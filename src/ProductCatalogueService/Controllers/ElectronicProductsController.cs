@@ -1,16 +1,13 @@
-using ArcGIS.Core.Geometry;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
-using S100FC.S128.FeatureTypes;
 using S100FC.ProductCatalogue;
+using S100FC.S128.FeatureTypes;
 using S100FC.YAML;
 using Serilog;
 using System.Diagnostics;
-using static ProductCatalogueService.RequestTypes;
 using static ProductCatalogueService.ResponseTypes;
 using IO = System.IO;
-using ArcGIS.Core.Data;
 
 namespace ProductCatalogueService.Controllers
 {
@@ -36,13 +33,13 @@ namespace ProductCatalogueService.Controllers
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse<string[]>();
 
-            var productNames = _electronicProductManager.ToArray();
+            var productNames = this._electronicProductManager.ToArray();
 
             response.Data = productNames;
             response.TotalHits = productNames.Length;
             response.DurationMs = sw.ElapsedMilliseconds;
 
-            return Ok(response);
+            return this.Ok(response);
         }
 
         /// <summary>
@@ -56,20 +53,20 @@ namespace ProductCatalogueService.Controllers
         public IActionResult GetElectronicProduct(string name) {
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse<ElectronicProduct>();
-            var product = _electronicProductManager.ElectronicProduct(name);
+            var product = this._electronicProductManager.ElectronicProduct(name);
 
             if (product == null) {
                 response.Success = false;
                 response.Message = $"No electronic product with name '{name}' was found.";
                 response.DurationMs = sw.ElapsedMilliseconds;
-                return NotFound(response);
+                return this.NotFound(response);
             }
 
             response.Data = product;
             response.TotalHits = 1;
             response.DurationMs = sw.ElapsedMilliseconds;
 
-            return Ok(response);
+            return this.Ok(response);
         }
 
         ///// <summary>
@@ -161,18 +158,18 @@ namespace ProductCatalogueService.Controllers
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpPost("{name}/newedition", Name = "NewEdition")]
         public async Task<IActionResult> NewEdition(string name) {
-            _logger.LogInformation("{newEdition} called with name: {name}", nameof(NewEdition), name);
+            this._logger.LogInformation("{newEdition} called with name: {name}", nameof(NewEdition), name);
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse();
 
-            if (_electronicProductManager.ElectronicProduct(name) == null) {
+            if (this._electronicProductManager.ElectronicProduct(name) == null) {
                 response.Success = false;
                 response.Message = $"No electronic product with name '{name}' was found.";
                 response.DurationMs = sw.ElapsedMilliseconds;
-                return StatusCode(StatusCodes.Status404NotFound, response);
+                return this.StatusCode(StatusCodes.Status404NotFound, response);
             }
 
-            var dataset = await _electronicProductManager.CreateNewEditionAsync(name);
+            var dataset = await this._electronicProductManager.CreateNewEditionAsync(name);
 
             var yaml = dataset.Serialize();
 
@@ -181,17 +178,17 @@ namespace ProductCatalogueService.Controllers
                 response.Success = false;
                 response.Message = $"An error occured attempting to read dataset '{name}'.";
                 response.DurationMs = sw.ElapsedMilliseconds;
-                return StatusCode(StatusCodes.Status500InternalServerError, response);
+                return this.StatusCode(StatusCodes.Status500InternalServerError, response);
             }
 
-            var product = _electronicProductManager.ElectronicProduct(name)!;
+            var product = this._electronicProductManager.ElectronicProduct(name)!;
 
-            _logger.LogInformation("Creating exchange set for product {name} edition {edition}", name, product.editionNumber);
+            this._logger.LogInformation("Creating exchange set for product {name} edition {edition}", name, product.editionNumber);
 
             this.CreateExchangeSet(product, yaml);
 
             response.DurationMs = sw.ElapsedMilliseconds;
-            return Ok(response);
+            return this.Ok(response);
         }
 
         ///// <summary>
@@ -282,7 +279,7 @@ namespace ProductCatalogueService.Controllers
         private void CreateExchangeSet(ElectronicProduct product, string yaml) {
             var datasetName = product.datasetName;
 
-            var dir = IO.Directory.CreateDirectory(_electronicProductManager.OutputFolder);
+            var dir = IO.Directory.CreateDirectory(this._electronicProductManager.OutputFolder);
 
             var exchangeset = IO.Directory.CreateDirectory(Path.Combine(dir.FullName, datasetName, $"{product.editionNumber}"));
 

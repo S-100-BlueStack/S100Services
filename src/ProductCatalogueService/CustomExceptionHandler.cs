@@ -15,7 +15,7 @@ namespace ProductCatalogueService
                 _ => StatusCodes.Status500InternalServerError
             };
 
-            _logger.LogError(exception, "An exception occurred. Message: {Message}", exception.Message);
+            this._logger.LogError(exception, "An exception occurred. Message: {Message}", exception.Message);
 
             var problemDetails = new ProblemDetails {
                 Title = "An error occurred while processing your request.",
