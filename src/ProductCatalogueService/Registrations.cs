@@ -5,16 +5,16 @@ namespace ProductCatalogueService
 {
     public static class Registrations
     {
-        public static async Task AddS100(this IServiceCollection services) {
+        public static async Task AddS100ProductCatalogue(this IServiceCollection services) {
             try {
                 // Setup ArcGIS and ProductManager
                 ArcGIS.Core.Hosting.Host.Initialize(ArcGIS.Core.Hosting.Host.LicenseProductCode.ArcGISPro);
-                Log.Logger.Information("ArcGIS Core Host Initialized");
+                Log.Information("ArcGIS Core Host Initialized");
 
                 // Connect to prod
                 var path = Environment.GetEnvironmentVariable("S100-Horizon-S128-Database");
 
-                Log.Logger.Information("S100-Horizon-S128-Database: {env}", path);
+                Log.Information("S100-Horizon-S128-Database: {env}", path);
 
                 if (string.IsNullOrEmpty(path))
                     throw new ArgumentNullException("Environment variable for S128-Database is null!");
@@ -38,7 +38,7 @@ namespace ProductCatalogueService
                 services.AddSingleton(productManager);
             }
             catch (Exception ex) {
-                Log.Logger.Error("Exception occured during init. {ex}", ex);
+                Log.Error("Exception occured during init. {ex}", ex);
             }
         }
     }

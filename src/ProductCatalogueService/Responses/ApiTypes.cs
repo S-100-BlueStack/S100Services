@@ -17,6 +17,18 @@ namespace ProductCatalogueService
         {
             public T? Data { get; set; }
         }
+
+        public class ProductResponse
+        {
+           // public Guid Uuid { get; set; }
+            public string? Name { get; set; }
+            public int? Edition { get; set; }
+            public int? Update { get; set; }
+            public int? Status { get; set; }     // Enumeration
+            public int? UsageBand { get; set; }  // Enumeration
+            public string? Aoi { get; set; }
+            public DateOnly? IssueDate { get; set; }
+        }
     }
 
     public static class RequestTypes
@@ -46,3 +58,5 @@ namespace ProductCatalogueService
         }
     }
 }
+
+

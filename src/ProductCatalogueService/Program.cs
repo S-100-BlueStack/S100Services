@@ -10,6 +10,19 @@ namespace ProductCatalogueService
     {
         private const string outputTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff}| [{Level:u3}] {Message:lj} {NewLine}{Exception}";
         public static async Task Main(string[] args) {
+            // Bootstrap logging
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Information()
+                .WriteTo.Console()
+                .WriteTo.File(
+                    path: "bootstrap.log",    // Log in project root
+                    rollingInterval: RollingInterval.Infinite,
+                    retainedFileCountLimit: 1,
+                    shared: true)
+                .CreateBootstrapLogger();
+
+            Log.Information("Bootstrap logger started");
+
             var builder = WebApplication.CreateBuilder(args);
             // var development = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")?.Equals("Development", StringComparison.OrdinalIgnoreCase) == true;
 
@@ -30,7 +43,6 @@ namespace ProductCatalogueService
                 outputTemplate: outputTemplate)
              .CreateLogger();
             builder.Host.UseSerilog(Log.Logger);
-            Log.Information("Logger registered...");
 
             // Add services to the container.
             builder.Services.AddControllers()
@@ -75,7 +87,7 @@ namespace ProductCatalogueService
             });
 
             // Configure ArcGIS and ProductManager
-            await builder.Services.AddS100();
+            await builder.Services.AddS100ProductCatalogue();
 
             // Problem details & Exception handling
             builder.Services.AddProblemDetails();
@@ -103,6 +115,20 @@ namespace ProductCatalogueService
                 }
                 await next();
             });
+
+            if (app.Environment.IsDevelopment()) {
+                app.MapGet("/mock/products", (IWebHostEnvironment env) => {
+                    var path = Path.Combine(env.ContentRootPath, "products.geojson");
+
+                    if (!System.IO.File.Exists(path))
+                        return Results.NotFound();
+
+                    return Results.File(path, "application/geo+json");
+                })
+                .Produces(StatusCodes.Status200OK)
+                .AllowAnonymous();
+            }
+
 
             app.MapControllers();
 
