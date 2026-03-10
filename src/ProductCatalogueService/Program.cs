@@ -118,7 +118,7 @@ namespace ProductCatalogueService
 
             if (app.Environment.IsDevelopment()) {
                 app.MapGet("/mock/products", (IWebHostEnvironment env) => {
-                    var path = Path.Combine(env.ContentRootPath, "products.geojson");
+                    var path = Path.Combine(env.ContentRootPath, "mock", "some_products.geojson");
 
                     if (!System.IO.File.Exists(path))
                         return Results.NotFound();

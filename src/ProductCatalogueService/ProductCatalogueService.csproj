@@ -28,7 +28,7 @@
     <Content Include="101_Feature_Catalogue_2.0.0.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="products.geojson">
+    <Content Include="mock\products.geojson">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
@@ -44,6 +44,15 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="8.1.4" />
     <PackageReference Include="System.Net.Http" Version="4.3.4" />
     <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="ArcGIS.Core">
+      <HintPath>..\..\..\..\..\Program Files\ArcGIS\Pro\bin\ArcGIS.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="ArcGIS.CoreHost">
+      <HintPath>..\..\..\..\..\Program Files\ArcGIS\Pro\bin\ArcGIS.CoreHost.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
