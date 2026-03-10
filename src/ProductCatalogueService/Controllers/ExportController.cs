@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using S100FC.ProductCatalogue;
-using S100FC.S128.FeatureTypes;
 using S100FC.YAML;
 using Serilog;
 using System.Diagnostics;
@@ -26,18 +25,20 @@ namespace ProductCatalogueService.Controllers
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpPost("{name}/newedition", Name = "NewEdition")]
         public async Task<IActionResult> NewEdition(string name) {
-            this._logger.LogInformation("{newEdition} called with name: {name}", nameof(NewEdition), name);
+            _logger.LogInformation("{newEdition} called with name: {name}", nameof(NewEdition), name);
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse();
 
-            if (this._electronicProductManager.ElectronicProduct(name) == null) {
+            var product = _electronicProductManager.ElectronicProduct(name);
+
+            if (product == null) {
                 response.Success = false;
                 response.Message = $"No electronic product with name '{name}' was found.";
                 response.DurationMs = sw.ElapsedMilliseconds;
-                return this.StatusCode(StatusCodes.Status404NotFound, response);
+                return StatusCode(StatusCodes.Status404NotFound, response);
             }
 
-            var dataset = await this._electronicProductManager.CreateNewEditionAsync(name);
+            var dataset = await _electronicProductManager.CreateNewEditionAsync(name);
 
             var yaml = dataset.Serialize();
 
@@ -46,104 +47,87 @@ namespace ProductCatalogueService.Controllers
                 response.Success = false;
                 response.Message = $"An error occured attempting to read dataset '{name}'.";
                 response.DurationMs = sw.ElapsedMilliseconds;
-                return this.StatusCode(StatusCodes.Status500InternalServerError, response);
+                return StatusCode(StatusCodes.Status500InternalServerError, response);
             }
 
-            var product = this._electronicProductManager.ElectronicProduct(name)!;
 
-            this._logger.LogInformation("Creating exchange set for product {name} edition {edition}", name, product.editionNumber);
 
-            this.CreateExchangeSet(product, yaml);
+            var (index, sign) = this.CreateExchangeSet(name, yaml);
+
+             await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewEdition, yaml, index, sign);
 
             response.DurationMs = sw.ElapsedMilliseconds;
-            return this.Ok(response);
+            return Ok(response);
         }
 
 
-        ///// <summary>
-        ///// Creates a new update.
-        ///// </summary>
-        ///// <param name="name">The name of the dataset.</param>
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
-        //[HttpPost("{name}/newupdate", Name = "NewUpdate")]
-        //public async Task<IActionResult> NewUpdate(string name = "101DK0040349E") {
-        //    return StatusCode(StatusCodes.Status501NotImplemented);
+        /// <summary>
+        /// Creates a new update.
+        /// </summary>
+        /// <param name="name">The name of the dataset.</param>
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
+        [HttpPost("{name}/newupdate", Name = "NewUpdate")]
+        public async Task<IActionResult> NewUpdate(string name = "101DK0040349E") {
+            var sw = Stopwatch.StartNew();
+            var response = new ApiResponse();
 
-        //    var sw = Stopwatch.StartNew();
-        //    var response = new ApiResponse();
+            // Check if product has any updates before creating new update
+            var product = _electronicProductManager.ElectronicProduct(name);
 
+            if (product == null) {
+                response.Success = false;
+                response.Message = $"No electronic product with name '{name}' was found.";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return StatusCode(StatusCodes.Status404NotFound, response);
+            }
 
-        //    var product = _electronicProductManager.ElectronicProduct(name);
+            var dirty = await _electronicProductManager.IsDirtyAsync(name);
 
+            if (!dirty) {
+                response.Success = false;
+                response.Message = $"Product has no updates.";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return BadRequest(response);
+            }
 
-        //    if (product == null) {
-        //        response.Success = false;
-        //        response.Message = $"No electronic product with name '{name}' was found.";
-        //        response.DurationMs = sw.ElapsedMilliseconds;
-        //        return StatusCode(StatusCodes.Status404NotFound, response);
-        //    }
+            var dataset = await _electronicProductManager.CreateNewUpdateAsync(name);
 
+            var incoming = dataset.Serialize();
 
-        //    var dirtyYaml = await _electronicProductManager.IsDirtyYamlAsync(name);
-
-        //    if(!dirtyYaml) {
-        //        response.Success = false;
-        //        response.Message = $"Product has no updates.";
-        //        response.DurationMs = sw.ElapsedMilliseconds;
-        //        return BadRequest(response);
-
-        //    }
-
-        //    //// Check if product has any updates before creating new update
-        //    //var dirty = await _electronicProductManager.IsDirtyAsync(name);
-
-        //    //if (!dirty) {
-        //    //    response.Success = false;
-        //    //    response.Message = $"Product has no updates.";
-        //    //    response.DurationMs = sw.ElapsedMilliseconds;
-        //    //    return BadRequest(response);
-        //    //}
-
-        //    // todo: detect updates properly
-        //    var dataset = await _electronicProductManager.CreateNewUpdateAsync(name);
-
-        //    var incoming = dataset.Serialize();
-
-        //    if (string.IsNullOrEmpty(incoming)) {
-        //        response.Success = false;
-        //        response.Message = $"An error occured attempting to read dataset '{name}'.";
-        //        response.DurationMs = sw.ElapsedMilliseconds;
-        //        return StatusCode(StatusCodes.Status500InternalServerError, response);
-        //    }
-
-        //    var latest = await _electronicProductManager.GetLatestDatasetYAML(name, product.editionNumber!.Value);
+            if (string.IsNullOrEmpty(incoming)) {
+                response.Success = false;
+                response.Message = $"An error occured attempting to read dataset '{name}'.";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return StatusCode(StatusCodes.Status500InternalServerError, response);
+            }
 
 
+            var (latest, prevIndex) = await _electronicProductManager.GetLatestDatasetYAML(name, product.editionNumber!.Value);
 
-        //    // Build YAML Delta
-        //    var delta = S100FC.YAML.DatasetComparer.Compare(latest, incoming);
 
-        //    //if(!delta.HasEdits)
-        //    // TODO: Do something
+            // Build YAML Delta
+            var delta = S100FC.YAML.DatasetComparer.Compare(latest, incoming);
 
-        //    // Populate metadata
-        //    delta.CellName = product.datasetName;
-        //    delta.Comment = "Not for navigation!";
-        //    delta.Edition = product.editionNumber!.Value;
-        //    //delta.Update = product.updateNumber!.Value;       // Hide for now until bugfix in s100compiler
-        //    delta.ENCVer = $"INT.IHO.{product.productSpecification?.name}.{product.productSpecification?.version}";         // delta.ENCVer = "INT.IHO.S-101.2.0.0";
-        //    delta.FCVer = product.productSpecification?.version;        // delta.FCVer = "2.0.0";
+            if (!delta.HasEdits) {
+                _logger.LogError("No edits found for product {product} during NewUpdate.", name);
+                response.Success = false;
+                response.Message = $"An error occured identifying edits.";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return StatusCode(StatusCodes.Status500InternalServerError, response);
+            }
 
-        //    var update = S100FC.YAML.Converter.Serialize(delta);     // Only delta
+            var update = S100FC.YAML.Converter.Serialize(delta);
 
-        //    this.CreateExchangeSet(product, update);
+            var (index, sign) = this.CreateExchangeSet(name, update, prevIndex);
 
-        //    response.DurationMs = sw.ElapsedMilliseconds;
-        //    return Ok(response);
-        //}
+            await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.Update, update, index, sign);
+
+            response.DurationMs = sw.ElapsedMilliseconds;
+            return Ok(response);
+        }
 
         /// <summary>
         /// Creates a new dataset.
@@ -157,7 +141,9 @@ namespace ProductCatalogueService.Controllers
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse();
 
-            if (_electronicProductManager.ElectronicProduct(name) == null) {
+            var product = _electronicProductManager.ElectronicProduct(name);
+
+            if (product == null) {
                 response.Success = false;
                 response.Message = $"No electronic product with name '{name}' was found.";
                 response.DurationMs = sw.ElapsedMilliseconds;
@@ -168,21 +154,26 @@ namespace ProductCatalogueService.Controllers
             var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
             var yaml = dataset.Serialize();
 
-            var product = _electronicProductManager.ElectronicProduct(name)!;
 
-            this.CreateExchangeSet(product, yaml);
+            var (index, sign) = this.CreateExchangeSet(name, yaml);
+
+            await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, index, sign);
 
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
         }
 
+       
+        private (string index, string sign) CreateExchangeSet(string dsnm, string yaml, string prevIndex = "") {
+            var product = _electronicProductManager.ElectronicProduct(dsnm);
 
-        private void CreateExchangeSet(ElectronicProduct product, string yaml) {
-            var datasetName = product.datasetName;
+            var datasetName = product!.datasetName;
 
-            var dir = IO.Directory.CreateDirectory(this._electronicProductManager.OutputFolder);
+            var dir = IO.Directory.CreateDirectory(_electronicProductManager.OutputFolder);
 
             var exchangeset = IO.Directory.CreateDirectory(Path.Combine(dir.FullName, datasetName, $"{product.editionNumber}"));
+
+            var update = product.updateNumber.HasValue ? product.updateNumber.Value.ToString("D3") : "000";
 
             // Write temp YAML file for the compiler
             IO.File.WriteAllText(Path.Combine(exchangeset.FullName, $"temp_{datasetName}.yaml"), yaml);
@@ -192,7 +183,22 @@ namespace ProductCatalogueService.Controllers
             if (!IO.File.Exists(catalogue))
                 throw new NullReferenceException("Could not find featurecatalogue!");
 
-            var commandline = $"-f \"{IO.Path.Combine(exchangeset.FullName, $"temp_{datasetName}.yaml")}\" -c \"{catalogue}\" -d \"{exchangeset.FullName}\"  -C {datasetName}";
+            var input = IO.Path.Combine(exchangeset.FullName, $"temp_{datasetName}.yaml");
+            var output = exchangeset.FullName;
+            var prevIndexPath = Path.Combine(exchangeset.FullName, "prev.idx");
+
+            var indexFile = Path.Combine(exchangeset.FullName, $"{datasetName.Replace("101DK00", "")}_{update}.idx");
+
+            var commandline = $"-f \"{input}\" -c \"{catalogue}\" -d \"{output}\" -C \"{datasetName}\" -l \"{indexFile}\"";
+
+            if (!string.IsNullOrEmpty(prevIndex)) {
+                IO.File.WriteAllText(prevIndexPath, prevIndex);
+                commandline += $" -L {prevIndexPath}";
+            }
+
+
+
+            //var commandline = $"-f \"{IO.Path.Combine(exchangeset.FullName, $"temp_{datasetName}.yaml")}\" -c \"{catalogue}\" -d \"{exchangeset.FullName}\"  -C {datasetName} -L {datasetName}_000.idx";
 
 
             var p = new Process();
@@ -210,12 +216,24 @@ namespace ProductCatalogueService.Controllers
             p.WaitForExit();
 
             if (p.ExitCode != 0) {
-                Log.Error("\"{filename}\" {arguments}", p.StartInfo.FileName, commandline);
+                _logger.LogError("\"{filename}\" {arguments} for product: {product}", p.StartInfo.FileName, commandline, product.datasetName);
                 throw new ArgumentException(commandline);
             }
 
+            _logger.LogInformation("S100 compiler run succesfully! Starting cleanup for temp index and yaml files for product: {product}", product.datasetName);
+
+            var index = IO.File.ReadAllText(indexFile);
+            var sign = IO.File.ReadAllText(Path.Combine(exchangeset.FullName, "S100_ROOT", "CATALOG.SIGN"));
+
+
             // Cleanup temp yaml
-            //IO.File.Delete(Path.Combine(exchangeset.FullName, $"temp_{datasetName}.yaml"));
+            IO.File.Delete(input);
+
+            // Cleanup temp index
+            IO.File.Delete(indexFile);
+            IO.File.Delete(prevIndexPath);
+
+            return (index, sign);
         }
     }
 }
