@@ -67,7 +67,17 @@ namespace ProductCatalogueService
                     options.IncludeXmlComments(xmlPath);
 
             });
-
+#if DEBUG
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowFrontend",
+                    policy => {
+                        policy.WithOrigins("http://localhost:5173")
+                              .AllowAnyHeader()
+                              .AllowAnyMethod();
+                    });
+            });
+#endif
 
             builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
 
@@ -128,7 +138,7 @@ namespace ProductCatalogueService
                 .Produces(StatusCodes.Status200OK)
                 .AllowAnonymous();
             }
-
+            app.UseCors("AllowFrontend");
 
             app.MapControllers();
 

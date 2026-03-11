@@ -9,7 +9,15 @@ body,
 html {
   font-size: 14px;
 }
+calcite-shell {
+  height: 100vh;
+  width: 100vw;
+}
 
+#viewDiv {
+  height: 100%;
+  width: 100%;
+}
 @media (min-width: 768px) {
   html {
     font-size: 16px;
@@ -34,10 +42,6 @@ html {
 html {
   position: relative;
   min-height: 100%;
-}
-
-body {
-  margin-bottom: 60px;
 }
 
 #header {
@@ -279,7 +283,7 @@ select {
   position: absolute;
   top: 10px;
   right: 325px;
-  z-index: 9999;
+  z-index: 1;
 }
 
 /*    Notice2MarinersCard Start   */
