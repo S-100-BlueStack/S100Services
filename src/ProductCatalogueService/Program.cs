@@ -125,10 +125,13 @@ namespace ProductCatalogueService
                 }
                 await next();
             });
-
+#if DEBUG
+            app.Environment.EnvironmentName = "Development";
+#endif
             if (app.Environment.IsDevelopment()) {
                 app.MapGet("/mock/products", (IWebHostEnvironment env) => {
-                    var path = Path.Combine(env.ContentRootPath, "mock", "some_products.geojson");
+                    //var path = Path.Combine(env.ContentRootPath, "mock", "some_products.geojson");
+                    var path = Path.Combine(env.ContentRootPath, "mock", "products.geojson");
 
                     if (!System.IO.File.Exists(path))
                         return Results.NotFound();

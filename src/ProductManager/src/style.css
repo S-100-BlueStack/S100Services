@@ -23,525 +23,55 @@ calcite-shell {
     font-size: 16px;
   }
 }
-
-.btn:focus,
-.btn:active:focus,
-.btn-link.nav-link:focus,
-.form-control:focus,
-.form-check-input:focus {
-  box-shadow:
-    0 0 0 0.1rem white,
-    0 0 0 0.25rem #258cfb;
-}
-
-.select-icon.select-icon--active {
-  display: none !important;
-  visibility: hidden !important;
-}
-
-html {
-  position: relative;
-  min-height: 100%;
-}
-
-#header {
-  display: flex;
-  align-items: center;
-  color: rgb(255, 255, 255);
-  padding: 10px 16px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  background-image: linear-gradient(
-    90deg,
-    rgb(0, 119, 133) 20%,
-    rgb(0, 184, 204)
-  );
-}
-
-#header a {
-  text-decoration: none;
-  color: rgb(255, 255, 255);
-  font-size: 18px;
-  font-weight: 400;
-}
-
-.map-popover {
-  height: inherit;
+.popup-section {
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 15vh);
+  gap: 6px;
 }
 
-.list-content {
-  flex: 1 1 85%;
-  overflow: auto;
-}
-
-.text-content {
-  flex: 0 1 10%;
-  padding: 5%;
-}
-
-.button-content {
-  flex: 0 1 5%;
-  padding: 10%;
-  display: flex;
+.popup-row {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  gap: 8px;
   align-items: center;
-  justify-content: center;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.popup-row:last-child {
+  border-bottom: none;
+}
+.popup-label {
+  font-size: 12px;
+  color: #6b6b6b;
+  font-weight: 500;
+}
+.popup-value {
+  font-size: 13px;
+  font-weight: 500;
+  word-break: break-word;
 }
 
-.reset-configuration-content {
-  padding: 2px 6px;
-  flex: 0 1 5%;
-  display: flex;
-  align-items: end;
-  justify-content: end;
+.esri-popup__main-container {
+  max-width: 360px !important;
 }
 
-.header-item {
-  align-self: center;
-  margin-left: 13px;
-  margin-right: 25px;
+.esri-popup__content {
+  padding: 6px 10px;
 }
 
-.header-item a.active {
-  text-decoration: underline !important;
-}
-
-.header-title {
-  display: flex;
-  align-items: center;
-  margin-right: 50px;
-  margin-left: 13px;
-  font-size: 24px;
-}
-
-/*.header-logo {
-    display: flex;
-    align-items: center;
-    min-width: 24px;
-    font-size: 24px;
-}
-
-    .header-logo img {
-        height: 24px;
-    }
-*/
-
-/* round scrollbars */
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 5px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 5px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
-
-#tasks-container {
-  display: flex;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  align-content: space-between;
-  padding: 12px 40px;
-  row-gap: 2em;
-  flex-direction: row;
-  overflow-x: auto;
-}
-
-.flex-panel {
-  display: inline-flex;
-  height: 100%;
-  justify-content: space-around;
-  flex-direction: row;
-  padding: 2rem 1rem;
-  box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
-}
-
-.tasks-card {
-  width: 48%;
-  box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
-}
-
-.esri-sketch {
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-/* Jira container start */
-.container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.row {
-  display: flex;
-  gap: 10px; /* Adjust the gap between items within a row */
-}
-
-input,
-select {
-  flex: 1; /* Makes input and select elements take equal space */
-}
-
-/* Jira container end */
-.main-card {
-  max-height: 100%;
-  min-width: 490px;
-  box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
-}
-
-.right-card {
-  min-width: 435px;
-  /* box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);*/
-  height: 100%;
-}
-
-/*removes blue selection box around map*/
-.esri-view .esri-view-surface--touch-none:focus::after {
-  outline: none !important;
-}
-
-/*    Notice2MarinersCard Start   */
-.shortId {
-  background-color: #595;
-  font-size: 90%;
-  padding: 0.2em 0.6em 0.3em;
-  font-weight: 700;
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  display: inline-block;
-  margin-bottom: 4px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
-  padding: 3px;
-  line-height: 1;
-  color: #fff;
-  text-align: center;
-  white-space: nowrap;
-  vertical-align: middle;
-}
-
-.pos-index {
-  min-width: 37px !important;
-}
-
-.table-condensed {
-  border: 1px solid #ddd;
-  border-collapse: collapse;
-  width: 100%;
-}
-
-.table-condensed th {
-  background-color: #f2f2f2;
-  padding: 8px;
-  text-align: left;
-  min-width: 100px;
-}
-
-.table-condensed td {
-  border: 1px solid #ddd;
-  padding: 8px;
-}
-
-.message-details-item strong {
-  font-weight: bold;
-  color: #333;
-  border: none;
-}
-
-.message-details-item-fields {
-  width: 100%;
-  margin-top: 10px;
-  border: 1px solid #ddd;
-  border-collapse: collapse;
-}
-
-.message-details-item-fields th {
-  background-color: #f2f2f2;
-  padding: 8px;
-  text-align: left;
-}
-
-.message-details-item-fields td {
-  border: 1px solid #ddd;
-  padding: 8px;
-}
-
-/*     Notice2MarinersCard End    */
-
-.esri-ui-top-center {
-  position: absolute;
-  top: 10px;
-  right: 325px;
-  z-index: 1;
-}
-
-/*    Notice2MarinersCard Start   */
-.shortId {
-  background-color: grey;
-  font-size: 75%;
-  padding: 0.2em 0.6em 0.3em;
+.esri-popup__header-title {
+  font-size: 14px;
   font-weight: 600;
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  display: inline-block;
-  margin-bottom: 4px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
-  padding: 3px 5px;
-  line-height: 1;
-  color: #fff;
-  text-align: center;
-  white-space: nowrap;
-  vertical-align: middle;
 }
 
-.table-condensed {
-  border: 1px solid #ddd;
-  border-collapse: collapse;
-  width: 100%;
+.esri-popup__footer {
+  padding: 6px 8px;
 }
 
-.table-condensed th {
-  background-color: #f2f2f2;
-  padding: 8px;
-  text-align: left;
+.esri-popup__content {
+  margin: 0;
 }
 
-.table-condensed td {
-  border: 1px solid #ddd;
-  padding: 8px;
-}
-
-.message-details-item strong {
-  font-weight: bold;
-  color: #333;
-  border: none;
-}
-
-.message-details-item-fields {
-  width: 100%;
-  margin-top: 10px;
-  border: 1px solid #ddd;
-  border-collapse: collapse;
-}
-
-.message-details-item-fields th {
-  background-color: #f2f2f2;
-  padding: 8px;
-  text-align: left;
-}
-
-.message-details-item-fields td {
-  border: 1px solid #ddd;
-  padding: 8px;
-}
-
-/*new generalized*/
-calcite-chip[selected] {
-  --calcite-color-foreground-2: var(--calcite-color-brand);
-  --calcite-color-text-1: var(--calcite-color-text-inverse);
-}
-
-calcite-tile {
-  --calcite-tile-description-text-width: 900px;
-  background-color: var(--calcite-color-background);
-}
-
-.feature-list-container {
-  width: 100%;
-  /*    --calcite-card-group-gap: 0;
-    cursor: pointer;*/
-}
-
-/*#chip-task-count {
-    --calcite-color-foreground-2: #ced4da;
-    --calcite-color-text-1: black;
-}*/
-
-/* calcite-list-item { */
-/*    height: 40px;*/
-
-/*transition: border 0.2s;*/ /* Smooth transition for border */
-/*} */
-
-/*calcite-list-item:hover {
-        border: 1px solid blue;*/ /* Blue border on hover */
-/*background-color: transparent !important;*/ /* Ensure background doesn't change */
-/*}*/
-
-.card-content-group {
-  /* overflow-y: auto; */
-  overflow-x: hidden;
-}
-
-.main-card-content {
-  border-bottom: 1px solid rgb(0, 119, 133);
-  padding-bottom: 20px;
-}
-
-.main-card-input {
-  display: flex;
-  /*    justify-content: space-between;*/
-  justify-content: flex-start;
-  column-gap: 60px;
-  padding: 13px;
-}
-
-.main-summary-card-content {
-  display: inline-flex;
-  justify-content: space-between;
-  width: 99%;
-  flex-wrap: wrap;
-}
-
-.create-task-container {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-end;
-  padding: 10px;
-  row-gap: 2em;
-  flex-direction: row;
-  overflow-x: auto;
-  align-items: flex-start;
-  justify-content: space-around;
-}
-
-/*.create-skr-container {*/
-/*    display: flex;
-    flex-wrap: wrap;
-    align-content: flex-end;
-    row-gap: 2em;*/
-/*    height: 650px;*/
-/*    flex-direction: row;
-    overflow-x: auto;
-    align-items: flex-start;
-    justify-content: space-around;*/
-/*}
-*/
-
-.centered-div {
-  background-color: white;
-  padding: 5px;
-  overflow-x: hidden;
-  overflow-y: hidden;
-  height: 100%;
-  border-radius: 5px;
-}
-
-.enc-list-container {
-  width: 100%;
-}
-
-.n2m-accordion {
-  max-height: calc(100vh - 443px);
-}
-
-@media (max-height: 700px) {
-  #n2m-map-container {
-    display: none;
-    height: 0% !important;
-  }
-
-  #n2m-content {
-    height: 100% !important;
-  }
-}
-
-@media (max-width: 1000px) {
-  #main-content {
-    width: 100% !important;
-  }
-
-  .right-card {
-    display: none;
-  }
-}
-
-.glow-effect {
-  animation: highlight 5000ms ease-out;
-}
-
-@keyframes highlight {
-  0% {
-    box-shadow: 0 0 4px rgb(51, 204, 51);
-  }
-
-  25% {
-    box-shadow: 0 0 3px rgb(51, 204, 51);
-  }
-
-  50% {
-    box-shadow: 0 0 2px rgb(51, 204, 51);
-  }
-
-  75% {
-    box-shadow: 0 0 1px rgb(51, 204, 51);
-  }
-
-  100% {
-    box-shadow: none;
-  }
-}
-
-calcite-text-area {
-  white-space: pre-wrap;
-}
-
-.ql-editor {
-  padding: 0px;
-  background-color: white;
-  min-height: 300px;
-  max-height: 500px;
-}
-
-.unselectable {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  -khtml-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-}
-
-.language-flag {
-  cursor: pointer;
-  height: 20px;
-  opacity: 30%;
-}
-
-.language-flag.active {
-  opacity: 100%;
-}
-
-.flag {
-  float: right;
-  cursor: pointer;
-  margin-right: 2px;
-}
-
-.main-card-add-button {
-  float: right;
-  margin-top: 15px;
-}
-
-#n2m-content {
-  height: 50%;
-  overflow-y: auto;
-  margin: 0 0 20px 0;
-}
-
-#correction-content {
-  height: 50%;
-  overflow-y: auto;
-  margin: 0 0 20px 0;
+.esri-popup__content p {
+  margin: 0;
 }
