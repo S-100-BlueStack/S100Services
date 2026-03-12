@@ -177,34 +177,6 @@ calcite-shell {
   overflow: hidden;
 }
 
-.notice-wrapper {
-  position: relative;
-}
-
-.notice-wrapper calcite-notice {
-  width: 100%;
-}
-
-.notice-progress {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  height: 3px;
-  width: 100%;
-  background: var(--calcite-color-brand);
-  transform-origin: left;
-  animation: noticeProgress linear forwards;
-}
-
-@keyframes noticeProgress {
-  from {
-    transform: scaleX(1);
-  }
-  to {
-    transform: scaleX(0);
-  }
-}
-
 #notice-container calcite-notice:hover .notice-progress {
   animation-play-state: paused;
 }
