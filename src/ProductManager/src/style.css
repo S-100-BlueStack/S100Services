@@ -1,3 +1,4 @@
+/* General styling */
 html,
 body,
 #viewDiv {
@@ -10,8 +11,8 @@ html {
   font-size: 14px;
 }
 calcite-shell {
-  height: 100vh;
-  width: 100vw;
+  height: 100%;
+  width: 100%;
 }
 
 #viewDiv {
@@ -23,6 +24,16 @@ calcite-shell {
     font-size: 16px;
   }
 }
+/* Fixes blue bounding box on map when clicking inside of it */
+.esri-view-surface:focus::after,
+.esri-view-surface:focus-visible::after,
+.esri-ui:focus::after,
+.esri-ui:focus-visible::after {
+  display: none;
+  opacity: 0;
+  box-shadow: none;
+}
+/* Poup content styles */
 .popup-section {
   display: flex;
   flex-direction: column;
@@ -74,4 +85,196 @@ calcite-shell {
 
 .esri-popup__content p {
   margin: 0;
+}
+
+/* Notice panel styles */
+#notice-log {
+  padding: 10px;
+  font-size: 13px;
+  max-height: 100%;
+  overflow-y: auto;
+  transition:
+    opacity 500ms ease,
+    transform 500ms ease;
+}
+
+.notice-row {
+  display: grid;
+  grid-template-columns: 70px 1fr 70px;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #eee;
+  font-size: 13px;
+}
+
+.notice-type {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.notice-time {
+  color: #777;
+  font-size: 11px;
+  text-align: right;
+}
+
+.notice-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.notice-title {
+  font-weight: 600;
+}
+
+/* Severity styling on notices */
+
+.notice-success {
+  border-left: 4px solid #2ecc71;
+}
+
+.notice-error {
+  border-left: 4px solid #e74c3c;
+  background: #fff5f5;
+}
+
+.notice-warning {
+  border-left: 4px solid #f39c12;
+  background: #fffaf2;
+}
+
+.notice-info {
+  border-left: 4px solid #3498db;
+}
+
+.notice-message {
+  flex: 1;
+  font-size: 12px;
+  color: #555;
+}
+
+.notification-widget button {
+  background: white;
+  border: 1px solid #ccc;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.notification-widget span {
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+/* Notice (Toasts) styling */
+
+#notice-container calcite-notice {
+  width: 100%;
+  box-sizing: border-box;
+  word-break: break-word;
+  margin: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.notice-wrapper {
+  position: relative;
+}
+
+.notice-wrapper calcite-notice {
+  width: 100%;
+}
+
+.notice-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: var(--calcite-color-brand);
+  transform-origin: left;
+  animation: noticeProgress linear forwards;
+}
+
+@keyframes noticeProgress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+#notice-container calcite-notice:hover .notice-progress {
+  animation-play-state: paused;
+}
+/* Header/Navbar styling */
+#header {
+  display: flex;
+  align-items: center;
+  height: 50px;
+  padding: 0 12px;
+  background-color: #456178;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.header-center {
+  margin-left: 10px;
+  font-weight: 600;
+  font-size: 16px;
+  color: white;
+}
+
+.header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#header calcite-action {
+  --calcite-color-foreground-1: transparent;
+  --calcite-color-text-3: white;
+}
+
+#header calcite-action:hover {
+  --calcite-color-foreground-1: rgba(255, 255, 255, 0.15);
+}
+
+#notification-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 16px;
+  height: 16px;
+
+  font-size: 11px;
+  font-weight: 600;
+
+  background: #e74c3c;
+  color: white;
+
+  border-radius: 999px;
+  padding: 0 4px;
+
+  line-height: 1;
+
+  position: absolute;
+  top: 2px;
+  right: 2px;
+
+  pointer-events: none;
+}
+
+.notification-wrapper {
+  position: relative;
+}
+
+#notification-button[active] {
+  --calcite-color-foreground-1: rgba(255, 255, 255, 0.15);
 }

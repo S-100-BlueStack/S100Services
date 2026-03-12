@@ -1,18 +1,13 @@
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
-
+import {
+  noticeError,
+  noticeSuccess,
+  noticeInfo,
+} from "../js/services/noticeService";
 const FREEZE_UI_MODE = "toggle"; // "toggle" | "color"
 
 let freezeAction = null;
 let sendAction = null;
-
-export function zoomOut() {
-  const graphic = view.popup.selectedFeature;
-
-  view.goTo({
-    target: graphic.geometry,
-    scale: view.scale * 2,
-  });
-}
 
 const freezeState = new Map();
 
@@ -44,6 +39,9 @@ export function registerPopupActions(view) {
         freezeState.set(id, newState);
 
         updateUI(view, newState);
+        noticeSuccess(
+          `Feature ${id} is now ${newState ? "frozen" : "unfrozen"}.`,
+        );
       }
 
       if (event.action.id === "send-immediately") {
@@ -87,4 +85,5 @@ function updateUI(view, frozen) {
 
 function mockSendImmediately(feature) {
   console.log("Send immediately:", feature.attributes.id);
+  noticeInfo(`Feature ${feature.attributes.id} sent immediately.`);
 }

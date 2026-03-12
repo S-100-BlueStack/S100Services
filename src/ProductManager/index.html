@@ -8,10 +8,29 @@
     type="module"
   ></script>
 </head>
+
 <body>
   <calcite-shell content-behind>
     <div id="navbar" slot="header"></div>
-    <div id="viewDiv"></div>
-  </calcite-shell>
+
+    <calcite-shell content-behind>
+  <div id="navbar" slot="header"></div>
+
+  <div id="viewDiv"></div>
+
+  <calcite-shell-panel slot="panel-end" width="m" id="notice-panel" collapsed>
+    <calcite-panel heading="Notifications">
+      <calcite-action
+        slot="header-actions-end"
+        icon="x"
+        id="close-notice-panel"
+      ></calcite-action>
+
+      <div id="notice-log"></div>
+    </calcite-panel>
+  </calcite-shell-panel>
+
+</calcite-shell>
+
   <script type="module" src="/src/main.js"></script>
 </body>

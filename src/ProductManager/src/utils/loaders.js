@@ -1,4 +1,14 @@
 export async function loadNavbar() {
   const res = await fetch("src/components/navbar.html");
-  document.getElementById("navbar").innerHTML = await res.text();
+  const html = await res.text();
+
+  document.getElementById("navbar").innerHTML = html;
+
+  const docButton = document.getElementById("documentation-button");
+
+  if (docButton) {
+    docButton.addEventListener("click", () => {
+      window.open("#", "_blank");
+    });
+  }
 }

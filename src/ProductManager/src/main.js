@@ -5,32 +5,46 @@ import { createMap } from "./map/createMap.js";
 import { createView } from "./map/createView.js";
 import { inspectLayer } from "./utils/debugLayer";
 import { configureArcGIS } from "./config/arcgisConfig.js";
-import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
-import { stylePopups } from "./utils/stylePopups.js";
-import { zoomOut } from "./utils/popupActions.js";
 import { addGeoJsonLayer } from "./map/AddGeoJsonLayer.js";
 import { loadNavbar } from "./utils/loaders.js";
 import { enableHoverHighlight } from "./interactions/hoverHightlight.js";
-configureArcGIS();
+import { noticeError, noticeSuccess } from "./js/services/noticeService.js";
+import { initNoticeToasts } from "./js/ui/noticeToastRenderer.js";
+import { initNoticePanel } from "./js/ui/noticePanel.js";
+import "@esri/calcite-components/dist/components/calcite-notice";
+import { initNavbarNotifications } from "./js/ui/navbarNotifications.js";
+let map;
+let view;
+let geoJsonLayer;
+async function start() {
+  configureArcGIS();
 
-//loadNavbar();
+  initNoticeToasts();
+  initNoticePanel();
 
-const map = createMap();
+  await loadNavbar();
+  initNavbarNotifications();
 
-const view = createView(map);
+  try {
+    map = createMap();
+  } catch (error) {
+    noticeError("Failed to create map.");
+  }
+  try {
+    view = createView(map);
+  } catch (error) {
+    noticeError("Failed to create map view.");
+  }
+  try {
+    geoJsonLayer = addGeoJsonLayer(map, "https://localhost:7271/mock/products");
+  } catch (error) {
+    noticeError("Failed to add GeoJSON layer.");
+  }
+  try {
+    enableHoverHighlight(view, geoJsonLayer);
+  } catch (error) {
+    noticeError("Failed to enable hover highlight.");
+  }
+}
 
-const geoJsonLayer = addGeoJsonLayer(
-  map,
-  "https://localhost:7271/mock/products",
-);
-enableHoverHighlight(view, geoJsonLayer);
-
-reactiveUtils.on(
-  () => view.popup,
-  "trigger-action",
-  (event) => {
-    if (event.action.id === "zoom-out") {
-      zoomOut(view);
-    }
-  },
-);
+start();
