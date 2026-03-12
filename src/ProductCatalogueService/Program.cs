@@ -72,7 +72,17 @@ namespace ProductCatalogueService
                     options.IncludeXmlComments(xmlPath);
 
             });
-
+#if DEBUG
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowFrontend",
+                    policy => {
+                        policy.WithOrigins("http://localhost:5173")
+                              .AllowAnyHeader()
+                              .AllowAnyMethod();
+                    });
+            });
+#endif
 
             builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
 
@@ -165,10 +175,13 @@ namespace ProductCatalogueService
                 }
                 await next();
             });
-
+#if DEBUG
+            app.Environment.EnvironmentName = "Development";
+#endif
             if (app.Environment.IsDevelopment()) {
                 app.MapGet("/mock/products", (IWebHostEnvironment env) => {
-                    var path = Path.Combine(env.ContentRootPath, "mock", "some_products.geojson");
+                    //var path = Path.Combine(env.ContentRootPath, "mock", "some_products.geojson");
+                    var path = Path.Combine(env.ContentRootPath, "mock", "products.geojson");
 
                     if (!System.IO.File.Exists(path))
                         return Results.NotFound();
@@ -178,7 +191,7 @@ namespace ProductCatalogueService
                 .Produces(StatusCodes.Status200OK)
                 .AllowAnonymous();
             }
-
+            app.UseCors("AllowFrontend");
 
             app.MapControllers();
 

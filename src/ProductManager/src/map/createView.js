@@ -1,43 +1,48 @@
 import MapView from "@arcgis/core/views/MapView.js";
-import Extent from "@arcgis/core/geometry/Extent.js";
+import { highlightConfig } from "../config/colorsConfig";
+import { registerPopupActions } from "../utils/popupActions";
+import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 
 export function createView(map) {
-  const extent = new Extent({
-    xmax: 1705294.8013330558,
-    xmin: 487805.81480709196,
-    ymax: 7853333.743980687,
-    ymin: 7267520.359203253,
-    spatialReference: {
-      wkid: 102100,
-    },
-  });
-  return new MapView({
+  const view = new MapView({
     container: "viewDiv",
     map: map,
+    center: [12.56, 55.67],
+    zoom: 6,
+
     popup: {
-      defaultPopupTemplateEnabled: false,
       dockEnabled: false,
-      visibleElements: {
-        collapseButton: false,
-        featureNavigation: false,
-        featureListLayerTitle: false,
-      },
       dockOptions: {
         buttonEnabled: false,
-        breakpoint: false,
       },
+      visibleElements: {
+        collapseButton: false,
+      },
+      actions: [
+        {
+          title: "Freeze",
+          id: "freeze-feature",
+          icon: "snow",
+        },
+        {
+          title: "Send immediately",
+          id: "send-immediately",
+          icon: "send",
+        },
+      ],
     },
-    // ui: {
-    //     components: ["attribution"]
-    // },
-    container: "viewDiv",
-    extent: extent,
-    constraints: {
-      rotationEnabled: false,
-      minScale: 100000000,
-    },
-    padding: {
-      left: 49,
-    },
+
+    highlights: highlightConfig,
   });
+
+  reactiveUtils.when(
+    () => view.popup?.viewModel,
+    () => {
+      view.popup.viewModel.includeDefaultActions = false;
+    },
+    { once: true },
+  );
+  registerPopupActions(view);
+
+  return view;
 }

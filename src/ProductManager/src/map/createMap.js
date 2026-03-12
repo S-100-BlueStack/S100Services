@@ -1,9 +1,7 @@
-import WebMap from "@arcgis/core/WebMap.js";
+import Map from "@arcgis/core/Map.js";
 
-export function createMap(webId) {
-  return new WebMap({
-    portalItem: {
-      id: webId,
-    },
+export function createMap() {
+  return new Map({
+    basemap: "gray-vector",
   });
 }
