@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using ProductCatalogueService.Data.Database;
 using ProductCatalogueService.Data.Models;
 using ProductCatalogueService.Data.Repositories;
@@ -12,7 +11,7 @@ namespace TestProductCatalogueService
         private readonly ProductRepository _repository;
         private readonly ITestOutputHelper _output;
         public ProductRepositoryTests(ITestOutputHelper output) {
-            var connectionFile = "C:/Geodatastyrelsen/ProductManager/system.connection";
+            var connectionFile = Environment.GetEnvironmentVariable("productmanager_systemdb_dev");
             var config = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
                 {
@@ -27,8 +26,8 @@ namespace TestProductCatalogueService
         }
 
         [Fact]
-        public async Task InsertInitial_ShouldCreateCurrentRecord() {
-            var name = "TestDataset2";
+        public async Task Test_AppendJobTableRow() {
+            var name = "10100DK4LIMFE";
             var state = ProductState.Ready;
             
 
