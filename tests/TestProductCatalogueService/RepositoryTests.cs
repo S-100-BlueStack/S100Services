@@ -1,0 +1,52 @@
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using ProductCatalogueService.Data.Database;
+using ProductCatalogueService.Data.Models;
+using ProductCatalogueService.Data.Repositories;
+using Xunit.Abstractions;
+
+namespace TestProductCatalogueService
+{
+    public class ProductRepositoryTests
+    {
+        private readonly ProductRepository _repository;
+        private readonly ITestOutputHelper _output;
+        public ProductRepositoryTests(ITestOutputHelper output) {
+            var connectionFile = "C:/Geodatastyrelsen/ProductManager/system.connection";
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    { "Connections:SystemConnection", connectionFile }
+                })
+                .Build();
+
+            var factory = new DbConnectionFactory(config);
+            _repository = new ProductRepository(factory);
+
+            _output = output;
+        }
+
+        [Fact]
+        public async Task InsertInitial_ShouldCreateCurrentRecord() {
+            var name = "TestDataset2";
+            var state = ProductState.Ready;
+            
+
+            // Adds or updates row
+            await _repository.AppendAsync(name, state);
+
+
+            // Fetch row
+            var result = await _repository.GetCurrentByNameAsync(name);
+
+
+            // COmpare the results
+            Assert.NotNull(result);
+            Assert.Equal(state, result!.State);
+
+
+
+            System.Diagnostics.Debugger.Break();
+        }
+    }
+}

@@ -1,6 +1,4 @@
 <Solution>
   <Project Path="src/ProductCatalogueService/ProductCatalogueService.csproj" />
-  <Project Path="tests/TestProductCatalogueService/TestProductCatalogueService.csproj" Id="5bde7ff2-f8e1-4872-98df-6d7434bb9fcd">
-    <Build Solution="Debug|*" Project="false" />
-  </Project>
+  <Project Path="tests/TestProductCatalogueService/TestProductCatalogueService.csproj" Id="5bde7ff2-f8e1-4872-98df-6d7434bb9fcd" />
 </Solution>

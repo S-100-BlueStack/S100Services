@@ -2,10 +2,11 @@ using ArcGIS.Core.Geometry;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using ProductCatalogueService.Models;
 using S100FC.ProductCatalogue;
 using System.Diagnostics;
-using static ProductCatalogueService.RequestTypes;
-using static ProductCatalogueService.ResponseTypes;
+using static ProductCatalogueService.Models.RequestTypes;
+using static ProductCatalogueService.Models.ResponseTypes;
 using IO = System.IO;
 
 namespace ProductCatalogueService.Controllers

@@ -34,8 +34,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.72" />
+    <PackageReference Include="Hangfire" Version="1.8.23" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="8.0.20" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Versioning" Version="5.1.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
     <PackageReference Include="S100Framework.ArcGIS.Core" Version="2.1.12" />
     <PackageReference Include="S100Framework.Catalogues" Version="2.1.25" />
     <PackageReference Include="S100Framework.ProductCatalogue" Version="2.0.1" />

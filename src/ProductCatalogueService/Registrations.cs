@@ -5,14 +5,17 @@ namespace ProductCatalogueService
 {
     public static class Registrations
     {
-        public static async Task AddS100ProductCatalogue(this IServiceCollection services) {
+        public static async Task AddS100ProductManager(this IServiceCollection services, ConfigurationManager configuration) {
             try {
                 // Setup ArcGIS and ProductManager
                 ArcGIS.Core.Hosting.Host.Initialize(ArcGIS.Core.Hosting.Host.LicenseProductCode.ArcGISPro);
                 Log.Information("ArcGIS Core Host Initialized");
 
-                // Connect to prod
-                var path = Environment.GetEnvironmentVariable("S100-Horizon-S128-Database");
+                // Connect to gdb/sde
+                var path = configuration.GetSection("Connections")["S128Connection"];
+
+                if (string.IsNullOrWhiteSpace(path) || !Path.Exists(path))
+                    throw new InvalidOperationException($"S128:ConnectionFile is not configured or insufficient access: {path}");
 
                 Log.Information("S100-Horizon-S128-Database: {env}", path);
 

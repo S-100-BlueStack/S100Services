@@ -1,7 +1,13 @@
+using Hangfire;
+using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Mvc; // Required for ApiVersion
+using Microsoft.Data.SqlClient;
+using ProductCatalogueService.Data.Database;
+using ProductCatalogueService.Data.Repositories;
 using S100FC.S128;
 using Serilog;
+using System.Data;
 using System.Reflection;
 
 namespace ProductCatalogueService
@@ -35,11 +41,10 @@ namespace ProductCatalogueService
              .Enrich.FromLogContext()
              .WriteTo.Console()
              .WriteTo.File(
-                path: "ProductCatalogue.log",
-                rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 365,
+                path: "ProductCatalogueAPI.log",
+                rollingInterval: RollingInterval.Infinite,
+                retainedFileCountLimit: 1,
                 shared: true,
-                flushToDiskInterval: TimeSpan.FromMinutes(10),
                 outputTemplate: outputTemplate)
              .CreateLogger();
             builder.Host.UseSerilog(Log.Logger);
@@ -86,17 +91,62 @@ namespace ProductCatalogueService
                 options.LowercaseUrls = true;
             });
 
-            // Configure ArcGIS and ProductManager
-            await builder.Services.AddS100ProductCatalogue();
 
             // Problem details & Exception handling
             builder.Services.AddProblemDetails();
             builder.Services.AddExceptionHandler<CustomExceptionHandler>();
 
+
+            // Bind configuration
+            builder.Configuration
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
+
+
+
+            // Configure ArcGIS and ProductManager
+            await builder.Services.AddS100ProductManager(builder.Configuration);
+
+
+            // Hangfire
+            var filePath = builder.Configuration.GetSection("Connections")["HangfireConnection"];
+
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+                throw new InvalidOperationException($"Hangfire:ConnectionFile is not configured or insufficient access: {filePath}");
+
+            var connectionString = File.ReadAllText(filePath);
+
+            builder.Services.AddHangfire(config =>
+            {
+                config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+                    .UseSimpleAssemblyNameTypeSerializer()
+                    .UseRecommendedSerializerSettings()
+                    .UseSqlServerStorage(
+                        nameOrConnectionString: connectionString,
+                        options: new SqlServerStorageOptions {
+                            CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+                            SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+                            QueuePollInterval = TimeSpan.FromSeconds(10),
+                            UseRecommendedIsolationLevel = true,
+                            DisableGlobalLocks = true
+                        });
+            });
+
+
+            // System DB
+            builder.Services.AddSingleton<DbConnectionFactory>();
+            builder.Services.AddScoped<IProductRepository, ProductRepository>();
+
+            builder.Services.AddHangfireServer();
+
             // Caching
             builder.Services.AddMemoryCache();
 
             var app = builder.Build();
+
+            app.UseHangfireDashboard("/dashboard", new DashboardOptions {
+                //   Authorization = new[] { new MyAuthorizationFilter() }             // TODO: Auth
+            });
 
             app.UseExceptionHandler();
 

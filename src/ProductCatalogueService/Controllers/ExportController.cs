@@ -4,7 +4,8 @@ using S100FC.ProductCatalogue;
 using S100FC.YAML;
 using Serilog;
 using System.Diagnostics;
-using static ProductCatalogueService.ResponseTypes;
+using static ProductCatalogueService.Models.RequestTypes;
+using static ProductCatalogueService.Models.ResponseTypes;
 using IO = System.IO;
 
 namespace ProductCatalogueService.Controllers
