@@ -87,6 +87,16 @@ calcite-shell {
   margin: 0;
 }
 
+.popup-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.copy-dataset-btn {
+  cursor: pointer;
+}
+
 /* Notice panel styles */
 #notice-log {
   padding: 10px;
@@ -127,7 +137,7 @@ calcite-shell {
   font-weight: 600;
 }
 
-/* Severity styling on notices */
+/* Severity styling on notices in Panel */
 
 .notice-success {
   border-left: 4px solid #2ecc71;
@@ -180,6 +190,7 @@ calcite-shell {
 #notice-container calcite-notice:hover .notice-progress {
   animation-play-state: paused;
 }
+
 /* Header/Navbar styling */
 #header {
   display: flex;

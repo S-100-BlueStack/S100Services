@@ -2,25 +2,35 @@ export function enableHoverHighlight(view, layer) {
   let highlight = null;
   let layerView = null;
   let lastGraphic = null;
-  let hitTestRunning = false;
+
+  let pointerEvent = null;
+  let frameRequested = false;
 
   view.whenLayerView(layer).then((lv) => {
     layerView = lv;
   });
 
-  view.on("pointer-move", async (event) => {
-    if (!layerView) return;
-    if (hitTestRunning) return;
+  view.on("pointer-move", (event) => {
+    pointerEvent = event;
 
-    hitTestRunning = true;
+    if (!frameRequested) {
+      frameRequested = true;
+      requestAnimationFrame(runHitTest);
+    }
+  });
 
-    const hit = await view.hitTest(event, {
+  async function runHitTest() {
+    frameRequested = false;
+
+    if (!pointerEvent || !layerView) return;
+
+    const hit = await view.hitTest(pointerEvent, {
       include: layer,
     });
 
-    hitTestRunning = false;
+    const result = hit.results.find((r) => r.graphic.layer === layer);
 
-    if (!hit.results.length) {
+    if (!result) {
       if (highlight) {
         highlight.remove();
         highlight = null;
@@ -29,7 +39,7 @@ export function enableHoverHighlight(view, layer) {
       return;
     }
 
-    const graphic = hit.results[0].graphic;
+    const graphic = result.graphic;
 
     if (lastGraphic && lastGraphic.uid === graphic.uid) {
       return;
@@ -44,5 +54,5 @@ export function enableHoverHighlight(view, layer) {
     highlight = layerView.highlight(graphic, {
       name: "hover-highlight",
     });
-  });
+  }
 }

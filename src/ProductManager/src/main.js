@@ -13,9 +13,11 @@ import { initNoticeToasts } from "./js/ui/noticeToastRenderer.js";
 import { initNoticePanel } from "./js/ui/noticePanel.js";
 import "@esri/calcite-components/dist/components/calcite-notice";
 import { initNavbarNotifications } from "./js/ui/navbarNotifications.js";
+import { createHoverManager } from "./ui/hoverManager.js";
 let map;
 let view;
 let geoJsonLayer;
+let hoverManager;
 async function start() {
   configureArcGIS();
 
@@ -36,7 +38,13 @@ async function start() {
     noticeError("Failed to create map view.");
   }
   try {
+    hoverManager = createHoverManager(view);
+  } catch (error) {
+    noticeError("Failed to create hover manager.");
+  }
+  try {
     geoJsonLayer = addGeoJsonLayer(map, "https://localhost:7271/mock/products");
+    hoverManager.registerLayer(geoJsonLayer);
   } catch (error) {
     noticeError("Failed to add GeoJSON layer.");
   }

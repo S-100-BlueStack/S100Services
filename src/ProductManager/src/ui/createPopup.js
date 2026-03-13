@@ -1,4 +1,4 @@
-export function createPopup(layer) {
+export function createPopup() {
   return {
     title: "{datasetName}",
 
@@ -13,7 +13,7 @@ export function createPopup(layer) {
 
       container.appendChild(section);
 
-      section.appendChild(createRow("Dataset", attr.datasetName, true));
+      //section.appendChild(createRow("Dataset", attr.datasetName, true));
       section.appendChild(createRow("Edition", attr.edition));
       section.appendChild(createRow("Update", attr.update));
       section.appendChild(createStatusRow(attr.status));

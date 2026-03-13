@@ -77,8 +77,9 @@ namespace ProductCatalogueService
             {
                 options.AddPolicy("AllowFrontend",
                     policy => {
-                        policy.WithOrigins("http://localhost:5173")
+                        policy.WithOrigins(["http://localhost:5173", "https://localhost:5173"])
                               .AllowAnyHeader()
+                              .AllowCredentials()
                               .AllowAnyMethod();
                     });
             });
@@ -166,7 +167,12 @@ namespace ProductCatalogueService
 
             app.UseHttpsRedirection();
 
+            app.UseCors("AllowFrontend");
+
+            app.UseAuthentication();
             app.UseAuthorization();
+
+            app.MapControllers();
 
             app.Use(async (context, next) => {
                 if (context.Request.Path == "/") {
@@ -175,9 +181,7 @@ namespace ProductCatalogueService
                 }
                 await next();
             });
-#if DEBUG
-            app.Environment.EnvironmentName = "Development";
-#endif
+
             if (app.Environment.IsDevelopment()) {
                 app.MapGet("/mock/products", (IWebHostEnvironment env) => {
                     //var path = Path.Combine(env.ContentRootPath, "mock", "some_products.geojson");
@@ -191,9 +195,7 @@ namespace ProductCatalogueService
                 .Produces(StatusCodes.Status200OK)
                 .AllowAnonymous();
             }
-            app.UseCors("AllowFrontend");
 
-            app.MapControllers();
 
             app.Run();
         }

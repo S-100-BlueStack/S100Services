@@ -3,8 +3,9 @@ import {
   noticeError,
   noticeSuccess,
   noticeInfo,
-} from "../js/services/noticeService";
-const FREEZE_UI_MODE = "toggle"; // "toggle" | "color"
+} from "../js/services/noticeService.js";
+import { uploadProduct } from "../api/api.js";
+import { changeFreezeState } from "../api/api.js";
 
 let freezeAction = null;
 let sendAction = null;
@@ -12,22 +13,10 @@ let sendAction = null;
 const freezeState = new Map();
 
 export function registerPopupActions(view) {
-  reactiveUtils.watch(
-    () => view.popup.selectedFeature,
-    (feature) => {
-      if (!feature) return;
-
-      const id = feature.attributes.id;
-      const frozen = freezeState.get(id) === true;
-
-      updateUI(view, frozen);
-    },
-  );
-
   reactiveUtils.on(
     () => view.popup,
     "trigger-action",
-    (event) => {
+    async (event) => {
       const feature = view.popup.selectedFeature;
       if (!feature) return;
 
@@ -36,17 +25,63 @@ export function registerPopupActions(view) {
       if (event.action.id === "freeze-feature") {
         const newState = !(freezeState.get(id) === true);
 
-        freezeState.set(id, newState);
-
-        updateUI(view, newState);
-        noticeSuccess(
-          `Feature ${id} is now ${newState ? "frozen" : "unfrozen"}.`,
+        const result = await triggerFreeze(
+          feature.attributes.datasetName,
+          newState,
         );
+        if (result.success) {
+          freezeState.set(id, newState);
+          updateUI(view, newState);
+        }
       }
 
       if (event.action.id === "send-immediately") {
-        mockSendImmediately(feature);
+        sendImmediately(feature.attributes.datasetName);
       }
+    },
+  );
+}
+
+export function registerPopupHeaderActions(view) {
+  reactiveUtils.watch(
+    () => view.popup.features,
+    (features) => {
+      if (!features || !features.length) return;
+
+      const feature = features[0];
+
+      const flowItem = document.querySelector("calcite-flow-item");
+      if (!flowItem) return;
+
+      const title = flowItem.querySelector(
+        "header-actions--end header-actions",
+      );
+      if (!title) return;
+
+      // undgå dobbelt knap
+      let button = flowItem.querySelector(".copy-dataset-btn");
+
+      if (!button) {
+        button = document.createElement("calcite-action");
+        button.setAttribute("icon", "copy");
+        button.setAttribute("scale", "s");
+
+        button.className = "copy-dataset-btn";
+
+        // wrapper til title + icon
+        const wrapper = document.createElement("div");
+        wrapper.className = "popup-title-wrapper";
+
+        title.parentNode.insertBefore(wrapper, title);
+
+        wrapper.appendChild(title);
+        wrapper.appendChild(button);
+      }
+
+      button.onclick = () => {
+        const dataset = feature.attributes.datasetName;
+        navigator.clipboard.writeText(dataset);
+      };
     },
   );
 }
@@ -83,6 +118,37 @@ function updateUI(view, frozen) {
   }
 }
 
+async function triggerFreeze(datasetName, state) {
+  const result = await changeFreezeState(datasetName, state);
+  if (result.success) {
+    noticeSuccess(
+      `Product ${datasetName} ${state ? "frozen" : "unfrozen"} successfully`,
+    );
+  } else if (result.networkError) {
+    noticeError(
+      `Network error while ${state ? "freezing" : "unfreezing"} ${datasetName}`,
+    );
+  } else {
+    noticeError(
+      `Failed to ${state ? "freeze" : "unfreeze"} ${datasetName}: (${result.status}) ${result.statusText}`,
+    );
+  }
+  return result;
+}
+
+async function sendImmediately(datasetName) {
+  const result = await uploadProduct(datasetName);
+
+  if (result.success) {
+    noticeSuccess(`Product ${datasetName} sent successfully`);
+  } else if (result.networkError) {
+    noticeError(`Network error while sending ${datasetName}`);
+  } else {
+    noticeError(
+      `Failed to send ${datasetName}: (${result.status}) ${result.statusText}`,
+    );
+  }
+}
 function mockSendImmediately(feature) {
   console.log("Send immediately:", feature.attributes.id);
   noticeInfo(`Feature ${feature.attributes.id} sent immediately.`);

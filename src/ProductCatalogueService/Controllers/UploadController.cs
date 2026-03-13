@@ -1,6 +1,8 @@
 ﻿using Hangfire;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ProductCatalogueService.Jobs;
+using System.Security.Cryptography;
 
 namespace ProductCatalogueService.Controllers
 {
@@ -18,11 +20,23 @@ namespace ProductCatalogueService.Controllers
         /// <returns>The job id</returns>
         [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError, "application/json")]
+#if DEBUG
+        [AllowAnonymous] //TODO: Find rigtig løsning på dette
+#endif
         [HttpPut("{datasetName}", Name = "upload")]
         public IActionResult UploadSingularProduct(string datasetName, CancellationToken cancellationToken) {
             _logger.LogInformation("{method}({jobType}. User: {user})", nameof(UploadSingularProduct), datasetName, User?.Identity?.Name ?? string.Empty);
             var id = _backgroundJobClient.Enqueue<UploadSingularProductJob>(j => j.RunAsync(datasetName, cancellationToken));
-
+#if DEBUG
+            var rng = new Random();
+            var ranNum = rng.NextInt64(1, 4);
+            if (ranNum == 1) {
+                return this.UnprocessableEntity();
+            }
+            else if (ranNum == 2) {
+                return this.Forbid();
+            }
+#endif
 
             return this.Ok(id);
         }

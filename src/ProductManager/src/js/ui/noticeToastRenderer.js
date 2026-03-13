@@ -59,10 +59,10 @@ function createNoticeElement(notice) {
   const element = document.createElement("calcite-notice");
 
   element.kind = notice.type;
-  element.scale = "s";
+  element.scale = "m";
   element.open = true;
   element.closable = true;
-
+  element.icon = getSeverityIcon(notice.type);
   element.style.transition = `opacity ${FADE_DURATION}ms ease, transform ${FADE_DURATION}ms ease`;
   element.style.opacity = "0";
   element.style.transform = "translateX(100px)";
@@ -126,5 +126,20 @@ function enforceStackLimit() {
 
   for (let i = MAX_STACK; i < notices.length; i++) {
     closeNotice(notices[i]);
+  }
+}
+
+function getSeverityIcon(type) {
+  switch (type) {
+    case "success":
+      return "check-circle-f";
+    case "danger":
+      return "exclamation-mark-triangle-f";
+    case "warning":
+      return "exclamation-point-f";
+    case "info":
+      return "information-f";
+    default:
+      return "question";
   }
 }

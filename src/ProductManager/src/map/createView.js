@@ -1,6 +1,9 @@
 import MapView from "@arcgis/core/views/MapView.js";
 import { highlightConfig } from "../config/colorsConfig";
-import { registerPopupActions } from "../utils/popupActions";
+import {
+  registerPopupActions,
+  registerPopupHeaderActions,
+} from "../utils/popupActions";
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 
 export function createView(map) {
@@ -17,6 +20,7 @@ export function createView(map) {
       },
       visibleElements: {
         collapseButton: false,
+        featureNavigation: false,
       },
       actions: [
         {
@@ -43,6 +47,7 @@ export function createView(map) {
     { once: true },
   );
   registerPopupActions(view);
+  //registerPopupHeaderActions(view);
 
   return view;
 }

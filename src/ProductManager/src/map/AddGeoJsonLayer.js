@@ -15,7 +15,7 @@ export function addGeoJsonLayer(map, url) {
     objectIdField: "id",
   });
 
-  layer.popupTemplate = createPopup(layer);
+  layer.popupTemplate = createPopup();
   map.add(layer);
 
   return layer;
