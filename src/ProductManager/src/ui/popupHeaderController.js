@@ -58,25 +58,30 @@ function ensureCopyButton(header, datasetName) {
     btn.icon = "copy-to-clipboard";
     btn.scale = "m";
     btn.title = "Copy dataset name";
-
+    btn.appearance = "transparent";
     actions.prepend(btn);
+
+    btn.addEventListener("click", async () => {
+      const datasetName = btn.dataset.datasetName;
+
+      try {
+        await navigator.clipboard.writeText(datasetName);
+
+        addNotice({
+          type: "success",
+          message: "Dataset name copied",
+          duration: 2000,
+        });
+      } catch {
+        addNotice({
+          type: "danger",
+          message: "Failed to copy dataset name",
+          duration: 3000,
+        });
+      }
+    });
   }
 
-  btn.onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(datasetName);
-
-      addNotice({
-        type: "success",
-        message: `Copied: ${datasetName}`,
-        duration: 2000,
-      });
-    } catch (err) {
-      addNotice({
-        type: "danger",
-        message: `Failed to copy dataset name: ${err}`,
-        duration: 3000,
-      });
-    }
-  };
+  // opdater altid datasetName når popup skifter feature
+  btn.dataset.datasetName = datasetName;
 }
