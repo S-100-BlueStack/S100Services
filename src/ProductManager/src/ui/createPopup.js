@@ -1,6 +1,15 @@
+import { getStatusName } from "../store/statusStore";
+import { statusConfig } from "../config/colorsConfig";
+
 export function createPopup() {
   return {
-    title: "{datasetName}",
+    title: (event) => {
+      const attr = event.graphic.attributes;
+
+      const statusName = getStatusName(attr.status);
+
+      return `${attr.datasetName} (${statusName})`;
+    },
 
     content: (event) => {
       const attr = event.graphic.attributes;
@@ -64,12 +73,12 @@ function createStatusRow(status) {
   label.className = "popup-label";
   label.textContent = "Status";
 
-  const badge = document.createElement("calcite-badge");
-  badge.setAttribute("scale", "s");
-  badge.textContent = status;
+  const value = document.createElement("span");
+  value.className = "popup-value";
+  value.textContent = getStatusName(status);
 
   row.appendChild(label);
-  row.appendChild(badge);
+  row.appendChild(value);
 
   return row;
 }

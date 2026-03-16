@@ -5,6 +5,7 @@ import {
   registerPopupHeaderActions,
 } from "../utils/popupActions";
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
+import { statusConfig } from "../config/colorsConfig";
 
 export function createView(map) {
   const view = new MapView({
@@ -46,6 +47,7 @@ export function createView(map) {
     },
     { once: true },
   );
+
   registerPopupActions(view);
   //registerPopupHeaderActions(view);
 

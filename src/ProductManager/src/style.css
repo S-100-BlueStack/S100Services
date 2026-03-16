@@ -97,6 +97,8 @@ calcite-shell {
   cursor: pointer;
 }
 
+/* Popup-header colors based on status */
+
 /* Notice panel styles */
 #notice-log {
   padding: 10px;

@@ -14,6 +14,8 @@ import { initNoticePanel } from "./js/ui/noticePanel.js";
 import "@esri/calcite-components/dist/components/calcite-notice";
 import { initNavbarNotifications } from "./js/ui/navbarNotifications.js";
 import { createHoverManager } from "./ui/hoverManager.js";
+import { loadStatuses } from "./store/statusStore.js";
+
 let map;
 let view;
 let geoJsonLayer;
@@ -26,6 +28,11 @@ async function start() {
 
   await loadNavbar();
   initNavbarNotifications();
+  try {
+    await loadStatuses();
+  } catch (error) {
+    noticeError("Failed to load product states.");
+  }
 
   try {
     map = createMap();
