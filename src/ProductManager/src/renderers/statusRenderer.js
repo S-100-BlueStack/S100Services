@@ -1,6 +1,6 @@
-import { statusConfig } from "../config/colorsConfig";
+import { statusColorConfig } from "../config/colorsConfig";
 
-const uniqueValueInfos = Object.entries(statusConfig)
+const uniqueValueInfos = Object.entries(statusColorConfig)
   .sort(([a], [b]) => Number(a) - Number(b))
   .map(([value, cfg]) => ({
     value: Number(value),

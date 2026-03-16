@@ -28,7 +28,7 @@ function render(notices) {
   ${notice.message ? `<div class="notice-message">${notice.message}</div>` : ""}
 </span>
 
-<span class="notice-time">${notice.timestamp.toLocaleTimeString()}</span>
+<span class="notice-time">${notice.timestamp?.toLocaleTimeString()}</span>
 `;
 
     container.appendChild(row);

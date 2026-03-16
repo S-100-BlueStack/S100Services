@@ -5,7 +5,7 @@ import {
   registerPopupHeaderActions,
 } from "../utils/popupActions";
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
-import { statusConfig } from "../config/colorsConfig";
+import { applyHeaderColor } from "../ui/popupHeaderController";
 
 export function createView(map) {
   const view = new MapView({
@@ -47,9 +47,23 @@ export function createView(map) {
     },
     { once: true },
   );
+  reactiveUtils.when(
+    () => view.popup.container,
+    (container) => {
+      const observer = new MutationObserver(() => applyHeaderColor(view));
 
+      observer.observe(container, {
+        childList: true,
+        subtree: true,
+      });
+
+      reactiveUtils.watch(
+        () => view.popup.selectedFeature,
+        () => applyHeaderColor(view),
+      );
+    },
+  );
   registerPopupActions(view);
   //registerPopupHeaderActions(view);
-
   return view;
 }

@@ -1,3 +1,5 @@
+import { statusColorConfig } from "../config/colorsConfig.js";
+
 const statusMap = new Map();
 const API_BASE_URL = "https://localhost:7271/";
 
@@ -11,10 +13,17 @@ export async function loadStatuses() {
   const data = await response.json();
 
   data.forEach((state) => {
-    statusMap.set(state.Id, state.Name);
+    statusMap.set(state.Id, state);
   });
 }
 
 export function getStatusName(id) {
-  return statusMap.get(id) ?? id;
+  return statusMap.get(id)?.Name ?? id;
+}
+
+export function getStatusColor(id) {
+  return statusColorConfig[id];
+}
+export function getStatus(id) {
+  return statusMap.get(id);
 }

@@ -1,6 +1,6 @@
-import "./style.css";
 import "@arcgis/core/assets/esri/themes/light/main.css";
 import "bootstrap/dist/css/bootstrap.min.css";
+import "./style.css";
 import { createMap } from "./map/createMap.js";
 import { createView } from "./map/createView.js";
 import { inspectLayer } from "./utils/debugLayer";

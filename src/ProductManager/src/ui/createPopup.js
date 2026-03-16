@@ -1,5 +1,4 @@
 import { getStatusName } from "../store/statusStore";
-import { statusConfig } from "../config/colorsConfig";
 
 export function createPopup() {
   return {
@@ -8,7 +7,7 @@ export function createPopup() {
 
       const statusName = getStatusName(attr.status);
 
-      return `${attr.datasetName} (${statusName})`;
+      return `${attr.datasetName}`;
     },
 
     content: (event) => {
