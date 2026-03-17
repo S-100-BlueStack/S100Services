@@ -104,10 +104,15 @@ export function createHoverManager(view) {
     return lockedGraphic?.attributes?.id || null;
   }
 
+  function getLockedLayerId() {
+    return lockedGraphic?.layer?.customId || null;
+  }
+
   return {
     registerLayer,
     setLockedFeature,
     clearLockedFeature,
     getLockedFeatureId,
+    getLockedLayerId,
   };
 }

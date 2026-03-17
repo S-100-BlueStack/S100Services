@@ -13,10 +13,10 @@ export function createRefreshService({
   onRefreshSuccess,
   onRefreshError,
 }) {
-  let geoJsonLayer = null;
+  let geoJsonLayers = [];
 
-  function setLayer(layer) {
-    geoJsonLayer = layer;
+  function setLayers(layers) {
+    geoJsonLayers = layers;
   }
 
   function captureState() {
@@ -24,18 +24,26 @@ export function createRefreshService({
 
     return {
       selectedFeatureId: selectedFeature?.attributes?.id,
+      selectedLayerId: selectedFeature?.layer?.customId,
+
       popupVisible: view.popup.visible,
 
       lockedFeatureId: hoverManager?.getLockedFeatureId?.(),
+      lockedLayerId: hoverManager?.getLockedLayerId?.(),
     };
   }
 
   async function restoreState(state) {
-    if (!geoJsonLayer) return;
+    if (!geoJsonLayers.length) return;
 
     // --- Popup ---
     if (state?.popupVisible && state.selectedFeatureId) {
-      const graphic = await findGraphicById(geoJsonLayer, view, state.selectedFeatureId);
+      const graphic = await findGraphicInLayer(
+        geoJsonLayers,
+        view,
+        state.selectedLayerId,
+        state.selectedFeatureId
+      );
 
       if (graphic) {
         view.popup.open({
@@ -47,7 +55,12 @@ export function createRefreshService({
 
     // --- Highlight ---
     if (state?.lockedFeatureId) {
-      const graphic = await findGraphicById(geoJsonLayer, view, state.lockedFeatureId);
+      const graphic = await findGraphicInLayer(
+        geoJsonLayers,
+        view,
+        state.lockedLayerId,
+        state.lockedFeatureId
+      );
 
       if (graphic) {
         hoverManager.setLockedFeature(graphic);
@@ -79,15 +92,18 @@ export function createRefreshService({
     try {
       const data = await loadAppData();
 
-      if (geoJsonLayer) {
-        map.remove(geoJsonLayer);
-      }
+      // Fjern alle gamle layers
+      geoJsonLayers.forEach((layer) => map.remove(layer));
+      geoJsonLayers = [];
 
-      geoJsonLayer = addLayer(map, data.geoJson);
+      geoJsonLayers = data.layers.map((layerConfig) => addLayer(map, layerConfig));
 
-      hoverManager.registerLayer(geoJsonLayer);
+      // Registrer hover
+      geoJsonLayers.forEach((layer) => {
+        hoverManager.registerLayer(layer);
+      });
 
-      await view.whenLayerView(geoJsonLayer);
+      await Promise.all(geoJsonLayers.map((layer) => view.whenLayerView(layer)));
 
       hoverManager.clearLockedFeature();
 
@@ -144,6 +160,21 @@ export function createRefreshService({
     setAuto,
     startAuto,
     stopAuto,
-    setLayer,
+    setLayers,
   };
+}
+
+async function findGraphicInLayer(layers, view, layerId, featureId) {
+  const layer = layers.find((l) => l.customId === layerId);
+  if (!layer) return null;
+
+  const layerView = await view.whenLayerView(layer);
+
+  const result = await layerView.queryFeatures({
+    where: `id = '${featureId}'`,
+    returnGeometry: true,
+    outFields: ["*"],
+  });
+
+  return result.features[0] || null;
 }

@@ -22,14 +22,22 @@ import { runWithRetry } from "./utils/retryRunner.js";
 import { showLoader, hideLoader, setLoaderText } from "./ui/loader.js";
 import { fetchGeoJson } from "./services/dataLoader.js";
 import { createRefreshService } from "./services/refreshService.js";
+import { createLayer } from "./map/layerFactory.js";
 
 let map;
 let view;
-let geoJsonLayer;
+let geoJsonLayers = [];
 let hoverManager;
 let refreshService;
 
 const abortController = new AbortController();
+
+const layerConfigs = [
+  {
+    id: "default",
+    fetch: fetchGeoJson,
+  },
+];
 
 //
 // ---------------- UI INIT ----------------
@@ -58,7 +66,7 @@ function initMap() {
     view,
     hoverManager,
     loadAppData,
-    addLayer: addGeoJsonLayerFromData,
+    addLayer: createLayer,
 
     onRefreshSuccess: () => {
       updateLastUpdated();
@@ -77,20 +85,40 @@ function initMap() {
 async function loadAppData() {
   const [statuses, usages] = await Promise.all([loadStatuses(), loadUsages()]);
 
-  const geoJson = await fetchGeoJson();
+  const layerResults = await Promise.all(
+    layerConfigs.map(async (config) => {
+      const data = await config.fetch();
 
-  return { statuses, usages, geoJson };
+      return {
+        id: config.id,
+        data,
+      };
+    })
+  );
+
+  return { statuses, usages, layers: layerResults };
 }
 
 //
 // ---------------- BIND ----------------
 //
 function bindDataToMap(data) {
-  geoJsonLayer = addGeoJsonLayerFromData(map, data.geoJson);
+  geoJsonLayers = data.layers.map((layerConfig) => {
+    const layer = createLayer(map, layerConfig);
 
-  hoverManager.registerLayer(geoJsonLayer);
-  enableHoverHighlight(view, geoJsonLayer);
-  refreshService.setLayer(geoJsonLayer);
+    // Bind id til layer
+    layer.customId = layerConfig.id;
+
+    return layer;
+  });
+
+  geoJsonLayers.forEach((layer) => {
+    hoverManager.registerLayer(layer);
+    enableHoverHighlight(view, layer);
+  });
+
+  // Midlertidigt: brug første layer til refreshService (backwards compatibility)
+  refreshService.setLayers(geoJsonLayers);
 }
 
 //
