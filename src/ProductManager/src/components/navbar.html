@@ -8,6 +8,30 @@
   </div>
 
   <div class="header-right">
+    <!-- Last updated -->
+    <span
+      id="last-updated"
+      class="ms-2 text-muted"
+      style="font-size: 12px; color: white !important"
+    >
+      Updated: -
+    </span>
+    <!-- Refresh button -->
+    <calcite-action
+      id="refresh-button"
+      icon="refresh"
+      text="Refresh data"
+      scale="m"
+    ></calcite-action>
+
+    <!-- Auto refresh toggle -->
+    <div class="d-flex align-items-center">
+      <calcite-switch id="auto-refresh-switch" checked></calcite-switch>
+
+      <calcite-tooltip reference-element="auto-refresh-switch" style="z-index: 9999">
+        Automatically refreshes every 10 minutes
+      </calcite-tooltip>
+    </div>
     <div class="notification-wrapper">
       <calcite-action
         id="notification-button"

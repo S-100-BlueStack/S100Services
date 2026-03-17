@@ -20,10 +20,14 @@ import { loadUsages } from "./store/usageStore.js";
 import { resetUnread } from "./js/state/noticeStore.js";
 import { runWithRetry } from "./utils/retryRunner.js";
 import { showLoader, hideLoader, setLoaderText } from "./ui/loader.js";
+import { fetchGeoJson } from "./services/dataLoader.js";
+import { createRefreshService } from "./services/refreshService.js";
+
 let map;
 let view;
 let geoJsonLayer;
 let hoverManager;
+let refreshService;
 
 const abortController = new AbortController();
 
@@ -38,6 +42,7 @@ async function initUI() {
 
   await loadNavbar();
   initNavbarNotifications();
+  initRefreshControls();
 }
 
 //
@@ -47,23 +52,28 @@ function initMap() {
   map = createMap();
   view = createView(map);
   hoverManager = createHoverManager(view);
+  window.hoverManager = hoverManager;
+  refreshService = createRefreshService({
+    map,
+    view,
+    hoverManager,
+    loadAppData,
+    addLayer: addGeoJsonLayerFromData,
+
+    onRefreshSuccess: () => {
+      updateLastUpdated();
+      noticeSuccess("Data refreshed");
+    },
+
+    onRefreshError: (error) => {
+      noticeError(`Refresh failed: ${error.message}`);
+    },
+  });
 }
 
 //
 // ---------------- DATA ----------------
 //
-async function fetchGeoJson() {
-  const response = await fetch("https://localhost:7271/mock/products", {
-    signal: abortController.signal,
-  });
-
-  if (!response.ok) {
-    throw new Error(`GeoJSON request failed: ${response.status}`);
-  }
-
-  return await response.json();
-}
-
 async function loadAppData() {
   const [statuses, usages] = await Promise.all([loadStatuses(), loadUsages()]);
 
@@ -80,6 +90,7 @@ function bindDataToMap(data) {
 
   hoverManager.registerLayer(geoJsonLayer);
   enableHoverHighlight(view, geoJsonLayer);
+  refreshService.setLayer(geoJsonLayer);
 }
 
 //
@@ -104,6 +115,9 @@ async function loadDataIncrementally() {
 
     setLoaderText("Rendering data...");
     bindDataToMap(data);
+    updateLastUpdated();
+
+    refreshService.startAuto();
 
     hideLoader();
 
@@ -120,6 +134,43 @@ async function loadDataIncrementally() {
   }
 }
 
+//
+// ---------------- REFRESH LOGIC ----------------
+//
+function initRefreshControls() {
+  const refreshBtn = document.getElementById("refresh-button");
+  const autoSwitch = document.getElementById("auto-refresh-switch");
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", async () => {
+      refreshBtn.loading = true;
+
+      await refreshService.refresh();
+
+      refreshBtn.loading = false;
+    });
+  }
+
+  if (autoSwitch) {
+    autoSwitch.addEventListener("calciteSwitchChange", (e) => {
+      refreshService.setAuto(e.target.checked);
+    });
+  }
+}
+
+function updateLastUpdated() {
+  const el = document.getElementById("last-updated");
+  if (!el) return;
+
+  const now = new Date();
+
+  el.textContent =
+    "Updated: " +
+    now.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+}
 //
 // ---------------- BOOTSTRAP ----------------
 //

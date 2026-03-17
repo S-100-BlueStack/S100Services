@@ -1,9 +1,5 @@
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
-import {
-  noticeError,
-  noticeSuccess,
-  noticeInfo,
-} from "../js/services/noticeService.js";
+import { noticeError, noticeSuccess, noticeInfo } from "../js/services/noticeService.js";
 import { uploadProduct } from "../api/api.js";
 import { changeFreezeState } from "../api/api.js";
 
@@ -25,10 +21,7 @@ export function registerPopupActions(view) {
       if (event.action.id === "freeze-feature") {
         const newState = !(freezeState.get(id) === true);
 
-        const result = await triggerFreeze(
-          feature.attributes.datasetName,
-          newState,
-        );
+        const result = await triggerFreeze(feature.attributes.datasetName, newState);
         if (result.success) {
           freezeState.set(id, newState);
           updateUI(view, newState);
@@ -38,51 +31,7 @@ export function registerPopupActions(view) {
       if (event.action.id === "send-immediately") {
         sendImmediately(feature.attributes.datasetName);
       }
-    },
-  );
-}
-
-export function registerPopupHeaderActions(view) {
-  reactiveUtils.watch(
-    () => view.popup.features,
-    (features) => {
-      if (!features || !features.length) return;
-
-      const feature = features[0];
-
-      const flowItem = document.querySelector("calcite-flow-item");
-      if (!flowItem) return;
-
-      const title = flowItem.querySelector(
-        "header-actions--end header-actions",
-      );
-      if (!title) return;
-
-      // undgå dobbelt knap
-      let button = flowItem.querySelector(".copy-dataset-btn");
-
-      if (!button) {
-        button = document.createElement("calcite-action");
-        button.setAttribute("icon", "copy");
-        button.setAttribute("scale", "s");
-
-        button.className = "copy-dataset-btn";
-
-        // wrapper til title + icon
-        const wrapper = document.createElement("div");
-        wrapper.className = "popup-title-wrapper";
-
-        title.parentNode.insertBefore(wrapper, title);
-
-        wrapper.appendChild(title);
-        wrapper.appendChild(button);
-      }
-
-      button.onclick = () => {
-        const dataset = feature.attributes.datasetName;
-        navigator.clipboard.writeText(dataset);
-      };
-    },
+    }
   );
 }
 
@@ -121,16 +70,12 @@ function updateUI(view, frozen) {
 async function triggerFreeze(datasetName, state) {
   const result = await changeFreezeState(datasetName, state);
   if (result.success) {
-    noticeSuccess(
-      `Product ${datasetName} ${state ? "frozen" : "unfrozen"} successfully`,
-    );
+    noticeSuccess(`Product ${datasetName} ${state ? "frozen" : "unfrozen"} successfully`);
   } else if (result.networkError) {
-    noticeError(
-      `Network error while ${state ? "freezing" : "unfreezing"} ${datasetName}`,
-    );
+    noticeError(`Network error while ${state ? "freezing" : "unfreezing"} ${datasetName}`);
   } else {
     noticeError(
-      `Failed to ${state ? "freeze" : "unfreeze"} ${datasetName}: (${result.status}) ${result.statusText}`,
+      `Failed to ${state ? "freeze" : "unfreeze"} ${datasetName}: (${result.status}) ${result.statusText}`
     );
   }
   return result;
@@ -144,9 +89,7 @@ async function sendImmediately(datasetName) {
   } else if (result.networkError) {
     noticeError(`Network error while sending ${datasetName}`);
   } else {
-    noticeError(
-      `Failed to send ${datasetName}: (${result.status}) ${result.statusText}`,
-    );
+    noticeError(`Failed to send ${datasetName}: (${result.status}) ${result.statusText}`);
   }
 }
 function mockSendImmediately(feature) {

@@ -1,9 +1,6 @@
 import MapView from "@arcgis/core/views/MapView.js";
 import { highlightConfig } from "../config/colorsConfig";
-import {
-  registerPopupActions,
-  registerPopupHeaderActions,
-} from "../utils/popupActions";
+import { registerPopupActions } from "../utils/popupActions";
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 import { applyHeaderColor } from "../ui/popupHeaderController";
 
@@ -11,7 +8,7 @@ export function createView(map) {
   const view = new MapView({
     container: "viewDiv",
     map: map,
-    center: [12.56, 55.67],
+    center: [10.3, 56],
     zoom: 6,
 
     popup: {
@@ -45,7 +42,7 @@ export function createView(map) {
     () => {
       view.popup.viewModel.includeDefaultActions = false;
     },
-    { once: true },
+    { once: true }
   );
   reactiveUtils.when(
     () => view.popup.container,
@@ -59,11 +56,21 @@ export function createView(map) {
 
       reactiveUtils.watch(
         () => view.popup.selectedFeature,
-        () => applyHeaderColor(view),
+        () => applyHeaderColor(view)
       );
-    },
+      reactiveUtils.watch(
+        () => view.popup.selectedFeature,
+        (feature) => {
+          if (!feature) {
+            window.hoverManager?.clearLockedFeature();
+            return;
+          }
+
+          window.hoverManager?.setLockedFeature(feature);
+        }
+      );
+    }
   );
   registerPopupActions(view);
-  //registerPopupHeaderActions(view);
   return view;
 }

@@ -8,6 +8,9 @@ export function createHoverManager(view) {
   let pointerEvent = null;
   let frameRequested = false;
 
+  let lockedGraphic = null;
+  let lockedHighlight = null;
+
   function registerLayer(layer) {
     layers.add(layer);
 
@@ -27,6 +30,8 @@ export function createHoverManager(view) {
 
   async function runHitTest() {
     frameRequested = false;
+
+    if (lockedGraphic) return;
 
     if (!pointerEvent || layers.size === 0) return;
 
@@ -69,7 +74,40 @@ export function createHoverManager(view) {
     lastGraphicUid = null;
   }
 
+  function setLockedFeature(graphic) {
+    clearHighlight();
+
+    lockedGraphic = graphic;
+
+    const layerView = layerViews.get(graphic.layer);
+    if (!layerView) return;
+
+    if (lockedHighlight) {
+      lockedHighlight.remove();
+    }
+
+    lockedHighlight = layerView.highlight(graphic, {
+      name: "hover-highlight",
+    });
+  }
+
+  function clearLockedFeature() {
+    if (lockedHighlight) {
+      lockedHighlight.remove();
+      lockedHighlight = null;
+    }
+
+    lockedGraphic = null;
+  }
+
+  function getLockedFeatureId() {
+    return lockedGraphic?.attributes?.id || null;
+  }
+
   return {
     registerLayer,
+    setLockedFeature,
+    clearLockedFeature,
+    getLockedFeatureId,
   };
 }

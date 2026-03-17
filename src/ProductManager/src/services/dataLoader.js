@@ -18,7 +18,7 @@ export async function loadAppData() {
 }
 
 // isolér fetch så den kan retries alene hvis nødvendigt
-async function fetchGeoJson() {
+export async function fetchGeoJson() {
   const response = await fetch("https://localhost:7271/mock/products");
 
   if (!response.ok) {
