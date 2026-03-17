@@ -8,7 +8,12 @@
     type="module"
   ></script>
 </head>
-
+<div id="app-loader" class="app-loader hidden">
+  <div class="loader-content">
+    <calcite-loader active scale="l"></calcite-loader>
+    <div id="loader-text" class="loader-text"></div>
+  </div>
+</div>
 <body>
   <calcite-shell content-behind>
     <div id="navbar" slot="header"></div>

@@ -1,0 +1,31 @@
+{
+  "env": {
+    "browser": true,
+    "es2022": true
+  },
+  "extends": ["eslint:recommended", "prettier"],
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "module"
+  },
+  "globals": {
+    "require": "readonly"
+  },
+  "rules": {
+    /* --- Kvalitet / fejl --- */
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "no-undef": "error",
+    "no-console": "off",
+
+    /* --- ArcGIS / DOM praksis --- */
+    "no-async-promise-executor": "off",
+    "no-prototype-builtins": "off",
+
+    /* --- Moderne JS --- */
+    "prefer-const": "warn",
+    "no-var": "error",
+
+    /* --- Læsbarhed --- */
+    "max-lines-per-function": ["warn", { "max": 80, "skipComments": true }]
+  }
+}

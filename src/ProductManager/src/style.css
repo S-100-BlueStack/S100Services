@@ -24,6 +24,44 @@ calcite-shell {
     font-size: 16px;
   }
 }
+/* Loader styling */
+.app-loader {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  opacity: 1;
+  transition: opacity 200ms ease;
+}
+
+.app-loader.hidden {
+  display: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loader-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.loader-content calcite-loader {
+  display: block;
+}
+
+.loader-text {
+  font-size: 14px;
+  color: #444;
+  width: 100%;
+  visibility: hidden;
+}
 /* Fixes blue bounding box on map when clicking inside of it */
 .esri-view-surface:focus::after,
 .esri-view-surface:focus-visible::after,
@@ -96,8 +134,6 @@ calcite-shell {
 .copy-dataset-btn {
   cursor: pointer;
 }
-
-/* Popup-header colors based on status */
 
 /* Notice styling */
 .notice-row {
