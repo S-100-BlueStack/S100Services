@@ -1,5 +1,6 @@
 import { findFeature } from "../map/featureAdapter";
 import { getLayer, getAllLayers, clearLayers, registerLayer } from "../map/layerRegistry";
+import { rebuildLayers } from "../map/rebuildLayers";
 
 let isRefreshing = false;
 let autoRefreshEnabled = true;
@@ -72,23 +73,15 @@ export function createRefreshService({
     try {
       const data = await loadAppData();
 
-      hoverManager.clear();
-      clearLayers(map);
-
-      data.layers.forEach((layerConfig) => {
-        const layer = addLayer(map, layerConfig);
-        layer.customId = layerConfig.id;
-        registerLayer(layer);
+      await rebuildLayers({
+        map,
+        view,
+        hoverManager,
+        layerConfigs: data.layers,
+        createLayer: addLayer,
       });
-
-      getAllLayers().forEach((layer) => {
-        hoverManager.registerLayer(layer);
-      });
-
-      await Promise.all(getAllLayers().map((layer) => view.whenLayerView(layer)));
 
       await restoreState(state);
-
       onRefreshSuccess?.();
     } catch (error) {
       onRefreshError?.(error);
