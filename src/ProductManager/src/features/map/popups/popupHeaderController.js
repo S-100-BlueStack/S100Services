@@ -1,5 +1,5 @@
-import { getStatusColor } from "../store/statusStore";
-import { addNotice } from "../js/state/noticeStore";
+import { getStatusColor } from "../../data/stores/statusStore";
+import { addNotice } from "../../notices/state/noticeStore";
 let currentFeatureId = null;
 
 export function applyHeaderColor(view) {
@@ -13,9 +13,7 @@ export function applyHeaderColor(view) {
 }
 
 function waitForHeader(view, featureId) {
-  const heading = view.popup.container?.querySelector(
-    ".esri-features__heading",
-  );
+  const heading = view.popup.container?.querySelector(".esri-features__heading");
   if (!heading) {
     requestAnimationFrame(() => waitForHeader(view, featureId));
     return;

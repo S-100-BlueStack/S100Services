@@ -1,25 +1,29 @@
+import { loadStatuses } from "../stores/statusStore.js";
+import { loadUsages } from "../stores/usageStore.js";
+import { layerConfigs } from "../../map/config/layerConfigs.js";
+
+const API_BASE_URL = "https://localhost:7271/";
+
 export async function loadAppData() {
-  const result = {
-    statuses: null,
-    usages: null,
-    geoJson: null,
-  };
+  await Promise.all([loadStatuses(), loadUsages()]);
 
-  // Kør parallelt hvor muligt
-  const [statuses, usages] = await Promise.all([loadStatuses(), loadUsages()]);
+  const layers = await Promise.all(
+    layerConfigs.map(async (config) => {
+      const data = await config.fetch();
 
-  result.statuses = statuses;
-  result.usages = usages;
+      return {
+        id: config.id,
+        type: config.type,
+        data,
+      };
+    })
+  );
 
-  // GeoJSON separat (ofte den der fejler)
-  result.geoJson = await fetchGeoJson();
-
-  return result;
+  return { layers };
 }
 
-// isolér fetch så den kan retries alene hvis nødvendigt
 export async function fetchGeoJson() {
-  const response = await fetch("https://localhost:7271/mock/products");
+  const response = await fetch(`${API_BASE_URL}mock/products`);
 
   if (!response.ok) {
     throw new Error(`GeoJSON request failed: ${response.status}`);

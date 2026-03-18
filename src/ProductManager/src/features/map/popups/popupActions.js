@@ -1,7 +1,6 @@
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
-import { noticeError, noticeSuccess, noticeInfo } from "../../../js/services/noticeService.js";
-import { uploadProduct } from "../../../api/lookupApi.js";
-import { changeFreezeState } from "../../../api/lookupApi.js";
+import { noticeError, noticeInfo, noticeSuccess } from "../../notices/services/noticeService.js";
+import { changeFreezeState, uploadProduct } from "../../../api/productApi.js";
 
 let freezeAction = null;
 let sendAction = null;

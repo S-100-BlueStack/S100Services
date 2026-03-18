@@ -1,4 +1,4 @@
-import { getStatusName } from "../store/statusStore";
+import { getStatusName } from "../../data/stores/statusStore.js";
 
 export function createPopup() {
   return {
