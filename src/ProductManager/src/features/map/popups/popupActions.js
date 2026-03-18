@@ -1,6 +1,6 @@
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 import { noticeError, noticeInfo, noticeSuccess } from "../../notices/services/noticeService.js";
-import { changeFreezeState, uploadProduct } from "../../../api/productApi.js";
+import { changeFreezeState, uploadProduct } from "../../data/api/productApi.js";
 
 let freezeAction = null;
 let sendAction = null;
@@ -35,35 +35,37 @@ export function registerPopupActions(view) {
 }
 
 function updateUI(view, frozen) {
-  if (frozen) {
-    view.popup.actions = [
-      {
-        title: "Unfreeze",
-        id: "freeze-feature",
-        icon: "brightness",
-      },
-      {
-        title: "Send immediately",
-        id: "send-immediately",
-        icon: "send",
-        disabled: true,
-      },
-    ];
-  } else {
-    view.popup.actions = [
-      {
-        title: "Freeze",
-        id: "freeze-feature",
-        icon: "snow",
-      },
-      {
-        title: "Send immediately",
-        id: "send-immediately",
-        icon: "send",
-        disabled: false,
-      },
-    ];
-  }
+  view.popup.actions = frozen
+    ? [
+        {
+          title: "Unfreeze",
+          id: "freeze-feature",
+          icon: "brightness",
+          className: "popup-action popup-action-freeze",
+        },
+        {
+          title: "Send immediately",
+          id: "send-immediately",
+          icon: "send",
+          disabled: true,
+          className: "popup-action popup-action-send is-disabled",
+        },
+      ]
+    : [
+        {
+          title: "Freeze",
+          id: "freeze-feature",
+          icon: "snow",
+          className: "popup-action popup-action-freeze",
+        },
+        {
+          title: "Send immediately",
+          id: "send-immediately",
+          icon: "send",
+          disabled: false,
+          className: "popup-action popup-action-send",
+        },
+      ];
 }
 
 async function triggerFreeze(datasetName, state) {
@@ -90,8 +92,4 @@ async function sendImmediately(datasetName) {
   } else {
     noticeError(`Failed to send ${datasetName}: (${result.status}) ${result.statusText}`);
   }
-}
-function mockSendImmediately(feature) {
-  console.log("Send immediately:", feature.attributes.id);
-  noticeInfo(`Feature ${feature.attributes.id} sent immediately.`);
 }

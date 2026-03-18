@@ -135,6 +135,22 @@ calcite-shell {
   cursor: pointer;
 }
 
+/* Popup action icon color */
+.popup-action-freeze {
+  color: #0d6efd;
+}
+
+.esri-popup__action.popup-action-send {
+  color: #198754;
+}
+
+/* Optional: disabled look */
+.esri-popup__action.is-disabled,
+.esri-popup__action[disabled] {
+  color: #6c757d;
+  opacity: 0.65;
+}
+
 /* Notice styling */
 .notice-row {
   display: grid;
