@@ -5,9 +5,7 @@ import "./style.css";
 import { createMap } from "./map/createMap.js";
 import { createView } from "./map/createView.js";
 import { configureArcGIS } from "./config/arcgisConfig.js";
-import { addGeoJsonLayerFromData } from "./map/addGeoJsonLayer.js";
 import { loadNavbar } from "./utils/loaders.js";
-import { enableHoverHighlight } from "./interactions/hoverHightlight.js";
 import { noticeError, noticeSuccess } from "./js/services/noticeService.js";
 import { initNoticeToasts } from "./js/ui/noticeToastRenderer.js";
 import { initNoticePanel } from "./js/ui/noticePanel.js";
@@ -105,21 +103,14 @@ async function loadAppData() {
 // ---------------- BIND ----------------
 //
 function bindDataToMap(data) {
-  // Fjern alle eksisterende lag fra kortet og hoverManager
-  getAllLayers().forEach((layer) => {
-    map.remove(layer); // Fjern layer fra kortet
-  });
-  hoverManager.clear(); // Ryd hoverManager interne lag og highlights
-  clearLayers(map); // Eventuelt ekstra cleanup fra layerRegistry
+  hoverManager.clear();
+  clearLayers(map);
 
-  // Tilføj nye lag fra API/data
   data.layers.forEach((layerConfig) => {
     const layer = createLayer(map, layerConfig);
     layer.customId = layerConfig.id;
-
-    registerLayer(layer); // Registrer i layerRegistry
-    hoverManager.registerLayer(layer); // Gør hoverManager opmærksom på laget
-    enableHoverHighlight(view, layer); // Genaktiver hover highlight
+    registerLayer(layer);
+    hoverManager.registerLayer(layer);
   });
 }
 

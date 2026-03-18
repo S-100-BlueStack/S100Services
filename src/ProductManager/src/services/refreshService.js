@@ -1,5 +1,6 @@
 import { findFeature } from "../map/featureAdapter";
-import { getLayer } from "../map/layerRegistry";
+import { getLayer, getAllLayers, clearLayers, registerLayer } from "../map/layerRegistry";
+
 let isRefreshing = false;
 let autoRefreshEnabled = true;
 let intervalId = null;
@@ -15,29 +16,23 @@ export function createRefreshService({
   onRefreshSuccess,
   onRefreshError,
 }) {
-  let geoJsonLayers = [];
-
   function captureState() {
     const selectedFeature = view.popup.selectedFeature;
 
     return {
       selectedFeatureId: selectedFeature?.attributes?.id,
       selectedLayerId: selectedFeature?.layer?.customId,
-
       popupVisible: view.popup.visible,
-
       lockedFeatureId: hoverManager?.getLockedFeatureId?.(),
       lockedLayerId: hoverManager?.getLockedLayerId?.(),
     };
   }
 
   async function restoreState(state) {
-    if (!geoJsonLayers.length) return;
+    if (!state) return;
 
-    // --- Popup ---
-    if (state?.popupVisible && state.selectedFeatureId) {
+    if (state.popupVisible && state.selectedFeatureId && state.selectedLayerId) {
       const layer = getLayer(state.selectedLayerId);
-
       const graphic = findFeature(layer, state.selectedFeatureId);
 
       if (graphic) {
@@ -48,10 +43,8 @@ export function createRefreshService({
       }
     }
 
-    // --- Highlight ---
-    if (state?.lockedFeatureId) {
+    if (state.lockedFeatureId && state.lockedLayerId) {
       const layer = getLayer(state.lockedLayerId);
-
       const graphic = findFeature(layer, state.lockedFeatureId);
 
       if (graphic) {
@@ -59,50 +52,40 @@ export function createRefreshService({
       }
     }
   }
+
   function getPopupLocation(graphic) {
     const geom = graphic.geometry;
 
     if (!geom) return null;
-
-    if (geom.type === "point") {
-      return geom;
-    }
-
-    if (geom.extent) {
-      return geom.extent.center;
-    }
+    if (geom.type === "point") return geom;
+    if (geom.extent) return geom.extent.center;
 
     return null;
   }
+
   async function refresh() {
     if (isRefreshing) return;
 
     isRefreshing = true;
-
     const state = captureState();
 
     try {
       const data = await loadAppData();
 
-      // Fjern alle gamle layers
-      geoJsonLayers.forEach((layer) => map.remove(layer));
-      geoJsonLayers = [];
+      hoverManager.clear();
+      clearLayers(map);
 
-      geoJsonLayers = data.layers.map((layerConfig) => {
+      data.layers.forEach((layerConfig) => {
         const layer = addLayer(map, layerConfig);
         layer.customId = layerConfig.id;
-        return layer;
+        registerLayer(layer);
       });
 
-      // Registrer hover
-      geoJsonLayers.forEach((layer) => {
+      getAllLayers().forEach((layer) => {
         hoverManager.registerLayer(layer);
-        view.whenLayerView(layer);
       });
 
-      await Promise.all(geoJsonLayers.map((layer) => view.whenLayerView(layer)));
-
-      hoverManager.clearLockedFeature();
+      await Promise.all(getAllLayers().map((layer) => view.whenLayerView(layer)));
 
       await restoreState(state);
 
