@@ -1,6 +1,6 @@
-import { findFeature } from "../map/featureAdapter";
-import { getLayer, getAllLayers, clearLayers, registerLayer } from "../map/layerRegistry";
-import { rebuildLayers } from "../map/rebuildLayers";
+import { findFeature } from "../map/featureAdapter.js";
+import { getLayer } from "../map/layerRegistry.js";
+import { rebuildLayers } from "../map/rebuildLayers.js";
 
 let isRefreshing = false;
 let autoRefreshEnabled = true;

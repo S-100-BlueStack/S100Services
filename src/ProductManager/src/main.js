@@ -21,7 +21,7 @@ import { showLoader, hideLoader, setLoaderText } from "./ui/loader.js";
 import { fetchGeoJson } from "./services/dataLoader.js";
 import { createRefreshService } from "./services/refreshService.js";
 import { createLayer } from "./map/layerFactory.js";
-import { registerLayer, getAllLayers, clearLayers } from "./map/layerRegistry.js";
+import { rebuildLayers } from "./map/rebuildLayers.js";
 
 let map;
 let view;
@@ -102,15 +102,13 @@ async function loadAppData() {
 //
 // ---------------- BIND ----------------
 //
-function bindDataToMap(data) {
-  hoverManager.clear();
-  clearLayers(map);
-
-  data.layers.forEach((layerConfig) => {
-    const layer = createLayer(map, layerConfig);
-    layer.customId = layerConfig.id;
-    registerLayer(layer);
-    hoverManager.registerLayer(layer);
+async function bindDataToMap(data) {
+  await rebuildLayers({
+    map,
+    view,
+    hoverManager,
+    layerConfigs: data.layers,
+    createLayer,
   });
 }
 
@@ -135,7 +133,7 @@ async function loadDataIncrementally() {
     });
 
     setLoaderText("Rendering data...");
-    bindDataToMap(data);
+    await bindDataToMap(data);
     updateLastUpdated();
 
     refreshService.startAuto();
@@ -199,7 +197,6 @@ async function waitForCalcite() {
 async function bootstrap() {
   try {
     await waitForCalcite();
-
     showLoader("Initializing application...");
 
     await initUI();
@@ -207,7 +204,7 @@ async function bootstrap() {
     setLoaderText("Initializing map...");
     initMap();
 
-    loadDataIncrementally();
+    await loadDataIncrementally();
   } catch (error) {
     hideLoader();
     noticeError(`Application failed: ${error.message}`);
