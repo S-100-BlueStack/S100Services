@@ -1,8 +1,8 @@
 import MapView from "@arcgis/core/views/MapView.js";
-import { highlightConfig } from "../config/colorsConfig";
-import { registerPopupActions } from "../utils/popupActions";
+import { highlightConfig } from "../../../shared/config/colorsConfig";
+import { registerPopupActions } from "../popups/popupActions";
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
-import { applyHeaderColor } from "../ui/popupHeaderController";
+import { applyHeaderColor } from "../../../ui/popupHeaderController";
 
 export function createView(map) {
   const view = new MapView({

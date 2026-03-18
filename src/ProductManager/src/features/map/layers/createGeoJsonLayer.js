@@ -1,6 +1,6 @@
 import GeoJSONLayer from "@arcgis/core/layers/GeoJSONLayer.js";
 import { statusRenderer } from "../renderers/statusRenderer";
-import { createPopup } from "../ui/createPopup";
+import { createPopup } from "../../../ui/createPopup";
 
 export function addGeoJsonLayer(map, url) {
   const layer = new GeoJSONLayer({

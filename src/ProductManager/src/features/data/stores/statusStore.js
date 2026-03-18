@@ -1,4 +1,4 @@
-import { statusColorConfig } from "../config/colorsConfig.js";
+import { statusColorConfig } from "../../../shared/config/colorsConfig.js";
 
 const statusMap = new Map();
 const API_BASE_URL = "https://localhost:7271/";

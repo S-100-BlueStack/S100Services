@@ -1,7 +1,7 @@
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer.js";
-import { geoJsonToGraphics } from "./transformers/geoJsonToGraphics.js";
-import { createLayerIndex } from "./layerIndex.js";
-import { createPopup } from "../ui/createPopup.js";
+import { geoJsonToGraphics } from "../transformers/geoJsonToGraphics.js";
+import { createLayerIndex } from "../core/layerIndex.js";
+import { createPopup } from "../../../ui/createPopup.js";
 
 export function createGraphicsLayer(map, layerConfig) {
   const { data, id } = layerConfig;

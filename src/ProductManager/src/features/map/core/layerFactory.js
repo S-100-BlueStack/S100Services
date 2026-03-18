@@ -1,4 +1,4 @@
-import { createGraphicsLayer } from "./createGraphicsLayer.js";
+import { createGraphicsLayer } from "../layers/createGraphicsLayer.js";
 
 export function createLayer(map, layerConfig) {
   const { type = "graphics" } = layerConfig;

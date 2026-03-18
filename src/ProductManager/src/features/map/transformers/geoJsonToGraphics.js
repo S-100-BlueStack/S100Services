@@ -1,5 +1,5 @@
 import Graphic from "@arcgis/core/Graphic.js";
-import { statusColorConfig } from "../../config/colorsConfig";
+import { statusColorConfig } from "../../../shared/config/colorsConfig";
 
 function getSymbol(status) {
   const cfg = statusColorConfig[status];
