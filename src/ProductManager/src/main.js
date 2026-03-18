@@ -5,7 +5,7 @@ import "./style.css";
 import { createMap } from "./map/createMap.js";
 import { createView } from "./map/createView.js";
 import { configureArcGIS } from "./config/arcgisConfig.js";
-import { addGeoJsonLayerFromData } from "./map/AddGeoJsonLayer.js";
+import { addGeoJsonLayerFromData } from "./map/addGeoJsonLayer.js";
 import { loadNavbar } from "./utils/loaders.js";
 import { enableHoverHighlight } from "./interactions/hoverHightlight.js";
 import { noticeError, noticeSuccess } from "./js/services/noticeService.js";
@@ -23,10 +23,10 @@ import { showLoader, hideLoader, setLoaderText } from "./ui/loader.js";
 import { fetchGeoJson } from "./services/dataLoader.js";
 import { createRefreshService } from "./services/refreshService.js";
 import { createLayer } from "./map/layerFactory.js";
+import { registerLayer, getAllLayers, clearLayers } from "./map/layerRegistry.js";
 
 let map;
 let view;
-let geoJsonLayers = [];
 let hoverManager;
 let refreshService;
 
@@ -34,7 +34,8 @@ const abortController = new AbortController();
 
 const layerConfigs = [
   {
-    id: "default",
+    id: "mock",
+    type: "graphics",
     fetch: fetchGeoJson,
   },
 ];
@@ -91,6 +92,7 @@ async function loadAppData() {
 
       return {
         id: config.id,
+        type: config.type,
         data,
       };
     })
@@ -103,22 +105,22 @@ async function loadAppData() {
 // ---------------- BIND ----------------
 //
 function bindDataToMap(data) {
-  geoJsonLayers = data.layers.map((layerConfig) => {
-    const layer = createLayer(map, layerConfig);
+  // Fjern alle eksisterende lag fra kortet og hoverManager
+  getAllLayers().forEach((layer) => {
+    map.remove(layer); // Fjern layer fra kortet
+  });
+  hoverManager.clear(); // Ryd hoverManager interne lag og highlights
+  clearLayers(map); // Eventuelt ekstra cleanup fra layerRegistry
 
-    // Bind id til layer
+  // Tilføj nye lag fra API/data
+  data.layers.forEach((layerConfig) => {
+    const layer = createLayer(map, layerConfig);
     layer.customId = layerConfig.id;
 
-    return layer;
+    registerLayer(layer); // Registrer i layerRegistry
+    hoverManager.registerLayer(layer); // Gør hoverManager opmærksom på laget
+    enableHoverHighlight(view, layer); // Genaktiver hover highlight
   });
-
-  geoJsonLayers.forEach((layer) => {
-    hoverManager.registerLayer(layer);
-    enableHoverHighlight(view, layer);
-  });
-
-  // Midlertidigt: brug første layer til refreshService (backwards compatibility)
-  refreshService.setLayers(geoJsonLayers);
 }
 
 //
@@ -154,8 +156,6 @@ async function loadDataIncrementally() {
   } catch (error) {
     setLoaderText("Failed to load data");
 
-    // du kan vælge at holde loader synlig her
-    // eller skjule den:
     setTimeout(() => hideLoader(), 1500);
 
     noticeError(`Data failed permanently: ${error.message}`);
@@ -174,7 +174,7 @@ function initRefreshControls() {
       refreshBtn.loading = true;
 
       await refreshService.refresh();
-
+      refreshBtn.blur(); // fjerner stuck hover/active
       refreshBtn.loading = false;
     });
   }

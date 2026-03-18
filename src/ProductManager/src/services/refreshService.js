@@ -1,3 +1,5 @@
+import { findFeature } from "../map/featureAdapter";
+import { getLayer } from "../map/layerRegistry";
 let isRefreshing = false;
 let autoRefreshEnabled = true;
 let intervalId = null;
@@ -14,10 +16,6 @@ export function createRefreshService({
   onRefreshError,
 }) {
   let geoJsonLayers = [];
-
-  function setLayers(layers) {
-    geoJsonLayers = layers;
-  }
 
   function captureState() {
     const selectedFeature = view.popup.selectedFeature;
@@ -38,12 +36,9 @@ export function createRefreshService({
 
     // --- Popup ---
     if (state?.popupVisible && state.selectedFeatureId) {
-      const graphic = await findGraphicInLayer(
-        geoJsonLayers,
-        view,
-        state.selectedLayerId,
-        state.selectedFeatureId
-      );
+      const layer = getLayer(state.selectedLayerId);
+
+      const graphic = findFeature(layer, state.selectedFeatureId);
 
       if (graphic) {
         view.popup.open({
@@ -55,12 +50,9 @@ export function createRefreshService({
 
     // --- Highlight ---
     if (state?.lockedFeatureId) {
-      const graphic = await findGraphicInLayer(
-        geoJsonLayers,
-        view,
-        state.lockedLayerId,
-        state.lockedFeatureId
-      );
+      const layer = getLayer(state.lockedLayerId);
+
+      const graphic = findFeature(layer, state.lockedFeatureId);
 
       if (graphic) {
         hoverManager.setLockedFeature(graphic);
@@ -96,11 +88,16 @@ export function createRefreshService({
       geoJsonLayers.forEach((layer) => map.remove(layer));
       geoJsonLayers = [];
 
-      geoJsonLayers = data.layers.map((layerConfig) => addLayer(map, layerConfig));
+      geoJsonLayers = data.layers.map((layerConfig) => {
+        const layer = addLayer(map, layerConfig);
+        layer.customId = layerConfig.id;
+        return layer;
+      });
 
       // Registrer hover
       geoJsonLayers.forEach((layer) => {
         hoverManager.registerLayer(layer);
+        view.whenLayerView(layer);
       });
 
       await Promise.all(geoJsonLayers.map((layer) => view.whenLayerView(layer)));
@@ -143,38 +140,11 @@ export function createRefreshService({
       stopAuto();
     }
   }
-  async function findGraphicById(layer, view, id) {
-    const layerView = await view.whenLayerView(layer);
-
-    const result = await layerView.queryFeatures({
-      where: `id = '${id}'`,
-      returnGeometry: true,
-      outFields: ["*"],
-    });
-
-    return result.features[0] || null;
-  }
 
   return {
     refresh,
     setAuto,
     startAuto,
     stopAuto,
-    setLayers,
   };
-}
-
-async function findGraphicInLayer(layers, view, layerId, featureId) {
-  const layer = layers.find((l) => l.customId === layerId);
-  if (!layer) return null;
-
-  const layerView = await view.whenLayerView(layer);
-
-  const result = await layerView.queryFeatures({
-    where: `id = '${featureId}'`,
-    returnGeometry: true,
-    outFields: ["*"],
-  });
-
-  return result.features[0] || null;
 }

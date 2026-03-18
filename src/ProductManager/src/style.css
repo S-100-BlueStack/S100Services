@@ -289,3 +289,7 @@ calcite-shell {
 #notification-button[active] {
   --calcite-color-foreground-1: rgba(255, 255, 255, 0.15);
 }
+
+#refresh-button[active] {
+  --calcite-color-foreground-1: rgba(255, 255, 255, 0.15);
+}

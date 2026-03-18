@@ -99,7 +99,12 @@ export function createHoverManager(view) {
 
     lockedGraphic = null;
   }
-
+  function clear() {
+    layers.clear();
+    layerViews.clear();
+    clearHighlight();
+    clearLockedFeature();
+  }
   function getLockedFeatureId() {
     return lockedGraphic?.attributes?.id || null;
   }
@@ -114,5 +119,6 @@ export function createHoverManager(view) {
     clearLockedFeature,
     getLockedFeatureId,
     getLockedLayerId,
+    clear,
   };
 }
