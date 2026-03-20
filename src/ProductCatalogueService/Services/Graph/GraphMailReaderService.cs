@@ -77,7 +77,7 @@ public sealed class GraphMailReaderService : IGraphMailReaderService
                 requestConfiguration => {
                     requestConfiguration.QueryParameters.Top = _options.PageSize;
                     requestConfiguration.QueryParameters.Select = ["id", "displayName"];
-                    requestConfiguration.QueryParameters.IncludeHiddenFolders = true;
+                    requestConfiguration.QueryParameters.IncludeHiddenFolders = "true";
                 },
                 cancellationToken);
 
