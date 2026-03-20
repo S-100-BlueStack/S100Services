@@ -5,10 +5,13 @@ using Microsoft.AspNetCore.Mvc; // Required for ApiVersion
 using Microsoft.Data.SqlClient;
 using ProductCatalogueService.Data.Database;
 using ProductCatalogueService.Data.Repositories;
+using ProductCatalogueService.Jobs;
+using ProductCatalogueService.Services.MailImport;
 using S100FC.S128;
 using Serilog;
 using System.Data;
 using System.Reflection;
+using ProductCatalogueService.Services.Graph;
 
 namespace ProductCatalogueService
 {
@@ -153,6 +156,23 @@ namespace ProductCatalogueService
             // Caching
             builder.Services.AddMemoryCache();
 
+            // Mail-Handling
+            builder.Services
+    .AddOptions<MailImportOptions>()
+    .Bind(builder.Configuration.GetSection(MailImportOptions.SectionName))
+    .ValidateOnStart();
+            builder.Services.AddScoped<IProductStatusEmailParser, ProductStatusEmailParser>();
+            builder.Services.AddScoped<ProcessProductStatusEmailsJob>();
+
+            // Graph
+            builder.Services
+                .AddOptions<GraphAuthOptions>()
+                .Bind(builder.Configuration.GetSection(GraphAuthOptions.SectionName))
+                .ValidateOnStart();
+
+            builder.Services.AddSingleton<IGraphClientFactory, GraphClientFactory>();
+            builder.Services.AddScoped<IGraphMailReaderService, GraphMailReaderService>();
+
             var app = builder.Build();
 
             app.UseHangfireDashboard("/dashboard", new DashboardOptions {
@@ -166,8 +186,9 @@ namespace ProductCatalogueService
             app.UseSwaggerUI();
 
             app.UseHttpsRedirection();
-
+#if DEBUG
             app.UseCors("AllowFrontend");
+#endif
 
             app.UseAuthentication();
             app.UseAuthorization();
@@ -195,7 +216,18 @@ namespace ProductCatalogueService
                 .Produces(StatusCodes.Status200OK)
                 .AllowAnonymous();
             }
+            if (app.Environment.IsDevelopment() && 1 == 2) {
+                using var scope = app.Services.CreateScope();
+                var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
+                try {
+                    var job = scope.ServiceProvider.GetRequiredService<ProcessProductStatusEmailsJob>();
+                    await job.RunAsync(CancellationToken.None);
+                }
+                catch (Exception ex) {
+                    logger.LogError(ex, "Failed to run {JobName} during startup.", nameof(ProcessProductStatusEmailsJob));
+                }
+            }
 
             app.Run();
         }

@@ -1,5 +1,4 @@
 ﻿using ArcGIS.Core.Data;
-using ArcGIS.Core.Hosting.Threading.Tasks;
 using ProductCatalogueService.Data.Repositories;
 using S100FC.S128.FeatureTypes;
 
@@ -11,12 +10,12 @@ namespace ProductCatalogueService.Jobs
         private readonly ILogger<DetectProductChangesJob> _logger = logger;
         public async Task RunAsync(CancellationToken token) {
             _logger.LogInformation("Job: {jobName} started", nameof(DetectProductChangesJob));
-            
+
             throw new NotImplementedException();
 
             var products = await _repository.GetCurrentAsync();
 
-           
+
 
             _logger.LogInformation("Job: {jobName} finished", nameof(DetectProductChangesJob));
         }
