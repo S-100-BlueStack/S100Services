@@ -136,15 +136,18 @@ calcite-shell {
 }
 
 /* Popup action icon color */
-.popup-action-freeze {
-  color: #0d6efd;
+/* Popup actions render through Calcite internals/shadow DOM.
+   In this context the exposed icon token that actually propagates is
+   --calcite-ui-icon-color, not --calcite-button-icon-color. */
+[data-action-id="freeze-feature"] {
+  --calcite-ui-icon-color: #0d6efd;
 }
 
-.esri-popup__action.popup-action-send {
-  color: #198754;
+[data-action-id="freeze-feature-sun"] {
+  --calcite-ui-icon-color: #fd7e14;
 }
 
-/* Optional: disabled look */
+/* Disabled popup action button */
 .esri-popup__action.is-disabled,
 .esri-popup__action[disabled] {
   color: #6c757d;

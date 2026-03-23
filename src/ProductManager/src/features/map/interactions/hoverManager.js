@@ -31,8 +31,6 @@ export function createHoverManager(view) {
   async function runHitTest() {
     frameRequested = false;
 
-    if (lockedGraphic) return;
-
     if (!pointerEvent || layers.size === 0) return;
 
     const hit = await view.hitTest(pointerEvent, {
@@ -47,14 +45,30 @@ export function createHoverManager(view) {
     const result = hit.results[0];
     const graphic = result.graphic;
 
-    if (!graphic || graphic.uid === lastGraphicUid) {
+    if (!graphic) {
+      clearHighlight();
+      return;
+    }
+
+    // Do not render a separate hover highlight on top of the locked feature.
+    // The locked feature already has its own persistent highlight while the popup is open.
+    if (lockedGraphic && graphic.uid === lockedGraphic.uid) {
+      clearHighlight();
+      lastGraphicUid = graphic.uid;
+      return;
+    }
+
+    if (graphic.uid === lastGraphicUid) {
       return;
     }
 
     lastGraphicUid = graphic.uid;
 
     const layerView = layerViews.get(graphic.layer);
-    if (!layerView) return;
+    if (!layerView) {
+      clearHighlight();
+      return;
+    }
 
     if (highlight) {
       highlight.remove();
@@ -98,6 +112,7 @@ export function createHoverManager(view) {
     }
 
     lockedGraphic = null;
+    lastGraphicUid = null;
   }
   function clear() {
     layers.clear();

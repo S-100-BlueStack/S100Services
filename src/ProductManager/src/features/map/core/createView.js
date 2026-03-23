@@ -25,11 +25,13 @@ export function createView(map) {
           title: "Freeze",
           id: "freeze-feature",
           icon: "snow",
+          className: "freeze-feature",
         },
         {
           title: "Send immediately",
           id: "send-immediately",
           icon: "send",
+          className: "send-immediately",
         },
       ],
     },
