@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc; // Required for ApiVersion
 using Microsoft.Data.SqlClient;
 using ProductCatalogueService.Data.Database;
 using ProductCatalogueService.Data.Repositories;
+using ProductCatalogueService.Services;
 using ProductCatalogueService.Jobs;
 using ProductCatalogueService.Services.MailImport;
 using S100FC.S128;
@@ -150,6 +151,9 @@ namespace ProductCatalogueService
             // System DB
             builder.Services.AddSingleton<DbConnectionFactory>();
             builder.Services.AddScoped<IProductRepository, ProductRepository>();
+
+            // ExchangeServive
+            builder.Services.AddSingleton<IExchangeSetService, ExchangeSetService>();
 
             builder.Services.AddHangfireServer();
 

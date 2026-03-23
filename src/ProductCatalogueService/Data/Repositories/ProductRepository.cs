@@ -81,4 +81,27 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
             sql,
             new { Name = name });
     }
+
+    public async Task<string[]> GetIneligbleProductsAsync() {
+        using var connection = _connectionFactory.Create();
+
+        var sql = """
+            SELECT name
+            FROM (
+                SELECT 
+                    name,
+                    state,
+                    ROW_NUMBER() OVER (PARTITION BY name ORDER BY date_to DESC) AS rn
+                FROM dbo.JobTable
+            ) t
+            WHERE rn = 1
+            AND state NOT IN @States
+        """;
+
+        var names = await connection.QueryAsync<string>(sql, new {
+            States = new[] { ProductState.Frozen, ProductState.InTransit }
+        });
+
+        return [.. names];
+    }
 }

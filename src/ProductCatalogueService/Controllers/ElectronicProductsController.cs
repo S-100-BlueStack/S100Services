@@ -25,7 +25,7 @@ namespace ProductCatalogueService.Controllers
         /// <summary>
         /// Get all product names in the database
         /// </summary>
-        /// <returns>An collection with all productnames</returns>
+        /// <returns>An collection with all productnames</returns>f
         [ProducesResponseType(typeof(ApiResponse<string[]>), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpGet(Name = "GetAllElectronicProducts")]
