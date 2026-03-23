@@ -1,0 +1,8 @@
+﻿namespace ProductCatalogueService.Services
+{
+    public interface IExchangeSetService
+    {
+        ExchangeSetResult CreateExchangeSet(S100FC.S128.FeatureTypes.ElectronicProduct product, string outputFolder, string yaml, string prevIndex = "");
+    }
+    public record ExchangeSetResult(string Index, string Sign);
+}

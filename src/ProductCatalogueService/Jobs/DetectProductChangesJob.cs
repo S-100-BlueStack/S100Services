@@ -1,167 +1,121 @@
-﻿using ArcGIS.Core.Data;
-using ArcGIS.Core.Hosting.Threading.Tasks;
-using ProductCatalogueService.Data.Repositories;
-using S100FC.S128.FeatureTypes;
+﻿using ProductCatalogueService.Data.Repositories;
+using ProductCatalogueService.Services;
+using S100FC.ProductCatalogue;
+using S100FC.YAML;
 
 namespace ProductCatalogueService.Jobs
 {
-    public class DetectProductChangesJob(IProductRepository repository, ILogger<DetectProductChangesJob> logger) : IBackgroundJob
+    public class DetectProductChangesJob(IProductRepository repository, IProductManager productManager, IExchangeSetService exchangeSetService, ILogger<DetectProductChangesJob> logger) : IBackgroundJob
     {
         private readonly IProductRepository _repository = repository;
+        private readonly IProductManager _productManager = productManager;
+        private readonly IExchangeSetService _exchangeSetService = exchangeSetService;
         private readonly ILogger<DetectProductChangesJob> _logger = logger;
         public async Task RunAsync(CancellationToken token) {
             _logger.LogInformation("Job: {jobName} started", nameof(DetectProductChangesJob));
-            
-            throw new NotImplementedException();
 
-            var products = await _repository.GetCurrentAsync();
+            var output = _productManager.ElectronicProductManager.OutputFolder;
+            var productNames = _productManager.ElectronicProductManager.ToArray();
 
-           
+            // InTransit, Frozen or somehow otherwise locked products
+            var productsToSkip = await _repository.GetIneligbleProductsAsync();
+            _logger.LogInformation("Frozen/InTransit products found: {count}", productsToSkip.Length);
+
+
+            var products = productNames.Where(e => !productsToSkip.Contains(e));
+            _logger.LogInformation("Checking for dirty in {count} products", products.Count());
+
+            foreach (var productName in products) {
+                var electronicProduct = _productManager.ElectronicProductManager.ElectronicProduct(productName);
+
+                if (electronicProduct == null) {
+                    _logger.LogError("Could not find electronic product with name: {name}", productName);
+                    continue;
+                }
+
+
+
+                var dirtyFeatures = await _productManager.ElectronicProductManager.GetPendingEditsAsync(productName);
+
+                if (dirtyFeatures.Count == 0)
+                    continue;
+
+                _logger.LogInformation("({count}) Pending edits detected for {dataset}", dirtyFeatures.Count, productName);
+
+                // Look at all dirty features and decide if new edition or update
+                var newEdition = IsNewEdition(dirtyFeatures);
+
+                if (newEdition) {
+                    _logger.LogInformation("Creating new edition.. ");
+                    var dataset = await _productManager.ElectronicProductManager.CreateNewEditionAsync(productName);
+
+
+                    var yaml = dataset.Serialize();
+
+
+                    if (string.IsNullOrEmpty(yaml)) {
+                        _logger.LogWarning("Failed to create new edition for dataset {dataset}.", productName);
+                        await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid);
+                        continue;
+                    }
+
+                    _logger.LogInformation("Creating export.. ");
+
+                    var result = _exchangeSetService.CreateExchangeSet(electronicProduct, output, yaml);
+
+                    _logger.LogInformation("Writing to s128.attachments.. ");
+                    await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
+
+                    _logger.LogInformation("Saving productstate in system database..");
+                    _ = _repository.AppendAsync(productName, Data.Models.ProductState.NewEdition);
+                }
+                else {
+                    _logger.LogInformation("Creating new update.. ");
+                    var dataset = await _productManager.ElectronicProductManager.CreateNewUpdateAsync(productName);
+
+
+                    var incoming = dataset.Serialize();
+
+
+                    if (string.IsNullOrEmpty(incoming)) {
+                        _logger.LogWarning("Failed to create new edition for dataset {dataset}.", productName);
+                        await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid);
+                        continue;
+                    }
+
+                    var (latest, prevIndex) = await _productManager.ElectronicProductManager.GetLatestDatasetYAML(productName, (int)dataset.Edition.Value);
+
+
+                    // Build YAML Delta
+                    var delta = S100FC.YAML.DatasetComparer.Compare(latest, incoming);
+
+                    if (!delta.HasEdits) {
+                        _logger.LogError("No edits found for product {product} during NewUpdate.", productName);
+                        throw new InvalidOperationException($"No edits found for product {productName} during NewUpdate in {nameof(DetectProductChangesJob)}");
+                    }
+
+
+                    var update = S100FC.YAML.Converter.Serialize(delta);
+
+                    _logger.LogInformation("Creating export.. ");
+                    var result = _exchangeSetService.CreateExchangeSet(electronicProduct, output, update, prevIndex);
+
+                    _logger.LogInformation("Writing to s128.attachments.. ");
+                    await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.Update, update, result.Index, result.Sign);
+
+                    _logger.LogInformation("Saving productstate in database..");
+                    _ = _repository.AppendAsync(productName, Data.Models.ProductState.NewUpdate);
+
+                }
+            }
 
             _logger.LogInformation("Job: {jobName} finished", nameof(DetectProductChangesJob));
         }
+
+
+        private static bool IsNewEdition(Dictionary<string, ArchiveRow> features) {
+            // TODO: Given ruleset, figure out if NewEdition or NewUpdate. For now just return true;
+            return true;
+        }
     }
-
-    //public async Task CheckForChangesAsync(CancellationToken token) {
-    //    var connection = CreateGeodatabase(f);
-    //    var sqlSyntax = connection.GetSQLSyntax();
-
-    //    var filter = new QueryFilter();
-
-    //    // 1) get products
-    //    var products =
-
-
-    //    //2) foreach product, build queryfilter with spatial dimensions
-    //    //3) query all archive table(point/ pointset / curve / surface) in s101 with queryfilter
-    //    //4) save all rows with edits for later analysis
-    //    //5) Apply rules supplied from EPK that decide if its newupdate / newedition
-    //    //6) Write to JobState table with new PendingUpdates state + result from update/ edition analysis
-
-
-
-
-    //    await QueuedWorker.Run(() => {
-    //        //string[] tableNames = ["point", "pointset", "curve", "surface"];
-    //        //foreach (var baseTableName in tableNames) {
-    //        //    using var fc = connection.OpenDataset<FeatureClass>("baseTableName");
-
-    //        //    // read fc and figure out dataset timestamp
-
-
-    //        //    var formattedDate = sqlSyntax.Format(dataset.TimestampUTC, SQLDateTimeType.Timestamp);
-
-    //        //    var isArchived = fc.IsArchiveEnabled();
-    //        //    if (isArchived) {
-    //        //        var archiveTable = fc.GetArchiveTable();
-
-    //        //        using var archiveCursor = archiveTable.Search(filter);
-    //        //        while (archiveCursor.MoveNext()) {
-    //        //            var cur = archiveCursor.Current;
-    //        //            var id = cur["UID"]?.ToString();
-    //        //            var flatten = cur["flatten"]?.ToString();
-
-    //        //            _logger.LogInformation("Change detected for {id} in {table}. Stopping further detection", id, baseTableName);
-    //        //            return true;
-    //        //        }
-    //        //    }
-    //        //    else {
-    //        //        _logger.LogWarning("Archive is not enabled on {tableName}. Should only happen while debugging! Checking for 'created_date' or 'last_edited_date' instead", baseTableName);
-    //        //        filter.WhereClause = $"UPPER(ps) = 'S-101' AND (" +
-    //        //                             $"created_date > DATE '{dataset.TimestampUTC:yyyy-MM-dd HH:mm:ss}' " +
-    //        //                             $"OR last_edited_date > DATE '{dataset.TimestampUTC:yyyy-MM-dd HH:mm:ss}')";
-
-    //        //        using var cursor = fc.Search(filter, true);
-    //        //        while (cursor.MoveNext()) {
-    //        //            return true;
-    //        //        }
-    //        //    }
-    //        //}
-    //        return false;
-    //    });
-
-
-
-    //}
-
-    //private static async Task GetProducts(Geodatabase geodatabase) {
-    //    await QueuedWorker.Run(() => {
-    //        using (var surface = geodatabase!.OpenDataset<FeatureClass>("surface")) {
-    //            using var cursor = surface.Search(new QueryFilter {
-    //                WhereClause = "upper(ps) = 'S-128'"
-    //            }, true);
-    //            while (cursor.MoveNext()) {
-    //                var c = cursor.Current;
-
-    //                if (c.IsNull("code")) continue;
-
-    //                var code = Convert.ToString(c["code"])!;
-    //                if (code.Equals(nameof(S100FC.S128.FeatureTypes.ElectronicProduct))) {
-    //                    var json = c["flatten"];
-
-    //                    var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(json.ToString(), typeof(ElectronicProduct));
-    //                    //  this._electronicProducts.GetOrAdd(electronicProduct.datasetName!.ToUpperInvariant(), electronicProduct);
-    //                }
-    //            }
-    //        }
-    //    });
-    //}
-
-    //private static Geodatabase CreateGeodatabase(string path) {
-    //    if (".sde".Equals(System.IO.Path.GetExtension(path), StringComparison.OrdinalIgnoreCase)) {
-    //        var connectionFile = new DatabaseConnectionFile(new Uri(System.IO.Path.GetFullPath(path)));
-
-    //        return new Geodatabase(connectionFile);
-    //    }
-    //    else if (".gdb".Equals(System.IO.Path.GetExtension(path), StringComparison.OrdinalIgnoreCase)) {
-    //        var connectionFile = new FileGeodatabaseConnectionPath(new Uri(System.IO.Path.GetFullPath(path)));
-
-    //        return new Geodatabase(connectionFile);
-    //    }
-    //    else {
-    //        throw new InvalidOperationException("Connectionfile path while detecting changes is neither .gdb nor .sde");
-    //    }
-    //}
-    //private static async Task<SpatialQueryFilter> BuildSpatialQueryFilter(S100FC.ProductCatalogue.Dataset dataset, S100FC.S128.SimpleAttributes.specificUsage? specificUsage, Geodatabase geodatabase) {
-    //    return await QueuedWorker.Run(() => {
-    //        using var surface = geodatabase!.OpenDataset<FeatureClass>("surface");
-
-    //        using var cursorS128 = surface.Search(new QueryFilter {
-    //            WhereClause = $"flatten LIKE '%\"{dataset.DatasetName}\"%'",
-    //        }, false);
-
-    //        cursorS128.MoveNext();
-
-    //        if (cursorS128.Current.IsNull("flatten"))
-    //            throw new System.ArgumentNullException(nameof(dataset.DatasetName));
-
-    //        var sqlSyntax = geodatabase.GetSQLSyntax();
-
-    //        var formattedDate = sqlSyntax.Format(dataset.TimestampUTC, SQLDateTimeType.Timestamp);
-
-    //        var whereClause = $"UPPER(ps) = 'S-101' AND (GDB_FROM_DATE > {formattedDate} OR GDB_TO_DATE > {formattedDate})";
-
-    //        if (specificUsage != null)
-    //            whereClause += $" AND usageband = {specificUsage.value}";
-
-
-    //        ArcGIS.Core.Geometry.Polygon shapeCoverage = (ArcGIS.Core.Geometry.Polygon)((ArcGIS.Core.Data.Feature)cursorS128.Current).GetShape().Clone();
-
-    //        var filter = new SpatialQueryFilter {
-    //            FilterGeometry = shapeCoverage,
-    //            SpatialRelationship = SpatialRelationship.Relation,
-    //            SpatialRelationshipDescription = S100FC.Topology.Matrix.DE9IM,
-    //            WhereClause = whereClause,
-    //        };
-
-    //        return filter;
-    //    });
-
-    //}
-
-    //private SQLSyntax SQLSyntax => this._geodatabase!.GetSQLSyntax();
-
-    // private string QualifyTableName(this Geodatabase geodatabase, string tableName) => geodatabase.GetSQLSyntax().QualifyTableName(geodatabase._databaseName, this._ownerName, tableName);
-
-
 }

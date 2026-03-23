@@ -12,7 +12,7 @@
 
     public enum ProductState : int
     {
-        Ready = 1,
+        Ready = 1,      // Default?
         NewEdition = 2,
         NewUpdate = 3,
         Invalid = 4,

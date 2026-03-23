@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using ProductCatalogueService.Services;
 using S100FC.ProductCatalogue;
 using S100FC.YAML;
-using Serilog;
 using System.Diagnostics;
 using static ProductCatalogueService.Models.RequestTypes;
 using static ProductCatalogueService.Models.ResponseTypes;
@@ -10,10 +10,11 @@ using IO = System.IO;
 
 namespace ProductCatalogueService.Controllers
 {
-    public class ExportController(ILogger<ExportController> logger, IMemoryCache cache, IProductManager productManager) : ControllerBase
+    public class ExportController(ILogger<ExportController> logger, IMemoryCache cache, IExchangeSetService exchangeSetService, IProductManager productManager) : ControllerBase
     {
         private readonly ILogger<ExportController> _logger = logger;
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
+        private readonly IExchangeSetService _exchangeSetService = exchangeSetService;
         private readonly IMemoryCache _cache = cache;
 
 
@@ -52,10 +53,9 @@ namespace ProductCatalogueService.Controllers
             }
 
 
+            var result = _exchangeSetService.CreateExchangeSet(product, _electronicProductManager.OutputFolder, yaml);
 
-            var (index, sign) = this.CreateExchangeSet(name, yaml);
-
-             await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewEdition, yaml, index, sign);
+            await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
 
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
@@ -122,9 +122,9 @@ namespace ProductCatalogueService.Controllers
 
             var update = S100FC.YAML.Converter.Serialize(delta);
 
-            var (index, sign) = this.CreateExchangeSet(name, update, prevIndex);
+            var result = _exchangeSetService.CreateExchangeSet(product, _electronicProductManager.OutputFolder, update, prevIndex);
 
-            await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.Update, update, index, sign);
+            await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.Update, update, result.Index, result.Sign);
 
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
@@ -151,90 +151,16 @@ namespace ProductCatalogueService.Controllers
                 return StatusCode(StatusCodes.Status404NotFound, response);
             }
 
-            // Create exchange set?
             var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
             var yaml = dataset.Serialize();
 
 
-            var (index, sign) = this.CreateExchangeSet(name, yaml);
+            var result = _exchangeSetService.CreateExchangeSet(product, _electronicProductManager.OutputFolder, yaml);
 
-            await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, index, sign);
+            await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
 
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
-        }
-
-       
-        private (string index, string sign) CreateExchangeSet(string dsnm, string yaml, string prevIndex = "") {
-            var product = _electronicProductManager.ElectronicProduct(dsnm);
-
-            var datasetName = product!.datasetName;
-
-            var dir = IO.Directory.CreateDirectory(_electronicProductManager.OutputFolder);
-
-            var exchangeset = IO.Directory.CreateDirectory(Path.Combine(dir.FullName, datasetName, $"{product.editionNumber}"));
-
-            var update = product.updateNumber.HasValue ? product.updateNumber.Value.ToString("D3") : "000";
-
-            // Write temp YAML file for the compiler
-            IO.File.WriteAllText(Path.Combine(exchangeset.FullName, $"temp_{datasetName}.yaml"), yaml);
-
-            var catalogue = Path.Combine(AppContext.BaseDirectory, "101_Feature_Catalogue_2.0.0.xml");
-
-            if (!IO.File.Exists(catalogue))
-                throw new NullReferenceException("Could not find featurecatalogue!");
-
-            var input = IO.Path.Combine(exchangeset.FullName, $"temp_{datasetName}.yaml");
-            var output = exchangeset.FullName;
-            var prevIndexPath = Path.Combine(exchangeset.FullName, "prev.idx");
-
-            var indexFile = Path.Combine(exchangeset.FullName, $"{datasetName.Replace("101DK00", "")}_{update}.idx");
-
-            var commandline = $"-f \"{input}\" -c \"{catalogue}\" -d \"{output}\" -C \"{datasetName}\" -l \"{indexFile}\"";
-
-            if (!string.IsNullOrEmpty(prevIndex)) {
-                IO.File.WriteAllText(prevIndexPath, prevIndex);
-                commandline += $" -L {prevIndexPath}";
-            }
-
-
-
-            //var commandline = $"-f \"{IO.Path.Combine(exchangeset.FullName, $"temp_{datasetName}.yaml")}\" -c \"{catalogue}\" -d \"{exchangeset.FullName}\"  -C {datasetName} -L {datasetName}_000.idx";
-
-
-            var p = new Process();
-            p.StartInfo.CreateNoWindow = true;
-            p.StartInfo.UseShellExecute = true;
-            p.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-            p.StartInfo.FileName = @"C:\Program Files\s100compiler\s100compiler.exe";
-            p.StartInfo.Arguments = commandline;
-            p.StartInfo.WorkingDirectory = exchangeset.FullName;
-            p.EnableRaisingEvents = true;
-            p.Exited += (s, e) => {
-            };
-
-            p.Start();
-            p.WaitForExit();
-
-            if (p.ExitCode != 0) {
-                _logger.LogError("\"{filename}\" {arguments} for product: {product}", p.StartInfo.FileName, commandline, product.datasetName);
-                throw new ArgumentException(commandline);
-            }
-
-            _logger.LogInformation("S100 compiler run succesfully! Starting cleanup for temp index and yaml files for product: {product}", product.datasetName);
-
-            var index = IO.File.ReadAllText(indexFile);
-            var sign = IO.File.ReadAllText(Path.Combine(exchangeset.FullName, "S100_ROOT", "CATALOG.SIGN"));
-
-
-            // Cleanup temp yaml
-            IO.File.Delete(input);
-
-            // Cleanup temp index
-            IO.File.Delete(indexFile);
-            IO.File.Delete(prevIndexPath);
-
-            return (index, sign);
         }
     }
 }
