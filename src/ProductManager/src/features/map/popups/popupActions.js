@@ -17,7 +17,7 @@ export function registerPopupActions(view) {
 
       const id = feature.attributes.id;
 
-      if (event.action.id === "freeze-feature") {
+      if (event.action.id === "freeze-feature" || event.action.id === "freeze-feature-sun") {
         const newState = !(freezeState.get(id) === true);
 
         const result = await triggerFreeze(feature.attributes.datasetName, newState);
@@ -39,7 +39,7 @@ function updateUI(view, frozen) {
     ? [
         {
           title: "Unfreeze",
-          id: "freeze-feature",
+          id: "freeze-feature-sun",
           icon: "brightness",
           className: "popup-action popup-action-freeze",
         },
