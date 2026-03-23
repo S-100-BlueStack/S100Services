@@ -18,6 +18,12 @@ public enum ProductStatusEmailOutcome
     FailureToRegister = 5
 }
 
+public enum ProductStatusType {
+    Unknown = 0,
+    NewEdition = 1,
+    NewUpdate = 2,
+}
+
 public sealed record ImportedMailAttachment(
     string FileName,
     string? ContentType,
@@ -39,6 +45,7 @@ public sealed record ParsedProductStatusEmail(
     ProductStatusEmailCategory Category,
     ProductStatusEmailOutcome Outcome,
     string? RegistrationId,
+    string? RegistrationName,
     string? Crc,
     bool IsCatalog,
     ImportedMailAttachment? DocumentAttachment,

@@ -15,12 +15,14 @@ public class ProcessProductStatusEmailsJob(
     IProductManager productManager,
     ILogger<ProcessProductStatusEmailsJob> logger,
     IOptions<MailImportOptions> options,
-    IProductStatusEmailParser productStatusEmailParser) : IBackgroundJob
+    IProductStatusEmailParser productStatusEmailParser,
+    IProductRepository productRepository) : IBackgroundJob
 {
     private readonly ILogger<ProcessProductStatusEmailsJob> _logger = logger;
     private readonly MailImportOptions _options = options.Value;
     private readonly IProductStatusEmailParser _productStatusEmailParser = productStatusEmailParser;
     private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
+    private readonly IProductRepository _productRepository = productRepository;
     public async Task RunAsync(CancellationToken cancellationToken) {
         _logger.LogInformation("Job: {jobName} started", nameof(ProcessProductStatusEmailsJob));
 
@@ -44,8 +46,8 @@ public class ProcessProductStatusEmailsJob(
 
             return;
         }
-        var currentProducts = this._electronicProductManager.ToList();
-        if (currentProducts.Count == 0) {
+        var currentProducts = await this._productRepository.GetCurrentAsync();
+        if (!currentProducts.Any() || currentProducts == null) {
             _logger.LogError("No products found in Product Repository. Aborting mail processing.");
             return;
         }
@@ -60,7 +62,7 @@ public class ProcessProductStatusEmailsJob(
                     importedMessage.Subject,
                     importedMessage.Attachments.Count);
 
-                await ProcessImportedMailAsync(importedMessage, cancellationToken, currentProducts);
+                await ProcessImportedMailAsync(importedMessage, currentProducts, cancellationToken);
             }
             catch (Exception ex) {
                 _logger.LogError(ex, "Failed to process mail file '{FilePath}'.", filePath);
@@ -88,10 +90,10 @@ public class ProcessProductStatusEmailsJob(
         _logger.LogInformation("Job: {jobName} finished", nameof(ProcessProductStatusEmailsJob));
     }
 
-    private Task ProcessImportedMailAsync(
+    private async Task<Task> ProcessImportedMailAsync(
      ImportedMailMessage mail,
-     CancellationToken cancellationToken,
-     List<string> currentProducts) {
+     IEnumerable<ProductRecord>? currentProducts,
+     CancellationToken cancellationToken) {
         cancellationToken.ThrowIfCancellationRequested();
 
         var parsedMail = _productStatusEmailParser.Parse(mail);
@@ -105,30 +107,77 @@ public class ProcessProductStatusEmailsJob(
         }
 
         _logger.LogInformation(
-            "Parsed registration mail. Category: {Category}, Outcome: {Outcome}, RegistrationId: {RegistrationId}, Crc: {Crc}, IsCatalog: {IsCatalog}, Attachment: {AttachmentFileName}",
+            "Parsed registration mail. Category: {Category}, Outcome: {Outcome}, RegistrationId: {RegistrationId}, RegistrationName: {RegistrationName}, Crc: {Crc}, IsCatalog: {IsCatalog}, Attachment: {AttachmentFileName}",
             parsedMail.Category,
             parsedMail.Outcome,
             parsedMail.RegistrationId,
+            parsedMail.RegistrationName,
             parsedMail.Crc,
             parsedMail.IsCatalog,
             parsedMail.DocumentAttachment?.FileName);
         if (!string.IsNullOrEmpty(parsedMail.RegistrationId)) {
-            string? product;
-            product = currentProducts.FirstOrDefault(x => parsedMail.RegistrationId.Contains(x));
+            ProductRecord? product = currentProducts?.FirstOrDefault(x => parsedMail.RegistrationId.Contains(x.Name));
             if (product == null) {
 
                 if (!string.IsNullOrWhiteSpace(parsedMail.RegistrationId) &&
                     TryConvertRegistrationId(parsedMail.RegistrationId, out var converted)) {
-                    product = currentProducts.FirstOrDefault(x => converted.Contains(x));
-                    if (product == null) {
-                        _logger.LogInformation("Failed to find product {Converted}", converted);
-                        return Task.CompletedTask;
-                    }
-                    _logger.LogInformation("Found product!");
+                    product = currentProducts?.FirstOrDefault(x => converted.Contains(x.Name));
                 }
+            }
+            if (!string.IsNullOrEmpty(parsedMail.RegistrationName))
+                await HandleProductUpdateFromMail(parsedMail, product, cancellationToken);
+            else {
+                _logger.LogError("Parsed Mail does not contain a Registration Name. Cannot process.");
             }
         }
         return Task.CompletedTask;
+    }
+
+    private async Task<bool> HandleProductUpdateFromMail(ParsedProductStatusEmail parsedMail, ProductRecord? product, CancellationToken cancellationToken) {
+        cancellationToken.ThrowIfCancellationRequested();
+        var state = ProductState.Frozen;
+        var type = GetRegistrationType(parsedMail.RegistrationId);
+        switch (parsedMail.Outcome) { // TODO: Ensure mapping is correct
+            case ProductStatusEmailOutcome.Unknown: // Unknown = Information could not be extracted from subject
+                state = ProductState.Invalid;
+                break;
+            case ProductStatusEmailOutcome.Successful: // Successful = Fully accepted registration of new cell
+                state = ProductState.NewEdition;
+                break;
+            case ProductStatusEmailOutcome.AcceptedForDistribution: // Accepted For Distribution = Fully accepted and awaiting next patch-window
+                if (type == ProductStatusType.NewEdition)
+                    state = ProductState.NewEdition;
+                else
+                    state = ProductState.NewUpdate;
+                break;
+            case ProductStatusEmailOutcome.PassedInHolding: // Passed In Holding = Accepted but missing some information before publishing
+                state = ProductState.Invalid;
+                break;
+            case ProductStatusEmailOutcome.FailureToRegister: // Failure to register = Rejected registration of new cell
+                state = ProductState.Invalid;
+                break;
+        }
+        if (state != product?.State || product == null) {
+            try {
+                _logger.LogInformation("Product {Name} has new state: {newState} from old state: {oldState}. Attempting upsert.", parsedMail.RegistrationName, product?.State, state);
+                await _productRepository.AppendAsync(parsedMail.RegistrationName, state);
+                _logger.LogInformation("Product {Name} successfully upserted with new state {newState}.", state, parsedMail.RegistrationName);
+                return true;
+            }
+            catch (Exception ex) {
+                _logger.LogError("Failed to upsert {Name} in Product Repository: {Exception}.", parsedMail.RegistrationName, ex);
+                return false;
+            }
+        }
+        else if (state == product.State) {
+            _logger.LogInformation("New state is the same as old state for Product {Name}: {newState}. Skipping upsert.", product.Name, state);
+            return true;
+        }
+        else if (product.State == ProductState.Frozen) {
+            _logger.LogWarning("Product {Name} is frozen. Skipping upsert to new state {newState}.", product.Name, state);
+            return false;
+        }
+        return true;
     }
     private static ImportedMailMessage LoadMailMessage(string filePath) {
         using var message = new Storage.Message(filePath);
@@ -200,6 +249,28 @@ public class ProcessProductStatusEmailsJob(
         return string.Empty;
     }
 
+    private static ProductStatusType GetRegistrationType(string? registrationId) {
+        if (string.IsNullOrWhiteSpace(registrationId)) {
+            return ProductStatusType.Unknown;
+        }
+
+        var match = RegistrationIdConversionRegex.Match(registrationId.Trim());
+        if (!match.Success) {
+            return ProductStatusType.Unknown;
+        }
+
+        var version = match.Groups["version"].Value;
+
+        if (version == "000") {
+            return ProductStatusType.NewEdition;
+        }
+        else if (!string.IsNullOrEmpty(version)) {
+            return ProductStatusType.NewUpdate;
+        }
+        else {
+            return ProductStatusType.Unknown;
+        }
+    }
 
     private static bool TryConvertRegistrationId(string registrationId, out string convertedRegistrationId) {
         convertedRegistrationId = string.Empty;

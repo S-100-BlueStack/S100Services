@@ -18,6 +18,7 @@ public sealed partial class ProductStatusEmailParser : IProductStatusEmailParser
         var category = ParseCategory(normalizedSubject);
         var outcome = ParseOutcome(normalizedSubject);
         var registrationId = ParseRegistrationId(normalizedSubject);
+        var registrationName = ParseRegistrationName(registrationId);
         var (crc, isCatalog) = ParseCrcOrCatalog(normalizedSubject);
         var documentAttachment = FindDocumentAttachment(mail.Attachments);
 
@@ -30,11 +31,36 @@ public sealed partial class ProductStatusEmailParser : IProductStatusEmailParser
             Category: isRelevant ? category : ProductStatusEmailCategory.Other,
             Outcome: outcome,
             RegistrationId: registrationId,
+            RegistrationName: registrationName,
             Crc: crc,
             IsCatalog: isCatalog,
             DocumentAttachment: documentAttachment,
             IsRelevant: isRelevant);
     }
+
+    private static string? ParseRegistrationName(string? registrationId) {
+
+        if (string.IsNullOrWhiteSpace(registrationId)) {
+            return null;
+        }
+
+        var match = RegistrationIdConversionRegex.Match(registrationId.Trim());
+        if (!match.Success) {
+            return null;
+        }
+
+        var prefix = match.Groups["prefix"].Value;
+        var seriesNumber = match.Groups["seriesNumber"].Value;
+        var tail = match.Groups["tail"].Value;
+        var version = match.Groups["version"].Value;
+
+        return $"101{prefix}{seriesNumber.PadLeft(7, '0')}{tail}";
+    }
+
+    private static readonly Regex RegistrationIdConversionRegex = new(
+    @"^(?<prefix>[A-Z]{2,})(?<seriesNumber>\d+)(?<tail>[A-Z0-9]+)\.(?<version>\d{3})$",
+    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+    TimeSpan.FromSeconds(2));
 
     private static ProductStatusEmailCategory ParseCategory(string subject) {
         if (subject.Contains("CELL REGISTRATION", StringComparison.OrdinalIgnoreCase)) {
