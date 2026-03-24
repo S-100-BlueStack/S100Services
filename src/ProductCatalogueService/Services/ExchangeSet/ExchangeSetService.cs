@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics;
 using IO = System.IO;
 
-namespace ProductCatalogueService.Services
+namespace ProductCatalogueService.Services.ExchangeSet
 {
     public class ExchangeSetService(ILogger<ExchangeSetService> logger) : IExchangeSetService
     {
