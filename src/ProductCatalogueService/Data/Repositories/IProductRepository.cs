@@ -4,7 +4,7 @@ namespace ProductCatalogueService.Data.Repositories
 {
     public interface IProductRepository
     {
-        Task AppendAsync(string name, ProductState state, string? owner = null);
+        Task AppendAsync(string name, ProductState state, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null);
 
         Task<IEnumerable<ProductRecord>> GetCurrentAsync();
 
