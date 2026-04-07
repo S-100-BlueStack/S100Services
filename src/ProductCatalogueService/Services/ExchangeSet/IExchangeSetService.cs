@@ -1,4 +1,4 @@
-﻿namespace ProductCatalogueService.Services
+﻿namespace ProductCatalogueService.Services.ExchangeSet
 {
     public interface IExchangeSetService
     {

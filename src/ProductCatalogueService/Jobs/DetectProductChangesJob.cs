@@ -1,15 +1,17 @@
 ﻿using ProductCatalogueService.Data.Repositories;
-using ProductCatalogueService.Services;
+using ProductCatalogueService.Services.ExchangeSet;
+using ProductCatalogueService.Services.SevenCs;
 using S100FC.ProductCatalogue;
 using S100FC.YAML;
 
 namespace ProductCatalogueService.Jobs
 {
-    public class DetectProductChangesJob(IProductRepository repository, IProductManager productManager, IExchangeSetService exchangeSetService, ILogger<DetectProductChangesJob> logger) : IBackgroundJob
+    public class DetectProductChangesJob(IProductRepository repository, IProductManager productManager, IExchangeSetService exchangeSetService, ISevenCsService sevenCsService, ILogger<DetectProductChangesJob> logger) : IBackgroundJob
     {
         private readonly IProductRepository _repository = repository;
         private readonly IProductManager _productManager = productManager;
         private readonly IExchangeSetService _exchangeSetService = exchangeSetService;
+        private readonly ISevenCsService _sevenCsService = sevenCsService;
         private readonly ILogger<DetectProductChangesJob> _logger = logger;
         public async Task RunAsync(CancellationToken token) {
             _logger.LogInformation("Job: {jobName} started", nameof(DetectProductChangesJob));
@@ -63,11 +65,21 @@ namespace ProductCatalogueService.Jobs
 
                     var result = _exchangeSetService.CreateExchangeSet(electronicProduct, output, yaml);
 
+                    // Validate .000 files
+                    var summary = await _sevenCsService.ValidateDatasetAsync(electronicProduct, output);
+
+                    // TODO: do something with validationresult. Rollback ed/update?
+                    _logger.LogInformation("Saving productstate in database..");
+
+                    if (summary.Errors == 0 & summary.Critical == 0)
+                        await _repository.AppendAsync(productName, Data.Models.ProductState.NewEdition);
+                    else
+                        await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid);
+
+                    // write to s128 database
                     _logger.LogInformation("Writing to s128.attachments.. ");
                     await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
 
-                    _logger.LogInformation("Saving productstate in system database..");
-                    _ = _repository.AppendAsync(productName, Data.Models.ProductState.NewEdition);
                 }
                 else {
                     _logger.LogInformation("Creating new update.. ");
@@ -100,12 +112,19 @@ namespace ProductCatalogueService.Jobs
                     _logger.LogInformation("Creating export.. ");
                     var result = _exchangeSetService.CreateExchangeSet(electronicProduct, output, update, prevIndex);
 
+                    // Validate .000 files
+                    var summary = await _sevenCsService.ValidateDatasetAsync(electronicProduct, output);
+
+                    // TODO: do something with validationresult. Rollback ed/update?
+                    _logger.LogInformation("Saving productstate in database..");
+
+                    if (summary.Errors == 0 & summary.Critical == 0)
+                        await _repository.AppendAsync(productName, Data.Models.ProductState.NewUpdate);
+                    else 
+                        await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid);
+                    
                     _logger.LogInformation("Writing to s128.attachments.. ");
                     await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.Update, update, result.Index, result.Sign);
-
-                    _logger.LogInformation("Saving productstate in database..");
-                    _ = _repository.AppendAsync(productName, Data.Models.ProductState.NewUpdate);
-
                 }
             }
 

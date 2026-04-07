@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
-using ProductCatalogueService.Services;
+using ProductCatalogueService.Services.ExchangeSet;
 using S100FC.ProductCatalogue;
 using S100FC.YAML;
 using System.Diagnostics;

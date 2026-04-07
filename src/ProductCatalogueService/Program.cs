@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Mvc; // Required for ApiVersion
 using Microsoft.Data.SqlClient;
 using ProductCatalogueService.Data.Database;
 using ProductCatalogueService.Data.Repositories;
-using ProductCatalogueService.Services;
 using ProductCatalogueService.Jobs;
 using ProductCatalogueService.Services.MailImport;
 using S100FC.S128;
@@ -13,6 +12,8 @@ using Serilog;
 using System.Data;
 using System.Reflection;
 using ProductCatalogueService.Services.Graph;
+using ProductCatalogueService.Services.ExchangeSet;
+using ProductCatalogueService.Services.SevenCs;
 
 namespace ProductCatalogueService
 {
@@ -155,6 +156,8 @@ namespace ProductCatalogueService
             // ExchangeServive
             builder.Services.AddSingleton<IExchangeSetService, ExchangeSetService>();
 
+            builder.Services.AddSingleton<ISevenCsService, SevenCsService>();
+
             builder.Services.AddHangfireServer();
 
             // Caching
@@ -162,9 +165,9 @@ namespace ProductCatalogueService
 
             // Mail-Handling
             builder.Services
-    .AddOptions<MailImportOptions>()
-    .Bind(builder.Configuration.GetSection(MailImportOptions.SectionName))
-    .ValidateOnStart();
+                .AddOptions<MailImportOptions>()
+                .Bind(builder.Configuration.GetSection(MailImportOptions.SectionName))
+                .ValidateOnStart();
             builder.Services.AddScoped<IProductStatusEmailParser, ProductStatusEmailParser>();
             builder.Services.AddScoped<ProcessProductStatusEmailsJob>();
 
