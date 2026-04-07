@@ -3,6 +3,7 @@ import { initNavbarNotifications } from "../features/notices/ui/navbarNotificati
 import { initNoticePanel } from "../features/notices/ui/noticePanel.js";
 import { initNoticeToasts } from "../features/notices/ui/noticeToastRenderer.js";
 import { configureArcGIS } from "../shared/config/arcgisConfig.js";
+import { registerConfirmDialog } from "../shared/ui/confirm/services/confirmService.js";
 
 export async function initUI() {
   configureArcGIS();
@@ -12,4 +13,5 @@ export async function initUI() {
 
   await loadNavbar();
   initNavbarNotifications();
+  registerConfirmDialog();
 }

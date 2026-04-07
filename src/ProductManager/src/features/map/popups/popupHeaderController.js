@@ -69,12 +69,14 @@ function ensureCopyButton(header, datasetName) {
           type: "success",
           message: "Dataset name copied",
           duration: 2000,
+          storeInCenter: false,
         });
       } catch {
         addNotice({
           type: "danger",
           message: "Failed to copy dataset name",
           duration: 3000,
+          storeInCenter: false,
         });
       }
     });

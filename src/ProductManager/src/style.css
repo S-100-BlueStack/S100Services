@@ -134,6 +134,99 @@ calcite-shell {
 .copy-dataset-btn {
   cursor: pointer;
 }
+/* Anchored confirm popover */
+
+.confirm-popover[hidden] {
+  display: none;
+}
+
+.confirm-popover {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  pointer-events: none;
+}
+
+.confirm-popover__card {
+  position: absolute;
+  min-width: 260px;
+  max-width: 320px;
+  background: #ffffff;
+  border: 1px solid rgba(110, 110, 110, 0.3);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+  padding: 12px;
+  pointer-events: auto;
+}
+
+.confirm-popover__card::before {
+  content: "";
+  position: absolute;
+  left: var(--confirm-popover-arrow-left, 50%);
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.confirm-popover__card[data-placement="bottom"]::before {
+  top: -6px;
+  border-top: 1px solid rgba(110, 110, 110, 0.3);
+  border-left: 1px solid rgba(110, 110, 110, 0.3);
+}
+
+.confirm-popover__card[data-placement="top"]::before {
+  bottom: -6px;
+  border-right: 1px solid rgba(110, 110, 110, 0.3);
+  border-bottom: 1px solid rgba(110, 110, 110, 0.3);
+}
+
+.confirm-popover__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #323232;
+  margin-bottom: 6px;
+}
+
+.confirm-popover__message {
+  font-size: 13px;
+  line-height: 1.4;
+  color: #323232;
+  margin-bottom: 12px;
+}
+
+.confirm-popover__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.confirm-popover__button {
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 10px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.confirm-popover__button--secondary {
+  background: #ffffff;
+  border-color: #8f8f8f;
+  color: #323232;
+}
+
+.confirm-popover__button--secondary:hover {
+  background: #f3f3f3;
+}
+
+.confirm-popover__button--primary {
+  background: #0079c1;
+  color: #ffffff;
+}
+
+.confirm-popover__button--primary:hover {
+  background: #00619b;
+}
 
 /* Popup action icon color */
 /* Popup actions render through Calcite internals/shadow DOM.
