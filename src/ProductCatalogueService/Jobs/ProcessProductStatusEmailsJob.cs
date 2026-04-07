@@ -47,10 +47,7 @@ public class ProcessProductStatusEmailsJob(
             return;
         }
         var currentProducts = await this._productRepository.GetCurrentAsync();
-        if (!currentProducts.Any() || currentProducts == null) {
-            _logger.LogError("No products found in Product Repository. Aborting mail processing.");
-            return;
-        }
+
         foreach (var filePath in files) {
             cancellationToken.ThrowIfCancellationRequested();
             try {
@@ -97,7 +94,10 @@ public class ProcessProductStatusEmailsJob(
         cancellationToken.ThrowIfCancellationRequested();
 
         var parsedMail = _productStatusEmailParser.Parse(mail);
-
+        if (parsedMail == null) {
+            _logger.LogError("Parsed Mail returned null. Skipping mail.");
+            return Task.CompletedTask;
+        }
         if (!parsedMail.IsRelevant) {
             _logger.LogInformation(
                 "Mail '{Subject}' was classified as non-registration mail.",
@@ -124,8 +124,9 @@ public class ProcessProductStatusEmailsJob(
                     product = currentProducts?.FirstOrDefault(x => converted.Contains(x.Name));
                 }
             }
-            if (!string.IsNullOrEmpty(parsedMail.RegistrationName))
+            if (!string.IsNullOrEmpty(parsedMail.RegistrationName)) {
                 await HandleProductUpdateFromMail(parsedMail, product, cancellationToken);
+            }
             else {
                 _logger.LogError("Parsed Mail does not contain a Registration Name. Cannot process.");
             }
@@ -135,6 +136,7 @@ public class ProcessProductStatusEmailsJob(
 
     private async Task<bool> HandleProductUpdateFromMail(ParsedProductStatusEmail parsedMail, ProductRecord? product, CancellationToken cancellationToken) {
         cancellationToken.ThrowIfCancellationRequested();
+        if (parsedMail == null) { return false; }
         var state = ProductState.Frozen;
         var type = GetRegistrationType(parsedMail.RegistrationId);
         switch (parsedMail.Outcome) { // TODO: Ensure mapping is correct
@@ -157,25 +159,27 @@ public class ProcessProductStatusEmailsJob(
                 state = ProductState.Invalid;
                 break;
         }
-        if (state != product?.State || product == null) {
-            try {
-                _logger.LogInformation("Product {Name} has new state: {newState} from old state: {oldState}. Attempting upsert.", parsedMail.RegistrationName, product?.State, state);
-                await _productRepository.AppendAsync(parsedMail.RegistrationName, state);
-                _logger.LogInformation("Product {Name} successfully upserted with new state {newState}.", state, parsedMail.RegistrationName);
+        if (parsedMail.RegistrationName != null) {
+            if (state != product?.State || product == null) {
+                try {
+                    _logger.LogInformation("Product {Name} has new state: {newState} from old state: {oldState}. Attempting upsert.", parsedMail.RegistrationName, state, product?.State);
+                    await _productRepository.AppendAsync(parsedMail.RegistrationName, state, null, parsedMail.DocumentAttachment?.Content, parsedMail.DocumentAttachment?.FileName);
+                    _logger.LogInformation("Product {Name} successfully upserted with new state {newState}.", parsedMail.RegistrationName, state);
+                    return true;
+                }
+                catch (Exception ex) {
+                    _logger.LogError("Failed to upsert {Name} in Product Repository: {Exception}.", parsedMail.RegistrationName, ex);
+                    return false;
+                }
+            }
+            else if (state == product.State) {
+                _logger.LogInformation("New state is the same as old state for Product {Name}: {newState}. Skipping upsert.", product.Name, state);
                 return true;
             }
-            catch (Exception ex) {
-                _logger.LogError("Failed to upsert {Name} in Product Repository: {Exception}.", parsedMail.RegistrationName, ex);
+            else if (product.State == ProductState.Frozen) {
+                _logger.LogWarning("Product {Name} is frozen. Skipping upsert to new state {newState}.", product.Name, state);
                 return false;
             }
-        }
-        else if (state == product.State) {
-            _logger.LogInformation("New state is the same as old state for Product {Name}: {newState}. Skipping upsert.", product.Name, state);
-            return true;
-        }
-        else if (product.State == ProductState.Frozen) {
-            _logger.LogWarning("Product {Name} is frozen. Skipping upsert to new state {newState}.", product.Name, state);
-            return false;
         }
         return true;
     }

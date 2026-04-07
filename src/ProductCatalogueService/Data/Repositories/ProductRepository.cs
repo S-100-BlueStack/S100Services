@@ -10,7 +10,7 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
 
     private static readonly DateTime MaxDate = new(9999, 12, 31);
 
-    public async Task AppendAsync(string name, ProductState state, string? owner = null) {
+    public async Task AppendAsync(string name, ProductState state, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null) {
         using var conn = _connectionFactory.Create();
         conn.Open();
         using var transaction = conn.BeginTransaction();
@@ -34,9 +34,9 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
         // insert new version
         var insertSql = """
             INSERT INTO dbo.JobTable
-            (name, state, owner, date_from, date_to)
+            (name, state, owner, date_from, date_to, attachment, attachment_file_name)
             VALUES
-            (@Name, @State, @Owner, @DateFrom, @DateTo)
+            (@Name, @State, @Owner, @DateFrom, @DateTo, @Attachment, @AttachmentFileName)
         """;
 
         await conn.ExecuteAsync(
@@ -46,7 +46,9 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
                 State = state,
                 Owner = owner,
                 DateFrom = now,
-                DateTo = MaxDate
+                DateTo = MaxDate,
+                Attachment = attachment,
+                AttachmentFileName = attachmentFileName
             },
             transaction);
 
@@ -56,12 +58,12 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
     public async Task<IEnumerable<ProductRecord>> GetCurrentAsync() {
         using var connection = _connectionFactory.Create();
         var sql = """
-            SELECT id, name, state, owner, date_from, date_to
+            SELECT id, name, state, owner, date_from, date_to, attachment, attachment_file_name
             FROM dbo.JobTable
             WHERE date_to = (
                 SELECT MAX(date_to)
-                FROM dbo.JobTable AS inner
-                WHERE inner.name = dbo.JobTable.name
+                FROM dbo.JobTable AS q2
+                WHERE q2.name = dbo.JobTable.name
             )
         """;
         return await connection.QueryAsync<ProductRecord>(sql);
@@ -71,7 +73,7 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
         using var connection = _connectionFactory.Create();
 
         var sql = """
-            SELECT TOP 1 id, name, state, owner, date_from, date_to
+            SELECT TOP 1 id, name, state, owner, date_from, date_to, attachment, attachment_file_name
             FROM dbo.JobTable
             WHERE name = @Name
             ORDER BY date_from DESC
@@ -88,7 +90,7 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
         var sql = """
             SELECT name
             FROM (
-                SELECT 
+                SELECT
                     name,
                     state,
                     ROW_NUMBER() OVER (PARTITION BY name ORDER BY date_to DESC) AS rn
