@@ -27,8 +27,8 @@ namespace TestProductCatalogueService
 
         [Fact]
         public async Task Test_AppendJobTableRow() {
-            var name = "10100DK4LIMFE";
-            var state = ProductState.Ready;
+            var name = "101DK0040349E";
+            var state = ProductState.InTransit;
             
 
             // Adds or updates row
@@ -39,7 +39,7 @@ namespace TestProductCatalogueService
             var result = await _repository.GetCurrentByNameAsync(name);
 
 
-            // COmpare the results
+            // Compare the results
             Assert.NotNull(result);
             Assert.Equal(state, result!.State);
 

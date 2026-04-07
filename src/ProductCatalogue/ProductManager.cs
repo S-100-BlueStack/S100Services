@@ -1,11 +1,14 @@
 ﻿using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
+using Microsoft.AspNetCore.Components.Forms;
 using S100FC.S128;
 using S100FC.S128.FeatureTypes;
+using S100FC.S128.SimpleAttributes;
 using S100FC.YAML;
 using Serilog;
 using System.Collections;
 using System.Collections.Concurrent;
+using System.Data;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
@@ -32,10 +35,9 @@ namespace S100FC.ProductCatalogue
         Task<YAML.Dataset> CreateNewUpdateAsync(string name);
 
         Task<YAML.Dataset> ReissueAsync(string name);
-
-        Task<bool> QueryUpdatesAsync(string name, Action<object> action);
-
+        Task<Dictionary<string, ArcGIS.Core.Geometry.Geometry>> GetDatasetAOIs();
         Task<bool> IsDirtyAsync(string name);
+        Task<ArcGIS.Core.Geometry.Geometry> GetDatasetBoundary(string name);
         Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name);
         ElectronicProduct? ElectronicProduct(string name);
 
@@ -306,41 +308,6 @@ namespace S100FC.ProductCatalogue
             return await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, ExportTypes.Reissue);
         }
 
-        async Task<bool> IElectronicProductManager.QueryUpdatesAsync(string name, Action<object> action) {
-            if (string.IsNullOrEmpty(name))
-                throw new System.ArgumentNullException(nameof(name));
-            name = name.ToUpperInvariant();
-
-            if (!this._electronicProducts.ContainsKey(name))
-                throw new System.ArgumentException(nameof(name));
-
-            var electronicProduct = this._electronicProducts[name];
-
-            var uri = this._connections[this._electronicProducts[name].productSpecification!.name]!;
-
-            using var connection = this.OpenGeodatabase(uri);
-
-            var dataset = await this.GetLatestDataset(name);
-
-            if (dataset == default)
-                return false;
-
-            var filter = await this.BuildSpatialQueryFilter(dataset, new S100FC.S128.SimpleAttributes.specificUsage { value = electronicProduct.specificUsage });
-
-            return await this.Dispatch(() => {
-                string[] tableNames = ["point", "pointset", "curve", "surface"];
-                foreach (var baseTableName in tableNames) {
-                    using var fc = connection.OpenDataset<FeatureClass>(this.QualifyTableName($"{baseTableName}_H"));
-
-                    using var cursor = fc.Search(filter, true);
-                    while (cursor.MoveNext()) {
-                        action(cursor.Current);
-                    }
-                }
-                return false;
-            });
-        }
-
         async Task<bool> IElectronicProductManager.IsDirtyAsync(string name) {
             if (string.IsNullOrEmpty(name))
                 throw new System.ArgumentNullException(nameof(name));
@@ -439,7 +406,7 @@ namespace S100FC.ProductCatalogue
                             var flatten = cur["attributebindings"]?.ToString();
                             var informationBindings = cur["informationbindings"]?.ToString();
                             var featureBindings = cur["featurebindings"]?.ToString();
-        
+
 
                             _ = DateTime.TryParse(cur["GDB_FROM_DATE"].ToString(), out DateTime fromDate);
                             _ = DateTime.TryParse(cur["GDB_TO_DATE"].ToString(), out DateTime toDate);
@@ -455,7 +422,8 @@ namespace S100FC.ProductCatalogue
                             if (toDate == maxDate) {
                                 Log.Information("Feature deleted {id} in {table} for dataset: {name}.", id, baseTableName, name);
                                 entry.Deleted = true;
-                            } else {
+                            }
+                            else {
                                 Log.Information("Feature updated {id} in {table} for dataset: {name}.", id, baseTableName, name);
                             }
 
@@ -1118,6 +1086,65 @@ namespace S100FC.ProductCatalogue
                 };
 
                 return filter;
+            });
+
+        }
+
+        public async Task<Dictionary<string, ArcGIS.Core.Geometry.Geometry>> GetDatasetAOIs() {
+            return await this.Dispatch(() => {
+                var result = new Dictionary<string, ArcGIS.Core.Geometry.Geometry>();
+
+                using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
+                using var cursor = surface.Search();
+
+                while (cursor.MoveNext()) {
+                    var feature = (ArcGIS.Core.Data.Feature)cursor.Current;
+                    var boundary = feature.GetShape();
+
+                    var attrBindings = Convert.ToString(feature["attributebindings"]) ?? string.Empty;
+
+                    if (string.IsNullOrEmpty(attrBindings))
+                        continue;
+
+                    try {
+                        var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(attrBindings!, typeof(ElectronicProduct));
+
+                        if (electronicProduct.datasetName == null)
+                            continue;
+
+                        result[electronicProduct.datasetName!] = boundary;
+                    }
+                    catch (Exception ex) {
+                        continue;
+                    }
+
+                }
+
+                return result;
+            });
+        }
+
+        public async Task<ArcGIS.Core.Geometry.Geometry> GetDatasetBoundary(string datasetName) {
+            return await this.Dispatch(() => {
+                //using var surface = _geodatabase!.OpenDataset<Table>(QualifyTableName("surface"));
+
+                //using var cursor = surface.Search(new QueryFilter {
+                //    WhereClause = $"json LIKE '%\"DatasetName\":\"{datasetName}\"%'",
+                //    PostfixClause = "ORDER BY created_date ASC"
+                //}, true);
+
+                using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
+
+                using var cursor = surface.Search(new QueryFilter {
+                    WhereClause = $"attributebindings LIKE '%\"{datasetName}\"%'",
+                }, false);
+
+                if (!cursor.MoveNext())
+                    throw new InvalidOperationException("No dataset rows found");
+
+                var boundary = ((ArcGIS.Core.Data.Feature)cursor.Current).GetShape();
+
+                return boundary!;
             });
 
         }

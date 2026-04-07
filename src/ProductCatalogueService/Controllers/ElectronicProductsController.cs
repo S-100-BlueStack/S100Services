@@ -2,12 +2,14 @@ using ArcGIS.Core.Geometry;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using ProductCatalogueService.Data.Repositories;
 using ProductCatalogueService.Models;
 using S100FC.ProductCatalogue;
 using System.Diagnostics;
 using static ProductCatalogueService.Models.RequestTypes;
 using static ProductCatalogueService.Models.ResponseTypes;
-using IO = System.IO;
+using System.Text.Json;
+using ArcGIS.Core.Internal.Geometry;
 
 namespace ProductCatalogueService.Controllers
 {
@@ -16,11 +18,12 @@ namespace ProductCatalogueService.Controllers
     [AllowAnonymous] // during development
     [ApiController]
     [Route("[controller]")]
-    public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager) : ControllerBase
+    public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository) : ControllerBase
     {
         private readonly ILogger<ElectronicProductsController> _logger = logger;
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
         private readonly IMemoryCache _cache = cache;
+        private readonly IProductRepository _repository = repository;
 
         /// <summary>
         /// Get all product names in the database
@@ -43,6 +46,60 @@ namespace ProductCatalogueService.Controllers
         }
 
         /// <summary>
+        /// Get all product names in the database
+        /// </summary>
+        /// <returns>An collection with all productnames</returns>f
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
+        [HttpGet("aoi")]
+        public async Task<IActionResult> GetAllElectronicProductsAOI() {
+            var sw = Stopwatch.StartNew();
+            //var response = new ApiResponse<string>();
+            var aois = await _electronicProductManager.GetDatasetAOIs();
+            var features = new List<object>();
+
+            foreach (var a in aois) {
+                var electronicProduct = _electronicProductManager.ElectronicProduct(a.Key);
+
+                if (electronicProduct == null) {
+                    logger.LogWarning("No electronic product found for dataset {dataset}", a.Key);
+                    continue;
+                }
+
+                var polygon = a.Value as Polygon;
+
+                var env = polygon.Extent;
+
+                // simplify coordinates
+                var rectangle = PolygonBuilder.CreatePolygon(
+                [
+                    new Coordinate2D(env.XMin, env.YMin),
+                    new Coordinate2D(env.XMax, env.YMin),
+                    new Coordinate2D(env.XMax, env.YMax),
+                    new Coordinate2D(env.XMin, env.YMax),
+                    new Coordinate2D(env.XMin, env.YMin)
+                ], SpatialReferences.WGS84);
+
+                var current = await _repository.GetCurrentByNameAsync(a.Key);
+
+                var esriGeometry = GeometryEngine.Instance.ExportToJson(JsonExportFlags.JsonExportSkipCRS, rectangle);
+
+                features.Add(new {
+                    geometry = JsonSerializer.Deserialize<object>(esriGeometry),
+                    attributes = new {
+                        datasetName = electronicProduct.datasetName,
+                        edition = electronicProduct.editionNumber,
+                        update = electronicProduct.updateDate,
+                        status = (int)(current?.State ?? Data.Models.ProductState.Ready)    // If no explicit state defined in JobTable, default to Ready
+                    }
+                });
+            }
+
+
+            return Ok(features);
+        }
+
+        /// <summary>
         /// Get a specific electronic product
         /// </summary>
         /// <param name="name">The name of the dataset.</param>
@@ -50,7 +107,7 @@ namespace ProductCatalogueService.Controllers
         [ProducesResponseType(typeof(ApiResponse<ResponseTypes.ProductResponse>), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpGet("{name}", Name = "GetElectronicProduct")]
-        public IActionResult GetElectronicProduct(string name) {
+        public async Task<IActionResult> GetElectronicProduct(string name) {
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse<ResponseTypes.ProductResponse>();
             var electronicProduct = this._electronicProductManager.ElectronicProduct(name);
@@ -61,13 +118,21 @@ namespace ProductCatalogueService.Controllers
                 response.DurationMs = sw.ElapsedMilliseconds;
                 return this.NotFound(response);
             }
+
+            var boundary = await _electronicProductManager.GetDatasetBoundary(name);
+
+            var current = await _repository.GetCurrentByNameAsync(name);
+
             var product = new ProductResponse {
                 Edition = electronicProduct.editionNumber,
                 IssueDate = electronicProduct.issueDate,
                 Name = electronicProduct.datasetName,
                 Update = electronicProduct.updateNumber,
-                UsageBand = electronicProduct.specificUsage
+                UsageBand = electronicProduct.specificUsage,
+                Aoi = boundary.ToJson(),
+                Status = (int)(current?.State ?? Data.Models.ProductState.Ready)
             };
+
 
             response.Data = product;
             response.TotalHits = 1;
@@ -98,7 +163,7 @@ namespace ProductCatalogueService.Controllers
             //    UsageBand = electronicProduct.specificUsage
             //};
 
-           // response.Data = geojson;
+            // response.Data = geojson;
             //response.DurationMs = sw.ElapsedMilliseconds;
 
             return this.Ok(response);
@@ -132,6 +197,8 @@ namespace ProductCatalogueService.Controllers
 
             //var boundary = GetBoundaryFromGeoJSON(aoi);
             var boundary = PolygonBuilderEx.FromJson(product.Aoi.ToString());
+
+            _electronicProductManager.ElectronicProduct(product.Name); // check if product already exists, if not, will return null
 
             var productSpecification = new S100FC.S128.ComplexAttributes.productSpecification() {
                 name = "S-101",
