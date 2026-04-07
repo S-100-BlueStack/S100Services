@@ -35,7 +35,7 @@ export async function loadInitialData(app) {
     app.updateLastUpdated();
 
     hideLoader();
-    noticeSuccess("Data loaded");
+    noticeSuccess("Data loaded", null, { countAsUnread: false });
     resetUnread();
   } catch (error) {
     setLoaderText("Failed to load data");

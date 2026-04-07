@@ -1,41 +1,67 @@
-<head>
-  <link
-    rel="stylesheet"
-    href="https://js.arcgis.com/calcite-components/2.10.1/calcite.css"
-  />
-  <script
-    src="https://js.arcgis.com/calcite-components/2.10.1/calcite.esm.js"
-    type="module"
-  ></script>
-</head>
-<div id="app-loader" class="app-loader hidden">
-  <div class="loader-content">
-    <calcite-loader active scale="l"></calcite-loader>
-    <div id="loader-text" class="loader-text"></div>
-  </div>
-</div>
-<body>
-  <calcite-shell content-behind>
-    <div id="navbar" slot="header"></div>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/2.10.1/calcite.css" /> -->
+    <!-- <script
+      src="https://js.arcgis.com/calcite-components/2.10.1/calcite.esm.js"
+      type="module"
+    ></script> -->
+  </head>
+
+  <body>
+    <div id="app-loader" class="app-loader hidden">
+      <div class="loader-content">
+        <calcite-loader active scale="l"></calcite-loader>
+        <div id="loader-text" class="loader-text"></div>
+      </div>
+    </div>
 
     <calcite-shell content-behind>
-  <div id="navbar" slot="header"></div>
+      <div id="navbar" slot="header"></div>
 
-  <div id="viewDiv"></div>
+      <div id="viewDiv"></div>
 
-  <calcite-shell-panel slot="panel-end" width="m" id="notice-panel" collapsed>
-    <calcite-panel heading="Notifications">
-      <calcite-action
-        slot="header-actions-end"
-        icon="x"
-        id="close-notice-panel"
-      ></calcite-action>
+      <calcite-shell-panel slot="panel-end" width="m" id="notice-panel" collapsed>
+        <calcite-panel heading="Notifications">
+          <calcite-action
+            slot="header-actions-end"
+            icon="x"
+            id="close-notice-panel"
+          ></calcite-action>
 
-      <div id="notice-log"></div>
-    </calcite-panel>
-  </calcite-shell-panel>
+          <div id="notice-log"></div>
+        </calcite-panel>
+      </calcite-shell-panel>
+    </calcite-shell>
 
-</calcite-shell>
+    <div id="confirm-popover" class="confirm-popover" hidden>
+      <div class="confirm-popover__card">
+        <div class="confirm-popover__title" id="confirm-popover-title">Confirm action</div>
+        <hr class="solid" style="border-top: 3px solid #bbb; margin: 8px !important" />
+        <div class="confirm-popover__message" id="confirm-popover-message">Are you sure?</div>
 
-  <script type="module" src="/src/main.js"></script>
-</body>
+        <div class="confirm-popover__actions">
+          <button
+            type="button"
+            id="confirm-popover-cancel"
+            class="confirm-popover__button confirm-popover__button--secondary"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            id="confirm-popover-confirm"
+            class="confirm-popover__button confirm-popover__button--primary"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,6 +1,7 @@
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 import { noticeError, noticeInfo, noticeSuccess } from "../../notices/services/noticeService.js";
 import { changeFreezeState, uploadProduct } from "../../data/api/productApi.js";
+import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
 
 let freezeAction = null;
 let sendAction = null;
@@ -19,8 +20,10 @@ export function registerPopupActions(view) {
 
       if (event.action.id === "freeze-feature" || event.action.id === "freeze-feature-sun") {
         const newState = !(freezeState.get(id) === true);
-
-        const result = await triggerFreeze(feature.attributes.datasetName, newState);
+        const freezeButton = document.querySelector(
+          '[data-action-id="freeze-feature"], [data-action-id="freeze-feature-sun"]'
+        );
+        const result = await triggerFreeze(feature.attributes.datasetName, newState, freezeButton);
         if (result.success) {
           freezeState.set(id, newState);
           updateUI(view, newState);
@@ -28,7 +31,8 @@ export function registerPopupActions(view) {
       }
 
       if (event.action.id === "send-immediately") {
-        sendImmediately(feature.attributes.datasetName);
+        const sendButton = document.querySelector('[data-action-id="send-immediately"]');
+        await sendImmediately(feature.attributes.datasetName, sendButton);
       }
     }
   );
@@ -68,28 +72,67 @@ function updateUI(view, frozen) {
       ];
 }
 
-async function triggerFreeze(datasetName, state) {
+async function triggerFreeze(datasetName, state, anchorElement) {
+  const confirmed = await confirmAction({
+    title: `${state ? "Freeze" : "Unfreeze"} ${datasetName}`,
+    message: `Are you sure you want to ${state ? "freeze" : "unfreeze"} ${datasetName}?`,
+    confirmText: "Confirm",
+    cancelText: "Cancel",
+    anchorElement,
+  });
+
+  if (!confirmed) {
+    return;
+  }
+
   const result = await changeFreezeState(datasetName, state);
   if (result.success) {
-    noticeSuccess(`Product ${datasetName} ${state ? "frozen" : "unfrozen"} successfully`);
+    noticeSuccess(`Product ${datasetName} ${state ? "frozen" : "unfrozen"} successfully`, null, {
+      countAsUnread: false,
+    });
   } else if (result.networkError) {
     noticeError(`Network error while ${state ? "freezing" : "unfreezing"} ${datasetName}`);
   } else {
     noticeError(
-      `Failed to ${state ? "freeze" : "unfreeze"} ${datasetName}: (${result.status}) ${result.statusText}`
+      `Failed to ${state ? "freeze" : "unfreeze"} ${datasetName} (${result.status})`,
+      ` ${result.statusText}`
     );
   }
   return result;
 }
 
-async function sendImmediately(datasetName) {
-  const result = await uploadProduct(datasetName);
+let isSending = false;
 
-  if (result.success) {
-    noticeSuccess(`Product ${datasetName} sent successfully`);
-  } else if (result.networkError) {
-    noticeError(`Network error while sending ${datasetName}`);
-  } else {
-    noticeError(`Failed to send ${datasetName}: (${result.status}) ${result.statusText}`);
+async function sendImmediately(datasetName, anchorElement) {
+  if (isSending) {
+    return;
+  }
+
+  const confirmed = await confirmAction({
+    title: `Send ${datasetName}`,
+    message: `Are you sure you want to send ${datasetName} immediately?`,
+    confirmText: "Send",
+    cancelText: "Cancel",
+    anchorElement,
+  });
+
+  if (!confirmed) {
+    return;
+  }
+
+  isSending = true;
+
+  try {
+    const result = await uploadProduct(datasetName);
+
+    if (result.success) {
+      noticeSuccess(`Product ${datasetName} sent successfully`, null, { countAsUnread: false });
+    } else if (result.networkError) {
+      noticeError(`Network error while sending ${datasetName}`);
+    } else {
+      noticeError(`Failed to send ${datasetName} (${result.status})`, `${result.statusText}`);
+    }
+  } finally {
+    isSending = false;
   }
 }
