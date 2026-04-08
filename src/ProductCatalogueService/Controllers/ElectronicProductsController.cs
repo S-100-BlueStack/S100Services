@@ -13,9 +13,8 @@ using ArcGIS.Core.Internal.Geometry;
 
 namespace ProductCatalogueService.Controllers
 {
-
-    //[Authorize]
-    [AllowAnonymous] // during development
+    //[AllowAnonymous] 
+    [Authorize("productmanager:access")]
     [ApiController]
     [Route("[controller]")]
     public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository) : ControllerBase
@@ -141,35 +140,6 @@ namespace ProductCatalogueService.Controllers
             return this.Ok(response);
         }
 
-        /// <summary>
-        /// Get all products that have pending updates
-        /// </summary>
-        ///// <param name="name">The name of the dataset.</param>
-        /// <returns>The product</returns>
-        [ProducesResponseType(StatusCodes.Status501NotImplemented)]
-        //[ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK, "application/json")]
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
-        [HttpGet("pending", Name = "GetPendingProducts")]
-        public IActionResult GetPendingProducts() {
-            return StatusCode(StatusCodes.Status501NotImplemented);
-            var sw = Stopwatch.StartNew();
-            var response = new ApiResponse<string>();
-
-            //var product = new ProductResponse {
-            //    Edition = electronicProduct.editionNumber,
-            //    IssueDate = electronicProduct.issueDate,
-            //    Name = electronicProduct.datasetName,
-            //    Update = electronicProduct.updateNumber,
-            //    UsageBand = electronicProduct.specificUsage
-            //};
-
-            // response.Data = geojson;
-            //response.DurationMs = sw.ElapsedMilliseconds;
-
-            return this.Ok(response);
-        }
-
-
 
         /// <summary>
         /// Creates a new Electronic Product in the S-128 database.
@@ -183,6 +153,7 @@ namespace ProductCatalogueService.Controllers
         //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
         //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpPost()]
+        [Authorize("productmanager:manage")]
         public async Task<IActionResult> CreateElectronicProduct([FromBody] CreateProductRequest product) {
             return StatusCode(StatusCodes.Status501NotImplemented);
             var sw = Stopwatch.StartNew();

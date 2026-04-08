@@ -6,6 +6,8 @@ using System.Security.Cryptography;
 
 namespace ProductCatalogueService.Controllers
 {
+    [Authorize("productmanager:distribute")]
+    [ApiController]
     public class UploadController(ILogger<UploadController> logger, IBackgroundJobClient backgroundJobClient, IRecurringJobManager recurringJobManager) : ControllerBase
     {
         private readonly IBackgroundJobClient _backgroundJobClient = backgroundJobClient;
@@ -20,9 +22,6 @@ namespace ProductCatalogueService.Controllers
         /// <returns>The job id</returns>
         [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError, "application/json")]
-#if DEBUG
-        [AllowAnonymous] //TODO: Find rigtig løsning på dette
-#endif
         [HttpPut("{datasetName}", Name = "upload")]
         public IActionResult UploadSingularProduct(string datasetName, CancellationToken cancellationToken) {
             _logger.LogInformation("{method}({jobType}. User: {user})", nameof(UploadSingularProduct), datasetName, User?.Identity?.Name ?? string.Empty);

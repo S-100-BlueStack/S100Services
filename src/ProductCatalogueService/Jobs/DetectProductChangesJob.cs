@@ -62,24 +62,25 @@ namespace ProductCatalogueService.Jobs
                     }
 
                     _logger.LogInformation("Creating export.. ");
-
                     var result = _exchangeSetService.CreateExchangeSet(electronicProduct, output, yaml);
 
                     // Validate .000 files
                     var summary = await _sevenCsService.ValidateDatasetAsync(electronicProduct, output);
 
-                    // TODO: do something with validationresult. Rollback ed/update?
-                    _logger.LogInformation("Saving productstate in database..");
-
-                    if (summary.Errors == 0 & summary.Critical == 0)
+                    if (summary.Errors == 0 & summary.Critical == 0) {
                         await _repository.AppendAsync(productName, Data.Models.ProductState.NewEdition);
-                    else
+                        // write to s128 database
+                        _logger.LogInformation("Writing to s128.attachments.. ");
+                        await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
+                    }
+                    else {
+                        _logger.LogWarning("Product {product} failed the SevenCs Validation check. Errors: {err}. Critical: {crit}. Marking product as Invalid.", productName, summary.Errors, summary.Critical);
+
                         await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid);
 
-                    // write to s128 database
-                    _logger.LogInformation("Writing to s128.attachments.. ");
-                    await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
-
+                        _logger.LogInformation("Rolling back exchange set creation.. ");
+                        _exchangeSetService.DeleteExchangeSet(productName, electronicProduct.editionNumber!.Value, output);
+                    }
                 }
                 else {
                     _logger.LogInformation("Creating new update.. ");
@@ -115,19 +116,25 @@ namespace ProductCatalogueService.Jobs
                     // Validate .000 files
                     var summary = await _sevenCsService.ValidateDatasetAsync(electronicProduct, output);
 
-                    // TODO: do something with validationresult. Rollback ed/update?
                     _logger.LogInformation("Saving productstate in database..");
 
-                    if (summary.Errors == 0 & summary.Critical == 0)
+                    if (summary.Errors == 0 & summary.Critical == 0) {
                         await _repository.AppendAsync(productName, Data.Models.ProductState.NewUpdate);
-                    else 
+
+                        _logger.LogInformation("Writing to s128.attachments.. ");
+                        await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.Update, update, result.Index, result.Sign);
+                    }
+                     
+                    else {
+                        _logger.LogWarning("Product {product} failed the SevenCs Validation check. Errors: {err}. Critical: {crit}. Marking product as Invalid.", productName, summary.Errors, summary.Critical);
+
                         await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid);
-                    
-                    _logger.LogInformation("Writing to s128.attachments.. ");
-                    await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.Update, update, result.Index, result.Sign);
+
+                        _logger.LogInformation("Rolling back exchange set creation.. ");
+                        _exchangeSetService.DeleteExchangeSet(productName, electronicProduct.editionNumber!.Value, output);
+                    }
                 }
             }
-
             _logger.LogInformation("Job: {jobName} finished", nameof(DetectProductChangesJob));
         }
 

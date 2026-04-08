@@ -4,7 +4,7 @@ using ProductCatalogueService.Models;
 
 namespace ProductCatalogueService.Controllers
 {
-    [AllowAnonymous]
+    [Authorize("productmanager:access")]
     [ApiController]
     public class LookupController : ControllerBase
     {

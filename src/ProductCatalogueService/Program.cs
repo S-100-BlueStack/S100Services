@@ -6,14 +6,16 @@ using Microsoft.Data.SqlClient;
 using ProductCatalogueService.Data.Database;
 using ProductCatalogueService.Data.Repositories;
 using ProductCatalogueService.Jobs;
+using ProductCatalogueService.Services.ExchangeSet;
+using ProductCatalogueService.Services.Graph;
 using ProductCatalogueService.Services.MailImport;
+using ProductCatalogueService.Services.SevenCs;
 using S100FC.S128;
 using Serilog;
 using System.Data;
 using System.Reflection;
-using ProductCatalogueService.Services.Graph;
-using ProductCatalogueService.Services.ExchangeSet;
-using ProductCatalogueService.Services.SevenCs;
+using System.Security.Claims;
+using System.Text.Json;
 
 namespace ProductCatalogueService
 {
@@ -78,8 +80,7 @@ namespace ProductCatalogueService
 
             });
 #if DEBUG
-            builder.Services.AddCors(options =>
-            {
+            builder.Services.AddCors(options => {
                 options.AddPolicy("AllowFrontend",
                     policy => {
                         policy.WithOrigins(["http://localhost:5173", "https://localhost:5173"])
@@ -90,11 +91,44 @@ namespace ProductCatalogueService
             });
 #endif
 
+
+            //  Windows SSO            
+            builder.Services.AddHttpContextAccessor();
             builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
 
+            var path = builder.Configuration["Policies"];
+
+            if (string.IsNullOrEmpty(path))
+                Log.Error("No path configured for authorization groups file! Please set 'Policies' in appsettings.sjon to point to a valid JSON file containing group policies.");
+
+            var json = File.ReadAllText(path!);
+
+            var groupPolicies = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string[]>>(json, new JsonSerializerOptions {
+                ReadCommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            }) ?? [];
+
             builder.Services.AddAuthorization(options => {
-                // By default, all incoming requests will be authorized according to the default policy.
+
                 options.FallbackPolicy = options.DefaultPolicy;
+
+                foreach (var policy in groupPolicies) {
+                    options.AddPolicy(policy.Key, p => {
+                        switch (policy.Key) {
+                            case "productmanager:distribute":
+                                p.RequireClaim(ClaimTypes.PrimarySid, policy.Value);
+                                break;
+
+                            case "productmanager:access":
+                            case "productmanager:manage":
+                                p.RequireClaim("http://schemas.microsoft.com/ws/2008/06/identity/claims/groupsid", policy.Value);
+                                break;
+
+                            default:
+                                throw new Exception($"Unknown authorization policy: {policy.Key}");
+                        }
+                    });
+                }
             });
 
             builder.Services.AddApiVersioning(options => {
@@ -132,8 +166,7 @@ namespace ProductCatalogueService
 
             var connectionString = File.ReadAllText(filePath);
 
-            builder.Services.AddHangfire(config =>
-            {
+            builder.Services.AddHangfire(config => {
                 config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
                     .UseSimpleAssemblyNameTypeSerializer()
                     .UseRecommendedSerializerSettings()

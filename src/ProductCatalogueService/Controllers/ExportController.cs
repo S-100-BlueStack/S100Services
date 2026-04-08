@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using ProductCatalogueService.Services.ExchangeSet;
 using S100FC.ProductCatalogue;
@@ -10,6 +11,8 @@ using IO = System.IO;
 
 namespace ProductCatalogueService.Controllers
 {
+    [Authorize("productmanager:manage")]
+    [ApiController]
     public class ExportController(ILogger<ExportController> logger, IMemoryCache cache, IExchangeSetService exchangeSetService, IProductManager productManager) : ControllerBase
     {
         private readonly ILogger<ExportController> _logger = logger;

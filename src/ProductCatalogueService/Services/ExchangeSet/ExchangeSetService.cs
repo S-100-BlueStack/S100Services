@@ -71,5 +71,9 @@ namespace ProductCatalogueService.Services.ExchangeSet
 
             return new(index, sign);
         }
+
+        public void DeleteExchangeSet(string datasetName, int editionNumber, string outputFolder) {
+            IO.Directory.Delete(Path.Combine(outputFolder, datasetName, $"{editionNumber}"), true);
+        }
     }
 }
