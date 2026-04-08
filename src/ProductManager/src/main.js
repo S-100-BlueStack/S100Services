@@ -1,5 +1,3 @@
-import "@arcgis/core/assets/esri/themes/light/main.css";
-import "bootstrap/dist/css/bootstrap.min.css";
 import "@esri/calcite-components/dist/components/calcite-notice";
 import "@esri/calcite-components/dist/components/calcite-loader";
 import "@esri/calcite-components/components/calcite-dialog";
@@ -9,8 +7,11 @@ import "@esri/calcite-components/components/calcite-shell-panel";
 import "@esri/calcite-components/components/calcite-panel";
 import "@esri/calcite-components/components/calcite-action";
 
+import "@arcgis/core/assets/esri/themes/light/main.css";
+import "bootstrap/dist/css/bootstrap.min.css";
 import "./style.css";
 import "@esri/calcite-components/main.css";
+
 import { bootstrap } from "./app/bootstrap.js";
 
 bootstrap();

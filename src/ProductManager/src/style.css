@@ -366,6 +366,7 @@ calcite-shell {
 
 #header calcite-action:hover {
   --calcite-color-foreground-1: rgba(255, 255, 255, 0.15);
+  --calcite-action-background-color-hover: transparent;
 }
 
 #notification-count {

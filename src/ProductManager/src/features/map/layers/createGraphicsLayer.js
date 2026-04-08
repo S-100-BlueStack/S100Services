@@ -2,10 +2,20 @@ import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer.js";
 import { createLayerIndex } from "../core/layerIndex.js";
 import { createPopup } from "../popups/createPopup.js";
 import { geoJsonToGraphics } from "../transformers/geoJsonToGraphics.js";
+import { esriJsonToGraphics } from "../transformers/esriJsonToGraphics.js";
 export function createGraphicsLayer(map, layerConfig) {
   const { data, id } = layerConfig;
-
-  const graphics = geoJsonToGraphics(data);
+  let graphics = [];
+  switch (layerConfig.dataFormat) {
+    case "esri-json":
+      graphics = esriJsonToGraphics(layerConfig.data);
+      break;
+    case "geojson":
+      graphics = geoJsonToGraphics(layerConfig.data);
+      break;
+    default:
+      throw new Error(`Unsupported data format: ${layerConfig.dataFormat}`);
+  }
   const index = createLayerIndex(graphics);
 
   const layer = new GraphicsLayer({
