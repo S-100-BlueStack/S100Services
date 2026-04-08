@@ -1,16 +1,18 @@
 import { statusColorConfig } from "../../../shared/config/colorsConfig.js";
+import { apiRequest } from "../../../shared/api/apiClient.js";
 
 const statusMap = new Map();
-const API_BASE_URL = "https://localhost:7271/";
 
 export async function loadStatuses() {
-  const response = await fetch(`${API_BASE_URL}productstates`);
+  const result = await apiRequest("productstates");
 
-  if (!response.ok) {
-    throw new Error("Failed to load product states");
+  if (!result.success) {
+    throw new Error(getStoreErrorMessage("product states", result));
   }
 
-  const data = await response.json();
+  const data = Array.isArray(result.data) ? result.data : [];
+
+  statusMap.clear();
 
   data.forEach((state) => {
     statusMap.set(state.Id, state);
@@ -24,6 +26,23 @@ export function getStatusName(id) {
 export function getStatusColor(id) {
   return statusColorConfig[id];
 }
+
 export function getStatus(id) {
   return statusMap.get(id);
+}
+
+function getStoreErrorMessage(resourceName, result) {
+  if (result.isUnauthorized) {
+    return `Unauthorized while loading ${resourceName}`;
+  }
+
+  if (result.isForbidden) {
+    return `Forbidden while loading ${resourceName}`;
+  }
+
+  if (result.networkError) {
+    return `Network error while loading ${resourceName}: ${result.errorMessage}`;
+  }
+
+  return `Failed to load ${resourceName}${result.status ? ` (${result.status})` : ""}`;
 }

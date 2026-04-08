@@ -1,8 +1,7 @@
 import { loadStatuses } from "../stores/statusStore.js";
 import { loadUsages } from "../stores/usageStore.js";
 import { layerConfigs } from "../../map/config/layerConfigs.js";
-
-const API_BASE_URL = "https://localhost:7271/";
+import { apiRequest } from "../../../shared/api/apiClient.js";
 
 export async function loadAppData() {
   await Promise.all([loadStatuses(), loadUsages()]);
@@ -24,19 +23,45 @@ export async function loadAppData() {
 }
 
 export async function fetchGeoJson() {
-  const response = await fetch(`${API_BASE_URL}mock/products`);
+  const result = await apiRequest("mock/products");
 
-  if (!response.ok) {
-    throw new Error(`GeoJSON request failed: ${response.status}`);
+  if (!result.success) {
+    if (result.isUnauthorized) {
+      throw new Error("Unauthorized while loading GeoJSON");
+    }
+
+    if (result.isForbidden) {
+      throw new Error("Forbidden while loading GeoJSON");
+    }
+
+    if (result.networkError) {
+      throw new Error(`Network error while loading GeoJSON: ${result.errorMessage}`);
+    }
+
+    throw new Error(`GeoJSON request failed: ${result.status ?? "unknown"}`);
   }
 
-  return await response.json();
+  return result.data;
 }
 
 export async function fetchAOI() {
-  const response = await fetch(`${API_BASE_URL}electronicproducts/aoi`);
-  if (!response.ok) {
-    throw new Error(`AOI request failed: ${response.status}`);
+  const result = await apiRequest("electronicproducts/aoi");
+
+  if (!result.success) {
+    if (result.isUnauthorized) {
+      throw new Error("Unauthorized while loading AOI");
+    }
+
+    if (result.isForbidden) {
+      throw new Error("Forbidden while loading AOI");
+    }
+
+    if (result.networkError) {
+      throw new Error(`Network error while loading AOI: ${result.errorMessage}`);
+    }
+
+    throw new Error(`AOI request failed: ${result.status ?? "unknown"}`);
   }
-  return await response.json();
+
+  return result.data;
 }

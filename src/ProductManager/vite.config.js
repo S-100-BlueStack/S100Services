@@ -6,6 +6,13 @@ export default defineConfig({
   server: {
     port: 5173,
     https: true,
+    proxy: {
+      "/api": {
+        target: "https://localhost:7271",
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
 
   build: {

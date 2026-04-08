@@ -1,14 +1,17 @@
+import { apiRequest } from "../../../shared/api/apiClient.js";
+
 const usageMap = new Map();
-const API_BASE_URL = "https://localhost:7271/";
 
 export async function loadUsages() {
-  const response = await fetch(`${API_BASE_URL}specificusages`);
+  const result = await apiRequest("specificusages");
 
-  if (!response.ok) {
-    throw new Error("Failed to load specific usages");
+  if (!result.success) {
+    throw new Error(getStoreErrorMessage("specific usages", result));
   }
 
-  const data = await response.json();
+  const data = Array.isArray(result.data) ? result.data : [];
+
+  usageMap.clear();
 
   data.forEach((usage) => {
     usageMap.set(usage.Id, usage);
@@ -18,6 +21,23 @@ export async function loadUsages() {
 export function getUsageName(id) {
   return usageMap.get(id)?.Name ?? id;
 }
+
 export function getUsage(id) {
   return usageMap.get(id);
+}
+
+function getStoreErrorMessage(resourceName, result) {
+  if (result.isUnauthorized) {
+    return `Unauthorized while loading ${resourceName}`;
+  }
+
+  if (result.isForbidden) {
+    return `Forbidden while loading ${resourceName}`;
+  }
+
+  if (result.networkError) {
+    return `Network error while loading ${resourceName}: ${result.errorMessage}`;
+  }
+
+  return `Failed to load ${resourceName}${result.status ? ` (${result.status})` : ""}`;
 }

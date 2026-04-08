@@ -1,49 +1,20 @@
-const API_BASE_URL = "https://localhost:7271/";
+import { apiRequest } from "../../../shared/api/apiClient.js";
 
 export async function uploadProduct(datasetName) {
-  try {
-    const response = await fetch(`${API_BASE_URL}${datasetName}`, {
-      method: "PUT",
-      credentials: "include",
-    });
-
-    if (!response.ok) {
-      return {
-        success: false,
-        status: response.status,
-        statusText: response.statusText,
-      };
-    }
-
-    return { success: true };
-  } catch {
-    return { success: false, networkError: true };
-  }
+  return apiRequest(datasetName, {
+    method: "PUT",
+  });
 }
 
+// Aktivér den her, når backend-endpointet er klar.
 // export async function changeFreezeState(datasetName, frozen) {
-//   try {
-//     const response = await fetch(`${API_BASE_URL}freeze/${datasetName}`, {
-//       method: "POST",
-//       headers: {
-//         "Content-Type": "application/json",
-//       },
-//       credentials: "include",
-//       body: JSON.stringify({ frozen }),
-//     });
-
-//     if (!response.ok) {
-//       return {
-//         success: false,
-//         status: response.status,
-//         statusText: response.statusText,
-//       };
-//     }
-
-//     return { success: true };
-//   } catch {
-//     return { success: false, networkError: true };
-//   }
+//   return apiRequest(`freeze/${encodeURIComponent(datasetName)}`, {
+//     method: "POST",
+//     headers: {
+//       "Content-Type": "application/json",
+//     },
+//     body: JSON.stringify({ frozen }),
+//   });
 // }
 export async function changeFreezeState(datasetName, state) {
   const ranNum = Math.floor(Math.random() * (3 - 1) + 1);

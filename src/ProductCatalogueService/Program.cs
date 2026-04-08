@@ -92,7 +92,7 @@ namespace ProductCatalogueService
 #endif
 
 
-            //  Windows SSO            
+            //  Windows SSO
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
 
