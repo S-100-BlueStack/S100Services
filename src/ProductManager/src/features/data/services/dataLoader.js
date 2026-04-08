@@ -14,6 +14,7 @@ export async function loadAppData() {
       return {
         id: config.id,
         type: config.type,
+        dataFormat: config.dataFormat,
         data,
       };
     })
@@ -29,5 +30,13 @@ export async function fetchGeoJson() {
     throw new Error(`GeoJSON request failed: ${response.status}`);
   }
 
+  return await response.json();
+}
+
+export async function fetchAOI() {
+  const response = await fetch(`${API_BASE_URL}electronicproducts/aoi`);
+  if (!response.ok) {
+    throw new Error(`AOI request failed: ${response.status}`);
+  }
   return await response.json();
 }
