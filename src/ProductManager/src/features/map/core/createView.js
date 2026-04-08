@@ -10,7 +10,6 @@ export function createView(map) {
     map: map,
     center: [10.3, 56],
     zoom: 6,
-
     popup: {
       dockEnabled: false,
       dockOptions: {
@@ -35,7 +34,6 @@ export function createView(map) {
         },
       ],
     },
-
     highlights: highlightConfig,
   });
 
@@ -46,6 +44,7 @@ export function createView(map) {
     },
     { once: true }
   );
+
   reactiveUtils.when(
     () => view.popup.container,
     (container) => {
@@ -60,10 +59,11 @@ export function createView(map) {
         () => view.popup.selectedFeature,
         () => applyHeaderColor(view)
       );
+
       reactiveUtils.watch(
-        () => view.popup.selectedFeature,
-        (feature) => {
-          if (!feature) {
+        () => [view.popup.visible, view.popup.selectedFeature],
+        ([isVisible, feature]) => {
+          if (!isVisible || !feature) {
             window.hoverManager?.clearLockedFeature();
             return;
           }
@@ -73,6 +73,8 @@ export function createView(map) {
       );
     }
   );
+
   registerPopupActions(view);
+
   return view;
 }

@@ -82,7 +82,7 @@ async function triggerFreeze(datasetName, state, anchorElement) {
   });
 
   if (!confirmed) {
-    return;
+    return false;
   }
 
   const result = await changeFreezeState(datasetName, state);
