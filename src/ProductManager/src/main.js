@@ -9,7 +9,7 @@ import "@esri/calcite-components/components/calcite-action";
 
 // import "@arcgis/core/assets/esri/themes/light/main.css";
 // import "@arcgis/core/assets/esri/themes/dark/main.css";
-import "@arcgis/core/assets/esri/css/main.css";
+// import "@arcgis/core/assets/esri/css/main.css";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./style.css";
 import "@esri/calcite-components/main.css";

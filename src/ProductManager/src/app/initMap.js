@@ -35,7 +35,7 @@ export function initMap() {
     addLayer: createLayer,
     onRefreshSuccess: () => {
       updateLastUpdated();
-      noticeSuccess("Data refreshed");
+      noticeSuccess("Data refreshed", null, { countAsUnread: false });
     },
     onRefreshError: (error) => {
       noticeError("Refresh failed", error.message);
