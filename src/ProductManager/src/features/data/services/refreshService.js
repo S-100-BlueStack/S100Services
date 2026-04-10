@@ -21,10 +21,10 @@ export function createRefreshService({
     const selectedFeature = view.popup.selectedFeature;
 
     return {
-      selectedFeatureId: selectedFeature?.attributes?.id,
+      selectedFeatureKey: selectedFeature?.attributes?.featureKey,
       selectedLayerId: selectedFeature?.layer?.customId,
       popupVisible: view.popup.visible,
-      lockedFeatureId: hoverManager?.getLockedFeatureId?.(),
+      lockedFeatureKey: hoverManager?.getLockedFeatureKey?.(),
       lockedLayerId: hoverManager?.getLockedLayerId?.(),
     };
   }
@@ -32,9 +32,9 @@ export function createRefreshService({
   async function restoreState(state) {
     if (!state) return;
 
-    if (state.popupVisible && state.selectedFeatureId && state.selectedLayerId) {
+    if (state.popupVisible && state.selectedFeatureKey && state.selectedLayerId) {
       const layer = getLayer(state.selectedLayerId);
-      const graphic = findFeature(layer, state.selectedFeatureId);
+      const graphic = findFeature(layer, state.selectedFeatureKey);
 
       if (graphic) {
         view.popup.open({
@@ -44,9 +44,9 @@ export function createRefreshService({
       }
     }
 
-    if (state.lockedFeatureId && state.lockedLayerId) {
+    if (state.lockedFeatureKey && state.lockedLayerId) {
       const layer = getLayer(state.lockedLayerId);
-      const graphic = findFeature(layer, state.lockedFeatureId);
+      const graphic = findFeature(layer, state.lockedFeatureKey);
 
       if (graphic) {
         hoverManager.setLockedFeature(graphic);
@@ -75,7 +75,6 @@ export function createRefreshService({
 
       await rebuildLayers({
         map,
-        view,
         hoverManager,
         layerConfigs: data.layers,
         createLayer: addLayer,

@@ -1,22 +1,38 @@
+import { getGraphicFeatureKey } from "../core/featureIdentity.js";
+
 export function createHoverManager(view) {
   const layers = new Set();
   const layerViews = new Map();
+  const layerViewPromises = new Map();
 
   let highlight = null;
   let lastGraphicUid = null;
-
   let pointerEvent = null;
   let frameRequested = false;
-
   let lockedGraphic = null;
   let lockedHighlight = null;
 
   function registerLayer(layer) {
     layers.add(layer);
 
-    view.whenLayerView(layer).then((layerView) => {
-      layerViews.set(layer, layerView);
+    const existingPromise = layerViewPromises.get(layer);
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const promise = view.whenLayerView(layer).then((layerView) => {
+      // A refresh can clear the manager while layer views are still resolving.
+      // Only cache the layer view if the layer is still active in this manager.
+      if (layers.has(layer)) {
+        layerViews.set(layer, layerView);
+      }
+
+      return layerView;
     });
+
+    layerViewPromises.set(layer, promise);
+
+    return promise;
   }
 
   view.on("pointer-move", (event) => {
@@ -50,8 +66,6 @@ export function createHoverManager(view) {
       return;
     }
 
-    // Do not render a separate hover highlight on top of the locked feature.
-    // The locked feature already has its own persistent highlight while the popup is open.
     if (lockedGraphic && graphic.uid === lockedGraphic.uid) {
       clearHighlight();
       lastGraphicUid = graphic.uid;
@@ -65,6 +79,7 @@ export function createHoverManager(view) {
     lastGraphicUid = graphic.uid;
 
     const layerView = layerViews.get(graphic.layer);
+
     if (!layerView) {
       clearHighlight();
       return;
@@ -90,7 +105,6 @@ export function createHoverManager(view) {
 
   function setLockedFeature(graphic) {
     clearHighlight();
-
     lockedGraphic = graphic;
 
     const layerView = layerViews.get(graphic.layer);
@@ -114,14 +128,17 @@ export function createHoverManager(view) {
     lockedGraphic = null;
     lastGraphicUid = null;
   }
+
   function clear() {
     layers.clear();
     layerViews.clear();
+    layerViewPromises.clear();
     clearHighlight();
     clearLockedFeature();
   }
-  function getLockedFeatureId() {
-    return lockedGraphic?.attributes?.id || null;
+
+  function getLockedFeatureKey() {
+    return getGraphicFeatureKey(lockedGraphic);
   }
 
   function getLockedLayerId() {
@@ -132,7 +149,7 @@ export function createHoverManager(view) {
     registerLayer,
     setLockedFeature,
     clearLockedFeature,
-    getLockedFeatureId,
+    getLockedFeatureKey,
     getLockedLayerId,
     clear,
   };

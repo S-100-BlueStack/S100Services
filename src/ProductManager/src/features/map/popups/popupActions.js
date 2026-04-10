@@ -16,16 +16,19 @@ export function registerPopupActions(view) {
       const feature = view.popup.selectedFeature;
       if (!feature) return;
 
-      const id = feature.attributes.id;
+      const featureKey = feature.attributes.featureKey ?? feature.attributes.datasetName;
 
       if (event.action.id === "freeze-feature" || event.action.id === "freeze-feature-sun") {
-        const newState = !(freezeState.get(id) === true);
+        const newState = !(freezeState.get(featureKey) === true);
+
         const freezeButton = document.querySelector(
           '[data-action-id="freeze-feature"], [data-action-id="freeze-feature-sun"]'
         );
+
         const result = await triggerFreeze(feature.attributes.datasetName, newState, freezeButton);
+
         if (result.success) {
-          freezeState.set(id, newState);
+          freezeState.set(featureKey, newState);
           updateUI(view, newState);
         }
       }
@@ -86,6 +89,7 @@ async function triggerFreeze(datasetName, state, anchorElement) {
   }
 
   const result = await changeFreezeState(datasetName, state);
+
   if (result.success) {
     noticeSuccess(`Product ${datasetName} ${state ? "frozen" : "unfrozen"} successfully`, null, {
       countAsUnread: false,
@@ -98,6 +102,7 @@ async function triggerFreeze(datasetName, state, anchorElement) {
       ` ${result.statusText}`
     );
   }
+
   return result;
 }
 
@@ -126,7 +131,9 @@ async function sendImmediately(datasetName, anchorElement) {
     const result = await uploadProduct(datasetName);
 
     if (result.success) {
-      noticeSuccess(`Product ${datasetName} sent successfully`, null, { countAsUnread: false });
+      noticeSuccess(`Product ${datasetName} sent successfully`, null, {
+        countAsUnread: false,
+      });
     } else if (result.networkError) {
       noticeError(`Network error while sending ${datasetName}`);
     } else {

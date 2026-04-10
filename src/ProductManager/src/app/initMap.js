@@ -5,9 +5,11 @@ import { createMap } from "../features/map/core/createMap.js";
 import { createView } from "../features/map/core/createView.js";
 import { createLayer } from "../features/map/core/layerFactory.js";
 import { createHoverManager } from "../features/map/interactions/hoverManager.js";
+import { registerPopupHoverSync } from "../features/map/interactions/registerPopupHoverSync.js";
 
 function updateLastUpdated() {
   const el = document.getElementById("last-updated");
+
   if (!el) return;
 
   const now = new Date();
@@ -25,7 +27,7 @@ export function initMap() {
   const view = createView(map);
   const hoverManager = createHoverManager(view);
 
-  window.hoverManager = hoverManager;
+  registerPopupHoverSync(view, hoverManager);
 
   const refreshService = createRefreshService({
     map,

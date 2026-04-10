@@ -59,19 +59,8 @@ export function createView(map) {
         () => view.popup.selectedFeature,
         () => applyHeaderColor(view)
       );
-
-      reactiveUtils.watch(
-        () => [view.popup.visible, view.popup.selectedFeature],
-        ([isVisible, feature]) => {
-          if (!isVisible || !feature) {
-            window.hoverManager?.clearLockedFeature();
-            return;
-          }
-
-          window.hoverManager?.setLockedFeature(feature);
-        }
-      );
-    }
+    },
+    { once: true }
   );
 
   registerPopupActions(view);

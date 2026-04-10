@@ -1,5 +1,6 @@
 import Graphic from "@arcgis/core/Graphic.js";
 import { statusColorConfig } from "../../../shared/config/colorsConfig";
+import { resolveFeatureKey } from "../core/featureIdentity.js";
 
 function getSymbol(status) {
   const cfg = statusColorConfig[status];
@@ -22,14 +23,17 @@ function getSymbol(status) {
   };
 }
 
-export function geoJsonToGraphics(geojson) {
+export function geoJsonToGraphics(geojson, { layerId } = {}) {
   return geojson.features.map((feature) => {
-    const status = feature.properties.status;
+    const attributes = feature.properties ?? {};
+    const status = attributes.status;
+    const featureKey = resolveFeatureKey(attributes, layerId);
+
     return new Graphic({
       geometry: convertGeometry(feature.geometry),
       attributes: {
-        ...feature.properties,
-        id: feature.properties.id,
+        ...attributes,
+        featureKey,
         status,
       },
       symbol: getSymbol(status),
@@ -64,7 +68,6 @@ function convertGeometry(geometry) {
       };
 
     case "MultiPolygon": {
-      // Flatten alle polygons → ét rings array
       const rings = geometry.coordinates.flat();
 
       return {
