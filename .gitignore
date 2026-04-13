@@ -444,3 +444,4 @@ dist-ssr
 *.sw?
 
 *.zip
+/src/ProductCatalogueService/exports
