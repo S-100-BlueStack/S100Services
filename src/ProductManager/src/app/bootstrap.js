@@ -4,6 +4,8 @@ import { initMap } from "./initMap.js";
 import { initRefreshControls } from "./initRefreshControls.js";
 import { initUI } from "./initUI.js";
 import { loadInitialData } from "./loadInitialData.js";
+import { initializeTheme } from "../features/themes/themeService.js";
+import { registerThemeToggle } from "../features/themes/themeToggle.js";
 
 async function waitForCalcite() {
   await customElements.whenDefined("calcite-loader");
@@ -22,7 +24,8 @@ export async function bootstrap() {
     const app = initMap();
 
     initRefreshControls(app);
-
+    initializeTheme(app.view);
+    registerThemeToggle(app.view);
     await loadInitialData(app);
 
     app.refreshService.startAuto();

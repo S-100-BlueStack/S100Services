@@ -1,5 +1,7 @@
-export function findFeature(layer, featureId) {
-  if (!layer || !featureId) return null;
+export function findFeature(layer, featureKey) {
+  if (!layer || !featureKey) {
+    return null;
+  }
 
-  return layer._index?.get(featureId) || null;
+  return layer._index?.get(featureKey) || null;
 }

@@ -1,38 +1,106 @@
-/* General styling */
+/* =========================================================
+   Base layout
+   ========================================================= */
+
 html,
 body,
 #viewDiv {
   margin: 0;
   padding: 0;
-  height: 100%;
   width: 100%;
+  height: 100%;
 }
+
 html {
   font-size: 14px;
 }
-calcite-shell {
-  height: 100%;
-  width: 100%;
-}
 
-#viewDiv {
-  height: 100%;
-  width: 100%;
-}
 @media (min-width: 768px) {
   html {
     font-size: 16px;
   }
 }
-/* Loader styling */
+
+calcite-shell,
+#viewDiv {
+  width: 100%;
+  height: 100%;
+}
+
+/* =========================================================
+   Theme tokens
+   Use semantic variables so custom UI can follow light/dark
+   mode without hardcoded colors spread across the stylesheet.
+   ========================================================= */
+
+html.calcite-mode-light {
+  --pm-surface: var(--calcite-color-surface-1);
+  --pm-surface-alt: var(--calcite-color-surface-2);
+  --pm-border: var(--calcite-color-border-1);
+  --pm-text: var(--calcite-color-text-1);
+  --pm-text-muted: var(--calcite-color-text-3);
+
+  --pm-overlay: rgba(255, 255, 255, 0.75);
+  --pm-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+
+  --pm-popup-surface: var(--calcite-color-surface-1);
+  --pm-popup-surface-alt: var(--calcite-color-surface-2);
+  --pm-popup-border: var(--calcite-color-border-1);
+  --pm-popup-text: var(--calcite-color-text-1);
+  --pm-popup-text-muted: var(--calcite-color-text-3);
+
+  --pm-popup-header-bg: #005b8f;
+  --pm-popup-header-text: #ffffff;
+
+  --pm-button-secondary-bg: var(--calcite-color-foreground-1);
+  --pm-button-secondary-bg-hover: var(--calcite-color-foreground-2);
+  --pm-button-secondary-border: var(--calcite-color-border-1);
+  --pm-button-secondary-text: var(--calcite-color-text-1);
+
+  --pm-notice-error-bg: #fff5f5;
+  --pm-notice-warning-bg: #fffaf2;
+}
+
+html.calcite-mode-dark {
+  --pm-surface: var(--calcite-color-surface-1);
+  --pm-surface-alt: var(--calcite-color-surface-2);
+  --pm-border: var(--calcite-color-border-1);
+  --pm-text: var(--calcite-color-text-1);
+  --pm-text-muted: var(--calcite-color-text-3);
+
+  --pm-overlay: rgba(0, 0, 0, 0.45);
+  --pm-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+
+  --pm-popup-surface: var(--calcite-color-surface-1);
+  --pm-popup-surface-alt: var(--calcite-color-surface-2);
+  --pm-popup-border: var(--calcite-color-border-1);
+  --pm-popup-text: var(--calcite-color-text-1);
+  --pm-popup-text-muted: var(--calcite-color-text-3);
+
+  --pm-popup-header-bg: #0f6ea8;
+  --pm-popup-header-text: #ffffff;
+
+  --pm-button-secondary-bg: var(--calcite-color-foreground-1);
+  --pm-button-secondary-bg-hover: var(--calcite-color-foreground-2);
+  --pm-button-secondary-border: var(--calcite-color-border-1);
+  --pm-button-secondary-text: var(--calcite-color-text-1);
+
+  --pm-notice-error-bg: rgba(231, 76, 60, 0.12);
+  --pm-notice-warning-bg: rgba(243, 156, 18, 0.12);
+}
+
+/* =========================================================
+   Loader
+   ========================================================= */
+
 .app-loader {
   position: fixed;
   inset: 0;
-  background: rgba(255, 255, 255, 0.75);
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  background: var(--pm-overlay);
   opacity: 1;
   transition: opacity 200ms ease;
 }
@@ -57,12 +125,16 @@ calcite-shell {
 }
 
 .loader-text {
-  font-size: 14px;
-  color: #444;
   width: 100%;
+  font-size: 14px;
+  color: var(--pm-text);
   visibility: hidden;
 }
-/* Fixes blue bounding box on map when clicking inside of it */
+
+/* =========================================================
+   Accessibility / map focus cleanup
+   ========================================================= */
+
 .esri-view-surface:focus::after,
 .esri-view-surface:focus-visible::after,
 .esri-ui:focus::after,
@@ -71,11 +143,21 @@ calcite-shell {
   opacity: 0;
   box-shadow: none;
 }
-/* Poup content styles */
+
+/* =========================================================
+   Popup content
+   These are your own popup DOM nodes, so styling them here is stable.
+   ========================================================= */
+
+.popup-container {
+  color: var(--pm-popup-text);
+}
+
 .popup-section {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  color: inherit;
 }
 
 .popup-row {
@@ -84,45 +166,24 @@ calcite-shell {
   gap: 8px;
   align-items: center;
   padding: 4px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid var(--pm-popup-border);
 }
+
 .popup-row:last-child {
   border-bottom: none;
 }
+
 .popup-label {
   font-size: 12px;
-  color: #6b6b6b;
   font-weight: 500;
+  color: var(--pm-popup-text-muted);
 }
+
 .popup-value {
   font-size: 13px;
   font-weight: 500;
+  color: var(--pm-popup-text);
   word-break: break-word;
-}
-
-.esri-popup__main-container {
-  max-width: 360px !important;
-}
-
-.esri-popup__content {
-  padding: 6px 10px;
-}
-
-.esri-popup__header-title {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.esri-popup__footer {
-  padding: 6px 8px;
-}
-
-.esri-popup__content {
-  margin: 0;
-}
-
-.esri-popup__content p {
-  margin: 0;
 }
 
 .popup-title-wrapper {
@@ -134,7 +195,85 @@ calcite-shell {
 .copy-dataset-btn {
   cursor: pointer;
 }
-/* Anchored confirm popover */
+
+/* =========================================================
+   ArcGIS popup theme integration
+   Feed popup-related Calcite tokens into ArcGIS popup surfaces so
+   the SDK UI follows the same theme as the rest of the app.
+   ========================================================= */
+
+.esri-popup {
+  --calcite-color-surface-1: var(--pm-popup-surface);
+  --calcite-color-surface-2: var(--pm-popup-surface-alt);
+  --calcite-color-border-1: var(--pm-popup-border);
+  --calcite-color-border-2: var(--pm-popup-border);
+  --calcite-color-border-3: var(--pm-popup-border);
+  --calcite-color-text-1: var(--pm-popup-text);
+  --calcite-color-text-3: var(--pm-popup-text-muted);
+
+  --calcite-action-bar-background-color: var(--pm-popup-surface);
+  --calcite-action-background-color: transparent;
+  --calcite-action-background-color-hover: var(--pm-popup-surface-alt);
+  --calcite-action-background-color-press: var(--pm-popup-surface-alt);
+  --calcite-action-text-color: var(--pm-popup-text);
+  --calcite-action-text-color-press: var(--pm-popup-text);
+}
+
+.esri-popup__main-container {
+  max-width: 360px !important;
+  background: var(--pm-popup-surface);
+  color: var(--pm-popup-text);
+}
+
+.esri-popup__content {
+  margin: 0;
+  padding: 6px 10px;
+  background: var(--pm-popup-surface);
+  color: var(--pm-popup-text);
+}
+
+.esri-popup__content p {
+  margin: 0;
+}
+
+.esri-popup__header-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.esri-popup__footer {
+  padding: 6px 8px;
+}
+
+.esri-popup__footer,
+.esri-popup__button-container,
+.esri-popup__action-menu {
+  background: var(--pm-popup-surface);
+  color: var(--pm-popup-text);
+  border-color: var(--pm-popup-border);
+}
+
+/* Disabled action styling should remain readable in both themes. */
+.esri-popup__action.is-disabled,
+.esri-popup__action[disabled] {
+  color: var(--pm-text-muted);
+  opacity: 0.65;
+}
+
+/* Popup actions render through Calcite internals / shadow DOM.
+   In this context the exposed icon token that actually propagates is
+   --calcite-ui-icon-color, not --calcite-button-icon-color. */
+[data-action-id="freeze-feature"] {
+  --calcite-ui-icon-color: #0d6efd;
+}
+
+[data-action-id="freeze-feature-sun"] {
+  --calcite-ui-icon-color: #fd7e14;
+}
+
+/* =========================================================
+   Anchored confirm popover
+   ========================================================= */
 
 .confirm-popover[hidden] {
   display: none;
@@ -151,11 +290,12 @@ calcite-shell {
   position: absolute;
   min-width: 260px;
   max-width: 320px;
-  background: #ffffff;
-  border: 1px solid rgba(110, 110, 110, 0.3);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
   padding: 12px;
   pointer-events: auto;
+  background: var(--pm-surface);
+  color: var(--pm-text);
+  border: 1px solid var(--pm-border);
+  box-shadow: var(--pm-shadow);
 }
 
 .confirm-popover__card::before {
@@ -164,34 +304,34 @@ calcite-shell {
   left: var(--confirm-popover-arrow-left, 50%);
   width: 12px;
   height: 12px;
-  background: #ffffff;
+  background: var(--pm-surface);
   transform: translateX(-50%) rotate(45deg);
 }
 
 .confirm-popover__card[data-placement="bottom"]::before {
   top: -6px;
-  border-top: 1px solid rgba(110, 110, 110, 0.3);
-  border-left: 1px solid rgba(110, 110, 110, 0.3);
+  border-top: 1px solid var(--pm-border);
+  border-left: 1px solid var(--pm-border);
 }
 
 .confirm-popover__card[data-placement="top"]::before {
   bottom: -6px;
-  border-right: 1px solid rgba(110, 110, 110, 0.3);
-  border-bottom: 1px solid rgba(110, 110, 110, 0.3);
+  border-right: 1px solid var(--pm-border);
+  border-bottom: 1px solid var(--pm-border);
 }
 
 .confirm-popover__title {
+  margin-bottom: 6px;
   font-size: 14px;
   font-weight: 600;
-  color: #323232;
-  margin-bottom: 6px;
+  color: var(--pm-text);
 }
 
 .confirm-popover__message {
+  margin-bottom: 12px;
   font-size: 13px;
   line-height: 1.4;
-  color: #323232;
-  margin-bottom: 12px;
+  color: var(--pm-text);
 }
 
 .confirm-popover__actions {
@@ -201,22 +341,22 @@ calcite-shell {
 }
 
 .confirm-popover__button {
+  padding: 6px 10px;
+  border: 1px solid transparent;
   border-radius: 4px;
   font-size: 13px;
   font-weight: 500;
-  padding: 6px 10px;
   cursor: pointer;
-  border: 1px solid transparent;
 }
 
 .confirm-popover__button--secondary {
-  background: #ffffff;
-  border-color: #8f8f8f;
-  color: #323232;
+  background: var(--pm-button-secondary-bg);
+  color: var(--pm-button-secondary-text);
+  border-color: var(--pm-button-secondary-border);
 }
 
 .confirm-popover__button--secondary:hover {
-  background: #f3f3f3;
+  background: var(--pm-button-secondary-bg-hover);
 }
 
 .confirm-popover__button--primary {
@@ -228,33 +368,17 @@ calcite-shell {
   background: #00619b;
 }
 
-/* Popup action icon color */
-/* Popup actions render through Calcite internals/shadow DOM.
-   In this context the exposed icon token that actually propagates is
-   --calcite-ui-icon-color, not --calcite-button-icon-color. */
-[data-action-id="freeze-feature"] {
-  --calcite-ui-icon-color: #0d6efd;
-}
+/* =========================================================
+   Notice center / notifications
+   ========================================================= */
 
-[data-action-id="freeze-feature-sun"] {
-  --calcite-ui-icon-color: #fd7e14;
-}
-
-/* Disabled popup action button */
-.esri-popup__action.is-disabled,
-.esri-popup__action[disabled] {
-  color: #6c757d;
-  opacity: 0.65;
-}
-
-/* Notice styling */
 .notice-row {
   display: grid;
   grid-template-columns: 70px 1fr 70px;
   gap: 8px;
   padding: 6px 8px;
-  border-bottom: 1px solid #eee;
   font-size: 13px;
+  border-bottom: 1px solid var(--pm-border);
 }
 
 .notice-type {
@@ -263,9 +387,9 @@ calcite-shell {
 }
 
 .notice-time {
-  color: #777;
   font-size: 11px;
   text-align: right;
+  color: var(--pm-text-muted);
 }
 
 .notice-content {
@@ -277,61 +401,66 @@ calcite-shell {
   font-weight: 600;
 }
 
-/* Severity styling on notices in Panel */
+.notice-message {
+  flex: 1;
+  font-size: 12px;
+  color: var(--pm-text-muted);
+}
 
+/* Severity styling in panel rows */
 .notice-success {
   border-left: 4px solid #2ecc71;
 }
 
 .notice-error {
   border-left: 4px solid #e74c3c;
-  background: #fff5f5;
+  background: var(--pm-notice-error-bg);
 }
 
 .notice-warning {
   border-left: 4px solid #f39c12;
-  background: #fffaf2;
+  background: var(--pm-notice-warning-bg);
 }
 
 .notice-info {
   border-left: 4px solid #3498db;
 }
 
-.notice-message {
-  flex: 1;
-  font-size: 12px;
-  color: #555;
-}
-
 .notification-widget button {
-  background: white;
-  border: 1px solid #ccc;
   padding: 6px 10px;
-  cursor: pointer;
   font-size: 14px;
+  cursor: pointer;
+  background: var(--pm-surface);
+  color: var(--pm-text);
+  border: 1px solid var(--pm-border);
 }
 
 .notification-widget span {
-  font-weight: 600;
   margin-left: 4px;
+  font-weight: 600;
 }
 
-/* Notice (Toasts) styling */
+/* =========================================================
+   Toast notices
+   ========================================================= */
 
 #notice-container calcite-notice {
-  width: 100%;
-  box-sizing: border-box;
-  word-break: break-word;
-  margin: 0;
   position: relative;
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
   overflow: hidden;
+  word-break: break-word;
 }
 
 #notice-container calcite-notice:hover .notice-progress {
   animation-play-state: paused;
 }
 
-/* Header/Navbar styling */
+/* =========================================================
+   Header / navbar
+   ========================================================= */
+
 #header {
   display: flex;
   align-items: center;
@@ -347,54 +476,47 @@ calcite-shell {
 
 .header-center {
   margin-left: 10px;
-  font-weight: 600;
   font-size: 16px;
-  color: white;
+  font-weight: 600;
+  color: #ffffff;
 }
 
 .header-right {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-left: auto;
 }
 
 #header calcite-action {
+  border-radius: 10px;
   --calcite-color-foreground-1: transparent;
   --calcite-color-text-3: white;
   --calcite-action-background-color-hover: rgba(255, 255, 255, 0.25);
-  border-radius: 10px;
   --calcite-action-text-color-press: white;
 }
 
 #header calcite-action:hover {
   --calcite-color-foreground-1: white;
-  --calcite-action-background-color-hover: rgb(255, 255, 255, 0.25);
+  --calcite-action-background-color-hover: rgba(255, 255, 255, 0.25);
 }
 
 #notification-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  min-width: 16px;
-  height: 16px;
-
-  font-size: 11px;
-  font-weight: 600;
-
-  background: #e74c3c;
-  color: white;
-
-  border-radius: 999px;
-  padding: 0 4px;
-
-  line-height: 1;
-
   position: absolute;
   top: 2px;
   right: 2px;
-
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  line-height: 1;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #e74c3c;
+  border-radius: 999px;
   pointer-events: none;
 }
 
@@ -408,14 +530,9 @@ calcite-shell {
 
 #refresh-button[active] {
   --calcite-color-foreground-1: rgb(255, 255, 255);
-  /* --calcite-action-background-color-hover: rgba(255, 255, 255, 0.25); */
 }
 
-.navbar-title-link {
-  color: inherit;
-  text-decoration: none;
-}
-
+.navbar-title-link,
 .navbar-title-link:hover,
 .navbar-title-link:focus,
 .navbar-title-link:active,

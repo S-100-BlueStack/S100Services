@@ -1,6 +1,7 @@
 import Graphic from "@arcgis/core/Graphic.js";
 import * as jsonUtils from "@arcgis/core/geometry/support/jsonUtils.js";
 import { statusColorConfig } from "../../../shared/config/colorsConfig";
+import { resolveFeatureKey } from "../core/featureIdentity.js";
 
 function getSymbol(status) {
   const cfg = statusColorConfig[status];
@@ -23,19 +24,20 @@ function getSymbol(status) {
   };
 }
 
-export function esriJsonToGraphics(input) {
+export function esriJsonToGraphics(input, { layerId } = {}) {
   const features = normalizeEsriFeatures(input);
 
   return features.map((feature) => {
     const attributes = feature.attributes ?? {};
     const status = attributes.status;
     const geometry = feature.geometry ? jsonUtils.fromJSON(feature.geometry) : null;
+    const featureKey = resolveFeatureKey(attributes, layerId);
 
     return new Graphic({
       geometry,
       attributes: {
         ...attributes,
-        id: attributes.id,
+        featureKey,
         status,
       },
       symbol: getSymbol(status),

@@ -49,6 +49,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\S100Framework\src\S100Framework.REST\S100Framework.REST.csproj" />
     <ProjectReference Include="..\ProductCatalogue\ProductCatalogue.csproj" />
   </ItemGroup>
 

@@ -37,9 +37,9 @@ function waitForHeader(view, featureId) {
 
   if (header.dataset.statusColor !== color) {
     header.style.backgroundColor = color;
+    header.style.color = "#ffffff";
     header.dataset.statusColor = color;
   }
-
   ensureCopyButton(header, attr.datasetName);
 }
 
