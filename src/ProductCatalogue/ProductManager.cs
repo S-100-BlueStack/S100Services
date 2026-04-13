@@ -1,10 +1,10 @@
 ﻿using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
-using Microsoft.AspNetCore.Components.Forms;
 using S100FC.S128;
 using S100FC.S128.FeatureTypes;
 using S100FC.S128.SimpleAttributes;
 using S100FC.YAML;
+using S100Horizon.Settings;
 using Serilog;
 using System.Collections;
 using System.Collections.Concurrent;
@@ -24,7 +24,7 @@ namespace S100FC.ProductCatalogue
 
     public interface IElectronicProductManager : IEnumerable<string>
     {
-        Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, ArcGIS.Core.Geometry.Polygon boundary);
+        Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, ArcGIS.Core.Geometry.Polygon boundary, int? optimumDisplayScale = null);
 
         Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, ArcGIS.Core.Geometry.Polygon boundary, int edition, int update, byte[] zipfile);
 
@@ -88,7 +88,9 @@ namespace S100FC.ProductCatalogue
 
 
         public string OutputFolder { get; internal set; }
-        private readonly IDictionary<string, Uri> _connections = new Dictionary<string, Uri>();
+        private Connection[] _connections { get; set; } = [];
+        private Uri? Connection(string productSpecification, int compilationScale) => _connections.FirstOrDefault(e => e.ProductSpecification == productSpecification && e.MinimumScale <= compilationScale && e.MaximumScale >= compilationScale)?.ConnectionFile;
+
 
         record ElectronicProductKey(string ps, string name)
         {
@@ -120,7 +122,7 @@ namespace S100FC.ProductCatalogue
                 using var table = this._geodatabase.OpenDataset<Table>(configuration.GetName());
 
                 using var cursor = table.Search(new QueryFilter {
-                    WhereClause = "upper(ps) = 'S-128.HORIZON' AND code = 'ProductCatalogue'",
+                    WhereClause = "upper(ps) = 'S-128.NuvionPro' AND code = 'ProductCatalogue'",
                 }, true);
 
                 cursor.MoveNext();
@@ -135,16 +137,12 @@ namespace S100FC.ProductCatalogue
                         var settings = System.Text.Json.JsonSerializer.Deserialize<S100Horizon.Settings.ProductCatalogue>(Convert.ToString(c["json"])!);
 
                         if (settings != null) {
-                            foreach (var connection in settings.Connections) {
-                                if (connection.ConnectionFile == default) {
-                                    this._connections.Add(connection.ProductSpecification.ToUpperInvariant(), this._geodatabase.GetPath());
-                                }
-                                else {
-                                    this._connections.Add(connection.ProductSpecification.ToUpperInvariant(), connection.ConnectionFile);
-                                    //var geodatabase = this.OpenGeodatabase(connection.ConnectionFile);
-                                    //this._connections.Add(connection.ProductSpecification.ToUpperInvariant(), geodatabase);
-                                }
-                            }
+                            var connections = settings.Connections.Select(e => {
+                                var uri = e.ConnectionFile == default ? this._geodatabase.GetPath() : e.ConnectionFile;
+                                return new Connection(e.ProductSpecification, e.MinimumScale, e.MaximumScale, uri);
+                            });
+
+                            this._connections = [.. connections];
 
                             // Add output folder
                             this.OutputFolder = settings.OutputFolder;
@@ -195,7 +193,7 @@ namespace S100FC.ProductCatalogue
 
         #region IElectronicProductManager
 
-        async Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, ArcGIS.Core.Geometry.Polygon boundary) {
+        async Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, ArcGIS.Core.Geometry.Polygon boundary, int? optimumDisplayScale) {
             if (string.IsNullOrEmpty(name))
                 throw new System.ArgumentNullException(nameof(name));
 
@@ -222,6 +220,7 @@ namespace S100FC.ProductCatalogue
                             agencyResponsibleForProduction = "Danish Geodata Agency",
                             specificUsage = specificUsage.value,
                             productSpecification = productSpecification,
+                            optimumDisplayScale = optimumDisplayScale,
                         };
 
 
@@ -316,8 +315,9 @@ namespace S100FC.ProductCatalogue
             if (!this._electronicProducts.TryGetValue(name, out var electronicProduct))
                 throw new ArgumentException(null, nameof(name));
 
-            var uri = this._connections[this._electronicProducts[name].productSpecification!.name]!;
-
+            //  var uri = this._connections[this._electronicProducts[name].productSpecification!.name]!;
+            // TODO: Handle null
+            var uri = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
             using var connection = this.OpenGeodatabase(uri);
 
             var dataset = await this.GetLatestDataset(name);
@@ -371,7 +371,9 @@ namespace S100FC.ProductCatalogue
             if (!this._electronicProducts.TryGetValue(name, out var electronicProduct))
                 throw new ArgumentException(null, nameof(name));
 
-            var uri = this._connections[this._electronicProducts[name].productSpecification!.name]!;
+            //  var uri = this._connections[this._electronicProducts[name].productSpecification!.name]!;
+            // TODO: Handle null
+            var uri = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
 
             using var connection = this.OpenGeodatabase(uri);
 
@@ -567,7 +569,9 @@ namespace S100FC.ProductCatalogue
             var regPictorialRepresentation = new Regex("pictorialRepresentation\":\"(?<filename>[^\"]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace);
 
             //using var connection = this._connections["S-101"]!;
-            var uri = this._connections["S-101"]!;
+            //var uri = this._connections["S-101"]!;
+            // TODO: Handle null
+            var uri = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
 
 
 
@@ -732,11 +736,11 @@ namespace S100FC.ProductCatalogue
                             }
                             // var flatten = current["attributebindings"].ToString()!;
                             var flatten =
-                            current.FindField("attributebindings") != -1 &&
-                            current["attributebindings"] != null &&
-                            current["attributebindings"] != DBNull.Value
-                            ? current["attributebindings"].ToString()
-                            : string.Empty;
+                                current.FindField("attributebindings") != -1 &&
+                                current["attributebindings"] != null &&
+                                current["attributebindings"] != DBNull.Value
+                                ? current["attributebindings"].ToString()
+                                : string.Empty;
 
                             var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
 
@@ -774,24 +778,29 @@ namespace S100FC.ProductCatalogue
 
                                     if (informationBindings != default && informationBindings.Length != 0) {
                                         foreach (var binding in informationBindings) {
+
+                                            var isValid = binding.Validate();
+
+                                            if (!isValid)
+                                                continue;
+
                                             var asso = new YAML.Association {
-                                                Name = binding.GetType().GenericTypeArguments[0].Name,
+                                                Name = binding.informationType!, // binding.GetType().GenericTypeArguments[0].Name,
                                                 Role = binding.role,
                                                 To = binding.informationId
                                             };
 
-                                            // TODO: validate method
+                                            if (!informationsTypesAdded.Contains(binding.informationId!)) {
+                                                dataset!.AddInformation(informationTypes.Single(e => e.ID!.Equals(binding.informationId!)));
+                                                informationsTypesAdded.Add(binding.informationId!);
+                                            }
+
 
                                             // Special case for SpatialAssociation. Add to dictionary for later processing.
                                             if (prim != Primitive.Surface && asso.Name.Equals("SpatialAssociation", StringComparison.CurrentCultureIgnoreCase))
                                                 spatialAssociations.TryAdd(geometry, asso);
                                             else
                                                 feature?.AddAssociation(asso);
-
-                                            if (!informationsTypesAdded.Contains(binding.informationId!)) {
-                                                informationsTypesAdded.Add(binding.informationId!);
-                                                dataset!.AddInformation(informationTypes.Single(e => e.ID!.Equals(binding.informationId!)));
-                                            }
                                         }
                                     }
                                 }
@@ -809,7 +818,10 @@ namespace S100FC.ProductCatalogue
                                         foreach (var binding in featureBindings) {
 
                                             // check if valid
-                                            // TODO: validate method
+                                            var isValid = binding.Validate();
+
+                                            if (!isValid)
+                                                continue;
 
                                             var roleType = binding.roleType;
 
@@ -818,7 +830,7 @@ namespace S100FC.ProductCatalogue
                                                 continue;
 
                                             var asso = new YAML.Association {
-                                                Name = binding.GetType().GenericTypeArguments[0].Name,
+                                                Name = binding.featureType!, // binding.GetType().GenericTypeArguments[0].Name,
                                                 Role = binding.role,
                                                 To = $"110:{binding!.featureId!.Substring(1)}:1"
                                             };
@@ -841,7 +853,12 @@ namespace S100FC.ProductCatalogue
 
                             dataset?.AddFeature(feature!);
 
-                            geometries.Add(new(current.GetShape(), name!));
+                            var geometrytype = code!.ToLower() switch {
+                                "sounding" => MultipointBuilderEx.CreateMultipoint(current.GetShape() as MapPoint),
+                                _ => current.GetShape()
+                            };
+
+                            geometries.Add(new(geometrytype, name!));
                         }
                         catch (Exception ex) {
                             Log.Error(ex, ex.Message);
@@ -908,8 +925,6 @@ namespace S100FC.ProductCatalogue
                         using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
 
                         using var cursorS128 = surface.Search(new QueryFilter {
-                            //WhereClause = $"json LIKE '%\"datasetName\":\"{electronicProduct.datasetName}\"%'",
-                            //WhereClause = $"attributebindings LIKE '%\"datasetName\":\"{electronicProduct.datasetName}\"%'",
                             WhereClause = $"attributebindings LIKE '%\"{electronicProduct.datasetName}\"%'",
                         }, false);
 
@@ -940,7 +955,7 @@ namespace S100FC.ProductCatalogue
 
                     using var buffer = attachment.CreateRowBuffer();
 
-                    buffer["ps"] = "S-128.Horizon";
+                    buffer["ps"] = "S-128.NuvionPro";
                     buffer["code"] = nameof(Dataset);
                     buffer["json"] = System.Text.Json.JsonSerializer.Serialize(new Dataset {
                         DatasetName = electronicProduct.datasetName!,

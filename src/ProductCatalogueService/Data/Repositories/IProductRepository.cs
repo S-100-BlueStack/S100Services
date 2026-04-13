@@ -10,6 +10,7 @@ namespace ProductCatalogueService.Data.Repositories
 
         Task<ProductRecord?> GetCurrentByNameAsync(string name);
         Task<string[]> GetIneligbleProductsAsync();
+        Task<string[]> GetEligibleProductsAsync();
 
     }
 }

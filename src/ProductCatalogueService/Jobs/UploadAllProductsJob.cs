@@ -10,7 +10,6 @@ namespace ProductCatalogueService.Jobs
         public async Task RunAsync(CancellationToken token) {
             _logger.LogInformation("Job: {jobName} started", nameof(UploadAllProductsJob));
      
-            //await _repository.UpdateAsync(Guid.NewGuid(), "Name", 2, "system");
             throw new NotImplementedException();
             _logger.LogInformation("Job: {jobName} finished", nameof(UploadAllProductsJob));
 

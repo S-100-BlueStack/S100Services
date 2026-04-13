@@ -26,6 +26,7 @@ namespace ProductCatalogueService.Models
             public required string Name { get; set; }
             public JsonElement Aoi { get; set; }
             public SpecificUsage UsageBand { get; set; }
+            public int OptimumDisplayScale { get; set; }
         }
     }
 }

@@ -54,11 +54,13 @@ namespace ProductCatalogueService.Controllers
                 response.DurationMs = sw.ElapsedMilliseconds;
                 return StatusCode(StatusCodes.Status500InternalServerError, response);
             }
-
+            
 
             var result = _exchangeSetService.CreateExchangeSet(product, _electronicProductManager.OutputFolder, yaml);
 
             await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
+
+            // TODO: save in repo
 
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
@@ -165,5 +167,60 @@ namespace ProductCatalogueService.Controllers
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
         }
+
+
+
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
+        [HttpPost("alldatasets", Name = "NewDatasets")]
+        public async Task<IActionResult> CreateAllDatasets() {
+            var sw = Stopwatch.StartNew();
+            var response = new ApiResponse();
+
+            var products = _electronicProductManager.ToArray();
+            int i = 0;
+            int total = products.Length;
+
+            foreach (var name in products) {
+                try {
+                    i++;
+                    _logger.LogInformation("creating dataset {i}/{total}: {name}", i, total, name);
+                    var product = _electronicProductManager.ElectronicProduct(name)!;
+                    if (product.editionNumber.HasValue && product.editionNumber.Value > 0) {
+                        _logger.LogInformation("Product {name} already has edition {edition}. skipping", name, product.editionNumber.Value);
+                        continue;
+                        //throw new InvalidOperationException();
+                    }
+                    // Create exchange set
+                    var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
+                    var yaml = dataset.Serialize();
+
+                    _exchangeSetService.CreateExchangeSet(product, _electronicProductManager.OutputFolder, yaml);
+                    _logger.LogInformation("Exchangeset created successfully");
+                }
+                catch (InvalidOperationException) {
+                    _logger.LogWarning("Dataset already has update. skipping");
+                }
+                catch (IndexOutOfRangeException) {
+                    _logger.LogWarning("Topology IndexOutOfRangeException! skipping");
+                }
+                catch (AggregateException) {
+                    _logger.LogWarning("Topology AggregateException! skipping");
+                }
+                catch (ArgumentException) {
+                    _logger.LogWarning("s100compiler exception for exchangeset. Probably missing minimumScale on DataCoverage skipping");
+                }
+                catch (Exception ex) {
+                    _logger.LogError("Unexpected exception: {ex}", ex);
+                }
+             
+            }
+            response.DurationMs = sw.ElapsedMilliseconds;
+            response.Message = $"Datasets created: {products.Length}";
+            return Ok(response);
+        }
+
+
     }
 }

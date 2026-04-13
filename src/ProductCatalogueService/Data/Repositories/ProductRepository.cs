@@ -106,4 +106,27 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
 
         return [.. names];
     }
+
+    public async Task<string[]> GetEligibleProductsAsync() {
+        using var connection = _connectionFactory.Create();
+
+        var sql = """
+            SELECT name
+            FROM (
+                SELECT
+                    name,
+                    state,
+                    ROW_NUMBER() OVER (PARTITION BY name ORDER BY date_to DESC) AS rn
+                FROM dbo.JobTable
+            ) t
+            WHERE rn = 1
+            AND state NOT IN @States
+        """;
+
+        var names = await connection.QueryAsync<string>(sql, new {
+            States = new[] { ProductState.NewUpdate, ProductState.NewEdition }
+        });
+
+        return [.. names];
+    }
 }

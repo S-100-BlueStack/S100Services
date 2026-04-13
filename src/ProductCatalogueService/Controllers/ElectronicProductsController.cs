@@ -188,7 +188,7 @@ namespace ProductCatalogueService.Controllers
             };
 
             // Todo: change argument to AOI and do arcgis core geometry conversion in productmanager
-            await _electronicProductManager.CreateElectronicProductAsync(product.Name, productSpecification, specificUsage, boundary);
+            await _electronicProductManager.CreateElectronicProductAsync(product.Name, productSpecification, specificUsage, boundary, product.OptimumDisplayScale);
 
             response.DurationMs = sw.ElapsedMilliseconds;
 
@@ -201,57 +201,11 @@ namespace ProductCatalogueService.Controllers
 
 
 
-        #region import
-        ///// <summary>
-        ///// Creates all datasets in s128 database.
-        ///// </summary>
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
-        //[HttpPost("alldatasets", Name = "NewDatasets")]
-        //public async Task<IActionResult> CreateAllDatasets() {
-        //    var sw = Stopwatch.StartNew();
-        //    var response = new ApiResponse();
+       // #region import
+        /// <summary>
+        /// Creates all datasets in s128 database.
+        /// </summary>
 
-        //    var products = _electronicProductManager.ToArray();
-        //    int i = 1;
-        //    int total = products.Length;
-
-        //    foreach (var name in products) {
-        //        try {
-        //            _logger.LogInformation("creating dataset {i}/{total}: {name}", i, total, name);
-        //            var product = _electronicProductManager.ElectronicProduct(name)!;
-        //            if (product.editionNumber.HasValue && product.editionNumber.Value > 0) {
-        //                throw new InvalidOperationException();
-        //            }
-        //            // Create exchange set
-        //            var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
-        //            var yaml = dataset.Serialize();
-
-        //            this.CreateExchangeSet(product, yaml);
-        //            _logger.LogInformation("Exchangeset created successfully");
-        //        }
-        //        catch (InvalidOperationException) {
-        //            _logger.LogWarning("Dataset already has update. skipping");
-        //        }
-        //        catch (IndexOutOfRangeException) {
-        //            _logger.LogWarning("Topology IndexOutOfRangeException! skipping");
-        //        }
-        //        catch (AggregateException) {
-        //            _logger.LogWarning("Topology AggregateException! skipping");
-        //        }
-        //        catch (ArgumentException) {
-        //            _logger.LogWarning("s100compiler exception for exchangeset. Probably missing minimumScale on DataCoverage skipping");
-        //        }
-        //        catch (Exception ex) {
-        //            _logger.LogError("Unexpected exception: {ex}", ex);
-        //        }
-        //        i++;
-        //    }
-        //    response.DurationMs = sw.ElapsedMilliseconds;
-        //    response.Message = $"Datasets created: {products.Length}";
-        //    return Ok(response);
-        //}
 
 
         ///// <summary>
@@ -368,7 +322,7 @@ namespace ProductCatalogueService.Controllers
 
         //    return Ok(response);
         //}
-        #endregion
+        //#endregion
 
     }
 }

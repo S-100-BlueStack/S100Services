@@ -63,7 +63,7 @@ namespace ProductCatalogueService.Services.ExchangeSet
 
 
             // Cleanup temp yaml
-            IO.File.Delete(input);
+            //IO.File.Delete(input);
 
             // Cleanup temp index
             IO.File.Delete(indexFile);
