@@ -1,15 +1,15 @@
-using ArcGIS.Core.Geometry;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using NetTopologySuite.Geometries;
+using NetTopologySuite.IO;
 using ProductCatalogueService.Data.Repositories;
 using ProductCatalogueService.Models;
 using S100FC.ProductCatalogue;
 using System.Diagnostics;
+using System.Text.Json;
 using static ProductCatalogueService.Models.RequestTypes;
 using static ProductCatalogueService.Models.ResponseTypes;
-using System.Text.Json;
-using ArcGIS.Core.Internal.Geometry;
 
 namespace ProductCatalogueService.Controllers
 {
@@ -65,26 +65,26 @@ namespace ProductCatalogueService.Controllers
                     continue;
                 }
 
-                var polygon = a.Value as Polygon;
+                var polygon = a.Value;
 
-                var env = polygon.Extent;
+                //var env = polygon.Extent;
 
-                // simplify coordinates
-                var rectangle = PolygonBuilder.CreatePolygon(
-                [
-                    new Coordinate2D(env.XMin, env.YMin),
-                    new Coordinate2D(env.XMax, env.YMin),
-                    new Coordinate2D(env.XMax, env.YMax),
-                    new Coordinate2D(env.XMin, env.YMax),
-                    new Coordinate2D(env.XMin, env.YMin)
-                ], SpatialReferences.WGS84);
+                //// simplify coordinates
+                //var rectangle = PolygonBuilder.CreatePolygon(
+                //[
+                //    new Coordinate2D(env.XMin, env.YMin),
+                //    new Coordinate2D(env.XMax, env.YMin),
+                //    new Coordinate2D(env.XMax, env.YMax),
+                //    new Coordinate2D(env.XMin, env.YMax),
+                //    new Coordinate2D(env.XMin, env.YMin)
+                //], SpatialReferences.WGS84);
 
                 var current = await _repository.GetCurrentByNameAsync(a.Key);
 
-                var esriGeometry = GeometryEngine.Instance.ExportToJson(JsonExportFlags.JsonExportSkipCRS, rectangle);
+                // var esriGeometry = GeometryEngine.Instance.ExportToJson(JsonExportFlags.JsonExportSkipCRS, rectangle);
 
                 features.Add(new {
-                    geometry = JsonSerializer.Deserialize<object>(esriGeometry),
+                    geometry = polygon, // JsonSerializer.Deserialize<object>(polygon),
                     attributes = new {
                         datasetName = electronicProduct.datasetName,
                         edition = electronicProduct.editionNumber,
@@ -128,7 +128,7 @@ namespace ProductCatalogueService.Controllers
                 Name = electronicProduct.datasetName,
                 Update = electronicProduct.updateNumber,
                 UsageBand = electronicProduct.specificUsage,
-                Aoi = boundary.ToJson(),
+                Aoi = boundary,
                 Status = (int)(current?.State ?? Data.Models.ProductState.Ready)
             };
 
@@ -167,7 +167,8 @@ namespace ProductCatalogueService.Controllers
             }
 
             //var boundary = GetBoundaryFromGeoJSON(aoi);
-            var boundary = PolygonBuilderEx.FromJson(product.Aoi.ToString());
+            //var boundary = NetTopologySuite.Geometries.Polygon.FromJson(product.Aoi.ToString());
+            var boundary = product.Aoi.ToString();
 
             _electronicProductManager.ElectronicProduct(product.Name); // check if product already exists, if not, will return null
 
@@ -201,7 +202,7 @@ namespace ProductCatalogueService.Controllers
 
 
 
-       // #region import
+        // #region import
         /// <summary>
         /// Creates all datasets in s128 database.
         /// </summary>

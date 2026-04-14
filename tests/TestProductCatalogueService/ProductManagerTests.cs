@@ -25,6 +25,28 @@ namespace TestProductCatalogueService
 
         }
 
+
+        [Fact]
+        public async Task Test_ProductManagerREST() {
+            var productManager = await ProductCatalogue.ProductManagerREST.CreateInstanceAsync(() => {
+                var url = Environment.GetEnvironmentVariable("featureService_dev", EnvironmentVariableTarget.User)!;
+
+                var client = new HttpClient();
+                var opt = new S100Framework.REST.Configuration.FeatureServiceClientOptions {
+                    ServiceUri = new Uri(url),
+                };
+                return new S100Framework.REST.Clients.FeatureServiceClient(client, opt);
+
+            });
+
+
+
+            Assert.NotNull(productManager);
+
+            System.Diagnostics.Debugger.Break();
+        }
+
+
         [Fact]
         public async Task Test_ImportS128Products() {
             var s57 = Environment.GetEnvironmentVariable("s57_import");
@@ -65,88 +87,89 @@ namespace TestProductCatalogueService
 
             int productCount = 0;
 
+            // TODO: fix dispatch
             //  S-57 ProductDefinitions
-            await productManager.Dispatch(async () => {
-                var connectionFile = new Uri(IO.Path.GetFullPath(s57));
+            // await productManager.Dispatch(async () => {
+            var connectionFile = new Uri(IO.Path.GetFullPath(s57));
 
-                Func<Geodatabase> createGeodatabase = () => { throw new NotImplementedException(); };
+            Func<Geodatabase> createGeodatabase = () => { throw new NotImplementedException(); };
 
-                if (IO.File.Exists(s57) && ".sde".Equals(IO.Path.GetExtension(s57), StringComparison.InvariantCultureIgnoreCase)) {
-                    createGeodatabase = () => { return new Geodatabase(new DatabaseConnectionFile(connectionFile)); };
-                }
-                else if (IO.Directory.Exists(s57) && ".gdb".Equals(IO.Path.GetExtension(s57), StringComparison.InvariantCultureIgnoreCase)) {
-                    createGeodatabase = () => { return new Geodatabase(new FileGeodatabaseConnectionPath(connectionFile)); };
-                }
+            if (IO.File.Exists(s57) && ".sde".Equals(IO.Path.GetExtension(s57), StringComparison.InvariantCultureIgnoreCase)) {
+                createGeodatabase = () => { return new Geodatabase(new DatabaseConnectionFile(connectionFile)); };
+            }
+            else if (IO.Directory.Exists(s57) && ".gdb".Equals(IO.Path.GetExtension(s57), StringComparison.InvariantCultureIgnoreCase)) {
+                createGeodatabase = () => { return new Geodatabase(new FileGeodatabaseConnectionPath(connectionFile)); };
+            }
 
-                var productSpecification = new S100FC.S128.ComplexAttributes.productSpecification {
-                    editionDate = S100FC.S101.Summary.VersionDate,
-                    name = S100FC.S101.Summary.ProductId,
-                    version = S100FC.S101.Summary.Version.ToString(),
-                };
+            var productSpecification = new S100FC.S128.ComplexAttributes.productSpecification {
+                editionDate = S100FC.S101.Summary.VersionDate,
+                name = S100FC.S101.Summary.ProductId,
+                version = S100FC.S101.Summary.Version.ToString(),
+            };
 
 
 
-                using var geodatabase = createGeodatabase();
+            using var geodatabase = createGeodatabase();
 
-                var definitionTables = geodatabase.GetDefinitions<TableDefinition>();
-                var definitionFeatureClasses = geodatabase.GetDefinitions<FeatureClassDefinition>();
+            var definitionTables = geodatabase.GetDefinitions<TableDefinition>();
+            var definitionFeatureClasses = geodatabase.GetDefinitions<FeatureClassDefinition>();
 
-                using var tableProductCoverage = geodatabase.OpenDataset<FeatureClass>(definitionFeatureClasses.Single(e => e.GetName().EndsWith("ProductCoverage")).GetName());
+            using var tableProductCoverage = geodatabase.OpenDataset<FeatureClass>(definitionFeatureClasses.Single(e => e.GetName().EndsWith("ProductCoverage")).GetName());
 
-                using (var tableProductDefinitions = geodatabase.OpenDataset<Table>(definitionTables.Single(e => e.GetName().EndsWith("ProductDefinitions")).GetName())) {
-                    using var cursor = tableProductDefinitions.Search(new QueryFilter {
-                        WhereClause = "upper(ExportType) <> 'CANCEL'",
-                        //WhereClause = "1 = 1",
+            using (var tableProductDefinitions = geodatabase.OpenDataset<Table>(definitionTables.Single(e => e.GetName().EndsWith("ProductDefinitions")).GetName())) {
+                using var cursor = tableProductDefinitions.Search(new QueryFilter {
+                    WhereClause = "upper(ExportType) <> 'CANCEL'",
+                    //WhereClause = "1 = 1",
+                }, true);
+
+                while (cursor.MoveNext()) {
+                    //if (productCount > 20)
+                    //    continue;
+
+                    productCount++;
+                    var c = cursor.Current;
+
+                    var series = Convert.ToString(c["series"])!.ToString();
+
+                    var name = "101DK00" + Convert.ToString(c["DSNM"])!.Substring(2);
+
+                    var compilationScale = c["CSCL"] != null ? Convert.ToInt32(c["CSCL"]) : 0;
+
+                    var specificUsage = name[7] switch {
+                        '5' => 5, // NavigationalPurposeHarbour,
+                        '4' => 4, // NavigationalPurposeApproach,
+                        '3' => 3, // NavigationalPurposeCoastal,
+                        '2' => 2, // NavigationalPurposeGeneral,
+                        '1' => 1, // NavigationalPurposeOverview,
+                        _ => throw new InvalidDataException(),
+                    };
+
+                    // ONLY DK4
+                    if (specificUsage == 4)
+                        continue;
+
+                    using var coverage = tableProductCoverage.Search(new QueryFilter {
+                        WhereClause = $"DSNM = '{Convert.ToString(c["DSNM"])}'",
                     }, true);
 
-                    while (cursor.MoveNext()) {
-                        //if (productCount > 20)
-                        //    continue;
+                    var polygons = new List<ArcGIS.Core.Geometry.Polygon>();
+                    while (coverage.MoveNext()) {
+                        var current = (ArcGIS.Core.Data.Feature)coverage.Current;
+                        var polygon = (ArcGIS.Core.Geometry.Polygon)current.GetShape();
 
-                        productCount++;
-                        var c = cursor.Current;
-
-                        var series = Convert.ToString(c["series"])!.ToString();
-
-                        var name = "101DK00" + Convert.ToString(c["DSNM"])!.Substring(2);
-
-                        var compilationScale = c["CSCL"] != null ? Convert.ToInt32(c["CSCL"]) : 0;
-
-                        var specificUsage = name[7] switch {
-                            '5' => 5, // NavigationalPurposeHarbour,
-                            '4' => 4, // NavigationalPurposeApproach,
-                            '3' => 3, // NavigationalPurposeCoastal,
-                            '2' => 2, // NavigationalPurposeGeneral,
-                            '1' => 1, // NavigationalPurposeOverview,
-                            _ => throw new InvalidDataException(),
-                        };
-
-                        // ONLY DK4
-                        if (specificUsage == 4)
-                            continue;
-
-                        using var coverage = tableProductCoverage.Search(new QueryFilter {
-                            WhereClause = $"DSNM = '{Convert.ToString(c["DSNM"])}'",
-                        }, true);
-
-                        var polygons = new List<ArcGIS.Core.Geometry.Polygon>();
-                        while (coverage.MoveNext()) {
-                            var current = (ArcGIS.Core.Data.Feature)coverage.Current;
-                            var polygon = (ArcGIS.Core.Geometry.Polygon)current.GetShape();
-
-                            polygons.Add(polygon);
-                            continue;
-                        }
-                        Debug.Assert(polygons.Any());
-
-                        var cover = (ArcGIS.Core.Geometry.Polygon)GeometryEngine.Instance.Union(polygons);
-
-                        tasks.Add(productManager.ElectronicProductManager.CreateElectronicProductAsync(name, productSpecification, specificUsage, cover, compilationScale));
+                        polygons.Add(polygon);
+                        continue;
                     }
-                }
-            });
+                    Debug.Assert(polygons.Any());
 
-           // System.Diagnostics.Debugger.Break();
+                    var cover = (ArcGIS.Core.Geometry.Polygon)GeometryEngine.Instance.Union(polygons);
+
+                    tasks.Add(productManager.ElectronicProductManager.CreateElectronicProductAsync(name, productSpecification, specificUsage, cover.ToJson(), compilationScale));
+                }
+            }
+            // });
+
+            // System.Diagnostics.Debugger.Break();
             await Task.WhenAll([.. tasks]);
 
             System.Diagnostics.Debugger.Break();

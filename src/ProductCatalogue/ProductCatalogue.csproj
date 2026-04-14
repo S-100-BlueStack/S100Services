@@ -25,6 +25,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <ProjectReference Include="..\..\..\S100Framework\src\S100Framework.REST\S100Framework.REST.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<Reference Include="ArcGIS.Core">
 			<HintPath>C:\Program Files\ArcGIS\Pro\bin\ArcGIS.Core.dll</HintPath>
 		</Reference>

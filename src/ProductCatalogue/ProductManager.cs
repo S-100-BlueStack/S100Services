@@ -1,5 +1,6 @@
 ﻿using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
+using ArcGIS.Core.Internal.Geometry;
 using S100FC.S128;
 using S100FC.S128.FeatureTypes;
 using S100FC.S128.SimpleAttributes;
@@ -18,46 +19,6 @@ using IO = System.IO;
 
 namespace S100FC.ProductCatalogue
 {
-    public interface INauticalProductManager
-    {
-    }
-
-    public interface IElectronicProductManager : IEnumerable<string>
-    {
-        Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, ArcGIS.Core.Geometry.Polygon boundary, int? optimumDisplayScale = null);
-
-        Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, ArcGIS.Core.Geometry.Polygon boundary, int edition, int update, byte[] zipfile);
-
-        Task<YAML.Dataset> CreateNewDatasetAsync(string name);
-
-        Task<YAML.Dataset> CreateNewEditionAsync(string name);
-
-        Task<YAML.Dataset> CreateNewUpdateAsync(string name);
-
-        Task<YAML.Dataset> ReissueAsync(string name);
-        Task<Dictionary<string, ArcGIS.Core.Geometry.Geometry>> GetDatasetAOIs();
-        Task<bool> IsDirtyAsync(string name);
-        Task<ArcGIS.Core.Geometry.Geometry> GetDatasetBoundary(string name);
-        Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name);
-        ElectronicProduct? ElectronicProduct(string name);
-
-        Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition);
-        Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign);
-
-        string OutputFolder { get; }
-    }
-
-    public interface IProductManager
-    {
-        INauticalProductManager NauticalProductManager { get; }
-
-        IElectronicProductManager ElectronicProductManager { get; }
-
-        Task Dispatch(Action action);
-
-        Task<TResult> Dispatch<TResult>(Func<TResult> function);
-    }
-
     public class ProductManager : IProductManager, INauticalProductManager, IElectronicProductManager, IDisposable
     {
         public static async Task<IProductManager> CreateInstanceAsync(Func<Geodatabase> creator) => await new ProductManager().InitializeAsync(creator);
@@ -193,7 +154,7 @@ namespace S100FC.ProductCatalogue
 
         #region IElectronicProductManager
 
-        async Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, ArcGIS.Core.Geometry.Polygon boundary, int? optimumDisplayScale) {
+        async Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, string boundary, int? optimumDisplayScale) {
             if (string.IsNullOrEmpty(name))
                 throw new System.ArgumentNullException(nameof(name));
 
@@ -226,7 +187,7 @@ namespace S100FC.ProductCatalogue
 
                         var flattened = electronicProduct.Flatten();
                         buffer["attributebindings"] = flattened;
-                        buffer["shape"] = boundary;
+                        buffer["shape"] = boundary; // TODO
                         surface.CreateRow(buffer);
 
                         var result = this._electronicProducts.TryAdd(name, electronicProduct);
@@ -237,7 +198,7 @@ namespace S100FC.ProductCatalogue
 
         }
 
-        Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, ArcGIS.Core.Geometry.Polygon boundary, int edition, int update, byte[] zipfile) {
+        Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, string boundary, int edition, int update, byte[] zipfile) {
             throw new NotImplementedException();
         }
 
@@ -454,12 +415,15 @@ namespace S100FC.ProductCatalogue
                 if (!cursor.MoveNext())
                     throw new InvalidOperationException("No dataset rows found");
 
-                var rootData = ReadZippedData(cursor); // root YAML
+                var ms = cursor.Current["data"] as MemoryStream;
+
+                var rootData = Extensions.ReadZippedData(ms); // root YAML
                 var rootYAML = rootData["yaml"];
                 var index = rootData["index"];
 
                 while (cursor.MoveNext()) {
-                    var data = ReadZippedData(cursor);
+                    var cms = cursor.Current["data"] as MemoryStream;
+                    var data = Extensions.ReadZippedData(cms);
                     var delta = data["yaml"];
                     index = data["index"];
 
@@ -469,33 +433,6 @@ namespace S100FC.ProductCatalogue
 
                 return (rootYAML, index);
             });
-        }
-
-        private static Dictionary<string, string> ReadZippedData(RowCursor cursor) {
-            if (cursor.Current["data"] is not MemoryStream stream)
-                throw new InvalidOperationException("Column 'data' is not a MemoryStream");
-
-            var files = new Dictionary<string, string>();
-            stream.Position = 0;
-
-            // Open the stream as a ZipArchive
-            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-
-            foreach (ZipArchiveEntry entry in archive.Entries) {
-                var key = entry.Name;
-                if (entry.Name.EndsWith(".yaml", StringComparison.InvariantCultureIgnoreCase))
-                    key = "yaml";
-                else if (entry.Name.EndsWith(".idx", StringComparison.InvariantCultureIgnoreCase))
-                    key = "index";
-                else if (entry.Name.EndsWith(".sign", StringComparison.InvariantCultureIgnoreCase))
-                    key = "catalogue";
-
-                using var entryStream = entry.Open();
-                using var reader = new StreamReader(entryStream);
-                files.Add(entry.FullName, reader.ReadToEnd());
-            }
-
-            return files;
         }
 
         ElectronicProduct? IElectronicProductManager.ElectronicProduct(string name) => this._electronicProducts.GetValueOrDefault(name.ToUpperInvariant());
@@ -965,7 +902,7 @@ namespace S100FC.ProductCatalogue
                         TimestampUTC = timestamp
                     }, this.jsonSerializerOptionsS128);
 
-                    var memoryStream = ZipIt(yaml, index, sign);
+                    var memoryStream = Extensions.ZipIt(yaml, index, sign);
 
                     buffer["data_size"] = memoryStream.Length;
                     buffer["data"] = memoryStream;
@@ -975,28 +912,6 @@ namespace S100FC.ProductCatalogue
                     Log.Information("Attachment created for dataset {datasetName} with edition {edition} and update {update}", electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
                 });
             });
-        }
-
-        private static MemoryStream ZipIt(string yaml, string index, string sign) {
-            var zipStream = new MemoryStream();
-
-            using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true)) {
-                AddFileToArchive(archive, "yaml", yaml);
-                AddFileToArchive(archive, "index", index);
-                AddFileToArchive(archive, "sign", sign);
-            }
-
-            // 4. Reset position so the reader starts at the beginning
-            zipStream.Position = 0;
-
-            return zipStream;
-
-            static void AddFileToArchive(ZipArchive archive, string fileName, string content) {
-                var entry = archive.CreateEntry(fileName);
-                using var entryStream = entry.Open();
-                using var writer = new StreamWriter(entryStream, Encoding.UTF8);
-                writer.Write(content);
-            }
         }
 
         #endregion
@@ -1105,9 +1020,9 @@ namespace S100FC.ProductCatalogue
 
         }
 
-        public async Task<Dictionary<string, ArcGIS.Core.Geometry.Geometry>> GetDatasetAOIs() {
+        public async Task<Dictionary<string, string>> GetDatasetAOIs() {
             return await this.Dispatch(() => {
-                var result = new Dictionary<string, ArcGIS.Core.Geometry.Geometry>();
+                var result = new Dictionary<string, string>();
 
                 using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
                 using var cursor = surface.Search();
@@ -1127,7 +1042,19 @@ namespace S100FC.ProductCatalogue
                         if (electronicProduct.datasetName == null)
                             continue;
 
-                        result[electronicProduct.datasetName!] = boundary;
+                        var env = boundary.Extent;
+
+                        // simplify coordinates
+                        var rectangle = PolygonBuilder.CreatePolygon(
+                        [
+                            new Coordinate2D(env.XMin, env.YMin),
+                            new Coordinate2D(env.XMax, env.YMin),
+                            new Coordinate2D(env.XMax, env.YMax),
+                            new Coordinate2D(env.XMin, env.YMax),
+                            new Coordinate2D(env.XMin, env.YMin)
+                        ], SpatialReferences.WGS84);
+
+                        result[electronicProduct.datasetName!] = rectangle.ToJson();
                     }
                     catch (Exception ex) {
                         continue;
@@ -1139,7 +1066,7 @@ namespace S100FC.ProductCatalogue
             });
         }
 
-        public async Task<ArcGIS.Core.Geometry.Geometry> GetDatasetBoundary(string datasetName) {
+        public async Task<string> GetDatasetBoundary(string datasetName) {
             return await this.Dispatch(() => {
                 //using var surface = _geodatabase!.OpenDataset<Table>(QualifyTableName("surface"));
 
@@ -1159,7 +1086,7 @@ namespace S100FC.ProductCatalogue
 
                 var boundary = ((ArcGIS.Core.Data.Feature)cursor.Current).GetShape();
 
-                return boundary!;
+                return boundary.ToJson()!;
             });
 
         }

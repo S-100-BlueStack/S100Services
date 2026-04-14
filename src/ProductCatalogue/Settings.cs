@@ -1,10 +1,12 @@
-﻿namespace S100Horizon.Settings
+﻿using S100Framework.REST.Clients;
+
+namespace S100Horizon.Settings
 {
     public record Connection(string ProductSpecification, int? MinimumScale, int? MaximumScale, Uri? ConnectionFile = default);
+    public record ConnectionREST(string ProductSpecification, int? MinimumScale, int? MaximumScale, FeatureServiceClient Client);
     public class ProductCatalogue
     {
         public Connection[] Connections { get; set; } = [];
-
         public string OutputFolder { get; set; } = @".\";
     }
 }

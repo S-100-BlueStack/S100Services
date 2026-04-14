@@ -1,0 +1,48 @@
+﻿using S100FC.ProductCatalogue;
+using S100FC.S128.FeatureTypes;
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace S100FC.ProductCatalogue
+{
+    public interface INauticalProductManager
+    {
+    }
+
+    public interface IElectronicProductManager : IEnumerable<string>
+    {
+        Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, string boundary, int? optimumDisplayScale = null);
+
+        Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, string boundary, int edition, int update, byte[] zipfile);
+
+        Task<YAML.Dataset> CreateNewDatasetAsync(string name);
+
+        Task<YAML.Dataset> CreateNewEditionAsync(string name);
+
+        Task<YAML.Dataset> CreateNewUpdateAsync(string name);
+
+        Task<YAML.Dataset> ReissueAsync(string name);
+        Task<Dictionary<string, string>> GetDatasetAOIs();
+        Task<bool> IsDirtyAsync(string name);
+        Task<string> GetDatasetBoundary(string name);
+        Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name);
+        ElectronicProduct? ElectronicProduct(string name);
+
+        Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition);
+        Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign);
+
+        string OutputFolder { get; }
+    }
+
+    public interface IProductManager
+    {
+        INauticalProductManager NauticalProductManager { get; }
+
+        IElectronicProductManager ElectronicProductManager { get; }
+
+        //Task Dispatch(Action action);
+
+        //Task<TResult> Dispatch<TResult>(Func<TResult> function);
+    }
+}
