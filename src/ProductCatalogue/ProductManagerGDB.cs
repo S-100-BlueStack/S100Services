@@ -19,9 +19,9 @@ using IO = System.IO;
 
 namespace S100FC.ProductCatalogue
 {
-    public class ProductManager : IProductManager, INauticalProductManager, IElectronicProductManager, IDisposable
+    public class ProductManagerGDB : IProductManager, INauticalProductManager, IElectronicProductManager, IDisposable
     {
-        public static async Task<IProductManager> CreateInstanceAsync(Func<Geodatabase> creator) => await new ProductManager().InitializeAsync(creator);
+        public static async Task<IProductManager> CreateInstanceAsync(Func<Geodatabase> creator) => await new ProductManagerGDB().InitializeAsync(creator);
 
         private bool _disposed = false;
 
@@ -60,13 +60,13 @@ namespace S100FC.ProductCatalogue
 
         private readonly ConcurrentDictionary<string, S100FC.S128.FeatureTypes.ElectronicProduct> _electronicProducts = new ConcurrentDictionary<string, S100FC.S128.FeatureTypes.ElectronicProduct>();
 
-        private ProductManager() {
+        private ProductManagerGDB() {
             this._singleThreadTaskScheduler = new SingleThreadTaskScheduler();
             this._taskFactory = new TaskFactory(this._singleThreadTaskScheduler);
             this.OutputFolder = string.Empty;
         }
 
-        protected async Task<ProductManager> InitializeAsync(Func<Geodatabase> creator) {
+        protected async Task<ProductManagerGDB> InitializeAsync(Func<Geodatabase> creator) {
             S100FC.S101.Extensions.AppendTypeInfoResolver(this.jsonSerializerOptionsS101);
 
             await this.Dispatch(() => {
@@ -187,7 +187,7 @@ namespace S100FC.ProductCatalogue
 
                         var flattened = electronicProduct.Flatten();
                         buffer["attributebindings"] = flattened;
-                        buffer["shape"] = boundary; // TODO
+                        buffer["shape"] = boundary;
                         surface.CreateRow(buffer);
 
                         var result = this._electronicProducts.TryAdd(name, electronicProduct);
@@ -198,9 +198,7 @@ namespace S100FC.ProductCatalogue
 
         }
 
-        Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, string boundary, int edition, int update, byte[] zipfile) {
-            throw new NotImplementedException();
-        }
+        Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, string boundary, int edition, int update, byte[] zipfile) => throw new NotImplementedException();
 
         async Task<YAML.Dataset> IElectronicProductManager.CreateNewDatasetAsync(string name) {
             if (string.IsNullOrEmpty(name))
@@ -470,21 +468,6 @@ namespace S100FC.ProductCatalogue
 
                 var whereClause = "upper(ps) = 'S-101'";
 
-                //TODO: ????
-                //var specificUsage = S128.SimpleAttributes.specificUsage.listedValues.FirstOrDefault(e => e.code == electronicProduct.specificUsage);
-                //if (specificUsage != default)
-                //    whereClause += $" AND usageband = {electronicProduct.specificUsage}";
-
-
-                //whereClause += specificUsage switch {
-
-                //    S100FC.S128.specificUsage.NavigationalPurposeOverview => $" AND usageband = 1",
-                //    S100FC.S128.specificUsage.NavigationalPurposeGeneral => $" AND usageband = 2",
-                //    S100FC.S128.specificUsage.NavigationalPurposeCoastal => $" AND usageband = 3",
-                //    S100FC.S128.specificUsage.NavigationalPurposeApproach => $" AND usageband = 4",
-                //    S100FC.S128.specificUsage.NavigationalPurposeHarbour => $" AND usageband = 5",
-                //    _ => "",
-                //};
 
                 var filter = new SpatialQueryFilter {
                     FilterGeometry = shapeCoverage,
@@ -505,9 +488,6 @@ namespace S100FC.ProductCatalogue
             var regFileReference = new Regex("fileReference\":\"(?<filename>[^\"]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace);
             var regPictorialRepresentation = new Regex("pictorialRepresentation\":\"(?<filename>[^\"]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace);
 
-            //using var connection = this._connections["S-101"]!;
-            //var uri = this._connections["S-101"]!;
-            // TODO: Handle null
             var uri = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
 
 

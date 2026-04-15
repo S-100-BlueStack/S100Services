@@ -5,12 +5,16 @@ using S100FC.ProductCatalogue;
 using S100FC.S128.ComplexAttributes;
 using S100FC.S128.FeatureTypes;
 using S100FC.S128.SimpleAttributes;
+using S100FC.YAML;
 using S100Framework.REST.Clients;
 using S100Framework.REST.Models;
 using S100Horizon.Settings;
+using Serilog;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
+using Extensions = S100FC.ProductCatalogue.Extensions;
 
 namespace ProductCatalogue
 {
@@ -21,6 +25,7 @@ namespace ProductCatalogue
         private WKTReader _wktReader { get; } = new WKTReader();
         private FeatureServiceClient? _s128FeatureServiceClient;
 
+        private readonly string[] _tableNames = ["point", "pointset", "curve", "surface"];
 
         private ConnectionREST[] _connections { get; set; } = [];
         private FeatureServiceClient Connection(string productSpecification, int compilationScale) => _connections.FirstOrDefault(e => e.ProductSpecification == productSpecification && e.MinimumScale <= compilationScale && e.MaximumScale >= compilationScale).Client;
@@ -32,7 +37,7 @@ namespace ProductCatalogue
 
             // TEST
             if (System.Diagnostics.Debugger.IsAttached) {
-                var testclient = await this._s128FeatureServiceClient.GetLayerClient("Paper Charts");
+                var testclient = await this._s128FeatureServiceClient.GetLayerClientAsync("Paper Charts");
                 var chart = await testclient.QueryAsync(new FeatureQuery() {
                     Where = "PRODUCTNAME = 'Kort1161'",
                 }).SingleOrDefaultAsync();
@@ -44,7 +49,7 @@ namespace ProductCatalogue
 
 
             // ---- Read configuration
-            var configurationClient = await this._s128FeatureServiceClient.GetLayerClient("configuration");
+            var configurationClient = await this._s128FeatureServiceClient.GetLayerClientAsync("configuration");
             var configuration = await configurationClient.QueryAsync(new FeatureQuery() {
                 Where = "upper(ps) = 'S-128.NuvionPro' AND code = 'ProductCatalogue'",
             }).SingleOrDefaultAsync();
@@ -65,7 +70,7 @@ namespace ProductCatalogue
             }
 
             // ----- Read electronic products
-            var attachmentClient = await this._s128FeatureServiceClient.GetLayerClient("attachment");
+            var attachmentClient = await this._s128FeatureServiceClient.GetLayerClientAsync("attachment");
             var electronicProducts = await attachmentClient.QueryAsync(new FeatureQuery() {
                 Where = "upper(ps) = 'S-128' AND code = 'ElectronicProduct'",
             }).ToListAsync();
@@ -91,8 +96,8 @@ namespace ProductCatalogue
 
 
             var ps = "S-128.NuvionPro";
-            var code = nameof(Dataset);
-            var json = System.Text.Json.JsonSerializer.Serialize(new Dataset {
+            var code = nameof(S100FC.ProductCatalogue.Dataset);
+            var json = System.Text.Json.JsonSerializer.Serialize(new S100FC.ProductCatalogue.Dataset {
                 DatasetName = electronicProduct.datasetName!,
                 Edition = electronicProduct.editionNumber!.Value,
                 Update = electronicProduct.updateNumber,
@@ -117,7 +122,7 @@ namespace ProductCatalogue
                 Adds = [ef]
             };
 
-            var attachmentClient = await this._s128FeatureServiceClient.GetLayerClient("attachment");
+            var attachmentClient = await this._s128FeatureServiceClient.GetLayerClientAsync("attachment");
 
             var applyEditsResult = await attachmentClient.ApplyEditsAsync(edits);
 
@@ -164,7 +169,7 @@ namespace ProductCatalogue
                 Adds = [ef]
             };
 
-            var attachmentClient = await this._s128FeatureServiceClient.GetLayerClient("attachment");
+            var attachmentClient = await this._s128FeatureServiceClient.GetLayerClientAsync("attachment");
 
             var applyEditsResult = await attachmentClient.ApplyEditsAsync(edits);
 
@@ -179,8 +184,6 @@ namespace ProductCatalogue
         public async Task CreateElectronicProductAsync(string name, productSpecification productSpecification, specificUsage specificUsage, string boundary, int edition, int update, byte[] zipfile) => throw new NotImplementedException();
 
         public async Task<S100FC.YAML.Dataset> CreateNewDatasetAsync(string name) {
-            throw new NotImplementedException();
-
             if (string.IsNullOrEmpty(name))
                 throw new System.ArgumentNullException(nameof(name));
             name = name.ToUpperInvariant();
@@ -197,12 +200,10 @@ namespace ProductCatalogue
             result.ElectronicProduct.editionNumber = 1;
             result.ElectronicProduct.updateNumber = 0;
 
-            return await this.CreateDatasetAsync(result.ElectronicProduct, /*result.Filter,*/ ExportTypes.NewDataset);
+            return await this.CreateDatasetAsync(result.ElectronicProduct, result.Boundary, ExportTypes.NewDataset);
         }
 
         public async Task<S100FC.YAML.Dataset> CreateNewEditionAsync(string name) {
-            throw new NotImplementedException();
-
             if (string.IsNullOrEmpty(name))
                 throw new System.ArgumentNullException(nameof(name));
             name = name.ToUpperInvariant();
@@ -216,12 +217,10 @@ namespace ProductCatalogue
             result.ElectronicProduct.editionNumber += 1;
             result.ElectronicProduct.updateNumber = 0;
 
-            return await this.CreateDatasetAsync(result.ElectronicProduct,/* result.Filter,*/ ExportTypes.NewEdition);
+            return await this.CreateDatasetAsync(result.ElectronicProduct, result.Boundary, ExportTypes.NewEdition);
         }
 
         public async Task<S100FC.YAML.Dataset> CreateNewUpdateAsync(string name) {
-            throw new NotImplementedException();
-
             if (string.IsNullOrEmpty(name))
                 throw new System.ArgumentNullException(nameof(name));
             name = name.ToUpperInvariant();
@@ -234,11 +233,11 @@ namespace ProductCatalogue
 
             result.ElectronicProduct.updateNumber += 1;
 
-            return await this.CreateDatasetAsync(result.ElectronicProduct, /*result.Filter,*/ ExportTypes.Update);
+            return await this.CreateDatasetAsync(result.ElectronicProduct, result.Boundary, ExportTypes.Update);
         }
 
         public async Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition) {
-            var attachmentClient = await this._s128FeatureServiceClient.GetLayerClient("attachment");
+            var attachmentClient = await this._s128FeatureServiceClient.GetLayerClientAsync("attachment");
 
             var attachments = await attachmentClient.QueryAsync(new FeatureQuery() {
                 Where = $"json LIKE '%\"DatasetName\":\"{name}\"%' AND json LIKE '%\"Edition\":{edition}%'",
@@ -268,8 +267,6 @@ namespace ProductCatalogue
         }
 
         public async Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name) {
-            throw new NotImplementedException();
-
             if (string.IsNullOrEmpty(name))
                 throw new System.ArgumentNullException(nameof(name));
 
@@ -280,7 +277,7 @@ namespace ProductCatalogue
 
             var dataset = await this.GetLatestDataset(name);
 
-            if (dataset == default)
+            if (dataset == null)
                 throw new NullReferenceException(nameof(dataset));
 
             var maxDate = new DateTime(31, 12, 9999);
@@ -288,16 +285,45 @@ namespace ProductCatalogue
             var dict = new Dictionary<string, ArchiveRow>();
 
             var client = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
-            string[] tableNames = ["point", "pointset", "curve", "surface"];
-            foreach (var baseTableName in tableNames) {
-                var layerClient = client.GetLayerClient(baseTableName);
 
-                //var filter = await this.BuildSpatialQueryFilter(dataset, electronicProduct.specificUsage);
+            var extent = await this.BuildSpatialQueryFilter(name);
 
-                // query spatially
-                // TODO: Access archiveTable? ExtractChanges query.
-            }
+            var spatialFilter = ExtractChangesSpatialFilter.FromGeometry(extent);
 
+            var result = await client.ExtractChangesAsync(
+                new ExtractChangesRequest {
+                    Layers = [0, 1, 2, 3, 4, 5],
+                    SpatialFilter = spatialFilter,
+                    ReturnIdsOnly = true,
+                    FieldsToCompare = ["type"],
+
+                    // TODO: Store generation for later use when requesting actual changes. For now, just return all changes since we don't know the last gen.
+                    //LayerServerGens = [
+                    //    new ExtractChangesLayerServerGen(0, 1653608093000)
+                    //],
+                });
+
+
+
+            // TODO: populate dict with results
+
+            //foreach(var res in result.Edits) {
+            //  //  res.LayerId
+            //    res.Features?.Adds.ForEach(f => {
+            //        var code = f.Attributes["code"].ToString();
+            //        var attrBindings = f.Attributes["attributebindings"].ToString();
+            //        var featureBindings = f.Attributes["featurebindings"].ToString();
+            //        var informationBindings = f.Attributes["informationbindings"].ToString();
+            //        dict.TryAdd(f.Id.ToString(), new ArchiveRow {
+            //            Code = code!,
+            //            AttributeBindings = attrBindings,
+            //            FeatureBindings = featureBindings,
+            //            InformationBindings = informationBindings,
+            //            Deleted = res.ObjectIds != null && res.ObjectIds.Contains(f.Id) && res.HasGeometryUpdates == false, // if objectids contains the id and hasgeometryupdates is false, we can consider it a delete. Otherwise, it's either an update or an insert.
+            //        });
+            //    });
+            //}
+        
 
             return dict;
         }
@@ -324,7 +350,7 @@ namespace ProductCatalogue
             var client = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
             string[] tableNames = ["point", "pointset", "curve", "surface"];
             foreach (var baseTableName in tableNames) {
-                var layerClient = client.GetLayerClient(baseTableName);
+                var layerClient = client.GetLayerClientAsync(baseTableName);
 
                 //var filter = await this.BuildSpatialQueryFilter(dataset, electronicProduct.specificUsage);
 
@@ -334,8 +360,8 @@ namespace ProductCatalogue
 
             return dirty;
         }
-        private async Task<Dataset?> GetLatestDataset(string name) {
-            var attachmentClient = await this._s128FeatureServiceClient.GetLayerClient("attachment");
+        private async Task<S100FC.ProductCatalogue.Dataset?> GetLatestDataset(string name) {
+            var attachmentClient = await this._s128FeatureServiceClient.GetLayerClientAsync("attachment");
 
             var product = await attachmentClient.QueryAsync(new FeatureQuery() {
                 Where = $"json LIKE '{name}' AND Code = 'ElectronicProduct'",
@@ -346,13 +372,11 @@ namespace ProductCatalogue
 
             var json = product.GetString("json");
 
-            return System.Text.Json.JsonSerializer.Deserialize<Dataset>(json);
+            return System.Text.Json.JsonSerializer.Deserialize<S100FC.ProductCatalogue.Dataset>(json);
         }
 
 
         public async Task<S100FC.YAML.Dataset> ReissueAsync(string name) {
-            throw new NotImplementedException();
-
             if (string.IsNullOrEmpty(name))
                 throw new System.ArgumentNullException(nameof(name));
             name = name.ToUpperInvariant();
@@ -362,7 +386,7 @@ namespace ProductCatalogue
 
             var result = await this.GetElectronicProductAsync(name);
 
-            return await this.CreateDatasetAsync(result.ElectronicProduct, /*result.Filter,*/ ExportTypes.Reissue);
+            return await this.CreateDatasetAsync(result.ElectronicProduct, result.Boundary, ExportTypes.Reissue);
         }
 
 
@@ -380,7 +404,7 @@ namespace ProductCatalogue
         async Task<Dictionary<string, string>> IElectronicProductManager.GetDatasetAOIs() {
             var result = new Dictionary<string, string>();
 
-            var surfaceClient = await this._s128FeatureServiceClient.GetLayerClient("surface");
+            var surfaceClient = await this._s128FeatureServiceClient.GetLayerClientAsync("surface");
 
             var products = await surfaceClient.QueryAsync(new FeatureQuery() {
                 Where = $"upper(ps) = 'S-128' AND Code = 'ElectronicProduct'",
@@ -403,7 +427,7 @@ namespace ProductCatalogue
 
         async Task<string> IElectronicProductManager.GetDatasetBoundary(string name) {
 
-            var surfaceClient = await this._s128FeatureServiceClient.GetLayerClient("surface");
+            var surfaceClient = await this._s128FeatureServiceClient.GetLayerClientAsync("surface");
             var product = await surfaceClient.QueryAsync(new FeatureQuery() {
                 Where = $"upper(ps) = 'S-128' AND Code = 'ElectronicProduct' AND attributebindings LIKE '%\"{name}\"%'",
                 ReturnGeometry = true,
@@ -414,15 +438,73 @@ namespace ProductCatalogue
             return boundaryWKT;
         }
 
+        private async Task<NetTopologySuite.Geometries.Geometry> BuildSpatialQueryFilter(string name) {
+
+            var surfaceClient = await this._s128FeatureServiceClient.GetLayerClientAsync("surface");
+
+            var product = await surfaceClient.QueryAsync(new FeatureQuery() {
+                Where = $"upper(ps) = 'S-128' AND Code = 'ElectronicProduct' AND attributebindings LIKE '{name}'",
+                ReturnGeometry = true,
+            }).SingleOrDefaultAsync();
+
+            if (product == null)
+                throw new System.ArgumentException(nameof(name));
 
 
-        // TODO: Refactor from Arcgis.Core
-        private async Task<(ElectronicProduct ElectronicProduct, ArcGIS.Core.Data.SpatialQueryFilter Filter)> GetElectronicProductAsync(string name) {
-            throw new NotImplementedException();
+            return product.Geometry!;
 
-            var surfaceClient = await this._s128FeatureServiceClient.GetLayerClient("surface");
+            //return await this.Dispatch(() => {
+            //    using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
+
+            //    using var cursorS128 = surface.Search(new QueryFilter {
+            //        WhereClause = $"attributebindings LIKE '%\"{dataset.DatasetName}\"%'",
+            //    }, false);
+
+            //    cursorS128.MoveNext();
+
+            //    Debug.Assert(cursorS128.Current != null);
+
+            //    if (cursorS128.Current.IsNull("attributebindings"))
+            //        throw new System.ArgumentNullException(nameof(dataset.DatasetName));
+
+            //    // original
+            //    //var whereClause = $"UPPER(ps) = 'S-101' AND (" +
+            //    //                  $"created_date > DATE '{dataset.TimestampUTC:yyyy-MM-dd HH:mm:ss}' " +
+            //    //                  $"OR last_edited_date > DATE '{dataset.TimestampUTC:yyyy-MM-dd HH:mm:ss}')";
+
+            //    var sqlSyntax = _geodatabase.GetSQLSyntax();
+
+            //    var formattedDate = sqlSyntax.Format(dataset.TimestampUTC, SQLDateTimeType.Timestamp);
+
+
+            //    //var whereClause = $"UPPER(ps) = 'S-101' AND GDB_FROM_DATE > {formattedDate}";
+            //    var whereClause = $"UPPER(ps) = 'S-101' AND (GDB_FROM_DATE > {formattedDate} OR GDB_TO_DATE > {formattedDate})";
+
+            //    if (specificUsage != null)
+            //        whereClause += $" AND usageband = {specificUsage.value}";
+
+
+            //    ArcGIS.Core.Geometry.Polygon shapeCoverage;
+
+            //    shapeCoverage = (ArcGIS.Core.Geometry.Polygon)((ArcGIS.Core.Data.Feature)cursorS128.Current).GetShape().Clone();
+
+            //    var filter = new SpatialQueryFilter {
+            //        FilterGeometry = shapeCoverage,
+            //        SpatialRelationship = SpatialRelationship.Relation,
+            //        SpatialRelationshipDescription = S100FC.Topology.Matrix.DE9IM,
+            //        WhereClause = whereClause,
+            //    };
+
+            //    return filter;
+            //});
+
+        }
+
+        private async Task<(ElectronicProduct ElectronicProduct, NetTopologySuite.Geometries.Geometry Boundary)> GetElectronicProductAsync(string name) {
+            var surfaceClient = await this._s128FeatureServiceClient.GetLayerClientAsync("surface");
             var product = await surfaceClient.QueryAsync(new FeatureQuery() {
                 Where = $"attributebindings LIKE '{name}' AND Code = 'ElectronicProduct'",
+
                 ReturnGeometry = true,
             }).SingleOrDefaultAsync();
 
@@ -430,10 +512,347 @@ namespace ProductCatalogue
 
             var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(attrBindings!, typeof(ElectronicProduct));
 
+            return (electronicProduct, product.Geometry);
+
         }
-        // TODO: Refactor from Arcgis.Core with new spatial filter
-        private async Task<S100FC.YAML.Dataset> CreateDatasetAsync(ElectronicProduct electronicProduct, /*SpatialQueryFilter filter,*/ ExportTypes exportType, bool applyEdits = true) {
-            throw new NotImplementedException();
+        // TODO: Reimplement AddTopology and AddGeometry
+        private async Task<S100FC.YAML.Dataset> CreateDatasetAsync(ElectronicProduct electronicProduct, NetTopologySuite.Geometries.Geometry boundary, ExportTypes exportType, bool applyEdits = true) {
+            var filter = FeatureSpatialFilter.FromGeometry(boundary, 4326, SpatialRelationship.Intersects);
+
+            var timestamp = DateTime.UtcNow;
+
+            var featureCatalogue = S100FC.Catalogues.FeatureCatalogue.Catalogues.Single(e => e.ProductID.Equals("S-101"));
+
+            var regFileReference = new Regex("fileReference\":\"(?<filename>[^\"]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace);
+            var regPictorialRepresentation = new Regex("pictorialRepresentation\":\"(?<filename>[^\"]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace);
+
+            var uri = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
+
+
+
+            electronicProduct.issueDate = DateOnly.FromDateTime(timestamp);
+
+            var dataset = new S100FC.YAML.Dataset {
+                CellName = $"{electronicProduct!.datasetName!}.000",
+                Comment = electronicProduct.notForNavigation.HasValue ? "Not for navigation!" : string.Empty,
+                Edition = (uint?)electronicProduct.editionNumber,
+                ENCVer = "INT.IHO.S-101.2.0",
+                FCVer = "2.0",
+                verticalDatum = "Baltic Sea Chart Datum 2000,44",
+                //Update = (uint?)electronicProduct.updateNumber,   // todo: Bug in s100ocompiler and must always be null 
+            };
+
+            var supportFiles = new List<string>();
+            var geometries = new List<(NetTopologySuite.Geometries.Geometry geometry, string name)>();
+            var spatialAssociations = new Dictionary<string, S100FC.YAML.Association>();
+            var informationTypes = new List<S100FC.YAML.Information>();
+            var informationsTypesAdded = new List<string>();
+            var featureTypes = new List<S100FC.YAML.Feature>();
+            var featureTypesAdded = new List<string>();
+
+            var topology = await uri.BuildTopology();
+
+            //  InformationTypes
+            try {
+                var informationTypeClient = await this._s128FeatureServiceClient.GetLayerClientAsync("informationtype");
+
+                var infRes = await informationTypeClient.QueryAsync(new FeatureQuery() {
+                    Where = "1=1",
+                }).ToListAsync();
+
+                foreach (var inf in infRes) {
+                    var name = $"{inf.Attributes["UID"]}";
+                    var code = inf.Attributes["code"].ToString();
+
+                    var flatten = inf.Attributes["attributebindings"].ToString();
+                    var type = featureCatalogue.Assembly!.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "InformationTypes")}.{code}", true)!;
+                    var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.InformationType>(flatten, type);
+
+                    var information = new S100FC.YAML.Information {
+                        Name = code,
+                        ID = name,
+                    };
+
+                    // Only emit attributes if feature contains any non-static properties
+                    if (instance?.attributeBindings.Length > 0)
+                        information.Attributes = instance!;
+
+                    informationTypes.Add(information);
+
+                    var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
+
+                    foreach (var filename in filenames) {
+                        if (!supportFiles.Contains(filename)) {
+                            supportFiles.Add(filename);
+                        }
+                    }
+
+                }
+            }
+            catch (Exception ex) {
+                Log.Information("Table: informationtype: {message} ", ex.Message);
+            }
+
+            // FeatureType
+            try {
+                var featureTypeClient = await this._s128FeatureServiceClient.GetLayerClientAsync("featuretype");
+
+                var ftRes = await featureTypeClient.QueryAsync(new FeatureQuery() {
+                    Where = "1=1",
+                }).ToListAsync();
+
+                foreach (var ft in ftRes) {
+                    var name = $"{ft.Attributes["UID"]}";
+                    var code = ft.Attributes["code"].ToString();
+                    var flatten = ft.Attributes["attributebindings"].ToString();
+
+                    var type = featureCatalogue.Assembly!.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", true)!;
+                    var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
+
+                    var foid = $"110:{name.Substring(1)}:1";       // Geodatastyrelsen: 110 
+
+                    var feature = new S100FC.YAML.Feature {
+                        Prim = S100FC.YAML.Primitive.NoGeometry,
+                        Name = code,
+                        Foid = foid,
+                        Attributes = instance?.attributeBindings.Length > 0 ? instance : null,
+                    };
+
+                    featureTypes.Add(feature);
+
+                    var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
+
+                    foreach (var filename in filenames) {
+                        if (!supportFiles.Contains(filename)) {
+                            supportFiles.Add(filename);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) {
+                Log.Information("Table: featuretype: {message} ", ex.Message);
+            }
+
+            //  Features
+            foreach (var tableName in _tableNames) {
+
+                var featureClient = await this._s128FeatureServiceClient.GetLayerClientAsync(tableName);
+
+                var records = await featureClient.QueryAsync(new FeatureQuery() {
+                    Where = $"upper(ps) = 'S-101'",
+                    SpatialFilter = filter,
+                    ReturnGeometry = true,
+                }).ToListAsync();
+
+                foreach (var record in records) {
+                    var name = $"{record.Attributes["UID"]}";
+
+                    // Only map geometry, and keep name seperate so foids remain unique
+                    var geometry = name;
+
+
+                    if (topology.Mapping.TryGetValue(name!, out var value))
+                        geometry = value;
+
+
+                    var code = $"{record.Attributes["code"]}";
+
+                    var foid = $"110:{name.Substring(1)}:1";       // Geodatastyrelsen: 110 
+
+                    var prim = record.Geometry.OgcGeometryType switch {
+                        OgcGeometryType.Point => S100FC.YAML.Primitive.Point,
+                        OgcGeometryType.MultiPoint => S100FC.YAML.Primitive.Point,
+                        OgcGeometryType.LineString => S100FC.YAML.Primitive.Curve,
+                        OgcGeometryType.Polygon => S100FC.YAML.Primitive.Surface,
+                        _ => throw new InvalidOperationException(),
+                    };
+
+                    var type = featureCatalogue.Assembly!.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", true) ?? default;
+
+                    var flatten = $"{record.Attributes["attributebindings"]}";
+
+                    var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
+
+                    var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
+
+                    foreach (var filename in filenames) {
+                        if (!supportFiles.Contains(filename)) {
+                            supportFiles.Add(filename);
+                        }
+                    }
+
+                    var topologySurface = topology.Surfaces.FirstOrDefault(e => e.Ref!.Equals(name, StringComparison.InvariantCultureIgnoreCase));
+
+                    //Build comma seperated string of masks, with: 1 or: 2 indicating which mask it is.Should be null / omitted if empty.
+                    var masks = new[] {
+                                    topologySurface?.Masks1?.Select(e => $"C{e}:1"),
+                                    topologySurface?.Masks2?.Select(e => $"C{e}:2")
+                                }.Where(m => m != null).SelectMany(m => m!);
+
+                    var feature = new S100FC.YAML.Feature {
+                        Name = code,
+                        Foid = foid,
+                        Prim = prim,
+                        Geometry = geometry,
+                        Masks = masks.Any() ? string.Join(",", masks) : null,
+                        Attributes = instance?.attributeBindings.Length > 0 ? instance : null,
+                    };
+
+
+                    // Information Associations
+                    if (record.Attributes["informationbindings"] != null) {
+                        try {
+                            var informationBindings = System.Text.Json.JsonSerializer.Deserialize<informationBinding[]>(Convert.ToString(record.Attributes["informationbindings"])!);   //  this.jsonSerializerOptionsS101 nessecary?
+
+                            if (informationBindings != default && informationBindings.Length != 0) {
+                                foreach (var binding in informationBindings) {
+
+                                    var isValid = binding.Validate();
+
+                                    if (!isValid)
+                                        continue;
+
+                                    var asso = new S100FC.YAML.Association {
+                                        Name = binding.informationType!, // binding.GetType().GenericTypeArguments[0].Name,
+                                        Role = binding.role,
+                                        To = binding.informationId
+                                    };
+
+                                    if (!informationsTypesAdded.Contains(binding.informationId!)) {
+                                        dataset!.AddInformation(informationTypes.Single(e => e.ID!.Equals(binding.informationId!)));
+                                        informationsTypesAdded.Add(binding.informationId!);
+                                    }
+
+
+                                    // Special case for SpatialAssociation. Add to dictionary for later processing.
+                                    if (prim != S100FC.YAML.Primitive.Surface && asso.Name.Equals("SpatialAssociation", StringComparison.CurrentCultureIgnoreCase))
+                                        spatialAssociations.TryAdd(geometry, asso);
+                                    else
+                                        feature?.AddAssociation(asso);
+                                }
+                            }
+                        }
+                        catch (Exception ex) {
+                            Log.Warning(ex, "Error deserializing informationbindings for feature {name}: {message}", name, ex.Message);
+                        }
+                    }
+
+                    // Feature Associations
+                    if (record.Attributes["featurebindings"] != null) {
+                        try {
+                            var featureBindings = System.Text.Json.JsonSerializer.Deserialize<featureBinding[]>(Convert.ToString(record.Attributes["informationbindings"])!);       //  this.jsonSerializerOptionsS101 nessecary?
+
+                            if (featureBindings != default && featureBindings.Length != 0) {
+                                foreach (var binding in featureBindings) {
+
+                                    // check if valid
+                                    var isValid = binding.Validate();
+
+                                    if (!isValid)
+                                        continue;
+
+                                    var roleType = binding.roleType;
+
+                                    // Skip association roleType
+                                    if (roleType == "association")
+                                        continue;
+
+                                    var asso = new S100FC.YAML.Association {
+                                        Name = binding.featureType!, // binding.GetType().GenericTypeArguments[0].Name,
+                                        Role = binding.role,
+                                        To = $"110:{binding!.featureId!.Substring(1)}:1"
+                                    };
+
+                                    feature?.AddFeatureAssociation(asso);
+
+                                    var noGeometry = featureTypes.SingleOrDefault(e => e.Foid.Equals($"110:{binding.featureId.Substring(1)}:1"));
+                                    if (noGeometry != null && !featureTypesAdded.Contains(binding.featureId)) {
+                                        featureTypesAdded.Add(binding.featureId);
+                                        dataset?.AddFeature(noGeometry);
+                                    }
+                                }
+                            }
+                        }
+                        catch (Exception ex) {
+                            Log.Warning(ex, "Error deserializing featurebindings for feature {name}: {message}", name, ex.Message);
+                        }
+                    }
+
+                    dataset?.AddFeature(feature!);
+
+                    NetTopologySuite.Geometries.Geometry geometrytype = code!.ToLower() switch {
+                        "sounding" => new NetTopologySuite.Geometries.Point(record.Geometry.Coordinate),
+                        _ => record.Geometry
+                    };
+
+                    geometries.Add(new(geometrytype, name!));
+                }
+            }
+
+            // SupportFiles
+            if (supportFiles.Count != 0) {
+                var attachmentClient = await this._s128FeatureServiceClient.GetLayerClientAsync("attachment");
+
+                var attachments = await attachmentClient.QueryAsync(new FeatureQuery() {
+                    Where = $"code = 'supportfile'",
+                    ReturnGeometry = false,
+                    OutFields = ["json", "data"]
+                }).ToListAsync();
+
+                foreach (var att in attachments) {
+                    var json = att.Attributes["json"]?.ToString();
+                    if (json == null)
+                        continue;
+
+                    var file = System.Text.Json.JsonSerializer.Deserialize<S100BlueStack.Settings.SupportFile>(json);
+
+                    if (!supportFiles.Contains(file!.FileName))
+                        continue;
+
+                    if (att.Attributes["data"] is not MemoryStream stream)
+                        throw new ArgumentNullException("Column 'data' is not a memory stream");
+
+                    stream.Position = 0;
+                    using var reader = new StreamReader(stream);
+
+                    var base64 = Convert.ToBase64String(stream.ToArray());
+                    dataset?.Metadata.AddSupportFile(file.FileName, base64);
+                }
+            }
+
+            //  Geometries
+            foreach (var (geometry, name) in geometries.OrderBy(e => e.geometry.GeometryType)) {
+                if (geometry.OgcGeometryType == OgcGeometryType.Polygon) continue;    // Skip polygons after topology
+                dataset?.AddGeometry(geometry, name!);
+                Log.Verbose("Adding {geometryType} with ID: {name}", geometry.GeometryType, name);
+            }
+
+            dataset!.AddTopology(topology);
+
+            // Add Spatial Association Informationbindings. Must be handled after curves are added to dataset.
+            foreach (var sa in spatialAssociations) {
+                var curve = dataset?.Curves?.FirstOrDefault(e => e.Name == sa.Key);
+
+                curve?.AddAssociation(sa.Value);
+            }
+
+            // Apply Edits
+            if (applyEdits) {
+                var sfClient = await this._s128FeatureServiceClient.GetLayerClientAsync("surface");
+                var flatten = electronicProduct.Flatten();
+
+                var editableFeature = new EditableFeature(null, new Dictionary<string, object?> {
+                    ["attributebindings"] = flatten
+                });
+
+                var aeRes = await sfClient.ApplyEditsAsync(new FeatureEdits {
+                    Updates = [editableFeature]
+                });
+
+                this._electronicProducts[electronicProduct.datasetName!.ToUpperInvariant()] = electronicProduct;
+            }
+
+            return dataset!;
         }
     }
 }

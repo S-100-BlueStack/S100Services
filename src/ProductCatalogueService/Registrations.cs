@@ -22,7 +22,7 @@ namespace ProductCatalogueService
                 if (string.IsNullOrEmpty(path))
                     throw new ArgumentNullException("Environment variable for S128-Database is null!");
 
-                var productManager = await S100FC.ProductCatalogue.ProductManager.CreateInstanceAsync(() => {
+                var productManager = await S100FC.ProductCatalogue.ProductManagerGDB.CreateInstanceAsync(() => {
                     if (".sde".Equals(System.IO.Path.GetExtension(path), StringComparison.OrdinalIgnoreCase)) {
                         var connectionFile = new DatabaseConnectionFile(new Uri(System.IO.Path.GetFullPath(path)));
 

@@ -21,7 +21,7 @@
 	  <PackageReference Include="S100Framework.Catalogues" Version="3.1.8" />
 	  <PackageReference Include="S100Framework.Catalogues.ProductSpecifications" Version="3.1.8" />
 	  <PackageReference Include="S100Framework.Topology" Version="3.1.8" />
-	  <PackageReference Include="S100Framework.YAML" Version="3.7.1772.8" />
+	  <PackageReference Include="S100Framework.YAML" Version="3.7.1772.10" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -29,9 +29,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Reference Include="ArcGIS.Core">
-			<HintPath>C:\Program Files\ArcGIS\Pro\bin\ArcGIS.Core.dll</HintPath>
-		</Reference>
+	  <Reference Include="ArcGIS.Core">
+	    <HintPath>..\..\..\..\..\Program Files\ArcGIS\Pro\bin\ArcGIS.Core.dll</HintPath>
+	  </Reference>
 	</ItemGroup>
 
 </Project>

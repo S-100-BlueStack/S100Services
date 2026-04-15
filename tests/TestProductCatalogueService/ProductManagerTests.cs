@@ -61,7 +61,7 @@ namespace TestProductCatalogueService
             Assert.True(exist57 && exist128);
 
             // S128 ProductManager
-            var productManager = await S100FC.ProductCatalogue.ProductManager.CreateInstanceAsync(() => {
+            var productManager = await S100FC.ProductCatalogue.ProductManagerGDB.CreateInstanceAsync(() => {
                 if (".sde".Equals(System.IO.Path.GetExtension(s128), StringComparison.OrdinalIgnoreCase)) {
                     var connectionFile = new DatabaseConnectionFile(new Uri(System.IO.Path.GetFullPath(s128)));
 
@@ -187,7 +187,7 @@ namespace TestProductCatalogueService
             var exss = new ExchangeSetService(NullLogger<ExchangeSetService>.Instance);
 
             // S128 ProductManager
-            var productManager = await S100FC.ProductCatalogue.ProductManager.CreateInstanceAsync(() => {
+            var productManager = await S100FC.ProductCatalogue.ProductManagerGDB.CreateInstanceAsync(() => {
                 if (".sde".Equals(System.IO.Path.GetExtension(s128), StringComparison.OrdinalIgnoreCase)) {
                     var connectionFile = new DatabaseConnectionFile(new Uri(System.IO.Path.GetFullPath(s128)));
 

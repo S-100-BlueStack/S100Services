@@ -1,8 +1,4 @@
-﻿using S100FC.ProductCatalogue;
-using S100FC.S128.FeatureTypes;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using S100FC.S128.FeatureTypes;
 
 namespace S100FC.ProductCatalogue
 {

@@ -4,6 +4,7 @@ using GeoAPI.Geometries;
 using NetTopologySuite.Geometries;
 using S100Framework.REST.Abstractions;
 using S100Framework.REST.Clients;
+using S100Framework.REST.Models;
 using System.IO.Compression;
 using System.Text;
 
@@ -15,6 +16,158 @@ namespace S100FC.ProductCatalogue
 
         static readonly GeometryFactory factory = new GeometryFactory(new PrecisionModel(10000000), srid: 4326); // Or PrecisionModels.Floating
 
+        public static async Task<S100FC.Topology.IMatrix?> BuildTopology(this FeatureServiceClient client, Action<ICollection<LineString>>? interceptor = default) {
+            var matrix = S100FC.Topology.Matrix.CreateMatrix(interceptor);
+
+            S100FC.Topology.ITopologyBuilder? builder = default;
+            var s101Clause = "upper(ps) = 'S-101' ";
+
+            //  Skin of the Earth
+            {
+                var polygons = new List<S100FC.Topology.Polygon>();
+
+                var surfaceClient = await client.GetLayerClientAsync("surface");
+
+                var surfaceFeatures = await surfaceClient.QueryAsync(new FeatureQuery {
+                    Where = $"upper(ps) = 'S-101' AND (upper(code) IN ('DEPTHAREA','DREDGEDAREA','LANDAREA','UNSURVEYEDAREA'))",
+                    ReturnGeometry = true,
+                }).ToListAsync();
+
+                foreach (var surfaceFeature in surfaceFeatures) {
+                    var f = surfaceFeature;
+                    var shape = f.Geometry as NetTopologySuite.Geometries.Polygon;
+
+                    var name = $"{f.Attributes["UID"]}";
+                    var code = $"{f.Attributes["code"]}";
+
+                    var exteriorRing = shape.ExteriorRing.RemoveRepeatedVertices();
+                    var interiorRings = new List<LineString>();
+
+                    for (int i = 0; i < shape.NumInteriorRings; i++) {
+                        var ring = (LineString)shape.GetInteriorRingN(i).RemoveRepeatedVertices();
+                        interiorRings.Add(ring);
+                    }
+
+                    polygons.Add(new S100FC.Topology.Polygon(f.ObjectId!.Value, name, code, exteriorRing, [.. interiorRings]
+                        )
+                    );
+
+                }
+
+
+                var curves = new List<S100FC.Topology.Polyline>();
+
+                var curveClient = await client.GetLayerClientAsync("curve");
+
+                var curveFeatures = await curveClient.QueryAsync(new FeatureQuery {
+                    Where = $"upper(ps) = 'S-101' AND (upper(code) IN ('DEPTHAREA','DREDGEDAREA','LANDAREA','UNSURVEYEDAREA'))",
+                    ReturnGeometry = true,
+                }).ToListAsync();
+
+                foreach (var curveFeature in curveFeatures) {
+                    var f = curveFeature;
+                    var shape = f.Geometry as LineString;
+                    var name = $"{f.Attributes["UID"]}";
+                    var code = $"{f.Attributes["code"]}";
+
+                    var linestring = shape.RemoveRepeatedVertices();
+
+                    curves.Add(new S100FC.Topology.Polyline(f.ObjectId.Value!, name, code, linestring));
+                }
+
+                builder = matrix.AddTopologyFeatures(polygons, curves);
+
+            }
+
+
+
+            //  Navigational features
+            {
+                var polygons = new List<S100FC.Topology.Polygon>();
+
+                var surfaceClient = await client.GetLayerClientAsync("surface");
+
+                var surfaceFeatures = await surfaceClient.QueryAsync(new FeatureQuery {
+                    Where = $"upper(ps) = 'S-101' AND (upper(code) NOT IN ('DEPTHAREA','DREDGEDAREA','LANDAREA','UNSURVEYEDAREA'))",
+                    ReturnGeometry = true,
+                }).ToListAsync();
+
+
+                foreach (var surfaceFeature in surfaceFeatures) {
+                    var f = surfaceFeature;
+
+                    var shape = f.Geometry as NetTopologySuite.Geometries.Polygon;
+
+
+                    var name = $"{f.Attributes["UID"]}";
+                    var code = $"{f.Attributes["code"]}";
+
+                    var exteriorRing = (LineString)shape.ExteriorRing.RemoveRepeatedVertices();
+
+                    var interiorRings = new List<LineString>();
+
+                    for (int i = 0; i < shape.NumInteriorRings; i++) {
+                        var ring = (LineString)shape.GetInteriorRingN(i).RemoveRepeatedVertices();
+                        interiorRings.Add(ring);
+                    }
+
+                    polygons.Add(new S100FC.Topology.Polygon(f.ObjectId.Value!, name, code, exteriorRing, [.. interiorRings]));
+                }
+
+
+                var curves = new List<S100FC.Topology.Polyline>();
+                var singletons = new List<S100FC.Topology.Polyline>();
+
+                var singletonsFeatures = "''";// "'ROAD','RAILWAY'";  //'NAVIGATIONLINE','RECOMMENDEDTRACK'
+
+                // Not in singleton features
+                var curveClient = await client.GetLayerClientAsync("curve");
+                {
+                    var curveFeatures = await curveClient.QueryAsync(new FeatureQuery {
+                        Where = $"upper(ps) = 'S-101' AND (upper(code) NOT IN ('COASTLINE','DEPTHCONTOUR','SHORELINECONSTRUCTION')) AND (upper(code) NOT IN ({singletonsFeatures}))",
+                        ReturnGeometry = true,
+                    }).ToListAsync();
+
+                    foreach (var curveFeature in curveFeatures) {
+                        var f = curveFeature;
+                        var shape = f.Geometry as LineString;
+                        var name = $"{f.Attributes["UID"]}";
+                        var code = $"{f.Attributes["code"]}";
+
+                        var linestring = shape.RemoveRepeatedVertices();
+
+                        curves.Add(new S100FC.Topology.Polyline(f.ObjectId.Value!, name, code, linestring));
+                    }
+                }
+
+                // In singleton features
+                {
+                    var curveFeatures = await curveClient.QueryAsync(new FeatureQuery {
+                        Where = $"upper(ps) = 'S-101' AND (upper(code) IN ({singletonsFeatures}))",
+                        ReturnGeometry = true,
+                    }).ToListAsync();
+
+                    foreach (var curveFeature in curveFeatures) {
+                        var f = curveFeature;
+                        var shape = f.Geometry as LineString;
+                        var name = $"{f.Attributes["UID"]}";
+                        var code = $"{f.Attributes["code"]}";
+
+
+                        var linestring = shape.RemoveRepeatedVertices();
+
+                        curves.Add(new S100FC.Topology.Polyline(f.ObjectId.Value!, name, code, linestring));
+                    }
+                }
+
+
+                builder = matrix.AddNavigationalFeatures(polygons, curves);//.AddSingletonFeatures(singletons);
+            }
+
+            var result = builder.BuildTopology();
+
+            return result;
+        }
 
         public static S100FC.Topology.IMatrix? BuildTopology(this Geodatabase geodatabase, QueryFilter? queryFilter = default, Action<ICollection<LineString>>? interceptor = default) {
             queryFilter = queryFilter switch {
@@ -235,13 +388,6 @@ namespace S100FC.ProductCatalogue
             return result;
         }
 
-        public static async Task<IFeatureLayerClient> GetLayerClient(this FeatureServiceClient client, string name) {
-            var metadata = await client.GetMetadataAsync();
-
-            var id = metadata.Layers.FirstOrDefault(e => e.Name.Equals(name, StringComparison.InvariantCultureIgnoreCase))?.Id;
-
-            return client.GetLayerClient(id!.Value);
-        }
 
         public static MemoryStream ZipIt(string yaml, string index, string sign) {
             var zipStream = new MemoryStream();
