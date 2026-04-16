@@ -47,41 +47,24 @@ namespace ProductCatalogueAPI.Controllers
         /// <summary>
         /// Get all product names in the database
         /// </summary>
-        /// <returns>An collection with all productnames</returns>f
+        /// <returns>An ESRI json feature collection for all product AOIs</returns>
         [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpGet("aoi")]
         public async Task<IActionResult> GetAllElectronicProductsAOI() {
-            var sw = Stopwatch.StartNew();
-            //var response = new ApiResponse<string>();
             var aois = await _electronicProductManager.GetDatasetAOIs();
             var features = new List<object>();
 
-            foreach (var a in aois) {
-                var electronicProduct = _electronicProductManager.ElectronicProduct(a.Key);
+            foreach (var aoi in aois) {
+                var electronicProduct = _electronicProductManager.ElectronicProduct(aoi.Key);
 
                 if (electronicProduct == null) {
-                    logger.LogWarning("No electronic product found for dataset {dataset}", a.Key);
+                    logger.LogWarning("No electronic product found for dataset {dataset}", aoi.Key);
                     continue;
-                }
+                }   
 
-                var polygon = a.Value;
-
-                //var env = polygon.Extent;
-
-                //// simplify coordinates
-                //var rectangle = PolygonBuilder.CreatePolygon(
-                //[
-                //    new Coordinate2D(env.XMin, env.YMin),
-                //    new Coordinate2D(env.XMax, env.YMin),
-                //    new Coordinate2D(env.XMax, env.YMax),
-                //    new Coordinate2D(env.XMin, env.YMax),
-                //    new Coordinate2D(env.XMin, env.YMin)
-                //], SpatialReferences.WGS84);
-
-                var current = await _repository.GetCurrentByNameAsync(a.Key);
-
-                // var esriGeometry = GeometryEngine.Instance.ExportToJson(JsonExportFlags.JsonExportSkipCRS, rectangle);
+                var polygon = aoi.Value;
+                var current = await _repository.GetCurrentByNameAsync(aoi.Key);
 
                 features.Add(new {
                     geometry = polygon, // JsonSerializer.Deserialize<object>(polygon),

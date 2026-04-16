@@ -28,7 +28,7 @@ namespace ProductCatalogueAPI
                 .MinimumLevel.Information()
                 .WriteTo.Console()
                 .WriteTo.File(
-                    path: "bootstrap.log",    // Log in project root
+                    path: "logs/bootstrap.log",    // Log in project root
                     rollingInterval: RollingInterval.Infinite,
                     retainedFileCountLimit: 1,
                     shared: true)
@@ -48,7 +48,7 @@ namespace ProductCatalogueAPI
              .Enrich.FromLogContext()
              .WriteTo.Console()
              .WriteTo.File(
-                path: "ProductCatalogueAPI.log",
+                path: "logs/ProductCatalogueAPI.log",
                 rollingInterval: RollingInterval.Infinite,
                 retainedFileCountLimit: 1,
                 shared: true,
