@@ -21,7 +21,7 @@
 	  <PackageReference Include="S100Framework.Catalogues" Version="3.1.8" />
 	  <PackageReference Include="S100Framework.Catalogues.ProductSpecifications" Version="3.1.8" />
 	  <PackageReference Include="S100Framework.Topology" Version="3.1.8" />
-	  <PackageReference Include="S100Framework.YAML" Version="3.7.1772.10" />
+	  <PackageReference Include="S100Framework.YAML" Version="3.7.1772.11" />
 	</ItemGroup>
 
 	<ItemGroup>
