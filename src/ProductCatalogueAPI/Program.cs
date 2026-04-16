@@ -201,21 +201,26 @@ namespace ProductCatalogueAPI
             builder.Services.AddMemoryCache();
 
             // Mail-Handling
-            builder.Services
-                .AddOptions<MailImportOptions>()
-                .Bind(builder.Configuration.GetSection(MailImportOptions.SectionName))
-                .ValidateOnStart();
-            builder.Services.AddScoped<IProductStatusEmailParser, ProductStatusEmailParser>();
-            builder.Services.AddScoped<ProcessProductStatusEmailsJob>();
+            try {
+                builder.Services
+                    .AddOptions<MailImportOptions>()
+                    .Bind(builder.Configuration.GetSection(MailImportOptions.SectionName))
+                    .ValidateOnStart();
+                builder.Services.AddScoped<IProductStatusEmailParser, ProductStatusEmailParser>();
+                builder.Services.AddScoped<ProcessProductStatusEmailsJob>();
 
-            // Graph
-            builder.Services
-                .AddOptions<GraphAuthOptions>()
-                .Bind(builder.Configuration.GetSection(GraphAuthOptions.SectionName))
-                .ValidateOnStart();
+                // Graph
+                builder.Services
+                    .AddOptions<GraphAuthOptions>()
+                    .Bind(builder.Configuration.GetSection(GraphAuthOptions.SectionName))
+                    .ValidateOnStart();
 
-            builder.Services.AddSingleton<IGraphClientFactory, GraphClientFactory>();
-            builder.Services.AddScoped<IGraphMailReaderService, GraphMailReaderService>();
+                builder.Services.AddSingleton<IGraphClientFactory, GraphClientFactory>();
+                builder.Services.AddScoped<IGraphMailReaderService, GraphMailReaderService>();
+            }
+            catch (Exception ex) {
+                Log.Error(ex, "Failed to configure mail import services. Mail import functionality will be unavailable.");
+            }
 
             var app = builder.Build();
 

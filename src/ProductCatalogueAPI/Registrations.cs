@@ -15,17 +15,14 @@ namespace ProductCatalogueAPI
                 var path = configuration.GetSection("Connections")["S128Connection"];
 
                 if (string.IsNullOrWhiteSpace(path) || !Path.Exists(path))
-                    throw new InvalidOperationException($"S128:ConnectionFile is not configured or insufficient access: {path}");
+                    throw new InvalidOperationException($"S128:ConnectionFile is either not configured or the system has insufficient access to the file: {path}");
 
-                Log.Information("S100-Horizon-S128-Database: {env}", path);
-
-                if (string.IsNullOrEmpty(path))
-                    throw new ArgumentNullException("Environment variable for S128-Database is null!");
+                Log.Information("Connecting to S128-Database: {path}", path);
 
                 var productManager = await S100FC.ProductCatalogue.ProductManagerGDB.CreateInstanceAsync(() => {
                     if (".sde".Equals(System.IO.Path.GetExtension(path), StringComparison.OrdinalIgnoreCase)) {
                         var connectionFile = new DatabaseConnectionFile(new Uri(System.IO.Path.GetFullPath(path)));
-
+                        
                         return new Geodatabase(connectionFile);
                     }
                     else if (".gdb".Equals(System.IO.Path.GetExtension(path), StringComparison.OrdinalIgnoreCase)) {
