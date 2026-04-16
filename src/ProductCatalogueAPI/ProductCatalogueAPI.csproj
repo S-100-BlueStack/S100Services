@@ -11,18 +11,27 @@
 
 	<ItemGroup>
 		<Compile Remove="exports\**" />
+		<Compile Remove="logs\**" />
 		<Compile Remove="s100ed9.gdb\**" />
 		<Content Remove="exports\**" />
+		<Content Remove="logs\**" />
 		<Content Remove="s100ed9.gdb\**" />
 		<EmbeddedResource Remove="exports\**" />
+		<EmbeddedResource Remove="logs\**" />
 		<EmbeddedResource Remove="s100ed9.gdb\**" />
 		<None Remove="exports\**" />
+		<None Remove="logs\**" />
 		<None Remove="s100ed9.gdb\**" />
+		<Page Remove="logs\**" />
+		<PRIResource Remove="logs\**" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<None Remove="101_Feature_Catalogue_2.0.0.xml" />
+		<None Remove="bootstrap.log" />
+		<None Remove="ProductCatalogueAPI.log" />
 		<None Remove="products.geojson" />
+		<None Remove="s100edX.gdb.zip" />
 	</ItemGroup>
 
 	<ItemGroup>

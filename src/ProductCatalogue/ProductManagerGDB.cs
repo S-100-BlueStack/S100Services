@@ -187,7 +187,10 @@ namespace S100FC.ProductCatalogue
 
                         var flattened = electronicProduct.Flatten();
                         buffer["attributebindings"] = flattened;
-                        buffer["shape"] = boundary;
+
+                        // cast to EsriGeometry
+                        var shape = ArcGIS.Core.Geometry.GeometryEngine.Instance.ImportFromJson(JsonImportFlags.JsonImportDefaults, boundary);
+                        buffer["shape"] = shape;
                         surface.CreateRow(buffer);
 
                         var result = this._electronicProducts.TryAdd(name, electronicProduct);

@@ -8,19 +8,10 @@ namespace TestProductCatalogueAPI
 {
     public class ProductRepositoryTests
     {
-        private readonly ProductRepository _repository;
+        private readonly IProductRepository _repository;
         private readonly ITestOutputHelper _output;
         public ProductRepositoryTests(ITestOutputHelper output) {
-            var connectionFile = Environment.GetEnvironmentVariable("productmanager_systemdb_dev");
-            var config = new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    { "Connections:SystemConnection", connectionFile }
-                })
-                .Build();
-
-            var factory = new DbConnectionFactory(config);
-            _repository = new ProductRepository(factory);
+            _repository = new InMemoryProductRepository();
 
             _output = output;
         }

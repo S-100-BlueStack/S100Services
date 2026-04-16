@@ -136,11 +136,15 @@ public class InMemoryProductRepository : IProductRepository
 {
     private readonly List<ProductRecord> _products = [];
 
+    private static readonly DateTime MaxDate = new(9999, 12, 31);
+
     public Task AppendAsync(string name, ProductState state, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null) {
         _products.Add(new ProductRecord {
             Name = name,
             State = state,
             Owner = owner,
+            Date_From = DateTime.UtcNow,
+            Date_to = MaxDate,
         });
 
         return Task.CompletedTask;
