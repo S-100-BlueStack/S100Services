@@ -3,7 +3,6 @@
     <Platform Name="Any CPU" />
     <Platform Name="x64" />
   </Configurations>
-  <Project Path="../S100Framework/src/S100Framework.REST/S100Framework.REST.csproj" />
   <Project Path="src/ProductCatalogue/ProductCatalogue.csproj">
     <BuildType Project="Debug" />
     <Platform Project="x64" />
