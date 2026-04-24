@@ -1,12 +1,11 @@
-﻿using ArcGIS.Core.Data.UtilityNetwork.Trace;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Services.ExchangeSet;
 using S100FC.ProductCatalogue;
 using S100FC.YAML;
 using System.Diagnostics;
-using static ProductCatalogueAPI.Models.RequestTypes;
 using static ProductCatalogueAPI.Models.ResponseTypes;
 using IO = System.IO;
 
@@ -14,11 +13,12 @@ namespace ProductCatalogueAPI.Controllers
 {
     [Authorize("productmanager:manage")]
     [ApiController]
-    public class ExportController(ILogger<ExportController> logger, IMemoryCache cache, IExchangeSetService exchangeSetService, IProductManager productManager) : ControllerBase
+    public class ExportController(ILogger<ExportController> logger, IMemoryCache cache, IExchangeSetService exchangeSetService, IProductManager productManager, IProductRepository productRepository) : ControllerBase
     {
         private readonly ILogger<ExportController> _logger = logger;
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
         private readonly IExchangeSetService _exchangeSetService = exchangeSetService;
+        private readonly IProductRepository _productRepository;
         private readonly IMemoryCache _cache = cache;
 
 
@@ -35,6 +35,9 @@ namespace ProductCatalogueAPI.Controllers
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse();
 
+            var user = User?.Identity?.Name;
+            _logger.LogInformation("{NewEdition} called with name: {name} by user: {user}", nameof(NewEdition), name, user);
+
             var product = _electronicProductManager.ElectronicProduct(name);
 
             if (product == null) {
@@ -47,7 +50,7 @@ namespace ProductCatalogueAPI.Controllers
             var dataset = await _electronicProductManager.CreateNewEditionAsync(name);
 
             // Ensure updated edition/updateNo from the product
-            product = _electronicProductManager.ElectronicProduct(name)!;
+            //product = _electronicProductManager.ElectronicProduct(name)!;
 
             var yaml = dataset.Serialize();
 
@@ -64,7 +67,7 @@ namespace ProductCatalogueAPI.Controllers
 
             await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
 
-            // TODO: save in repo
+            await _productRepository.AppendAsync(name, Data.Models.ProductState.NewEdition, user);
 
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
@@ -83,6 +86,9 @@ namespace ProductCatalogueAPI.Controllers
         public async Task<IActionResult> NewUpdate(string name = "101DK0040349E") {
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse();
+
+            var user = User?.Identity?.Name;
+            _logger.LogInformation("{NewUpdate} called with name: {name} by user: {user}", nameof(NewUpdate), name, user);
 
             // Check if product has any updates before creating new update
             var product = _electronicProductManager.ElectronicProduct(name);
@@ -106,7 +112,7 @@ namespace ProductCatalogueAPI.Controllers
             var dataset = await _electronicProductManager.CreateNewUpdateAsync(name);
 
             // Ensure updated edition/updateNo from the product
-            product = _electronicProductManager.ElectronicProduct(name)!;
+            //product = _electronicProductManager.ElectronicProduct(name)!;
 
             var incoming = dataset.Serialize();
 
@@ -138,6 +144,8 @@ namespace ProductCatalogueAPI.Controllers
 
             await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.Update, update, result.Index, result.Sign);
 
+            await _productRepository.AppendAsync(name, Data.Models.ProductState.NewUpdate, user);
+
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
         }
@@ -154,6 +162,9 @@ namespace ProductCatalogueAPI.Controllers
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse();
 
+            var user = User?.Identity?.Name;
+            _logger.LogInformation("{newDataset} called with name: {name} by user: {user}", nameof(NewDataset), name, user);
+
             var product = _electronicProductManager.ElectronicProduct(name);
 
             if (product == null) {
@@ -166,7 +177,7 @@ namespace ProductCatalogueAPI.Controllers
             var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
 
             // Ensure updated edition/updateNo from the product
-            product = _electronicProductManager.ElectronicProduct(name)!;
+            //product = _electronicProductManager.ElectronicProduct(name)!;
 
             var yaml = dataset.Serialize();
 
@@ -174,6 +185,8 @@ namespace ProductCatalogueAPI.Controllers
             var result = _exchangeSetService.CreateExchangeSet(product, _electronicProductManager.OutputFolder, yaml);
 
             await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
+
+            await _productRepository.AppendAsync(name, Data.Models.ProductState.Ready, user);
 
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
@@ -207,7 +220,7 @@ namespace ProductCatalogueAPI.Controllers
                     var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
 
                     // Ensure updated edition/updateNo from the product
-                    product = _electronicProductManager.ElectronicProduct(name)!;
+                    //product = _electronicProductManager.ElectronicProduct(name)!;
 
                     var yaml = dataset.Serialize();
 
@@ -215,6 +228,8 @@ namespace ProductCatalogueAPI.Controllers
 
                     await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
                     _logger.LogInformation("Exchangeset created successfully");
+
+                    await _productRepository.AppendAsync(name, Data.Models.ProductState.Ready);
                 }
                 catch (InvalidOperationException) {
                     _logger.LogWarning("Dataset already has update. skipping");

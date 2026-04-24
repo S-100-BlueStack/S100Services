@@ -226,9 +226,6 @@ namespace S100FC.ProductCatalogue
             result.ElectronicProduct.editionNumber = 1;
             result.ElectronicProduct.updateNumber = 0;
 
-            this._electronicProducts[name].editionNumber = 1;
-            this._electronicProducts[name].updateNumber = 0;
-
             return await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, ExportTypes.NewDataset);
         }
 
@@ -246,8 +243,6 @@ namespace S100FC.ProductCatalogue
             result.ElectronicProduct.editionNumber += 1;
             result.ElectronicProduct.updateNumber = 0;
 
-            this._electronicProducts[name].editionNumber = +1;
-            this._electronicProducts[name].updateNumber = 0;
 
             return await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, ExportTypes.NewEdition);
         }
@@ -264,7 +259,6 @@ namespace S100FC.ProductCatalogue
 
 
             result.ElectronicProduct.updateNumber += 1;
-            this._electronicProducts[name].updateNumber += 1;
 
             return await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, ExportTypes.Update);
         }
@@ -533,46 +527,46 @@ namespace S100FC.ProductCatalogue
                 var topology = connection.BuildTopology(filter)!;
 
                 //  InformationTypes
-                try {
-                    using var informationType = connection.OpenDataset<Table>(this.QualifyTableName("informationtype"));
+                //try {
+                //    using var informationType = connection.OpenDataset<Table>(this.QualifyTableName("informationtype"));
 
-                    using var informationCursor = informationType.Search();
-                    while (informationCursor.MoveNext()) {
-                        var current = informationCursor.Current;
+                //    using var informationCursor = informationType.Search();
+                //    while (informationCursor.MoveNext()) {
+                //        var current = informationCursor.Current;
 
-                        var name = $"{current.UID()}";
-                        var code = current["code"].ToString()!;
-                        var flatten = current.FindField("attributebindings") != -1 &&
-                            current["attributebindings"] != null &&
-                            current["attributebindings"] != DBNull.Value ?
-                            current["attributebindings"].ToString() :
-                            string.Empty;
+                //        var name = $"{current.UID()}";
+                //        var code = current["code"].ToString()!;
+                //        var flatten = current.FindField("attributebindings") != -1 &&
+                //            current["attributebindings"] != null &&
+                //            current["attributebindings"] != DBNull.Value ?
+                //            current["attributebindings"].ToString() :
+                //            string.Empty;
 
-                        var type = featureCatalogue.Assembly!.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "InformationTypes")}.{code}", true)!;
-                        var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.InformationType>(flatten, type);
+                //        var type = featureCatalogue.Assembly!.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "InformationTypes")}.{code}", true)!;
+                //        var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.InformationType>(flatten, type);
 
-                        var information = new YAML.Information {
-                            Name = code,
-                            ID = name,
-                        };
-                        // Only emit attributes if feature contains any non-static properties
-                        if (instance?.attributeBindings.Length > 0)
-                            information.Attributes = instance!;
+                //        var information = new YAML.Information {
+                //            Name = code,
+                //            ID = name,
+                //        };
+                //        // Only emit attributes if feature contains any non-static properties
+                //        if (instance?.attributeBindings.Length > 0)
+                //            information.Attributes = instance!;
 
-                        informationTypes.Add(information);
+                //        informationTypes.Add(information);
 
-                        var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
+                //        var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
 
-                        foreach (var filename in filenames) {
-                            if (!supportFiles.Contains(filename)) {
-                                supportFiles.Add(filename);
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex) {
-                    Log.Information("Table: informationtype: {message} ", ex.Message);
-                }
+                //        foreach (var filename in filenames) {
+                //            if (!supportFiles.Contains(filename)) {
+                //                supportFiles.Add(filename);
+                //            }
+                //        }
+                //    }
+                //}
+                //catch (Exception ex) {
+                //    Log.Information("Table: informationtype: {message} ", ex.Message);
+                //}
 
                 // FeatureType
                 try {
@@ -704,85 +698,85 @@ namespace S100FC.ProductCatalogue
                                 Attributes = instance?.attributeBindings.Length > 0 ? instance : null,
                             };
 
-                            // Information Associations
-                            if (!current.IsNull("informationbindings")) {
-                                try {
-                                    var informationBindings = System.Text.Json.JsonSerializer.Deserialize<informationBinding[]>(Convert.ToString(current["informationbindings"])!, this.jsonSerializerOptionsS101);
+                            //// Information Associations
+                            //if (!current.IsNull("informationbindings")) {
+                            //    try {
+                            //        var informationBindings = System.Text.Json.JsonSerializer.Deserialize<informationBinding[]>(Convert.ToString(current["informationbindings"])!, this.jsonSerializerOptionsS101);
 
-                                    if (informationBindings != default && informationBindings.Length != 0) {
-                                        foreach (var binding in informationBindings) {
+                            //        if (informationBindings != default && informationBindings.Length != 0) {
+                            //            foreach (var binding in informationBindings) {
 
-                                            var isValid = binding.Validate();
+                            //                var isValid = binding.Validate();
 
-                                            if (!isValid)
-                                                continue;
+                            //                if (!isValid)
+                            //                    continue;
 
-                                            var asso = new YAML.Association {
-                                                Name = binding.informationType!, // binding.GetType().GenericTypeArguments[0].Name,
-                                                Role = binding.role,
-                                                To = binding.informationId
-                                            };
+                            //                var asso = new YAML.Association {
+                            //                    Name = binding.informationType!, // binding.GetType().GenericTypeArguments[0].Name,
+                            //                    Role = binding.role,
+                            //                    To = binding.informationId
+                            //                };
 
-                                            if (!informationsTypesAdded.Contains(binding.informationId!)) {
-                                                dataset!.AddInformation(informationTypes.Single(e => e.ID!.Equals(binding.informationId!)));
-                                                informationsTypesAdded.Add(binding.informationId!);
-                                            }
+                            //                if (!informationsTypesAdded.Contains(binding.informationId!)) {
+                            //                    dataset!.AddInformation(informationTypes.Single(e => e.ID!.Equals(binding.informationId!)));
+                            //                    informationsTypesAdded.Add(binding.informationId!);
+                            //                }
 
 
-                                            // Special case for SpatialAssociation. Add to dictionary for later processing.
-                                            if (prim != Primitive.Surface && asso.Name.Equals("SpatialAssociation", StringComparison.CurrentCultureIgnoreCase))
-                                                spatialAssociations.TryAdd(geometry, asso);
-                                            else
-                                                feature?.AddAssociation(asso);
-                                        }
-                                    }
-                                }
-                                catch (Exception ex) {
-                                    Log.Warning(ex, "Error deserializing informationbindings for feature {name}: {message}", name, ex.Message);
-                                }
-                            }
+                            //                // Special case for SpatialAssociation. Add to dictionary for later processing.
+                            //                if (prim != Primitive.Surface && asso.Name.Equals("SpatialAssociation", StringComparison.CurrentCultureIgnoreCase))
+                            //                    spatialAssociations.TryAdd(geometry, asso);
+                            //                else
+                            //                    feature?.AddAssociation(asso);
+                            //            }
+                            //        }
+                            //    }
+                            //    catch (Exception ex) {
+                            //        Log.Warning(ex, "Error deserializing informationbindings for feature {name}: {message}", name, ex.Message);
+                            //    }
+                            //}
 
-                            // Feature Associations
-                            if (!current.IsNull("featurebindings")) {
-                                try {
-                                    var featureBindings = System.Text.Json.JsonSerializer.Deserialize<featureBinding[]>(Convert.ToString(current["featurebindings"])!, this.jsonSerializerOptionsS101);
+                            //// Feature Associations
+                            //if (!current.IsNull("featurebindings")) {
+                            //    try {
+                            //        var featureBindings = System.Text.Json.JsonSerializer.Deserialize<featureBinding[]>(Convert.ToString(current["featurebindings"])!, this.jsonSerializerOptionsS101);
 
-                                    if (featureBindings != default && featureBindings.Length != 0) {
-                                        foreach (var binding in featureBindings) {
+                            //        if (featureBindings != default && featureBindings.Length != 0) {
+                            //            foreach (var binding in featureBindings) {
 
-                                            // check if valid
-                                            var isValid = binding.Validate();
+                            //                // check if valid
+                            //                var isValid = binding.Validate();
 
-                                            if (!isValid)
-                                                continue;
+                            //                if (!isValid)
+                            //                    continue;
 
-                                            var roleType = binding.roleType;
+                            //                var roleType = binding.roleType;
 
-                                            // Skip association roleType
-                                            if (roleType == "association")
-                                                continue;
+                            //                // Skip association roleType
+                            //                if (roleType == "association")
+                            //                    continue;
 
-                                            var asso = new YAML.Association {
-                                                Name = binding.featureType!, // binding.GetType().GenericTypeArguments[0].Name,
-                                                Role = binding.role,
-                                                To = $"110:{binding!.featureId!.Substring(1)}:1"
-                                            };
+                            //                var asso = new YAML.Association {
+                            //                    Name = binding.featureType!, // binding.GetType().GenericTypeArguments[0].Name,
+                            //                    Role = binding.role,
+                            //                    To = $"110:{binding!.featureId!.Substring(1)}:1"
+                            //                };
 
-                                            feature?.AddFeatureAssociation(asso);
+                            //                feature?.AddFeatureAssociation(asso);
 
-                                            var noGeometry = featureTypes.SingleOrDefault(e => e.Foid.Equals($"110:{binding.featureId.Substring(1)}:1"));
-                                            if (noGeometry != null && !featureTypesAdded.Contains(binding.featureId)) {
-                                                featureTypesAdded.Add(binding.featureId);
-                                                dataset?.AddFeature(noGeometry);
-                                            }
-                                        }
-                                    }
+                            //                var noGeometry = featureTypes.SingleOrDefault(e => e.Foid.Equals($"110:{binding.featureId.Substring(1)}:1"));
+                            //                if (noGeometry != null && !featureTypesAdded.Contains(binding.featureId)) {
+                            //                    featureTypesAdded.Add(binding.featureId);
+                            //                    dataset?.AddFeature(noGeometry);
+                            //                }
+                            //            }
+                            //        }
 
-                                }
-                                catch (Exception ex) {
-                                    Log.Warning(ex, "Error deserializing featurebindings for feature {name}: {message}", name, ex.Message);
-                                }
-                            }
+                            //    }
+                            //    catch (Exception ex) {
+                            //        Log.Warning(ex, "Error deserializing featurebindings for feature {name}: {message}", name, ex.Message);
+                            //    }
+                            //}
 
                             dataset?.AddFeature(feature!);
 
