@@ -182,11 +182,10 @@ namespace ProductCatalogueAPI
             });
 
 
-            // TODO: Implement a persistent repository
             // System DB
-            builder.Services.AddSingleton<IProductRepository, InMemoryProductRepository>();
-            //builder.Services.AddSingleton<DbConnectionFactory>();
-            //builder.Services.AddScoped<IProductRepository, ProductRepository>();
+           // builder.Services.AddSingleton<IProductRepository, InMemoryProductRepository>();
+            builder.Services.AddSingleton<DbConnectionFactory>();
+            builder.Services.AddScoped<IProductRepository, ProductRepository>();
 
 
             // ExchangeServive

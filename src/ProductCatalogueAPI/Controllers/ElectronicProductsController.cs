@@ -172,7 +172,7 @@ namespace ProductCatalogueAPI.Controllers
             };
 
             // Todo: change argument to AOI and do arcgis core geometry conversion in productmanager
-            await _electronicProductManager.CreateElectronicProductAsync(product.Name, productSpecification, specificUsage, boundary, product.OptimumDisplayScale);
+            await _electronicProductManager.CreateElectronicProductAsync(product.Name, productSpecification, /*specificUsage,*/ boundary, product.OptimumDisplayScale);
 
             response.DurationMs = sw.ElapsedMilliseconds;
 

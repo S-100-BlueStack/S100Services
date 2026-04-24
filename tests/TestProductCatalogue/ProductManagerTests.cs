@@ -47,6 +47,75 @@ namespace TestProductCatalogueAPI
         }
 
 
+
+        [Fact]
+        public async Task Test_ImportLalaLand() {
+            var lalaLandSde = Environment.GetEnvironmentVariable("lalaland_import_sde", EnvironmentVariableTarget.User);
+            var s128 = Environment.GetEnvironmentVariable("s128_import", EnvironmentVariableTarget.User);
+
+            Assert.NotNull(lalaLandSde);
+            Assert.NotNull(s128);
+
+            var exist57 = IO.Path.Exists(lalaLandSde);
+            var exist128 = IO.Path.Exists(s128);
+
+            Assert.True(exist57 && exist128);
+
+            // S128 ProductManager
+            var productManager = await S100FC.ProductCatalogue.ProductManagerGDB.CreateInstanceAsync(() => {
+                if (".sde".Equals(System.IO.Path.GetExtension(s128), StringComparison.OrdinalIgnoreCase)) {
+                    var connectionFile = new DatabaseConnectionFile(new Uri(System.IO.Path.GetFullPath(s128)));
+
+                    return new Geodatabase(connectionFile);
+                }
+                else if (".gdb".Equals(System.IO.Path.GetExtension(s128), StringComparison.OrdinalIgnoreCase)) {
+                    var connectionFile = new FileGeodatabaseConnectionPath(new Uri(Path.GetFullPath(s128)));
+
+                    return new Geodatabase(connectionFile);
+                }
+                else {
+                    throw new InvalidOperationException("Connectionfile path for S128-Database is neither .gdb nor .sde");
+                }
+            });
+
+            // Build LalaLand arguments
+            var boundary = "";
+            var optimumDisplayScale = 22000;
+            var datasetName = "101DK00LALALAND";
+            var productSpecification = new S100FC.S128.ComplexAttributes.productSpecification {
+                editionDate = new DateOnly(2024, 10, 16),
+                name = "S-101",
+                version = "2.0.0",
+            };
+
+
+            var connectionFile = new DatabaseConnectionFile(new Uri(System.IO.Path.GetFullPath(lalaLandSde)));
+            var lalaGdb = new Geodatabase(connectionFile);
+
+            // fully qualified name usually required for enterprise GDB
+            using var table = lalaGdb.OpenDataset<FeatureClass>("S100.Surface");
+
+            using var cursor = table.Search(new QueryFilter() {
+                WhereClause = "flatten LIKE '%LALA%'",    // 101DK00LALALAND
+            }, false);
+
+            while (cursor.MoveNext()) {
+                using var row = cursor.Current as ArcGIS.Core.Data.Feature;
+
+                var geometry = row.GetShape() as Polygon;
+                boundary = geometry.ToJson();
+            }
+
+            Assert.True(!string.IsNullOrEmpty(boundary));
+
+            // Import
+            await productManager.ElectronicProductManager.CreateElectronicProductAsync(datasetName, productSpecification, boundary, optimumDisplayScale);
+
+
+            System.Diagnostics.Debugger.Break();
+        }
+
+
         [Fact]
         public async Task Test_ImportS128Products() {
             var s57 = Environment.GetEnvironmentVariable("s57_import");
@@ -123,8 +192,6 @@ namespace TestProductCatalogueAPI
                 }, true);
 
                 while (cursor.MoveNext()) {
-                    //if (productCount > 20)
-                    //    continue;
 
                     productCount++;
                     var c = cursor.Current;
@@ -144,9 +211,9 @@ namespace TestProductCatalogueAPI
                         _ => throw new InvalidDataException(),
                     };
 
-                    // ONLY DK4
-                    if (specificUsage == 4)
-                        continue;
+                    //// ONLY DK4
+                    //if (specificUsage == 4)
+                    //    continue;
 
                     using var coverage = tableProductCoverage.Search(new QueryFilter {
                         WhereClause = $"DSNM = '{Convert.ToString(c["DSNM"])}'",
@@ -164,72 +231,75 @@ namespace TestProductCatalogueAPI
 
                     var cover = (ArcGIS.Core.Geometry.Polygon)GeometryEngine.Instance.Union(polygons);
 
-                    tasks.Add(productManager.ElectronicProductManager.CreateElectronicProductAsync(name, productSpecification, specificUsage, cover.ToJson(), compilationScale));
+                    tasks.Add(productManager.ElectronicProductManager.CreateElectronicProductAsync(name, productSpecification, /*specificUsage,*/ cover.ToJson(), compilationScale));
                 }
             }
-            // });
 
-            // System.Diagnostics.Debugger.Break();
+            System.Diagnostics.Debugger.Break();
             await Task.WhenAll([.. tasks]);
 
             System.Diagnostics.Debugger.Break();
         }
 
 
-        [Fact]
-        public async Task Test_CreateDatasets() {
-            var s128 = Environment.GetEnvironmentVariable("s128_import", EnvironmentVariableTarget.User);
-            Assert.NotNull(s128);
-            var exist128 = IO.Path.Exists(s128);
-            Assert.True(exist128);
+        //[Fact]
+        //public async Task Test_CreateDatasets() {
+        //    var s128 = Environment.GetEnvironmentVariable("s128_import", EnvironmentVariableTarget.User);
+        //    Assert.NotNull(s128);
+        //    var exist128 = IO.Path.Exists(s128);
+        //    Assert.True(exist128);
 
-            // Null Logger, not important for this test
-            var exss = new ExchangeSetService(NullLogger<ExchangeSetService>.Instance);
+        //    // Null Logger, not important for this test
+        //    var exss = new ExchangeSetService(NullLogger<ExchangeSetService>.Instance);
 
-            // S128 ProductManager
-            var productManager = await S100FC.ProductCatalogue.ProductManagerGDB.CreateInstanceAsync(() => {
-                if (".sde".Equals(System.IO.Path.GetExtension(s128), StringComparison.OrdinalIgnoreCase)) {
-                    var connectionFile = new DatabaseConnectionFile(new Uri(System.IO.Path.GetFullPath(s128)));
+        //    // S128 ProductManager
+        //    var productManager = await S100FC.ProductCatalogue.ProductManagerGDB.CreateInstanceAsync(() => {
+        //        if (".sde".Equals(System.IO.Path.GetExtension(s128), StringComparison.OrdinalIgnoreCase)) {
+        //            var connectionFile = new DatabaseConnectionFile(new Uri(System.IO.Path.GetFullPath(s128)));
 
-                    return new Geodatabase(connectionFile);
-                }
-                else if (".gdb".Equals(System.IO.Path.GetExtension(s128), StringComparison.OrdinalIgnoreCase)) {
-                    var connectionFile = new FileGeodatabaseConnectionPath(new Uri(Path.GetFullPath(s128)));
+        //            return new Geodatabase(connectionFile);
+        //        }
+        //        else if (".gdb".Equals(System.IO.Path.GetExtension(s128), StringComparison.OrdinalIgnoreCase)) {
+        //            var connectionFile = new FileGeodatabaseConnectionPath(new Uri(Path.GetFullPath(s128)));
 
-                    return new Geodatabase(connectionFile);
-                }
-                else {
-                    throw new InvalidOperationException("Connectionfile path for S128-Database is neither .gdb nor .sde");
-                }
-            });
+        //            return new Geodatabase(connectionFile);
+        //        }
+        //        else {
+        //            throw new InvalidOperationException("Connectionfile path for S128-Database is neither .gdb nor .sde");
+        //        }
+        //    });
 
-            var products = productManager.ElectronicProductManager.ToArray();
+        //    var products = productManager.ElectronicProductManager.ToArray();
 
-            foreach (var productName in products) {
-                output.WriteLine($"Processing product {productName}");
-                var ds = productManager.ElectronicProductManager.ElectronicProduct(productName);
+        //    foreach (var productName in products) {
+        //        output.WriteLine($"Processing product {productName}");
+        //        var ds = productManager.ElectronicProductManager.ElectronicProduct(productName);
 
-                // avoid crashing on previous erros
-                if (ds.editionNumber.HasValue && ds.editionNumber > 0) {
-                    output.WriteLine($"Existing dataset found for product {productName}, skipping...");
-                    continue;
+        //        // avoid crashing on previous erros
+        //        if (ds.editionNumber.HasValue && ds.editionNumber > 0) {
+        //            output.WriteLine($"Existing dataset found for product {productName}, skipping...");
+        //            continue;
 
-                }
-                var dataset = await productManager.ElectronicProductManager.CreateNewDatasetAsync(productName);
-                var product = productManager.ElectronicProductManager.ElectronicProduct(productName);
+        //        }
+        //        var dataset = await productManager.ElectronicProductManager.CreateNewDatasetAsync(productName);
+        //        var product = productManager.ElectronicProductManager.ElectronicProduct(productName);
 
-                var yaml = dataset.Serialize();
+        //        var yaml = dataset.Serialize();
 
 
-                var datasetName = product.datasetName;
+        //        var datasetName = product.datasetName;
 
-                var result = exss.CreateExchangeSet(product, productManager.ElectronicProductManager.OutputFolder, yaml);
+        //        var result = exss.CreateExchangeSet(product, productManager.ElectronicProductManager.OutputFolder, yaml);
 
-                await productManager.ElectronicProductManager.CreateAttachmentAsync(datasetName, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
-            }
+        //        await productManager.ElectronicProductManager.CreateAttachmentAsync(datasetName, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
+        //    }
 
-            System.Diagnostics.Debugger.Break();
-        }
+        //    System.Diagnostics.Debugger.Break();
+        //}
+
+
+
+        // ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
         //        [Fact]

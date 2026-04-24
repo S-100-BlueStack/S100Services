@@ -8,9 +8,9 @@ namespace S100FC.ProductCatalogue
 
     public interface IElectronicProductManager : IEnumerable<string>
     {
-        Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, string boundary, int? optimumDisplayScale = null);
+        Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, /*S100FC.S128.SimpleAttributes.specificUsage specificUsage,*/ string boundary, int? optimumDisplayScale = null);
 
-        Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, string boundary, int edition, int update, byte[] zipfile);
+        Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, /*S100FC.S128.SimpleAttributes.specificUsage specificUsage,*/ string boundary, int edition, int update, byte[] zipfile);
 
         Task<YAML.Dataset> CreateNewDatasetAsync(string name);
 

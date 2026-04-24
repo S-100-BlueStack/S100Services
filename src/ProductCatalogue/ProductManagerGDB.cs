@@ -11,8 +11,6 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
-using System.IO.Compression;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using IO = System.IO;
@@ -99,7 +97,15 @@ namespace S100FC.ProductCatalogue
 
                         if (settings != null) {
                             var connections = settings.Connections.Select(e => {
-                                var uri = e.ConnectionFile == default ? this._geodatabase.GetPath() : e.ConnectionFile;
+                                // var uri = e.ConnectionFile; 
+                                var path = $"config/{e.ConnectionFile.OriginalString}";
+
+                                var exist = IO.Path.Exists(path);
+
+                                Log.Information("Adding connection for {productSpecification} with scale range {min}-{max} with connection file: {path}. File exists: {exist}", e.ProductSpecification, e.MinimumScale, e.MaximumScale, path, exist);
+
+                                var uri = new Uri(System.IO.Path.GetFullPath(path));
+
                                 return new Connection(e.ProductSpecification, e.MinimumScale, e.MaximumScale, uri);
                             });
 
@@ -154,7 +160,7 @@ namespace S100FC.ProductCatalogue
 
         #region IElectronicProductManager
 
-        async Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, string boundary, int? optimumDisplayScale) {
+        async Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, /*S100FC.S128.SimpleAttributes.specificUsage specificUsage,*/ string boundary, int? optimumDisplayScale) {
             if (string.IsNullOrEmpty(name))
                 throw new System.ArgumentNullException(nameof(name));
 
@@ -179,7 +185,7 @@ namespace S100FC.ProductCatalogue
                             issueDate = DateOnly.FromDateTime(DateTime.Now),
                             editionNumber = 0,
                             agencyResponsibleForProduction = "Danish Geodata Agency",
-                            specificUsage = specificUsage.value,
+                            // specificUsage = specificUsage.value,
                             productSpecification = productSpecification,
                             optimumDisplayScale = optimumDisplayScale,
                         };
@@ -201,7 +207,7 @@ namespace S100FC.ProductCatalogue
 
         }
 
-        Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, S100FC.S128.SimpleAttributes.specificUsage specificUsage, string boundary, int edition, int update, byte[] zipfile) => throw new NotImplementedException();
+        Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, /*S100FC.S128.SimpleAttributes.specificUsage specificUsage,*/ string boundary, int edition, int update, byte[] zipfile) => throw new NotImplementedException();
 
         async Task<YAML.Dataset> IElectronicProductManager.CreateNewDatasetAsync(string name) {
             if (string.IsNullOrEmpty(name))
@@ -220,6 +226,9 @@ namespace S100FC.ProductCatalogue
             result.ElectronicProduct.editionNumber = 1;
             result.ElectronicProduct.updateNumber = 0;
 
+            this._electronicProducts[name].editionNumber = 1;
+            this._electronicProducts[name].updateNumber = 0;
+
             return await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, ExportTypes.NewDataset);
         }
 
@@ -237,6 +246,9 @@ namespace S100FC.ProductCatalogue
             result.ElectronicProduct.editionNumber += 1;
             result.ElectronicProduct.updateNumber = 0;
 
+            this._electronicProducts[name].editionNumber = +1;
+            this._electronicProducts[name].updateNumber = 0;
+
             return await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, ExportTypes.NewEdition);
         }
 
@@ -252,6 +264,7 @@ namespace S100FC.ProductCatalogue
 
 
             result.ElectronicProduct.updateNumber += 1;
+            this._electronicProducts[name].updateNumber += 1;
 
             return await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, ExportTypes.Update);
         }

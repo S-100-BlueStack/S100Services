@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using ArcGIS.Core.Data.UtilityNetwork.Trace;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using ProductCatalogueAPI.Services.ExchangeSet;
@@ -44,6 +45,9 @@ namespace ProductCatalogueAPI.Controllers
             }
 
             var dataset = await _electronicProductManager.CreateNewEditionAsync(name);
+
+            // Ensure updated edition/updateNo from the product
+            product = _electronicProductManager.ElectronicProduct(name)!;
 
             var yaml = dataset.Serialize();
 
@@ -101,6 +105,9 @@ namespace ProductCatalogueAPI.Controllers
 
             var dataset = await _electronicProductManager.CreateNewUpdateAsync(name);
 
+            // Ensure updated edition/updateNo from the product
+            product = _electronicProductManager.ElectronicProduct(name)!;
+
             var incoming = dataset.Serialize();
 
             if (string.IsNullOrEmpty(incoming)) {
@@ -157,6 +164,10 @@ namespace ProductCatalogueAPI.Controllers
             }
 
             var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
+
+            // Ensure updated edition/updateNo from the product
+            product = _electronicProductManager.ElectronicProduct(name)!;
+
             var yaml = dataset.Serialize();
 
 
@@ -194,9 +205,15 @@ namespace ProductCatalogueAPI.Controllers
                     }
                     // Create exchange set
                     var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
+
+                    // Ensure updated edition/updateNo from the product
+                    product = _electronicProductManager.ElectronicProduct(name)!;
+
                     var yaml = dataset.Serialize();
 
-                    _exchangeSetService.CreateExchangeSet(product, _electronicProductManager.OutputFolder, yaml);
+                    var result = _exchangeSetService.CreateExchangeSet(product, _electronicProductManager.OutputFolder, yaml);
+
+                    await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
                     _logger.LogInformation("Exchangeset created successfully");
                 }
                 catch (InvalidOperationException) {
@@ -220,7 +237,5 @@ namespace ProductCatalogueAPI.Controllers
             response.Message = $"Datasets created: {products.Length}";
             return Ok(response);
         }
-
-
     }
 }

@@ -130,7 +130,7 @@ namespace ProductCatalogue
                 throw new Exception("Error occured during CreateAttachmentAsync.ApplyEditsAsync()");
         }
 
-        public async Task CreateElectronicProductAsync(string name, productSpecification productSpecification, specificUsage specificUsage, string boundary, int? optimumDisplayScale = null) {
+        public async Task CreateElectronicProductAsync(string name, productSpecification productSpecification, /*specificUsage specificUsage,*/ string boundary, int? optimumDisplayScale = null) {
             if (string.IsNullOrEmpty(name))
                 throw new System.ArgumentNullException(nameof(name));
 
@@ -149,7 +149,7 @@ namespace ProductCatalogue
                 issueDate = DateOnly.FromDateTime(DateTime.Now),
                 editionNumber = 0,
                 agencyResponsibleForProduction = "Danish Geodata Agency",
-                specificUsage = specificUsage.value,
+                // specificUsage = specificUsage.value,
                 productSpecification = productSpecification,
                 optimumDisplayScale = optimumDisplayScale,
             };
@@ -181,7 +181,7 @@ namespace ProductCatalogue
             Debug.Assert(result);
         }
 
-        public async Task CreateElectronicProductAsync(string name, productSpecification productSpecification, specificUsage specificUsage, string boundary, int edition, int update, byte[] zipfile) => throw new NotImplementedException();
+        public async Task CreateElectronicProductAsync(string name, productSpecification productSpecification, /*specificUsage specificUsage,*/ string boundary, int edition, int update, byte[] zipfile) => throw new NotImplementedException();
 
         public async Task<S100FC.YAML.Dataset> CreateNewDatasetAsync(string name) {
             if (string.IsNullOrEmpty(name))
