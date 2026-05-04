@@ -36,6 +36,8 @@ namespace ProductCatalogueAPI.Services.ExchangeSet
                 commandline += $" -L {prevIndexPath}";
             }
 
+            _logger.LogInformation("Starting S100 compiler for product: {product} with commandline: {commandline}", product.datasetName, commandline);
+
 
             var p = new Process();
             p.StartInfo.CreateNoWindow = true;
