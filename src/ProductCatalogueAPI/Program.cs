@@ -49,8 +49,8 @@ namespace ProductCatalogueAPI
              .WriteTo.Console()
              .WriteTo.File(
                 path: "logs/ProductCatalogueAPI.log",
-                rollingInterval: RollingInterval.Infinite,
-                retainedFileCountLimit: 1,
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: 365,
                 shared: true,
                 outputTemplate: outputTemplate)
              .CreateLogger();
@@ -130,6 +130,7 @@ namespace ProductCatalogueAPI
                     });
                 }
             });
+            Log.Information("Authorization policies configured");
 
             builder.Services.AddApiVersioning(options => {
                 options.AssumeDefaultVersionWhenUnspecified = true;
@@ -180,12 +181,14 @@ namespace ProductCatalogueAPI
                             DisableGlobalLocks = true
                         });
             });
-
+            Log.Information("Hangfire configured");
 
             // System DB
-           // builder.Services.AddSingleton<IProductRepository, InMemoryProductRepository>();
+            // builder.Services.AddSingleton<IProductRepository, InMemoryProductRepository>();
+            //Log.Information("InMemory SystemDB configured");
             builder.Services.AddSingleton<DbConnectionFactory>();
             builder.Services.AddScoped<IProductRepository, ProductRepository>();
+            Log.Information("SystemDB configured");
 
 
             // ExchangeServive

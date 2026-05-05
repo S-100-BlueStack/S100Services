@@ -18,7 +18,7 @@ namespace ProductCatalogueAPI.Controllers
         private readonly ILogger<ExportController> _logger = logger;
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
         private readonly IExchangeSetService _exchangeSetService = exchangeSetService;
-        private readonly IProductRepository _productRepository;
+        private readonly IProductRepository _productRepository = productRepository;
         private readonly IMemoryCache _cache = cache;
 
 

@@ -1,6 +1,7 @@
 ﻿using Dapper;
 using ProductCatalogueAPI.Data.Database;
 using ProductCatalogueAPI.Data.Models;
+using Serilog;
 
 namespace ProductCatalogueAPI.Data.Repositories;
 
@@ -26,10 +27,12 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
             AND date_to = @MaxDate
         """;
 
-        await conn.ExecuteAsync(
+        var count = await conn.ExecuteAsync(
             closeSql,
             new { Name = name, Now = now, MaxDate },
             transaction);
+
+        Log.Information("Existing record expired {expired}", (count == 1));
 
         // insert new version
         var insertSql = """

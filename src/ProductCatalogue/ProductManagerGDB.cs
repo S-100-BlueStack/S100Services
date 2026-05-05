@@ -102,7 +102,7 @@ namespace S100FC.ProductCatalogue
 
                                 var exist = IO.Path.Exists(path);
 
-                                Log.Information("Adding connection for {productSpecification} with scale range {min}-{max} with connection file: {path}. File exists: {exist}", e.ProductSpecification, e.MinimumScale, e.MaximumScale, path, exist);
+                                Log.Information("Adding connection for {productSpecification} with scale range {min}-{max} with connection file: {path}. Path exists: {exist}", e.ProductSpecification, e.MinimumScale, e.MaximumScale, path, exist);
 
                                 var uri = new Uri(System.IO.Path.GetFullPath(path));
 
