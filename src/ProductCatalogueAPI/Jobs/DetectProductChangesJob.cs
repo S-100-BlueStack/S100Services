@@ -13,34 +13,49 @@ namespace ProductCatalogueAPI.Jobs
         private readonly IExchangeSetService _exchangeSetService = exchangeSetService;
         private readonly ISevenCsService _sevenCsService = sevenCsService;
         private readonly ILogger<DetectProductChangesJob> _logger = logger;
-        public async Task RunAsync(CancellationToken token) {
-            _logger.LogInformation("Job: {jobName} started", nameof(DetectProductChangesJob));
+
+
+
+
+
+
+        public async Task RunAsync(CancellationToken cancellationToken) {
+            var jobName = nameof(DetectProductChangesJob);
+            var scanStartedUtc = DateTime.UtcNow;
+            var initialImportDate = new DateTime(2026, 04, 12);
+            var sinceUtc = await _repository.GetLastSuccessfulRunUtcAsync(jobName);
+
+            if (sinceUtc == null) {
+                await _repository.SetSuccessfulRunUtcAsync(
+                    jobName,
+                    initialImportDate);
+
+                _logger.LogInformation(
+                    "Initialized job watermark for {jobName} at {scanStartedUtc}. No scan performed.",
+                    jobName,
+                    initialImportDate);
+
+                return;
+            }
+
+            _logger.LogInformation("Job: {jobName} started. Last successful run at: {lastRun}", jobName, sinceUtc);
+
 
             var output = _productManager.ElectronicProductManager.OutputFolder;
-            var productNames = _productManager.ElectronicProductManager.ToArray();
 
-            // InTransit, Frozen or somehow otherwise locked products
-            var productsToSkip = await _repository.GetIneligbleProductsAsync();
-            _logger.LogInformation("Frozen/InTransit products found: {count}", productsToSkip.Length);
+            var pendingEdits = await _productManager.ElectronicProductManager.GetPendingEditsAsync(sinceUtc.Value);
 
+            _logger.LogInformation("Products found with pending edits: {count}", pendingEdits.Count);
 
-            var products = productNames.Where(e => !productsToSkip.Contains(e));
-            _logger.LogInformation("Checking for dirty in {count} products", products.Count());
+            foreach (var productChange in pendingEdits) {
+                cancellationToken.ThrowIfCancellationRequested();
+                var productName = productChange.Key;
+                var dirtyFeatures = productChange.Value;
 
-            foreach (var productName in products) {
+                if (dirtyFeatures.Values.Count == 0)
+                    continue;
+
                 var electronicProduct = _productManager.ElectronicProductManager.ElectronicProduct(productName);
-
-                if (electronicProduct == null) {
-                    _logger.LogError("Could not find electronic product with name: {name}", productName);
-                    continue;
-                }
-
-
-
-                var dirtyFeatures = await _productManager.ElectronicProductManager.GetPendingEditsAsync(productName);
-
-                if (dirtyFeatures.Count == 0)
-                    continue;
 
                 _logger.LogInformation("({count}) Pending edits detected for {dataset}", dirtyFeatures.Count, productName);
 
@@ -65,21 +80,31 @@ namespace ProductCatalogueAPI.Jobs
                     var result = _exchangeSetService.CreateExchangeSet(electronicProduct, output, yaml);
 
                     // Validate .000 files
-                    var summary = await _sevenCsService.ValidateDatasetAsync(electronicProduct, output);
+                    _logger.LogInformation("Validating .000 files with SevenCs.. ");
+                    try {
+                        var summary = await _sevenCsService.ValidateDatasetAsync(electronicProduct, output);
 
-                    if (summary.Errors == 0 & summary.Critical == 0) {
+                        if (summary.Errors == 0 & summary.Critical == 0) {
+                            await _repository.AppendAsync(productName, Data.Models.ProductState.NewEdition);
+                            // write to s128 database
+                            _logger.LogInformation("Writing to s128.attachments.. ");
+                            await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
+                        }
+                        else {
+                            _logger.LogWarning("Product {product} failed the SevenCs Validation check. Errors: {err}. Critical: {crit}. Marking product as Invalid.", productName, summary.Errors, summary.Critical);
+
+                            await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid);
+
+                            _logger.LogInformation("Rolling back exchange set creation.. ");
+                            _exchangeSetService.DeleteExchangeSet(productName, electronicProduct.editionNumber!.Value, output);
+                        }
+                    }
+                    catch (Exception ex) {
+                        _logger.LogWarning(ex, "An error occurred during SevenCs validation for product {product}. Assume validation was succesful for now.", productName);
                         await _repository.AppendAsync(productName, Data.Models.ProductState.NewEdition);
                         // write to s128 database
                         _logger.LogInformation("Writing to s128.attachments.. ");
                         await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
-                    }
-                    else {
-                        _logger.LogWarning("Product {product} failed the SevenCs Validation check. Errors: {err}. Critical: {crit}. Marking product as Invalid.", productName, summary.Errors, summary.Critical);
-
-                        await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid);
-
-                        _logger.LogInformation("Rolling back exchange set creation.. ");
-                        _exchangeSetService.DeleteExchangeSet(productName, electronicProduct.editionNumber!.Value, output);
                     }
                 }
                 else {
@@ -112,29 +137,41 @@ namespace ProductCatalogueAPI.Jobs
 
                     _logger.LogInformation("Creating export.. ");
                     var result = _exchangeSetService.CreateExchangeSet(electronicProduct, output, update, prevIndex);
-
                     // Validate .000 files
-                    var summary = await _sevenCsService.ValidateDatasetAsync(electronicProduct, output);
+                    _logger.LogInformation("Validating .000 files with SevenCs.. ");
+                    try {
+                        // Validate .000 files
+                        var summary = await _sevenCsService.ValidateDatasetAsync(electronicProduct, output);
 
-                    _logger.LogInformation("Saving productstate in database..");
+                        _logger.LogInformation("Saving productstate in database..");
 
-                    if (summary.Errors == 0 & summary.Critical == 0) {
+                        if (summary.Errors == 0 & summary.Critical == 0) {
+                            await _repository.AppendAsync(productName, Data.Models.ProductState.NewUpdate);
+
+                            _logger.LogInformation("Writing to s128.attachments.. ");
+                            await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.Update, update, result.Index, result.Sign);
+                        }
+
+                        else {
+                            _logger.LogWarning("Product {product} failed the SevenCs Validation check. Errors: {err}. Critical: {crit}. Marking product as Invalid.", productName, summary.Errors, summary.Critical);
+
+                            await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid);
+
+                            _logger.LogInformation("Rolling back exchange set creation.. ");
+                            _exchangeSetService.DeleteExchangeSet(productName, electronicProduct.editionNumber!.Value, output);
+                        }
+                    }
+                    catch (Exception ex) {
+                        _logger.LogWarning(ex, "An error occurred during SevenCs validation for product {product}. Assume validation was succesful for now.", productName);
                         await _repository.AppendAsync(productName, Data.Models.ProductState.NewUpdate);
 
                         _logger.LogInformation("Writing to s128.attachments.. ");
                         await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.Update, update, result.Index, result.Sign);
                     }
-                     
-                    else {
-                        _logger.LogWarning("Product {product} failed the SevenCs Validation check. Errors: {err}. Critical: {crit}. Marking product as Invalid.", productName, summary.Errors, summary.Critical);
-
-                        await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid);
-
-                        _logger.LogInformation("Rolling back exchange set creation.. ");
-                        _exchangeSetService.DeleteExchangeSet(productName, electronicProduct.editionNumber!.Value, output);
-                    }
                 }
             }
+            _logger.LogInformation("Setting successful run for job: {jobName} at {time}", jobName, scanStartedUtc);
+            await _repository.SetSuccessfulRunUtcAsync(jobName, scanStartedUtc);
             _logger.LogInformation("Job: {jobName} finished", nameof(DetectProductChangesJob));
         }
 

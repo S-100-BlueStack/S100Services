@@ -1,12 +1,16 @@
 using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
 using Microsoft.Extensions.Logging.Abstractions;
+using ProductCatalogueAPI;
 using ProductCatalogueAPI.Services.ExchangeSet;
+using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.ProductCatalogue;
+using S100FC.S128.FeatureTypes;
 using S100FC.YAML;
 using Serilog.Core;
 using System.Diagnostics;
 using System.Reflection.Emit;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Xunit.Abstractions;
 using IO = System.IO;
@@ -47,6 +51,34 @@ namespace TestProductCatalogueAPI
         }
 
 
+        [Fact]
+        public async Task Test_GenerateKey() {
+            var creds = Environment.GetEnvironmentVariable("7cs_credentials", EnvironmentVariableTarget.User);
+
+            var encrypted = Configuration.EncryptString(creds);
+
+            System.Diagnostics.Debugger.Break();
+        }
+
+        [Fact]
+        public async Task Test_ValidateENCWithSevenCs() {
+            var sevenCs = new SevenCsService(NullLogger<SevenCsService>.Instance);
+
+
+            var datasetName = "";
+            var outputPath = "";
+
+            var res = await sevenCs.ValidateDatasetAsync(new ElectronicProduct {
+                datasetName = datasetName,
+                editionNumber = 1,
+            }, outputPath);
+
+
+
+            System.Diagnostics.Debugger.Break();
+
+
+        }
 
         [Fact]
         public async Task Test_ImportLalaLand() {

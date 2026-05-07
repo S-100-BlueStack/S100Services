@@ -854,5 +854,9 @@ namespace ProductCatalogue
 
             return dataset!;
         }
+
+        public Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc) {
+            throw new NotImplementedException();
+        }
     }
 }

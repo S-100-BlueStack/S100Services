@@ -2,7 +2,6 @@ using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Mvc; // Required for ApiVersion
-using Microsoft.Data.SqlClient;
 using ProductCatalogueAPI.Data.Database;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
@@ -12,7 +11,6 @@ using ProductCatalogueAPI.Services.MailImport;
 using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.S128;
 using Serilog;
-using System.Data;
 using System.Reflection;
 using System.Security.Claims;
 using System.Text.Json;
@@ -229,6 +227,18 @@ namespace ProductCatalogueAPI
             app.UseHangfireDashboard("/dashboard", new DashboardOptions {
                 //   Authorization = new[] { new MyAuthorizationFilter() }             // TODO: Auth
             });
+
+            // Read flag from configuration
+            var enableJob = builder.Configuration.GetValue<bool>("EnableDetectProductChanges");
+
+            if (enableJob) {
+                Log.Information("Scheduling DetectProductChangesJob to run hourly.");
+                RecurringJob.AddOrUpdate<DetectProductChangesJob>(
+                    "detect-product-changes-job",
+                    job => job.RunAsync(CancellationToken.None),
+                    Cron.Daily(23)
+                );
+            }
 
             app.UseExceptionHandler();
 

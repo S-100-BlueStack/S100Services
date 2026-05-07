@@ -16,7 +16,7 @@ namespace ProductCatalogueAPI.Services.SevenCs
             client = new HttpClient() {
                 BaseAddress = new Uri(@"https://sevencs.gst.dk:43222/api/"),
             };
-            client.DefaultRequestHeaders.Add("Accept-version", "1.4");
+            client.DefaultRequestHeaders.Add("Accept-version", "1.5");
         }
 
         /// <summary>Validates a dataset based on the publicationJob id.
@@ -153,9 +153,9 @@ namespace ProductCatalogueAPI.Services.SevenCs
             return summary;
         }
         private async Task Authorize() {
-            var token = Environment.GetEnvironmentVariable("ncps_token");
+            var token = Environment.GetEnvironmentVariable("productcatalogue_7cs_credentials");
             if (string.IsNullOrEmpty(token)) {
-                throw new Exception("Could not find environment variable for 'ncps_token'");
+                throw new Exception("Could not find environment variable for 'productcatalogue_7cs_credentials'");
             }
 
             token = Configuration.DecryptString(token);

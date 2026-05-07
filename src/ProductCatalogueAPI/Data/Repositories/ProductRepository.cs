@@ -87,6 +87,41 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
             new { Name = name });
     }
 
+    public async Task<DateTime?> GetLastSuccessfulRunUtcAsync(string jobName) {
+        using var connection = _connectionFactory.Create();
+
+        var sql = """
+        SELECT TOP 1 last_successful_run_utc
+        FROM dbo.JobRunState
+        WHERE job_name = @JobName
+        ORDER BY id DESC
+    """;
+
+        return await connection.QueryFirstOrDefaultAsync<DateTime?>(
+            sql,
+            new { JobName = jobName });
+    }
+
+    public async Task SetSuccessfulRunUtcAsync(
+        string jobName,
+        DateTime lastSuccessfulRunUtc) {
+        using var connection = _connectionFactory.Create();
+
+        var insertSql = """
+        INSERT INTO dbo.JobRunState
+        (job_name, last_successful_run_utc)
+        VALUES
+        (@JobName, @LastSuccessfulRunUtc)
+    """;
+
+        await connection.ExecuteAsync(
+            insertSql,
+            new {
+                JobName = jobName,
+                LastSuccessfulRunUtc = lastSuccessfulRunUtc,
+            });
+    }
+
     public async Task<string[]> GetIneligbleProductsAsync() {
         using var connection = _connectionFactory.Create();
 
@@ -174,5 +209,14 @@ public class InMemoryProductRepository : IProductRepository
             _products.Where(p => p.State == ProductState.NewEdition || p.State == ProductState.NewUpdate)
                      .Select(p => p.Name)
                      .ToArray());
+    }
+
+
+    public Task SetSuccessfulRunUtcAsync(string jobName, DateTime dateTime) {
+        return Task.CompletedTask;
+    }
+
+    Task<DateTime?> IProductRepository.GetLastSuccessfulRunUtcAsync(string jobName) {
+        throw new NotImplementedException();
     }
 }

@@ -23,6 +23,7 @@ namespace S100FC.ProductCatalogue
         Task<bool> IsDirtyAsync(string name);
         Task<string> GetDatasetBoundary(string name);
         Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name);
+        Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc);
         ElectronicProduct? ElectronicProduct(string name);
 
         Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition);

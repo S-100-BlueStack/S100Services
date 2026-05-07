@@ -294,7 +294,7 @@ namespace S100FC.ProductCatalogue
             if (dataset == default)
                 return false;
 
-            var filter = await this.BuildSpatialQueryFilter(dataset, electronicProduct.specificUsage);
+            var filter = await this.BuildSpatialQueryFilter(dataset);
 
             var dirty = await this.Dispatch(() => {
                 string[] tableNames = ["point", "pointset", "curve", "surface"];
@@ -305,9 +305,7 @@ namespace S100FC.ProductCatalogue
                     if (isArchived) {
                         var archiveTable = fc.GetArchiveTable();
 
-                        using var archiveCursor = archiveTable.Search(new QueryFilter {
-                            WhereClause = filter.WhereClause,
-                        }, true);
+                        using var archiveCursor = archiveTable.Search(filter, true);
                         while (archiveCursor.MoveNext()) {
                             var cur = archiveCursor.Current;
                             var id = cur["UID"]?.ToString();
@@ -332,83 +330,233 @@ namespace S100FC.ProductCatalogue
 
             return dirty;
         }
+
         async Task<Dictionary<string, ArchiveRow>> IElectronicProductManager.GetPendingEditsAsync(string name) {
-            if (string.IsNullOrEmpty(name))
-                throw new System.ArgumentNullException(nameof(name));
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentNullException(nameof(name));
+
             name = name.ToUpperInvariant();
 
             if (!this._electronicProducts.TryGetValue(name, out var electronicProduct))
                 throw new ArgumentException(null, nameof(name));
-
-            //  var uri = this._connections[this._electronicProducts[name].productSpecification!.name]!;
-            // TODO: Handle null
-            var uri = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
-
-            using var connection = this.OpenGeodatabase(uri);
 
             var dataset = await this.GetLatestDataset(name);
 
             if (dataset == default)
                 throw new NullReferenceException(nameof(dataset));
 
-            var maxDate = new DateTime(31, 12, 9999);
+            var filter = await this.BuildSpatialQueryFilter(dataset);
 
-            var dict = new Dictionary<string, ArchiveRow>();
-
-            var filter = await this.BuildSpatialQueryFilter(dataset, electronicProduct.specificUsage);
+            var result = new Dictionary<string, ArchiveRow>();
 
             await this.Dispatch(() => {
                 string[] tableNames = ["point", "pointset", "curve", "surface"];
+
+                var productName = electronicProduct.productSpecification?.name
+                    ?? throw new NullReferenceException(nameof(electronicProduct.productSpecification.name));
+
+                var displayScale = electronicProduct.optimumDisplayScale
+                    ?? throw new NullReferenceException(nameof(electronicProduct.optimumDisplayScale));
+
+                var uri = this.Connection(productName, displayScale)
+                    ?? throw new NullReferenceException("uri");
+
+                using var connection = this.OpenGeodatabase(uri);
+
                 foreach (var baseTableName in tableNames) {
-                    using var fc = connection.OpenDataset<FeatureClass>(this.QualifyTableName($"{baseTableName}"));
+                    using var fc = connection.OpenDataset<FeatureClass>(
+                        this.QualifyTableName(baseTableName));
 
-                    var isArchived = fc.IsArchiveEnabled();
-                    if (isArchived) {
-                        var archiveTable = fc.GetArchiveTable();
+                    if (!fc.IsArchiveEnabled()) {
+                        Log.Warning(
+                            "Archiving is not enabled on {tableName} for product {name}.",
+                            baseTableName,
+                            name);
 
-                        using var archiveCursor = archiveTable.Search(new QueryFilter {
-                            WhereClause = filter.WhereClause,
-                        }, true);
-                        while (archiveCursor.MoveNext()) {
-                            var cur = archiveCursor.Current;
-                            var id = cur["UID"]?.ToString()!;
-                            var code = cur["Code"]?.ToString()!;
-
-                            var flatten = cur["attributebindings"]?.ToString();
-                            var informationBindings = cur["informationbindings"]?.ToString();
-                            var featureBindings = cur["featurebindings"]?.ToString();
-
-
-                            _ = DateTime.TryParse(cur["GDB_FROM_DATE"].ToString(), out DateTime fromDate);
-                            _ = DateTime.TryParse(cur["GDB_TO_DATE"].ToString(), out DateTime toDate);
-
-                            var entry = new ArchiveRow() {
-                                Code = code,
-                                AttributeBindings = flatten,
-                                InformationBindings = informationBindings,
-                                FeatureBindings = featureBindings,
-                            };
-
-                            // Deleted
-                            if (toDate == maxDate) {
-                                Log.Information("Feature deleted {id} in {table} for dataset: {name}.", id, baseTableName, name);
-                                entry.Deleted = true;
-                            }
-                            else {
-                                Log.Information("Feature updated {id} in {table} for dataset: {name}.", id, baseTableName, name);
-                            }
-
-                            dict.Add(id, entry);
-                        }
+                        continue;
                     }
-                    else {
-                        Log.Error("Archiving is not enabled on {tableName} for dataset: {name}.", baseTableName, name);
-                        //throw new System.InvalidOperationException("Archiving is not enabled");
+
+                    using var archiveTable = fc.GetArchiveTable();
+
+                    using var cursor = archiveTable.Search(filter, true);
+
+                    var tableCount = 0;
+
+                    while (cursor.MoveNext()) {
+                        var row = cursor.Current;
+
+                        var id = row["UID"]?.ToString();
+
+                        if (string.IsNullOrWhiteSpace(id))
+                            continue;
+
+                        result[id] = new ArchiveRow {
+                            Code = row["Code"]?.ToString(),
+                            AttributeBindings = row["attributebindings"]?.ToString(),
+                            InformationBindings = row["informationbindings"]?.ToString(),
+                            FeatureBindings = row["featurebindings"]?.ToString(),
+
+                            // Do not infer deletion from a single historical row.
+                            // Deletion needs separate current-row validation if required.
+                            Deleted = false
+                        };
+
+                        tableCount++;
                     }
+
+                    Log.Information(
+                        "Found {count} archive changes in {tableName} for product {name}.",
+                        tableCount,
+                        baseTableName,
+                        name);
                 }
             });
 
-            return dict;
+            Log.Information(
+                "Found {count} unique pending edited features for product {name}.",
+                result.Count,
+                name);
+
+            return result;
+        }
+
+        public async Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc) {
+            var result = new Dictionary<string, Dictionary<string, ArchiveRow>>();
+
+            await this.Dispatch(() => {
+                var products = this._electronicProducts
+                    .Where(x => x.Value.optimumDisplayScale.HasValue)
+                    .Select(x => new {
+                        Name = x.Key,
+                        Product = x.Value,
+                        DisplayScale = x.Value.optimumDisplayScale!.Value,
+                        Aoi = this.GetProductAoiGeometry(x.Key)
+                    })
+                    .Where(x => x.Aoi != null && !x.Aoi.IsEmpty)
+                    .ToList();
+
+                foreach (var c in this._connections.Where(e => e.ProductSpecification.Equals("S-101", StringComparison.OrdinalIgnoreCase))) {
+                    var uri = c.ConnectionFile!;
+                    var dbScale = $"Database: {c.MinimumScale}-{c.MaximumScale}";
+                    using var connection = this.OpenGeodatabase(uri);
+
+                    var productsForConnection = products
+                        .Where(p => this.Connection(
+                            p.Product.productSpecification!.name!,
+                            p.DisplayScale) == uri)
+                        .ToList();
+
+                    if (productsForConnection.Count == 0)
+                        continue;
+
+                    ScanConnectionForPendingEdits(connection, dbScale, productsForConnection, sinceUtc, result);
+                }
+            });
+
+            return result;
+        }
+
+        private void ScanConnectionForPendingEdits(Geodatabase connection, string connectionName, IEnumerable<dynamic> products, DateTime sinceUtc, Dictionary<string, Dictionary<string, ArchiveRow>> result) {
+            var productList = products.ToList();
+
+            var sqlSyntax = connection.GetSQLSyntax();
+
+            var formattedSince = sqlSyntax.Format(
+                sinceUtc,
+                SQLDateTimeType.Timestamp);
+
+            var formattedMaxDate = sqlSyntax.Format(
+                new DateTime(9999, 12, 31),
+                SQLDateTimeType.Timestamp);
+
+            var archiveWhereClause =
+                $"UPPER(ps) = 'S-101' AND " +
+                $"(" +
+                $"GDB_FROM_DATE > {formattedSince} OR " +
+                $"(GDB_TO_DATE > {formattedSince} AND GDB_TO_DATE < {formattedMaxDate})" +
+                $")";
+
+            string[] tableNames = ["point", "pointset", "curve", "surface"];
+
+            foreach (var baseTableName in tableNames) {
+                using var fc = connection.OpenDataset<FeatureClass>(
+                    this.QualifyTableName(baseTableName));
+
+                if (!fc.IsArchiveEnabled()) {
+                    Log.Warning(
+                        "Archiving is not enabled on {tableName} for connection {connectionName}.",
+                        baseTableName,
+                        connectionName);
+
+                    continue;
+                }
+
+                using var archiveTable = fc.GetArchiveTable();
+
+                using var cursor = archiveTable.Search(new QueryFilter {
+                    WhereClause = archiveWhereClause
+                }, true);
+
+                var archiveRows = 0;
+
+                var uniqueChangedFeatureIds = new HashSet<string>();
+                var affectedProducts = new HashSet<string>();
+
+                while (cursor.MoveNext()) {
+                    var row = cursor.Current;
+
+                    var id = row["UID"]?.ToString();
+
+                    if (string.IsNullOrWhiteSpace(id)) {
+  
+                        Log.Warning("Row in {tableName} for connection {connectionName} is missing UID. Skipping geometry check.", baseTableName, connectionName);
+                        continue;
+                    }
+
+                    if (row is not ArcGIS.Core.Data.Feature feature) {
+                        Log.Warning("Row with UID {id} in {tableName} for connection {connectionName} is not a feature. Skipping geometry check.", id, baseTableName, connectionName);
+                        continue;
+                    }
+
+                    var changedShape = feature.GetShape();
+
+                    if (changedShape == null || changedShape.IsEmpty) {
+                        Log.Warning("Feature with UID {id} in {tableName} for connection {connectionName} has no geometry. Skipping.", id, baseTableName, connectionName);
+                        continue;
+                    }
+
+                    archiveRows++;
+                    uniqueChangedFeatureIds.Add(id);
+
+                    var archiveRow = new ArchiveRow {
+                        Code = row["Code"]?.ToString(),
+                        AttributeBindings = row["attributebindings"]?.ToString(),
+                        InformationBindings = row["informationbindings"]?.ToString(),
+                        FeatureBindings = row["featurebindings"]?.ToString(),
+                        Deleted = false
+                    };
+
+                    foreach (var product in productList) {
+                        if (!GeometryEngine.Instance.Intersects(changedShape, product.Aoi))
+                            continue;
+
+                        affectedProducts.Add(product.Name);
+
+                        if (!result.ContainsKey(product.Name))
+                            result[product.Name] = new Dictionary<string, ArchiveRow>();
+
+                        result[product.Name][id] = archiveRow;
+                    }
+                }
+
+                Log.Information(
+                    "Scanned archive changes in {tableName} for connection {connectionName}. Archive rows: {archiveRows}, unique changed features: {uniqueChangedFeatureIds}, affected products: {affectedProducts}",
+                    baseTableName,
+                    connectionName,
+                    archiveRows,
+                    uniqueChangedFeatureIds.Count,
+                    affectedProducts.Count);
+            }
         }
         public async Task<(string yaml, string index)> GetLatestDatasetYAML(string datasetName, int edition) {
             return await this.Dispatch(() => {
@@ -655,10 +803,10 @@ namespace S100FC.ProductCatalogue
                         };
 
                         try {
-                            var type = featureCatalogue.Assembly!.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", true) ?? default;
+                            var type = featureCatalogue.Assembly?.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", false) ?? default;
 
                             if (type == default) {
-                                Log.Error("Could not get type: {type} for feature: {name}", code, name);
+                                Log.Error("Could not get type: {type} for feature: {name}. In product: {product}", code, name, electronicProduct.datasetName);
                                 continue;
                             }
                             // var flatten = current["attributebindings"].ToString()!;
@@ -962,54 +1110,63 @@ namespace S100FC.ProductCatalogue
             });
         }
 
-        private async Task<SpatialQueryFilter> BuildSpatialQueryFilter(Dataset dataset, S100FC.S128.SimpleAttributes.specificUsage? specificUsage) {
+        private ArcGIS.Core.Geometry.Geometry GetProductAoiGeometry(string productName) {
+            if (string.IsNullOrWhiteSpace(productName))
+                throw new ArgumentNullException(nameof(productName));
+
+            using var surface = this._geodatabase!.OpenDataset<FeatureClass>(
+                this.QualifyTableName("surface"));
+
+            using var cursor = surface.Search(new QueryFilter {
+                WhereClause = $"attributebindings LIKE '%\"{productName}\"%'",
+            }, false);
+
+            if (!cursor.MoveNext() || cursor.Current == null)
+                throw new InvalidOperationException(
+                    $"Could not find product coverage surface for product '{productName}'.");
+
+            if (cursor.Current is not ArcGIS.Core.Data.Feature feature)
+                throw new InvalidOperationException(
+                    $"Product coverage row for '{productName}' is not a feature.");
+
+            var shape = feature.GetShape();
+
+            if (shape == null || shape.IsEmpty)
+                throw new InvalidOperationException(
+                    $"Product coverage geometry for '{productName}' is empty.");
+
+            return shape.Clone();
+        }
+
+        private async Task<SpatialQueryFilter> BuildSpatialQueryFilter(Dataset dataset) {
+            if (dataset == null)
+                throw new ArgumentNullException(nameof(dataset));
+
+            if (string.IsNullOrWhiteSpace(dataset.DatasetName))
+                throw new ArgumentNullException(nameof(dataset.DatasetName));
+
             return await this.Dispatch(() => {
-                using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
+                var sqlSyntax = this._geodatabase!.GetSQLSyntax();
 
-                using var cursorS128 = surface.Search(new QueryFilter {
-                    WhereClause = $"attributebindings LIKE '%\"{dataset.DatasetName}\"%'",
-                }, false);
+                var formattedDate = sqlSyntax.Format(
+                    dataset.TimestampUTC,
+                    SQLDateTimeType.Timestamp);
 
-                cursorS128.MoveNext();
+                var whereClause =
+                    $"UPPER(ps) = 'S-101' AND " +
+                    $"(GDB_FROM_DATE > {formattedDate} OR GDB_TO_DATE > {formattedDate})";
 
-                Debug.Assert(cursorS128.Current != null);
+                var shapeCoverage = this.GetProductAoiGeometry(dataset.DatasetName);
 
-                if (cursorS128.Current.IsNull("attributebindings"))
-                    throw new System.ArgumentNullException(nameof(dataset.DatasetName));
-
-                // original
-                //var whereClause = $"UPPER(ps) = 'S-101' AND (" +
-                //                  $"created_date > DATE '{dataset.TimestampUTC:yyyy-MM-dd HH:mm:ss}' " +
-                //                  $"OR last_edited_date > DATE '{dataset.TimestampUTC:yyyy-MM-dd HH:mm:ss}')";
-
-                var sqlSyntax = _geodatabase.GetSQLSyntax();
-
-                var formattedDate = sqlSyntax.Format(dataset.TimestampUTC, SQLDateTimeType.Timestamp);
-
-
-                //var whereClause = $"UPPER(ps) = 'S-101' AND GDB_FROM_DATE > {formattedDate}";
-                var whereClause = $"UPPER(ps) = 'S-101' AND (GDB_FROM_DATE > {formattedDate} OR GDB_TO_DATE > {formattedDate})";
-
-                if (specificUsage != null)
-                    whereClause += $" AND usageband = {specificUsage.value}";
-
-
-                ArcGIS.Core.Geometry.Polygon shapeCoverage;
-
-                shapeCoverage = (ArcGIS.Core.Geometry.Polygon)((ArcGIS.Core.Data.Feature)cursorS128.Current).GetShape().Clone();
-
-                var filter = new SpatialQueryFilter {
+                return new SpatialQueryFilter {
                     FilterGeometry = shapeCoverage,
                     SpatialRelationship = SpatialRelationship.Relation,
                     SpatialRelationshipDescription = S100FC.Topology.Matrix.DE9IM,
-                    WhereClause = whereClause,
+                    WhereClause = whereClause
                 };
-
-                return filter;
             });
-
         }
-
+        
         public async Task<Dictionary<string, string>> GetDatasetAOIs() {
             return await this.Dispatch(() => {
                 var result = new Dictionary<string, string>();

@@ -9,6 +9,10 @@ namespace ProductCatalogueAPI.Data.Repositories
         Task<IEnumerable<ProductRecord>> GetCurrentAsync();
 
         Task<ProductRecord?> GetCurrentByNameAsync(string name);
+
+        Task<DateTime?> GetLastSuccessfulRunUtcAsync(string jobName);
+        Task SetSuccessfulRunUtcAsync(string jobName, DateTime dateTime);
+
         Task<string[]> GetIneligbleProductsAsync();
         Task<string[]> GetEligibleProductsAsync();
 
