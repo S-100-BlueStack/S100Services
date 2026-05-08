@@ -15,10 +15,6 @@ namespace ProductCatalogueAPI.Jobs
         private readonly ILogger<DetectProductChangesJob> _logger = logger;
 
 
-
-
-
-
         public async Task RunAsync(CancellationToken cancellationToken) {
             var jobName = nameof(DetectProductChangesJob);
             var scanStartedUtc = DateTime.UtcNow;
@@ -56,6 +52,11 @@ namespace ProductCatalogueAPI.Jobs
                     continue;
 
                 var electronicProduct = _productManager.ElectronicProductManager.ElectronicProduct(productName);
+
+                if (electronicProduct == null) {
+                    _logger.LogError("Failed to retrieve electronic product for {productName}. Skipping.", productName);
+                    continue;
+                }
 
                 _logger.LogInformation("({count}) Pending edits detected for {dataset}", dirtyFeatures.Count, productName);
 
@@ -177,6 +178,8 @@ namespace ProductCatalogueAPI.Jobs
 
 
         private static bool IsNewEdition(Dictionary<string, ArchiveRow> features) {
+
+            
             // TODO: Given ruleset, figure out if NewEdition or NewUpdate. For now just return true;
             return true;
         }

@@ -47,5 +47,6 @@ namespace S100FC.ProductCatalogue
         public string? FeatureBindings { get; set; }
         public string? InformationBindings { get; set; }
         public bool Deleted { get; set; } = false;
+        public DateTime? EditDate {  get; set; }
     }
 }

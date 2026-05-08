@@ -533,7 +533,8 @@ namespace S100FC.ProductCatalogue
                         AttributeBindings = row["attributebindings"]?.ToString(),
                         InformationBindings = row["informationbindings"]?.ToString(),
                         FeatureBindings = row["featurebindings"]?.ToString(),
-                        Deleted = false
+                        Deleted = false,
+                        EditDate = row["GDB_FROM_DATE"] as DateTime?
                     };
 
                     foreach (var product in productList) {
