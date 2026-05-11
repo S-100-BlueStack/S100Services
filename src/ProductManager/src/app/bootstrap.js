@@ -27,7 +27,6 @@ export async function bootstrap() {
     initializeTheme(app.view);
     registerThemeToggle(app.view);
     await loadInitialData(app);
-
     app.refreshService.startAuto();
   } catch (error) {
     hideLoader();
