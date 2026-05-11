@@ -1,48 +1,41 @@
 import Graphic from "@arcgis/core/Graphic.js";
-import { statusColorConfig } from "../../../shared/config/colorsConfig";
 import { resolveFeatureKey } from "../core/featureIdentity.js";
+import { getCorrectionSymbol } from "../symbology/correctionSymbols.js";
+import { resolveDisplayScaleValue } from "../scale/displayScale.js";
 
-function getSymbol(status) {
-  const cfg = statusColorConfig[status];
+export function geoJsonToGraphics(geojson, { layerId, displayScale: layerDisplayScale } = {}) {
+  return geojson.features
+    .map((feature) => {
+      const attributes = feature.properties ?? {};
+      const status = attributes.status;
+      const featureKey = resolveFeatureKey(attributes, layerId);
+      const displayScale = resolveDisplayScaleValue(attributes, feature, {
+        displayScale: layerDisplayScale,
+      });
+      const geometry = convertGeometry(feature.geometry);
 
-  if (!cfg) {
-    return {
-      type: "simple-fill",
-      color: [0, 0, 0, 0.5],
-      outline: { color: [0, 0, 0], width: 1 },
-    };
-  }
+      if (!geometry) {
+        return null;
+      }
 
-  return {
-    type: "simple-fill",
-    color: cfg.fill,
-    outline: {
-      color: cfg.outline,
-      width: 1,
-    },
-  };
-}
-
-export function geoJsonToGraphics(geojson, { layerId } = {}) {
-  return geojson.features.map((feature) => {
-    const attributes = feature.properties ?? {};
-    const status = attributes.status;
-    const featureKey = resolveFeatureKey(attributes, layerId);
-
-    return new Graphic({
-      geometry: convertGeometry(feature.geometry),
-      attributes: {
-        ...attributes,
-        featureKey,
-        status,
-      },
-      symbol: getSymbol(status),
-    });
-  });
+      return new Graphic({
+        geometry,
+        attributes: {
+          ...attributes,
+          featureKey,
+          displayScale,
+          status,
+        },
+        symbol: getCorrectionSymbol(status, { variant: "detail" }),
+      });
+    })
+    .filter(Boolean);
 }
 
 function convertGeometry(geometry) {
-  if (!geometry) return null;
+  if (!geometry) {
+    return null;
+  }
 
   switch (geometry.type) {
     case "Point":
@@ -67,15 +60,12 @@ function convertGeometry(geometry) {
         spatialReference: { wkid: 4326 },
       };
 
-    case "MultiPolygon": {
-      const rings = geometry.coordinates.flat();
-
+    case "MultiPolygon":
       return {
         type: "polygon",
-        rings,
+        rings: geometry.coordinates.flat(),
         spatialReference: { wkid: 4326 },
       };
-    }
 
     default:
       console.warn("Unsupported geometry type:", geometry.type);

@@ -8,12 +8,11 @@ export async function loadAppData() {
 
   const layers = await Promise.all(
     layerConfigs.map(async (config) => {
-      const data = await config.fetch();
+      const { fetch, ...layerConfig } = config;
+      const data = await fetch();
 
       return {
-        id: config.id,
-        type: config.type,
-        dataFormat: config.dataFormat,
+        ...layerConfig,
         data,
       };
     })

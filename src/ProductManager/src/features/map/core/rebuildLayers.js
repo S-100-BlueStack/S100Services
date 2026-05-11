@@ -4,16 +4,32 @@ export async function rebuildLayers({ map, hoverManager, layerConfigs, createLay
   hoverManager.clear();
   clearLayers(map);
 
+  const createdLayers = [];
   const layerViewPromises = [];
 
   for (const layerConfig of layerConfigs) {
-    const layer = createLayer(map, layerConfig);
+    const layers = normalizeCreatedLayers(createLayer(map, layerConfig));
 
-    layer.customId = layerConfig.id;
-
-    registerLayer(layer);
-    layerViewPromises.push(hoverManager.registerLayer(layer));
+    for (const layer of layers) {
+      registerLayer(layer);
+      createdLayers.push(layer);
+      layerViewPromises.push(hoverManager.registerLayer(layer));
+    }
   }
 
   await Promise.all(layerViewPromises);
+
+  return createdLayers;
+}
+
+function normalizeCreatedLayers(layerOrLayers) {
+  if (Array.isArray(layerOrLayers)) {
+    return layerOrLayers.filter(Boolean);
+  }
+
+  if (layerOrLayers) {
+    return [layerOrLayers];
+  }
+
+  return [];
 }

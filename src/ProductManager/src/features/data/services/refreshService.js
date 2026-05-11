@@ -1,7 +1,7 @@
 import { findFeature } from "../../map/core/featureAdapter.js";
-import { getLayer } from "../../map/core/layerRegistry.js";
+import { getAllLayers, getLayer } from "../../map/core/layerRegistry.js";
 import { rebuildLayers } from "../../map/core/rebuildLayers.js";
-
+import { bindDisplayScaleVisibility } from "../../map/scale/displayScaleVisibility.js";
 let isRefreshing = false;
 let autoRefreshEnabled = true;
 let intervalId = null;
@@ -30,14 +30,15 @@ export function createRefreshService({
   }
 
   async function restoreState(state) {
-    if (!state) return;
+    if (!state) {
+      return;
+    }
 
     if (state.popupVisible && state.selectedFeatureKey && state.selectedLayerId) {
-      const layer = getLayer(state.selectedLayerId);
-      const graphic = findFeature(layer, state.selectedFeatureKey);
+      const graphic = findFeatureForRestore(state.selectedLayerId, state.selectedFeatureKey);
 
       if (graphic) {
-        view.popup.open({
+        openPopup(view, {
           features: [graphic],
           location: getPopupLocation(graphic),
         });
@@ -45,8 +46,7 @@ export function createRefreshService({
     }
 
     if (state.lockedFeatureKey && state.lockedLayerId) {
-      const layer = getLayer(state.lockedLayerId);
-      const graphic = findFeature(layer, state.lockedFeatureKey);
+      const graphic = findFeatureForRestore(state.lockedLayerId, state.lockedFeatureKey);
 
       if (graphic) {
         hoverManager.setLockedFeature(graphic);
@@ -54,30 +54,67 @@ export function createRefreshService({
     }
   }
 
+  function findFeatureForRestore(layerId, featureKey) {
+    const preferredLayer = getLayer(layerId);
+    const preferredGraphic = findFeature(preferredLayer, featureKey);
+
+    if (preferredGraphic) {
+      return preferredGraphic;
+    }
+
+    // If the user crossed a scale boundary during refresh, the previous
+    // overview/detail layer may no longer be the best layer to restore from.
+    for (const layer of getAllLayers()) {
+      const graphic = findFeature(layer, featureKey);
+
+      if (graphic) {
+        return graphic;
+      }
+    }
+
+    return null;
+  }
+
   function getPopupLocation(graphic) {
     const geom = graphic.geometry;
 
-    if (!geom) return null;
-    if (geom.type === "point") return geom;
-    if (geom.extent) return geom.extent.center;
+    if (!geom) {
+      return null;
+    }
+
+    if (geom.type === "point") {
+      return geom;
+    }
+
+    if (geom.extent) {
+      return geom.extent.center;
+    }
 
     return null;
   }
 
   async function refresh() {
-    if (isRefreshing) return;
+    if (isRefreshing) {
+      return;
+    }
 
     isRefreshing = true;
+
     const state = captureState();
 
     try {
       const data = await loadAppData();
 
-      await rebuildLayers({
+      const createdLayers = await rebuildLayers({
         map,
+        view,
         hoverManager,
         layerConfigs: data.layers,
         createLayer: addLayer,
+      });
+
+      bindDisplayScaleVisibility(view, {
+        layers: createdLayers,
       });
 
       await restoreState(state);
@@ -122,4 +159,13 @@ export function createRefreshService({
     startAuto,
     stopAuto,
   };
+}
+
+function openPopup(view, options) {
+  if (typeof view.openPopup === "function") {
+    view.openPopup(options);
+    return;
+  }
+
+  view.popup.open(options);
 }

@@ -6,6 +6,7 @@ import { createView } from "../features/map/core/createView.js";
 import { createLayer } from "../features/map/core/layerFactory.js";
 import { createHoverManager } from "../features/map/interactions/hoverManager.js";
 import { registerPopupHoverSync } from "../features/map/interactions/registerPopupHoverSync.js";
+import { bindOverlapPicker } from "../features/map/interactions/overlapPicker.js";
 
 function updateLastUpdated() {
   const el = document.getElementById("last-updated");
@@ -28,6 +29,8 @@ export function initMap() {
   const hoverManager = createHoverManager(view);
 
   registerPopupHoverSync(view, hoverManager);
+
+  bindOverlapPicker(view);
 
   const refreshService = createRefreshService({
     map,

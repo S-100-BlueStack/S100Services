@@ -3,6 +3,7 @@ import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 import { highlightConfig } from "../../../shared/config/colorsConfig.js";
 import { registerPopupActions } from "../popups/popupActions.js";
 import { applyHeaderColor } from "../popups/popupHeaderController.js";
+import { createDefaultPopupActions } from "../popups/popupActionsConfig.js";
 
 export function createView(map) {
   const view = new MapView({
@@ -19,20 +20,7 @@ export function createView(map) {
         collapseButton: false,
         featureNavigation: false,
       },
-      actions: [
-        {
-          title: "Freeze",
-          id: "freeze-feature",
-          icon: "snow",
-          className: "freeze-feature",
-        },
-        {
-          title: "Send immediately",
-          id: "send-immediately",
-          icon: "send",
-          className: "send-immediately",
-        },
-      ],
+      actions: createDefaultPopupActions(),
     },
     highlights: highlightConfig,
   });

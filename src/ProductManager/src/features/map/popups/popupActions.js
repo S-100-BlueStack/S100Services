@@ -2,6 +2,7 @@ import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 import { noticeError, noticeInfo, noticeSuccess } from "../../notices/services/noticeService.js";
 import { changeFreezeState, uploadProduct } from "../../data/api/productApi.js";
 import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
+import { resetPopupActions, setFrozenPopupActions } from "./popupActionsConfig.js";
 
 let freezeAction = null;
 let sendAction = null;
@@ -42,37 +43,12 @@ export function registerPopupActions(view) {
 }
 
 function updateUI(view, frozen) {
-  view.popup.actions = frozen
-    ? [
-        {
-          title: "Unfreeze",
-          id: "freeze-feature-sun",
-          icon: "brightness",
-          className: "popup-action popup-action-freeze",
-        },
-        {
-          title: "Send immediately",
-          id: "send-immediately",
-          icon: "send",
-          disabled: true,
-          className: "popup-action popup-action-send is-disabled",
-        },
-      ]
-    : [
-        {
-          title: "Freeze",
-          id: "freeze-feature",
-          icon: "snow",
-          className: "popup-action popup-action-freeze",
-        },
-        {
-          title: "Send immediately",
-          id: "send-immediately",
-          icon: "send",
-          disabled: false,
-          className: "popup-action popup-action-send",
-        },
-      ];
+  if (frozen) {
+    setFrozenPopupActions(view);
+    return;
+  }
+
+  resetPopupActions(view);
 }
 
 async function triggerFreeze(datasetName, state, anchorElement) {

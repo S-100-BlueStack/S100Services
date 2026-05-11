@@ -2,11 +2,12 @@ import Graphic from "@arcgis/core/Graphic.js";
 import Polygon from "@arcgis/core/geometry/Polygon.js";
 import Polyline from "@arcgis/core/geometry/Polyline.js";
 import Point from "@arcgis/core/geometry/Point.js";
-import { statusColorConfig } from "../../../shared/config/colorsConfig";
 import { resolveFeatureKey } from "../core/featureIdentity.js";
+import { getCorrectionSymbol } from "../symbology/correctionSymbols.js";
+import { resolveDisplayScaleValue } from "../scale/displayScale.js";
 
-export function esriJsonToGraphics(input, { layerId } = {}) {
-  const features = normalizeEsriFeatures(input);
+export function esriJsonToGraphics(data, { layerId, displayScale: layerDisplayScale } = {}) {
+  const features = getFeatures(data);
 
   return features
     .map((feature, index) => {
@@ -14,21 +15,24 @@ export function esriJsonToGraphics(input, { layerId } = {}) {
       const status = attributes.status;
       const geometry = createGeometry(feature.geometry);
       const featureKey = resolveFeatureKey(attributes, layerId);
+      const displayScale = resolveDisplayScaleValue(attributes, feature, {
+        displayScale: layerDisplayScale,
+      });
 
       if (!geometry) {
-        console.warn("[Map debug] Esri feature has no valid geometry.", {
+        console.warn("[Map debug] Feature has no valid geometry", {
           index,
           layerId,
           featureKey,
-          rawGeometry: feature.geometry,
           feature,
+          geometryValue: feature.geometry,
         });
 
         return null;
       }
 
       if (!featureKey) {
-        console.warn("[Map debug] Esri feature has no featureKey source.", {
+        console.warn("[Map debug] Feature has no featureKey source", {
           index,
           layerId,
           attributes,
@@ -37,7 +41,6 @@ export function esriJsonToGraphics(input, { layerId } = {}) {
 
       return new Graphic({
         geometry,
-
         attributes: {
           ...attributes,
 
@@ -45,52 +48,28 @@ export function esriJsonToGraphics(input, { layerId } = {}) {
           // popup actions, and future refresh reconciliation.
           featureKey,
 
-          // Keep status explicit even if future API responses move or rename fields.
+          // Keep displayScale normalized so map visibility logic does not need
+          // to understand every possible API field shape.
+          displayScale,
+
           status,
         },
-
-        symbol: getSymbol(status),
+        symbol: getCorrectionSymbol(status, { variant: "detail" }),
       });
     })
     .filter(Boolean);
 }
 
-function getSymbol(status) {
-  const cfg = statusColorConfig[status];
-
-  if (!cfg) {
-    return {
-      type: "simple-fill",
-      color: [0, 0, 0, 0.5],
-      outline: { color: [0, 0, 0], width: 1 },
-    };
+function getFeatures(data) {
+  if (Array.isArray(data)) {
+    return data;
   }
 
-  return {
-    type: "simple-fill",
-    color: cfg.fill,
-    outline: {
-      color: cfg.outline,
-      width: 1,
-    },
-  };
-}
-
-function normalizeEsriFeatures(input) {
-  let features = [];
-
-  if (Array.isArray(input)) {
-    features = input;
-  } else if (Array.isArray(input?.features)) {
-    features = input.features;
+  if (Array.isArray(data?.features)) {
+    return data.features;
   }
 
-  return features.filter(
-    (feature) =>
-      feature &&
-      typeof feature === "object" &&
-      (feature.geometry || feature.attributes || feature.properties)
-  );
+  return [];
 }
 
 function createGeometry(rawGeometry) {
@@ -112,7 +91,7 @@ function createGeometry(rawGeometry) {
     return Point.fromJSON(geometryJson);
   }
 
-  console.warn("[Map debug] Unsupported Esri geometry JSON.", geometryJson);
+  console.warn("[Map debug] Unsupported Esri geometry JSON", geometryJson);
   return null;
 }
 
@@ -125,7 +104,7 @@ function parseGeometryJson(rawGeometry) {
     try {
       return JSON.parse(rawGeometry);
     } catch (error) {
-      console.warn("[Map debug] Failed to parse Esri geometry JSON string.", {
+      console.warn("[Map debug] Failed to parse geometry JSON string", {
         rawGeometry,
         error,
       });
@@ -137,11 +116,6 @@ function parseGeometryJson(rawGeometry) {
   if (typeof rawGeometry === "object") {
     return rawGeometry;
   }
-
-  console.warn("[Map debug] Unsupported Esri geometry value.", {
-    rawGeometry,
-    type: typeof rawGeometry,
-  });
 
   return null;
 }

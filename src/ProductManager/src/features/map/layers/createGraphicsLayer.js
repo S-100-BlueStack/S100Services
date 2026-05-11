@@ -1,92 +1,112 @@
+import Graphic from "@arcgis/core/Graphic.js";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer.js";
 import { createLayerIndex } from "../core/layerIndex.js";
 import { createPopup } from "../popups/createPopup.js";
+import { resolveScaleRanges } from "../config/scaleRanges.js";
 import { geoJsonToGraphics } from "../transformers/geoJsonToGraphics.js";
 import { esriJsonToGraphics } from "../transformers/esriJsonToGraphics.js";
+import { getCorrectionSymbol } from "../symbology/correctionSymbols.js";
 
 export function createGraphicsLayer(map, layerConfig) {
-  const { data, id, dataFormat = "geojson" } = layerConfig;
+  const { id, dataFormat = "geojson", data, displayScale } = layerConfig;
+  const popupTemplate = createPopup();
+  const scaleRanges = resolveScaleRanges(layerConfig);
 
-  const graphics = createGraphicsFromData(data, {
+  const detailGraphics = createGraphicsFromData(data, {
     dataFormat,
     layerId: id,
+    displayScale,
   });
 
-  debugGraphicsLayerCreation({
-    id,
-    data,
-    dataFormat,
-    graphics,
+  const overviewGraphics = detailGraphics.map((graphic) => createOverviewGraphic(graphic));
+
+  const overviewLayer = new GraphicsLayer({
+    title: `${id} overview`,
+    minScale: scaleRanges.overview.minScale,
+    maxScale: scaleRanges.overview.maxScale,
+    popupTemplate,
   });
 
-  const index = createLayerIndex(graphics);
-
-  const layer = new GraphicsLayer({
+  const detailLayer = new GraphicsLayer({
     title: id,
-    popupTemplate: createPopup(),
+    minScale: scaleRanges.detail.minScale,
+    maxScale: scaleRanges.detail.maxScale,
+    popupTemplate,
   });
 
-  layer.addMany(graphics);
+  overviewLayer.addMany(overviewGraphics);
+  detailLayer.addMany(detailGraphics);
 
-  // Keep custom metadata close to the ArcGIS layer instance so other modules can
-  // treat GraphicsLayer as the runtime representation of an application layer.
-  layer.customId = id;
-  layer.layerType = "graphics";
-  layer._index = index;
+  applyAppLayerMetadata(overviewLayer, {
+    customId: `${id}:overview`,
+    appLayerId: id,
+    role: "overview",
+    index: createLayerIndex(overviewGraphics),
+  });
 
-  map.add(layer);
+  applyAppLayerMetadata(detailLayer, {
+    customId: `${id}:detail`,
+    appLayerId: id,
+    role: "detail",
+    index: createLayerIndex(detailGraphics),
+  });
 
-  return layer;
+  map.add(overviewLayer);
+  map.add(detailLayer);
+
+  console.table([
+    {
+      layer: overviewLayer.title,
+      customId: overviewLayer.customId,
+      role: overviewLayer.appLayerRole,
+      graphics: overviewLayer.graphics.length,
+      minScale: overviewLayer.minScale,
+      maxScale: overviewLayer.maxScale,
+    },
+    {
+      layer: detailLayer.title,
+      customId: detailLayer.customId,
+      role: detailLayer.appLayerRole,
+      graphics: detailLayer.graphics.length,
+      minScale: detailLayer.minScale,
+      maxScale: detailLayer.maxScale,
+    },
+  ]);
+
+  return [overviewLayer, detailLayer];
 }
 
-function createGraphicsFromData(data, { dataFormat, layerId }) {
+function createGraphicsFromData(data, { dataFormat, layerId, displayScale }) {
   switch (dataFormat) {
-    case "geojson":
-      return geoJsonToGraphics(data);
-
     case "esri-json":
     case "esrijson":
-      return esriJsonToGraphics(data, { layerId });
+      return esriJsonToGraphics(data, { layerId, displayScale });
+
+    case "geojson":
+      return geoJsonToGraphics(data, { layerId, displayScale });
 
     default:
-      throw new Error(`Unsupported graphics data format: ${dataFormat}`);
+      throw new Error(`Unsupported data format: ${dataFormat}`);
   }
 }
 
-function debugGraphicsLayerCreation({ id, data, dataFormat, graphics }) {
-  const graphicsWithoutGeometry = graphics.filter((graphic) => !graphic.geometry);
+function createOverviewGraphic(graphic) {
+  const status = graphic.attributes?.status;
 
-  console.groupCollapsed(`[Map debug] Graphics layer created: ${id}`);
-
-  console.table({
-    id,
-    dataFormat,
-    graphicsCount: graphics.length,
-    graphicsWithoutGeometry: graphicsWithoutGeometry.length,
-    graphicsWithGeometry: graphics.length - graphicsWithoutGeometry.length,
+  return new Graphic({
+    geometry: graphic.geometry?.clone?.() ?? graphic.geometry,
+    attributes: {
+      ...graphic.attributes,
+    },
+    visible: graphic.visible !== false,
+    symbol: getCorrectionSymbol(status, { variant: "overview" }),
   });
-
-  if (graphicsWithoutGeometry.length > 0) {
-    console.warn(
-      `[Map debug] ${graphicsWithoutGeometry.length} graphics in "${id}" have no geometry. They cannot be rendered.`
-    );
-
-    console.log("First raw feature:", getFirstFeature(data));
-    console.log("First graphic without geometry:", graphicsWithoutGeometry[0]);
-    console.log("First graphic attributes:", graphicsWithoutGeometry[0]?.attributes);
-  }
-
-  console.groupEnd();
 }
 
-function getFirstFeature(data) {
-  if (Array.isArray(data)) {
-    return data[0] ?? null;
-  }
-
-  if (Array.isArray(data?.features)) {
-    return data.features[0] ?? null;
-  }
-
-  return null;
+function applyAppLayerMetadata(layer, { customId, appLayerId, role, index }) {
+  layer.customId = customId;
+  layer.appLayerId = appLayerId;
+  layer.appLayerRole = role;
+  layer.layerType = "graphics";
+  layer._index = index;
 }
