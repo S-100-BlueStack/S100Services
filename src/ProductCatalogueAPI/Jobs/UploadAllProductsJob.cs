@@ -78,7 +78,7 @@ namespace ProductCatalogueAPI.Jobs
                     IO.File.Delete(e);
                 }
 
-                var root = outputPath; // IO.Path.Combine(@"g:\indigo\jobs", $"Job_ENC_Publication_{job.Job.Id:00000000}");
+                var root = outputPath; 
 
                 var folderExchangeSet = IO.Path.Combine(root, "ExchangeSet", product.datasetName, "ENC_ROOT");
 
@@ -108,7 +108,6 @@ namespace ProductCatalogueAPI.Jobs
 
             _logger.LogInformation("UploadFTP({dsnm})", dsnm);
 
-            //var root = IO.Path.Combine(@"g:\indigo\jobs", $"Job_ENC_Publication_{job.Job.Id:00000000}");
             var root = outputPath;
 
             var folderExchangeSet = IO.Path.Combine(root, "ExchangeSet", dsnm);
@@ -125,8 +124,8 @@ namespace ProductCatalogueAPI.Jobs
 
                 var password = Configuration.DecryptString(Environment.GetEnvironmentVariable("cipher_ftp"));
 
-                var host = "ftps.ic-enc.org";
-                var username = "Denmark";
+                var host = "";
+                var username = "";
 
                 var loggerFactory = new SerilogLoggerFactory().CreateLogger($"FTP::{dsnm}");
 

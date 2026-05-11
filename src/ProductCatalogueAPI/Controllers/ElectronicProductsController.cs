@@ -72,7 +72,8 @@ namespace ProductCatalogueAPI.Controllers
                         datasetName = electronicProduct.datasetName,
                         edition = electronicProduct.editionNumber,
                         update = electronicProduct.updateDate,
-                        status = (int)(current?.State ?? Data.Models.ProductState.Ready)    // If no explicit state defined in JobTable, default to Ready
+                        status = (int)(current?.State ?? Data.Models.ProductState.Ready),    // If no explicit state defined in JobTable, default to Ready,
+                        displayScale = electronicProduct.optimumDisplayScale,
                     }
                 });
             }
