@@ -1,5 +1,5 @@
 export async function loadNavbar() {
-  const res = await fetch("/src/features/layout/components/navbar.html");
+  const res = await fetch(`${import.meta.env.BASE_URL}components/navbar.html`);
   const html = await res.text();
 
   document.getElementById("navbar").innerHTML = html;
