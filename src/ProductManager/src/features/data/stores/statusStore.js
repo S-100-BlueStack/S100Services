@@ -4,7 +4,7 @@ import { apiGet } from "../../../shared/api/apiClient.js";
 const statusMap = new Map();
 
 export async function loadStatuses() {
-  const data = await apiGet("productstates", "Failed to load product states");
+  const data = await apiGet("lookup/productstates", "Failed to load product states");
 
   data.forEach((state) => {
     statusMap.set(state.Id, state);

@@ -7,6 +7,7 @@ import { createLayer } from "../features/map/core/layerFactory.js";
 import { createHoverManager } from "../features/map/interactions/hoverManager.js";
 import { registerPopupHoverSync } from "../features/map/interactions/registerPopupHoverSync.js";
 import { bindOverlapPicker } from "../features/map/interactions/overlapPicker.js";
+import { addReferenceLayers } from "../features/map/layers/addReferenceLayers.js";
 
 function updateLastUpdated() {
   const el = document.getElementById("last-updated");
@@ -25,6 +26,13 @@ function updateLastUpdated() {
 
 export function initMap() {
   const map = createMap();
+
+  const referenceLayers = addReferenceLayers(map, {
+    onLoadError: (layer, error) => {
+      noticeError(`Reference layer failed to load: ${layer.title}`, error.message);
+    },
+  });
+
   const view = createView(map);
   const hoverManager = createHoverManager(view);
 
