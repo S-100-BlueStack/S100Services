@@ -9,6 +9,7 @@ namespace ProductCatalogueAPI.Controllers
 {
     [Authorize("productmanager:distribute")]
     [ApiController]
+    [Route("[controller]")]
     public class UploadController(ILogger<UploadController> logger, IBackgroundJobClient backgroundJobClient, IRecurringJobManager recurringJobManager, IProductRepository productRepository) : ControllerBase
     {
         private readonly IBackgroundJobClient _backgroundJobClient = backgroundJobClient;

@@ -244,7 +244,7 @@ namespace ProductCatalogueAPI
 
             // Configure the HTTP request pipeline.
             app.UseSwagger();
-            app.UseSwaggerUI();
+            app.UseSwaggerUI(e => e.RoutePrefix = "swagger");
 
             app.UseHttpsRedirection();
 #if DEBUG
@@ -258,7 +258,7 @@ namespace ProductCatalogueAPI
 
             app.Use(async (context, next) => {
                 if (context.Request.Path == "/") {
-                    context.Response.Redirect("/swagger");
+                    context.Response.Redirect("/api/swagger");
                     return;
                 }
                 await next();

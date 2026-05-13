@@ -6,6 +6,7 @@ namespace ProductCatalogueAPI.Controllers
 {
     [Authorize("productmanager:access")]
     [ApiController]
+    [Route("[controller]")]
     public class LookupController : ControllerBase
     {
         [HttpGet("productstates")]

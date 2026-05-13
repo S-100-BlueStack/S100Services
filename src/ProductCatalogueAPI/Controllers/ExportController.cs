@@ -13,6 +13,7 @@ namespace ProductCatalogueAPI.Controllers
 {
     [Authorize("productmanager:manage")]
     [ApiController]
+    [Route("[controller]")]
     public class ExportController(ILogger<ExportController> logger, IMemoryCache cache, IExchangeSetService exchangeSetService, IProductManager productManager, IProductRepository productRepository) : ControllerBase
     {
         private readonly ILogger<ExportController> _logger = logger;
