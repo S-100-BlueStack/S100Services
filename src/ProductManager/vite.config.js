@@ -8,7 +8,7 @@ export default defineConfig({
     https: true,
   },
   build: {
-    sourcemap: true,
+    sourcemap: false,
   },
   optimizeDeps: {
     exclude: ["@arcgis/core"],
