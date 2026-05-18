@@ -27,11 +27,11 @@ function updateLastUpdated() {
 export function initMap() {
   const map = createMap();
 
-  const referenceLayers = addReferenceLayers(map, {
-    onLoadError: (layer, error) => {
-      noticeError(`Reference layer failed to load: ${layer.title}`, error.message);
-    },
-  });
+  // const referenceLayers = addReferenceLayers(map, {
+  //   onLoadError: (layer, error) => {
+  //     noticeError(`Reference layer failed to load: ${layer.title}`, error.message);
+  //   },
+  // });
 
   const view = createView(map);
   const hoverManager = createHoverManager(view);
