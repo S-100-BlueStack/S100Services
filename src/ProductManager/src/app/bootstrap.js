@@ -27,6 +27,10 @@ export async function bootstrap() {
     initializeTheme(app.view);
     registerThemeToggle(app.view);
     await loadInitialData(app);
+
+    app.bindMapVisibility?.();
+    app.filterPanel?.refresh();
+
     app.refreshService.startAuto();
   } catch (error) {
     hideLoader();

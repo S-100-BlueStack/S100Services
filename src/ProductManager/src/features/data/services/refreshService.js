@@ -1,7 +1,6 @@
 import { findFeature } from "../../map/core/featureAdapter.js";
 import { getAllLayers, getLayer } from "../../map/core/layerRegistry.js";
 import { rebuildLayers } from "../../map/core/rebuildLayers.js";
-import { bindDisplayScaleVisibility } from "../../map/scale/displayScaleVisibility.js";
 let isRefreshing = false;
 let autoRefreshEnabled = true;
 let intervalId = null;
@@ -14,6 +13,7 @@ export function createRefreshService({
   hoverManager,
   loadAppData,
   addLayer,
+  onLayersRebuilt,
   onRefreshSuccess,
   onRefreshError,
 }) {
@@ -37,8 +37,8 @@ export function createRefreshService({
     if (state.popupVisible && state.selectedFeatureKey && state.selectedLayerId) {
       const graphic = findFeatureForRestore(state.selectedLayerId, state.selectedFeatureKey);
 
-      if (graphic) {
-        openPopup(view, {
+      if (graphic && graphic.visible !== false) {
+        view.popup.open({
           features: [graphic],
           location: getPopupLocation(graphic),
         });
@@ -48,7 +48,7 @@ export function createRefreshService({
     if (state.lockedFeatureKey && state.lockedLayerId) {
       const graphic = findFeatureForRestore(state.lockedLayerId, state.lockedFeatureKey);
 
-      if (graphic) {
+      if (graphic && graphic.visible !== false) {
         hoverManager.setLockedFeature(graphic);
       }
     }
@@ -107,15 +107,12 @@ export function createRefreshService({
 
       const createdLayers = await rebuildLayers({
         map,
-        view,
         hoverManager,
         layerConfigs: data.layers,
         createLayer: addLayer,
       });
 
-      bindDisplayScaleVisibility(view, {
-        layers: createdLayers,
-      });
+      await onLayersRebuilt?.(createdLayers);
 
       await restoreState(state);
       onRefreshSuccess?.();

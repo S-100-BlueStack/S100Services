@@ -8,6 +8,13 @@ import { createHoverManager } from "../features/map/interactions/hoverManager.js
 import { registerPopupHoverSync } from "../features/map/interactions/registerPopupHoverSync.js";
 import { bindOverlapPicker } from "../features/map/interactions/overlapPicker.js";
 import { addReferenceLayers } from "../features/map/layers/addReferenceLayers.js";
+import { getAllLayers } from "../features/map/core/layerRegistry.js";
+import {
+  applyDisplayScaleVisibility,
+  bindDisplayScaleVisibility,
+} from "../features/map/scale/displayScaleVisibility.js";
+import { createAttributeFilterService } from "../features/map/filters/attributeFilterService.js";
+import { initAttributeFilterPanel } from "../features/map/filters/attributeFilterPanel.js";
 
 function updateLastUpdated() {
   const el = document.getElementById("last-updated");
@@ -38,6 +45,28 @@ export function initMap() {
 
   registerPopupHoverSync(view, hoverManager);
 
+  const filterService = createAttributeFilterService();
+
+  const isGraphicAllowed = (graphic, layer) => {
+    return filterService.matchesGraphic(graphic, layer);
+  };
+
+  const applyMapVisibility = (layers = getAllLayers()) => {
+    applyDisplayScaleVisibility(view, layers, { isGraphicAllowed });
+  };
+
+  const bindMapVisibility = (layers = getAllLayers()) => {
+    bindDisplayScaleVisibility(view, {
+      layers,
+      isGraphicAllowed,
+    });
+  };
+
+  const filterPanel = initAttributeFilterPanel({
+    filterService,
+    applyVisibility: applyMapVisibility,
+  });
+
   bindOverlapPicker(view);
 
   const refreshService = createRefreshService({
@@ -46,6 +75,10 @@ export function initMap() {
     hoverManager,
     loadAppData,
     addLayer: createLayer,
+    onLayersRebuilt: (layers) => {
+      bindMapVisibility(layers);
+      filterPanel.refresh();
+    },
     onRefreshSuccess: () => {
       updateLastUpdated();
       noticeSuccess("Data refreshed", null, { countAsUnread: false });
@@ -60,6 +93,10 @@ export function initMap() {
     view,
     hoverManager,
     refreshService,
+    filterService,
+    filterPanel,
+    applyMapVisibility,
+    bindMapVisibility,
     updateLastUpdated,
   };
 }

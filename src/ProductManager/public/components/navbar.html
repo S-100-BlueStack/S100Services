@@ -8,6 +8,19 @@
   </div>
 
   <div class="header-right">
+    <!-- Filter panel -->
+    <div class="filter-wrapper">
+      <calcite-action
+        id="filter-button"
+        icon="filter"
+        text="Filters"
+        title="Filters"
+        aria-label="Filters"
+      ></calcite-action>
+
+      <span id="filter-count" hidden>0</span>
+    </div>
+
     <!-- Last updated -->
     <span
       id="last-updated"

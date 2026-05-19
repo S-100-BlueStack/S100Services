@@ -1,6 +1,7 @@
 import { getAllLayers } from "../core/layerRegistry.js";
 import { resetPopupActions, clearPopupActions } from "../popups/popupActionsConfig.js";
 import { statusColorConfig } from "../../../shared/config/colorsConfig.js";
+import { applyHeaderColor, resetHeaderColor } from "../popups/popupHeaderController.js";
 
 let activeClickHandle = null;
 
@@ -93,6 +94,7 @@ function getUniqueGraphicKey(graphic) {
 
 function openOverlapPickerPopup(view, { graphics, location }) {
   clearPopupActions(view);
+  resetHeaderColor(view);
 
   const content = createOverlapPickerContent({
     graphics,
@@ -109,6 +111,11 @@ function openOverlapPickerPopup(view, { graphics, location }) {
     location,
     content,
   });
+
+  // ArcGIS can re-render the popup after openPopup(), so reset again after the DOM settles.
+  requestAnimationFrame(() => {
+    resetHeaderColor(view);
+  });
 }
 
 function openGraphicPopup(view, { graphic, location }) {
@@ -118,6 +125,11 @@ function openGraphicPopup(view, { graphic, location }) {
   openPopup(view, {
     features: [graphic],
     location,
+  });
+
+  // Feature popup rendering is async, so apply the status header after the first paint.
+  requestAnimationFrame(() => {
+    applyHeaderColor(view);
   });
 }
 
@@ -135,42 +147,38 @@ function ensureGraphicHasPopupTemplate(graphic) {
 
 function createOverlapPickerContent({ graphics, onSelect }) {
   const container = document.createElement("div");
-  container.className = "list-group overlap-picker";
+  container.className = "overlap-picker";
 
   const sortedGraphics = [...graphics].sort(compareGraphicsForPicker);
 
   for (const graphic of sortedGraphics) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "list-group-item list-group-item-action overlap-picker__item";
-
-    const header = document.createElement("div");
-    header.className = "d-flex align-items-start gap-2";
+    button.className = "overlap-picker__item";
 
     const statusMarker = document.createElement("span");
     statusMarker.className = "overlap-picker__status-marker";
     statusMarker.style.backgroundColor = getStatusColor(graphic.attributes?.status, "outline");
 
     const textContainer = document.createElement("div");
-    textContainer.className = "flex-grow-1 min-width-0";
+    textContainer.className = "overlap-picker__content";
 
     const title = document.createElement("div");
-    title.className = "fw-semibold text-truncate";
+    title.className = "overlap-picker__title";
     title.textContent = getGraphicTitle(graphic);
 
     const subtitle = document.createElement("div");
-    subtitle.className = "small text-muted";
+    subtitle.className = "overlap-picker__subtitle";
     subtitle.textContent = getGraphicSubtitle(graphic);
 
     textContainer.appendChild(title);
 
-    if (subtitle) {
+    if (subtitle.textContent) {
       textContainer.appendChild(subtitle);
     }
 
-    header.appendChild(statusMarker);
-    header.appendChild(textContainer);
-    button.appendChild(header);
+    button.appendChild(statusMarker);
+    button.appendChild(textContainer);
 
     button.addEventListener("click", () => {
       onSelect(graphic);

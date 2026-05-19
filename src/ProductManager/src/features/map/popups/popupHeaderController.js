@@ -1,38 +1,60 @@
 import { getStatusColor } from "../../data/stores/statusStore";
 import { addNotice } from "../../notices/state/noticeStore";
+
 let currentFeatureId = null;
+let headerMode = "default";
 
 export function applyHeaderColor(view) {
+  if (isOverlapPickerPopup(view)) {
+    resetHeaderColor(view);
+    return;
+  }
+
   const feature = view.popup.selectedFeature;
-  if (!feature) return;
+
+  if (!feature) {
+    resetHeaderColor(view);
+    return;
+  }
+
+  headerMode = "feature";
 
   const featureId = feature.attributes.id ?? feature.uid;
   currentFeatureId = featureId;
 
-  waitForHeader(view, featureId);
+  waitForFeatureHeader(view, featureId);
 }
 
-function waitForHeader(view, featureId) {
-  const heading = view.popup.container?.querySelector(".esri-features__heading");
-  if (!heading) {
-    requestAnimationFrame(() => waitForHeader(view, featureId));
-    return;
-  }
+export function resetHeaderColor(view) {
+  headerMode = "default";
+  currentFeatureId = null;
 
-  const flowItem = heading.closest("calcite-flow-item");
-  const panel = flowItem?.shadowRoot?.querySelector("calcite-panel");
-  const header = panel?.shadowRoot?.querySelector(".header");
+  waitForDefaultHeader(view);
+}
+
+function waitForFeatureHeader(view, featureId, remainingFrames = 20) {
+  const header = getPopupHeader(view);
 
   if (!header) {
-    requestAnimationFrame(() => waitForHeader(view, featureId));
+    if (remainingFrames > 0) {
+      requestAnimationFrame(() => waitForFeatureHeader(view, featureId, remainingFrames - 1));
+    }
+
     return;
   }
 
-  if (currentFeatureId !== featureId) return;
+  if (headerMode !== "feature" || currentFeatureId !== featureId || isOverlapPickerPopup(view)) {
+    return;
+  }
 
   const feature = view.popup.selectedFeature;
-  const attr = feature.attributes;
 
+  if (!feature) {
+    resetHeaderColor(view);
+    return;
+  }
+
+  const attr = feature.attributes;
   const color = getStatusColor(attr.status)?.header ?? "#666";
 
   if (header.dataset.statusColor !== color) {
@@ -40,11 +62,72 @@ function waitForHeader(view, featureId) {
     header.style.color = "#ffffff";
     header.dataset.statusColor = color;
   }
+
   ensureCopyButton(header, attr.datasetName);
+}
+
+function waitForDefaultHeader(view, remainingFrames = 20) {
+  const header = getPopupHeader(view);
+
+  if (!header) {
+    if (remainingFrames > 0) {
+      requestAnimationFrame(() => waitForDefaultHeader(view, remainingFrames - 1));
+    }
+
+    return;
+  }
+
+  if (headerMode !== "default") {
+    return;
+  }
+
+  // Feature popups set inline styles inside Calcite Shadow DOM.
+  // The picker must remove those inline values so theme tokens can apply again.
+  header.style.removeProperty("background-color");
+  header.style.removeProperty("color");
+  delete header.dataset.statusColor;
+
+  removeCopyButton(header);
+}
+
+function getPopupHeader(view) {
+  const popupContainer =
+    view.popup.container ??
+    view.container?.querySelector(".esri-popup") ??
+    document.querySelector(".esri-popup");
+
+  if (!popupContainer) {
+    return null;
+  }
+
+  const heading = popupContainer.querySelector(".esri-features__heading");
+  const flowItem =
+    heading?.closest("calcite-flow-item") ?? popupContainer.querySelector("calcite-flow-item");
+
+  const panel =
+    flowItem?.shadowRoot?.querySelector("calcite-panel") ??
+    popupContainer.querySelector("calcite-panel");
+
+  return panel?.shadowRoot?.querySelector(".header") ?? null;
+}
+
+function isOverlapPickerPopup(view) {
+  const content = view.popup.content;
+
+  return content instanceof Element && content.classList.contains("overlap-picker");
+}
+
+function removeCopyButton(header) {
+  const btn = header.querySelector(".popup-copy-btn");
+
+  if (btn) {
+    btn.remove();
+  }
 }
 
 function ensureCopyButton(header, datasetName) {
   const actions = header.querySelector(".header-actions--end");
+
   if (!actions) return;
 
   let btn = actions.querySelector(".popup-copy-btn");
@@ -82,6 +165,6 @@ function ensureCopyButton(header, datasetName) {
     });
   }
 
-  // opdater altid datasetName når popup skifter feature
+  // Keep the copy action aligned with the currently selected feature.
   btn.dataset.datasetName = datasetName;
 }

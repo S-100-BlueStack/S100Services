@@ -11,6 +11,10 @@ export async function rebuildLayers({ map, hoverManager, layerConfigs, createLay
     const layers = normalizeCreatedLayers(createLayer(map, layerConfig));
 
     for (const layer of layers) {
+      // createLayer can return multiple ArcGIS layers for one logical app layer.
+      // Each concrete layer must be registered separately so view.whenLayerView receives a real layer.
+      layer.customId ??= layerConfig.id;
+
       registerLayer(layer);
       createdLayers.push(layer);
       layerViewPromises.push(hoverManager.registerLayer(layer));
