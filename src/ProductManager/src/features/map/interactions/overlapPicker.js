@@ -2,6 +2,7 @@ import { getAllLayers } from "../core/layerRegistry.js";
 import { resetPopupActions, clearPopupActions } from "../popups/popupActionsConfig.js";
 import { statusColorConfig } from "../../../shared/config/colorsConfig.js";
 import { applyHeaderColor, resetHeaderColor } from "../popups/popupHeaderController.js";
+import { formatStatusDisplayValue } from "../attributes/attributeDisplay.js";
 
 let activeClickHandle = null;
 
@@ -207,7 +208,7 @@ function getGraphicSubtitle(graphic) {
   const values = [];
 
   if (attributes.status !== undefined && attributes.status !== null) {
-    values.push(`Status: ${attributes.status}`);
+    values.push(`Status: ${formatStatusDisplayValue(attributes.status)}`);
   }
 
   if (attributes.edition !== undefined && attributes.edition !== null) {

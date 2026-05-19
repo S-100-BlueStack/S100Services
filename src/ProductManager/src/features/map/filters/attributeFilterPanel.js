@@ -1,3 +1,5 @@
+import { formatAttributeDisplayValue } from "../attributes/attributeDisplay.js";
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => {
     const entities = {
@@ -65,21 +67,22 @@ function renderField({ filterService, layerId, fieldName, openFieldKeys }) {
         ${values
           .map((entry) => {
             const checked = !selectedValues || selectedValues.has(entry.value);
+            const displayLabel = formatAttributeDisplayValue(fieldName, entry.value, entry.label);
 
             return `
-              <label class="pm-filter-value">
-                <input
-                  type="checkbox"
-                  data-filter-checkbox
-                  data-layer-id="${escapeHtml(layerId)}"
-                  data-field-name="${escapeHtml(fieldName)}"
-                  data-filter-value="${escapeHtml(entry.value)}"
-                  ${checked ? "checked" : ""}
-                />
-                <span class="pm-filter-value__label">${escapeHtml(entry.label)}</span>
-                <span class="pm-filter-value__count">${entry.count}</span>
-              </label>
-            `;
+    <label class="pm-filter-value">
+      <input
+        type="checkbox"
+        data-filter-checkbox
+        data-layer-id="${escapeHtml(layerId)}"
+        data-field-name="${escapeHtml(fieldName)}"
+        data-filter-value="${escapeHtml(entry.value)}"
+        ${checked ? "checked" : ""}
+      />
+      <span class="pm-filter-value__label">${escapeHtml(displayLabel)}</span>
+      <span class="pm-filter-value__count">${entry.count}</span>
+    </label>
+  `;
           })
           .join("")}
       </div>

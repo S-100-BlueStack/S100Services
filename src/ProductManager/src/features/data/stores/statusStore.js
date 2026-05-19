@@ -11,14 +11,22 @@ export async function loadStatuses() {
   });
 }
 
-export function getStatusName(id) {
-  return statusMap.get(id)?.Name ?? id;
-}
-
 export function getStatusColor(id) {
   return statusColorConfig[id];
 }
 
+export function getStatusName(id) {
+  const normalizedId = normalizeStatusId(id);
+
+  return statusMap.get(normalizedId)?.Name ?? id;
+}
+
 export function getStatus(id) {
-  return statusMap.get(id);
+  return statusMap.get(normalizeStatusId(id));
+}
+
+function normalizeStatusId(id) {
+  const number = Number(id);
+
+  return Number.isFinite(number) ? number : id;
 }
