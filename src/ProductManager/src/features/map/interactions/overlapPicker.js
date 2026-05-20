@@ -1,8 +1,7 @@
 import { getAllLayers } from "../core/layerRegistry.js";
-import { resetPopupActions, clearPopupActions } from "../popups/popupActionsConfig.js";
 import { statusColorConfig } from "../../../shared/config/colorsConfig.js";
-import { applyHeaderColor, resetHeaderColor } from "../popups/popupHeaderController.js";
 import { formatStatusDisplayValue } from "../attributes/attributeDisplay.js";
+import { applyHeaderColor, resetHeaderColor } from "../popups/popupHeaderController.js";
 
 let activeClickHandle = null;
 
@@ -94,8 +93,8 @@ function getUniqueGraphicKey(graphic) {
 }
 
 function openOverlapPickerPopup(view, { graphics, location }) {
-  clearPopupActions(view);
   resetHeaderColor(view);
+  view.popup.actions = [];
 
   const content = createOverlapPickerContent({
     graphics,
@@ -113,14 +112,13 @@ function openOverlapPickerPopup(view, { graphics, location }) {
     content,
   });
 
-  // ArcGIS can re-render the popup after openPopup(), so reset again after the DOM settles.
   requestAnimationFrame(() => {
     resetHeaderColor(view);
   });
 }
 
 function openGraphicPopup(view, { graphic, location }) {
-  resetPopupActions(view);
+  view.popup.actions = [];
   ensureGraphicHasPopupTemplate(graphic);
 
   openPopup(view, {
@@ -128,7 +126,6 @@ function openGraphicPopup(view, { graphic, location }) {
     location,
   });
 
-  // Feature popup rendering is async, so apply the status header after the first paint.
   requestAnimationFrame(() => {
     applyHeaderColor(view);
   });

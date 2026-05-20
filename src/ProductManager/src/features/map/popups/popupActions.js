@@ -54,7 +54,7 @@ function updateUI(view, frozen) {
 async function triggerFreeze(datasetName, state, anchorElement) {
   const confirmed = await confirmAction({
     title: `${state ? "Freeze" : "Unfreeze"} ${datasetName}`,
-    message: `Are you sure you want to ${state ? "freeze" : "unfreeze"} ${datasetName}?`,
+    message: `Are you sure you want to ${state ? "freeze" : "unfreeze"} ${datasetName}? Freezing a product will prevent it from being sent to IC-ENC until it is unfrozen.`,
     confirmText: "Confirm",
     cancelText: "Cancel",
     anchorElement,
@@ -91,7 +91,7 @@ async function sendImmediately(datasetName, anchorElement) {
 
   const confirmed = await confirmAction({
     title: `Send ${datasetName}`,
-    message: `Are you sure you want to send ${datasetName} immediately?`,
+    message: `Are you sure you want to send ${datasetName} immediately? This will upload the product to IC-ENC immediately without waiting for the daily automated upload.`,
     confirmText: "Send",
     cancelText: "Cancel",
     anchorElement,

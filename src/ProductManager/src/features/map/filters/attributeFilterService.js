@@ -1,7 +1,12 @@
 import { getAllLayers } from "../core/layerRegistry.js";
 
-const EXCLUDED_FIELDS = new Set(["datasetName"]);
+const EXCLUDED_FIELDS = new Set(["datasetName", "featureKey"]);
 const EMPTY_FILTER_VALUE = "__pm_empty_value__";
+
+const FILTER_MODE = {
+  VALUES: "values",
+  RANGE: "range",
+};
 
 function getLayerId(layer) {
   return layer?.appLayerId ?? layer?.customId ?? layer?.id ?? layer?.title ?? null;
@@ -17,6 +22,16 @@ function normalizeFilterValue(value) {
   }
 
   return String(value);
+}
+
+function toFiniteNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const number = Number(value);
+
+  return Number.isFinite(number) ? number : null;
 }
 
 function compareValues(a, b) {
@@ -56,20 +71,145 @@ export function createAttributeFilterService() {
     return layerFilters;
   }
 
+  function cleanupLayerFilters(layerId, layerFilters) {
+    if (layerFilters.size === 0) {
+      filtersByLayer.delete(layerId);
+    }
+  }
+
+  function getFilterSnapshot() {
+    const layers = [];
+
+    for (const [layerId, layerFilters] of filtersByLayer.entries()) {
+      const fields = [];
+
+      for (const [fieldName, filter] of layerFilters.entries()) {
+        if (filter.mode === FILTER_MODE.RANGE) {
+          fields.push({
+            fieldName,
+            mode: FILTER_MODE.RANGE,
+            min: filter.min,
+            max: filter.max,
+          });
+
+          continue;
+        }
+
+        fields.push({
+          fieldName,
+          mode: FILTER_MODE.VALUES,
+          values: Array.from(filter.values),
+        });
+      }
+
+      if (fields.length) {
+        layers.push({ layerId, fields });
+      }
+    }
+
+    return {
+      version: 1,
+      layers,
+    };
+  }
+
+  function applyFilterSnapshot(snapshot) {
+    filtersByLayer.clear();
+
+    if (!snapshot || snapshot.version !== 1 || !Array.isArray(snapshot.layers)) {
+      return false;
+    }
+
+    for (const layerEntry of snapshot.layers) {
+      if (!layerEntry?.layerId || !Array.isArray(layerEntry.fields)) {
+        continue;
+      }
+
+      const layerFilters = ensureLayerFilters(layerEntry.layerId);
+
+      for (const fieldEntry of layerEntry.fields) {
+        if (!isFilterableField(fieldEntry?.fieldName)) {
+          continue;
+        }
+
+        if (fieldEntry.mode === FILTER_MODE.RANGE) {
+          const min = toFiniteNumber(fieldEntry.min);
+          const max = toFiniteNumber(fieldEntry.max);
+
+          if (min === null || max === null) {
+            continue;
+          }
+
+          layerFilters.set(fieldEntry.fieldName, {
+            mode: FILTER_MODE.RANGE,
+            min: Math.min(min, max),
+            max: Math.max(min, max),
+          });
+
+          continue;
+        }
+
+        if (fieldEntry.mode === FILTER_MODE.VALUES && Array.isArray(fieldEntry.values)) {
+          layerFilters.set(fieldEntry.fieldName, {
+            mode: FILTER_MODE.VALUES,
+            values: new Set(fieldEntry.values.map(normalizeFilterValue)),
+          });
+        }
+      }
+
+      cleanupLayerFilters(layerEntry.layerId, layerFilters);
+    }
+
+    return true;
+  }
+
   function setFilter(layerId, fieldName, selectedValues, totalValuesCount) {
     const normalizedValues = new Set(Array.from(selectedValues ?? []).map(normalizeFilterValue));
-
     const layerFilters = ensureLayerFilters(layerId);
 
     if (normalizedValues.size === totalValuesCount) {
       layerFilters.delete(fieldName);
     } else {
-      layerFilters.set(fieldName, normalizedValues);
+      layerFilters.set(fieldName, {
+        mode: FILTER_MODE.VALUES,
+        values: normalizedValues,
+      });
     }
 
-    if (layerFilters.size === 0) {
-      filtersByLayer.delete(layerId);
+    cleanupLayerFilters(layerId, layerFilters);
+  }
+
+  function setRangeFilter(layerId, fieldName, minValue, maxValue, fullMinValue, fullMaxValue) {
+    const minNumber = toFiniteNumber(minValue);
+    const maxNumber = toFiniteNumber(maxValue);
+    const fullMinNumber = toFiniteNumber(fullMinValue);
+    const fullMaxNumber = toFiniteNumber(fullMaxValue);
+
+    if (
+      minNumber === null ||
+      maxNumber === null ||
+      fullMinNumber === null ||
+      fullMaxNumber === null
+    ) {
+      clearFilter(layerId, fieldName);
+      return;
     }
+
+    const normalizedMin = Math.min(minNumber, maxNumber);
+    const normalizedMax = Math.max(minNumber, maxNumber);
+    const layerFilters = ensureLayerFilters(layerId);
+
+    if (normalizedMin <= fullMinNumber && normalizedMax >= fullMaxNumber) {
+      layerFilters.delete(fieldName);
+    } else {
+      layerFilters.set(fieldName, {
+        mode: FILTER_MODE.RANGE,
+        min: normalizedMin,
+        max: normalizedMax,
+      });
+    }
+
+    cleanupLayerFilters(layerId, layerFilters);
   }
 
   function clearFilter(layerId, fieldName) {
@@ -80,10 +220,7 @@ export function createAttributeFilterService() {
     }
 
     layerFilters.delete(fieldName);
-
-    if (layerFilters.size === 0) {
-      filtersByLayer.delete(layerId);
-    }
+    cleanupLayerFilters(layerId, layerFilters);
   }
 
   function clearAll() {
@@ -91,7 +228,15 @@ export function createAttributeFilterService() {
   }
 
   function getSelectedValues(layerId, fieldName) {
-    return filtersByLayer.get(layerId)?.get(fieldName) ?? null;
+    const filter = filtersByLayer.get(layerId)?.get(fieldName);
+
+    return filter?.mode === FILTER_MODE.VALUES ? filter.values : null;
+  }
+
+  function getRangeFilter(layerId, fieldName) {
+    const filter = filtersByLayer.get(layerId)?.get(fieldName);
+
+    return filter?.mode === FILTER_MODE.RANGE ? filter : null;
   }
 
   function getActiveFilterCount() {
@@ -159,10 +304,23 @@ export function createAttributeFilterService() {
       return true;
     }
 
-    for (const [fieldName, selectedValues] of layerFilters.entries()) {
-      const value = normalizeFilterValue(graphic.attributes?.[fieldName]);
+    for (const [fieldName, filter] of layerFilters.entries()) {
+      const rawValue = graphic.attributes?.[fieldName];
 
-      if (!selectedValues.has(value)) {
+      if (filter.mode === FILTER_MODE.RANGE) {
+        const numberValue = toFiniteNumber(rawValue);
+
+        // Missing or non-numeric values should not match an active numeric range.
+        if (numberValue === null || numberValue < filter.min || numberValue > filter.max) {
+          return false;
+        }
+
+        continue;
+      }
+
+      const value = normalizeFilterValue(rawValue);
+
+      if (!filter.values.has(value)) {
         return false;
       }
     }
@@ -172,13 +330,17 @@ export function createAttributeFilterService() {
 
   return {
     setFilter,
+    setRangeFilter,
     clearFilter,
     clearAll,
     getSelectedValues,
+    getRangeFilter,
     getActiveFilterCount,
     getLayerIds,
     getFilterableFields,
     getValuesForField,
     matchesGraphic,
+    getFilterSnapshot,
+    applyFilterSnapshot,
   };
 }

@@ -1,9 +1,7 @@
 import MapView from "@arcgis/core/views/MapView.js";
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 import { highlightConfig } from "../../../shared/config/colorsConfig.js";
-import { registerPopupActions } from "../popups/popupActions.js";
 import { applyHeaderColor } from "../popups/popupHeaderController.js";
-import { createDefaultPopupActions } from "../popups/popupActionsConfig.js";
 
 export function createView(map) {
   const view = new MapView({
@@ -20,7 +18,7 @@ export function createView(map) {
         collapseButton: false,
         featureNavigation: false,
       },
-      actions: createDefaultPopupActions(),
+      actions: [],
     },
     highlights: highlightConfig,
   });
@@ -29,6 +27,7 @@ export function createView(map) {
     () => view.popup?.viewModel,
     () => {
       view.popup.viewModel.includeDefaultActions = false;
+      view.popup.actions = [];
     },
     { once: true }
   );
@@ -50,8 +49,6 @@ export function createView(map) {
     },
     { once: true }
   );
-
-  registerPopupActions(view);
 
   return view;
 }

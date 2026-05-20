@@ -6,6 +6,7 @@ import "@esri/calcite-components/components/calcite-shell";
 import "@esri/calcite-components/components/calcite-shell-panel";
 import "@esri/calcite-components/components/calcite-panel";
 import "@esri/calcite-components/components/calcite-action";
+import "@esri/calcite-components/components/calcite-slider";
 
 // import "@arcgis/core/assets/esri/themes/light/main.css";
 // import "@arcgis/core/assets/esri/themes/dark/main.css";

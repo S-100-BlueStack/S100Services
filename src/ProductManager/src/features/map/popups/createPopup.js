@@ -1,11 +1,10 @@
 import { getStatusName } from "../../data/stores/statusStore.js";
+import { createPopupActionBar } from "./popupActionBar.js";
 
 export function createPopup() {
   return {
     title: (event) => {
       const attr = event.graphic.attributes;
-
-      const statusName = getStatusName(attr.status);
 
       return `${attr.datasetName}`;
     },
@@ -14,14 +13,14 @@ export function createPopup() {
       const attr = event.graphic.attributes;
 
       const container = document.createElement("div");
-      container.className = "popup-container";
+      container.className = "popup-container popup-container--with-action-bar";
 
       const section = document.createElement("div");
       section.className = "popup-section";
 
+      container.appendChild(createPopupActionBar(event.graphic));
       container.appendChild(section);
 
-      //section.appendChild(createRow("Dataset", attr.datasetName, true));
       section.appendChild(createRow("Edition", attr.edition));
       section.appendChild(createRow("Update", attr.update));
       section.appendChild(createStatusRow(attr.status));

@@ -13,6 +13,7 @@ export function createDefaultPopupActions() {
       disabled: false,
       className: "popup-action popup-action-send",
     },
+    {},
   ];
 }
 
