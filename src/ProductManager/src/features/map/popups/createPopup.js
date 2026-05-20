@@ -24,7 +24,7 @@ export function createPopup() {
       section.appendChild(createRow("Edition", attr.edition));
       section.appendChild(createRow("Update", attr.update));
       section.appendChild(createStatusRow(attr.status));
-
+      section.appendChild(createRow("Error Message", attr.errorMessage));
       return container;
     },
 
