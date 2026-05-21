@@ -4,10 +4,38 @@ export async function loadNavbar() {
 
   document.getElementById("navbar").innerHTML = html;
 
-  const docButton = document.getElementById("documentation-button");
-  if (docButton) {
-    docButton.addEventListener("click", () => {
-      window.open("#", "_blank");
-    });
+  initializeNavbarLinks();
+  initializeDocumentationButton();
+}
+
+function initializeNavbarLinks() {
+  const homeLink = document.querySelector("[data-nav-home-link]");
+  const analyzeLink = document.querySelector("[data-nav-analyze-link]");
+
+  if (homeLink) {
+    homeLink.href = getAppUrl("");
   }
+
+  if (analyzeLink) {
+    analyzeLink.href = getAppUrl("analyze/");
+  }
+}
+
+function initializeDocumentationButton() {
+  const docButton = document.getElementById("documentation-button");
+
+  if (!docButton) {
+    return;
+  }
+
+  docButton.addEventListener("click", () => {
+    window.open("#", "_blank", "noopener,noreferrer");
+  });
+}
+
+function getAppUrl(path) {
+  const baseUrl = String(import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
+  const normalizedPath = String(path || "").replace(/^\/+/, "");
+
+  return `${baseUrl}${normalizedPath}`;
 }

@@ -1,3 +1,4 @@
+import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
 import { noticeError, noticeInfo, noticeSuccess } from "../../notices/services/noticeService.js";
 import { changeFreezeState, uploadProduct } from "../../data/api/productApi.js";
 import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
@@ -52,7 +53,7 @@ export function createPopupActionBar(graphic) {
             },
           ],
         }),
-        createRollbackAction(),
+        createRollbackAction({ attributes }),
         createDropdownAction({
           id: "tools",
           label: "Tools",
@@ -63,7 +64,7 @@ export function createPopupActionBar(graphic) {
               label: "Analyze",
               icon: "magnifying-glass",
               onClick: () => {
-                noticeInfo("Analyze is not available yet", attributes.datasetName);
+                openAnalyzePage(attributes.datasetName);
               },
             },
           ],
@@ -137,13 +138,13 @@ function createDropdownAction({ id, label, icon, items }) {
   });
 }
 
-function createRollbackAction() {
+function createRollbackAction({ attributes }) {
   return createAction({
     id: "rollback",
     label: "Rollback",
     icon: "undo",
     className: "popup-action-bar__action--rollback",
-    onClick: ({ anchorElement }) => {
+    onClick: () => {
       noticeInfo("Rollback is not available yet", attributes.datasetName);
     },
   });
@@ -248,6 +249,7 @@ function createDropdownItem(itemConfig) {
     event.stopPropagation();
 
     closePopupActionDropdown();
+
     await itemConfig.onClick?.();
   });
 
@@ -292,10 +294,29 @@ function getFeatureKey(attributes) {
   return attributes.featureKey ?? attributes.datasetName ?? attributes.id;
 }
 
+function openAnalyzePage(datasetName) {
+  if (!datasetName) {
+    noticeError("Cannot analyze product", "The selected feature does not have a datasetName.");
+    return;
+  }
+
+  const analyzeUrl = buildAnalyzeUrl([datasetName]);
+  const openedWindow = window.open(analyzeUrl, "_blank", "noopener,noreferrer");
+
+  if (!openedWindow) {
+    noticeError(
+      "Analyze page was blocked",
+      "The browser blocked the new tab. Allow popups for this site and try again."
+    );
+  }
+}
+
 async function triggerFreeze(datasetName, state, anchorElement) {
   const confirmed = await confirmAction({
     title: `${state ? "Freeze" : "Unfreeze"} ${datasetName}`,
-    message: `Are you sure you want to ${state ? "freeze" : "unfreeze"} ${datasetName}? Freezing a product will prevent it from being sent to IC-ENC until it is unfrozen.`,
+    message: `Are you sure you want to ${
+      state ? "freeze" : "unfreeze"
+    } ${datasetName}? Freezing a product will prevent it from being sent to IC-ENC until it is unfrozen.`,
     confirmText: "Confirm",
     cancelText: "Cancel",
     anchorElement,
@@ -316,7 +337,7 @@ async function triggerFreeze(datasetName, state, anchorElement) {
   } else {
     noticeError(
       `Failed to ${state ? "freeze" : "unfreeze"} ${datasetName} (${result.status})`,
-      ` ${result.statusText}`
+      `${result.statusText}`
     );
   }
 
@@ -356,17 +377,5 @@ async function sendImmediately(datasetName, anchorElement) {
     }
   } finally {
     isSending = false;
-  }
-}
-
-async function copyDatasetName(datasetName) {
-  try {
-    await navigator.clipboard.writeText(datasetName);
-
-    noticeSuccess("Dataset name copied", null, {
-      countAsUnread: false,
-    });
-  } catch {
-    noticeError("Failed to copy dataset name");
   }
 }
