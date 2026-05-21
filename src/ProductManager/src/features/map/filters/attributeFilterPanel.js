@@ -1,6 +1,8 @@
 import "@esri/calcite-components/components/calcite-slider";
 import { formatAttributeDisplayValue } from "../attributes/attributeDisplay.js";
 import { ATTRIBUTE_FILTER_CONFIG } from "./attributeFilterConfig.js";
+import { setDisplayScaleHidingDisabled } from "../scale/displayScaleOverrideState.js";
+
 function readSavedFilterSnapshot() {
   try {
     const rawValue = window.localStorage.getItem(ATTRIBUTE_FILTER_CONFIG.storageKey);
@@ -489,6 +491,7 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
   panel.setAttribute("aria-label", "Attribute filters");
 
   let hasInitializedFilterState = false;
+  let wasDisplayScaleFilterActive = false;
 
   document.body.append(panel);
 
@@ -553,6 +556,28 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
     badge.textContent = String(activeCount);
   }
 
+  function autoDisableScaleHidingForDisplayScaleFilter() {
+    if (!filterService.hasActiveDisplayScaleFilter()) {
+      return;
+    }
+
+    setDisplayScaleHidingDisabled(true, {
+      source: "displayScaleFilter",
+    });
+  }
+
+  function syncDisplayScaleFilterAutoDisable() {
+    const isDisplayScaleFilterActive = filterService.hasActiveDisplayScaleFilter();
+
+    if (isDisplayScaleFilterActive && !wasDisplayScaleFilterActive) {
+      setDisplayScaleHidingDisabled(true, {
+        source: "displayScaleFilter",
+      });
+    }
+
+    wasDisplayScaleFilterActive = isDisplayScaleFilterActive;
+  }
+
   function render() {
     const layerIds = filterService.getLayerIds();
     const didInitializeFilterState = initializeFilterStateIfNeeded(layerIds);
@@ -587,6 +612,7 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
 
     refreshBadge();
     if (didInitializeFilterState) {
+      syncDisplayScaleFilterAutoDisable();
       applyVisibility();
     }
   }
@@ -597,6 +623,7 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
 
     filterService.setFilter(layerId, fieldName, selectedValues, values.length);
     writeFilterSnapshot(filterService);
+    syncDisplayScaleFilterAutoDisable();
 
     applyVisibility();
     render();
@@ -635,16 +662,8 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
       entries[entries.length - 1].numericValue
     );
 
-    filterService.setRangeFilter(
-      layerId,
-      fieldName,
-      entries[minIndex].numericValue,
-      entries[maxIndex].numericValue,
-      entries[0].numericValue,
-      entries[entries.length - 1].numericValue
-    );
-
     writeFilterSnapshot(filterService);
+    syncDisplayScaleFilterAutoDisable();
 
     applyVisibility();
     render();
@@ -701,6 +720,9 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
 
     if (clearAllButton) {
       filterService.clearAll();
+      writeFilterSnapshot(filterService);
+      syncDisplayScaleFilterAutoDisable();
+
       applyVisibility();
       render();
       return;
@@ -713,6 +735,9 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
         selectFieldButton.dataset.layerId,
         selectFieldButton.dataset.fieldName
       );
+      writeFilterSnapshot(filterService);
+      syncDisplayScaleFilterAutoDisable();
+
       applyVisibility();
       render();
       return;
@@ -730,6 +755,9 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
           clearFieldButton.dataset.fieldName
         ).length
       );
+      writeFilterSnapshot(filterService);
+      syncDisplayScaleFilterAutoDisable();
+
       applyVisibility();
       render();
       return;
@@ -742,6 +770,9 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
         resetRangeButton.dataset.layerId,
         resetRangeButton.dataset.fieldName
       );
+      writeFilterSnapshot(filterService);
+      syncDisplayScaleFilterAutoDisable();
+
       applyVisibility();
       render();
     }

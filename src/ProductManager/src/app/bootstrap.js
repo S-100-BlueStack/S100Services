@@ -11,6 +11,7 @@ import { initUI } from "./initUI.js";
 import { loadInitialData } from "./loadInitialData.js";
 import { initializeTheme } from "../features/themes/themeService.js";
 import { registerThemeToggle } from "../features/themes/themeToggle.js";
+import { initDisplayScaleOverrideControl } from "../features/map/scale/displayScaleOverrideControl.js";
 
 async function waitForCalcite() {
   await customElements.whenDefined("calcite-loader");
@@ -39,6 +40,7 @@ async function bootstrapMainRoute() {
     showLoader("Initializing application...");
     setLoaderText("Initializing UI...");
     await initUI();
+    initDisplayScaleOverrideControl();
 
     setLoaderText("Initializing map...");
     const app = initMap();

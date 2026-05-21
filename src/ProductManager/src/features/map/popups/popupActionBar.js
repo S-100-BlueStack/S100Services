@@ -351,7 +351,7 @@ async function sendImmediately(datasetName, anchorElement) {
 
   const confirmed = await confirmAction({
     title: `Send ${datasetName}`,
-    message: `Are you sure you want to send ${datasetName} immediately? This will upload the product to IC-ENC immediately without waiting for the daily automated upload.`,
+    message: `Are you sure you want to send ${datasetName} immediately? This will upload the product to IC-ENC immediately without waiting for the automated upload.`,
     confirmText: "Send",
     cancelText: "Cancel",
     anchorElement,

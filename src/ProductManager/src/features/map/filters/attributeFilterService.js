@@ -8,6 +8,8 @@ const FILTER_MODE = {
   RANGE: "range",
 };
 
+const DISPLAY_SCALE_FIELD_KEY = "displayscale";
+
 function getLayerId(layer) {
   return layer?.appLayerId ?? layer?.customId ?? layer?.id ?? layer?.title ?? null;
 }
@@ -43,6 +45,13 @@ function compareValues(a, b) {
   }
 
   return a.label.localeCompare(b.label);
+}
+
+function normalizeFieldKey(fieldName) {
+  return String(fieldName ?? "")
+    .trim()
+    .replace(/[_\-\s]/g, "")
+    .toLowerCase();
 }
 
 function getSourceLayers(layerId) {
@@ -249,6 +258,18 @@ export function createAttributeFilterService() {
     return count;
   }
 
+  function hasActiveDisplayScaleFilter() {
+    for (const layerFilters of filtersByLayer.values()) {
+      for (const fieldName of layerFilters.keys()) {
+        if (normalizeFieldKey(fieldName) === DISPLAY_SCALE_FIELD_KEY) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   function getLayerIds() {
     const layerIds = new Set();
 
@@ -336,6 +357,7 @@ export function createAttributeFilterService() {
     getSelectedValues,
     getRangeFilter,
     getActiveFilterCount,
+    hasActiveDisplayScaleFilter,
     getLayerIds,
     getFilterableFields,
     getValuesForField,

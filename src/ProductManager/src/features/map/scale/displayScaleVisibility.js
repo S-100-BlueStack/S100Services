@@ -1,7 +1,12 @@
 import { watch } from "@arcgis/core/core/reactiveUtils.js";
 import { isGraphicVisibleAtScale } from "./displayScale.js";
+import {
+  isDisplayScaleHidingDisabled,
+  onDisplayScaleOverrideChange,
+} from "./displayScaleOverrideState.js";
 
 let activeScaleHandle = null;
+let activeOverrideHandle = null;
 let pendingAnimationFrame = null;
 
 export function bindDisplayScaleVisibility(view, { layers, isGraphicAllowed = () => true } = {}) {
@@ -33,6 +38,10 @@ export function bindDisplayScaleVisibility(view, { layers, isGraphicAllowed = ()
     }
   );
 
+  activeOverrideHandle = onDisplayScaleOverrideChange(() => {
+    scheduleVisibilityUpdate();
+  });
+
   return {
     remove: removeDisplayScaleVisibilityBinding,
   };
@@ -51,12 +60,17 @@ export function applyDisplayScaleVisibility(view, layers, { isGraphicAllowed = (
     return;
   }
 
+  const ignoreDisplayScale = isDisplayScaleHidingDisabled();
+
   for (const layer of targetLayers) {
     const graphics = layer.graphics?.toArray?.() ?? [];
 
     for (const graphic of graphics) {
-      graphic.visible =
-        isGraphicVisibleAtScale(graphic, viewScale) && isGraphicAllowed(graphic, layer);
+      const visibleAtScale = ignoreDisplayScale || isGraphicVisibleAtScale(graphic, viewScale);
+
+      // Keep filter visibility separate from displayScale visibility so filters
+      // still hide graphics even when the user disables scale-based hiding.
+      graphic.visible = visibleAtScale && isGraphicAllowed(graphic, layer);
     }
   }
 }
@@ -73,6 +87,11 @@ function removeDisplayScaleVisibilityBinding() {
   if (activeScaleHandle) {
     activeScaleHandle.remove();
     activeScaleHandle = null;
+  }
+
+  if (activeOverrideHandle) {
+    activeOverrideHandle.remove();
+    activeOverrideHandle = null;
   }
 
   if (pendingAnimationFrame !== null) {

@@ -773,6 +773,40 @@ html.calcite-mode-dark .overlap-picker__status-marker {
   text-underline-offset: 4px;
 }
 
+.navbar-switch-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 8px;
+  color: #ffffff;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.navbar-switch-control:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.navbar-switch-control__label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  color: #ffffff;
+}
+
+#display-scale-toggle {
+  --calcite-switch-track-color: rgba(255, 255, 255, 0.35);
+  --calcite-switch-track-color-hover: rgba(255, 255, 255, 0.45);
+  --calcite-switch-track-color-checked: #ffffff;
+  --calcite-switch-handle-color: #ffffff;
+  --calcite-switch-handle-color-checked: #456178;
+}
+
+.pm-analyze-route #display-scale-toggle-wrapper {
+  display: none;
+}
+
 /* =========================================================
    Filter panel
    The panel is plain DOM instead of a Calcite overlay, so it needs
@@ -1099,6 +1133,7 @@ html.calcite-mode-dark .overlap-picker__status-marker {
 .pm-analyze-route #filter-button,
 .pm-analyze-route #filter-count,
 .pm-analyze-route #refresh-button,
+.pm-analyze-route #display-scale-toggle,
 .pm-analyze-route #last-updated {
   display: none;
 }
