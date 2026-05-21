@@ -41,25 +41,36 @@ export async function fetchProductPropertiesByDatasetName(datasetName) {
     };
   }
 
+  const normalizedData = normalizeElectronicProductResponse(result.data, datasetName);
+
   return {
     ...result,
-    data: normalizeElectronicProductResponse(result.data),
+    data: normalizedData,
+  };
+
+  return {
+    ...result,
+    data: normalizeElectronicProductResponse(result.data, datasetName),
   };
 }
 
-function normalizeElectronicProductResponse(data) {
-  const attributes = findElectronicProductAttributes(data);
+function normalizeElectronicProductResponse(data, datasetName) {
+  const attributes = findElectronicProductAttributes(data, datasetName);
 
   return attributes ?? {};
 }
 
-function findElectronicProductAttributes(value) {
+function findElectronicProductAttributes(value, datasetName) {
   if (!value) {
     return null;
   }
 
   if (Array.isArray(value)) {
-    return value.map(findElectronicProductAttributes).find(Boolean) ?? null;
+    const candidates = value
+      .map((item) => findElectronicProductAttributes(item, datasetName))
+      .filter(Boolean);
+
+    return findMatchingDataset(candidates, datasetName) ?? candidates[0] ?? null;
   }
 
   if (typeof value !== "object") {
@@ -72,14 +83,68 @@ function findElectronicProductAttributes(value) {
     return directAttributes;
   }
 
+  const nestedCandidates = [
+    value.feature,
+    value.Feature,
+    value.features,
+    value.Features,
+    value.data,
+    value.Data,
+    value.result,
+    value.Result,
+    value.product,
+    value.Product,
+    value.products,
+    value.Products,
+    value.electronicProduct,
+    value.ElectronicProduct,
+    value.electronicProducts,
+    value.ElectronicProducts,
+    value.item,
+    value.Item,
+    value.items,
+    value.Items,
+    value.value,
+    value.Value,
+  ];
+
+  for (const candidate of nestedCandidates) {
+    const attributes = findElectronicProductAttributes(candidate, datasetName);
+
+    if (attributes) {
+      return attributes;
+    }
+  }
+
+  return null;
+}
+
+function findMatchingDataset(candidates, datasetName) {
+  if (!datasetName) {
+    return null;
+  }
+
   return (
-    findElectronicProductAttributes(value.data) ??
-    findElectronicProductAttributes(value.result) ??
-    findElectronicProductAttributes(value.product) ??
-    findElectronicProductAttributes(value.electronicProduct) ??
-    findElectronicProductAttributes(value.item) ??
-    findElectronicProductAttributes(value.value)
+    candidates.find((attributes) => {
+      return normalizeDatasetName(getDatasetName(attributes)) === normalizeDatasetName(datasetName);
+    }) ?? null
   );
+}
+
+function getDatasetName(attributes) {
+  return (
+    attributes?.datasetName ??
+    attributes?.DatasetName ??
+    attributes?.datasetname ??
+    attributes?.name ??
+    attributes?.Name
+  );
+}
+
+function normalizeDatasetName(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 function hasProductAttributeShape(value) {
@@ -90,8 +155,15 @@ function hasProductAttributeShape(value) {
   return (
     Object.hasOwn(value, "datasetName") ||
     Object.hasOwn(value, "DatasetName") ||
+    Object.hasOwn(value, "datasetname") ||
+    Object.hasOwn(value, "edition") ||
+    Object.hasOwn(value, "Edition") ||
+    Object.hasOwn(value, "update") ||
+    Object.hasOwn(value, "Update") ||
     Object.hasOwn(value, "status") ||
     Object.hasOwn(value, "Status") ||
+    Object.hasOwn(value, "state") ||
+    Object.hasOwn(value, "State") ||
     Object.hasOwn(value, "productState") ||
     Object.hasOwn(value, "ProductState")
   );
