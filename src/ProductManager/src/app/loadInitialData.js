@@ -62,9 +62,13 @@ export async function loadInitialData(app) {
 
     const layers = normalizeLayers(result);
 
-    debugLoadedLayers(layers);
+    // debugLoadedLayers(layers);
 
-    setLoaderText(`Rendering ${layers.length} layer${layers.length === 1 ? "" : "s"}...`);
+    setLoaderText(`Rendering ${layers.length} data layer${layers.length === 1 ? "" : "s"}...`);
+
+    // Let the loader text/spinner paint before the synchronous ArcGIS graphics work starts.
+    // Without this yield, the UI can look frozen even though loading is progressing.
+    await waitForNextPaint();
 
     const renderSummary = await bindDataToMap({
       map: app.map,
@@ -73,10 +77,11 @@ export async function loadInitialData(app) {
       layers,
     });
 
-    await debugMapState(app, renderSummary);
+    // await debugMapState(app, renderSummary);
 
     const totalGraphics =
-      getTotalGraphicsFromRenderSummary(renderSummary) ?? getTotalGraphicsFromMap(app.map);
+      getUserFacingGraphicsFromRenderSummary(renderSummary) ??
+      getUserFacingGraphicsFromMap(app.map);
 
     app.updateLastUpdated();
 
@@ -119,128 +124,136 @@ function normalizeLayers(result) {
   return layers;
 }
 
-function debugLoadedLayers(layers) {
-  console.groupCollapsed("[Map debug] Loaded data layers");
+// function debugLoadedLayers(layers) {
+//   console.groupCollapsed("[Map debug] Loaded data layers");
 
-  console.table(
-    layers.map((layer, index) => ({
-      index,
-      id: layer.id ?? layer.name ?? layer.title ?? "(unknown)",
-      title: layer.title ?? null,
-      featureCount: getFeatureCount(layer),
-      hasFeaturesArray: Array.isArray(layer.features),
-      hasGeoJsonFeatures: Array.isArray(layer.geoJson?.features),
-      hasDataFeatures: Array.isArray(layer.data?.features),
-      geometryType: getFirstGeometryType(layer),
-      firstCoordinates: getFirstCoordinates(layer),
-    }))
-  );
+//   console.table(
+//     layers.map((layer, index) => ({
+//       index,
+//       id: layer.id ?? layer.name ?? layer.title ?? "(unknown)",
+//       title: layer.title ?? null,
+//       featureCount: getFeatureCount(layer),
+//       hasFeaturesArray: Array.isArray(layer.features),
+//       hasGeoJsonFeatures: Array.isArray(layer.geoJson?.features),
+//       hasDataFeatures: Array.isArray(layer.data?.features),
+//       geometryType: getFirstGeometryType(layer),
+//       firstCoordinates: getFirstCoordinates(layer),
+//     }))
+//   );
 
-  console.log("Raw loaded layers:", layers);
-  console.groupEnd();
-}
+//   console.log("Raw loaded layers:", layers);
+//   console.groupEnd();
+// }
 
-async function debugMapState(app, renderSummary) {
-  const mapLayers = app.map.layers?.toArray?.() ?? [];
+// async function debugMapState(app, renderSummary) {
+//   const mapLayers = app.map.layers?.toArray?.() ?? [];
 
-  console.groupCollapsed("[Map debug] Map state after bindDataToMap");
+//   console.groupCollapsed("[Map debug] Map state after bindDataToMap");
 
-  console.log("Render summary from bindDataToMap:", renderSummary);
+//   console.log("Render summary from bindDataToMap:", renderSummary);
 
-  console.table(
-    mapLayers.map((layer, index) => ({
-      index,
-      id: layer.id,
-      title: layer.title,
-      type: layer.type,
-      visible: layer.visible,
-      opacity: layer.opacity,
-      graphicsCount: layer.graphics?.length ?? null,
-      hasRenderer: Boolean(layer.renderer),
-      minScale: layer.minScale,
-      maxScale: layer.maxScale,
-    }))
-  );
+//   console.table(
+//     mapLayers.map((layer, index) => ({
+//       index,
+//       id: layer.id,
+//       title: layer.title,
+//       type: layer.type,
+//       visible: layer.visible,
+//       opacity: layer.opacity,
+//       graphicsCount: layer.graphics?.length ?? null,
+//       hasRenderer: Boolean(layer.renderer),
+//       minScale: layer.minScale,
+//       maxScale: layer.maxScale,
+//     }))
+//   );
 
-  console.table({
-    mapLayerCount: mapLayers.length,
-    totalGraphicsInMap: getTotalGraphicsFromMap(app.map),
-    viewReady: app.view.ready,
-    viewUpdating: app.view.updating,
-    viewScale: app.view.scale,
-    center: JSON.stringify(app.view.center?.toJSON?.() ?? null),
-    extent: JSON.stringify(app.view.extent?.toJSON?.() ?? null),
-  });
+//   console.table({
+//     mapLayerCount: mapLayers.length,
+//     totalGraphicsInMap: getTotalGraphicsFromMap(app.map),
+//     viewReady: app.view.ready,
+//     viewUpdating: app.view.updating,
+//     viewScale: app.view.scale,
+//     center: JSON.stringify(app.view.center?.toJSON?.() ?? null),
+//     extent: JSON.stringify(app.view.extent?.toJSON?.() ?? null),
+//   });
 
-  logFirstGraphics(mapLayers);
+//   logFirstGraphics(mapLayers);
 
-  await debugLayerViews(app.view, mapLayers);
+//   await debugLayerViews(app.view, mapLayers);
 
-  console.groupEnd();
-}
+//   console.groupEnd();
+// }
 
-async function debugLayerViews(view, layers) {
-  const results = await Promise.all(
-    layers.map(async (layer) => {
-      try {
-        const layerView = await view.whenLayerView(layer);
+// async function debugLayerViews(view, layers) {
+//   const results = await Promise.all(
+//     layers.map(async (layer) => {
+//       try {
+//         const layerView = await view.whenLayerView(layer);
 
-        return {
-          id: layer.id,
-          title: layer.title,
-          type: layer.type,
-          layerViewCreated: true,
-          suspended: layerView.suspended,
-          updating: layerView.updating,
-        };
-      } catch (error) {
-        return {
-          id: layer.id,
-          title: layer.title,
-          type: layer.type,
-          layerViewCreated: false,
-          error: error.message,
-        };
-      }
-    })
-  );
+//         return {
+//           id: layer.id,
+//           title: layer.title,
+//           type: layer.type,
+//           layerViewCreated: true,
+//           suspended: layerView.suspended,
+//           updating: layerView.updating,
+//         };
+//       } catch (error) {
+//         return {
+//           id: layer.id,
+//           title: layer.title,
+//           type: layer.type,
+//           layerViewCreated: false,
+//           error: error.message,
+//         };
+//       }
+//     })
+//   );
 
-  console.table(results);
-}
+//   console.table(results);
+// }
 
-function logFirstGraphics(layers) {
-  for (const layer of layers) {
-    const firstGraphic = layer.graphics?.at?.(0);
+// function logFirstGraphics(layers) {
+//   for (const layer of layers) {
+//     const firstGraphic = layer.graphics?.at?.(0);
 
-    if (!firstGraphic) {
-      continue;
-    }
+//     if (!firstGraphic) {
+//       continue;
+//     }
 
-    console.groupCollapsed(`[Map debug] First graphic in layer: ${layer.title ?? layer.id}`);
+//     console.groupCollapsed(`[Map debug] First graphic in layer: ${layer.title ?? layer.id}`);
 
-    console.log("Geometry:", firstGraphic.geometry?.toJSON?.() ?? firstGraphic.geometry);
-    console.log("Symbol:", firstGraphic.symbol);
-    console.log("Attributes:", firstGraphic.attributes);
-    console.log("Popup template:", firstGraphic.popupTemplate);
+//     console.log("Geometry:", firstGraphic.geometry?.toJSON?.() ?? firstGraphic.geometry);
+//     console.log("Symbol:", firstGraphic.symbol);
+//     console.log("Attributes:", firstGraphic.attributes);
+//     console.log("Popup template:", firstGraphic.popupTemplate);
 
-    console.groupEnd();
-  }
-}
+//     console.groupEnd();
+//   }
+// }
 
-function getTotalGraphicsFromRenderSummary(renderSummary) {
+function getUserFacingGraphicsFromRenderSummary(renderSummary) {
   if (!Array.isArray(renderSummary?.renderedLayers)) {
     return null;
   }
 
   return renderSummary.renderedLayers.reduce((sum, layer) => {
+    if (!isUserFacingDataLayer(layer)) {
+      return sum;
+    }
+
     return sum + (layer.graphicsCount ?? 0);
   }, 0);
 }
 
-function getTotalGraphicsFromMap(map) {
+function getUserFacingGraphicsFromMap(map) {
   const layers = map.layers?.toArray?.() ?? [];
 
   return layers.reduce((sum, layer) => {
+    if (!isUserFacingDataLayer(layer)) {
+      return sum;
+    }
+
     return sum + (layer.graphics?.length ?? 0);
   }, 0);
 }
@@ -289,4 +302,20 @@ function getFirstCoordinates(layer) {
   }
 
   return JSON.stringify(coordinates).slice(0, 200);
+}
+
+function isUserFacingDataLayer(layer) {
+  const role = layer.role ?? layer.appLayerRole;
+
+  // Overview graphics are duplicated representations of the same features.
+  // They should not be included in user-facing loaded/rendered counts.
+  return role !== "overview";
+}
+
+function waitForNextPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve);
+    });
+  });
 }
