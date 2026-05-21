@@ -93,7 +93,7 @@ function createSendAction({ attributes, frozen }) {
 
 function createExportAction({ attributes, frozen }) {
   const disabledReason = "Unfreeze the product before exporting.";
-
+  const disabledUnimplementedReason = "Feature is not available yet.";
   return createDropdownAction({
     id: "export",
     label: "Export...",
@@ -115,6 +115,46 @@ function createExportAction({ attributes, frozen }) {
         icon: "notepad-edit",
         disabled: frozen,
         disabledReason,
+        onClick: () => {
+          noticeInfo("Export update is not available yet", attributes.datasetName);
+        },
+      },
+      {
+        id: "s57-export-edition",
+        label: "S57 Edition",
+        icon: "notepad-add",
+        disabled: true,
+        disabledReason: disabledUnimplementedReason,
+        onClick: () => {
+          noticeInfo("Export edition is not available yet", attributes.datasetName);
+        },
+      },
+      {
+        id: "s57-export-update",
+        label: "S57 Update",
+        icon: "notepad-edit",
+        disabled: true,
+        disabledReason: disabledUnimplementedReason,
+        onClick: () => {
+          noticeInfo("Export update is not available yet", attributes.datasetName);
+        },
+      },
+      {
+        id: "s101-export-edition",
+        label: "S101 Edition",
+        icon: "notepad-add",
+        disabled: true,
+        disabledReason: disabledUnimplementedReason,
+        onClick: () => {
+          noticeInfo("Export edition is not available yet", attributes.datasetName);
+        },
+      },
+      {
+        id: "s101-export-update",
+        label: "S101 Update",
+        icon: "notepad-edit",
+        disabled: true,
+        disabledReason: disabledUnimplementedReason,
         onClick: () => {
           noticeInfo("Export update is not available yet", attributes.datasetName);
         },
@@ -261,7 +301,10 @@ function createDropdownItem(itemConfig) {
 
   if (disabled) {
     item.setAttribute("aria-disabled", "true");
-    item.title = itemConfig.disabledReason ?? "";
+    item.title =
+      itemConfig.disabledReason ??
+      itemConfig.disabledUnimplementedReason ??
+      "This action is unavailable.";
   }
 
   const icon = document.createElement("calcite-icon");

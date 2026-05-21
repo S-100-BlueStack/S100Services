@@ -221,9 +221,9 @@ function createProductCard(product) {
   const rows = document.createElement("div");
   rows.className = "analyze-product-card__rows";
 
-  rows.appendChild(createInfoRow("Status", getStatusName(product.status)));
   rows.appendChild(createInfoRow("Edition", product.edition));
   rows.appendChild(createInfoRow("Update", product.update));
+  rows.appendChild(createInfoRow("Status", getStatusName(product.status)));
   rows.appendChild(createInfoRow("AOI geometry", product.aoiGeometry ? "Loaded" : "Missing"));
 
   if (product.errorMessage) {

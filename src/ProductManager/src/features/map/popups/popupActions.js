@@ -1,3 +1,13 @@
+// DEPRECATED:
+// This file belongs to the old Esri popup action flow based on view.popup.actions
+// and the popup "trigger-action" event.
+//
+// The current implementation renders a custom popup action bar from:
+// - src/features/map/popups/createPopup.js
+// - src/features/map/popups/popupActionBar.js
+//
+// Do not add new behavior here. Move popup action behavior to popupActionBar.js
+// and remove this file when createView.js no longer imports registerPopupActions.
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 import { noticeError, noticeInfo, noticeSuccess } from "../../notices/services/noticeService.js";
 import { changeFreezeState, uploadProduct } from "../../data/api/productApi.js";

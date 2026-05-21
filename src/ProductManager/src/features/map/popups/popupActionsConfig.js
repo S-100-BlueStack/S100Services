@@ -1,3 +1,12 @@
+// DEPRECATED:
+// This file defines the old Esri popup action arrays for view.popup.actions.
+//
+// The current popup action UI is custom-rendered through popupActionBar.js.
+// New popup buttons, dropdowns, disabled states, and freeze/send behavior should
+// be implemented in:
+// - src/features/map/popups/popupActionBar.js
+//
+// Remove this file when all view.popup.actions usage has been removed.
 export function createDefaultPopupActions() {
   return [
     {
