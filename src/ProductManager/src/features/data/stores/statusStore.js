@@ -30,3 +30,29 @@ function normalizeStatusId(id) {
 
   return Number.isFinite(number) ? number : id;
 }
+
+export function getStatusIdByName(name) {
+  const normalizedName = normalizeStatusName(name);
+
+  for (const [id, status] of statusMap.entries()) {
+    if (normalizeStatusName(status?.Name) === normalizedName) {
+      return id;
+    }
+  }
+
+  return null;
+}
+
+export function isFrozenStatus(id) {
+  const name = normalizeStatusName(getStatusName(id));
+
+  return (
+    name === "frozen" || name === "in transit" // TODO: Remove this when backend returns Frozen.
+  );
+}
+
+function normalizeStatusName(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}

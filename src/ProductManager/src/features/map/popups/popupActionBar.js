@@ -1,81 +1,70 @@
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
-import { noticeError, noticeInfo, noticeSuccess } from "../../notices/services/noticeService.js";
 import { changeFreezeState, uploadProduct } from "../../data/api/productApi.js";
+import { noticeError, noticeInfo, noticeSuccess } from "../../notices/services/noticeService.js";
 import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
-
-const freezeState = new Map();
+import { isStatusFrozen } from "../state/featureState.js";
 
 let isSending = false;
 let activeDropdown = null;
 
-export function createPopupActionBar(graphic) {
+export function createPopupActionBar({ attributes, refreshAndRender } = {}) {
   closePopupActionDropdown();
-
-  const attributes = graphic?.attributes ?? {};
-  const featureKey = getFeatureKey(attributes);
 
   const container = document.createElement("div");
   container.className = "popup-action-bar";
   container.setAttribute("aria-label", "Popup actions");
 
-  function render() {
-    container.replaceChildren();
+  const frozen = isStatusFrozen(attributes?.status);
 
-    container.appendChild(
-      createActionRow([
-        createFreezeAction({ attributes, featureKey, render }),
-        createSendAction({ attributes, featureKey }),
-      ])
-    );
+  container.appendChild(
+    createActionRow([
+      createFreezeAction({
+        attributes,
+        frozen,
+        refreshAndRender,
+      }),
+      createSendAction({
+        attributes,
+        frozen,
+      }),
+    ])
+  );
 
-    container.appendChild(
-      createActionRow([
-        createDropdownAction({
-          id: "export",
-          label: "Export...",
-          icon: "plus-square",
-          items: [
-            {
-              id: "export-edition",
-              label: "Edition",
-              icon: "notepad-add",
-              onClick: () => {
-                noticeInfo("Export edition is not available yet", attributes.datasetName);
-              },
-            },
-            {
-              id: "export-update",
-              label: "Update",
-              icon: "notepad-edit",
-              onClick: () => {
-                noticeInfo("Export update is not available yet", attributes.datasetName);
-              },
-            },
-          ],
-        }),
-        createRollbackAction({ attributes }),
-        createDropdownAction({
-          id: "tools",
-          label: "Tools",
-          icon: "wrench",
-          items: [
-            {
-              id: "analyze",
-              label: "Analyze",
-              icon: "magnifying-glass",
-              onClick: () => {
-                openAnalyzePage(attributes.datasetName);
-              },
-            },
-          ],
-        }),
-      ])
-    );
-  }
-
-  render();
+  container.appendChild(
+    createActionRow([
+      createExportAction({
+        attributes,
+        frozen,
+      }),
+      createRollbackAction({
+        attributes,
+      }),
+      createToolsAction({
+        attributes,
+      }),
+    ])
+  );
 
   return container;
+}
+
+function createFreezeAction({ attributes, frozen, refreshAndRender }) {
+  return createAction({
+    id: frozen ? "unfreeze-feature" : "freeze-feature",
+    label: frozen ? "Unfreeze" : "Freeze",
+    icon: frozen ? "brightness" : "snow",
+    className: "popup-action-bar__action--freeze",
+    onClick: async ({ anchorElement }) => {
+      const nextFrozenState = !frozen;
+      const result = await triggerFreeze(attributes.datasetName, nextFrozenState, anchorElement);
+
+      if (!result?.success) {
+        return;
+      }
+
+      await refreshAndRender?.();
+    },
+  });
 }
 
 function createActionRow(actions) {
@@ -89,28 +78,7 @@ function createActionRow(actions) {
   return row;
 }
 
-function createFreezeAction({ attributes, featureKey, render }) {
-  const frozen = freezeState.get(featureKey) === true;
-
-  return createAction({
-    id: frozen ? "unfreeze-feature" : "freeze-feature",
-    label: frozen ? "Unfreeze" : "Freeze",
-    icon: frozen ? "brightness" : "snow",
-    className: "popup-action-bar__action--freeze",
-    onClick: async ({ anchorElement }) => {
-      const result = await triggerFreeze(attributes.datasetName, !frozen, anchorElement);
-
-      if (result?.success) {
-        freezeState.set(featureKey, !frozen);
-        render();
-      }
-    },
-  });
-}
-
-function createSendAction({ attributes, featureKey }) {
-  const frozen = freezeState.get(featureKey) === true;
-
+function createSendAction({ attributes, frozen }) {
   return createAction({
     id: "send-immediately",
     label: "Send to IC-ENC",
@@ -120,6 +88,56 @@ function createSendAction({ attributes, featureKey }) {
     onClick: async ({ anchorElement }) => {
       await sendImmediately(attributes.datasetName, anchorElement);
     },
+  });
+}
+
+function createExportAction({ attributes, frozen }) {
+  const disabledReason = "Unfreeze the product before exporting.";
+
+  return createDropdownAction({
+    id: "export",
+    label: "Export...",
+    icon: "plus-square",
+    items: [
+      {
+        id: "export-edition",
+        label: "Edition",
+        icon: "notepad-add",
+        disabled: frozen,
+        disabledReason,
+        onClick: () => {
+          noticeInfo("Export edition is not available yet", attributes.datasetName);
+        },
+      },
+      {
+        id: "export-update",
+        label: "Update",
+        icon: "notepad-edit",
+        disabled: frozen,
+        disabledReason,
+        onClick: () => {
+          noticeInfo("Export update is not available yet", attributes.datasetName);
+        },
+      },
+    ],
+  });
+}
+
+function createToolsAction({ attributes }) {
+  return createDropdownAction({
+    id: "tools",
+    label: "Tools",
+    icon: "wrench",
+    items: [
+      {
+        id: "analyze",
+        label: "Analyze",
+        icon: "magnifying-glass",
+        onClick: () => {
+          openAnalyzePage(attributes.datasetName);
+        },
+      },
+    ],
   });
 }
 
@@ -158,16 +176,20 @@ function createAction({ id, label, icon, disabled = false, className = "", onCli
   action.title = label;
   action.scale = "m";
   action.appearance = "transparent";
-  action.disabled = disabled;
+  action.disabled = Boolean(disabled);
   action.textEnabled = true;
   action.className = ["popup-action-bar__action", className].filter(Boolean).join(" ");
   action.dataset.popupActionId = id;
 
-  // Keep attributes in sync with Calcite's DOM API. This is more reliable
-  // when components upgrade after the element has already been created.
+  // Keep attributes in sync because Calcite upgrades custom elements asynchronously.
   action.setAttribute("text", label);
   action.setAttribute("title", label);
   action.setAttribute("text-enabled", "");
+
+  if (disabled) {
+    action.setAttribute("disabled", "");
+    action.setAttribute("aria-disabled", "true");
+  }
 
   action.addEventListener("click", async (event) => {
     event.preventDefault();
@@ -228,11 +250,19 @@ function openPopupActionDropdown({ anchorElement, items }) {
 }
 
 function createDropdownItem(itemConfig) {
+  const disabled = itemConfig.disabled === true;
+
   const item = document.createElement("button");
   item.type = "button";
   item.className = "popup-action-dropdown__item";
+  item.disabled = disabled;
   item.setAttribute("role", "menuitem");
   item.dataset.dropdownActionId = itemConfig.id;
+
+  if (disabled) {
+    item.setAttribute("aria-disabled", "true");
+    item.title = itemConfig.disabledReason ?? "";
+  }
 
   const icon = document.createElement("calcite-icon");
   icon.icon = itemConfig.icon;
@@ -248,9 +278,15 @@ function createDropdownItem(itemConfig) {
     event.preventDefault();
     event.stopPropagation();
 
+    if (item.disabled) {
+      return;
+    }
+
     closePopupActionDropdown();
 
-    await itemConfig.onClick?.();
+    await itemConfig.onClick?.({
+      anchorElement: item,
+    });
   });
 
   return item;
@@ -288,10 +324,6 @@ function closePopupActionDropdown() {
   document.removeEventListener("click", handleOutsideDropdownClick);
   window.removeEventListener("resize", closePopupActionDropdown);
   window.removeEventListener("scroll", closePopupActionDropdown, true);
-}
-
-function getFeatureKey(attributes) {
-  return attributes.featureKey ?? attributes.datasetName ?? attributes.id;
 }
 
 function openAnalyzePage(datasetName) {

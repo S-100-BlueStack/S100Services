@@ -1,30 +1,65 @@
+import { fetchProductPropertiesByDatasetName } from "../../data/api/productApi.js";
 import { getStatusName } from "../../data/stores/statusStore.js";
+import { noticeError } from "../../notices/services/noticeService.js";
+import { applyGraphicAttributes } from "../state/featureState.js";
 import { createPopupActionBar } from "./popupActionBar.js";
 
 export function createPopup() {
   return {
     title: (event) => {
       const attr = event.graphic.attributes;
-
       return `${attr.datasetName}`;
     },
 
     content: (event) => {
-      const attr = event.graphic.attributes;
-
+      const graphic = event.graphic;
       const container = document.createElement("div");
       container.className = "popup-container popup-container--with-action-bar";
 
-      const section = document.createElement("div");
-      section.className = "popup-section";
+      let currentAttributes = {
+        ...(graphic.attributes ?? {}),
+      };
 
-      container.appendChild(createPopupActionBar(event.graphic));
-      container.appendChild(section);
+      let latestRefreshId = 0;
 
-      section.appendChild(createRow("Edition", attr.edition));
-      section.appendChild(createRow("Update", attr.update));
-      section.appendChild(createStatusRow(attr.status));
-      section.appendChild(createRow("Error Message", attr.errorMessage));
+      function render() {
+        renderPopupContent(container, currentAttributes, {
+          refreshAndRender,
+        });
+      }
+
+      async function refreshAndRender() {
+        const refreshId = ++latestRefreshId;
+        const datasetName = currentAttributes.datasetName ?? graphic?.attributes?.datasetName;
+
+        if (!datasetName) {
+          return false;
+        }
+
+        const result = await fetchProductPropertiesByDatasetName(datasetName);
+
+        // Ignore stale refreshes. This prevents an older popup-open refresh from
+        // overwriting a newer freeze/unfreeze refresh.
+        if (refreshId !== latestRefreshId) {
+          return false;
+        }
+
+        if (!result.success) {
+          noticeError("Selected product could not be refreshed", result.errorMessage);
+          return false;
+        }
+
+        currentAttributes = applyGraphicAttributes(graphic, result.data);
+        render();
+
+        return true;
+      }
+
+      render();
+
+      // Initial freshness check when the popup opens.
+      void refreshAndRender();
+
       return container;
     },
 
@@ -33,6 +68,27 @@ export function createPopup() {
       featureNavigation: false,
     },
   };
+}
+
+function renderPopupContent(container, attributes, { refreshAndRender }) {
+  container.replaceChildren();
+
+  const section = document.createElement("div");
+  section.className = "popup-section";
+
+  container.appendChild(
+    createPopupActionBar({
+      attributes,
+      refreshAndRender,
+    })
+  );
+
+  container.appendChild(section);
+
+  section.appendChild(createRow("Edition", attributes.edition));
+  section.appendChild(createRow("Update", attributes.update));
+  section.appendChild(createStatusRow(attributes.status));
+  section.appendChild(createRow("Error Message", attributes.errorMessage));
 }
 
 function createRow(label, value, withCopy = false) {
@@ -45,7 +101,7 @@ function createRow(label, value, withCopy = false) {
 
   const valueEl = document.createElement("span");
   valueEl.className = "popup-value";
-  valueEl.textContent = value;
+  valueEl.textContent = value ?? "";
 
   row.appendChild(labelEl);
   row.appendChild(valueEl);
@@ -56,7 +112,6 @@ function createRow(label, value, withCopy = false) {
     copy.setAttribute("scale", "s");
     copy.className = "copy-btn";
     copy.dataset.copy = value;
-
     row.appendChild(copy);
   }
 
