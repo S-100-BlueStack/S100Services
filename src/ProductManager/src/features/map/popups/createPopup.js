@@ -88,7 +88,9 @@ function renderPopupContent(container, attributes, { refreshAndRender }) {
   section.appendChild(createRow("Edition", attributes.edition));
   section.appendChild(createRow("Update", attributes.update));
   section.appendChild(createStatusRow(attributes.status));
-  section.appendChild(createRow("Error Message", attributes.errorMessage));
+  if (attributes.errorMessage) {
+    section.appendChild(createRow("Error Message", attributes.errorMessage));
+  }
 }
 
 function createRow(label, value, withCopy = false) {
