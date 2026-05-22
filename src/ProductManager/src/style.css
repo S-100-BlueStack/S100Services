@@ -40,7 +40,7 @@ html.calcite-mode-light {
   --pm-text: var(--calcite-color-text-1);
   --pm-text-muted: var(--calcite-color-text-3);
 
-  --pm-overlay: rgba(255, 255, 255, 0.75);
+  --pm-overlay: rgba(255, 255, 255, 0.86);
   --pm-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
 
   --pm-popup-surface: var(--calcite-color-surface-1);
@@ -68,7 +68,7 @@ html.calcite-mode-dark {
   --pm-text: var(--calcite-color-text-1);
   --pm-text-muted: var(--calcite-color-text-3);
 
-  --pm-overlay: rgba(0, 0, 0, 0.45);
+  --pm-overlay: rgba(0, 0, 0, 0.62);
   --pm-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 
   --pm-popup-surface: var(--calcite-color-surface-1);
@@ -112,23 +112,90 @@ html.calcite-mode-dark {
 }
 
 .loader-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-rows: auto auto auto;
   gap: 12px;
+  width: min(520px, calc(100vw - 48px));
+  padding: 18px 22px 16px;
+  color: var(--pm-text);
+  background: color-mix(in srgb, var(--pm-surface) 84%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pm-border) 82%, transparent);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
   text-align: center;
+  backdrop-filter: blur(10px) saturate(120%);
 }
 
+/* The old Calcite spinner is intentionally disabled. It looks broken whenever
+   the main thread is busy, while the progress bar can still show chunk progress. */
 .loader-content calcite-loader {
-  display: block;
+  display: none !important;
 }
 
 .loader-text {
   width: 100%;
-  font-size: 14px;
+  min-height: 24px;
+  margin: 0;
+  padding: 0 8px;
   color: var(--pm-text);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: center;
+  text-wrap: balance;
   visibility: hidden;
+}
+
+.loader-progress {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--pm-border) 70%, transparent);
+  border-radius: 999px;
+}
+
+.loader-progress__fill {
+  width: 0;
+  height: 100%;
+  background: var(--calcite-color-brand, #007ac2);
+  border-radius: inherit;
+  transition: width 160ms ease;
+}
+
+.loader-progress.is-indeterminate .loader-progress__fill {
+  width: 45%;
+  animation: loader-progress-indeterminate 1.2s ease-in-out infinite;
+}
+
+.loader-progress__label {
+  min-height: 16px;
+  color: var(--pm-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  visibility: hidden;
+}
+
+html.calcite-mode-dark .loader-content {
+  background: color-mix(in srgb, var(--calcite-color-foreground-1) 88%, transparent);
+  border-color: color-mix(in srgb, var(--calcite-color-border-2) 80%, transparent);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.36);
+}
+
+html.calcite-mode-dark .loader-progress {
+  background: color-mix(in srgb, var(--calcite-color-border-3) 72%, transparent);
+}
+
+@keyframes loader-progress-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(240%);
+  }
 }
 
 /* =========================================================

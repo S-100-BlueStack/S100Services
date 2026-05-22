@@ -10,8 +10,19 @@
   <body>
     <div id="app-loader" class="app-loader hidden">
       <div class="loader-content">
-        <calcite-loader active scale="l"></calcite-loader>
         <div id="loader-text" class="loader-text"></div>
+
+        <div
+          id="loader-progress"
+          class="loader-progress is-indeterminate"
+          role="progressbar"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        >
+          <div class="loader-progress__fill"></div>
+        </div>
+
+        <div id="loader-progress-label" class="loader-progress__label"></div>
       </div>
     </div>
 

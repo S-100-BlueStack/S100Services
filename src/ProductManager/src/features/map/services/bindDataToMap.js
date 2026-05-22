@@ -1,13 +1,19 @@
 import { createLayer } from "../core/layerFactory.js";
 import { rebuildLayers } from "../core/rebuildLayers.js";
+import { bindDisplayScaleVisibility } from "../scale/displayScaleVisibility.js";
 
-export async function bindDataToMap({ map, view, hoverManager, layers }) {
+export async function bindDataToMap({ map, view, hoverManager, layers, onProgress }) {
   const createdLayers = await rebuildLayers({
     map,
     view,
     hoverManager,
     layerConfigs: layers,
     createLayer,
+    onProgress,
+  });
+
+  const displayScaleVisibility = bindDisplayScaleVisibility(view, {
+    layers: createdLayers,
   });
 
   return {
@@ -24,5 +30,6 @@ export async function bindDataToMap({ map, view, hoverManager, layers }) {
       maxScale: layer.maxScale,
       graphicsCount: layer.graphics?.length ?? 0,
     })),
+    displayScaleVisibility,
   };
 }
