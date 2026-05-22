@@ -69,7 +69,7 @@ async function bootstrapAnalyzeRoute(route) {
     setLoaderText("Initializing UI...");
     await initUI();
 
-    setLoaderText("Loading analyze data...");
+    setLoaderText("Loading feature data...");
     const app = await initAnalyzePage({
       datasetNames: route.datasetNames,
     });

@@ -1,34 +1,50 @@
 import { createLayer } from "../../map/core/layerFactory.js";
 
-export function createAnalyzeLayers(map, products) {
+export async function createAnalyzeLayers(map, products, { onProgress } = {}) {
   const features = products.map(createAnalyzeFeature).filter(Boolean);
 
   if (features.length === 0) {
     return [];
   }
 
-  const createdLayers = createLayer(map, {
-    id: "analyze-products",
-    type: "graphics",
-    dataFormat: "esri-json",
-    data: {
-      features,
-    },
-    scaleRanges: {
-      overview: {
-        minScale: 0,
-        maxScale: 1_000_000,
+  const createdLayers = await createLayer(
+    map,
+    {
+      id: "analyze-products",
+      type: "graphics",
+      dataFormat: "esri-json",
+      data: {
+        features,
       },
-      detail: {
-        minScale: 1_000_000,
-        maxScale: 0,
+      scaleRanges: {
+        overview: {
+          minScale: 0,
+          maxScale: 1_000_000,
+        },
+        detail: {
+          minScale: 1_000_000,
+          maxScale: 0,
+        },
       },
     },
-  });
+    {
+      onProgress,
+    }
+  );
 
-  return Array.isArray(createdLayers)
-    ? createdLayers.flat().filter(Boolean)
-    : [createdLayers].filter(Boolean);
+  return normalizeCreatedLayers(createdLayers);
+}
+
+function normalizeCreatedLayers(layerOrLayers) {
+  if (Array.isArray(layerOrLayers)) {
+    return layerOrLayers.flat().filter(Boolean);
+  }
+
+  if (layerOrLayers) {
+    return [layerOrLayers];
+  }
+
+  return [];
 }
 
 function createAnalyzeFeature(product, index) {

@@ -11,6 +11,32 @@ import {
   setAnalyzeRouteUrl,
 } from "../routing/analyzeRoute.js";
 import { renderAnalyzeSidebar } from "../ui/analyzeSidebar.js";
+import {
+  hideLoader,
+  setLoaderProgress,
+  setLoaderText,
+  showLoader,
+  startLoaderTextRotation,
+  stopLoaderTextRotation,
+} from "../../../shared/ui/loader.js";
+import {
+  getLoadingMessages,
+  loadingMessageIntervalMs,
+  loadingTextMode,
+  shouldRotateLoadingMessages,
+  shouldShowTechnicalLoadingStages,
+} from "../../../shared/config/loadingTextConfig.js";
+
+const ANALYZE_LOAD_START_PROGRESS = 0.04;
+const ANALYZE_LOAD_END_PROGRESS = 0.2;
+const ANALYZE_RENDER_START_PROGRESS = 0.24;
+const ANALYZE_RENDER_END_PROGRESS = 0.96;
+
+const ANALYZE_FAKE_PROGRESS_INTERVAL_MS = 350;
+const ANALYZE_FAKE_PROGRESS_STEP = 0.014;
+
+let analyzeFakeProgressIntervalId = null;
+let analyzeFakeProgress = ANALYZE_LOAD_START_PROGRESS;
 
 export async function initAnalyzePage({ datasetNames }) {
   let currentLayers = [];
@@ -56,6 +82,8 @@ export async function initAnalyzePage({ datasetNames }) {
       return;
     }
 
+    startAnalyzeLoadingUi();
+
     await ensureLookupsLoaded();
 
     const products = await fetchAnalyzeProducts(normalizedNextDatasetNames);
@@ -64,7 +92,7 @@ export async function initAnalyzePage({ datasetNames }) {
       return;
     }
 
-    const layers = createAnalyzeLayers(map, products);
+    const layers = await createAnalyzeLayers(map, products);
 
     currentProducts = products;
     currentLayers = layers;
@@ -211,4 +239,78 @@ function showMockWarningIfNeeded(products) {
       .map((product) => product.datasetName)
       .join(", ")}.`
   );
+}
+
+function startAnalyzeLoadingUi() {
+  analyzeFakeProgress = ANALYZE_LOAD_START_PROGRESS;
+
+  showLoader("Loading analyze data...", {
+    progress: analyzeFakeProgress,
+  });
+
+  setLoaderProgress(analyzeFakeProgress, {
+    label: `${Math.round(analyzeFakeProgress * 100)}%`,
+  });
+
+  if (shouldRotateLoadingMessages()) {
+    startLoaderTextRotation(getLoadingMessages("loadingData", loadingTextMode), {
+      intervalMs: loadingMessageIntervalMs,
+      immediate: true,
+    });
+  }
+
+  startAnalyzeFakeProgress();
+}
+
+function startAnalyzeFakeProgress() {
+  stopAnalyzeFakeProgress();
+
+  analyzeFakeProgressIntervalId = window.setInterval(() => {
+    analyzeFakeProgress = Math.min(
+      ANALYZE_LOAD_END_PROGRESS,
+      analyzeFakeProgress + ANALYZE_FAKE_PROGRESS_STEP
+    );
+
+    setLoaderProgress(analyzeFakeProgress, {
+      label: `${Math.round(analyzeFakeProgress * 100)}%`,
+    });
+
+    if (analyzeFakeProgress >= ANALYZE_LOAD_END_PROGRESS) {
+      stopAnalyzeFakeProgress();
+    }
+  }, ANALYZE_FAKE_PROGRESS_INTERVAL_MS);
+}
+
+function stopAnalyzeFakeProgress() {
+  if (analyzeFakeProgressIntervalId === null) {
+    return;
+  }
+
+  window.clearInterval(analyzeFakeProgressIntervalId);
+  analyzeFakeProgressIntervalId = null;
+}
+
+function handleAnalyzeRenderProgress({ progress, stage, layerTitle }) {
+  const normalizedProgress = clamp(progress ?? 0, 0, 1);
+  const loaderProgress =
+    ANALYZE_RENDER_START_PROGRESS +
+    normalizedProgress * (ANALYZE_RENDER_END_PROGRESS - ANALYZE_RENDER_START_PROGRESS);
+
+  setLoaderProgress(loaderProgress, {
+    label: `${Math.round(loaderProgress * 100)}%`,
+  });
+
+  if (shouldShowTechnicalLoadingStages() && stage && layerTitle) {
+    setLoaderText(`${stage} (${layerTitle})...`);
+  }
+}
+
+function hideAnalyzeLoader() {
+  stopAnalyzeFakeProgress();
+  stopLoaderTextRotation();
+  hideLoader();
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
