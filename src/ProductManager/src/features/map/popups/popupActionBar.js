@@ -92,75 +92,110 @@ function createSendAction({ attributes, frozen }) {
 }
 
 function createExportAction({ attributes, frozen }) {
-  const disabledReason = "Unfreeze the product before exporting.";
-  const disabledUnimplementedReason = "Feature is not available yet.";
   return createDropdownAction({
     id: "export",
     label: "Export...",
     icon: "plus-square",
     items: [
       {
-        id: "export-edition",
-        label: "Edition",
-        icon: "notepad-add",
-        disabled: frozen,
-        disabledReason,
-        onClick: () => {
-          noticeInfo("Export edition is not available yet", attributes.datasetName);
-        },
+        id: "export-all",
+        label: "All",
+        icon: "folder",
+        items: [
+          createExportLeafAction({
+            id: "export-edition",
+            label: "Edition",
+            icon: "notepad-add",
+            attributes,
+            frozen,
+            implemented: true,
+          }),
+          createExportLeafAction({
+            id: "export-update",
+            label: "Update",
+            icon: "notepad-edit",
+            attributes,
+            frozen,
+            implemented: true,
+          }),
+        ],
       },
       {
-        id: "export-update",
-        label: "Update",
-        icon: "notepad-edit",
-        disabled: frozen,
-        disabledReason,
-        onClick: () => {
-          noticeInfo("Export update is not available yet", attributes.datasetName);
-        },
+        id: "export-s57",
+        label: "S57",
+        icon: "folder",
+        items: [
+          createExportLeafAction({
+            id: "s57-export-edition",
+            label: "Edition",
+            icon: "notepad-add",
+            attributes,
+            frozen,
+            implemented: false,
+          }),
+          createExportLeafAction({
+            id: "s57-export-update",
+            label: "Update",
+            icon: "notepad-edit",
+            attributes,
+            frozen,
+            implemented: false,
+          }),
+        ],
       },
       {
-        id: "s57-export-edition",
-        label: "S57 Edition",
-        icon: "notepad-add",
-        disabled: true,
-        disabledReason: disabledUnimplementedReason,
-        onClick: () => {
-          noticeInfo("Export edition is not available yet", attributes.datasetName);
-        },
-      },
-      {
-        id: "s57-export-update",
-        label: "S57 Update",
-        icon: "notepad-edit",
-        disabled: true,
-        disabledReason: disabledUnimplementedReason,
-        onClick: () => {
-          noticeInfo("Export update is not available yet", attributes.datasetName);
-        },
-      },
-      {
-        id: "s101-export-edition",
-        label: "S101 Edition",
-        icon: "notepad-add",
-        disabled: true,
-        disabledReason: disabledUnimplementedReason,
-        onClick: () => {
-          noticeInfo("Export edition is not available yet", attributes.datasetName);
-        },
-      },
-      {
-        id: "s101-export-update",
-        label: "S101 Update",
-        icon: "notepad-edit",
-        disabled: true,
-        disabledReason: disabledUnimplementedReason,
-        onClick: () => {
-          noticeInfo("Export update is not available yet", attributes.datasetName);
-        },
+        id: "export-s100",
+        label: "S100",
+        icon: "folder",
+        items: [
+          createExportLeafAction({
+            id: "s100-export-edition",
+            label: "Edition",
+            icon: "notepad-add",
+            attributes,
+            frozen,
+            implemented: false,
+          }),
+          createExportLeafAction({
+            id: "s100-export-update",
+            label: "Update",
+            icon: "notepad-edit",
+            attributes,
+            frozen,
+            implemented: false,
+          }),
+        ],
       },
     ],
   });
+}
+
+function createExportLeafAction({ id, label, icon, attributes, frozen, implemented }) {
+  return {
+    id,
+    label,
+    icon,
+    disabled: frozen || !implemented,
+    disabledReason: getExportDisabledReason({
+      frozen,
+      implemented,
+    }),
+    onClick: () => {
+      noticeInfo(`Export ${label.toLowerCase()} is not available yet`, attributes.datasetName);
+    },
+  };
+}
+
+function getExportDisabledReason({ frozen, implemented }) {
+  if (frozen) {
+    return "Unfreeze the product before exporting.";
+  }
+
+  if (!implemented) {
+    return "Feature is not available yet.";
+  }
+
+  return null;
 }
 
 function createToolsAction({ attributes }) {
@@ -289,8 +324,16 @@ function openPopupActionDropdown({ anchorElement, items }) {
   });
 }
 
-function createDropdownItem(itemConfig) {
+function createDropdownItem(itemConfig, level = 0) {
+  const hasChildren = Array.isArray(itemConfig.items) && itemConfig.items.length > 0;
   const disabled = itemConfig.disabled === true;
+
+  const node = document.createElement("div");
+  node.className = "popup-action-dropdown__node";
+
+  if (hasChildren) {
+    node.classList.add("popup-action-dropdown__node--has-children");
+  }
 
   const item = document.createElement("button");
   item.type = "button";
@@ -298,24 +341,57 @@ function createDropdownItem(itemConfig) {
   item.disabled = disabled;
   item.setAttribute("role", "menuitem");
   item.dataset.dropdownActionId = itemConfig.id;
+  item.style.setProperty("--popup-action-dropdown-level", String(level));
+
+  if (hasChildren) {
+    item.classList.add("popup-action-dropdown__item--has-children");
+    item.setAttribute("aria-haspopup", "menu");
+  }
 
   if (disabled) {
     item.setAttribute("aria-disabled", "true");
-    item.title =
-      itemConfig.disabledReason ??
-      itemConfig.disabledUnimplementedReason ??
-      "This action is unavailable.";
+    item.title = itemConfig.disabledReason ?? "This action is unavailable.";
   }
 
-  const icon = document.createElement("calcite-icon");
-  icon.icon = itemConfig.icon;
-  icon.scale = "s";
+  item.appendChild(createDropdownIcon(itemConfig.icon));
 
   const label = document.createElement("span");
+  label.className = "popup-action-dropdown__label";
   label.textContent = itemConfig.label;
-
-  item.appendChild(icon);
   item.appendChild(label);
+
+  if (hasChildren) {
+    const indicator = document.createElement("calcite-icon");
+    indicator.className = "popup-action-dropdown__submenu-indicator";
+    indicator.icon = "chevron-right";
+    indicator.scale = "s";
+    item.appendChild(indicator);
+
+    const submenu = document.createElement("div");
+    submenu.className = "popup-action-dropdown popup-action-dropdown--submenu";
+    submenu.setAttribute("role", "menu");
+
+    for (const childItem of itemConfig.items) {
+      submenu.appendChild(createDropdownItem(childItem, level + 1));
+    }
+
+    // Parent menu items are hover-only triggers. Preventing mousedown keeps the
+    // button from receiving focus, so the submenu cannot stay open after click.
+    item.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+    });
+
+    item.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      item.blur();
+    });
+
+    node.appendChild(item);
+    node.appendChild(submenu);
+
+    return node;
+  }
 
   item.addEventListener("click", async (event) => {
     event.preventDefault();
@@ -332,7 +408,22 @@ function createDropdownItem(itemConfig) {
     });
   });
 
-  return item;
+  node.appendChild(item);
+
+  return node;
+}
+
+function createDropdownIcon(iconName) {
+  if (!iconName) {
+    const placeholder = document.createElement("span");
+    placeholder.className = "popup-action-dropdown__icon-placeholder";
+    return placeholder;
+  }
+
+  const icon = document.createElement("calcite-icon");
+  icon.icon = iconName;
+  icon.scale = "s";
+  return icon;
 }
 
 function positionDropdown(dropdown, anchorElement) {
