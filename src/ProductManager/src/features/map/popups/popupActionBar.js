@@ -9,6 +9,7 @@ let isSending = false;
 let activeDropdown = null;
 
 const activeExportActionIds = new Set();
+const DROPDOWN_POINTER_CLOSE_DISTANCE = 90;
 
 export function createPopupActionBar({ attributes, refreshAndRender } = {}) {
   closePopupActionDropdown();
@@ -104,7 +105,7 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
       {
         id: "export-all",
         label: "All",
-        icon: "folder",
+        icon: "plus-square",
         items: [
           createExportLeafAction({
             id: "export-all-edition",
@@ -135,7 +136,7 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
       {
         id: "export-s57",
         label: "S57",
-        icon: "folder",
+        icon: "plus-square",
         items: [
           createExportLeafAction({
             id: "s57-export-edition",
@@ -162,7 +163,7 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
       {
         id: "export-s100",
         label: "S100",
-        icon: "folder",
+        icon: "plus-square",
         items: [
           createExportLeafAction({
             id: "s100-export-edition",
@@ -263,6 +264,7 @@ function createDropdownAction({ id, label, icon, items }) {
     id,
     label,
     icon,
+    closeDropdownOnClick: false,
     className: "popup-action-bar__action--dropdown",
     onClick: ({ anchorElement }) => {
       togglePopupActionDropdown({
@@ -272,7 +274,6 @@ function createDropdownAction({ id, label, icon, items }) {
     },
   });
 }
-
 function createRollbackAction({ attributes }) {
   return createAction({
     id: "rollback",
@@ -285,7 +286,15 @@ function createRollbackAction({ attributes }) {
   });
 }
 
-function createAction({ id, label, icon, disabled = false, className = "", onClick }) {
+function createAction({
+  id,
+  label,
+  icon,
+  disabled = false,
+  className = "",
+  closeDropdownOnClick = true,
+  onClick,
+}) {
   const action = document.createElement("calcite-action");
 
   action.icon = icon;
@@ -314,6 +323,10 @@ function createAction({ id, label, icon, disabled = false, className = "", onCli
 
     if (action.disabled) {
       return;
+    }
+
+    if (closeDropdownOnClick) {
+      closePopupActionDropdown();
     }
 
     await onClick?.({
@@ -353,6 +366,7 @@ function openPopupActionDropdown({ anchorElement, items }) {
 
   document.body.appendChild(dropdown);
   positionDropdown(dropdown, anchorElement);
+  anchorElement.blur?.();
 
   activeDropdown = {
     element: dropdown,
@@ -361,6 +375,7 @@ function openPopupActionDropdown({ anchorElement, items }) {
 
   requestAnimationFrame(() => {
     document.addEventListener("click", handleOutsideDropdownClick);
+    document.addEventListener("pointermove", handleDropdownPointerMove);
     window.addEventListener("resize", closePopupActionDropdown);
     window.addEventListener("scroll", closePopupActionDropdown, true);
   });
@@ -475,9 +490,15 @@ function createDropdownIcon(iconName) {
 
 function positionDropdown(dropdown, anchorElement) {
   const rect = anchorElement.getBoundingClientRect();
+  const dropdownOffset = 8;
+  const viewportPadding = 8;
 
-  dropdown.style.top = `${rect.bottom + 4}px`;
-  dropdown.style.left = `${Math.min(rect.left, window.innerWidth - dropdown.offsetWidth - 8)}px`;
+  const left = Math.min(rect.left, window.innerWidth - dropdown.offsetWidth - viewportPadding);
+  const arrowLeft = rect.left + rect.width / 2 - left - 5;
+
+  dropdown.style.top = `${rect.bottom + dropdownOffset}px`;
+  dropdown.style.left = `${left}px`;
+  dropdown.style.setProperty("--pm-popup-dropdown-arrow-left", `${Math.max(12, arrowLeft)}px`);
 }
 
 function handleOutsideDropdownClick(event) {
@@ -503,6 +524,7 @@ function closePopupActionDropdown() {
   activeDropdown = null;
 
   document.removeEventListener("click", handleOutsideDropdownClick);
+  document.removeEventListener("pointermove", handleDropdownPointerMove);
   window.removeEventListener("resize", closePopupActionDropdown);
   window.removeEventListener("scroll", closePopupActionDropdown, true);
 }
@@ -680,4 +702,40 @@ function getApiResultMessage(result) {
   }
 
   return null;
+}
+
+function handleDropdownPointerMove(event) {
+  if (!activeDropdown) {
+    return;
+  }
+
+  const target = event.target;
+
+  if (activeDropdown.element.contains(target) || activeDropdown.anchorElement.contains?.(target)) {
+    return;
+  }
+
+  const safeRect = getExpandedDropdownSafeRect(activeDropdown, DROPDOWN_POINTER_CLOSE_DISTANCE);
+
+  if (isPointInsideRect(event.clientX, event.clientY, safeRect)) {
+    return;
+  }
+
+  closePopupActionDropdown();
+}
+
+function getExpandedDropdownSafeRect(dropdownState, distance) {
+  const dropdownRect = dropdownState.element.getBoundingClientRect();
+  const anchorRect = dropdownState.anchorElement.getBoundingClientRect();
+
+  return {
+    top: Math.min(dropdownRect.top, anchorRect.top) - distance,
+    right: Math.max(dropdownRect.right, anchorRect.right) + distance,
+    bottom: Math.max(dropdownRect.bottom, anchorRect.bottom) + distance,
+    left: Math.min(dropdownRect.left, anchorRect.left) - distance,
+  };
+}
+
+function isPointInsideRect(x, y, rect) {
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 }

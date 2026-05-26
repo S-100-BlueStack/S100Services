@@ -344,13 +344,24 @@ html.calcite-mode-dark {
   --calcite-action-icon-color: var(--pm-popup-text);
 }
 
+.popup-action-bar calcite-action {
+  --calcite-color-focus: transparent;
+}
+
+.popup-action-bar__action:focus,
+.popup-action-bar__action:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* =========================================================
    Popup action dropdowns
    ========================================================= */
 
 .popup-action-dropdown {
   --pm-popup-dropdown-width: 180px;
-  --pm-popup-dropdown-submenu-offset: 6px;
+  --pm-popup-dropdown-submenu-offset: 8px;
+  --pm-popup-dropdown-arrow-size: 10px;
 
   position: fixed;
   z-index: 1400;
@@ -361,14 +372,38 @@ html.calcite-mode-dark {
   color: var(--pm-popup-text);
   background: var(--pm-popup-surface);
   border: 1px solid var(--pm-popup-border);
-  border-radius: 6px;
-  box-shadow: var(--pm-shadow);
+  border-radius: 0;
+
+  /*
+   * Use a mostly downward shadow so the dropdown does not look detached from
+   * the popup action bar above it.
+   */
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.18);
+}
+
+/* Connector arrow from the top-level action button into the root dropdown. */
+.popup-action-dropdown:not(.popup-action-dropdown--submenu)::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: var(--pm-popup-dropdown-arrow-left, 24px);
+  width: var(--pm-popup-dropdown-arrow-size);
+  height: var(--pm-popup-dropdown-arrow-size);
+  background: var(--pm-popup-surface);
+  border-top: 1px solid var(--pm-popup-border);
+  border-left: 1px solid var(--pm-popup-border);
+  transform: rotate(45deg);
 }
 
 .popup-action-dropdown__node {
   position: relative;
 }
 
+/*
+ * The submenu is offset slightly from the parent menu so there is room for the
+ * visual connector. This invisible bridge keeps hover active while the pointer
+ * moves from the parent item into the submenu.
+ */
 .popup-action-dropdown__node--has-children::after {
   content: "";
   position: absolute;
@@ -389,7 +424,7 @@ html.calcite-mode-dark {
   color: var(--pm-popup-text);
   background: transparent;
   border: 0;
-  border-radius: 4px;
+  border-radius: 0;
   font: inherit;
   font-size: 13px;
   font-weight: 400;
@@ -449,11 +484,34 @@ html.calcite-mode-dark {
 
 .popup-action-dropdown--submenu {
   position: absolute;
-  top: -4px;
+  top: -5px;
   left: calc(100% + var(--pm-popup-dropdown-submenu-offset));
   display: none;
   width: var(--pm-popup-dropdown-width);
   min-width: var(--pm-popup-dropdown-width);
+
+  /*
+   * Only the root dropdown casts a shadow. Submenus are visually connected
+   * through their arrow, so a second shadow makes the menu feel detached.
+   */
+  box-shadow: none;
+}
+
+/*
+ * Connector arrow between parent menu item and submenu. It mirrors the confirm
+ * popover idea, but keeps sharp edges to match the rest of the popup UI.
+ */
+.popup-action-dropdown--submenu::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: calc(-1 * var(--pm-popup-dropdown-arrow-size) / 2 - 1px);
+  width: var(--pm-popup-dropdown-arrow-size);
+  height: var(--pm-popup-dropdown-arrow-size);
+  background: var(--pm-popup-surface);
+  border-left: 1px solid var(--pm-popup-border);
+  border-bottom: 1px solid var(--pm-popup-border);
+  transform: rotate(45deg);
 }
 
 /* Submenus are hover-only. Do not add :focus-within or persistent click state,
