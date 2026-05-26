@@ -1,4 +1,5 @@
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
+import { exportNewEdition, exportNewUpdate } from "../../data/api/exportApi.js";
 import { changeFreezeState, uploadProduct } from "../../data/api/productApi.js";
 import { noticeError, noticeInfo, noticeSuccess } from "../../notices/services/noticeService.js";
 import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
@@ -6,6 +7,8 @@ import { isStatusFrozen } from "../state/featureState.js";
 
 let isSending = false;
 let activeDropdown = null;
+
+const activeExportActionIds = new Set();
 
 export function createPopupActionBar({ attributes, refreshAndRender } = {}) {
   closePopupActionDropdown();
@@ -35,6 +38,7 @@ export function createPopupActionBar({ attributes, refreshAndRender } = {}) {
       createExportAction({
         attributes,
         frozen,
+        refreshAndRender,
       }),
       createRollbackAction({
         attributes,
@@ -91,7 +95,7 @@ function createSendAction({ attributes, frozen }) {
   });
 }
 
-function createExportAction({ attributes, frozen }) {
+function createExportAction({ attributes, frozen, refreshAndRender }) {
   return createDropdownAction({
     id: "export",
     label: "Export...",
@@ -103,20 +107,28 @@ function createExportAction({ attributes, frozen }) {
         icon: "folder",
         items: [
           createExportLeafAction({
-            id: "export-edition",
+            id: "export-all-edition",
             label: "Edition",
             icon: "notepad-add",
             attributes,
             frozen,
             implemented: true,
+            scope: "All",
+            exportType: "Edition",
+            request: exportNewEdition,
+            refreshAndRender,
           }),
           createExportLeafAction({
-            id: "export-update",
+            id: "export-all-update",
             label: "Update",
             icon: "notepad-edit",
             attributes,
             frozen,
             implemented: true,
+            scope: "All",
+            exportType: "Update",
+            request: exportNewUpdate,
+            refreshAndRender,
           }),
         ],
       },
@@ -132,6 +144,8 @@ function createExportAction({ attributes, frozen }) {
             attributes,
             frozen,
             implemented: false,
+            scope: "S57",
+            exportType: "Edition",
           }),
           createExportLeafAction({
             id: "s57-export-update",
@@ -140,6 +154,8 @@ function createExportAction({ attributes, frozen }) {
             attributes,
             frozen,
             implemented: false,
+            scope: "S57",
+            exportType: "Update",
           }),
         ],
       },
@@ -155,6 +171,8 @@ function createExportAction({ attributes, frozen }) {
             attributes,
             frozen,
             implemented: false,
+            scope: "S100",
+            exportType: "Edition",
           }),
           createExportLeafAction({
             id: "s100-export-update",
@@ -163,6 +181,8 @@ function createExportAction({ attributes, frozen }) {
             attributes,
             frozen,
             implemented: false,
+            scope: "S100",
+            exportType: "Update",
           }),
         ],
       },
@@ -170,7 +190,18 @@ function createExportAction({ attributes, frozen }) {
   });
 }
 
-function createExportLeafAction({ id, label, icon, attributes, frozen, implemented }) {
+function createExportLeafAction({
+  id,
+  label,
+  icon,
+  attributes,
+  frozen,
+  implemented,
+  scope,
+  exportType,
+  request,
+  refreshAndRender,
+}) {
   return {
     id,
     label,
@@ -180,8 +211,19 @@ function createExportLeafAction({ id, label, icon, attributes, frozen, implement
       frozen,
       implemented,
     }),
-    onClick: () => {
-      noticeInfo(`Export ${label.toLowerCase()} is not available yet`, attributes.datasetName);
+    onClick: async ({ anchorElement }) => {
+      const result = await triggerExport({
+        actionId: id,
+        datasetName: attributes.datasetName,
+        scope,
+        exportType,
+        request,
+        anchorElement,
+      });
+
+      if (result?.success) {
+        await refreshAndRender?.();
+      }
     },
   };
 }
@@ -401,10 +443,15 @@ function createDropdownItem(itemConfig, level = 0) {
       return;
     }
 
+    // Dropdown items are removed before the action runs. Keep the top-level
+    // Export/Tools button as a stable confirmation anchor for actions that open
+    // the shared confirm popover.
+    const stableAnchorElement = activeDropdown?.anchorElement ?? item;
+
     closePopupActionDropdown();
 
     await itemConfig.onClick?.({
-      anchorElement: item,
+      anchorElement: stableAnchorElement,
     });
   });
 
@@ -544,4 +591,93 @@ async function sendImmediately(datasetName, anchorElement) {
   } finally {
     isSending = false;
   }
+}
+
+async function triggerExport({ actionId, datasetName, scope, exportType, request, anchorElement }) {
+  if (!datasetName) {
+    noticeError("Cannot export product", "The selected feature does not have a datasetName.");
+    return null;
+  }
+
+  if (typeof request !== "function") {
+    noticeError(
+      "Export is not configured",
+      `${scope} ${exportType} does not have an export endpoint configured yet.`
+    );
+    return null;
+  }
+
+  const exportLabel = `${scope} ${exportType}`;
+  const actionKey = `${datasetName}:${actionId}`;
+
+  if (activeExportActionIds.has(actionKey)) {
+    return null;
+  }
+
+  const confirmed = await confirmAction({
+    title: `Export ${exportLabel} for ${datasetName}`,
+    message: `Are you sure you want to export ${exportLabel.toLowerCase()} for ${datasetName}?`,
+    confirmText: "Export",
+    cancelText: "Cancel",
+    anchorElement,
+  });
+
+  if (!confirmed) {
+    return null;
+  }
+
+  activeExportActionIds.add(actionKey);
+
+  try {
+    const result = await request(datasetName);
+
+    if (result.success) {
+      noticeSuccess(`Export request sent for ${datasetName}`, exportLabel, {
+        countAsUnread: false,
+      });
+    } else if (result.networkError) {
+      noticeError(`Network error while exporting ${datasetName}`, exportLabel);
+    } else {
+      noticeError(
+        `Failed to export ${datasetName} (${result.status})`,
+        getApiResultMessage(result) ?? exportLabel
+      );
+    }
+
+    return result;
+  } finally {
+    activeExportActionIds.delete(actionKey);
+  }
+}
+
+function getApiResultMessage(result) {
+  if (!result) {
+    return null;
+  }
+
+  if (typeof result.errorMessage === "string" && result.errorMessage.trim()) {
+    return result.errorMessage;
+  }
+
+  if (typeof result.statusText === "string" && result.statusText.trim()) {
+    return result.statusText;
+  }
+
+  if (typeof result.data === "string" && result.data.trim()) {
+    return result.data;
+  }
+
+  if (result.data && typeof result.data === "object") {
+    return (
+      result.data.message ??
+      result.data.Message ??
+      result.data.error ??
+      result.data.Error ??
+      result.data.title ??
+      result.data.Title ??
+      null
+    );
+  }
+
+  return null;
 }
