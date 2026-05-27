@@ -26,7 +26,7 @@ export function geoJsonToGraphics(geojson, { layerId, displayScale: layerDisplay
           displayScale,
           status,
         },
-        symbol: getCorrectionSymbol(status, { variant: "detail" }),
+        symbol: getCorrectionSymbol(status),
       });
     })
     .filter(Boolean);

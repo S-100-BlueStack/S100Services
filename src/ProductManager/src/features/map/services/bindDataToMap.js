@@ -5,7 +5,6 @@ import { bindDisplayScaleVisibility } from "../scale/displayScaleVisibility.js";
 export async function bindDataToMap({ map, view, hoverManager, layers, onProgress }) {
   const createdLayers = await rebuildLayers({
     map,
-    view,
     hoverManager,
     layerConfigs: layers,
     createLayer,
@@ -22,7 +21,6 @@ export async function bindDataToMap({ map, view, hoverManager, layers, onProgres
     renderedLayers: createdLayers.map((layer) => ({
       id: layer.customId,
       appLayerId: layer.appLayerId,
-      role: layer.appLayerRole,
       title: layer.title,
       type: layer.type,
       visible: layer.visible,

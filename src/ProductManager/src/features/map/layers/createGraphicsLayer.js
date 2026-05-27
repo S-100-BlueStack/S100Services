@@ -45,7 +45,6 @@ export async function createGraphicsLayer(map, layerConfig, { onProgress } = {})
   applyAppLayerMetadata(layer, {
     customId: id,
     appLayerId: id,
-    role: "data",
     index: layerIndex,
   });
 
@@ -177,10 +176,9 @@ async function addGraphicsInChunks(layer, graphics, { chunkSize, onProgress }) {
   }
 }
 
-function applyAppLayerMetadata(layer, { customId, appLayerId, role, index }) {
+function applyAppLayerMetadata(layer, { customId, appLayerId, index }) {
   layer.customId = customId;
   layer.appLayerId = appLayerId;
-  layer.appLayerRole = role;
   layer.layerType = "graphics";
   layer._index = index;
 }

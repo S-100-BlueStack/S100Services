@@ -54,7 +54,7 @@ export function esriJsonToGraphics(data, { layerId, displayScale: layerDisplaySc
 
           status,
         },
-        symbol: getCorrectionSymbol(status, { variant: "detail" }),
+        symbol: getCorrectionSymbol(status),
       });
     })
     .filter(Boolean);

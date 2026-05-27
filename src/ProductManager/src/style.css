@@ -615,18 +615,6 @@ html.calcite-mode-dark {
   opacity: 0.65;
 }
 
-/* Popup actions render through Calcite internals / shadow DOM.
-   In this context the exposed icon token that actually propagates is
-   --calcite-ui-icon-color, not --calcite-button-icon-color. */
-/* CURRENTLY UNUSED WHILE USING CUSTOM ACTION DROPDOWNS INSTEAD OF CALCITE ACTION MENUS, BUT KEEPING FOR FUTURE REFERENCE */
-/* [data-action-id="freeze-feature"] {
-  --calcite-ui-icon-color: #0d6efd;
-}
-
-[data-action-id="freeze-feature-sun"] {
-  --calcite-ui-icon-color: #fd7e14;
-} */
-
 /* =========================================================
    Overlap picker
    Uses popup tokens because this UI appears inside an ArcGIS popup.
