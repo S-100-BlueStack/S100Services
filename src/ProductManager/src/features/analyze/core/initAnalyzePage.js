@@ -11,38 +11,14 @@ import {
   setAnalyzeRouteUrl,
 } from "../routing/analyzeRoute.js";
 import { renderAnalyzeSidebar } from "../ui/analyzeSidebar.js";
-import {
-  hideLoader,
-  setLoaderProgress,
-  setLoaderText,
-  showLoader,
-  startLoaderTextRotation,
-  stopLoaderTextRotation,
-} from "../../../shared/ui/loader.js";
-import {
-  getLoadingMessages,
-  loadingMessageIntervalMs,
-  loadingTextMode,
-  shouldRotateLoadingMessages,
-  shouldShowTechnicalLoadingStages,
-} from "../../../shared/config/loadingTextConfig.js";
-
-const ANALYZE_LOAD_START_PROGRESS = 0.04;
-const ANALYZE_LOAD_END_PROGRESS = 0.2;
-const ANALYZE_RENDER_START_PROGRESS = 0.24;
-const ANALYZE_RENDER_END_PROGRESS = 0.96;
-
-const ANALYZE_FAKE_PROGRESS_INTERVAL_MS = 350;
-const ANALYZE_FAKE_PROGRESS_STEP = 0.014;
-
-let analyzeFakeProgressIntervalId = null;
-let analyzeFakeProgress = ANALYZE_LOAD_START_PROGRESS;
+import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
 
 export async function initAnalyzePage({ datasetNames }) {
   let currentLayers = [];
   let currentProducts = [];
   let loadRequestId = 0;
   let lookupsLoaded = false;
+  let activeLoaderProgress = null;
 
   const normalizedDatasetNames = normalizeDatasetNames(datasetNames);
 
@@ -55,6 +31,9 @@ export async function initAnalyzePage({ datasetNames }) {
   const loadAnalyzeDatasetNames = async (nextDatasetNames, { updateUrl = true } = {}) => {
     const requestId = ++loadRequestId;
     const normalizedNextDatasetNames = normalizeDatasetNames(nextDatasetNames);
+
+    activeLoaderProgress?.cleanup();
+    activeLoaderProgress = null;
 
     if (updateUrl) {
       setAnalyzeRouteUrl(normalizedNextDatasetNames);
@@ -78,46 +57,82 @@ export async function initAnalyzePage({ datasetNames }) {
         products: [],
         loading: false,
       });
-
       return;
     }
 
-    startAnalyzeLoadingUi();
+    const loaderProgress = createAnalyzeLoaderProgress();
+    activeLoaderProgress = loaderProgress;
 
-    await ensureLookupsLoaded();
+    try {
+      loaderProgress.startLoading("Loading analyze data...", {
+        rotateImmediately: true,
+      });
 
-    const products = await fetchAnalyzeProducts(normalizedNextDatasetNames);
+      await ensureLookupsLoaded();
 
-    if (requestId !== loadRequestId) {
-      return;
-    }
+      const products = await fetchAnalyzeProducts(normalizedNextDatasetNames);
 
-    const layers = await createAnalyzeLayers(map, products);
+      if (requestId !== loadRequestId) {
+        return;
+      }
 
-    currentProducts = products;
-    currentLayers = layers;
+      loaderProgress.markDataReceived();
+      loaderProgress.startRendering({
+        text: `Rendering ${products.length} analyze product${products.length === 1 ? "" : "s"}...`,
+      });
 
-    renderAnalyzeSidebar({
-      datasetNames: normalizedNextDatasetNames,
-      products,
-      loading: false,
-    });
+      const layers = await createAnalyzeLayers(map, products, {
+        onProgress: loaderProgress.handleRenderProgress,
+      });
 
-    showMockWarningIfNeeded(products);
+      if (requestId !== loadRequestId) {
+        return;
+      }
 
-    await waitForLayerViews(view, layers);
+      currentProducts = products;
+      currentLayers = layers;
 
-    if (requestId !== loadRequestId) {
-      return;
-    }
+      renderAnalyzeSidebar({
+        datasetNames: normalizedNextDatasetNames,
+        products,
+        loading: false,
+      });
 
-    const didZoom = await zoomToGraphicsExtent(view, layers);
+      showMockWarningIfNeeded(products);
 
-    if (!didZoom) {
-      noticeError(
-        "Analyze geometry not found",
-        "The product was loaded, but no AOI geometry could be rendered on the map."
-      );
+      await waitForLayerViews(view, layers);
+
+      if (requestId !== loadRequestId) {
+        return;
+      }
+
+      const didZoom = await zoomToGraphicsExtent(view, layers);
+
+      if (!didZoom) {
+        noticeError(
+          "Analyze geometry not found",
+          "The product was loaded, but no AOI geometry could be rendered on the map."
+        );
+      }
+
+      loaderProgress.complete({
+        text: "Analyze ready",
+      });
+    } catch (error) {
+      if (requestId === loadRequestId) {
+        loaderProgress.fail({
+          text: "Failed to load analyze data",
+        });
+
+        noticeError(
+          "Analyze data failed",
+          error instanceof Error ? error.message : "Unknown analyze error"
+        );
+      }
+    } finally {
+      if (activeLoaderProgress === loaderProgress) {
+        activeLoaderProgress = null;
+      }
     }
   };
 
@@ -128,6 +143,7 @@ export async function initAnalyzePage({ datasetNames }) {
   });
 
   applyAnalyzeViewPadding(view);
+
   await view.when();
 
   renderAnalyzeSidebar({
@@ -168,6 +184,19 @@ export async function initAnalyzePage({ datasetNames }) {
     await loadLookupsSafely();
     lookupsLoaded = true;
   }
+}
+
+function createAnalyzeLoaderProgress() {
+  return createLoaderProgressSession({
+    loadStartProgress: 0.04,
+    loadEndProgress: 0.2,
+    dataReceivedProgress: 0.22,
+    renderStartProgress: 0.24,
+    renderEndProgress: 0.96,
+    simulatedProgressIntervalMs: 350,
+    simulatedProgressStep: 0.014,
+    showLoaderOnStart: true,
+  });
 }
 
 function normalizeDatasetNames(datasetNames) {
@@ -239,78 +268,4 @@ function showMockWarningIfNeeded(products) {
       .map((product) => product.datasetName)
       .join(", ")}.`
   );
-}
-
-function startAnalyzeLoadingUi() {
-  analyzeFakeProgress = ANALYZE_LOAD_START_PROGRESS;
-
-  showLoader("Loading analyze data...", {
-    progress: analyzeFakeProgress,
-  });
-
-  setLoaderProgress(analyzeFakeProgress, {
-    label: `${Math.round(analyzeFakeProgress * 100)}%`,
-  });
-
-  if (shouldRotateLoadingMessages()) {
-    startLoaderTextRotation(getLoadingMessages("loadingData", loadingTextMode), {
-      intervalMs: loadingMessageIntervalMs,
-      immediate: true,
-    });
-  }
-
-  startAnalyzeFakeProgress();
-}
-
-function startAnalyzeFakeProgress() {
-  stopAnalyzeFakeProgress();
-
-  analyzeFakeProgressIntervalId = window.setInterval(() => {
-    analyzeFakeProgress = Math.min(
-      ANALYZE_LOAD_END_PROGRESS,
-      analyzeFakeProgress + ANALYZE_FAKE_PROGRESS_STEP
-    );
-
-    setLoaderProgress(analyzeFakeProgress, {
-      label: `${Math.round(analyzeFakeProgress * 100)}%`,
-    });
-
-    if (analyzeFakeProgress >= ANALYZE_LOAD_END_PROGRESS) {
-      stopAnalyzeFakeProgress();
-    }
-  }, ANALYZE_FAKE_PROGRESS_INTERVAL_MS);
-}
-
-function stopAnalyzeFakeProgress() {
-  if (analyzeFakeProgressIntervalId === null) {
-    return;
-  }
-
-  window.clearInterval(analyzeFakeProgressIntervalId);
-  analyzeFakeProgressIntervalId = null;
-}
-
-function handleAnalyzeRenderProgress({ progress, stage, layerTitle }) {
-  const normalizedProgress = clamp(progress ?? 0, 0, 1);
-  const loaderProgress =
-    ANALYZE_RENDER_START_PROGRESS +
-    normalizedProgress * (ANALYZE_RENDER_END_PROGRESS - ANALYZE_RENDER_START_PROGRESS);
-
-  setLoaderProgress(loaderProgress, {
-    label: `${Math.round(loaderProgress * 100)}%`,
-  });
-
-  if (shouldShowTechnicalLoadingStages() && stage && layerTitle) {
-    setLoaderText(`${stage} (${layerTitle})...`);
-  }
-}
-
-function hideAnalyzeLoader() {
-  stopAnalyzeFakeProgress();
-  stopLoaderTextRotation();
-  hideLoader();
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
 }

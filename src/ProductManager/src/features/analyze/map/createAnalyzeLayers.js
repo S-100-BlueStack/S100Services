@@ -7,24 +7,15 @@ export async function createAnalyzeLayers(map, products, { onProgress } = {}) {
     return [];
   }
 
-  const createdLayers = await createLayer(
+  const layer = await createLayer(
     map,
     {
       id: "analyze-products",
+      title: "Analyze products",
       type: "graphics",
       dataFormat: "esri-json",
       data: {
         features,
-      },
-      scaleRanges: {
-        overview: {
-          minScale: 0,
-          maxScale: 1_000_000,
-        },
-        detail: {
-          minScale: 1_000_000,
-          maxScale: 0,
-        },
       },
     },
     {
@@ -32,19 +23,7 @@ export async function createAnalyzeLayers(map, products, { onProgress } = {}) {
     }
   );
 
-  return normalizeCreatedLayers(createdLayers);
-}
-
-function normalizeCreatedLayers(layerOrLayers) {
-  if (Array.isArray(layerOrLayers)) {
-    return layerOrLayers.flat().filter(Boolean);
-  }
-
-  if (layerOrLayers) {
-    return [layerOrLayers];
-  }
-
-  return [];
+  return layer ? [layer] : [];
 }
 
 function createAnalyzeFeature(product, index) {

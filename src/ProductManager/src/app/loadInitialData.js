@@ -2,78 +2,24 @@ import { loadAppData } from "../features/data/services/dataLoader.js";
 import { resetUnread } from "../features/notices/state/noticeStore.js";
 import { noticeError, noticeSuccess } from "../features/notices/services/noticeService.js";
 import { bindDataToMap } from "../features/map/services/bindDataToMap.js";
-import {
-  hideLoader,
-  setLoaderProgress,
-  setLoaderText,
-  startLoaderTextRotation,
-  stopLoaderTextRotation,
-} from "../shared/ui/loader.js";
-import {
-  getLoadingMessages,
-  loadingMessageIntervalMs,
-  loadingTextMode,
-  shouldRotateLoadingMessages,
-  shouldShowTechnicalLoadingStages,
-} from "../shared/config/loadingTextConfig.js";
+import { createLoaderProgressSession } from "../shared/ui/loaderProgressSession.js";
 import { runWithRetry } from "../shared/utils/retryRunner.js";
 
 const abortController = new AbortController();
 
-const DATA_LOAD_START_PROGRESS = 0.03;
-const DATA_LOAD_END_PROGRESS = 0.16;
-const DATA_RECEIVED_PROGRESS = 0.18;
-const RENDER_START_PROGRESS = 0.2;
-const RENDER_END_PROGRESS = 0.96;
-
-const SIMULATED_DATA_PROGRESS_INTERVAL_MS = 350;
-const SIMULATED_DATA_PROGRESS_STEP = 0.012;
-
-let retryCountdownIntervalId = null;
-let simulatedDataProgressIntervalId = null;
-let simulatedDataProgress = DATA_LOAD_START_PROGRESS;
-
-function clearRetryCountdown() {
-  if (retryCountdownIntervalId !== null) {
-    clearInterval(retryCountdownIntervalId);
-    retryCountdownIntervalId = null;
-  }
-}
-
-function startRetryCountdown(attempt, totalAttempts, delayMs) {
-  clearRetryCountdown();
-  stopSimulatedDataProgress();
-  stopLoaderTextRotation();
-
-  const startedAt = Date.now();
-
-  const updateCountdownText = () => {
-    const elapsedMs = Date.now() - startedAt;
-    const remainingMs = Math.max(0, delayMs - elapsedMs);
-    const remainingSeconds = Math.ceil(remainingMs / 1000);
-
-    setLoaderText(
-      `Retrying data load (${attempt}/${totalAttempts})... Next attempt in ${remainingSeconds}s`
-    );
-
-    // Retry waiting is intentionally indeterminate because no useful work is happening.
-    setLoaderProgress(null);
-  };
-
-  updateCountdownText();
-
-  retryCountdownIntervalId = window.setInterval(() => {
-    updateCountdownText();
-
-    if (Date.now() - startedAt >= delayMs) {
-      clearRetryCountdown();
-    }
-  }, 1000);
-}
-
 export async function loadInitialData(app) {
+  const loaderProgress = createLoaderProgressSession({
+    loadStartProgress: 0.03,
+    loadEndProgress: 0.16,
+    dataReceivedProgress: 0.18,
+    renderStartProgress: 0.2,
+    renderEndProgress: 0.96,
+    simulatedProgressIntervalMs: 350,
+    simulatedProgressStep: 0.012,
+  });
+
   try {
-    startDataLoadingUi();
+    loaderProgress.startLoading("Loading data...");
 
     const result = await runWithRetry(loadAppData, {
       maxRetries: 5,
@@ -82,54 +28,42 @@ export async function loadInitialData(app) {
       backoffFactor: 2,
       signal: abortController.signal,
       onRetry: ({ attempt, delay, error }) => {
-        startRetryCountdown(attempt, 5, delay);
+        loaderProgress.startRetryCountdown({
+          attempt,
+          totalAttempts: 5,
+          delayMs: delay,
+        });
+
         noticeError(`Data load failed (${attempt}/5)`, error.message);
       },
     });
 
-    clearRetryCountdown();
-    stopSimulatedDataProgress();
-
     const layers = normalizeLayers(result);
 
-    setLoaderProgress(DATA_RECEIVED_PROGRESS, {
-      label: `${Math.round(DATA_RECEIVED_PROGRESS * 100)}%`,
-    });
-
-    if (shouldShowTechnicalLoadingStages()) {
-      setLoaderText(`Rendering ${layers.length} data layer${layers.length === 1 ? "" : "s"}...`);
-    }
+    loaderProgress.markDataReceived();
 
     await waitForNextPaint();
 
-    if (shouldRotateLoadingMessages()) {
-      startLoaderTextRotation(getLoadingMessages("renderingMap", loadingTextMode), {
-        intervalMs: loadingMessageIntervalMs,
-        immediate: true,
-      });
-    }
+    loaderProgress.startRendering({
+      text: `Rendering ${layers.length} data layer${layers.length === 1 ? "" : "s"}...`,
+    });
 
     const renderSummary = await bindDataToMap({
       map: app.map,
       view: app.view,
       hoverManager: app.hoverManager,
       layers,
-      onProgress: handleRenderProgress,
+      onProgress: loaderProgress.handleRenderProgress,
     });
 
-    stopLoaderTextRotation();
-
-    setLoaderText("Map ready");
-    setLoaderProgress(1, {
-      label: "100%",
+    loaderProgress.complete({
+      text: "Map ready",
     });
 
     const totalGraphics =
       getTotalGraphicsFromRenderSummary(renderSummary) ?? getTotalGraphicsFromMap(app.map);
 
     app.updateLastUpdated();
-
-    hideLoader();
 
     if (totalGraphics === 0) {
       noticeError(
@@ -144,79 +78,12 @@ export async function loadInitialData(app) {
 
     resetUnread();
   } catch (error) {
-    clearRetryCountdown();
-    stopSimulatedDataProgress();
-    stopLoaderTextRotation();
+    loaderProgress.fail({
+      text: "Failed to load data",
+    });
 
     console.error("[Map debug] Data failed permanently:", error);
-
-    setLoaderText("Failed to load data");
-    setLoaderProgress(1, {
-      label: "Failed",
-    });
-
-    setTimeout(() => hideLoader(), 1500);
     noticeError("Data failed permanently", error.message);
-  }
-}
-
-function startDataLoadingUi() {
-  simulatedDataProgress = DATA_LOAD_START_PROGRESS;
-
-  setLoaderText("Loading data...");
-  setLoaderProgress(simulatedDataProgress, {
-    label: `${Math.round(simulatedDataProgress * 100)}%`,
-  });
-
-  if (shouldRotateLoadingMessages()) {
-    startLoaderTextRotation(getLoadingMessages("loadingData", loadingTextMode), {
-      intervalMs: loadingMessageIntervalMs,
-      immediate: false,
-    });
-  }
-
-  startSimulatedDataProgress();
-}
-
-function startSimulatedDataProgress() {
-  stopSimulatedDataProgress();
-
-  simulatedDataProgressIntervalId = window.setInterval(() => {
-    simulatedDataProgress = Math.min(
-      DATA_LOAD_END_PROGRESS,
-      simulatedDataProgress + SIMULATED_DATA_PROGRESS_STEP
-    );
-
-    setLoaderProgress(simulatedDataProgress, {
-      label: `${Math.round(simulatedDataProgress * 100)}%`,
-    });
-
-    if (simulatedDataProgress >= DATA_LOAD_END_PROGRESS) {
-      stopSimulatedDataProgress();
-    }
-  }, SIMULATED_DATA_PROGRESS_INTERVAL_MS);
-}
-
-function stopSimulatedDataProgress() {
-  if (simulatedDataProgressIntervalId === null) {
-    return;
-  }
-
-  window.clearInterval(simulatedDataProgressIntervalId);
-  simulatedDataProgressIntervalId = null;
-}
-
-function handleRenderProgress({ progress, stage, layerTitle }) {
-  const normalizedProgress = clamp(progress ?? 0, 0, 1);
-  const loaderProgress =
-    RENDER_START_PROGRESS + normalizedProgress * (RENDER_END_PROGRESS - RENDER_START_PROGRESS);
-
-  setLoaderProgress(loaderProgress, {
-    label: `${Math.round(loaderProgress * 100)}%`,
-  });
-
-  if (shouldShowTechnicalLoadingStages() && stage && layerTitle) {
-    setLoaderText(`${stage} (${layerTitle})...`);
   }
 }
 
@@ -258,8 +125,4 @@ function waitForNextPaint() {
       requestAnimationFrame(resolve);
     });
   });
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
 }
