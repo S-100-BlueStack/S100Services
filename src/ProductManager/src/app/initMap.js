@@ -7,7 +7,6 @@ import { createLayer } from "../features/map/core/layerFactory.js";
 import { createHoverManager } from "../features/map/interactions/hoverManager.js";
 import { registerPopupHoverSync } from "../features/map/interactions/registerPopupHoverSync.js";
 import { bindOverlapPicker } from "../features/map/interactions/overlapPicker.js";
-import { addReferenceLayers } from "../features/map/layers/addReferenceLayers.js";
 import { getAllLayers } from "../features/map/core/layerRegistry.js";
 import {
   applyDisplayScaleVisibility,
@@ -16,32 +15,41 @@ import {
 import { createAttributeFilterService } from "../features/map/filters/attributeFilterService.js";
 import { initAttributeFilterPanel } from "../features/map/filters/attributeFilterPanel.js";
 
-function updateLastUpdated() {
+function updateLastUpdated(date = new Date()) {
   const el = document.getElementById("last-updated");
 
-  if (!el) return;
-
-  const now = new Date();
+  if (!el) {
+    return;
+  }
 
   el.textContent =
     "Updated: " +
-    now.toLocaleTimeString([], {
+    date.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     });
 }
 
+function setLastUpdatedStatus(text) {
+  const el = document.getElementById("last-updated");
+
+  if (!el) {
+    return;
+  }
+
+  el.textContent = text;
+}
+
+function readLastUpdatedStatus() {
+  return document.getElementById("last-updated")?.textContent ?? "";
+}
+
 export function initMap() {
   const map = createMap();
-
-  // const referenceLayers = addReferenceLayers(map, {
-  //   onLoadError: (layer, error) => {
-  //     noticeError(`Reference layer failed to load: ${layer.title}`, error.message);
-  //   },
-  // });
-
   const view = createView(map);
   const hoverManager = createHoverManager(view);
+
+  let previousLastUpdatedStatus = "";
 
   registerPopupHoverSync(view, hoverManager);
 
@@ -79,8 +87,16 @@ export function initMap() {
       bindMapVisibility(layers);
       filterPanel.refresh();
     },
-    onRefreshSuccess: ({ source, graphicsCount }) => {
-      updateLastUpdated();
+    onRefreshStart: ({ source }) => {
+      if (source !== "manual") {
+        return;
+      }
+
+      previousLastUpdatedStatus = readLastUpdatedStatus();
+      setLastUpdatedStatus("Refreshing...");
+    },
+    onRefreshSuccess: ({ source, graphicsCount, finishedAt }) => {
+      updateLastUpdated(finishedAt);
 
       if (source === "manual") {
         noticeSuccess(`Data refreshed (${graphicsCount} graphics rendered)`, null, {
@@ -90,11 +106,20 @@ export function initMap() {
     },
     onRefreshError: (error, { source } = {}) => {
       if (source === "manual") {
+        if (previousLastUpdatedStatus) {
+          setLastUpdatedStatus(previousLastUpdatedStatus);
+        }
+
         noticeError("Refresh failed", error.message);
         return;
       }
 
       console.warn("[Refresh] Auto refresh failed", error);
+    },
+    onRefreshSkipped: ({ source, reason }) => {
+      if (source === "manual") {
+        console.info(`[Refresh] Manual refresh skipped: ${reason}`);
+      }
     },
   });
 

@@ -4,8 +4,16 @@ export function initRefreshControls({ refreshService }) {
 
   if (refreshBtn) {
     refreshBtn.addEventListener("click", async () => {
+      if (refreshService.isRefreshInProgress?.()) {
+        return;
+      }
+
+      const wasDisabled = refreshBtn.disabled;
+
       try {
         refreshBtn.loading = true;
+        refreshBtn.disabled = true;
+        refreshBtn.toggleAttribute("active", true);
 
         await refreshService.refresh({
           source: "manual",
@@ -13,6 +21,8 @@ export function initRefreshControls({ refreshService }) {
       } finally {
         refreshBtn.blur();
         refreshBtn.loading = false;
+        refreshBtn.disabled = wasDisabled;
+        refreshBtn.toggleAttribute("active", false);
       }
     });
   }

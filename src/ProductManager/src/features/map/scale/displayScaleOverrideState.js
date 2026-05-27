@@ -1,6 +1,7 @@
 const DISPLAY_SCALE_OVERRIDE_CHANGE_EVENT = "pm-display-scale-override-change";
+const DISPLAY_SCALE_OVERRIDE_STORAGE_KEY = "pm.displayScale.hidingDisabled";
 
-let displayScaleHidingDisabled = false;
+let displayScaleHidingDisabled = readPersistedDisplayScaleHidingDisabled();
 
 export function isDisplayScaleHidingDisabled() {
   return displayScaleHidingDisabled;
@@ -8,6 +9,10 @@ export function isDisplayScaleHidingDisabled() {
 
 export function setDisplayScaleHidingDisabled(disabled, { source = "manual" } = {}) {
   const nextDisabled = Boolean(disabled);
+
+  if (source === "manual") {
+    writePersistedDisplayScaleHidingDisabled(nextDisabled);
+  }
 
   if (displayScaleHidingDisabled === nextDisabled) {
     return;
@@ -43,4 +48,21 @@ export function onDisplayScaleOverrideChange(callback) {
       document.removeEventListener(DISPLAY_SCALE_OVERRIDE_CHANGE_EVENT, handler);
     },
   };
+}
+
+function readPersistedDisplayScaleHidingDisabled() {
+  try {
+    return window.localStorage.getItem(DISPLAY_SCALE_OVERRIDE_STORAGE_KEY) === "true";
+  } catch (error) {
+    console.warn("Failed to read display scale hiding preference.", error);
+    return false;
+  }
+}
+
+function writePersistedDisplayScaleHidingDisabled(disabled) {
+  try {
+    window.localStorage.setItem(DISPLAY_SCALE_OVERRIDE_STORAGE_KEY, String(Boolean(disabled)));
+  } catch (error) {
+    console.warn("Failed to save display scale hiding preference.", error);
+  }
 }

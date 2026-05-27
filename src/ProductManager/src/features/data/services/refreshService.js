@@ -1,12 +1,7 @@
 import { findFeature } from "../../map/core/featureAdapter.js";
 import { getAllLayers, getLayer } from "../../map/core/layerRegistry.js";
 import { rebuildLayers } from "../../map/core/rebuildLayers.js";
-import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
 import { runWithRetry } from "../../../shared/utils/retryRunner.js";
-
-let isRefreshing = false;
-let autoRefreshEnabled = true;
-let intervalId = null;
 
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 const MANUAL_REFRESH_MAX_RETRIES = 5;
@@ -19,9 +14,15 @@ export function createRefreshService({
   loadAppData,
   createLayer,
   onLayersRebuilt,
+  onRefreshStart,
   onRefreshSuccess,
   onRefreshError,
+  onRefreshSkipped,
 }) {
+  let isRefreshing = false;
+  let autoRefreshEnabled = true;
+  let intervalId = null;
+
   function captureState() {
     const selectedFeature = view.popup.selectedFeature;
     const popupLocation = cloneGeometry(view.popup.location);
@@ -34,9 +35,6 @@ export function createRefreshService({
       lockedFeatureKey: hoverManager?.getLockedFeatureKey?.(),
       lockedLayerId: hoverManager?.getLockedLayerId?.(),
     };
-  }
-  function cloneGeometry(geometry) {
-    return geometry?.clone?.() ?? geometry ?? null;
   }
 
   async function restoreState(state) {
@@ -72,8 +70,8 @@ export function createRefreshService({
       return preferredGraphic;
     }
 
-    // Fall back to all registered layers so state restoration still works if
-    // layer ids change later when more product layers are introduced.
+    // Layer ids can change later when multiple product layers are introduced.
+    // Falling back to all registered layers keeps popup restore resilient.
     for (const layer of getAllLayers()) {
       const graphic = findFeature(layer, featureKey);
 
@@ -85,36 +83,28 @@ export function createRefreshService({
     return null;
   }
 
-  function getPopupLocation(graphic) {
-    const geometry = graphic.geometry;
-
-    if (!geometry) {
-      return null;
-    }
-
-    if (geometry.type === "point") {
-      return geometry;
-    }
-
-    if (geometry.extent) {
-      return geometry.extent.center;
-    }
-
-    return null;
-  }
-
   async function refresh({ source = "manual" } = {}) {
     if (isRefreshing) {
-      return {
+      const skippedResult = {
         success: false,
         skipped: true,
         reason: "already-refreshing",
+        source,
       };
+
+      onRefreshSkipped?.(skippedResult);
+      return skippedResult;
     }
 
     isRefreshing = true;
 
+    const startedAt = new Date();
     const state = captureState();
+
+    onRefreshStart?.({
+      source,
+      startedAt,
+    });
 
     try {
       const result = await runWithRetry(loadAppData, {
@@ -136,32 +126,37 @@ export function createRefreshService({
       await onLayersRebuilt?.(createdLayers);
       await restoreState(state);
 
+      const finishedAt = new Date();
       const graphicsCount = getTotalGraphics(createdLayers);
 
-      onRefreshSuccess?.({
-        source,
-        layerCount: createdLayers.length,
-        graphicsCount,
-      });
-
-      return {
+      const refreshResult = {
         success: true,
         skipped: false,
         source,
+        startedAt,
+        finishedAt,
+        durationMs: finishedAt.getTime() - startedAt.getTime(),
         layerCount: createdLayers.length,
         graphicsCount,
       };
-    } catch (error) {
-      onRefreshError?.(error, {
-        source,
-      });
 
-      return {
+      onRefreshSuccess?.(refreshResult);
+      return refreshResult;
+    } catch (error) {
+      const finishedAt = new Date();
+
+      const refreshResult = {
         success: false,
         skipped: false,
         source,
+        startedAt,
+        finishedAt,
+        durationMs: finishedAt.getTime() - startedAt.getTime(),
         error,
       };
+
+      onRefreshError?.(error, refreshResult);
+      return refreshResult;
     } finally {
       isRefreshing = false;
     }
@@ -178,10 +173,12 @@ export function createRefreshService({
   }
 
   function stopAuto() {
-    if (intervalId) {
-      window.clearInterval(intervalId);
-      intervalId = null;
+    if (intervalId === null) {
+      return;
     }
+
+    window.clearInterval(intervalId);
+    intervalId = null;
   }
 
   function setAuto(enabled) {
@@ -198,27 +195,18 @@ export function createRefreshService({
     return autoRefreshEnabled;
   }
 
+  function isRefreshInProgress() {
+    return isRefreshing;
+  }
+
   return {
     refresh,
     setAuto,
     startAuto,
     stopAuto,
     isAutoEnabled,
+    isRefreshInProgress,
   };
-}
-
-function createRefreshLoaderProgress() {
-  return createLoaderProgressSession({
-    loadStartProgress: 0.04,
-    loadEndProgress: 0.18,
-    dataReceivedProgress: 0.2,
-    renderStartProgress: 0.24,
-    renderEndProgress: 0.96,
-    simulatedProgressIntervalMs: 350,
-    simulatedProgressStep: 0.014,
-    showLoaderOnStart: true,
-    showLoaderDelayMs: 350,
-  });
 }
 
 function normalizeLayers(result) {
@@ -241,10 +229,24 @@ function getTotalGraphics(layers) {
   }, 0);
 }
 
-function waitForNextPaint() {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(resolve);
-    });
-  });
+function getPopupLocation(graphic) {
+  const geometry = graphic.geometry;
+
+  if (!geometry) {
+    return null;
+  }
+
+  if (geometry.type === "point") {
+    return geometry;
+  }
+
+  if (geometry.extent) {
+    return geometry.extent.center;
+  }
+
+  return null;
+}
+
+function cloneGeometry(geometry) {
+  return geometry?.clone?.() ?? geometry ?? null;
 }
