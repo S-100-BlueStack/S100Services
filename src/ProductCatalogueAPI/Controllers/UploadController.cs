@@ -101,7 +101,7 @@ namespace ProductCatalogueAPI.Controllers
             if (product.State != Data.Models.ProductState.Frozen)
                 return BadRequest($"Product {datasetName} is not frozen and cannot be unfrozen.");
 
-            await _productRepository.AppendAsync(datasetName, Data.Models.ProductState.Ready);
+            await _productRepository.AppendAsync(datasetName, Data.Models.ProductState.Idle);
 
 
             return Ok();

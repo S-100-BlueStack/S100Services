@@ -68,7 +68,7 @@ namespace ProductCatalogueAPI.Controllers
 
             await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
 
-            await _productRepository.AppendAsync(name, Data.Models.ProductState.NewEdition, user);
+            await _productRepository.AppendAsync(name, Data.Models.ProductState.Exported, user);
 
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
@@ -187,10 +187,37 @@ namespace ProductCatalogueAPI.Controllers
 
             await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
 
-            await _productRepository.AppendAsync(name, Data.Models.ProductState.Ready, user);
+            await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, user);
 
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
+        }
+
+
+        /// <summary>
+        /// Creates a new edition.
+        /// </summary>
+        /// <param name="name">The name of the dataset.</param>
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
+        [HttpPost("{name}/rollback", Name = "RollBack")]
+        public async Task<IActionResult> RollBack(string name) {
+            _logger.LogInformation("{method} called with name: {name}", nameof(RollBack), name);
+            var sw = Stopwatch.StartNew();
+            var response = new ApiResponse();
+
+            var user = User?.Identity?.Name;
+            _logger.LogInformation("{method} called with name: {name} by user: {user}", nameof(RollBack), name, user);
+
+
+            return StatusCode(StatusCodes.Status501NotImplemented, new ApiResponse {
+                Success = false,
+                Message = "Rollback is not implemented yet.",
+                DurationMs = sw.ElapsedMilliseconds
+            });
+
+            return Ok();
         }
 
 
@@ -230,7 +257,7 @@ namespace ProductCatalogueAPI.Controllers
                     await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
                     _logger.LogInformation("Exchangeset created successfully");
 
-                    await _productRepository.AppendAsync(name, Data.Models.ProductState.Ready);
+                    await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle);
                 }
                 catch (InvalidOperationException) {
                     _logger.LogWarning("Dataset already has update. skipping");

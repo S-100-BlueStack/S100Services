@@ -30,11 +30,11 @@
 
         public enum ProductStatus : int
         {
-            Ready = 1,
-            NewEdition = 2,
-            NewUpdate = 3,
-            Invalid = 4,
-            InTransit = 5
+            Idle = 1,       // Default. No changes detected.
+            Exported = 2,   // Exported as new edition/update.
+            Frozen = 5,     // Frozen and awaits manual action.
+            InTransit = 6,  // Awaiting IC-ENC confirmation.
+            Rejected = 7    // Rejected by IC-ENC.
         }
     }
 }

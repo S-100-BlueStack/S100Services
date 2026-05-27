@@ -162,7 +162,7 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
         """;
 
         var names = await connection.QueryAsync<string>(sql, new {
-            States = new[] { ProductState.NewUpdate, ProductState.NewEdition }
+            States = new[] { ProductState.NewUpdate, ProductState.Exported }
         });
 
         return [.. names];
@@ -206,7 +206,7 @@ public class InMemoryProductRepository : IProductRepository
 
     public Task<string[]> GetEligibleProductsAsync() {
         return Task.FromResult(
-            _products.Where(p => p.State == ProductState.NewEdition || p.State == ProductState.NewUpdate)
+            _products.Where(p => p.State == ProductState.Exported || p.State == ProductState.NewUpdate)
                      .Select(p => p.Name)
                      .ToArray());
     }
