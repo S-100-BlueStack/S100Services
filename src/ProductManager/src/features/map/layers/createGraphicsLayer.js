@@ -1,11 +1,8 @@
-import Graphic from "@arcgis/core/Graphic.js";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer.js";
 import { createLayerIndexAsync } from "../core/layerIndex.js";
 import { createPopup } from "../popups/createPopup.js";
-import { resolveScaleRanges } from "../config/scaleRanges.js";
 import { geoJsonToGraphics } from "../transformers/geoJsonToGraphics.js";
 import { esriJsonToGraphics } from "../transformers/esriJsonToGraphics.js";
-import { getCorrectionSymbol } from "../symbology/correctionSymbols.js";
 
 const DEFAULT_GRAPHICS_CHUNK_SIZE = 50;
 
@@ -20,89 +17,50 @@ export async function createGraphicsLayer(map, layerConfig, { onProgress } = {})
   } = layerConfig;
 
   const popupTemplate = createPopup();
-  const scaleRanges = resolveScaleRanges(layerConfig);
 
   reportProgress(onProgress, 0, "Preparing layer", title);
 
-  const detailGraphics = await createGraphicsFromData(data, {
+  const graphics = await createGraphicsFromData(data, {
     dataFormat,
     layerId: id,
     displayScale,
     chunkSize: graphicsChunkSize,
     onProgress: (progress) => {
-      reportProgress(onProgress, scaleProgress(progress, 0, 0.42), "Creating graphics", title);
+      reportProgress(onProgress, scaleProgress(progress, 0, 0.72), "Creating graphics", title);
     },
   });
 
-  const overviewGraphics = await mapGraphicsInChunks(detailGraphics, createOverviewGraphic, {
+  const layerIndex = await createLayerIndexAsync(graphics, {
     chunkSize: graphicsChunkSize,
     onProgress: (progress) => {
-      reportProgress(onProgress, scaleProgress(progress, 0.42, 0.56), "Creating overview", title);
+      reportProgress(onProgress, scaleProgress(progress, 0.72, 0.84), "Indexing graphics", title);
     },
   });
 
-  const overviewLayer = new GraphicsLayer({
-    title: `${id} overview`,
-    minScale: scaleRanges.overview.minScale,
-    maxScale: scaleRanges.overview.maxScale,
+  const layer = new GraphicsLayer({
+    title,
     popupTemplate,
   });
 
-  const detailLayer = new GraphicsLayer({
-    title: id,
-    minScale: scaleRanges.detail.minScale,
-    maxScale: scaleRanges.detail.maxScale,
-    popupTemplate,
-  });
-
-  const overviewIndex = await createLayerIndexAsync(overviewGraphics, {
-    chunkSize: graphicsChunkSize,
-    onProgress: (progress) => {
-      reportProgress(onProgress, scaleProgress(progress, 0.56, 0.62), "Indexing overview", title);
-    },
-  });
-
-  const detailIndex = await createLayerIndexAsync(detailGraphics, {
-    chunkSize: graphicsChunkSize,
-    onProgress: (progress) => {
-      reportProgress(onProgress, scaleProgress(progress, 0.62, 0.68), "Indexing graphics", title);
-    },
-  });
-
-  applyAppLayerMetadata(overviewLayer, {
-    customId: `${id}:overview`,
+  applyAppLayerMetadata(layer, {
+    customId: id,
     appLayerId: id,
-    role: "overview",
-    index: overviewIndex,
+    role: "data",
+    index: layerIndex,
   });
 
-  applyAppLayerMetadata(detailLayer, {
-    customId: `${id}:detail`,
-    appLayerId: id,
-    role: "detail",
-    index: detailIndex,
-  });
+  map.add(layer);
 
-  map.add(overviewLayer);
-  map.add(detailLayer);
-
-  await addGraphicsInChunks(overviewLayer, overviewGraphics, {
+  await addGraphicsInChunks(layer, graphics, {
     chunkSize: graphicsChunkSize,
     onProgress: (progress) => {
-      reportProgress(onProgress, scaleProgress(progress, 0.68, 0.82), "Adding overview", title);
-    },
-  });
-
-  await addGraphicsInChunks(detailLayer, detailGraphics, {
-    chunkSize: graphicsChunkSize,
-    onProgress: (progress) => {
-      reportProgress(onProgress, scaleProgress(progress, 0.82, 1), "Adding graphics", title);
+      reportProgress(onProgress, scaleProgress(progress, 0.84, 1), "Adding graphics", title);
     },
   });
 
   reportProgress(onProgress, 1, "Layer ready", title);
 
-  return [overviewLayer, detailLayer];
+  return layer;
 }
 
 async function createGraphicsFromData(
@@ -203,28 +161,6 @@ function createEsriJsonChunkSource(data) {
   };
 }
 
-async function mapGraphicsInChunks(graphics, mapGraphic, { chunkSize, onProgress }) {
-  const mappedGraphics = [];
-
-  if (graphics.length === 0) {
-    onProgress?.(1);
-    return mappedGraphics;
-  }
-
-  for (let start = 0; start < graphics.length; start += chunkSize) {
-    const chunk = graphics.slice(start, start + chunkSize);
-
-    for (const graphic of chunk) {
-      mappedGraphics.push(mapGraphic(graphic));
-    }
-
-    onProgress?.(Math.min(1, (start + chunk.length) / graphics.length));
-    await yieldToBrowser();
-  }
-
-  return mappedGraphics;
-}
-
 async function addGraphicsInChunks(layer, graphics, { chunkSize, onProgress }) {
   if (graphics.length === 0) {
     onProgress?.(1);
@@ -239,21 +175,6 @@ async function addGraphicsInChunks(layer, graphics, { chunkSize, onProgress }) {
     onProgress?.(Math.min(1, (start + chunk.length) / graphics.length));
     await yieldToBrowser();
   }
-}
-
-function createOverviewGraphic(graphic) {
-  const status = graphic.attributes?.status;
-
-  return new Graphic({
-    geometry: graphic.geometry?.clone?.() ?? graphic.geometry,
-    attributes: {
-      ...graphic.attributes,
-    },
-    visible: graphic.visible !== false,
-    symbol: getCorrectionSymbol(status, {
-      variant: "overview",
-    }),
-  });
 }
 
 function applyAppLayerMetadata(layer, { customId, appLayerId, role, index }) {

@@ -1,25 +1,28 @@
 import { statusColorConfig } from "../../../shared/config/colorsConfig.js";
 
-export function getCorrectionSymbol(status, { variant = "detail" } = {}) {
+const DEFAULT_FILL_ALPHA = 0.15;
+const DEFAULT_OUTLINE_ALPHA = 0.7;
+
+export function getCorrectionSymbol(status, { fillAlpha = DEFAULT_FILL_ALPHA } = {}) {
   const cfg = statusColorConfig[status];
 
   if (!cfg) {
     return {
       type: "simple-fill",
-      color: variant === "overview" ? "rgba(0, 0, 0, 0.08)" : "rgba(0, 0, 0, 0.5)",
+      color: `rgba(0, 0, 0, ${fillAlpha})`,
       outline: {
-        color: "rgba(0, 0, 0, 1)",
-        width: variant === "overview" ? 1.5 : 1,
+        color: `rgba(0, 0, 0, ${DEFAULT_OUTLINE_ALPHA})`,
+        width: 1,
       },
     };
   }
 
   return {
     type: "simple-fill",
-    color: variant === "overview" ? withAlpha(cfg.fill, 0.08) : cfg.fill,
+    color: withAlpha(cfg.fill, fillAlpha),
     outline: {
-      color: cfg.outline,
-      width: variant === "overview" ? 1.5 : 1,
+      color: withAlpha(cfg.outline, DEFAULT_OUTLINE_ALPHA),
+      width: 1,
     },
   };
 }

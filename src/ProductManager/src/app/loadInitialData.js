@@ -125,8 +125,7 @@ export async function loadInitialData(app) {
     });
 
     const totalGraphics =
-      getUserFacingGraphicsFromRenderSummary(renderSummary) ??
-      getUserFacingGraphicsFromMap(app.map);
+      getTotalGraphicsFromRenderSummary(renderSummary) ?? getTotalGraphicsFromMap(app.map);
 
     app.updateLastUpdated();
 
@@ -235,38 +234,22 @@ function normalizeLayers(result) {
   return layers;
 }
 
-function getUserFacingGraphicsFromRenderSummary(renderSummary) {
+function getTotalGraphicsFromRenderSummary(renderSummary) {
   if (!Array.isArray(renderSummary?.renderedLayers)) {
     return null;
   }
 
   return renderSummary.renderedLayers.reduce((sum, layer) => {
-    if (!isUserFacingDataLayer(layer)) {
-      return sum;
-    }
-
     return sum + (layer.graphicsCount ?? 0);
   }, 0);
 }
 
-function getUserFacingGraphicsFromMap(map) {
+function getTotalGraphicsFromMap(map) {
   const layers = map.layers?.toArray?.() ?? [];
 
   return layers.reduce((sum, layer) => {
-    if (!isUserFacingDataLayer(layer)) {
-      return sum;
-    }
-
     return sum + (layer.graphics?.length ?? 0);
   }, 0);
-}
-
-function isUserFacingDataLayer(layer) {
-  const role = layer.role ?? layer.appLayerRole;
-
-  // Overview graphics are duplicated representations of the same features.
-  // They should not be included in user-facing loaded/rendered counts.
-  return role !== "overview";
 }
 
 function waitForNextPaint() {
