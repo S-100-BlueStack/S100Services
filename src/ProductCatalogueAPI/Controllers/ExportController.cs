@@ -62,7 +62,7 @@ namespace ProductCatalogueAPI.Controllers
                 response.DurationMs = sw.ElapsedMilliseconds;
                 return StatusCode(StatusCodes.Status500InternalServerError, response);
             }
-
+            
 
             var result = _exchangeSetService.CreateExchangeSet(product, _electronicProductManager.OutputFolder, yaml);
 
@@ -145,7 +145,7 @@ namespace ProductCatalogueAPI.Controllers
 
             await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.Update, update, result.Index, result.Sign);
 
-            await _productRepository.AppendAsync(name, Data.Models.ProductState.Exported, user);
+            await _productRepository.AppendAsync(name, Data.Models.ProductState.NewUpdate, user);
 
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
@@ -274,7 +274,7 @@ namespace ProductCatalogueAPI.Controllers
                 catch (Exception ex) {
                     _logger.LogError("Unexpected exception: {ex}", ex);
                 }
-
+             
             }
             response.DurationMs = sw.ElapsedMilliseconds;
             response.Message = $"Datasets created: {products.Length}";

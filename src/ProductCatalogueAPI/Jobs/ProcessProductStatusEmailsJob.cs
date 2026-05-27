@@ -141,7 +141,7 @@ public class ProcessProductStatusEmailsJob(
         var type = GetRegistrationType(parsedMail.RegistrationId);
         switch (parsedMail.Outcome) { // TODO: Ensure mapping is correct
             case ProductStatusEmailOutcome.Unknown: // Unknown = Information could not be extracted from subject
-                state = ProductState.Rejected;
+                state = ProductState.Invalid;
                 break;
             case ProductStatusEmailOutcome.Successful: // Successful = Fully accepted registration of new cell
                 state = ProductState.Exported;
@@ -150,13 +150,13 @@ public class ProcessProductStatusEmailsJob(
                 if (type == ProductStatusType.NewEdition)
                     state = ProductState.Exported;
                 else
-                    state = ProductState.Exported;
+                    state = ProductState.NewUpdate;
                 break;
             case ProductStatusEmailOutcome.PassedInHolding: // Passed In Holding = Accepted but missing some information before publishing
-                state = ProductState.Rejected;
+                state = ProductState.Invalid;
                 break;
             case ProductStatusEmailOutcome.FailureToRegister: // Failure to register = Rejected registration of new cell
-                state = ProductState.Rejected;
+                state = ProductState.Invalid;
                 break;
         }
         if (parsedMail.RegistrationName != null) {
