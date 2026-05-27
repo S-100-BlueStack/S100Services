@@ -24,10 +24,7 @@ export async function runWithRetry(taskFn, options = {}) {
         throw error;
       }
 
-      const delay = Math.min(
-        baseDelay * Math.pow(backoffFactor, attempt - 1),
-        maxDelay,
-      );
+      const delay = Math.min(baseDelay * Math.pow(backoffFactor, attempt - 1), maxDelay);
 
       onRetry({ attempt, delay, error });
 

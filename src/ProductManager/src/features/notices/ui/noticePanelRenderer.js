@@ -10,12 +10,7 @@ function getManager() {
   return toastManager;
 }
 
-export function renderNotice({
-  title,
-  message,
-  kind = "brand",
-  duration = 4000,
-}) {
+export function renderNotice({ title, message, kind = "brand", duration = 4000 }) {
   const manager = getManager();
 
   const toast = document.createElement("calcite-toast");
