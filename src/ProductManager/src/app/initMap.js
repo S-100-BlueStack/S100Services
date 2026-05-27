@@ -74,17 +74,27 @@ export function initMap() {
     view,
     hoverManager,
     loadAppData,
-    addLayer: createLayer,
+    createLayer,
     onLayersRebuilt: (layers) => {
       bindMapVisibility(layers);
       filterPanel.refresh();
     },
-    onRefreshSuccess: () => {
+    onRefreshSuccess: ({ source, graphicsCount }) => {
       updateLastUpdated();
-      noticeSuccess("Data refreshed", null, { countAsUnread: false });
+
+      if (source === "manual") {
+        noticeSuccess(`Data refreshed (${graphicsCount} graphics rendered)`, null, {
+          countAsUnread: false,
+        });
+      }
     },
-    onRefreshError: (error) => {
-      noticeError("Refresh failed", error.message);
+    onRefreshError: (error, { source } = {}) => {
+      if (source === "manual") {
+        noticeError("Refresh failed", error.message);
+        return;
+      }
+
+      console.warn("[Refresh] Auto refresh failed", error);
     },
   });
 

@@ -64,9 +64,6 @@ async function bootstrapMainRoute() {
 async function bootstrapAnalyzeRoute(route) {
   try {
     await waitForCalcite();
-
-    showLoader("Initializing analyze page...", 0.01);
-    // setLoaderText("Initializing UI...");
     await initUI();
 
     const app = await initAnalyzePage({
@@ -75,7 +72,6 @@ async function bootstrapAnalyzeRoute(route) {
 
     initializeTheme(app.view);
     registerThemeToggle(app.view);
-
     hideLoader();
   } catch (error) {
     hideLoader();

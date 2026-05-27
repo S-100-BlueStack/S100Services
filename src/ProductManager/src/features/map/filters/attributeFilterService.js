@@ -55,11 +55,7 @@ function normalizeFieldKey(fieldName) {
 }
 
 function getSourceLayers(layerId) {
-  const layers = getAllLayers().filter((layer) => getLayerId(layer) === layerId);
-  const detailLayers = layers.filter((layer) => layer.appLayerRole === "detail");
-
-  // If overview/detail layers contain duplicate features, count only the detail layer.
-  return detailLayers.length ? detailLayers : layers;
+  return getAllLayers().filter((layer) => getLayerId(layer) === layerId);
 }
 
 function isFilterableField(fieldName) {
@@ -285,19 +281,29 @@ export function createAttributeFilterService() {
   }
 
   function getFilterableFields(layerId) {
-    const fields = new Set();
+    const fieldsByNormalizedKey = new Map();
 
     for (const layer of getSourceLayers(layerId)) {
       for (const graphic of getLayerGraphics(layer)) {
         for (const fieldName of Object.keys(graphic.attributes ?? {})) {
-          if (isFilterableField(fieldName)) {
-            fields.add(fieldName);
+          if (!isFilterableField(fieldName)) {
+            continue;
           }
+
+          const normalizedKey = normalizeFieldKey(fieldName);
+
+          if (!fieldsByNormalizedKey.has(normalizedKey)) {
+            fieldsByNormalizedKey.set(normalizedKey, new Set());
+          }
+
+          fieldsByNormalizedKey.get(normalizedKey).add(fieldName);
         }
       }
     }
 
-    return Array.from(fields).sort((a, b) => a.localeCompare(b));
+    return Array.from(fieldsByNormalizedKey.values())
+      .map(selectCanonicalFieldName)
+      .sort((a, b) => a.localeCompare(b));
   }
 
   function getValuesForField(layerId, fieldName) {
@@ -305,9 +311,13 @@ export function createAttributeFilterService() {
 
     for (const layer of getSourceLayers(layerId)) {
       for (const graphic of getLayerGraphics(layer)) {
-        const value = normalizeFilterValue(graphic.attributes?.[fieldName]);
+        const value = normalizeFilterValue(readAttributeValue(graphic, fieldName));
         const label = value === EMPTY_FILTER_VALUE ? "(empty)" : value;
-        const entry = values.get(value) ?? { value, label, count: 0 };
+        const entry = values.get(value) ?? {
+          value,
+          label,
+          count: 0,
+        };
 
         entry.count += 1;
         values.set(value, entry);
@@ -326,7 +336,7 @@ export function createAttributeFilterService() {
     }
 
     for (const [fieldName, filter] of layerFilters.entries()) {
-      const rawValue = graphic.attributes?.[fieldName];
+      const rawValue = readAttributeValue(graphic, fieldName);
 
       if (filter.mode === FILTER_MODE.RANGE) {
         const numberValue = toFiniteNumber(rawValue);
@@ -347,6 +357,53 @@ export function createAttributeFilterService() {
     }
 
     return true;
+  }
+
+  function selectCanonicalFieldName(fieldNames) {
+    const names = Array.from(fieldNames);
+    const normalizedKey = normalizeFieldKey(names[0]);
+
+    // Prefer generated/internal canonical fields when they exist, because config
+    // such as default filters and range filters already uses those field names.
+    const exactNormalizedMatch = names.find((name) => name === normalizedKey);
+
+    if (exactNormalizedMatch) {
+      return exactNormalizedMatch;
+    }
+
+    const lowerCaseMatch = names.find((name) => name.toLowerCase() === normalizedKey);
+
+    if (lowerCaseMatch) {
+      return lowerCaseMatch;
+    }
+
+    return names.sort((a, b) => a.localeCompare(b))[0];
+  }
+
+  function readAttributeValue(graphic, fieldName) {
+    const attributes = graphic.attributes ?? {};
+    const exactValue = attributes[fieldName];
+
+    if (!isEmptyAttributeValue(exactValue)) {
+      return exactValue;
+    }
+
+    const normalizedFieldName = normalizeFieldKey(fieldName);
+
+    for (const [candidateName, candidateValue] of Object.entries(attributes)) {
+      if (
+        normalizeFieldKey(candidateName) === normalizedFieldName &&
+        !isEmptyAttributeValue(candidateValue)
+      ) {
+        return candidateValue;
+      }
+    }
+
+    return exactValue;
+  }
+
+  function isEmptyAttributeValue(value) {
+    return value === null || value === undefined || value === "";
   }
 
   return {

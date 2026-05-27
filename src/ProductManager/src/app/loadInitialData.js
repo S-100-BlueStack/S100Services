@@ -19,7 +19,7 @@ export async function loadInitialData(app) {
   });
 
   try {
-    // loaderProgress.startLoading("Loading data...");
+    loaderProgress.startLoading("Loading data...");
 
     const result = await runWithRetry(loadAppData, {
       maxRetries: 5,

@@ -1,32 +1,42 @@
 import { findFeature } from "../../map/core/featureAdapter.js";
 import { getAllLayers, getLayer } from "../../map/core/layerRegistry.js";
 import { rebuildLayers } from "../../map/core/rebuildLayers.js";
+import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
+import { runWithRetry } from "../../../shared/utils/retryRunner.js";
+
 let isRefreshing = false;
 let autoRefreshEnabled = true;
 let intervalId = null;
 
-const REFRESH_INTERVAL = 10 * 60 * 1000;
+const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+const MANUAL_REFRESH_MAX_RETRIES = 5;
+const AUTO_REFRESH_MAX_RETRIES = 1;
 
 export function createRefreshService({
   map,
   view,
   hoverManager,
   loadAppData,
-  addLayer,
+  createLayer,
   onLayersRebuilt,
   onRefreshSuccess,
   onRefreshError,
 }) {
   function captureState() {
     const selectedFeature = view.popup.selectedFeature;
+    const popupLocation = cloneGeometry(view.popup.location);
 
     return {
       selectedFeatureKey: selectedFeature?.attributes?.featureKey,
       selectedLayerId: selectedFeature?.layer?.customId,
       popupVisible: view.popup.visible,
+      popupLocation,
       lockedFeatureKey: hoverManager?.getLockedFeatureKey?.(),
       lockedLayerId: hoverManager?.getLockedLayerId?.(),
     };
+  }
+  function cloneGeometry(geometry) {
+    return geometry?.clone?.() ?? geometry ?? null;
   }
 
   async function restoreState(state) {
@@ -40,7 +50,7 @@ export function createRefreshService({
       if (graphic && graphic.visible !== false) {
         view.popup.open({
           features: [graphic],
-          location: getPopupLocation(graphic),
+          location: state.popupLocation ?? getPopupLocation(graphic),
         });
       }
     }
@@ -62,8 +72,8 @@ export function createRefreshService({
       return preferredGraphic;
     }
 
-    // If the user crossed a scale boundary during refresh, the previous
-    // overview/detail layer may no longer be the best layer to restore from.
+    // Fall back to all registered layers so state restoration still works if
+    // layer ids change later when more product layers are introduced.
     for (const layer of getAllLayers()) {
       const graphic = findFeature(layer, featureKey);
 
@@ -76,26 +86,30 @@ export function createRefreshService({
   }
 
   function getPopupLocation(graphic) {
-    const geom = graphic.geometry;
+    const geometry = graphic.geometry;
 
-    if (!geom) {
+    if (!geometry) {
       return null;
     }
 
-    if (geom.type === "point") {
-      return geom;
+    if (geometry.type === "point") {
+      return geometry;
     }
 
-    if (geom.extent) {
-      return geom.extent.center;
+    if (geometry.extent) {
+      return geometry.extent.center;
     }
 
     return null;
   }
 
-  async function refresh() {
+  async function refresh({ source = "manual" } = {}) {
     if (isRefreshing) {
-      return;
+      return {
+        success: false,
+        skipped: true,
+        reason: "already-refreshing",
+      };
     }
 
     isRefreshing = true;
@@ -103,21 +117,51 @@ export function createRefreshService({
     const state = captureState();
 
     try {
-      const data = await loadAppData();
+      const result = await runWithRetry(loadAppData, {
+        maxRetries: source === "manual" ? MANUAL_REFRESH_MAX_RETRIES : AUTO_REFRESH_MAX_RETRIES,
+        baseDelay: 1000,
+        maxDelay: 30000,
+        backoffFactor: 2,
+      });
+
+      const layers = normalizeLayers(result);
 
       const createdLayers = await rebuildLayers({
         map,
         hoverManager,
-        layerConfigs: data.layers,
-        createLayer: addLayer,
+        layerConfigs: layers,
+        createLayer,
       });
 
       await onLayersRebuilt?.(createdLayers);
-
       await restoreState(state);
-      onRefreshSuccess?.();
+
+      const graphicsCount = getTotalGraphics(createdLayers);
+
+      onRefreshSuccess?.({
+        source,
+        layerCount: createdLayers.length,
+        graphicsCount,
+      });
+
+      return {
+        success: true,
+        skipped: false,
+        source,
+        layerCount: createdLayers.length,
+        graphicsCount,
+      };
     } catch (error) {
-      onRefreshError?.(error);
+      onRefreshError?.(error, {
+        source,
+      });
+
+      return {
+        success: false,
+        skipped: false,
+        source,
+        error,
+      };
     } finally {
       isRefreshing = false;
     }
@@ -126,28 +170,32 @@ export function createRefreshService({
   function startAuto() {
     stopAuto();
 
-    intervalId = setInterval(() => {
+    intervalId = window.setInterval(() => {
       if (autoRefreshEnabled) {
-        refresh();
+        void refresh({ source: "auto" });
       }
-    }, REFRESH_INTERVAL);
+    }, REFRESH_INTERVAL_MS);
   }
 
   function stopAuto() {
     if (intervalId) {
-      clearInterval(intervalId);
+      window.clearInterval(intervalId);
       intervalId = null;
     }
   }
 
   function setAuto(enabled) {
-    autoRefreshEnabled = enabled;
+    autoRefreshEnabled = Boolean(enabled);
 
-    if (enabled) {
+    if (autoRefreshEnabled) {
       startAuto();
     } else {
       stopAuto();
     }
+  }
+
+  function isAutoEnabled() {
+    return autoRefreshEnabled;
   }
 
   return {
@@ -155,14 +203,48 @@ export function createRefreshService({
     setAuto,
     startAuto,
     stopAuto,
+    isAutoEnabled,
   };
 }
 
-function openPopup(view, options) {
-  if (typeof view.openPopup === "function") {
-    view.openPopup(options);
-    return;
+function createRefreshLoaderProgress() {
+  return createLoaderProgressSession({
+    loadStartProgress: 0.04,
+    loadEndProgress: 0.18,
+    dataReceivedProgress: 0.2,
+    renderStartProgress: 0.24,
+    renderEndProgress: 0.96,
+    simulatedProgressIntervalMs: 350,
+    simulatedProgressStep: 0.014,
+    showLoaderOnStart: true,
+    showLoaderDelayMs: 350,
+  });
+}
+
+function normalizeLayers(result) {
+  if (!result || !Array.isArray(result.layers)) {
+    throw new Error("Data loader returned an invalid result. Expected { layers: [] }.");
   }
 
-  view.popup.open(options);
+  const layers = result.layers.filter(Boolean);
+
+  if (layers.length === 0) {
+    throw new Error("No layers were returned from the data loader.");
+  }
+
+  return layers;
+}
+
+function getTotalGraphics(layers) {
+  return layers.reduce((sum, layer) => {
+    return sum + (layer.graphics?.length ?? 0);
+  }, 0);
+}
+
+function waitForNextPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve);
+    });
+  });
 }
