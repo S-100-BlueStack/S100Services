@@ -15,10 +15,10 @@ namespace ProductCatalogueAPI.Controllers
                 .Select(e => new {
                     Id = (int)e,
                     Name = e switch {
-                        ResponseTypes.ProductStatus.Ready => e.ToString(),
-                        ResponseTypes.ProductStatus.NewEdition => "New edition",
-                        ResponseTypes.ProductStatus.NewUpdate => "New update",
-                        ResponseTypes.ProductStatus.Invalid => e.ToString(),
+                        ResponseTypes.ProductStatus.Idle => e.ToString(),
+                        ResponseTypes.ProductStatus.Exported => e.ToString(),
+                        ResponseTypes.ProductStatus.Frozen => e.ToString(),
+                        ResponseTypes.ProductStatus.Rejected => e.ToString(),
                         ResponseTypes.ProductStatus.InTransit => "In transit",
 
                         _ => throw new InvalidOperationException()

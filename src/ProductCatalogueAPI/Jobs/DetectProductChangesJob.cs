@@ -1,4 +1,5 @@
-﻿using ProductCatalogueAPI.Data.Repositories;
+﻿using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Services.ExchangeSet;
 using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.ProductCatalogue;
@@ -58,6 +59,8 @@ namespace ProductCatalogueAPI.Jobs
                     continue;
                 }
 
+                var originalProductState = electronicProduct?.distributionStatus != null ? (ProductState)electronicProduct.distributionStatus : ProductState.Idle;
+
                 _logger.LogInformation("({count}) Pending edits detected for {dataset}", dirtyFeatures.Count, productName);
 
                 // Look at all dirty features and decide if new edition or update
@@ -73,7 +76,8 @@ namespace ProductCatalogueAPI.Jobs
 
                     if (string.IsNullOrEmpty(yaml)) {
                         _logger.LogWarning("Failed to create new edition for dataset {dataset}.", productName);
-                        await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid);
+                        //await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid); // TODO: Implement properly
+                        await _repository.AppendAsync(productName, originalProductState);
                         continue;
                     }
 
@@ -94,7 +98,8 @@ namespace ProductCatalogueAPI.Jobs
                         else {
                             _logger.LogWarning("Product {product} failed the SevenCs Validation check. Errors: {err}. Critical: {crit}. Marking product as Invalid.", productName, summary.Errors, summary.Critical);
 
-                            await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid);
+                            //await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid); // TODO: Implement properly
+                            await _repository.AppendAsync(productName, originalProductState);
 
                             _logger.LogInformation("Rolling back exchange set creation.. ");
                             _exchangeSetService.DeleteExchangeSet(productName, electronicProduct.editionNumber!.Value, output);
@@ -118,7 +123,8 @@ namespace ProductCatalogueAPI.Jobs
 
                     if (string.IsNullOrEmpty(incoming)) {
                         _logger.LogWarning("Failed to create new edition for dataset {dataset}.", productName);
-                        await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid);
+                        //await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid); // TODO: Implement properly
+                        await _repository.AppendAsync(productName, originalProductState);
                         continue;
                     }
 
@@ -147,7 +153,7 @@ namespace ProductCatalogueAPI.Jobs
                         _logger.LogInformation("Saving productstate in database..");
 
                         if (summary.Errors == 0 & summary.Critical == 0) {
-                            await _repository.AppendAsync(productName, Data.Models.ProductState.NewUpdate);
+                            await _repository.AppendAsync(productName, Data.Models.ProductState.Exported);
 
                             _logger.LogInformation("Writing to s128.attachments.. ");
                             await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.Update, update, result.Index, result.Sign);
@@ -156,7 +162,8 @@ namespace ProductCatalogueAPI.Jobs
                         else {
                             _logger.LogWarning("Product {product} failed the SevenCs Validation check. Errors: {err}. Critical: {crit}. Marking product as Invalid.", productName, summary.Errors, summary.Critical);
 
-                            await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid);
+                            //await _repository.AppendAsync(productName, Data.Models.ProductState.Invalid); // TODO: Implement properly
+                            await _repository.AppendAsync(productName, originalProductState);
 
                             _logger.LogInformation("Rolling back exchange set creation.. ");
                             _exchangeSetService.DeleteExchangeSet(productName, electronicProduct.editionNumber!.Value, output);
@@ -164,7 +171,7 @@ namespace ProductCatalogueAPI.Jobs
                     }
                     catch (Exception ex) {
                         _logger.LogWarning(ex, "An error occurred during SevenCs validation for product {product}. Assume validation was succesful for now.", productName);
-                        await _repository.AppendAsync(productName, Data.Models.ProductState.NewUpdate);
+                        await _repository.AppendAsync(productName, Data.Models.ProductState.Exported);
 
                         _logger.LogInformation("Writing to s128.attachments.. ");
                         await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.Update, update, result.Index, result.Sign);
@@ -179,7 +186,7 @@ namespace ProductCatalogueAPI.Jobs
 
         private static bool IsNewEdition(Dictionary<string, ArchiveRow> features) {
 
-            
+
             // TODO: Given ruleset, figure out if NewEdition or NewUpdate. For now just return true;
             return true;
         }
