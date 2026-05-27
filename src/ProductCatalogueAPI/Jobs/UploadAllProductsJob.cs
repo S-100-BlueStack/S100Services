@@ -56,7 +56,7 @@ namespace ProductCatalogueAPI.Jobs
 
 
 
-       
+
             _logger.LogInformation("Job: {jobName} finished", nameof(UploadAllProductsJob));
 
         }
@@ -78,7 +78,7 @@ namespace ProductCatalogueAPI.Jobs
                     IO.File.Delete(e);
                 }
 
-                var root = outputPath; 
+                var root = outputPath;
 
                 var folderExchangeSet = IO.Path.Combine(root, "ExchangeSet", product.datasetName, "ENC_ROOT");
 
@@ -177,7 +177,8 @@ namespace ProductCatalogueAPI.Jobs
                         new FluentFTP.Rules.FtpFileExtensionRule(false, [
                             "vld",
                         ]),
-                    ]);
+                    ]
+                );
                 //(p) => {
                 //    //_logger.LogInformation("#{index}: {file}", p.FileIndex, p.LocalPath);
                 //});

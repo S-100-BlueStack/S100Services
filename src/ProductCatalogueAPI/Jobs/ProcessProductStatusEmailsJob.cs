@@ -144,11 +144,11 @@ public class ProcessProductStatusEmailsJob(
                 state = ProductState.Invalid;
                 break;
             case ProductStatusEmailOutcome.Successful: // Successful = Fully accepted registration of new cell
-                state = ProductState.NewEdition;
+                state = ProductState.Exported;
                 break;
             case ProductStatusEmailOutcome.AcceptedForDistribution: // Accepted For Distribution = Fully accepted and awaiting next patch-window
                 if (type == ProductStatusType.NewEdition)
-                    state = ProductState.NewEdition;
+                    state = ProductState.Exported;
                 else
                     state = ProductState.NewUpdate;
                 break;

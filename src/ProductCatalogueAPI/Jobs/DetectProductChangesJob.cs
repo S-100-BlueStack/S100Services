@@ -86,7 +86,7 @@ namespace ProductCatalogueAPI.Jobs
                         var summary = await _sevenCsService.ValidateDatasetAsync(electronicProduct, output);
 
                         if (summary.Errors == 0 & summary.Critical == 0) {
-                            await _repository.AppendAsync(productName, Data.Models.ProductState.NewEdition);
+                            await _repository.AppendAsync(productName, Data.Models.ProductState.Exported);
                             // write to s128 database
                             _logger.LogInformation("Writing to s128.attachments.. ");
                             await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
@@ -102,7 +102,7 @@ namespace ProductCatalogueAPI.Jobs
                     }
                     catch (Exception ex) {
                         _logger.LogWarning(ex, "An error occurred during SevenCs validation for product {product}. Assume validation was succesful for now.", productName);
-                        await _repository.AppendAsync(productName, Data.Models.ProductState.NewEdition);
+                        await _repository.AppendAsync(productName, Data.Models.ProductState.Exported);
                         // write to s128 database
                         _logger.LogInformation("Writing to s128.attachments.. ");
                         await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.NewEdition, yaml, result.Index, result.Sign);

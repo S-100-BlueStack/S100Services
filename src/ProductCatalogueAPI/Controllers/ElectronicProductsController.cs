@@ -72,7 +72,7 @@ namespace ProductCatalogueAPI.Controllers
                         datasetName = electronicProduct.datasetName,
                         edition = electronicProduct.editionNumber,
                         update = electronicProduct.updateDate,
-                        status = (int)(current?.State ?? Data.Models.ProductState.Ready),    // If no explicit state defined in JobTable, default to Ready,
+                        status = (int)(current?.State ?? Data.Models.ProductState.Idle),    // If no explicit state defined in JobTable, default to Ready,
                         displayScale = electronicProduct.optimumDisplayScale,
                     }
                 });
@@ -113,7 +113,7 @@ namespace ProductCatalogueAPI.Controllers
                 Update = electronicProduct.updateNumber,
                 UsageBand = electronicProduct.specificUsage,
                 Aoi = boundary,
-                Status = (int)(current?.State ?? Data.Models.ProductState.Ready)
+                Status = (int)(current?.State ?? Data.Models.ProductState.Idle)
             };
 
 
