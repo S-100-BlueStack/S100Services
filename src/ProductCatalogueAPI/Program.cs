@@ -11,6 +11,7 @@ using ProductCatalogueAPI.Services.MailImport;
 using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.S128;
 using Serilog;
+using Serilog.Events;
 using System.Reflection;
 using System.Security.Claims;
 using System.Text.Json;
@@ -19,8 +20,12 @@ namespace ProductCatalogueAPI
 {
     public class Program
     {
-        private const string outputTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff}| [{Level:u3}] {Message:lj} {NewLine}{Exception}";
+        private const string outputTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff}| [{Level:u3}] [{MachineName}] [{SourceContext}] {Message:lj} {NewLine}{Exception}";
+
         public static async Task Main(string[] args) {
+            var development = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")?.Equals("Development", StringComparison.OrdinalIgnoreCase) == true;
+            var serilogPath = Environment.GetEnvironmentVariable("serilog_path");
+            
             // Bootstrap logging
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Information()
@@ -35,24 +40,42 @@ namespace ProductCatalogueAPI
             Log.Information("Bootstrap logger started");
 
             var builder = WebApplication.CreateBuilder(args);
-            // var development = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")?.Equals("Development", StringComparison.OrdinalIgnoreCase) == true;
 
-            // Logging
-            Log.Logger = new LoggerConfiguration()
-             .MinimumLevel.Information()
-             .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
-             .MinimumLevel.Override("Microsoft.AspNetCore", Serilog.Events.LogEventLevel.Warning)
-             .MinimumLevel.Override("Microsoft.Hosting.Lifetime", Serilog.Events.LogEventLevel.Warning)
-             .Enrich.FromLogContext()
-             .WriteTo.Console()
-             .WriteTo.File(
-                path: "logs/ProductCatalogueAPI.log",
-                rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 365,
-                shared: true,
-                outputTemplate: outputTemplate)
-             .CreateLogger();
-            builder.Host.UseSerilog(Log.Logger);
+            // logging
+            builder.Host.UseSerilog((context, loggerConfiguration) =>
+            {
+                loggerConfiguration.MinimumLevel.Information()
+                    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+                    .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Warning)
+                    .MinimumLevel.Override("Hangfire.Server.BackgroundServerProcess", LogEventLevel.Warning)
+                    .MinimumLevel.Override("Hangfire.SqlServer.SqlServerObjectsInstaller", LogEventLevel.Warning)
+                    .Enrich.FromLogContext()
+                    .Enrich.WithProperty("MachineName", Environment.MachineName)
+                    .WriteTo.Console(outputTemplate: outputTemplate, restrictedToMinimumLevel: LogEventLevel.Verbose)
+                    .WriteTo.File(
+                        path: "Logs/ProductManagerAPI.log",
+                        rollingInterval: RollingInterval.Infinite,
+                        retainedFileCountLimit: 1,
+                        shared: true,
+                        outputTemplate: outputTemplate);
+
+                if (!string.IsNullOrWhiteSpace(serilogPath)) {
+                    if (!Path.Exists(serilogPath))
+                        Log.Warning("The specified serilog_path '{serilogPath}' does not exist or the system cannot access the folder.", serilogPath);
+
+                    var centralLogPath = Path.Combine(serilogPath, "Applications", "ProductManager", $"{Environment.MachineName}", "ProductManagerAPI.log");
+
+                    loggerConfiguration.WriteTo.File(
+                        path: centralLogPath,
+                        rollingInterval: RollingInterval.Day,
+                        retainedFileCountLimit: 365,
+                        shared: true,
+                        outputTemplate: outputTemplate);
+                }
+                else {
+                    Log.Warning("No central log path configured. Set environment variable 'serilog_path' to enable logging to a central location.");
+                }
+            });
 
             // Add services to the container.
             builder.Services.AddControllers()
