@@ -65,11 +65,10 @@ async function bootstrapAnalyzeRoute(route) {
   try {
     await waitForCalcite();
 
-    showLoader("Initializing analyze page...");
-    setLoaderText("Initializing UI...");
+    showLoader("Initializing analyze page...", 0.01);
+    // setLoaderText("Initializing UI...");
     await initUI();
 
-    setLoaderText("Loading feature data...");
     const app = await initAnalyzePage({
       datasetNames: route.datasetNames,
     });

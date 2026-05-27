@@ -25,10 +25,17 @@ export function createLoaderProgressSession({
   loadingMessagesStage = "loadingData",
   renderingMessagesStage = "renderingMap",
   showLoaderOnStart = false,
+  showLoaderDelayMs = 0,
 } = {}) {
   let retryCountdownIntervalId = null;
   let simulatedProgressIntervalId = null;
-  let simulatedProgress = loadStartProgress;
+  let delayedShowTimeoutId = null;
+
+  let loaderWasShownBySession = false;
+  let currentText = null;
+  let currentProgress = null;
+  let currentProgressLabel = null;
+  let pendingTextRotation = null;
 
   return {
     startLoading,
@@ -43,31 +50,30 @@ export function createLoaderProgressSession({
   };
 
   function startLoading(text, { rotateImmediately = false } = {}) {
-    simulatedProgress = loadStartProgress;
+    simulatedProgressIntervalId = null;
+    currentText = text;
+    setSessionProgress(loadStartProgress);
 
     if (showLoaderOnStart) {
-      showLoader(text, {
-        progress: simulatedProgress,
-      });
+      scheduleLoaderShow();
     } else {
-      setLoaderText(text);
-      setProgress(simulatedProgress);
+      applyCurrentLoaderState();
     }
 
-    if (shouldRotateLoadingMessages()) {
-      startLoaderTextRotation(getLoadingMessages(loadingMessagesStage, loadingTextMode), {
-        intervalMs: loadingMessageIntervalMs,
-        immediate: rotateImmediately,
-      });
-    }
-
+    startSessionTextRotation(loadingMessagesStage, rotateImmediately);
     startSimulatedProgress();
   }
 
   function startRetryCountdown({ attempt, totalAttempts, delayMs }) {
     stopRetryCountdown();
     stopSimulatedProgress();
-    stopLoaderTextRotation();
+    stopSessionTextRotation();
+
+    // Retry waits are long enough that hiding the loader would make the app
+    // look idle, so show the delayed loader immediately when retrying.
+    if (showLoaderOnStart && !loaderWasShownBySession) {
+      showSessionLoader();
+    }
 
     const startedAt = Date.now();
 
@@ -76,12 +82,12 @@ export function createLoaderProgressSession({
       const remainingMs = Math.max(0, delayMs - elapsedMs);
       const remainingSeconds = Math.ceil(remainingMs / 1000);
 
-      setLoaderText(
+      setSessionText(
         `Retrying data load (${attempt}/${totalAttempts})...\nNext attempt in ${remainingSeconds}s`
       );
 
       // Retry waiting is intentionally indeterminate because no useful work is happening.
-      setLoaderProgress(null);
+      setSessionProgress(null, { label: null });
     };
 
     updateCountdownText();
@@ -107,24 +113,18 @@ export function createLoaderProgressSession({
   function markDataReceived() {
     stopRetryCountdown();
     stopSimulatedProgress();
-    setProgress(dataReceivedProgress);
+    setSessionProgress(dataReceivedProgress);
   }
 
   function startRendering({ text } = {}) {
     stopSimulatedProgress();
 
     if (shouldShowTechnicalLoadingStages() && text) {
-      setLoaderText(text);
+      setSessionText(text);
     }
 
-    if (shouldRotateLoadingMessages()) {
-      startLoaderTextRotation(getLoadingMessages(renderingMessagesStage, loadingTextMode), {
-        intervalMs: loadingMessageIntervalMs,
-        immediate: true,
-      });
-    }
-
-    setProgress(renderStartProgress);
+    startSessionTextRotation(renderingMessagesStage, true);
+    setSessionProgress(renderStartProgress);
   }
 
   function handleRenderProgress({ progress, stage, layerTitle } = {}) {
@@ -132,38 +132,120 @@ export function createLoaderProgressSession({
     const loaderProgress =
       renderStartProgress + normalizedProgress * (renderEndProgress - renderStartProgress);
 
-    setProgress(loaderProgress);
+    setSessionProgress(loaderProgress);
 
     if (shouldShowTechnicalLoadingStages() && stage && layerTitle) {
-      setLoaderText(`${stage} (${layerTitle})...`);
+      setSessionText(`${stage} (${layerTitle})...`);
     }
   }
 
   function complete({ text = "Ready", hide = true } = {}) {
     cleanup();
-    setLoaderText(text);
-    setProgress(1);
+    setSessionText(text);
+    setSessionProgress(1);
 
     if (hide) {
       hideLoader();
+      loaderWasShownBySession = false;
     }
   }
 
   function fail({ text = "Failed to load data", label = "Failed", hideAfterMs = 1500 } = {}) {
     cleanup();
-    setLoaderText(text);
-    setLoaderProgress(1, {
-      label,
-    });
+
+    setSessionText(text);
+    setSessionProgress(1, { label });
+
+    // Fast failures should still be visible to the user, even if the delayed
+    // loader was never shown during the request.
+    if (showLoaderOnStart && !loaderWasShownBySession) {
+      showSessionLoader();
+    }
 
     if (hideAfterMs !== null) {
-      window.setTimeout(() => hideLoader(), hideAfterMs);
+      window.setTimeout(() => {
+        hideLoader();
+        loaderWasShownBySession = false;
+      }, hideAfterMs);
     }
   }
 
   function cleanup() {
     stopRetryCountdown();
     stopSimulatedProgress();
+    stopSessionTextRotation();
+    cancelDelayedLoaderShow();
+  }
+
+  function scheduleLoaderShow() {
+    if (!showLoaderOnStart || loaderWasShownBySession || delayedShowTimeoutId !== null) {
+      return;
+    }
+
+    if (showLoaderDelayMs <= 0) {
+      showSessionLoader();
+      return;
+    }
+
+    delayedShowTimeoutId = window.setTimeout(() => {
+      showSessionLoader();
+    }, showLoaderDelayMs);
+  }
+
+  function showSessionLoader() {
+    cancelDelayedLoaderShow();
+
+    loaderWasShownBySession = true;
+
+    showLoader(currentText ?? "Loading...", {
+      progress: currentProgress,
+    });
+
+    applyCurrentLoaderState();
+    startPendingTextRotation();
+  }
+
+  function cancelDelayedLoaderShow() {
+    if (delayedShowTimeoutId === null) {
+      return;
+    }
+
+    window.clearTimeout(delayedShowTimeoutId);
+    delayedShowTimeoutId = null;
+  }
+
+  function startSessionTextRotation(stage, rotateImmediately) {
+    if (!shouldRotateLoadingMessages()) {
+      return;
+    }
+
+    pendingTextRotation = {
+      messages: getLoadingMessages(stage, loadingTextMode),
+      rotateImmediately,
+    };
+
+    if (showLoaderOnStart && !loaderWasShownBySession) {
+      return;
+    }
+
+    startPendingTextRotation();
+  }
+
+  function startPendingTextRotation() {
+    if (!pendingTextRotation) {
+      return;
+    }
+
+    startLoaderTextRotation(pendingTextRotation.messages, {
+      intervalMs: loadingMessageIntervalMs,
+      immediate: pendingTextRotation.rotateImmediately,
+    });
+
+    pendingTextRotation = null;
+  }
+
+  function stopSessionTextRotation() {
+    pendingTextRotation = null;
     stopLoaderTextRotation();
   }
 
@@ -171,10 +253,9 @@ export function createLoaderProgressSession({
     stopSimulatedProgress();
 
     simulatedProgressIntervalId = window.setInterval(() => {
-      simulatedProgress = Math.min(loadEndProgress, simulatedProgress + simulatedProgressStep);
-      setProgress(simulatedProgress);
+      setSessionProgress(Math.min(loadEndProgress, currentProgress + simulatedProgressStep));
 
-      if (simulatedProgress >= loadEndProgress) {
+      if (currentProgress >= loadEndProgress) {
         stopSimulatedProgress();
       }
     }, simulatedProgressIntervalMs);
@@ -188,12 +269,37 @@ export function createLoaderProgressSession({
     window.clearInterval(simulatedProgressIntervalId);
     simulatedProgressIntervalId = null;
   }
-}
 
-function setProgress(progress) {
-  setLoaderProgress(progress, {
-    label: `${Math.round(clamp(progress, 0, 1) * 100)}%`,
-  });
+  function setSessionText(text) {
+    currentText = text;
+
+    if (!showLoaderOnStart || loaderWasShownBySession) {
+      setLoaderText(text);
+    }
+  }
+
+  function setSessionProgress(progress, { label = null } = {}) {
+    currentProgress = progress;
+    currentProgressLabel =
+      label ??
+      (typeof progress === "number" ? `${Math.round(clamp(progress, 0, 1) * 100)}%` : null);
+
+    if (!showLoaderOnStart || loaderWasShownBySession) {
+      setLoaderProgress(progress, {
+        label: currentProgressLabel,
+      });
+    }
+  }
+
+  function applyCurrentLoaderState() {
+    if (currentText !== null) {
+      setLoaderText(currentText);
+    }
+
+    setLoaderProgress(currentProgress, {
+      label: currentProgressLabel,
+    });
+  }
 }
 
 function clamp(value, min, max) {

@@ -12,6 +12,7 @@ import {
 } from "../routing/analyzeRoute.js";
 import { renderAnalyzeSidebar } from "../ui/analyzeSidebar.js";
 import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
+import { hideLoader } from "../../../shared/ui/loader.js";
 
 export async function initAnalyzePage({ datasetNames }) {
   let currentLayers = [];
@@ -146,6 +147,11 @@ export async function initAnalyzePage({ datasetNames }) {
 
   await view.when();
 
+  // The bootstrap loader covers initial page and map setup. Hide it before
+  // data loading starts so the delayed Analyze loader can decide whether a
+  // loader is needed at all.
+  hideLoader();
+
   renderAnalyzeSidebar({
     datasetNames: normalizedDatasetNames,
     products: [],
@@ -196,6 +202,7 @@ function createAnalyzeLoaderProgress() {
     simulatedProgressIntervalMs: 350,
     simulatedProgressStep: 0.014,
     showLoaderOnStart: true,
+    showLoaderDelayMs: 350,
   });
 }
 
