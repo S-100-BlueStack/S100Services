@@ -6,7 +6,10 @@ export function initRefreshControls({ refreshService }) {
     refreshBtn.addEventListener("click", async () => {
       try {
         refreshBtn.loading = true;
-        await refreshService.refresh();
+
+        await refreshService.refresh({
+          source: "manual",
+        });
       } finally {
         refreshBtn.blur();
         refreshBtn.loading = false;
@@ -15,6 +18,8 @@ export function initRefreshControls({ refreshService }) {
   }
 
   if (autoSwitch) {
+    autoSwitch.checked = refreshService.isAutoEnabled?.() ?? true;
+
     autoSwitch.addEventListener("calciteSwitchChange", (event) => {
       refreshService.setAuto(event.target.checked);
     });
