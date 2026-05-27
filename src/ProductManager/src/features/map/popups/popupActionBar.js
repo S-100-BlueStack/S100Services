@@ -118,6 +118,13 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
             exportType: "Edition",
             request: exportNewEdition,
             refreshAndRender,
+            confirm: {
+              title: `Export new edition for ${attributes.datasetName}`,
+              message:
+                `Are you sure you want to export a new Edition in ALL formats of ${attributes.datasetName}? ` +
+                "The export will include ALL formats of the product - Currently S57 and S100",
+              confirmText: "Export edition",
+            },
           }),
           createExportLeafAction({
             id: "export-all-update",
@@ -130,6 +137,13 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
             exportType: "Update",
             request: exportNewUpdate,
             refreshAndRender,
+            confirm: {
+              title: `Export new update for ${attributes.datasetName}`,
+              message:
+                `Are you sure you want to export a new Update in ALL formats of ${attributes.datasetName}? ` +
+                "The export will include ALL formats of the product - Currently S57 and S100",
+              confirmText: "Export update",
+            },
           }),
         ],
       },
@@ -147,6 +161,13 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
             implemented: false,
             scope: "S57",
             exportType: "Edition",
+            confirm: {
+              title: `Export S57 edition for ${attributes.datasetName}`,
+              message:
+                `This will create a new edition export for ${attributes.datasetName}. ` +
+                "The export will include all relevant product formats supported by this action.",
+              confirmText: "Export edition",
+            },
           }),
           createExportLeafAction({
             id: "s57-export-update",
@@ -157,6 +178,13 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
             implemented: false,
             scope: "S57",
             exportType: "Update",
+            confirm: {
+              title: `Export S57 update for ${attributes.datasetName}`,
+              message:
+                `This will create a new update export for ${attributes.datasetName}. ` +
+                "Use this only when the product changes are ready to be exported.",
+              confirmText: "Export update",
+            },
           }),
         ],
       },
@@ -174,6 +202,13 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
             implemented: false,
             scope: "S100",
             exportType: "Edition",
+            confirm: {
+              title: `Export S100 edition for ${attributes.datasetName}`,
+              message:
+                `This will create a new edition export for ${attributes.datasetName}. ` +
+                "The export will include all relevant product formats supported by this action.",
+              confirmText: "Export edition",
+            },
           }),
           createExportLeafAction({
             id: "s100-export-update",
@@ -184,6 +219,13 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
             implemented: false,
             scope: "S100",
             exportType: "Update",
+            confirm: {
+              title: `Export S100 update for ${attributes.datasetName}`,
+              message:
+                `This will create a new update export for ${attributes.datasetName}. ` +
+                "Use this only when the product changes are ready to be exported.",
+              confirmText: "Export update",
+            },
           }),
         ],
       },
@@ -202,6 +244,7 @@ function createExportLeafAction({
   exportType,
   request,
   refreshAndRender,
+  confirm,
 }) {
   return {
     id,
@@ -220,6 +263,7 @@ function createExportLeafAction({
         exportType,
         request,
         anchorElement,
+        confirm,
       });
 
       if (result?.success) {
@@ -615,7 +659,15 @@ async function sendImmediately(datasetName, anchorElement) {
   }
 }
 
-async function triggerExport({ actionId, datasetName, scope, exportType, request, anchorElement }) {
+async function triggerExport({
+  actionId,
+  datasetName,
+  scope,
+  exportType,
+  request,
+  anchorElement,
+  confirm,
+}) {
   if (!datasetName) {
     noticeError("Cannot export product", "The selected feature does not have a datasetName.");
     return null;
@@ -637,10 +689,12 @@ async function triggerExport({ actionId, datasetName, scope, exportType, request
   }
 
   const confirmed = await confirmAction({
-    title: `Export ${exportLabel} for ${datasetName}`,
-    message: `Are you sure you want to export ${exportLabel.toLowerCase()} for ${datasetName}?`,
-    confirmText: "Export",
-    cancelText: "Cancel",
+    title: confirm?.title ?? `Export ${exportLabel} for ${datasetName}`,
+    message:
+      confirm?.message ??
+      `Are you sure you want to export ${exportLabel.toLowerCase()} for ${datasetName}?`,
+    confirmText: confirm?.confirmText ?? "Export",
+    cancelText: confirm?.cancelText ?? "Cancel",
     anchorElement,
   });
 
