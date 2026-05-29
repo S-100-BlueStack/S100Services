@@ -1,20 +1,42 @@
+import "@esri/calcite-components/components/calcite-icon";
+import { watch } from "@arcgis/core/core/reactiveUtils.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { fetchProductHistory } from "../api/timelineApi.js";
 import { onProductHistoryOpen } from "../events/productHistoryEvents.js";
 
-export function initProductHistoryPanel() {
+export function initProductHistoryPanel({ view } = {}) {
   const panel = createPanel();
+  let popupVisibilityHandle = null;
 
   document.body.append(panel.root);
 
-  const openHandle = onProductHistoryOpen(async ({ datasetName }) => {
-    await openHistory(datasetName);
+  const openHandle = onProductHistoryOpen(async ({ datasetName, source }) => {
+    await openHistory(datasetName, {
+      source,
+    });
   });
 
-  async function openHistory(datasetName) {
+  if (view?.popup) {
+    popupVisibilityHandle = watch(
+      () => view.popup.visible,
+      (visible) => {
+        if (!visible && !panel.isPinned) {
+          hidePanel(panel);
+        }
+      }
+    );
+  }
+
+  async function openHistory(datasetName, { source = "popup" } = {}) {
     if (!datasetName) {
       noticeError("Cannot open history", "The selected feature does not have a datasetName.");
       return;
+    }
+
+    // Opening from a popup always switches context to the selected product.
+    // This prevents a pinned panel from silently showing stale history.
+    if (source === "popup") {
+      setPinned(panel, false);
     }
 
     showPanel(panel);
@@ -31,6 +53,7 @@ export function initProductHistoryPanel() {
 
   function destroy() {
     openHandle.remove();
+    popupVisibilityHandle?.remove();
     panel.root.remove();
   }
 
@@ -63,27 +86,65 @@ function createPanel() {
 
   titleWrap.append(eyebrow, title);
 
-  const closeButton = document.createElement("button");
-  closeButton.type = "button";
-  closeButton.className = "pm-product-history-panel__close";
-  closeButton.setAttribute("aria-label", "Close product history");
-  closeButton.textContent = "×";
+  const actions = document.createElement("div");
+  actions.className = "pm-product-history-panel__actions";
+
+  const pinButton = createIconButton({
+    className: "pm-product-history-panel__pin",
+    icon: "pushpin",
+    label: "Pin product history panel",
+  });
+
+  const closeButton = createIconButton({
+    className: "pm-product-history-panel__close",
+    icon: "x",
+    label: "Close product history",
+  });
 
   const content = document.createElement("div");
   content.className = "pm-product-history-panel__content";
 
-  closeButton.addEventListener("click", () => {
-    hidePanel({ root });
-  });
-
-  header.append(titleWrap, closeButton);
-  root.append(header, content);
-
-  return {
+  const panel = {
     root,
     title,
     content,
+    pinButton,
+    isPinned: false,
   };
+
+  pinButton.addEventListener("click", () => {
+    setPinned(panel, !panel.isPinned);
+  });
+
+  closeButton.addEventListener("click", () => {
+    setPinned(panel, false);
+    hidePanel(panel);
+  });
+
+  actions.append(pinButton, closeButton);
+  header.append(titleWrap, actions);
+  root.append(header, content);
+
+  syncPinnedButton(panel);
+
+  return panel;
+}
+
+function createIconButton({ className, icon, label }) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = className;
+  button.title = label;
+  button.setAttribute("aria-label", label);
+
+  const iconElement = document.createElement("calcite-icon");
+  iconElement.icon = icon;
+  iconElement.scale = "s";
+  iconElement.setAttribute("aria-hidden", "true");
+
+  button.appendChild(iconElement);
+
+  return button;
 }
 
 function showPanel(panel) {
@@ -92,6 +153,24 @@ function showPanel(panel) {
 
 function hidePanel(panel) {
   panel.root.hidden = true;
+}
+
+function setPinned(panel, pinned) {
+  panel.isPinned = Boolean(pinned);
+  syncPinnedButton(panel);
+}
+
+function syncPinnedButton(panel) {
+  const icon = panel.pinButton.querySelector("calcite-icon");
+  const label = panel.isPinned ? "Unpin product history panel" : "Pin product history panel";
+
+  panel.pinButton.toggleAttribute("active", panel.isPinned);
+  panel.pinButton.title = label;
+  panel.pinButton.setAttribute("aria-label", label);
+
+  if (icon) {
+    icon.icon = panel.isPinned ? "unpin" : "pushpin";
+  }
 }
 
 function renderLoading(panel, datasetName) {

@@ -1,10 +1,11 @@
 export const PRODUCT_HISTORY_OPEN_EVENT = "pm-product-history-open";
 
-export function openProductHistoryPanel(datasetName) {
+export function openProductHistoryPanel(datasetName, { source = "popup" } = {}) {
   document.dispatchEvent(
     new CustomEvent(PRODUCT_HISTORY_OPEN_EVENT, {
       detail: {
         datasetName,
+        source,
       },
     })
   );

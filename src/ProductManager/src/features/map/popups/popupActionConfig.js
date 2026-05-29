@@ -245,28 +245,37 @@ function createRollbackAction({ attributes }) {
 }
 
 function createToolsAction({ attributes }) {
+  const items = [
+    {
+      id: "analyze",
+      label: "Analyze",
+      icon: "magnifying-glass",
+      onClick: () => {
+        openAnalyzePage(attributes?.datasetName);
+      },
+    },
+  ];
+
+  if (!isAnalyzeRoute()) {
+    items.push({
+      id: "history",
+      label: "History",
+      icon: "clock",
+      onClick: () => {
+        openProductHistory(attributes?.datasetName);
+      },
+    });
+  }
+
   return {
     id: "tools",
     label: "Tools",
     icon: "wrench",
     className: "popup-action-bar__action--dropdown",
-    items: [
-      {
-        id: "analyze",
-        label: "Analyze",
-        icon: "magnifying-glass",
-        onClick: () => {
-          openAnalyzePage(attributes?.datasetName);
-        },
-      },
-      {
-        id: "history",
-        label: "History",
-        icon: "clock",
-        onClick: () => {
-          openProductHistory(attributes?.datasetName);
-        },
-      },
-    ],
+    items,
   };
+}
+
+function isAnalyzeRoute() {
+  return document.body.classList.contains("pm-analyze-route");
 }

@@ -236,6 +236,7 @@ function createProductCard(product) {
 
   content.appendChild(rows);
   content.appendChild(createXmlBlock(product.xml));
+  content.appendChild(createHistoryBlock(product));
 
   card.appendChild(summary);
   card.appendChild(content);
@@ -275,6 +276,30 @@ function createXmlBlock(xml) {
   pre.appendChild(code);
   details.appendChild(summary);
   details.appendChild(pre);
+
+  return details;
+}
+
+function createHistoryBlock(product) {
+  const details = document.createElement("details");
+  details.className = "analyze-history";
+
+  const summary = document.createElement("summary");
+  summary.textContent = "History";
+
+  const content = document.createElement("div");
+  content.className = "analyze-history__content";
+
+  const title = document.createElement("h4");
+  title.className = "analyze-history__title";
+  title.textContent = "Historical changes are not available yet";
+
+  const message = document.createElement("p");
+  message.className = "analyze-history__message";
+  message.textContent = `History for ${product.datasetName} will be shown here when the backend endpoint is available.`;
+
+  content.append(title, message);
+  details.append(summary, content);
 
   return details;
 }

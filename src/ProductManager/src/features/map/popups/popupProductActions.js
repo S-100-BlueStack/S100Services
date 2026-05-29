@@ -30,7 +30,9 @@ export function openProductHistory(datasetName) {
     return;
   }
 
-  dispatchProductHistoryOpen(datasetName);
+  dispatchProductHistoryOpen(datasetName, {
+    source: "popup",
+  });
 }
 
 export async function triggerFreeze(datasetName, state, anchorElement) {

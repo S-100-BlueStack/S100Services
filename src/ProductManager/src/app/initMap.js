@@ -76,7 +76,9 @@ export function initMap() {
     applyVisibility: applyMapVisibility,
   });
 
-  const productHistoryPanel = initProductHistoryPanel();
+  const productHistoryPanel = initProductHistoryPanel({
+    view,
+  });
 
   bindOverlapPicker(view);
 
