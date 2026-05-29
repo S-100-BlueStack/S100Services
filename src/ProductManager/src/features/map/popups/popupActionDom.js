@@ -29,7 +29,7 @@ export function createActionButton(actionConfig) {
     event.preventDefault();
     event.stopPropagation();
 
-    if (action.disabled) {
+    if (action.disabled || action.dataset.busy === "true") {
       return;
     }
 
@@ -43,10 +43,42 @@ export function createActionButton(actionConfig) {
 
     closePopupActionDropdown();
 
-    await actionConfig.onClick?.({
-      anchorElement: action,
+    await runActionWithBusyState(action, async () => {
+      await actionConfig.onClick?.({
+        anchorElement: action,
+      });
     });
   });
 
   return action;
+}
+
+async function runActionWithBusyState(action, runAction) {
+  const wasDisabled = Boolean(action.disabled);
+
+  setActionBusy(action, true);
+
+  try {
+    await runAction();
+  } finally {
+    setActionBusy(action, false, {
+      disabled: wasDisabled,
+    });
+  }
+}
+
+function setActionBusy(action, busy, { disabled = true } = {}) {
+  action.dataset.busy = String(Boolean(busy));
+  action.toggleAttribute("aria-busy", Boolean(busy));
+
+  if (busy || disabled) {
+    action.disabled = true;
+    action.setAttribute("disabled", "");
+    action.setAttribute("aria-disabled", "true");
+    return;
+  }
+
+  action.disabled = false;
+  action.removeAttribute("disabled");
+  action.removeAttribute("aria-disabled");
 }

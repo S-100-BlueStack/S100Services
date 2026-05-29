@@ -7,6 +7,8 @@ import { onProductHistoryOpen } from "../events/productHistoryEvents.js";
 export function initProductHistoryPanel({ view } = {}) {
   const panel = createPanel();
   let popupVisibilityHandle = null;
+  let popupSelectionHandle = null;
+  let requestId = 0;
 
   document.body.append(panel.root);
 
@@ -16,12 +18,30 @@ export function initProductHistoryPanel({ view } = {}) {
     });
   });
 
+  panel.closeButton.addEventListener("click", () => {
+    setPinned(panel, false);
+    closePanel();
+  });
+
   if (view?.popup) {
     popupVisibilityHandle = watch(
       () => view.popup.visible,
       (visible) => {
         if (!visible && !panel.isPinned) {
-          hidePanel(panel);
+          closePanel();
+        }
+      }
+    );
+
+    popupSelectionHandle = watch(
+      () => getPopupHistoryContextId(view),
+      (contextId) => {
+        if (!contextId || panel.root.hidden || panel.isPinned) {
+          return;
+        }
+
+        if (panel.contextId && panel.contextId !== contextId) {
+          closePanel();
         }
       }
     );
@@ -33,33 +53,60 @@ export function initProductHistoryPanel({ view } = {}) {
       return;
     }
 
-    // Opening from a popup always switches context to the selected product.
-    // This prevents a pinned panel from silently showing stale history.
     if (source === "popup") {
       setPinned(panel, false);
     }
 
+    const currentRequestId = ++requestId;
+    panel.contextId = createHistoryContextId(datasetName);
+
     showPanel(panel);
+    setBusy(panel, true);
     renderLoading(panel, datasetName);
 
     try {
       const history = await fetchProductHistory(datasetName);
+
+      if (!isCurrentRequest(currentRequestId)) {
+        return;
+      }
+
       renderHistory(panel, history);
     } catch (error) {
+      if (!isCurrentRequest(currentRequestId)) {
+        return;
+      }
+
       renderError(panel, datasetName, error);
-      noticeError("History failed to load", error.message);
+      noticeError("History failed to load", getErrorMessage(error));
+    } finally {
+      if (isCurrentRequest(currentRequestId)) {
+        setBusy(panel, false);
+      }
     }
   }
 
+  function closePanel() {
+    requestId += 1;
+    panel.contextId = null;
+    hidePanel(panel);
+  }
+
+  function isCurrentRequest(currentRequestId) {
+    return currentRequestId === requestId;
+  }
+
   function destroy() {
+    requestId += 1;
     openHandle.remove();
     popupVisibilityHandle?.remove();
+    popupSelectionHandle?.remove();
     panel.root.remove();
   }
 
   return {
     openHistory,
-    close: () => hidePanel(panel),
+    close: closePanel,
     destroy,
   };
 }
@@ -93,12 +140,14 @@ function createPanel() {
     className: "pm-product-history-panel__pin",
     icon: "pushpin",
     label: "Pin product history panel",
+    scale: "s",
   });
 
   const closeButton = createIconButton({
     className: "pm-product-history-panel__close",
     icon: "x",
     label: "Close product history",
+    scale: "m",
   });
 
   const content = document.createElement("div");
@@ -109,16 +158,13 @@ function createPanel() {
     title,
     content,
     pinButton,
+    closeButton,
     isPinned: false,
+    contextId: null,
   };
 
   pinButton.addEventListener("click", () => {
     setPinned(panel, !panel.isPinned);
-  });
-
-  closeButton.addEventListener("click", () => {
-    setPinned(panel, false);
-    hidePanel(panel);
   });
 
   actions.append(pinButton, closeButton);
@@ -130,7 +176,7 @@ function createPanel() {
   return panel;
 }
 
-function createIconButton({ className, icon, label }) {
+function createIconButton({ className, icon, label, scale = "s" }) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = className;
@@ -139,7 +185,7 @@ function createIconButton({ className, icon, label }) {
 
   const iconElement = document.createElement("calcite-icon");
   iconElement.icon = icon;
-  iconElement.scale = "s";
+  iconElement.scale = scale;
   iconElement.setAttribute("aria-hidden", "true");
 
   button.appendChild(iconElement);
@@ -153,6 +199,11 @@ function showPanel(panel) {
 
 function hidePanel(panel) {
   panel.root.hidden = true;
+  setBusy(panel, false);
+}
+
+function setBusy(panel, busy) {
+  panel.root.toggleAttribute("aria-busy", Boolean(busy));
 }
 
 function setPinned(panel, pinned) {
@@ -223,7 +274,7 @@ function renderError(panel, datasetName, error) {
   panel.content.replaceChildren(
     createStateMessage({
       title: "History could not be loaded",
-      message: error instanceof Error ? error.message : "Unknown history error.",
+      message: getErrorMessage(error),
     })
   );
 }
@@ -277,4 +328,24 @@ function formatHistoryTimestamp(timestamp) {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+function getErrorMessage(error) {
+  return error instanceof Error ? error.message : "Unknown history error.";
+}
+
+function getPopupHistoryContextId(view) {
+  const attributes = view?.popup?.selectedFeature?.attributes;
+
+  if (!attributes) {
+    return null;
+  }
+
+  return createHistoryContextId(attributes.datasetName ?? attributes.featureKey);
+}
+
+function createHistoryContextId(value) {
+  const normalizedValue = String(value ?? "").trim();
+
+  return normalizedValue ? normalizedValue : null;
 }

@@ -1,10 +1,11 @@
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
 import { changeFreezeState, uploadProduct } from "../../data/api/productApi.js";
 import { noticeError, noticeSuccess } from "../../notices/services/noticeService.js";
-import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
 import { openProductHistoryPanel as dispatchProductHistoryOpen } from "../../timeline/events/productHistoryEvents.js";
+import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
 
-let isSending = false;
+const activeFreezeActionIds = new Set();
+const activeSendActionIds = new Set();
 const activeExportActionIds = new Set();
 
 export function openAnalyzePage(datasetName) {
@@ -41,63 +42,95 @@ export async function triggerFreeze(datasetName, state, anchorElement) {
     return null;
   }
 
-  const confirmed = await confirmAction({
-    title: `${state ? "Freeze" : "Unfreeze"} ${datasetName}`,
-    message: `Are you sure you want to ${
-      state ? "freeze" : "unfreeze"
-    } ${datasetName}? Freezing a product will prevent it from being sent to IC-ENC until it is unfrozen.`,
-    confirmText: "Confirm",
-    cancelText: "Cancel",
-    anchorElement,
-  });
+  const actionKey = `${datasetName}:${state ? "freeze" : "unfreeze"}`;
 
-  if (!confirmed) {
-    return null;
+  if (activeFreezeActionIds.has(actionKey)) {
+    return {
+      success: false,
+      skipped: true,
+      reason: "already-running",
+    };
   }
 
-  const result = await changeFreezeState(datasetName, state);
+  activeFreezeActionIds.add(actionKey);
 
-  if (result.success) {
-    noticeSuccess(`Product ${datasetName} ${state ? "frozen" : "unfrozen"} successfully`, null, {
-      countAsUnread: false,
+  try {
+    const confirmed = await confirmAction({
+      title: `${state ? "Freeze" : "Unfreeze"} ${datasetName}`,
+      message: `Are you sure you want to ${
+        state ? "freeze" : "unfreeze"
+      } ${datasetName}? Freezing a product will prevent it from being sent to IC-ENC until it is unfrozen.`,
+      confirmText: "Confirm",
+      cancelText: "Cancel",
+      anchorElement,
     });
-  } else if (result.networkError) {
-    noticeError(`Network error while ${state ? "freezing" : "unfreezing"} ${datasetName}`);
-  } else {
-    noticeError(
-      `Failed to ${state ? "freeze" : "unfreeze"} ${datasetName} (${result.status})`,
-      `${result.statusText}`
-    );
-  }
 
-  return result;
+    if (!confirmed) {
+      return null;
+    }
+
+    const result = await changeFreezeState(datasetName, state);
+
+    if (result.success) {
+      noticeSuccess(`Product ${datasetName} ${state ? "frozen" : "unfrozen"} successfully`, null, {
+        countAsUnread: false,
+      });
+    } else if (result.networkError) {
+      noticeError(`Network error while ${state ? "freezing" : "unfreezing"} ${datasetName}`);
+    } else {
+      noticeError(
+        `Failed to ${state ? "freeze" : "unfreeze"} ${datasetName} (${result.status})`,
+        `${result.statusText}`
+      );
+    }
+
+    return result;
+  } catch (error) {
+    noticeError(
+      `Unexpected error while ${state ? "freezing" : "unfreezing"} ${datasetName}`,
+      getErrorMessage(error)
+    );
+
+    return {
+      success: false,
+      error,
+    };
+  } finally {
+    activeFreezeActionIds.delete(actionKey);
+  }
 }
 
 export async function sendImmediately(datasetName, anchorElement) {
   if (!datasetName) {
     noticeError("Cannot send product", "The selected feature does not have a datasetName.");
-    return;
+    return null;
   }
 
-  if (isSending) {
-    return;
+  const actionKey = datasetName;
+
+  if (activeSendActionIds.has(actionKey)) {
+    return {
+      success: false,
+      skipped: true,
+      reason: "already-running",
+    };
   }
 
-  const confirmed = await confirmAction({
-    title: `Send ${datasetName}`,
-    message: `Are you sure you want to send ${datasetName} immediately? This will upload the product to IC-ENC immediately without waiting for the automated upload.`,
-    confirmText: "Send",
-    cancelText: "Cancel",
-    anchorElement,
-  });
-
-  if (!confirmed) {
-    return;
-  }
-
-  isSending = true;
+  activeSendActionIds.add(actionKey);
 
   try {
+    const confirmed = await confirmAction({
+      title: `Send ${datasetName}`,
+      message: `Are you sure you want to send ${datasetName} immediately? This will upload the product to IC-ENC immediately without waiting for the automated upload.`,
+      confirmText: "Send",
+      cancelText: "Cancel",
+      anchorElement,
+    });
+
+    if (!confirmed) {
+      return null;
+    }
+
     const result = await uploadProduct(datasetName);
 
     if (result.success) {
@@ -109,8 +142,17 @@ export async function sendImmediately(datasetName, anchorElement) {
     } else {
       noticeError(`Failed to send ${datasetName} (${result.status})`, `${result.statusText}`);
     }
+
+    return result;
+  } catch (error) {
+    noticeError(`Unexpected error while sending ${datasetName}`, getErrorMessage(error));
+
+    return {
+      success: false,
+      error,
+    };
   } finally {
-    isSending = false;
+    activeSendActionIds.delete(actionKey);
   }
 }
 
@@ -140,26 +182,30 @@ export async function triggerExport({
   const actionKey = `${datasetName}:${actionId}`;
 
   if (activeExportActionIds.has(actionKey)) {
-    return null;
-  }
-
-  const confirmed = await confirmAction({
-    title: confirm?.title ?? `Export ${exportLabel} for ${datasetName}`,
-    message:
-      confirm?.message ??
-      `Are you sure you want to export ${exportLabel.toLowerCase()} for ${datasetName}?`,
-    confirmText: confirm?.confirmText ?? "Export",
-    cancelText: confirm?.cancelText ?? "Cancel",
-    anchorElement,
-  });
-
-  if (!confirmed) {
-    return null;
+    return {
+      success: false,
+      skipped: true,
+      reason: "already-running",
+    };
   }
 
   activeExportActionIds.add(actionKey);
 
   try {
+    const confirmed = await confirmAction({
+      title: confirm?.title ?? `Export ${exportLabel} for ${datasetName}`,
+      message:
+        confirm?.message ??
+        `Are you sure you want to export ${exportLabel.toLowerCase()} for ${datasetName}?`,
+      confirmText: confirm?.confirmText ?? "Export",
+      cancelText: confirm?.cancelText ?? "Cancel",
+      anchorElement,
+    });
+
+    if (!confirmed) {
+      return null;
+    }
+
     const result = await request(datasetName);
 
     if (result.success) {
@@ -176,6 +222,13 @@ export async function triggerExport({
     }
 
     return result;
+  } catch (error) {
+    noticeError(`Unexpected error while exporting ${datasetName}`, getErrorMessage(error));
+
+    return {
+      success: false,
+      error,
+    };
   } finally {
     activeExportActionIds.delete(actionKey);
   }
@@ -211,4 +264,8 @@ function getApiResultMessage(result) {
   }
 
   return null;
+}
+
+function getErrorMessage(error) {
+  return error instanceof Error ? error.message : "Unknown error.";
 }
