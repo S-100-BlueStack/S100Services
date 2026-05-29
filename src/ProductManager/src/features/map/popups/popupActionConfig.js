@@ -2,6 +2,7 @@ import { exportNewEdition, exportNewUpdate } from "../../data/api/exportApi.js";
 import { noticeInfo } from "../../notices/services/noticeService.js";
 import {
   openAnalyzePage,
+  openProductHistory,
   sendImmediately,
   triggerExport,
   triggerFreeze,
@@ -256,6 +257,14 @@ function createToolsAction({ attributes }) {
         icon: "magnifying-glass",
         onClick: () => {
           openAnalyzePage(attributes?.datasetName);
+        },
+      },
+      {
+        id: "history",
+        label: "History",
+        icon: "clock",
+        onClick: () => {
+          openProductHistory(attributes?.datasetName);
         },
       },
     ],

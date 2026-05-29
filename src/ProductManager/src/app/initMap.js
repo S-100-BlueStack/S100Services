@@ -14,6 +14,7 @@ import {
 } from "../features/map/scale/displayScaleVisibility.js";
 import { createAttributeFilterService } from "../features/map/filters/attributeFilterService.js";
 import { initAttributeFilterPanel } from "../features/map/filters/attributeFilterPanel.js";
+import { initProductHistoryPanel } from "../features/timeline/ui/productHistoryPanel.js";
 
 function updateLastUpdated(date = new Date()) {
   const el = document.getElementById("last-updated");
@@ -75,6 +76,8 @@ export function initMap() {
     applyVisibility: applyMapVisibility,
   });
 
+  const productHistoryPanel = initProductHistoryPanel();
+
   bindOverlapPicker(view);
 
   const refreshService = createRefreshService({
@@ -130,6 +133,7 @@ export function initMap() {
     refreshService,
     filterService,
     filterPanel,
+    productHistoryPanel,
     applyMapVisibility,
     bindMapVisibility,
     updateLastUpdated,

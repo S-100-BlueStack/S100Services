@@ -2,6 +2,7 @@ import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
 import { changeFreezeState, uploadProduct } from "../../data/api/productApi.js";
 import { noticeError, noticeSuccess } from "../../notices/services/noticeService.js";
 import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
+import { openProductHistoryPanel as dispatchProductHistoryOpen } from "../../timeline/events/productHistoryEvents.js";
 
 let isSending = false;
 const activeExportActionIds = new Set();
@@ -21,6 +22,15 @@ export function openAnalyzePage(datasetName) {
       "The browser blocked the new tab. Allow popups for this site and try again."
     );
   }
+}
+
+export function openProductHistory(datasetName) {
+  if (!datasetName) {
+    noticeError("Cannot open history", "The selected feature does not have a datasetName.");
+    return;
+  }
+
+  dispatchProductHistoryOpen(datasetName);
 }
 
 export async function triggerFreeze(datasetName, state, anchorElement) {
