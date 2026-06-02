@@ -2,7 +2,7 @@ import { apiRequest } from "../../../shared/api/apiClient.js";
 import { getApiResultMessage } from "../../../shared/api/apiResult.js";
 
 export async function uploadProduct(datasetName) {
-  return apiRequest(encodeURIComponent(datasetName), {
+  return apiRequest(`upload/${encodeURIComponent(datasetName)}`, {
     method: "PUT",
   });
 }
