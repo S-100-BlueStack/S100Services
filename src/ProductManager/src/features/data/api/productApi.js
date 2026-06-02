@@ -1,4 +1,5 @@
 import { apiRequest } from "../../../shared/api/apiClient.js";
+import { getApiResultMessage } from "../../../shared/api/apiResult.js";
 
 export async function uploadProduct(datasetName) {
   return apiRequest(encodeURIComponent(datasetName), {
@@ -41,113 +42,71 @@ export async function fetchProductPropertiesByDatasetName(datasetName) {
     };
   }
 
-  const normalizedData = normalizeElectronicProductResponse(result.data, datasetName);
-
   return {
     ...result,
-    data: normalizedData,
-  };
-
-  return {
-    ...result,
-    data: normalizeElectronicProductResponse(result.data, datasetName),
+    data: normalizeElectronicProductResponse(result.data),
   };
 }
 
-function normalizeElectronicProductResponse(data, datasetName) {
-  const attributes = findElectronicProductAttributes(data, datasetName);
+function normalizeElectronicProductResponse(data) {
+  const product = findElectronicProductPayload(data);
 
-  return attributes ?? {};
+  if (!product) {
+    return {};
+  }
+
+  return {
+    datasetName: readFirstDefined(product, ["datasetName", "DatasetName", "name", "Name"]),
+    edition: readFirstDefined(product, ["edition", "Edition"]),
+    update: readFirstDefined(product, ["update", "Update", "updateNumber", "UpdateNumber"]),
+    issueDate: readFirstDefined(product, ["issueDate", "IssueDate"]),
+    usageBand: readFirstDefined(product, ["usageBand", "UsageBand"]),
+    aoi: readFirstDefined(product, ["aoi", "Aoi"]),
+    status: readFirstDefined(product, ["status", "Status", "productState", "ProductState"]),
+    displayScale: readFirstDefined(product, [
+      "displayScale",
+      "DisplayScale",
+      "optimumDisplayScale",
+      "OptimumDisplayScale",
+    ]),
+    errorMessage: readFirstDefined(product, ["errorMessage", "ErrorMessage"]),
+  };
 }
 
-function findElectronicProductAttributes(value, datasetName) {
+function findElectronicProductPayload(value) {
   if (!value) {
     return null;
   }
 
   if (Array.isArray(value)) {
-    const candidates = value
-      .map((item) => findElectronicProductAttributes(item, datasetName))
-      .filter(Boolean);
-
-    return findMatchingDataset(candidates, datasetName) ?? candidates[0] ?? null;
+    return value.map(findElectronicProductPayload).find(Boolean) ?? null;
   }
 
   if (typeof value !== "object") {
     return null;
   }
 
-  const directAttributes = value.properties ?? value.attributes ?? value;
-
-  if (hasProductAttributeShape(directAttributes)) {
-    return directAttributes;
-  }
-
-  const nestedCandidates = [
-    value.feature,
-    value.Feature,
-    value.features,
-    value.Features,
-    value.data,
-    value.Data,
-    value.result,
-    value.Result,
-    value.product,
-    value.Product,
-    value.products,
-    value.Products,
-    value.electronicProduct,
-    value.ElectronicProduct,
-    value.electronicProducts,
-    value.ElectronicProducts,
-    value.item,
-    value.Item,
-    value.items,
-    value.Items,
-    value.value,
-    value.Value,
-  ];
-
-  for (const candidate of nestedCandidates) {
-    const attributes = findElectronicProductAttributes(candidate, datasetName);
-
-    if (attributes) {
-      return attributes;
-    }
-  }
-
-  return null;
-}
-
-function findMatchingDataset(candidates, datasetName) {
-  if (!datasetName) {
-    return null;
+  if (hasProductPayloadShape(value)) {
+    return value;
   }
 
   return (
-    candidates.find((attributes) => {
-      return normalizeDatasetName(getDatasetName(attributes)) === normalizeDatasetName(datasetName);
-    }) ?? null
+    findElectronicProductPayload(value.data) ??
+    findElectronicProductPayload(value.Data) ??
+    findElectronicProductPayload(value.result) ??
+    findElectronicProductPayload(value.Result) ??
+    findElectronicProductPayload(value.product) ??
+    findElectronicProductPayload(value.Product) ??
+    findElectronicProductPayload(value.electronicProduct) ??
+    findElectronicProductPayload(value.ElectronicProduct) ??
+    findElectronicProductPayload(value.item) ??
+    findElectronicProductPayload(value.Item) ??
+    findElectronicProductPayload(value.value) ??
+    findElectronicProductPayload(value.Value)
   );
 }
 
-function getDatasetName(attributes) {
-  return (
-    attributes?.datasetName ??
-    attributes?.DatasetName ??
-    attributes?.datasetname ??
-    attributes?.name ??
-    attributes?.Name
-  );
-}
-
-function normalizeDatasetName(value) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
-}
-
-function hasProductAttributeShape(value) {
+function hasProductPayloadShape(value) {
   if (!value || typeof value !== "object") {
     return false;
   }
@@ -155,18 +114,23 @@ function hasProductAttributeShape(value) {
   return (
     Object.hasOwn(value, "datasetName") ||
     Object.hasOwn(value, "DatasetName") ||
-    Object.hasOwn(value, "datasetname") ||
-    Object.hasOwn(value, "edition") ||
-    Object.hasOwn(value, "Edition") ||
-    Object.hasOwn(value, "update") ||
-    Object.hasOwn(value, "Update") ||
+    Object.hasOwn(value, "name") ||
+    Object.hasOwn(value, "Name") ||
     Object.hasOwn(value, "status") ||
     Object.hasOwn(value, "Status") ||
-    Object.hasOwn(value, "state") ||
-    Object.hasOwn(value, "State") ||
     Object.hasOwn(value, "productState") ||
     Object.hasOwn(value, "ProductState")
   );
+}
+
+function readFirstDefined(source, keys) {
+  for (const key of keys) {
+    if (Object.hasOwn(source, key) && source[key] !== undefined && source[key] !== null) {
+      return source[key];
+    }
+  }
+
+  return undefined;
 }
 
 function getProductRequestErrorMessage(defaultMessage, result) {
@@ -174,11 +138,11 @@ function getProductRequestErrorMessage(defaultMessage, result) {
     return result.errorMessage ?? defaultMessage;
   }
 
-  if (typeof result.data === "string" && result.data.trim()) {
-    return `${defaultMessage}: ${result.data}`;
+  const detail = getApiResultMessage(result);
+
+  if (detail) {
+    return `${defaultMessage}: ${detail}`;
   }
 
-  return `${defaultMessage}${result.status ? ` (${result.status})` : ""}${
-    result.statusText ? ` ${result.statusText}` : ""
-  }`;
+  return `${defaultMessage}${result.status ? ` (${result.status})` : ""}`;
 }

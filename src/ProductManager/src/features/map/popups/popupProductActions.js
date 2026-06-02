@@ -1,6 +1,11 @@
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
 import { changeFreezeState, uploadProduct } from "../../data/api/productApi.js";
-import { noticeError, noticeSuccess } from "../../notices/services/noticeService.js";
+import {
+  noticeApiFailure,
+  noticeApiSuccess,
+  noticeUnexpectedApiError,
+} from "../../notices/services/apiNoticeService.js";
+import { noticeError } from "../../notices/services/noticeService.js";
 import { openProductHistoryPanel as dispatchProductHistoryOpen } from "../../timeline/events/productHistoryEvents.js";
 import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
 
@@ -18,10 +23,7 @@ export function openAnalyzePage(datasetName) {
   const openedWindow = window.open(analyzeUrl, "_blank", "noopener,noreferrer");
 
   if (!openedWindow) {
-    noticeError(
-      "Analyze page was blocked",
-      "The browser blocked the new tab. Allow popups for this site and try again."
-    );
+    noticeError("Analyze page was blocked", "Allow popups for this site and try again.");
   }
 }
 
@@ -42,6 +44,7 @@ export async function triggerFreeze(datasetName, state, anchorElement) {
     return null;
   }
 
+  const actionLabel = state ? "freezing" : "unfreezing";
   const actionKey = `${datasetName}:${state ? "freeze" : "unfreeze"}`;
 
   if (activeFreezeActionIds.has(actionKey)) {
@@ -72,24 +75,20 @@ export async function triggerFreeze(datasetName, state, anchorElement) {
     const result = await changeFreezeState(datasetName, state);
 
     if (result.success) {
-      noticeSuccess(`Product ${datasetName} ${state ? "frozen" : "unfrozen"} successfully`, null, {
-        countAsUnread: false,
-      });
-    } else if (result.networkError) {
-      noticeError(`Network error while ${state ? "freezing" : "unfreezing"} ${datasetName}`);
-    } else {
-      noticeError(
-        `Failed to ${state ? "freeze" : "unfreeze"} ${datasetName} (${result.status})`,
-        `${result.statusText}`
-      );
+      noticeApiSuccess(`Product ${datasetName} ${state ? "frozen" : "unfrozen"} successfully`);
+      return result;
     }
+
+    noticeApiFailure(result, {
+      networkTitle: `Network error while ${actionLabel} ${datasetName}`,
+      failureTitle: `Failed to ${state ? "freeze" : "unfreeze"} ${datasetName}`,
+    });
 
     return result;
   } catch (error) {
-    noticeError(
-      `Unexpected error while ${state ? "freezing" : "unfreezing"} ${datasetName}`,
-      getErrorMessage(error)
-    );
+    noticeUnexpectedApiError(error, {
+      title: `Unexpected error while ${actionLabel} ${datasetName}`,
+    });
 
     return {
       success: false,
@@ -134,18 +133,20 @@ export async function sendImmediately(datasetName, anchorElement) {
     const result = await uploadProduct(datasetName);
 
     if (result.success) {
-      noticeSuccess(`Product ${datasetName} sent successfully`, null, {
-        countAsUnread: false,
-      });
-    } else if (result.networkError) {
-      noticeError(`Network error while sending ${datasetName}`);
-    } else {
-      noticeError(`Failed to send ${datasetName} (${result.status})`, `${result.statusText}`);
+      noticeApiSuccess(`Product ${datasetName} sent successfully`);
+      return result;
     }
+
+    noticeApiFailure(result, {
+      networkTitle: `Network error while sending ${datasetName}`,
+      failureTitle: `Failed to send ${datasetName}`,
+    });
 
     return result;
   } catch (error) {
-    noticeError(`Unexpected error while sending ${datasetName}`, getErrorMessage(error));
+    noticeUnexpectedApiError(error, {
+      title: `Unexpected error while sending ${datasetName}`,
+    });
 
     return {
       success: false,
@@ -175,6 +176,7 @@ export async function triggerExport({
       "Export is not configured",
       `${scope} ${exportType} does not have an export endpoint configured yet.`
     );
+
     return null;
   }
 
@@ -209,21 +211,21 @@ export async function triggerExport({
     const result = await request(datasetName);
 
     if (result.success) {
-      noticeSuccess(`Export request sent for ${datasetName}`, exportLabel, {
-        countAsUnread: false,
-      });
-    } else if (result.networkError) {
-      noticeError(`Network error while exporting ${datasetName}`, exportLabel);
-    } else {
-      noticeError(
-        `Failed to export ${datasetName} (${result.status})`,
-        getApiResultMessage(result) ?? exportLabel
-      );
+      noticeApiSuccess(`Export request sent for ${datasetName}`, exportLabel);
+      return result;
     }
+
+    noticeApiFailure(result, {
+      networkTitle: `Network error while exporting ${datasetName}`,
+      failureTitle: `Failed to export ${datasetName}`,
+      fallbackMessage: exportLabel,
+    });
 
     return result;
   } catch (error) {
-    noticeError(`Unexpected error while exporting ${datasetName}`, getErrorMessage(error));
+    noticeUnexpectedApiError(error, {
+      title: `Unexpected error while exporting ${datasetName}`,
+    });
 
     return {
       success: false,
@@ -232,40 +234,4 @@ export async function triggerExport({
   } finally {
     activeExportActionIds.delete(actionKey);
   }
-}
-
-function getApiResultMessage(result) {
-  if (!result) {
-    return null;
-  }
-
-  if (typeof result.errorMessage === "string" && result.errorMessage.trim()) {
-    return result.errorMessage;
-  }
-
-  if (typeof result.statusText === "string" && result.statusText.trim()) {
-    return result.statusText;
-  }
-
-  if (typeof result.data === "string" && result.data.trim()) {
-    return result.data;
-  }
-
-  if (result.data && typeof result.data === "object") {
-    return (
-      result.data.message ??
-      result.data.Message ??
-      result.data.error ??
-      result.data.Error ??
-      result.data.title ??
-      result.data.Title ??
-      null
-    );
-  }
-
-  return null;
-}
-
-function getErrorMessage(error) {
-  return error instanceof Error ? error.message : "Unknown error.";
 }
