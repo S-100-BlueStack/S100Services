@@ -1,7 +1,9 @@
+import { TIMELINE_MODE } from "../model/timelineTypes.js";
+
 export async function fetchMapTimelineMetadata() {
   return {
     endpointAvailable: false,
-    mode: "snapshot",
+    mode: TIMELINE_MODE.SNAPSHOT,
     fullTimeExtent: null,
     stops: [],
   };
