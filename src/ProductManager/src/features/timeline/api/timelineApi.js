@@ -8,7 +8,7 @@ export async function fetchMapTimelineMetadata() {
 }
 
 export async function fetchMapSnapshotAtTime(timestamp) {
-  if (!timestamp) {
+  if (timestamp == null || timestamp === "") {
     throw new Error("timestamp is required to fetch a map snapshot.");
   }
 
