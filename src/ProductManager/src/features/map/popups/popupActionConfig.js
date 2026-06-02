@@ -6,6 +6,7 @@ import {
   sendImmediately,
   triggerExport,
   triggerFreeze,
+  isAnyExportActionRunning,
 } from "./popupProductActions.js";
 
 export function createPopupActionGroups({ attributes, frozen, refreshAndRender } = {}) {
@@ -71,10 +72,16 @@ function createSendAction({ attributes, frozen }) {
 }
 
 function createExportAction({ attributes, frozen, refreshAndRender }) {
+  const datasetName = attributes?.datasetName;
+  const exportIsRunning = isAnyExportActionRunning(datasetName);
+
   return {
     id: "export",
-    label: "Export...",
+    label: exportIsRunning ? "Exporting..." : "Export...",
     icon: "plus-square",
+    disabled: exportIsRunning,
+    disabledReason: exportIsRunning ? `An export is already running for ${datasetName}.` : null,
+    loading: exportIsRunning,
     className: "popup-action-bar__action--dropdown",
     items: [
       {

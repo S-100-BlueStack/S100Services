@@ -8,6 +8,7 @@ import {
 import { noticeError } from "../../notices/services/noticeService.js";
 import { openProductHistoryPanel as dispatchProductHistoryOpen } from "../../timeline/events/productHistoryEvents.js";
 import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
+import { setPopupActionLoading } from "./popupActionBusyState.js";
 
 const activeFreezeActionIds = new Set();
 const activeSendActionIds = new Set();
@@ -158,7 +159,6 @@ export async function sendImmediately(datasetName, anchorElement) {
 }
 
 export async function triggerExport({
-  actionId,
   datasetName,
   scope,
   exportType,
@@ -181,9 +181,14 @@ export async function triggerExport({
   }
 
   const exportLabel = `${scope} ${exportType}`;
-  const actionKey = `${datasetName}:${actionId}`;
+  const actionKey = createExportActionKey(datasetName, scope, exportType);
 
   if (activeExportActionIds.has(actionKey)) {
+    noticeError(
+      "Export is already running",
+      `${exportLabel} is already running for ${datasetName}.`
+    );
+
     return {
       success: false,
       skipped: true,
@@ -191,7 +196,7 @@ export async function triggerExport({
     };
   }
 
-  activeExportActionIds.add(actionKey);
+  let stopExportLoading = null;
 
   try {
     const confirmed = await confirmAction({
@@ -207,6 +212,13 @@ export async function triggerExport({
     if (!confirmed) {
       return null;
     }
+
+    activeExportActionIds.add(actionKey);
+
+    stopExportLoading = setPopupActionLoading(anchorElement, {
+      text: "Exporting...",
+      title: `Exporting ${exportLabel} for ${datasetName}`,
+    });
 
     const result = await request(datasetName);
 
@@ -232,6 +244,29 @@ export async function triggerExport({
       error,
     };
   } finally {
+    stopExportLoading?.();
     activeExportActionIds.delete(actionKey);
   }
+}
+
+function createExportActionKey(datasetName, scope, exportType) {
+  return `${datasetName}:${scope}:${exportType}`.toLowerCase();
+}
+
+export function isExportActionRunning(datasetName, scope, exportType) {
+  if (!datasetName || !scope || !exportType) {
+    return false;
+  }
+
+  return activeExportActionIds.has(createExportActionKey(datasetName, scope, exportType));
+}
+
+export function isAnyExportActionRunning(datasetName) {
+  if (!datasetName) {
+    return false;
+  }
+
+  const prefix = `${datasetName}:`.toLowerCase();
+
+  return [...activeExportActionIds].some((key) => key.startsWith(prefix));
 }

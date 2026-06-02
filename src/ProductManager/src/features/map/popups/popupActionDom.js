@@ -10,6 +10,7 @@ export function createActionButton(actionConfig) {
   action.scale = "m";
   action.appearance = "transparent";
   action.disabled = Boolean(actionConfig.disabled);
+  action.loading = Boolean(actionConfig.loading);
   action.textEnabled = true;
   action.className = ["popup-action-bar__action", actionConfig.className].filter(Boolean).join(" ");
   action.dataset.popupActionId = actionConfig.id;
@@ -23,6 +24,12 @@ export function createActionButton(actionConfig) {
   if (actionConfig.disabled) {
     action.setAttribute("disabled", "");
     action.setAttribute("aria-disabled", "true");
+  }
+
+  if (actionConfig.loading) {
+    action.dataset.busy = "true";
+    action.setAttribute("loading", "");
+    action.setAttribute("aria-busy", "true");
   }
 
   action.addEventListener("click", async (event) => {
