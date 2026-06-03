@@ -1,4 +1,5 @@
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer.js";
+import { resolveLayerCapabilities, resolveLayerKind } from "../config/layerDefinitions.js";
 import { createLayerIndexAsync } from "../core/layerIndex.js";
 import { createPopup } from "../popups/createPopup.js";
 import { geoJsonToGraphics } from "../transformers/geoJsonToGraphics.js";
@@ -14,7 +15,15 @@ export async function createGraphicsLayer(map, layerConfig, { onProgress } = {})
     data,
     displayScale,
     graphicsChunkSize = DEFAULT_GRAPHICS_CHUNK_SIZE,
+    layerKind,
+    capabilities,
   } = layerConfig;
+
+  const appLayerKind = layerKind ?? resolveLayerKind(id);
+  const appLayerCapabilities = resolveLayerCapabilities({
+    id,
+    capabilities,
+  });
 
   const popupTemplate = createPopup();
 
@@ -23,6 +32,7 @@ export async function createGraphicsLayer(map, layerConfig, { onProgress } = {})
   const graphics = await createGraphicsFromData(data, {
     dataFormat,
     layerId: id,
+    layerKind: appLayerKind,
     displayScale,
     chunkSize: graphicsChunkSize,
     onProgress: (progress) => {
@@ -45,6 +55,8 @@ export async function createGraphicsLayer(map, layerConfig, { onProgress } = {})
   applyAppLayerMetadata(layer, {
     customId: id,
     appLayerId: id,
+    appLayerKind,
+    appLayerCapabilities,
     index: layerIndex,
   });
 
@@ -64,7 +76,7 @@ export async function createGraphicsLayer(map, layerConfig, { onProgress } = {})
 
 async function createGraphicsFromData(
   data,
-  { dataFormat, layerId, displayScale, chunkSize, onProgress }
+  { dataFormat, layerId, layerKind, displayScale, chunkSize, onProgress }
 ) {
   const source = createFeatureChunkSource(data, dataFormat);
   const graphics = [];
@@ -83,6 +95,7 @@ async function createGraphicsFromData(
       ...createGraphicsFromChunkData(chunkData, {
         dataFormat,
         layerId,
+        layerKind,
         displayScale,
       })
     );
@@ -97,17 +110,19 @@ async function createGraphicsFromData(
   return graphics;
 }
 
-function createGraphicsFromChunkData(data, { dataFormat, layerId, displayScale }) {
+function createGraphicsFromChunkData(data, { dataFormat, layerId, layerKind, displayScale }) {
   switch (normalizeDataFormat(dataFormat)) {
     case "esri-json":
       return esriJsonToGraphics(data, {
         layerId,
+        layerKind,
         displayScale,
       });
 
     case "geojson":
       return geoJsonToGraphics(data, {
         layerId,
+        layerKind,
         displayScale,
       });
 
@@ -170,15 +185,20 @@ async function addGraphicsInChunks(layer, graphics, { chunkSize, onProgress }) {
     const chunk = graphics.slice(start, start + chunkSize);
 
     layer.addMany(chunk);
-
     onProgress?.(Math.min(1, (start + chunk.length) / graphics.length));
+
     await yieldToBrowser();
   }
 }
 
-function applyAppLayerMetadata(layer, { customId, appLayerId, index }) {
+function applyAppLayerMetadata(
+  layer,
+  { customId, appLayerId, appLayerKind, appLayerCapabilities, index }
+) {
   layer.customId = customId;
   layer.appLayerId = appLayerId;
+  layer.appLayerKind = appLayerKind;
+  layer.appLayerCapabilities = appLayerCapabilities;
   layer.layerType = "graphics";
   layer._index = index;
 }
