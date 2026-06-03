@@ -117,6 +117,7 @@ export function createPopupActionGroups({ attributes, frozen, refreshAndRender }
       createSendAction({
         attributes,
         availability,
+        refreshAndRender,
       }),
     ],
     [
@@ -151,16 +152,14 @@ function createFreezeAction({ attributes, frozen, availability, refreshAndRender
       const nextFrozenState = !frozen;
       const result = await triggerFreeze(attributes?.datasetName, nextFrozenState, anchorElement);
 
-      if (!result?.success) {
-        return;
+      if (shouldRefreshAfterProductAction(result)) {
+        await refreshAndRender?.();
       }
-
-      await refreshAndRender?.();
     },
   };
 }
 
-function createSendAction({ attributes, availability }) {
+function createSendAction({ attributes, availability, refreshAndRender }) {
   return {
     id: "send-immediately",
     label: "Send to IC-ENC",
@@ -169,7 +168,11 @@ function createSendAction({ attributes, availability }) {
     disabledReason: availability.sendImmediately.disabledReason,
     className: "popup-action-bar__action--send",
     onClick: async ({ anchorElement }) => {
-      await sendImmediately(attributes?.datasetName, anchorElement);
+      const result = await sendImmediately(attributes?.datasetName, anchorElement);
+
+      if (shouldRefreshAfterProductAction(result)) {
+        await refreshAndRender?.();
+      }
     },
   };
 }
@@ -242,7 +245,7 @@ function createExportLeafAction({ group, exportAction, attributes, frozen, refre
         confirm: exportAction.createConfirm?.(datasetName),
       });
 
-      if (result?.success) {
+      if (shouldRefreshAfterProductAction(result)) {
         await refreshAndRender?.();
       }
     },
@@ -307,4 +310,8 @@ function getDatasetName(attributes) {
     attributes?.Name ??
     null
   );
+}
+
+function shouldRefreshAfterProductAction(result) {
+  return Boolean(result && result.skipped !== true);
 }
