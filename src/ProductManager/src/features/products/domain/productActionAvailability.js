@@ -1,5 +1,7 @@
 import { isStatusFrozen } from "../../map/state/featureState.js";
 
+const EXPORT_RUNNING_REASON = "Wait until the current export finishes.";
+
 export function createProductActionAvailability({
   attributes,
   frozen,
@@ -13,18 +15,27 @@ export function createProductActionAvailability({
     datasetName,
     hasDatasetName,
     frozen: productIsFrozen,
+    exportHasRunningAction,
 
     freeze: createFreezeAvailability({
       hasDatasetName,
+      exportHasRunningAction,
     }),
 
     unfreeze: createUnfreezeAvailability({
       hasDatasetName,
+      exportHasRunningAction,
     }),
 
     sendImmediately: createSendAvailability({
       hasDatasetName,
       frozen: productIsFrozen,
+      exportHasRunningAction,
+    }),
+
+    rollback: createRollbackAvailability({
+      hasDatasetName,
+      exportHasRunningAction,
     }),
 
     exportRoot: createExportRootAvailability({
@@ -70,29 +81,53 @@ export function createProductExportAvailability({
   return available();
 }
 
-function createFreezeAvailability({ hasDatasetName }) {
+function createFreezeAvailability({ hasDatasetName, exportHasRunningAction }) {
   if (!hasDatasetName) {
     return unavailable("The selected feature does not have a datasetName.");
+  }
+
+  if (exportHasRunningAction) {
+    return unavailable(EXPORT_RUNNING_REASON);
   }
 
   return available();
 }
 
-function createUnfreezeAvailability({ hasDatasetName }) {
+function createUnfreezeAvailability({ hasDatasetName, exportHasRunningAction }) {
   if (!hasDatasetName) {
     return unavailable("The selected feature does not have a datasetName.");
+  }
+
+  if (exportHasRunningAction) {
+    return unavailable(EXPORT_RUNNING_REASON);
   }
 
   return available();
 }
 
-function createSendAvailability({ hasDatasetName, frozen }) {
+function createSendAvailability({ hasDatasetName, frozen, exportHasRunningAction }) {
   if (!hasDatasetName) {
     return unavailable("The selected feature does not have a datasetName.");
+  }
+
+  if (exportHasRunningAction) {
+    return unavailable(EXPORT_RUNNING_REASON);
   }
 
   if (frozen) {
     return unavailable("Unfreeze the product before sending.");
+  }
+
+  return available();
+}
+
+function createRollbackAvailability({ hasDatasetName, exportHasRunningAction }) {
+  if (!hasDatasetName) {
+    return unavailable("The selected feature does not have a datasetName.");
+  }
+
+  if (exportHasRunningAction) {
+    return unavailable(EXPORT_RUNNING_REASON);
   }
 
   return available();
@@ -103,6 +138,8 @@ function createExportRootAvailability({ hasDatasetName, exportHasRunningAction }
     return unavailable("The selected feature does not have a datasetName.");
   }
 
+  // Keep the root export action openable while an export runs. The leaf actions
+  // explain which export is running and which actions are blocked.
   return available({
     label: exportHasRunningAction ? "Exporting..." : "Export...",
   });

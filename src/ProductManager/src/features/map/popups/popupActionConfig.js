@@ -128,6 +128,7 @@ export function createPopupActionGroups({ attributes, frozen, refreshAndRender }
       }),
       createRollbackAction({
         attributes,
+        availability,
       }),
       createToolsAction({
         attributes,
@@ -248,11 +249,13 @@ function createExportLeafAction({ group, exportAction, attributes, frozen, refre
   };
 }
 
-function createRollbackAction({ attributes }) {
+function createRollbackAction({ attributes, availability }) {
   return {
     id: "rollback",
     label: "Rollback",
     icon: "undo",
+    disabled: availability.rollback.disabled,
+    disabledReason: availability.rollback.disabledReason,
     className: "popup-action-bar__action--rollback",
     onClick: () => {
       noticeInfo("Rollback is not available yet", attributes?.datasetName);
