@@ -1,3 +1,5 @@
+import { getApiResultMessage } from "./apiResult.js";
+
 const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL || "/");
 
 function normalizeBaseUrl(value) {
@@ -89,8 +91,10 @@ export async function apiGet(path, defaultMessage = "Request failed") {
       throw new Error(result.errorMessage || defaultMessage);
     }
 
-    if (typeof result.data === "string" && result.data.trim()) {
-      throw new Error(`${defaultMessage}: ${result.data}`);
+    const resultMessage = getApiResultMessage(result);
+
+    if (resultMessage) {
+      throw new Error(`${defaultMessage}: ${resultMessage}`);
     }
 
     throw new Error(
