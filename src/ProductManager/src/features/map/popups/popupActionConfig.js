@@ -129,7 +129,6 @@ export function createPopupActionGroups({ attributes, frozen, refreshAndRender }
       }),
       createRollbackAction({
         attributes,
-        availability,
       }),
       createToolsAction({
         attributes,
