@@ -86,3 +86,13 @@ When an export starts or finishes, the popup closes any open dropdown and re-ren
 Analyze product actions should remain in the product popup, not in the Analyze sidebar.
 
 The Analyze sidebar is for analysis details, reports, XML, and history placeholders. The popup action bar should remain the consistent place for product mutations.
+
+## Lifecycle and backend operation state
+
+Popup export state is currently frontend-only and scoped to the current browser tab.
+It prevents conflicting actions in the active UI, but it does not protect against
+other browser windows or other users.
+
+Open popup content subscribes to export-state changes and must unsubscribe when
+the popup DOM is disconnected. Backend operation state or async export jobs should
+replace this local state as the source of truth when those endpoints are available.

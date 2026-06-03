@@ -252,13 +252,13 @@ function createExportLeafAction({ group, exportAction, attributes, frozen, refre
   };
 }
 
-function createRollbackAction({ attributes, availability }) {
+function createRollbackAction({ attributes }) {
   return {
     id: "rollback",
     label: "Rollback",
     icon: "undo",
-    disabled: availability.rollback.disabled,
-    disabledReason: availability.rollback.disabledReason,
+    disabled: true,
+    disabledReason: "Feature is not available yet.",
     className: "popup-action-bar__action--rollback",
     onClick: () => {
       noticeInfo("Rollback is not available yet", attributes?.datasetName);

@@ -1,7 +1,7 @@
 import { apiGet } from "../../../shared/api/apiClient.js";
 
 const ANALYZE_PRODUCT_ENDPOINT = "electronicproducts";
-const USE_MOCK_ANALYZE_API = false;
+const USE_MOCK_ANALYZE_API = import.meta.env.DEV && false;
 
 export async function fetchAnalyzeProducts(datasetNames) {
   const uniqueDatasetNames = [...new Set(datasetNames)];

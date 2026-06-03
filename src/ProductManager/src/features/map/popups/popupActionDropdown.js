@@ -53,6 +53,10 @@ function openPopupActionDropdown({ anchorElement, items }) {
   };
 
   requestAnimationFrame(() => {
+    if (!activeDropdown || activeDropdown.element !== dropdown) {
+      return;
+    }
+
     document.addEventListener("click", handleOutsideDropdownClick);
     document.addEventListener("pointermove", handleDropdownPointerMove);
     window.addEventListener("resize", closePopupActionDropdown);

@@ -1,4 +1,4 @@
-import { addNotice } from "../state/noticeStore";
+import { addNotice } from "../state/noticeStore.js";
 
 function createNotice(type, title, message = null, options = {}) {
   const notice = {
