@@ -1,5 +1,6 @@
 import { exportNewEdition, exportNewUpdate } from "../../data/api/exportApi.js";
 import { noticeInfo } from "../../notices/services/noticeService.js";
+import { createProductActionAvailability } from "../../products/domain/productActionAvailability.js";
 import {
   openAnalyzePage,
   openProductHistory,
@@ -10,22 +11,29 @@ import {
 } from "./popupProductActions.js";
 
 export function createPopupActionGroups({ attributes, frozen, refreshAndRender } = {}) {
+  const availability = createProductActionAvailability({
+    attributes,
+    frozen,
+    exportIsRunning: isAnyExportActionRunning(attributes?.datasetName),
+  });
+
   return [
     [
       createFreezeAction({
         attributes,
         frozen,
+        availability,
         refreshAndRender,
       }),
       createSendAction({
         attributes,
-        frozen,
+        availability,
       }),
     ],
     [
       createExportAction({
         attributes,
-        frozen,
+        availability,
         refreshAndRender,
       }),
       createRollbackAction({
@@ -38,11 +46,15 @@ export function createPopupActionGroups({ attributes, frozen, refreshAndRender }
   ];
 }
 
-function createFreezeAction({ attributes, frozen, refreshAndRender }) {
+function createFreezeAction({ attributes, frozen, availability, refreshAndRender }) {
+  const actionAvailability = frozen ? availability.unfreeze : availability.freeze;
+
   return {
     id: frozen ? "unfreeze-feature" : "freeze-feature",
     label: frozen ? "Unfreeze" : "Freeze",
     icon: frozen ? "brightness" : "snow",
+    disabled: actionAvailability.disabled,
+    disabledReason: actionAvailability.disabledReason,
     className: "popup-action-bar__action--freeze",
     onClick: async ({ anchorElement }) => {
       const nextFrozenState = !frozen;
@@ -57,13 +69,13 @@ function createFreezeAction({ attributes, frozen, refreshAndRender }) {
   };
 }
 
-function createSendAction({ attributes, frozen }) {
+function createSendAction({ attributes, availability }) {
   return {
     id: "send-immediately",
     label: "Send to IC-ENC",
     icon: "send",
-    disabled: frozen,
-    disabledReason: "Unfreeze the product before sending.",
+    disabled: availability.sendImmediately.disabled,
+    disabledReason: availability.sendImmediately.disabledReason,
     className: "popup-action-bar__action--send",
     onClick: async ({ anchorElement }) => {
       await sendImmediately(attributes?.datasetName, anchorElement);
@@ -71,17 +83,14 @@ function createSendAction({ attributes, frozen }) {
   };
 }
 
-function createExportAction({ attributes, frozen, refreshAndRender }) {
-  const datasetName = attributes?.datasetName;
-  const exportIsRunning = isAnyExportActionRunning(datasetName);
-
+function createExportAction({ attributes, availability, refreshAndRender }) {
   return {
     id: "export",
-    label: exportIsRunning ? "Exporting..." : "Export...",
+    label: availability.export.loading ? "Exporting..." : "Export...",
     icon: "plus-square",
-    disabled: exportIsRunning,
-    disabledReason: exportIsRunning ? `An export is already running for ${datasetName}.` : null,
-    loading: exportIsRunning,
+    disabled: availability.export.disabled,
+    disabledReason: availability.export.disabledReason,
+    loading: availability.export.loading,
     className: "popup-action-bar__action--dropdown",
     items: [
       {
@@ -94,8 +103,7 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
             label: "Edition",
             icon: "notepad-add",
             attributes,
-            frozen,
-            implemented: true,
+            availability: availability.exports.allEdition,
             scope: "All",
             exportType: "Edition",
             request: exportNewEdition,
@@ -113,8 +121,7 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
             label: "Update",
             icon: "notepad-edit",
             attributes,
-            frozen,
-            implemented: true,
+            availability: availability.exports.allUpdate,
             scope: "All",
             exportType: "Update",
             request: exportNewUpdate,
@@ -139,8 +146,7 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
             label: "Edition",
             icon: "notepad-add",
             attributes,
-            frozen,
-            implemented: false,
+            availability: availability.exports.s57Edition,
             scope: "S57",
             exportType: "Edition",
           }),
@@ -149,8 +155,7 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
             label: "Update",
             icon: "notepad-edit",
             attributes,
-            frozen,
-            implemented: false,
+            availability: availability.exports.s57Update,
             scope: "S57",
             exportType: "Update",
           }),
@@ -166,8 +171,7 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
             label: "Edition",
             icon: "notepad-add",
             attributes,
-            frozen,
-            implemented: false,
+            availability: availability.exports.s100Edition,
             scope: "S100",
             exportType: "Edition",
           }),
@@ -176,8 +180,7 @@ function createExportAction({ attributes, frozen, refreshAndRender }) {
             label: "Update",
             icon: "notepad-edit",
             attributes,
-            frozen,
-            implemented: false,
+            availability: availability.exports.s100Update,
             scope: "S100",
             exportType: "Update",
           }),
@@ -192,8 +195,7 @@ function createExportLeafAction({
   label,
   icon,
   attributes,
-  frozen,
-  implemented,
+  availability,
   scope,
   exportType,
   request,
@@ -204,11 +206,8 @@ function createExportLeafAction({
     id,
     label,
     icon,
-    disabled: frozen || !implemented,
-    disabledReason: getExportDisabledReason({
-      frozen,
-      implemented,
-    }),
+    disabled: availability.disabled,
+    disabledReason: availability.disabledReason,
     onClick: async ({ anchorElement }) => {
       const result = await triggerExport({
         actionId: id,
@@ -225,18 +224,6 @@ function createExportLeafAction({
       }
     },
   };
-}
-
-function getExportDisabledReason({ frozen, implemented }) {
-  if (frozen) {
-    return "Unfreeze the product before exporting.";
-  }
-
-  if (!implemented) {
-    return "Feature is not available yet.";
-  }
-
-  return null;
 }
 
 function createRollbackAction({ attributes }) {
