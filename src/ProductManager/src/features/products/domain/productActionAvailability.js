@@ -1,9 +1,9 @@
-import { isStatusFrozen } from "../../map/state/featureState";
+import { isStatusFrozen } from "../../map/state/featureState.js";
 
 export function createProductActionAvailability({
   attributes,
   frozen,
-  exportIsRunning = false,
+  exportHasRunningAction = false,
 } = {}) {
   const datasetName = getDatasetName(attributes);
   const hasDatasetName = Boolean(datasetName);
@@ -27,51 +27,47 @@ export function createProductActionAvailability({
       frozen: productIsFrozen,
     }),
 
-    export: createExportRootAvailability({
+    exportRoot: createExportRootAvailability({
       hasDatasetName,
-      datasetName,
-      exportIsRunning,
+      exportHasRunningAction,
     }),
-
-    exports: {
-      allEdition: createExportLeafAvailability({
-        hasDatasetName,
-        frozen: productIsFrozen,
-        implemented: true,
-        exportIsRunning,
-      }),
-      allUpdate: createExportLeafAvailability({
-        hasDatasetName,
-        frozen: productIsFrozen,
-        implemented: true,
-        exportIsRunning,
-      }),
-      s57Edition: createExportLeafAvailability({
-        hasDatasetName,
-        frozen: productIsFrozen,
-        implemented: false,
-        exportIsRunning,
-      }),
-      s57Update: createExportLeafAvailability({
-        hasDatasetName,
-        frozen: productIsFrozen,
-        implemented: false,
-        exportIsRunning,
-      }),
-      s100Edition: createExportLeafAvailability({
-        hasDatasetName,
-        frozen: productIsFrozen,
-        implemented: false,
-        exportIsRunning,
-      }),
-      s100Update: createExportLeafAvailability({
-        hasDatasetName,
-        frozen: productIsFrozen,
-        implemented: false,
-        exportIsRunning,
-      }),
-    },
   };
+}
+
+export function createProductExportAvailability({
+  attributes,
+  frozen,
+  implemented,
+  exportState,
+} = {}) {
+  const datasetName = getDatasetName(attributes);
+  const hasDatasetName = Boolean(datasetName);
+  const productIsFrozen = frozen ?? isStatusFrozen(attributes?.status);
+
+  if (!hasDatasetName) {
+    return unavailable("The selected feature does not have a datasetName.");
+  }
+
+  if (exportState?.running) {
+    return unavailable(exportState.disabledReason, {
+      loading: true,
+      label: "Exporting...",
+    });
+  }
+
+  if (exportState?.blocked) {
+    return unavailable(exportState.disabledReason);
+  }
+
+  if (productIsFrozen) {
+    return unavailable("Unfreeze the product before exporting.");
+  }
+
+  if (!implemented) {
+    return unavailable("Feature is not available yet.");
+  }
+
+  return available();
 }
 
 function createFreezeAvailability({ hasDatasetName }) {
@@ -102,38 +98,14 @@ function createSendAvailability({ hasDatasetName, frozen }) {
   return available();
 }
 
-function createExportRootAvailability({ hasDatasetName, datasetName, exportIsRunning }) {
+function createExportRootAvailability({ hasDatasetName, exportHasRunningAction }) {
   if (!hasDatasetName) {
     return unavailable("The selected feature does not have a datasetName.");
   }
 
-  if (exportIsRunning) {
-    return unavailable(`An export is already running for ${datasetName}.`, {
-      loading: true,
-    });
-  }
-
-  return available();
-}
-
-function createExportLeafAvailability({ hasDatasetName, frozen, implemented, exportIsRunning }) {
-  if (!hasDatasetName) {
-    return unavailable("The selected feature does not have a datasetName.");
-  }
-
-  if (exportIsRunning) {
-    return unavailable("An export is already running for this product.");
-  }
-
-  if (frozen) {
-    return unavailable("Unfreeze the product before exporting.");
-  }
-
-  if (!implemented) {
-    return unavailable("Feature is not available yet.");
-  }
-
-  return available();
+  return available({
+    label: exportHasRunningAction ? "Exporting..." : "Export...",
+  });
 }
 
 function available(extra = {}) {
@@ -141,6 +113,7 @@ function available(extra = {}) {
     disabled: false,
     disabledReason: null,
     loading: false,
+    label: null,
     ...extra,
   };
 }
@@ -150,6 +123,7 @@ function unavailable(disabledReason, extra = {}) {
     disabled: true,
     disabledReason,
     loading: false,
+    label: null,
     ...extra,
   };
 }

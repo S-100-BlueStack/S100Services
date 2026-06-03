@@ -3,6 +3,8 @@ import { getStatusName } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { applyGraphicAttributes } from "../state/featureState.js";
 import { createPopupActionBar } from "./popupActionBar.js";
+import { closePopupActionDropdown } from "./popupActionDropdown.js";
+import { onPopupExportStateChanged } from "./popupExportState.js";
 
 export function createPopup() {
   return {
@@ -54,6 +56,20 @@ export function createPopup() {
 
         return true;
       }
+
+      const unsubscribeFromExportState = onPopupExportStateChanged(({ datasetName }) => {
+        const currentDatasetName =
+          currentAttributes.datasetName ?? graphic?.attributes?.datasetName;
+
+        if (!isSameDatasetName(datasetName, currentDatasetName)) {
+          return;
+        }
+
+        closePopupActionDropdown();
+        render();
+      });
+
+      cleanupWhenDisconnected(container, unsubscribeFromExportState);
 
       render();
 
@@ -136,4 +152,55 @@ function createStatusRow(status) {
   row.appendChild(value);
 
   return row;
+}
+
+function cleanupWhenDisconnected(element, cleanup) {
+  let hasBeenConnected = element.isConnected;
+  let cleanupHasRun = false;
+
+  const runCleanup = () => {
+    if (cleanupHasRun) {
+      return;
+    }
+
+    cleanupHasRun = true;
+    cleanup?.();
+  };
+
+  const observer = new MutationObserver(() => {
+    if (element.isConnected) {
+      hasBeenConnected = true;
+      return;
+    }
+
+    // ArcGIS may create popup content before attaching it to the DOM. Only clean
+    // up after the element has actually been connected at least once.
+    if (!hasBeenConnected) {
+      return;
+    }
+
+    runCleanup();
+    observer.disconnect();
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  requestAnimationFrame(() => {
+    if (element.isConnected) {
+      hasBeenConnected = true;
+    }
+  });
+}
+
+function isSameDatasetName(left, right) {
+  return normalizeDatasetName(left) === normalizeDatasetName(right);
+}
+
+function normalizeDatasetName(value) {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase();
 }

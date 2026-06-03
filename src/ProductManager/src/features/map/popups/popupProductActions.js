@@ -8,11 +8,10 @@ import {
 import { noticeError } from "../../notices/services/noticeService.js";
 import { openProductHistoryPanel as dispatchProductHistoryOpen } from "../../timeline/events/productHistoryEvents.js";
 import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
-import { setPopupActionLoading } from "./popupActionBusyState.js";
+import { beginPopupExportAction, endPopupExportAction } from "./popupExportState.js";
 
 const activeFreezeActionIds = new Set();
 const activeSendActionIds = new Set();
-const activeExportActionIds = new Set();
 
 export function openAnalyzePage(datasetName) {
   if (!datasetName) {
@@ -181,22 +180,7 @@ export async function triggerExport({
   }
 
   const exportLabel = `${scope} ${exportType}`;
-  const actionKey = createExportActionKey(datasetName, scope, exportType);
-
-  if (activeExportActionIds.has(actionKey)) {
-    noticeError(
-      "Export is already running",
-      `${exportLabel} is already running for ${datasetName}.`
-    );
-
-    return {
-      success: false,
-      skipped: true,
-      reason: "already-running",
-    };
-  }
-
-  let stopExportLoading = null;
+  let runningExport = null;
 
   try {
     const confirmed = await confirmAction({
@@ -213,12 +197,24 @@ export async function triggerExport({
       return null;
     }
 
-    activeExportActionIds.add(actionKey);
-
-    stopExportLoading = setPopupActionLoading(anchorElement, {
-      text: "Exporting...",
-      title: `Exporting ${exportLabel} for ${datasetName}`,
+    runningExport = beginPopupExportAction({
+      datasetName,
+      scope,
+      exportType,
     });
+
+    if (!runningExport.started) {
+      noticeError(
+        "Export is already running",
+        runningExport.reason ?? `${exportLabel} is already running for ${datasetName}.`
+      );
+
+      return {
+        success: false,
+        skipped: true,
+        reason: "already-running",
+      };
+    }
 
     const result = await request(datasetName);
 
@@ -244,29 +240,8 @@ export async function triggerExport({
       error,
     };
   } finally {
-    stopExportLoading?.();
-    activeExportActionIds.delete(actionKey);
+    if (runningExport?.started) {
+      endPopupExportAction(runningExport.key);
+    }
   }
-}
-
-function createExportActionKey(datasetName, scope, exportType) {
-  return `${datasetName}:${scope}:${exportType}`.toLowerCase();
-}
-
-export function isExportActionRunning(datasetName, scope, exportType) {
-  if (!datasetName || !scope || !exportType) {
-    return false;
-  }
-
-  return activeExportActionIds.has(createExportActionKey(datasetName, scope, exportType));
-}
-
-export function isAnyExportActionRunning(datasetName) {
-  if (!datasetName) {
-    return false;
-  }
-
-  const prefix = `${datasetName}:`.toLowerCase();
-
-  return [...activeExportActionIds].some((key) => key.startsWith(prefix));
 }

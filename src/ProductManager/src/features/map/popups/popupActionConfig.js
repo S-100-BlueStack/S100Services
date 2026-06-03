@@ -1,20 +1,109 @@
 import { exportNewEdition, exportNewUpdate } from "../../data/api/exportApi.js";
 import { noticeInfo } from "../../notices/services/noticeService.js";
-import { createProductActionAvailability } from "../../products/domain/productActionAvailability.js";
+import {
+  createProductActionAvailability,
+  createProductExportAvailability,
+} from "../../products/domain/productActionAvailability.js";
+import { getPopupExportActionState, isAnyPopupExportActionRunning } from "./popupExportState.js";
 import {
   openAnalyzePage,
   openProductHistory,
   sendImmediately,
   triggerExport,
   triggerFreeze,
-  isAnyExportActionRunning,
 } from "./popupProductActions.js";
 
+const EXPORT_GROUPS = [
+  {
+    id: "export-all",
+    label: "All",
+    icon: "plus-square",
+    scope: "All",
+    actions: [
+      {
+        id: "export-all-edition",
+        label: "Edition",
+        icon: "notepad-add",
+        exportType: "Edition",
+        implemented: true,
+        request: exportNewEdition,
+        createConfirm: (datasetName) => ({
+          title: `Export new edition for ${datasetName}`,
+          message:
+            `Are you sure you want to export a new Edition in ALL formats of ${datasetName}? ` +
+            "The export will include ALL formats of the product - Currently S57 and S100",
+          confirmText: "Export edition",
+        }),
+      },
+      {
+        id: "export-all-update",
+        label: "Update",
+        icon: "notepad-edit",
+        exportType: "Update",
+        implemented: true,
+        request: exportNewUpdate,
+        createConfirm: (datasetName) => ({
+          title: `Export new update for ${datasetName}`,
+          message:
+            `Are you sure you want to export a new Update in ALL formats of ${datasetName}? ` +
+            "The export will include ALL formats of the product - Currently S57 and S100",
+          confirmText: "Export update",
+        }),
+      },
+    ],
+  },
+  {
+    id: "export-s57",
+    label: "S57",
+    icon: "plus-square",
+    scope: "S57",
+    actions: [
+      {
+        id: "s57-export-edition",
+        label: "Edition",
+        icon: "notepad-add",
+        exportType: "Edition",
+        implemented: false,
+      },
+      {
+        id: "s57-export-update",
+        label: "Update",
+        icon: "notepad-edit",
+        exportType: "Update",
+        implemented: false,
+      },
+    ],
+  },
+  {
+    id: "export-s100",
+    label: "S100",
+    icon: "plus-square",
+    scope: "S100",
+    actions: [
+      {
+        id: "s100-export-edition",
+        label: "Edition",
+        icon: "notepad-add",
+        exportType: "Edition",
+        implemented: false,
+      },
+      {
+        id: "s100-export-update",
+        label: "Update",
+        icon: "notepad-edit",
+        exportType: "Update",
+        implemented: false,
+      },
+    ],
+  },
+];
+
 export function createPopupActionGroups({ attributes, frozen, refreshAndRender } = {}) {
+  const datasetName = getDatasetName(attributes);
   const availability = createProductActionAvailability({
     attributes,
     frozen,
-    exportIsRunning: isAnyExportActionRunning(attributes?.datasetName),
+    exportHasRunningAction: isAnyPopupExportActionRunning(datasetName),
   });
 
   return [
@@ -33,6 +122,7 @@ export function createPopupActionGroups({ attributes, frozen, refreshAndRender }
     [
       createExportAction({
         attributes,
+        frozen,
         availability,
         refreshAndRender,
       }),
@@ -83,140 +173,72 @@ function createSendAction({ attributes, availability }) {
   };
 }
 
-function createExportAction({ attributes, availability, refreshAndRender }) {
+function createExportAction({ attributes, frozen, availability, refreshAndRender }) {
   return {
     id: "export",
-    label: availability.export.loading ? "Exporting..." : "Export...",
+    label: availability.exportRoot.label ?? "Export...",
     icon: "plus-square",
-    disabled: availability.export.disabled,
-    disabledReason: availability.export.disabledReason,
-    loading: availability.export.loading,
+    disabled: availability.exportRoot.disabled,
+    disabledReason: availability.exportRoot.disabledReason,
     className: "popup-action-bar__action--dropdown",
-    items: [
-      {
-        id: "export-all",
-        label: "All",
-        icon: "plus-square",
-        items: [
-          createExportLeafAction({
-            id: "export-all-edition",
-            label: "Edition",
-            icon: "notepad-add",
-            attributes,
-            availability: availability.exports.allEdition,
-            scope: "All",
-            exportType: "Edition",
-            request: exportNewEdition,
-            refreshAndRender,
-            confirm: {
-              title: `Export new edition for ${attributes?.datasetName}`,
-              message:
-                `Are you sure you want to export a new Edition in ALL formats of ${attributes?.datasetName}? ` +
-                "The export will include ALL formats of the product - Currently S57 and S100",
-              confirmText: "Export edition",
-            },
-          }),
-          createExportLeafAction({
-            id: "export-all-update",
-            label: "Update",
-            icon: "notepad-edit",
-            attributes,
-            availability: availability.exports.allUpdate,
-            scope: "All",
-            exportType: "Update",
-            request: exportNewUpdate,
-            refreshAndRender,
-            confirm: {
-              title: `Export new update for ${attributes?.datasetName}`,
-              message:
-                `Are you sure you want to export a new Update in ALL formats of ${attributes?.datasetName}? ` +
-                "The export will include ALL formats of the product - Currently S57 and S100",
-              confirmText: "Export update",
-            },
-          }),
-        ],
-      },
-      {
-        id: "export-s57",
-        label: "S57",
-        icon: "plus-square",
-        items: [
-          createExportLeafAction({
-            id: "s57-export-edition",
-            label: "Edition",
-            icon: "notepad-add",
-            attributes,
-            availability: availability.exports.s57Edition,
-            scope: "S57",
-            exportType: "Edition",
-          }),
-          createExportLeafAction({
-            id: "s57-export-update",
-            label: "Update",
-            icon: "notepad-edit",
-            attributes,
-            availability: availability.exports.s57Update,
-            scope: "S57",
-            exportType: "Update",
-          }),
-        ],
-      },
-      {
-        id: "export-s100",
-        label: "S100",
-        icon: "plus-square",
-        items: [
-          createExportLeafAction({
-            id: "s100-export-edition",
-            label: "Edition",
-            icon: "notepad-add",
-            attributes,
-            availability: availability.exports.s100Edition,
-            scope: "S100",
-            exportType: "Edition",
-          }),
-          createExportLeafAction({
-            id: "s100-export-update",
-            label: "Update",
-            icon: "notepad-edit",
-            attributes,
-            availability: availability.exports.s100Update,
-            scope: "S100",
-            exportType: "Update",
-          }),
-        ],
-      },
-    ],
+    items: EXPORT_GROUPS.map((group) =>
+      createExportGroupAction({
+        group,
+        attributes,
+        frozen,
+        refreshAndRender,
+      })
+    ),
   };
 }
 
-function createExportLeafAction({
-  id,
-  label,
-  icon,
-  attributes,
-  availability,
-  scope,
-  exportType,
-  request,
-  refreshAndRender,
-  confirm,
-}) {
+function createExportGroupAction({ group, attributes, frozen, refreshAndRender }) {
   return {
-    id,
-    label,
-    icon,
+    id: group.id,
+    label: group.label,
+    icon: group.icon,
+    items: group.actions.map((exportAction) =>
+      createExportLeafAction({
+        group,
+        exportAction,
+        attributes,
+        frozen,
+        refreshAndRender,
+      })
+    ),
+  };
+}
+
+function createExportLeafAction({ group, exportAction, attributes, frozen, refreshAndRender }) {
+  const datasetName = getDatasetName(attributes);
+  const exportState = getPopupExportActionState({
+    datasetName,
+    scope: group.scope,
+    exportType: exportAction.exportType,
+  });
+
+  const availability = createProductExportAvailability({
+    attributes,
+    frozen,
+    implemented: exportAction.implemented,
+    exportState,
+  });
+
+  return {
+    id: exportAction.id,
+    label: availability.label ?? exportAction.label,
+    icon: exportAction.icon,
+    loading: availability.loading,
     disabled: availability.disabled,
     disabledReason: availability.disabledReason,
     onClick: async ({ anchorElement }) => {
       const result = await triggerExport({
-        actionId: id,
-        datasetName: attributes?.datasetName,
-        scope,
-        exportType,
-        request,
+        datasetName,
+        scope: group.scope,
+        exportType: exportAction.exportType,
+        request: exportAction.request,
         anchorElement,
-        confirm,
+        confirm: exportAction.createConfirm?.(datasetName),
       });
 
       if (result?.success) {
@@ -272,4 +294,14 @@ function createToolsAction({ attributes }) {
 
 function isAnalyzeRoute() {
   return document.body.classList.contains("pm-analyze-route");
+}
+
+function getDatasetName(attributes) {
+  return (
+    attributes?.datasetName ??
+    attributes?.DatasetName ??
+    attributes?.name ??
+    attributes?.Name ??
+    null
+  );
 }
