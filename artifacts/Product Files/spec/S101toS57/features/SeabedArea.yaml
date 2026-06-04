@@ -1,0 +1,21 @@
+feature: SeabedArea
+s65_annex_c: Clause 12.1  # S-65 Annex C Ed 1.0.0
+notes: >
+  All SeabedArea instances → SBDARE.
+  surfaceCharacteristics[*] complex attributes are zipped into comma-separated NATSUR and NATQUA.
+  Where an instance has underlyingLayer populated, "/" is used as the separator before that instance's
+  values in both NATSUR and NATQUA (S-65 Clause 12.1). underlyingLayer itself is not converted.
+  Example: SC(sand/fine) + SC(mud) + SC(rock, underlyingLayer) → NATSUR=4,1/9  NATQUA=1,/
+
+# TODO: review NATSUR/NATQUA conversion against genuine S-101 dataset conversions.
+# The zip logic and "/" separator are implemented per S-65 Clause 12.1 example,
+# but edge cases (multiple NATQUA values per SC instance, empty SC instances, ordering)
+# have not been validated against real data.
+
+extends: FeatureStandard
+params:
+  object: SBDARE
+  feature_attrs:
+    - surface_characteristics: {natsur: NATSUR, natqua: NATQUA}
+    - copy: {from: waterLevelEffect, to: WATLEV}
+  fileref: true

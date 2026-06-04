@@ -1,0 +1,15 @@
+feature: Road
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: ROADWY
+  feature_attrs:
+    - copy: {from: categoryOfRoad, to: CATROD}
+    - copy: {from: condition, to: CONDTN}
+    - apply: natureOfConstruction_to_NATCON_INFORM
+    - apply: status_to_STATUS_INFORM
+  status: true
+  sordat: true
+  fileref: true

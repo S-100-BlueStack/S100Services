@@ -1,0 +1,59 @@
+feature: Dam
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  A Dam with categoryOfDam=1 AND waterLevelEffect=3 is a submerged weir — it maps
+  to OBSTRN with a literal INFORM message instead of DAMCON.
+  All other Dam features map to DAMCON.
+  The OBSTRN case also copies waterLevelEffect to WATLEV and reads SOUACC from
+  the spatial quality attribute (CopyAttributeFromSpatialToFeature).
+
+uses:
+  - radarConspicuoustoCONRAD
+  - visualProminence_to_CONVIS
+  - natureOfConstruction_to_NATCON_INFORM
+  - featureName_to_OBJNAM_NOBJNM
+  - Pad_DATEND
+  - Pad_DATSTA
+  - status_to_STATUS_INFORM
+  - Pad_SORDAT
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - when: {and: [{eq: [categoryOfDam, "1"]}, {eq: [waterLevelEffect, "3"]}]}
+    create:
+      - object: OBSTRN
+        actions:
+          - set: {attr: INFORM, value: "Submerged weir"}
+          - copy: {from: condition, to: CONDTN}
+          - copy: {from: height, to: HEIGHT}
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: status_to_STATUS_INFORM
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: waterLevelEffect, to: WATLEV}
+          # TODO: SOUACC sourced from SpatialQuality spatial attribute — confirm translator handles CopyAttributeFromSpatialToFeature
+          - apply: nauticalInformation_to_INFORM_NINFOM
+
+  - create:
+      - object: DAMCON
+        actions:
+          - copy: {from: categoryOfDam, to: CATDAM}
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: height, to: HEIGHT}
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

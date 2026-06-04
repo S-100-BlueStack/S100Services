@@ -1,0 +1,12 @@
+feature: CurrentNonGravitational
+s65_annex_c: Table 40
+notes: >
+
+extends: FeatureStandard
+params:
+  object: CURENT
+  feature_attrs:
+    - copy: {from: 'speed.speedMaximum',              to: CURVEL}
+    - copy: {from: 'orientation.orientationValue',    to: ORIENT}
+  datend_datsta: true
+  perda: true

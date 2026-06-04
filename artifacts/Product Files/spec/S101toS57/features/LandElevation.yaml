@@ -1,0 +1,11 @@
+feature: LandElevation
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: LNDELV
+  feature_attrs:
+    - apply: visualProminence_to_CONVIS
+    - copy: {from: elevation, to: ELEVAT}
+  fileref: true

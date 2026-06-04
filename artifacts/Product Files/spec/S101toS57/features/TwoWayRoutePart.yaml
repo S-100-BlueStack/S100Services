@@ -1,0 +1,36 @@
+feature: TwoWayRoutePart
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  basedOnFixedMarkstoCATTRK maps the basedOnFixedMarks attribute to CATTRK.
+  maximumPermittedDraught_to_INFORM emits draught as INFORM text.
+  orientationValue is a direct attribute (not orientation.orientationValue).
+
+uses:
+  - basedOnFixedMarkstoCATTRK
+  - maximumPermittedDraught_to_INFORM
+  - status_to_STATUS_INFORM
+  - techniqueOfVerticalMeasurement_to_TECSOU
+  - Pad_DATEND
+  - Pad_DATSTA
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - create:
+      - object: TWRTPT
+        actions:
+          - apply: basedOnFixedMarkstoCATTRK
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: depthRangeMinimumValue, to: DRVAL1}
+          - apply: maximumPermittedDraught_to_INFORM
+          - copy: {from: orientationValue, to: ORIENT}
+          - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+          - copy: {from: 'verticalUncertainty.uncertaintyFixed', to: SOUACC}
+          - apply: status_to_STATUS_INFORM
+          - apply: techniqueOfVerticalMeasurement_to_TECSOU
+          - copy: {from: trafficFlow, to: TRAFIC}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

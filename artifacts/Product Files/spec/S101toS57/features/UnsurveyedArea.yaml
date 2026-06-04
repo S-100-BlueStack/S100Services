@@ -1,0 +1,22 @@
+feature: UnsurveyedArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  UnsurveyedArea features coincident with a FloatingDock, Hulk or Pontoon are not converted —
+  they represent the State of the Environment (SoE) in S-57.
+
+uses:
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - when: {geometry_coincident_with: {or: [FloatingDock, Hulk, Pontoon]}}
+    create:
+      - do_not_map: true
+        message: "UnsurveyedArea coincident with FloatingDock, Hulk or Pontoon not converted — SoE feature in S-57. Review and edit as needed."
+
+  - create:
+      - object: UNSARE
+        actions:
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

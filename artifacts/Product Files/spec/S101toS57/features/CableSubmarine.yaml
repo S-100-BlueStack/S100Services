@@ -1,0 +1,71 @@
+feature: CableSubmarine
+s65_annex_c: Table 29
+notes: >
+  categoryOfCable=9 (junction cable) maps to MORFAC with CATMOR=6 rather than CBLSUB.
+  All other categoryOfCable values are handled by the categoryOfCabletoCATCBL shared rule:
+    1 (Power Line)             → CATCBL 1  (direct copy)
+    3 (Transmission Line)      → CATCBL 3  (direct copy)
+    6 (Mooring Cable)          → CATCBL 6  (direct copy)
+    7 (Ferry)                  → INFORM "Ferry Cable"
+    10 (Telecommunications)    → CATCBL 4
+
+cases:
+  - when: "categoryOfCable == '9'"
+    create:
+      - object: MORFAC
+        actions:
+          - info: "Creating MORFAC from CableSubmarine (categoryOfCable=9, junction cable)"
+          - set:  {attr: CATMOR, value: "6"}
+          - copy: {from: condition, to: CONDTN}
+          - apply: status_to_STATUS_INFORM
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_to_INFORM_NINFOM
+          - apply: fileReference_to_TXTDSC_NTXTDS
+          - from_related:
+              relation: AdditionalInformation/theInformation/ContactDetails
+              copy:
+                - {from: communicationChannel,           to: INFORM, append: true, sep: ";"}
+                - {from: callSign,                       to: INFORM, append: true, sep: ";"}
+                - {from: frequencyShoreStationTransmits, to: INFORM, append: true, sep: ";"}
+                - {from: contactInstructions,            to: INFORM, append: true, sep: ";"}
+          - from_related:
+              relation: AdditionalInformation/theInformation/NauticalInformation
+              copy:
+                - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+                - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+                - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+                - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+                - {from: pictorialRepresentation,        to: PICREP,  append: true, sep: ";"}
+
+  - create:
+      - object: CBLSUB
+        actions:
+          - info: "Creating CBLSUB from CableSubmarine"
+          - copy: {from: buriedDepth, to: BURDEP}
+          - apply: categoryOfCabletoCATCBL
+          - copy: {from: condition, to: CONDTN}
+          - apply: status_to_STATUS_INFORM
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_to_INFORM_NINFOM
+          - apply: fileReference_to_TXTDSC_NTXTDS
+          - from_related:
+              relation: AdditionalInformation/theInformation/ContactDetails
+              copy:
+                - {from: communicationChannel,           to: INFORM, append: true, sep: ";"}
+                - {from: callSign,                       to: INFORM, append: true, sep: ";"}
+                - {from: frequencyShoreStationTransmits, to: INFORM, append: true, sep: ";"}
+                - {from: contactInstructions,            to: INFORM, append: true, sep: ";"}
+          - from_related:
+              relation: AdditionalInformation/theInformation/NauticalInformation
+              copy:
+                - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+                - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+                - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+                - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}

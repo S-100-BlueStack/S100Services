@@ -1,0 +1,10 @@
+feature: ContactDetails
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  ContactDetails has no S-57 equivalent. Its attributes are copied to related
+  S-57 feature objects via from_related rules in each consuming feature file.
+
+cases:
+  - do_not_map: true
+    message: "no S-57 match; attributes copied to related features"

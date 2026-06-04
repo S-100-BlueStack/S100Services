@@ -1,0 +1,97 @@
+feature: VirtualAISAidToNavigation
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Maps to NEWOBJ (new object — virtual AIS AtoN). The AIS type is mapped to CLSNAM via
+  virtualAISType_to_CLSNAM. The MMSI code embedded in featureName is mapped to OBJNAM via
+  featureName_mMSICode_to_OBJNAM.
+
+extends: FeatureStandard
+params:
+  object: NEWOBJ
+  feature_attrs:
+    - lookup:
+        source: virtualAISAidToNavigationType
+        target: CLSNAM
+        cases:
+          1:
+            actions:
+              - set: {attr: CLSNAM, value: "Virtual AtoN, North Cardinal"}
+              - set: {attr: CLSDEF, value: "A Virtual object which indicates navigable water lies northwards"}
+              - set: {attr: SYMINS, value: "SY(BRTHNO01);SY(BCNCAR01);TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)"}
+              - set: {attr: INFORM, value: "Virtual AtoN, North Cardinal; A Virtual object which indicates navigable water lies northwards", append: true, sep: "; "}
+          2:
+            actions:
+              - set: {attr: CLSNAM, value: "Virtual AtoN, East Cardinal"}
+              - set: {attr: CLSDEF, value: "A Virtual object which indicates navigable water lies eastwards"}
+              - set: {attr: SYMINS, value: "SY(BRTHNO01);SY(BCNCAR02);TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)"}
+              - set: {attr: INFORM, value: "Virtual AtoN, East Cardinal; A Virtual object which indicates navigable water lies eastwards", append: true, sep: "; "}
+          3:
+            actions:
+              - set: {attr: CLSNAM, value: "Virtual AtoN, South Cardinal"}
+              - set: {attr: CLSDEF, value: "A Virtual object which indicates navigable water lies southwards"}
+              - set: {attr: SYMINS, value: "SY(BRTHNO01);SY(BCNCAR03);TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)"}
+              - set: {attr: INFORM, value: "Virtual AtoN, South Cardinal; A Virtual object which indicates navigable water lies southwards", append: true, sep: "; "}
+          4:
+            actions:
+              - set: {attr: CLSNAM, value: "Virtual AtoN, West Cardinal"}
+              - set: {attr: CLSDEF, value: "A Virtual object which indicates navigable water lies westwards"}
+              - set: {attr: SYMINS, value: "SY(BRTHNO01);SY(BCNCAR04);TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)"}
+              - set: {attr: INFORM, value: "Virtual AtoN, West Cardinal; A Virtual object which indicates navigable water lies westwards", append: true, sep: "; "}
+          5:
+            actions:
+              - set: {attr: CLSNAM, value: "Virtual AtoN, Port Lateral"}
+              - set: {attr: CLSDEF, value: "A Virtual object marking the port side of a channel"}
+              - set: {attr: SYMINS, value: "SY(BRTHNO01);SY(BOYLAT24);TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)"}
+              - set: {attr: INFORM, value: "Virtual AtoN, Port Lateral; A Virtual object marking the port side of a channel", append: true, sep: "; "}
+          6:
+            actions:
+              - set: {attr: CLSNAM, value: "Virtual AtoN, Starboard Lateral"}
+              - set: {attr: CLSDEF, value: "A Virtual object marking the starboard side of a channel"}
+              - set: {attr: SYMINS, value: "SY(BRTHNO01);SY(BOYLAT13);TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)"}
+              - set: {attr: INFORM, value: "Virtual AtoN, Starboard Lateral; A Virtual object marking the starboard side of a channel", append: true, sep: "; "}
+          9:
+            actions:
+              - set: {attr: CLSNAM, value: "Virtual AtoN, Isolated Danger"}
+              - set: {attr: CLSDEF, value: "A Virtual object marking an isolated danger"}
+              - set: {attr: SYMINS, value: "SY(BRTHNO01);SY(BCNISD21);TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)"}
+              - set: {attr: INFORM, value: "Virtual AtoN, Isolated Danger; A Virtual object marking an isolated danger", append: true, sep: "; "}
+          10:
+            actions:
+              - set: {attr: CLSNAM, value: "Virtual AtoN, Safe Water"}
+              - set: {attr: CLSDEF, value: "A Virtual object marking safe water"}
+              - set: {attr: SYMINS, value: "SY(BRTHNO01);SY(BOYSAW12);TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)"}
+              - set: {attr: INFORM, value: "Virtual AtoN, Safe Water; A Virtual object marking safe water", append: true, sep: "; "}
+          11:
+            actions:
+              - set: {attr: CLSNAM, value: "Virtual AtoN, Special Purpose"}
+              - set: {attr: CLSDEF, value: "A Virtual object used to mark an area or feature referred to in nautical documents"}
+              - set: {attr: SYMINS, value: "SY(BRTHNO01);SY(BOYSPP11);TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)"}
+              - set: {attr: INFORM, value: "Virtual AtoN, Special Purpose; A Virtual object used to mark an area or feature referred to in nautical documents", append: true, sep: "; "}
+          12:
+            actions:
+              - set: {attr: CLSNAM, value: "Virtual AtoN, Wreck Marking"}
+              - set: {attr: CLSDEF, value: "A Virtual object marking a wreck"}
+              - set: {attr: SYMINS, value: "SY(BRTHNO01);SY(BOYSPP11);TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)"}
+              - set: {attr: INFORM, value: "Virtual AtoN, Wreck Marking; A Virtual object marking a wreck", append: true, sep: "; "}
+    # When both featureName and MMSI code are present the MMSI code is appended to the name.
+    - cases:
+        - when:
+            and:
+              - {has_value: 'featureName[0].name'}
+              - {has_value: mMSICode}
+          actions:
+            - copy: {from: 'featureName[0].name', to: OBJNAM}
+            - copy: {from: mMSICode, to: OBJNAM, append: true, sep: "; MMSI "}
+
+        - when: {has_value: mMSICode}
+          actions:
+            - set: {attr: OBJNAM, value: "MMSI"}
+            - copy: {from: mMSICode, to: OBJNAM, append: true, sep: " "}
+
+        - actions:
+            - copy: {from: 'featureName[0].name', to: OBJNAM}
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true

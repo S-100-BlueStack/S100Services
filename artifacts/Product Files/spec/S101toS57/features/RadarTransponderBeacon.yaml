@@ -1,0 +1,28 @@
+feature: RadarTransponderBeacon
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Maps to RTPBCN. Has no beaconShape, colour, topmark, marksNavigationalSystemOf, or
+  natureOfConstruction — quite different from the BeaconStandard family.
+  radarWaveLength[0..2] is iterated by radarWaveLengthtoRADWAL (up to 2 entries: X-band, S-band).
+  sectorLimit gives the arc limits (SECTR1/SECTR2) if the beacon covers a restricted sector.
+  Only NauticalInformation is linked — no ContactDetails.
+
+extends: FeatureStandard
+params:
+  object: RTPBCN
+  feature_attrs:
+    - copy: {from: categoryOfRadarTransponderBeacon,             to: CATRTB}
+  cases:
+    - actions:
+        - copy: {from: 'radarWaveLength.waveLengthValue', to: RADWAL, append: true, sep: ", "}
+        - copy: {from: 'radarWaveLength.radarBand',       to: RADWAL, append: true, sep: "-"}
+    - copy: {from: 'sectorLimit.sectorLimitOne.sectorBearing',   to: SECTR1}
+    - copy: {from: 'sectorLimit.sectorLimitTwo.sectorBearing',   to: SECTR2}
+    - copy: {from: signalGroup,                                  to: SIGGRP, sep: "NONE"}
+    - apply: signalSequencetoSIGSEQ
+    - copy: {from: valueOfMaximumRange,                          to: VALMXR}
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true

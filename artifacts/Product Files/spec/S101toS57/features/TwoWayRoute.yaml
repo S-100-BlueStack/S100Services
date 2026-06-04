@@ -1,0 +1,24 @@
+feature: TwoWayRoute
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Area geometry produces SEAARE + C_AGGR (collection). Non-area geometry produces C_AGGR only.
+  # TODO: collection creation (ConvertToCollectionFeature / SetRelationshipCode) not fully
+  representable in DSL — refer to S-65 Annex C.
+
+uses:
+  - featureName_to_OBJNAM_NOBJNM
+
+cases:
+  - when: {geometry: Area}
+    create:
+      - object: SEAARE
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+      # TODO: C_AGGR collection (ConvertToCollectionFeature) — refer to S-65 Annex C
+
+  - create:
+      # TODO: C_AGGR with SetRelationshipCode=collection — refer to S-65 Annex C
+      - object: C_AGGR
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM

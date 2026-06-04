@@ -1,0 +1,26 @@
+feature: Fairway
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  speedLimit_populated and speedLimit_units are local shared rules that write speed limit
+  values to S-57 (INFORM). maximumPermittedDraught_to_INFORM appends draught to INFORM.
+  restriction_to_RESTRN_INFORM maps restriction → RESTRN with INFORM fallback.
+  verticalUncertainty.uncertaintyFixed (sub-attribute) maps to SOUACC.
+
+extends: FeatureStandard
+params:
+  object: FAIRWY
+  feature_attrs:
+    - apply: Pad_DATEND
+    - apply: Pad_DATSTA
+    - copy: {from: depthRangeMinimumValue, to: DRVAL1}
+    - copy: {from: orientationValue, to: ORIENT}
+    - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+    - apply: restriction_to_RESTRN_INFORM
+    - copy: {from: 'verticalUncertainty.uncertaintyFixed', to: SOUACC}
+    - apply: speedLimit_populated
+    - apply: speedLimit_units
+    - apply: maximumPermittedDraught_to_INFORM
+    - copy: {from: trafficFlow, to: TRAFIC}
+  status: true
+  fileref: true

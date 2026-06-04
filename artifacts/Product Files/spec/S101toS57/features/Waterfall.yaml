@@ -1,0 +1,11 @@
+feature: Waterfall
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: WATFAL
+  feature_attrs:
+    - apply: visualProminence_to_CONVIS
+    - copy: {from: verticalLength, to: VERLEN}
+  fileref: true

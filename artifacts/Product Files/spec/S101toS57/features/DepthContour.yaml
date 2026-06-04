@@ -1,0 +1,14 @@
+feature: DepthContour
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  No featureName in source XML. SCAMIN is present.
+
+cases:
+  - create:
+      - object: DEPCNT
+        actions:
+          - copy: {from: valueOfDepthContour, to: VALDCO}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

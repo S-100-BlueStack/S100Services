@@ -1,0 +1,24 @@
+feature: RecommendedTrack
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  basedOnFixedMarkstoCATTRK is an XML attribute-mapping rule — flagged as TODO.
+  maximumPermittedDraught_to_INFORM appended to INFORM.
+
+extends: FeatureStandard
+params:
+  object: RECTRC
+  feature_attrs:
+    # TODO: basedOnFixedMarkstoCATTRK — refer to S-65 Annex C for clarification
+    - copy: {from: depthRangeMinimumValue, to: DRVAL1}
+    - apply: maximumPermittedDraught_to_INFORM
+    - copy: {from: orientationValue, to: ORIENT}
+    - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+    - copy: {from: 'verticalUncertainty.uncertaintyFixed', to: SOUACC}
+    - apply: status_to_STATUS_INFORM
+    - apply: techniqueOfVerticalMeasurement_to_TECSOU
+    - copy: {from: trafficFlow, to: TRAFIC}
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true

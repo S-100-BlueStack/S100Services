@@ -1,0 +1,76 @@
+feature: FairwaySystem
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Three cases in order of priority:
+  1. FairwaySystem with area geometry → SEAARE + C_AGGR (collection, with geometry).
+  2. FairwaySystem that has component Fairway features (no geometry) → C_AGGR (collection).
+  3. FairwaySystem that has component AtoN/infrastructure features → C_ASSO (association).
+  The C_AGGR and C_ASSO outputs use SetRelationshipCode="collection" internally.
+  CreateCollectionFeatureFromAttribute is used for the area case to also produce C_AGGR.
+
+uses:
+  - featureName_to_OBJNAM_NOBJNM
+
+cases:
+  - when: {geometry: Area}
+    create:
+      - object: SEAARE
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+
+      - object: C_AGGR
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+        # TODO: ConvertToCollectionFeature behaviour — confirm collection geometry handling
+
+  - when: {has_component: Fairway}
+    create:
+      - object: C_AGGR
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+        # TODO: SetRelationshipCode="collection" — no geometry
+
+  - when:
+      has_component_one_of:
+        - Bridge
+        - Building
+        - CardinalBeacon
+        - CardinalBuoy
+        - Conveyor
+        - Crane
+        - Daymark
+        - Dolphin
+        - EmergencyWreckMarkingBuoy
+        - FishingFacility
+        - FloatingDock
+        - FortifiedStructure
+        - Hulk
+        - IsolatedDangerBeacon
+        - IsolatedDangerBuoy
+        - Landmark
+        - LateralBeacon
+        - LateralBuoy
+        - LightFloat
+        - LightVessel
+        - MooringBuoy
+        - OffshorePlatform
+        - Pile
+        - PipelineOverhead
+        - Pontoon
+        - PylonBridgeSupport
+        - SafeWaterBeacon
+        - SafeWaterBuoy
+        - ShorelineConstruction
+        - SiloTank
+        - SpanFixed
+        - SpanOpening
+        - SpecialPurposeGeneralBeacon
+        - SpecialPurposeGeneralBuoy
+        - StructureOverNavigableWater
+        - WindTurbine
+    create:
+      - object: C_ASSO
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+        # TODO: SetRelationshipCode="collection" — confirm correct YAML relationship key

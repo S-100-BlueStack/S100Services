@@ -1,0 +1,115 @@
+feature: PhysicalAISAidToNavigation
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  This feature does not create a new S-57 object. Instead it updates an existing
+  coincident S-57 beacon or buoy object by appending an AIS note to INFORM.
+  The XML uses UpdateObject with Create="False" — no new geometry is created.
+  Each case targets a different S-57 acronym based on which S-101 beacon/buoy
+  shares the same geometry.
+
+  Beacon targets: BCNCAR, BCNISD, BCNLAT, BCNSAW, BCNSPP
+  Buoy targets:   BOYCAR, BOYINB, BOYISD, BOYLAT, BOYSAW, BOYSPP (also used for EmergencyWreckMarkingBuoy)
+
+  The DSL does not currently have an "update existing object" action.
+  All cases are represented below as best-effort — refer to S-65 Annex C for authoritative handling.
+
+cases:
+  # CardinalBeacon
+  - when: {geometry_equals_feature: CardinalBeacon}
+    create:
+      - object: BCNCAR
+        # TODO: UpdateObject (not create) — refer to S-65 Annex C for clarification
+        actions:
+          - set: {attr: INFORM, value: "Automatic Identification System (AIS) aid to navigation", append: true, sep: "; "}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  # IsolatedDangerBeacon
+  - when: {geometry_equals_feature: IsolatedDangerBeacon}
+    create:
+      - object: BCNISD
+        # TODO: UpdateObject (not create) — refer to S-65 Annex C for clarification
+        actions:
+          - set: {attr: INFORM, value: "Automatic Identification System (AIS) aid to navigation", append: true, sep: "; "}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  # LateralBeacon
+  - when: {geometry_equals_feature: LateralBeacon}
+    create:
+      - object: BCNLAT
+        # TODO: UpdateObject (not create) — refer to S-65 Annex C for clarification
+        actions:
+          - set: {attr: INFORM, value: "Automatic Identification System (AIS) aid to navigation", append: true, sep: "; "}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  # SafeWaterBeacon
+  - when: {geometry_equals_feature: SafeWaterBeacon}
+    create:
+      - object: BCNSAW
+        # TODO: UpdateObject (not create) — refer to S-65 Annex C for clarification
+        actions:
+          - set: {attr: INFORM, value: "Automatic Identification System (AIS) aid to navigation", append: true, sep: "; "}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  # SpecialPurposeGeneralBeacon
+  - when: {geometry_equals_feature: SpecialPurposeGeneralBeacon}
+    create:
+      - object: BCNSPP
+        # TODO: UpdateObject (not create) — refer to S-65 Annex C for clarification
+        actions:
+          - set: {attr: INFORM, value: "Automatic Identification System (AIS) aid to navigation", append: true, sep: "; "}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  # CardinalBuoy
+  - when: {geometry_equals_feature: CardinalBuoy}
+    create:
+      - object: BOYCAR
+        # TODO: UpdateObject (not create) — refer to S-65 Annex C for clarification
+        actions:
+          - set: {attr: INFORM, value: "Automatic Identification System (AIS) aid to navigation", append: true, sep: "; "}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  # InstallationBuoy
+  - when: {geometry_equals_feature: InstallationBuoy}
+    create:
+      - object: BOYINB
+        # TODO: UpdateObject (not create) — refer to S-65 Annex C for clarification
+        actions:
+          - set: {attr: INFORM, value: "Automatic Identification System (AIS) aid to navigation", append: true, sep: "; "}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  # IsolatedDangerBuoy
+  - when: {geometry_equals_feature: IsolatedDangerBuoy}
+    create:
+      - object: BOYISD
+        # TODO: UpdateObject (not create) — refer to S-65 Annex C for clarification
+        actions:
+          - set: {attr: INFORM, value: "Automatic Identification System (AIS) aid to navigation", append: true, sep: "; "}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  # LateralBuoy
+  - when: {geometry_equals_feature: LateralBuoy}
+    create:
+      - object: BOYLAT
+        # TODO: UpdateObject (not create) — refer to S-65 Annex C for clarification
+        actions:
+          - set: {attr: INFORM, value: "Automatic Identification System (AIS) aid to navigation", append: true, sep: "; "}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  # SafeWaterBuoy
+  - when: {geometry_equals_feature: SafeWaterBuoy}
+    create:
+      - object: BOYSAW
+        # TODO: UpdateObject (not create) — refer to S-65 Annex C for clarification
+        actions:
+          - set: {attr: INFORM, value: "Automatic Identification System (AIS) aid to navigation", append: true, sep: "; "}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  # SpecialPurposeGeneralBuoy or EmergencyWreckMarkingBuoy → both go to BOYSPP
+  - when: {or: [{geometry_equals_feature: SpecialPurposeGeneralBuoy}, {geometry_equals_feature: EmergencyWreckMarkingBuoy}]}
+    create:
+      - object: BOYSPP
+        # TODO: UpdateObject (not create) — refer to S-65 Annex C for clarification
+        actions:
+          - set: {attr: INFORM, value: "Automatic Identification System (AIS) aid to navigation", append: true, sep: "; "}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP

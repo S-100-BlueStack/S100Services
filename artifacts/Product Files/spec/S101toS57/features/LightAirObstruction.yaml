@@ -1,0 +1,33 @@
+feature: LightAirObstruction
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Always produces CATLIT=6 (air obstruction light). The XSL also appends any additional
+  categoryOfLight values that are not 6.
+  # TODO: copy: {from: categoryOfLight, to: CATLIT, append: true, exclude_value: "6"}
+  Has exhibitionConditionOfLight, lightVisibility, multiplicityOfFeatures, and
+  valueOfNominalRange — unlike LightFogDetector. Has no marksNavigationalSystemOf.
+  Neither verticalLengthToINFORM nor signalGenerationtoINFORM appear in the XML or XSL
+  for this feature type.
+
+extends: FeatureStandard
+params:
+  object: LIGHTS
+  feature_attrs:
+    - set:  {attr: CATLIT, value: "6"}
+    - copy: {from: colour,                                    to: COLOUR}
+    - copy: {from: exhibitionConditionOfLight,                to: EXCLIT}
+    - copy: {from: height,                                    to: HEIGHT}
+    - copy: {from: 'rhythmOfLight.lightCharacteristic',       to: LITCHR}
+    - copy: {from: lightVisibility,                           to: LITVIS}
+    - copy: {from: 'multiplicityOfFeatures.numberOfFeatures', to: MLTYLT}
+    - copy: {from: 'rhythmOfLight.signalGroup',               to: SIGGRP, sep: "NONE"}
+    - copy: {from: 'rhythmOfLight.signalPeriod',              to: SIGPER}
+    - apply: rhythmOfLightSignalSequencetoSIGSEQ
+    - copy: {from: valueOfNominalRange,                       to: VALNMR}
+    - copy: {from: verticalDatum,                             to: VERDAT}
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true
+  contact: true

@@ -1,0 +1,34 @@
+feature: DistanceMark
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  waterwayDistance is mapped to INFORM as a labelled value, along with
+  distanceUnitOfMeasurement and referenceLocation — all via apply rules or
+  specialised copy+set sequences in the XML.
+  The XML comment says "waterwayDistance mapped to INFORM".
+
+extends: FeatureStandard
+params:
+  object: DISMAR
+  feature_attrs:
+    - lookup:
+        source: distanceMarkVisible
+        target: CATDIS
+        cases:
+          "False": "1"
+          "True":  "4"
+    - apply: Pad_DATEND
+    - apply: Pad_DATSTA
+    - set: {attr: INFORM, value: "Waterway distance ="}
+    - copy: {from: 'measuredDistanceValue.waterwayDistance', to: INFORM, append: true}
+    - lookup:
+        source: measuredDistanceValue.distanceUnitOfMeasurement
+        target: INFORM
+        cases:
+          1: {actions: [{set: {attr: INFORM, value: "m",    append: true, sep: " "}}]}
+          2: {actions: [{set: {attr: INFORM, value: "yds",  append: true, sep: " "}}]}
+          3: {actions: [{set: {attr: INFORM, value: "km",   append: true, sep: " "}}]}
+          4: {actions: [{set: {attr: INFORM, value: "St M", append: true, sep: " "}}]}
+          5: {actions: [{set: {attr: INFORM, value: "NM",   append: true, sep: " "}}]}
+    - copy: {from: 'measuredDistanceValue.referenceLocation', to: INFORM, append: true, sep: "; Reference location: "}
+  fileref: true

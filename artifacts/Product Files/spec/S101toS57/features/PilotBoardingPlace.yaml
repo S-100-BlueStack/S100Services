@@ -1,0 +1,33 @@
+feature: PilotBoardingPlace
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  assign_COMCHA is an XML attribute script — flagged as TODO pending DSL support.
+  ContactDetails communicationChannel goes to COMCHA (not INFORM), unlike most features.
+  PilotageDistrict featureName/communicationChannel are pulled via
+  PilotageDistrictAssociation/theCollection/PilotageDistrict relation — flagged as TODO
+  as this relation path is noted "not currently working" in the XML.
+
+cases:
+  - create:
+      - object: PILBOP
+        actions:
+          # TODO: assign_COMCHA script — refer to S-65 Annex C for clarification
+          - copy: {from: categoryOfPilotBoardingPlace, to: CATPIL}
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: Pad_PEREND
+          - apply: Pad_PERSTA
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: contactDetails_COMCHA_to_INFORM
+          # TODO: PilotageDistrictAssociation/theCollection/PilotageDistrict — noted as "not currently working" in XML
+          - from_related:
+              relation: PilotageDistrictAssociation/theCollection/PilotageDistrict
+              copy:
+                - {from: 'featureName[0].name',  to: PILDST, append: true, sep: ";"}
+                - {from: 'featureName[1].name',  to: NPLDST, append: true, sep: ";"}
+                - {from: communicationChannel,   to: COMCHA, append: true, sep: ";"}
+          - apply: nauticalInformation_to_INFORM_NINFOM

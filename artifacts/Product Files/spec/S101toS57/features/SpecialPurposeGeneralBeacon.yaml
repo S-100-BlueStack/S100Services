@@ -1,0 +1,11 @@
+feature: SpecialPurposeGeneralBeacon
+s65_annex_c: Table 15
+notes: >
+  TOPMAR is only produced when topmark.topmarkDaymarkShape is populated.
+  The source XML applies marksNavigationalSystemOf_to_MARSYS_INFORM twice — applied once here.
+
+extends: BeaconStandard
+params:
+  object: BCNSPP
+  category:
+    apply: categoryOfSpecialPurposeMark_to_CATSPM_INFORM

@@ -1,0 +1,8 @@
+feature: SafeWaterBeacon
+s65_annex_c: Table 14
+notes: >
+  TOPMAR is only produced when topmark.topmarkDaymarkShape is populated.
+
+extends: BeaconStandard
+params:
+  object: BCNSAW

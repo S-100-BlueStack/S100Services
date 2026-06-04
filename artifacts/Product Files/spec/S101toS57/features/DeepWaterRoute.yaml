@@ -1,0 +1,28 @@
+feature: DeepWaterRoute
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Area geometry produces both a SEAARE and a C_AGGR (collection) simultaneously.
+  Non-area geometry produces a C_AGGR only (using SetRelationshipCode).
+  Neither output carries attribute payload beyond featureName.
+
+uses:
+  - featureName_to_OBJNAM_NOBJNM
+
+cases:
+  - when: {geometry: Area}
+    create:
+      - object: SEAARE
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+
+      - object: C_AGGR
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - set: {attr: relationship, value: "collection"}
+
+  - create:
+      - object: C_AGGR
+        actions:
+          - set: {attr: relationship, value: "collection"}
+          - apply: featureName_to_OBJNAM_NOBJNM

@@ -1,0 +1,19 @@
+feature: Berth
+s65_annex_c: Table 9
+
+extends: FeatureStandard
+params:
+  object: BERTHS
+  feature_attrs:
+    - copy: {from: minimumBerthDepth, to: DRVAL1}
+    - apply: categoryOfCargo_to_INFORM
+    - apply: maximumPermittedDraught_to_INFORM
+    - copy: {from: qualityOfVerticalMeasurement,                to: QUASOU}
+    - copy: {from: 'verticalUncertainty.uncertaintyFixed',      to: SOUACC}
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true
+  contact: true
+  service_hours_all_dates: true
+  non_std_day_all_dates: true

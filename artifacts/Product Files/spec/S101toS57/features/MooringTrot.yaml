@@ -1,0 +1,25 @@
+feature: MooringTrot
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Area MooringTrot produces both a SEAARE and a C_AGGR collection.
+  Non-area MooringTrot (no geometry) produces only C_AGGR.
+  The C_AGGR uses ConvertToCollectionFeature (Area) or SetRelationshipCode (no-geometry).
+  Collection feature semantics are not fully expressible in current DSL.
+
+cases:
+  - when: {geometry: Area}
+    create:
+      - object: SEAARE
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+      - object: C_AGGR
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+          # TODO: ConvertToCollectionFeature — refer to S-65 Annex C for clarification
+
+  - create:
+      - object: C_AGGR
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+          # TODO: SetRelationshipCode collection — refer to S-65 Annex C for clarification

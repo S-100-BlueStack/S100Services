@@ -1,0 +1,21 @@
+feature: FerryRoute
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: FERYRT
+  feature_attrs:
+    - lookup:
+        source: categoryOfFerry
+        target: CATFRY
+        cases:
+          5:
+            actions:
+              - set: {attr: INFORM, value: "High speed ferry", append: true, sep: "; "}
+              - unknown: CATFRY
+        default: copy
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true

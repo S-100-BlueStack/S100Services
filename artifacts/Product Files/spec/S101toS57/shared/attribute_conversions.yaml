@@ -1,0 +1,239 @@
+# General attribute conversion rules — boolean flags, simple enumerations,
+# complex constructs, and string formatting.
+---
+rule: radarConspicuoustoCONRAD
+description: Maps S-101 boolean radarConspicuous to S-57 integer CONRAD.
+
+lookup:
+  source: radarConspicuous
+  target: CONRAD
+  cases:
+    "True":  "1"
+    "False": "2"
+---
+rule: visualProminence_to_CONVIS
+description: Maps S-101 visualProminence to S-57 CONVIS (value 3 remaps to 2).
+
+lookup:
+  source: visualProminence
+  target: CONVIS
+  cases:
+    3: "2"
+  default: copy
+---
+rule: marksNavigationalSystemOf_to_MARSYS_INFORM
+description: Maps S-101 marksNavigationalSystemOf to S-57 MARSYS.
+
+lookup:
+  source: marksNavigationalSystemOf
+  target: MARSYS
+  cases:
+    11:
+      actions:
+        - set: {attr: MARSYS, value: "10"}
+        - set: {attr: INFORM, value: "Main European inland waterway marking system",
+                append: true, sep: "; "}
+  default: copy
+---
+rule: basedOnFixedMarkstoCATTRK
+description: Maps S-101 boolean basedOnFixedMarks to S-57 CATTRK.
+
+lookup:
+  source: basedOnFixedMarks
+  target: CATTRK
+  cases:
+    "True":  "1"
+    "False": "2"
+---
+rule: restriction_to_RESTRN_INFORM
+description: >
+  Maps S-101 restriction to S-57 RESTRN.
+  Values 39 and 42 have no S-57 RESTRN equivalent and go to INFORM.
+
+lookup:
+  source: restriction
+  target: RESTRN
+  cases:
+    39:
+      actions:
+        - set: {attr: INFORM, value: "Swimming prohibited", append: true, sep: "; "}
+    42:
+      actions:
+        - set: {attr: INFORM, value: "Power-driven vessels prohibited", append: true, sep: "; "}
+  default: copy
+---
+rule: status_to_STATUS_INFORM
+description: Maps S-101 status to S-57 STATUS (value 28 has no equivalent, goes to INFORM).
+
+lookup:
+  source: status
+  target: STATUS
+  cases:
+    28:
+      actions:
+        - set: {attr: INFORM, value: "Buoyed", append: true, sep: "; "}
+  default: copy
+---
+rule: function_to_FUNCTN_INFORM
+description: Maps S-101 function to S-57 FUNCTN, with overflow to INFORM.
+
+lookup:
+  source: function
+  target: FUNCTN
+  cases:
+    44:
+      actions:
+        - set: {attr: INFORM, value: "Sea rescue control", append: true, sep: "; "}
+    45:
+      actions:
+        - set: {attr: INFORM, value: "Observatory", append: true, sep: "; "}
+    46:
+      actions:
+        - set: {attr: INFORM, value: "Ore crusher", append: true, sep: "; "}
+    47:
+      actions:
+        - set: {attr: INFORM, value: "Boathouse", append: true, sep: "; "}
+    48:
+      actions:
+        - set: {attr: INFORM, value: "Pumping station", append: true, sep: "; "}
+  default: copy
+---
+rule: natureOfConstruction_to_NATCON_INFORM
+description: Maps S-101 natureOfConstruction to S-57 NATCON, with overflow to INFORM.
+
+lookup:
+  source: natureOfConstruction
+  target: NATCON
+  cases:
+    11:
+      actions:
+        - set: {attr: INFORM, value: "Latticed construction", append: true, sep: "; "}
+    12:
+      actions:
+        - set: {attr: INFORM, value: "Glass construction", append: true, sep: "; "}
+  default:
+    actions:
+      - copy: {from: natureOfConstruction, to: NATCON, append: true, sep: "; "}
+---
+rule: product_to_PRODCT_INFORM
+description: Maps S-101 product to S-57 PRODCT, with overflow to INFORM.
+
+lookup:
+  source: product
+  target: PRODCT
+  cases:
+    23:
+      actions:
+        - set: {attr: INFORM, value: "Product: Electricity", append: true, sep: "; "}
+    24:
+      actions:
+        - set: {attr: INFORM, value: "Product: Ice", append: true, sep: "; "}
+    25:
+      actions:
+        - set: {attr: INFORM, value: "Product: Clay", append: true, sep: "; "}
+  default: copy
+---
+rule: Multiplicity_to_INFORM
+description: Maps S-101 multiplicityOfFeatures to S-57 INFORM.
+
+cases:
+  - when: {eq: ['multiplicityOfFeatures.multiplicityKnown', "True"]}
+    actions:
+      - copy: {from: 'multiplicityOfFeatures.numberOfFeatures', to: INFORM,
+               append: true, sep: "; "}
+      - set: {attr: INFORM, value: " features", append: true}
+
+  - when: {eq: ['multiplicityOfFeatures.multiplicityKnown', "False"]}
+    actions:
+      - set: {attr: INFORM, value: "More than one", append: true, sep: "; "}
+---
+rule: maximumPermittedDraught_to_INFORM
+description: Maps S-101 maximumPermittedDraught to S-57 INFORM.
+
+cases:
+  - when: {has_value: maximumPermittedDraught}
+    actions:
+      - set: {attr: INFORM, value: "Maximum Permitted Draught =", append: true, sep: " ;"}
+      - copy: {from: maximumPermittedDraught, to: INFORM, append: true}
+      - set: {attr: INFORM, value: "metres", append: true}
+---
+rule: maximumPermittedVesselLength_to_INFORM
+description: Maps S-101 maximumPermittedVesselLength to S-57 INFORM.
+
+cases:
+  - when: {has_value: maximumPermittedVesselLength}
+    actions:
+      - set: {attr: INFORM, value: "Maximum vessel length permitted =", append: true, sep: " ;"}
+      - copy: {from: maximumPermittedVesselLength, to: INFORM, append: true}
+      - set: {attr: INFORM, value: "metres", append: true}
+---
+rule: speedLimit_to_INFORM
+description: Maps S-101 vesselSpeedLimit to S-57 INFORM.
+
+cases:
+  - when: {has_value: 'vesselSpeedLimit.speedLimit'}
+    actions:
+      - set: {attr: INFORM, value: "Speed limit ="}
+      - copy: {from: 'vesselSpeedLimit.speedLimit', to: INFORM, append: true}
+
+  - when: {eq: ['vesselSpeedLimit.speedUnits', "2"]}
+    actions:
+      - set: {attr: INFORM, value: "kilometres per hour", append: true, sep: ""}
+
+  - when: {eq: ['vesselSpeedLimit.speedUnits', "3"]}
+    actions:
+      - set: {attr: INFORM, value: "miles per hour", append: true, sep: ""}
+
+  - when: {eq: ['vesselSpeedLimit.speedUnits', "4"]}
+    actions:
+      - set: {attr: INFORM, value: "knots", append: true, sep: ""}
+---
+rule: signalGenerationtoINFORM
+description: Maps S-101 signalGeneration values 5 and 6 to S-57 INFORM.
+
+cases:
+  - when: {eq: [signalGeneration, "5"]}
+    actions:
+      - set: {attr: INFORM, value: "Radio activated", append: true, sep: "; "}
+
+  - when: {eq: [signalGeneration, "6"]}
+    actions:
+      - set: {attr: INFORM, value: "Call activated", append: true, sep: "; "}
+---
+rule: verticalLengthToINFORM
+description: Maps S-101 verticalLength to S-57 INFORM.
+
+cases:
+  - when: "unknown verticalLength"
+    actions: []
+  - when: "has verticalLength"
+    actions:
+      - set: {attr: INFORM, value: "Vertical Length of light", append: true, sep: "; "}
+      - copy: {from: verticalLength, to: INFORM, append: true, sep: "NONE"}
+      - set: {attr: INFORM, value: "metres", append: true}
+  - actions:
+      - set: {attr: INFORM, value: "Vertical Length of light: unknown", append: true, sep: "; "}
+---
+rule: fixeddates_to_INFORM
+description: Maps S-101 fixedDateRange to S-57 INFORM as a formatted date string.
+
+cases:
+  - when:
+      and:
+        - {has_value: 'fixedDateRange.dateStart'}
+        - {has_value: 'fixedDateRange.dateEnd'}
+    actions:
+      - set: {attr: INFORM, value: "From", append: true, sep: "; "}
+      - copy: {from: 'fixedDateRange.dateStart', to: INFORM, append: true}
+      - set: {attr: INFORM, value: "to", append: true}
+      - copy: {from: 'fixedDateRange.dateEnd', to: INFORM, append: true}
+
+  - when: {has_value: 'fixedDateRange.dateStart'}
+    actions:
+      - set: {attr: INFORM, value: "Start on", append: true, sep: "; "}
+      - copy: {from: 'fixedDateRange.dateStart', to: INFORM, append: true}
+
+  - when: {has_value: 'fixedDateRange.dateEnd'}
+    actions:
+      - set: {attr: INFORM, value: "End on", append: true, sep: "; "}
+      - copy: {from: 'fixedDateRange.dateEnd', to: INFORM, append: true}

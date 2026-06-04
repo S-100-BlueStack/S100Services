@@ -1,0 +1,15 @@
+feature: FishingFacility
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: FSHFAC
+  feature_attrs:
+    - copy: {from: categoryOfFishingFacility, to: CATFIF}
+    - copy: {from: verticalLength, to: VERLEN}
+  status: true
+  perda: true
+  sordat: true
+  fileref: true
+  contact: true

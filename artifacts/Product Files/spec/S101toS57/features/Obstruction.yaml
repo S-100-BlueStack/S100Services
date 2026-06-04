@@ -1,0 +1,100 @@
+feature: Obstruction
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Four dispatch cases in order:
+  1. categoryOfObstruction in {12..22} → OBSTRN with INFORM label (no CATOBS copy).
+  2. categoryOfObstruction = 23 AND Point → VEGATN with CATVEG=21 (point mangrove).
+  3. categoryOfObstruction = 23 (any geometry) → VEGATN with CATVEG=7 (area/line mangrove).
+  4. Default → OBSTRN with direct categoryOfObstruction → CATOBS copy.
+  Cases 1 and 4 pull SOUACC from SpatialQuality spatial object.
+  OBSTRN_HEIGHTvsVALSOU is an XML script for HEIGHT vs VALSOU logic — flagged as TODO.
+
+uses:
+  - featureName_to_OBJNAM_NOBJNM
+  - status_to_STATUS_INFORM
+  - techniqueOfVerticalMeasurement_to_TECSOU
+  - product_to_PRODCT_INFORM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - Pad_SORDAT
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  # categoryOfObstruction 12–22 → OBSTRN (value 12 maps to INFORM; others copy to CATOBS)
+  - when: "categoryOfObstruction matches '1[2-9]|2[0-2]'"
+    create:
+      - object: OBSTRN
+        actions:
+          - cases:
+              - when: "categoryOfObstruction == '12'"
+                actions:
+                  - set: {attr: INFORM, value: "Wave energy device", append: true, sep: "; "}
+              - actions:
+                  - copy: {from: categoryOfObstruction, to: CATOBS}
+          - copy: {from: condition, to: CONDTN}
+          - copy: {from: expositionOfSounding, to: EXPSOU}
+          - copy: {from: height, to: HEIGHT}
+          - copy: {from: natureOfSurface, to: NATSUR, append: true, sep: ","}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: product_to_PRODCT_INFORM
+          - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+          - apply: status_to_STATUS_INFORM
+          - apply: techniqueOfVerticalMeasurement_to_TECSOU
+          - copy: {from: valueOfSounding, to: VALSOU}
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: waterLevelEffect, to: WATLEV}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          # TODO: CopyAttributeFromSpatialToFeature SpatialQuality/spatialAccuracy/verticalUncertainty/uncertaintyFixed → SOUACC
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM
+
+  # categoryOfObstruction = 23, Point → VEGATN (mangrove point)
+  - when: "categoryOfObstruction == '23' and geometry == Point"
+    create:
+      - object: VEGATN
+        actions:
+          - set: {attr: CATVEG, value: "21"}
+          - copy: {from: height, to: HEIGHT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM
+
+  # categoryOfObstruction = 23, any geometry → VEGATN (mangrove area/line)
+  - when: "categoryOfObstruction == '23'"
+    create:
+      - object: VEGATN
+        actions:
+          - set: {attr: CATVEG, value: "7"}
+          - copy: {from: height, to: HEIGHT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM
+
+  # Default → OBSTRN
+  - create:
+      - object: OBSTRN
+        actions:
+          - copy: {from: categoryOfObstruction, to: CATOBS}
+          - copy: {from: condition, to: CONDTN}
+          - copy: {from: expositionOfSounding, to: EXPSOU}
+          # TODO: OBSTRN_HEIGHTvsVALSOU script — refer to S-65 Annex C for HEIGHT vs VALSOU logic
+          - copy: {from: natureOfSurface, to: NATSUR, append: true, sep: ","}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: product_to_PRODCT_INFORM
+          - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+          - apply: status_to_STATUS_INFORM
+          - apply: techniqueOfVerticalMeasurement_to_TECSOU
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: waterLevelEffect, to: WATLEV}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          # TODO: CopyAttributeFromSpatialToFeature SpatialQuality/spatialAccuracy/verticalUncertainty/uncertaintyFixed → SOUACC
+          - apply: nauticalInformation_to_INFORM_NINFOM

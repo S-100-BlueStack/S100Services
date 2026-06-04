@@ -1,0 +1,21 @@
+feature: FenceWall
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: FNCLNE
+  feature_attrs:
+    - copy: {from: categoryOfFence, to: CATFNC}
+    - copy: {from: colour, to: COLOUR}
+    - copy: {from: colourPattern, to: COLPAT}
+    - copy: {from: condition, to: CONDTN}
+    - apply: radarConspicuoustoCONRAD
+    - apply: visualProminence_to_CONVIS
+    - copy: {from: elevation, to: ELEVAT}
+    - copy: {from: height, to: HEIGHT}
+    - apply: natureOfConstruction_to_NATCON_INFORM
+    - copy: {from: verticalLength, to: VERLEN}
+  status: true
+  sordat: true
+  fileref: true

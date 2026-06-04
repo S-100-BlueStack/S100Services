@@ -1,0 +1,35 @@
+feature: AdministrationArea
+s65_annex_c: Table 1
+notes: >
+  CTNARE is only produced when inDispute is True.
+
+uses:
+  - featureName_to_OBJNAM_NOBJNM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - contactDetails_to_INFORM
+  - nauticalInformation_to_INFORM_NINFOM
+  - nauticalInformation_to_INFORM_NINFOM_PICREP
+
+cases:
+  - when: {geometry: Line}
+    exit: "No S-57 equivalent. Create an Area feature to cover."
+
+  - create:
+      - object: ADMARE
+        actions:
+          - copy: {from: jurisdiction, to: JRSDTN}
+          - copy: {from: nationality,  to: NATION}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: contactDetails_to_INFORM
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+      - object: CTNARE
+        condition: "inDispute == 'True'"
+        actions:
+          - set: {attr: INFORM, value: "In dispute", append: true, sep: "; "}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

@@ -1,0 +1,36 @@
+feature: LightAllAround
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Produces a single LIGHTS feature.
+  verticalLengthToINFORM writes "Vertical Length of light X metres" — note the XSL uses
+  "Height of light X metres" instead; check S-65 Annex C for the correct label.
+  marksNavigationalSystemOf=11 (CEVNI) maps MARSYS=10 and appends nav system text to INFORM.
+  multiplicityOfFeatures.numberOfFeatures is copied directly to MLTYLT; the XSL applies
+  additional nil-handling when multiplicityKnown is False.
+
+extends: FeatureStandard
+params:
+  object: LIGHTS
+  feature_attrs:
+    - copy: {from: categoryOfLight,                           to: CATLIT}
+    - copy: {from: colour,                                    to: COLOUR}
+    - copy: {from: exhibitionConditionOfLight,                to: EXCLIT}
+    - copy: {from: height,                                    to: HEIGHT}
+    - copy: {from: 'rhythmOfLight.lightCharacteristic',       to: LITCHR}
+    - copy: {from: lightVisibility,                           to: LITVIS}
+    - apply: marksNavigationalSystemOf_to_MARSYS_INFORM
+    - copy: {from: 'multiplicityOfFeatures.numberOfFeatures', to: MLTYLT}
+    - copy: {from: 'rhythmOfLight.signalGroup',               to: SIGGRP, sep: "NONE"}
+    - copy: {from: 'rhythmOfLight.signalPeriod',              to: SIGPER}
+    - apply: rhythmOfLightSignalSequencetoSIGSEQ
+    - copy: {from: valueOfNominalRange,                       to: VALNMR}
+    - copy: {from: verticalDatum,                             to: VERDAT}
+    - apply: verticalLengthToINFORM
+    - apply: signalGenerationtoINFORM
+    - debug: "Test debug message for Light All Round"
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true
+  contact: true

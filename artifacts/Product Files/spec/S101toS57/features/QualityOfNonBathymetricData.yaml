@@ -1,0 +1,15 @@
+feature: QualityOfNonBathymetricData
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Maps to M_ACCY. horizontalPositionUncertainty uses dot notation for the sub-attribute path.
+
+cases:
+  - create:
+      - object: M_ACCY
+        actions:
+          - copy: {from: horizontalDistanceUncertainty, to: HORACC}
+          - copy: {from: 'horizontalPositionUncertainty.uncertaintyFixed', to: POSACC}
+          - copy: {from: 'verticalUncertainty.uncertaintyFixed', to: VERACC}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

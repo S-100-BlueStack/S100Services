@@ -1,0 +1,93 @@
+feature: Hulk
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Three cases in order of priority:
+  1. Area geometry that is coincident with an UnsurveyedArea feature — produces HULKES
+     without an intervention message (the UnsurveyedArea will be removed separately).
+  2. Area geometry (all other cases) — produces HULKES with an intervention message
+     (HULKES is a Skin of the Earth feature; surrounding depth/dredged area needs a hole cut).
+  3. All other geometry — produces HULKES normally.
+  categoryOfHulk_to_CATHLK_INFORM is a local shared rule.
+
+uses:
+  - radarConspicuoustoCONRAD
+  - visualProminence_to_CONVIS
+  - featureName_to_OBJNAM_NOBJNM
+  - Pad_SORDAT
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM_PICREP
+
+cases:
+  - when:
+      and:
+        - {geometry: Area}
+        - {geometry_equals: {object: UnsurveyedArea}}
+    create:
+      - object: HULKES
+        actions:
+          - lookup:
+              source: categoryOfHulk
+              target: CATHLK
+              cases:
+                6:
+                  actions:
+                    - set: {attr: INFORM, value: "Casino", append: true, sep: "; "}
+                7:
+                  actions:
+                    - set: {attr: INFORM, value: "Training vessel", append: true, sep: "; "}
+              default: copy
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: horizontalLength, to: HORLEN}
+          - copy: {from: horizontalWidth, to: HORWID}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  - when: {geometry: Area}
+    create:
+      - object: HULKES
+        actions:
+          - apply: categoryOfHulk_to_CATHLK_INFORM
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: horizontalLength, to: HORLEN}
+          - copy: {from: horizontalWidth, to: HORWID}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - message: {text: "Intervention required: HULKES is a Skin of the Earth feature in S-57. Amend surrounding Depth or Dredged area to cut a hole.", severity: intervention}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  - create:
+      - object: HULKES
+        actions:
+          - apply: categoryOfHulk_to_CATHLK_INFORM
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: horizontalLength, to: HORLEN}
+          - copy: {from: horizontalWidth, to: HORWID}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP

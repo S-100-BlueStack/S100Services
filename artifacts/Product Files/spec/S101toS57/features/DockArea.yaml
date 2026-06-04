@@ -1,0 +1,21 @@
+feature: DockArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  maximumPermittedDraught is mapped to INFORM via a shared rule.
+  ServiceHours and NonStandardWorkingDay both supply fixedDateRange dates.
+
+extends: FeatureStandard
+params:
+  object: DOCARE
+  feature_attrs:
+    - apply: maximumPermittedDraught_to_INFORM
+    - copy: {from: categoryOfDock, to: CATDOC}
+    - copy: {from: condition, to: CONDTN}
+    - copy: {from: 'horizontalClearanceFixed.horizontalDistanceUncertainty', to: HORACC}
+    - copy: {from: 'horizontalClearanceFixed.horizontalClearanceValue', to: HORCLR}
+  status: true
+  fileref: true
+  contact: true
+  service_hours_dated: true
+  non_std_day_dated: true

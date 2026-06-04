@@ -1,0 +1,22 @@
+rule: information_to_INFORM_NINFOM
+description: >
+  Maps S-101 information list (text + language) to S-57 INFORM (English) and NINFOM (national).
+
+cases:
+  - when: {contains: ['information[0].language', "eng"]}
+    actions:
+      - copy: {from: 'information[0].text', to: INFORM, append: true, sep: "; "}
+      - copy: {from: 'information[1].text', to: NINFOM, append: true, sep: "; "}
+
+  - when: {contains: ['information[1].language', "eng"]}
+    actions:
+      - copy: {from: 'information[0].text', to: NINFOM, append: true, sep: "; "}
+      - copy: {from: 'information[1].text', to: INFORM, append: true, sep: "; "}
+
+---
+
+rule: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+description: Convenience rule — applies information_to_INFORM_NINFOM then fileReference_to_TXTDSC_NTXTDS.
+actions:
+  - apply: information_to_INFORM_NINFOM
+  - apply: fileReference_to_TXTDSC_NTXTDS

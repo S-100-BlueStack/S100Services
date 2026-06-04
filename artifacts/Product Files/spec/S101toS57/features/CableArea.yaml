@@ -1,0 +1,16 @@
+feature: CableArea
+s65_annex_c: Table 27
+notes: >
+
+extends: FeatureStandard
+params:
+  object: CBLARE
+  feature_attrs:
+    - apply: categoryOfCabletoCATCBL
+    - apply: restriction_to_RESTRN_INFORM
+    - apply: speedLimit_populated
+    - apply: speedLimit_units
+  status: true
+  datend_datsta: true
+  fileref: true
+  contact: true

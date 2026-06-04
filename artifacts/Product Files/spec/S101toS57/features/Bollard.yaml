@@ -1,0 +1,21 @@
+feature: Bollard
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Maps to MORFAC with CATMOR hard-set to 3 (bollard).
+
+extends: FeatureStandard
+params:
+  object: MORFAC
+  feature_attrs:
+    - set: {attr: CATMOR, value: "3"}
+    - copy: {from: condition, to: CONDTN}
+    - apply: Pad_DATEND
+    - apply: Pad_DATSTA
+    - apply: Pad_PEREND
+    - apply: Pad_PERSTA
+  status: true
+  sordat: true
+  fileref: true
+  picrep: true
+  contact: true

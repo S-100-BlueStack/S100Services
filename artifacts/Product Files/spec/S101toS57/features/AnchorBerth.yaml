@@ -1,0 +1,17 @@
+feature: AnchorBerth
+s65_annex_c: Table 2
+
+extends: FeatureStandard
+params:
+  object: ACHBRT
+  feature_attrs:
+    - apply: categoryOfCargo_to_INFORM
+    - apply: categoryOfAnchorage_to_INFORM
+    - copy: {from: radius, to: RADIUS}
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true
+  contact: true
+  service_hours_all_dates: true
+  non_std_day_all_dates: true

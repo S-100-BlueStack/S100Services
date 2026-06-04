@@ -1,0 +1,48 @@
+feature: Helipad
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Helipad → RUNWAY (CATRUN=2) + coincident LNDMRK.
+  LNDMRK has undefined CATLMK (SetAttributeValueUnknown in XML), CONVIS=2, and
+  INFORM="Helicopter landing pad".
+  ServiceHours and NonStandardWorkingDay provide periodicDateRange dates (PERSTA/PEREND)
+  rather than fixedDateRange — hence service_hours (no dates) is used and PERSTA/PEREND
+  are handled explicitly from related features.
+
+uses:
+  - natureOfConstruction_to_NATCON_INFORM
+  - featureName_to_OBJNAM_NOBJNM
+  - Pad_PEREND
+  - Pad_PERSTA
+  - status_to_STATUS_INFORM
+  - Pad_SORDAT
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - contactDetails_to_INFORM
+  - nauticalInformation_to_INFORM_NINFOM
+  - nonStandardWorkingDay_periodic_to_INFORM_NINFOM
+  - serviceHours_periodic_to_INFORM_NINFOM
+
+cases:
+  - create:
+      - object: RUNWAY
+        actions:
+          - set: {attr: CATRUN, value: "2"}
+          - copy: {from: condition, to: CONDTN}
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: Pad_PEREND
+          - apply: Pad_PERSTA
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: contactDetails_to_INFORM
+          - apply: serviceHours_periodic_to_INFORM_NINFOM
+          - apply: nonStandardWorkingDay_periodic_to_INFORM_NINFOM
+          - apply: nauticalInformation_to_INFORM_NINFOM
+
+      - object: LNDMRK
+        actions:
+          - undefined: CATLMK
+          - set: {attr: CONVIS, value: "2"}
+          - set: {attr: INFORM, value: "Helicopter landing pad", append: true, sep: "; "}

@@ -1,0 +1,48 @@
+feature: Vegetation
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Point or Area features with categoryOfVegetation=11 (reeds) also produce a companion LNDMRK
+  with CATLMK set to unknown and INFORM="Reed".
+
+uses:
+  - visualProminence_to_CONVIS
+  - featureName_to_OBJNAM_NOBJNM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - when:
+      and:
+        - {eq: [categoryOfVegetation, "11"]}
+        - {or: [{geometry: Point}, {geometry: Area}]}
+    create:
+      - object: VEGATN
+        actions:
+          - copy: {from: categoryOfVegetation, to: CATVEG}
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: elevation, to: ELEVAT}
+          - copy: {from: height, to: HEIGHT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM
+      - object: LNDMRK
+        actions:
+          - undefined: CATLMK
+          - apply: visualProminence_to_CONVIS
+          - set: {attr: INFORM, value: "Reed", append: true, sep: "; "}
+
+  - create:
+      - object: VEGATN
+        actions:
+          - copy: {from: categoryOfVegetation, to: CATVEG}
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: elevation, to: ELEVAT}
+          - copy: {from: height, to: HEIGHT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

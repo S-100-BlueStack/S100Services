@@ -1,0 +1,25 @@
+feature: DryDock
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  maximumPermittedDraught is mapped to INFORM via a shared rule.
+  The XML comment notes "maximumPermittedDraught mapped to INFORM".
+  ServiceHours and NonStandardWorkingDay supply info text only (no date fields in XML).
+
+extends: FeatureStandard
+params:
+  object: DRYDOC
+  feature_attrs:
+    - copy: {from: condition, to: CONDTN}
+    - copy: {from: depthRangeMinimumValue, to: DRVAL1}
+    - copy: {from: horizontalClearanceWidth, to: HORCLR}
+    - copy: {from: horizontalLength, to: HORLEN}
+    - copy: {from: horizontalWidth, to: HORWID}
+    - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+    - copy: {from: 'verticalUncertainty.uncertaintyFixed', to: SOUACC}
+    - apply: maximumPermittedDraught_to_INFORM
+  status: true
+  fileref: true
+  contact: true
+  service_hours: true
+  non_std_day: true

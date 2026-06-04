@@ -1,0 +1,35 @@
+feature: SeparationZoneOrLine
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Line geometry maps to TSELNE; Area geometry maps to TSEZNE.
+
+uses:
+  - Pad_DATEND
+  - Pad_DATSTA
+  - status_to_STATUS_INFORM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - when: {geometry: Line}
+    create:
+      - object: TSELNE
+        actions:
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM
+
+  - when: {geometry: Area}
+    create:
+      - object: TSEZNE
+        actions:
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

@@ -1,0 +1,18 @@
+feature: Tunnel
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: TUNNEL
+  feature_attrs:
+    - copy: {from: condition, to: CONDTN}
+    - copy: {from: 'horizontalClearanceFixed.horizontalDistanceUncertainty', to: HORACC}
+    - copy: {from: 'horizontalClearanceFixed.horizontalClearanceValue', to: HORCLR}
+    - copy: {from: 'verticalClearanceFixed.verticalUncertainty.uncertaintyFixed', to: VERACC}
+    - copy: {from: 'verticalClearanceFixed.verticalClearanceValue', to: VERCLR}
+  status: true
+  sordat: true
+  fileref: true
+  picrep: true
+  contact: true

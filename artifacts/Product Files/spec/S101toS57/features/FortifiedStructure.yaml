@@ -1,0 +1,68 @@
+feature: FortifiedStructure
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Point features with inTheWater=True also produce a coincident PILPNT.
+  categoryOfFortifiedStructure_to_CATFOR_INFORM is a local shared rule.
+
+uses:
+  - radarConspicuoustoCONRAD
+  - visualProminence_to_CONVIS
+  - natureOfConstruction_to_NATCON_INFORM
+  - featureName_to_OBJNAM_NOBJNM
+  - Pad_SORDAT
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM_PICREP
+
+cases:
+  - when:
+      and:
+        - {geometry: Point}
+        - {eq: [inTheWater, "True"]}
+    create:
+      - object: FORSTC
+        actions:
+          - lookup:
+              source: categoryOfFortifiedStructure
+              target: CATFOR
+              cases:
+                8:
+                  actions:
+                    - set: {attr: INFORM, value: "Fortified submarine shelter", append: true, sep: "; "}
+                9:
+                  actions:
+                    - set: {attr: INFORM, value: "Rampart", append: true, sep: "; "}
+              default: copy
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: height, to: HEIGHT}
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+      - object: PILPNT
+        actions:
+          - message: {text: "PILPNT created coincident with FORSTC in the water. Check for correct encoding.", severity: intervention}
+
+  - create:
+      - object: FORSTC
+        actions:
+          - apply: categoryOfFortifiedStructure_to_CATFOR_INFORM
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: height, to: HEIGHT}
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP

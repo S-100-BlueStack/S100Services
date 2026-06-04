@@ -1,0 +1,29 @@
+feature: CableOverhead
+s65_annex_c: Table 28
+notes: >
+
+extends: FeatureStandard
+params:
+  object: CBLOHD
+  feature_attrs:
+    - lookup:
+        source: categoryOfCable
+        target: CATCBL
+        cases:
+          10: "4"
+        default: copy
+    - copy: {from: condition, to: CONDTN}
+    - apply: radarConspicuoustoCONRAD
+    - apply: Multiplicity_to_INFORM
+    - apply: visualProminence_to_CONVIS
+    - copy: {from: iceFactor, to: ICEFAC}
+    - copy: {from: 'verticalClearanceFixed.verticalUncertainty.uncertaintyFixed', to: VERACC}
+    - copy: {from: 'verticalClearanceFixed.verticalClearanceValue',               to: VERCLR}
+    - copy: {from: 'verticalClearanceSafe.verticalClearanceValue',                to: VERCSA}
+    - copy: {from: 'verticalClearanceSafe.verticalUncertainty.uncertaintyFixed',  to: VERACC}
+    - copy: {from: verticalDatum, to: VERDAT}
+  status: true
+  datend_datsta: true
+  sordat: true
+  fileref: true
+  contact: true

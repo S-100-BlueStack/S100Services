@@ -1,0 +1,11 @@
+feature: EmergencyWreckMarkingBuoy
+s65_annex_c: Table 18
+notes: >
+  Maps to BOYSPP with CATSPM fixed to 27 (emergency wreck marking buoy).
+  TOPMAR is only produced when topmark.topmarkDaymarkShape is populated.
+
+extends: BuoyStandard
+params:
+  object: BOYSPP
+  category:
+    set: {attr: CATSPM, value: "27"}

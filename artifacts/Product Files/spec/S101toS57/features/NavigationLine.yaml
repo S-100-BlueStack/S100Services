@@ -1,0 +1,19 @@
+feature: NavigationLine
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  measuredDistance_to_INFORM is an XML attribute-mapping rule —
+  flagged as TODO pending DSL support.
+
+extends: FeatureStandard
+params:
+  object: NAVLNE
+  feature_attrs:
+    - copy: {from: categoryOfNavigationLine, to: CATNAV}
+    # TODO: measuredDistance_to_INFORM — refer to S-65 Annex C for clarification
+    - copy: {from: 'orientation.orientationValue', to: ORIENT}
+    - apply: status_to_STATUS_INFORM
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true

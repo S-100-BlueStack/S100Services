@@ -1,0 +1,42 @@
+feature: TidalStreamPanelData
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+# TODO: review against a representative S-101 TidalStreamPanelData dataset before finalising.
+#       Assumes tidalStreamValue instances are ordered -6 to +6 in the source. If the source
+#       does not guarantee this ordering a sort step will be needed before the loop.
+
+uses:
+  - featureName_to_OBJNAM_NOBJNM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - create:
+      - object: TS_PAD
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          # Build TS_TSP preamble: stationNumber, stationName, HW/LW
+          - cases:
+              - when: {has_value: stationNumber}
+                actions:
+                  - copy: {from: stationNumber, to: TS_TSP, append: true, sep: ","}
+              - actions:
+                  - set: {attr: TS_TSP, value: ",", append: true, sep: "NONE"}
+          - copy: {from: stationName, to: TS_TSP, append: true, sep: ","}
+          - cases:
+              - when: {eq: ['tidalStreamPanelValues.referenceTide', "1"]}
+                actions:
+                  - set: {attr: TS_TSP, value: "HW", append: true, sep: ","}
+              - when: {eq: ['tidalStreamPanelValues.referenceTide', "2"]}
+                actions:
+                  - set: {attr: TS_TSP, value: "LW", append: true, sep: ","}
+              - actions:
+                  - set: {attr: TS_TSP, value: ",", append: true, sep: "NONE"}
+          # Append orientation,speed for each tidalStreamValue in source order
+          - repeat_for_each: 'tidalStreamPanelValues.tidalStreamValue'
+            loop_actions:
+              - copy: {from: 'orientation.orientationValue', to: TS_TSP, append: true, sep: ","}
+              - copy: {from: speedMaximum, to: TS_TSP, append: true, sep: ","}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

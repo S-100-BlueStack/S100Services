@@ -1,0 +1,11 @@
+feature: River
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: RIVERS
+  feature_attrs:
+    - apply: status_to_STATUS_INFORM
+  status: true
+  fileref: true

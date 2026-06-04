@@ -1,0 +1,25 @@
+feature: LightVessel
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  LightVessel produces LITVES (light vessel). Similar structure to LightFloat but no topmark
+  case in the XML. natureOfConstruction_to_NATCON_INFORM applied.
+
+extends: FeatureStandard
+params:
+  object: LITVES
+  feature_attrs:
+    - copy: {from: colour, to: COLOUR}
+    - copy: {from: colourPattern, to: COLPAT}
+    - apply: radarConspicuoustoCONRAD
+    - apply: visualProminence_to_CONVIS
+    - copy: {from: horizontalLength, to: HORLEN}
+    - copy: {from: horizontalWidth, to: HORWID}
+    - apply: natureOfConstruction_to_NATCON_INFORM
+    - copy: {from: verticalLength, to: VERLEN}
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true
+  picrep: true
+  contact: true

@@ -1,0 +1,23 @@
+feature: SoundingDatum
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Maps to M_SDAT (sounding datum meta object). The verticalDatum attribute is converted to
+  INFORM text via the INFORM_from_verticalDatum shared rule.
+
+uses:
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+
+cases:
+  - create:
+      - object: M_SDAT
+        actions:
+          - lookup:
+              source: verticalDatum
+              target: VERDAT
+              cases:
+                44:
+                  actions:
+                    - set: {attr: INFORM, value: "Baltic Sea chart datum 2000", append: true, sep: "; "}
+              default: copy
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS

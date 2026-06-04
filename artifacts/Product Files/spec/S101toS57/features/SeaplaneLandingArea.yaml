@@ -1,0 +1,34 @@
+feature: SeaplaneLandingArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  ServiceHours and NonStandardWorkingDay carry periodicDateRange dates into PERSTA/PEREND.
+
+uses:
+  - featureName_to_OBJNAM_NOBJNM
+  - Pad_PEREND
+  - Pad_PERSTA
+  - restriction_to_RESTRN_INFORM
+  - status_to_STATUS_INFORM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - contactDetails_to_INFORM
+  - nauticalInformation_to_INFORM_NINFOM
+  - nonStandardWorkingDay_periodic_to_INFORM_NINFOM
+  - serviceHours_periodic_to_INFORM_NINFOM
+
+cases:
+  - create:
+      - object: SPLARE
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: Pad_PEREND
+          - apply: Pad_PERSTA
+          - apply: restriction_to_RESTRN_INFORM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: speedLimit_to_INFORM
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: contactDetails_to_INFORM
+          - apply: serviceHours_periodic_to_INFORM_NINFOM
+          - apply: nonStandardWorkingDay_periodic_to_INFORM_NINFOM
+          - apply: nauticalInformation_to_INFORM_NINFOM

@@ -1,0 +1,10 @@
+feature: LateralBuoy
+s65_annex_c: Table 16
+notes: >
+  TOPMAR is only produced when topmark.topmarkDaymarkShape is populated.
+
+extends: BuoyStandard
+params:
+  object: BOYLAT
+  category:
+    copy: {from: categoryOfLateralMark, to: CATLAM}

@@ -1,0 +1,54 @@
+feature: SpanOpening
+s65_annex_c: Table 22
+notes: >
+  Each SpanOpening produces one BRIDGE feature. CATBRG and most display attributes are
+  pulled from the parent Bridge collection feature. verticalClearanceClosed and
+  verticalClearanceOpen are both copied; the second VERACC copy (from verticalClearanceOpen)
+  will override the first if both are populated.
+  The XML notes that CONVIS from the related Bridge is "not currently working" — preserved here.
+
+uses:
+  - radarConspicuoustoCONRAD
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - Pad_DATEND
+  - Pad_DATSTA
+  - contactDetails_to_INFORM
+  - nauticalInformation_to_INFORM_NINFOM_PICREP
+  - nonStandardWorkingDay_dated_to_INFORM_NINFOM
+  - serviceHours_dated_to_INFORM_NINFOM
+
+cases:
+  - create:
+      - object: BRIDGE
+        actions:
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: 'horizontalClearanceFixed.horizontalDistanceUncertainty', to: HORACC}
+          - copy: {from: 'horizontalClearanceFixed.horizontalClearanceValue',      to: HORCLR}
+          - copy: {from: 'verticalClearanceClosed.verticalClearanceValue',         to: VERCCL}
+          - copy: {from: 'verticalClearanceClosed.verticalUncertainty.uncertaintyFixed', to: VERACC}
+          - copy: {from: 'verticalClearanceOpen.verticalClearanceValue',           to: VERCOP}
+          - copy: {from: 'verticalClearanceOpen.verticalUncertainty.uncertaintyFixed', to: VERACC}
+          - copy: {from: verticalDatum, to: VERDAT}
+          - intervention: "S-57 BRIDGE created from S-101 SpanOpening. May need to adjust and merge or delete additional spans."
+          - from_related:
+              relation: BridgeAggregation/theCollection/Bridge
+              copy:
+                - {from: categoryOfOpeningBridge, to: CATBRG}
+                - {from: colour,                  to: COLOUR}
+                - {from: colourPattern,            to: COLPAT}
+                - {from: condition,                to: CONDTN}
+                - {from: 'featureName.name',       to: OBJNAM, append: true, sep: "; "}
+                - {from: 'featureName[1].name',    to: NOBJNM}
+                - {from: natureOfConstruction,     to: NATCON}
+                - {from: reportedDate,             to: SORDAT}
+                - {from: visualProminence,         to: CONVIS}
+                # TODO: CONVIS copy from related Bridge is noted as "not currently working" in source XML
+                - {from: scaleMinimum,             to: SCAMIN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: contactDetails_to_INFORM
+          - apply: serviceHours_dated_to_INFORM_NINFOM
+          - apply: nonStandardWorkingDay_dated_to_INFORM_NINFOM
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP

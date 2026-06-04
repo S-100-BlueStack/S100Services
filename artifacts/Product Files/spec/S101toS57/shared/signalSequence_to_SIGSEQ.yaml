@@ -1,0 +1,45 @@
+# Signal sequence rules.
+#
+# S-101 encodes light/sound signal timing as a list of {signalStatus, signalDuration} pairs.
+# signalStatus: 1 = lit/sound, 2 = dark/silent
+#
+# S-57 SIGSEQ is a string like "1.5+(0.5)+2.0+(0.5)" where values in parentheses are silences.
+#
+# Both rules use repeat_for_each to iterate the list and build the string progressively.
+# Conditions and source paths are RELATIVE to the current signalSequence iteration node —
+# using absolute paths (e.g. rhythmOfLight.signalSequence.signalStatus) fails because
+# the resolver finds the first signalSequence in the parent and always returns its values.
+---
+rule: signalSequencetoSIGSEQ
+description: >
+  Converts S-101 signalSequence list to S-57 SIGSEQ string.
+  Used for fog signals and non-sectored lights.
+
+repeat_for_each: signalSequence
+cases:
+  - when: "signalStatus == '1'"
+    actions:
+      - copy: {from: signalDuration, to: SIGSEQ, append: true, sep: "+"}
+
+  - when: "signalStatus == '2'"
+    actions:
+      - set:  {attr: SIGSEQ, value: "(", append: true, sep: "+"}
+      - copy: {from: signalDuration, to: SIGSEQ, append: true, sep: "NONE"}
+      - set:  {attr: SIGSEQ, value: ")", append: true, sep: "NONE"}
+---
+rule: rhythmOfLightSignalSequencetoSIGSEQ
+description: >
+  Converts S-101 rhythmOfLight.signalSequence list to S-57 SIGSEQ.
+  Used for LightAllAround and LightFogDetector.
+
+repeat_for_each: rhythmOfLight.signalSequence
+cases:
+  - when: "signalStatus == '1'"
+    actions:
+      - copy: {from: signalDuration, to: SIGSEQ, append: true, sep: "+"}
+
+  - when: "signalStatus == '2'"
+    actions:
+      - set:  {attr: SIGSEQ, value: "(", append: true, sep: "+"}
+      - copy: {from: signalDuration, to: SIGSEQ, append: true, sep: "NONE"}
+      - set:  {attr: SIGSEQ, value: ")", append: true, sep: "NONE"}

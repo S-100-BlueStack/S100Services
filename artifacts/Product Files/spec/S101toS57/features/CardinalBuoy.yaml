@@ -1,0 +1,10 @@
+feature: CardinalBuoy
+s65_annex_c: Table 10
+notes: >
+  TOPMAR is only produced when topmark.topmarkDaymarkShape is populated.
+
+extends: BuoyStandard
+params:
+  object: BOYCAR
+  category:
+    copy: {from: categoryOfCardinalMark, to: CATCAM}

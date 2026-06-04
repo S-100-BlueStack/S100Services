@@ -1,0 +1,18 @@
+feature: MarinePollutionRegulationsArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Maps to ADMARE with a fixed INFORM label and JRSDTN=3. The feature's own
+  information/text goes to NINFOM (not INFORM), which is non-standard — preserved as-is from XML.
+
+cases:
+  - create:
+      - object: ADMARE
+        actions:
+          - set: {attr: INFORM, value: "Marine Pollution Regulations Area"}
+          - set: {attr: JRSDTN, value: "3"}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - copy: {from: 'information.text', to: NINFOM}
+          - apply: fileReference_to_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP

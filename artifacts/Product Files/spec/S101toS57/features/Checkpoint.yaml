@@ -1,0 +1,14 @@
+feature: Checkpoint
+s65_annex_c: Table 31
+notes: >
+
+extends: FeatureStandard
+params:
+  object: CHKPNT
+  feature_attrs:
+    - copy: {from: categoryOfCheckpoint, to: CATCHP}
+  status: true
+  fileref: true
+  contact: true
+  service_hours: true
+  non_std_day: true

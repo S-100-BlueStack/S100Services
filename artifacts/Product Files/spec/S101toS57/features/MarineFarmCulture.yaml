@@ -1,0 +1,24 @@
+feature: MarineFarmCulture
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  valueOfSounding_to_UNKNOWN is in the XML but the target attribute is UNKNOWN — flagged as TODO.
+
+extends: FeatureStandard
+params:
+  object: MARCUL
+  feature_attrs:
+    - copy: {from: categoryOfMarineFarmCulture, to: CATMFA}
+    - copy: {from: expositionOfSounding, to: EXPSOU}
+    - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+    - apply: restriction_to_RESTRN_INFORM
+    - copy: {from: 'verticalUncertainty.uncertaintyFixed', to: SOUACC}
+    - apply: status_to_STATUS_INFORM
+    # TODO: valueOfSounding_to_UNKNOWN — target S-57 attribute unclear; refer to S-65 Annex C
+    - copy: {from: verticalLength, to: VERLEN}
+    - copy: {from: waterLevelEffect, to: WATLEV}
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true
+  contact: true

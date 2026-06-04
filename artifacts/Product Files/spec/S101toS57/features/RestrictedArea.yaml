@@ -1,0 +1,25 @@
+feature: RestrictedArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  categoryOfRestrictedAreaToCATREA_INFORM handles the CATREA lookup and any INFORM fallback
+  for S-101 category values that have no direct S-57 CATREA equivalent.
+  speedLimit_populated and speedLimit_units are XML attribute-script rules — flagged as TODO.
+
+extends: FeatureStandard
+params:
+  object: RESARE
+  feature_attrs:
+    - lookup:
+        source: categoryOfRestrictedArea
+        target: CATREA
+        cases:
+          32: "32"   # no change
+        default: copy
+    - apply: restriction_to_RESTRN_INFORM
+    - apply: status_to_STATUS_INFORM
+        # TODO: speedLimit_populated and speedLimit_units — refer to S-65 Annex C for clarification
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true

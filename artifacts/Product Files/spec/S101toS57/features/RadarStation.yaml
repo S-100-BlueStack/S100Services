@@ -1,0 +1,23 @@
+feature: RadarStation
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  assign_COMCHA is an XML attribute script — flagged as TODO pending DSL support.
+  ContactDetails communicationChannel goes to COMCHA (not INFORM), unlike most features.
+
+cases:
+  - create:
+      - object: RADSTA
+        actions:
+          - copy: {from: categoryOfRadarStation, to: CATRAS}
+          # TODO: assign_COMCHA script — refer to S-65 Annex C for clarification
+          - copy: {from: height, to: HEIGHT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: Pad_PEREND
+          - apply: Pad_PERSTA
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: valueOfMaximumRange, to: VALMXR}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: contactDetails_COMCHA_to_INFORM
+          - apply: nauticalInformation_to_INFORM_NINFOM

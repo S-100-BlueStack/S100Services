@@ -1,0 +1,25 @@
+feature: PipelineOverhead
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Multiplicity_to_INFORM is an XML attribute-mapping rule — flagged as TODO.
+
+extends: FeatureStandard
+params:
+  object: PIPOHD
+  feature_attrs:
+    - copy: {from: categoryOfPipelinePipe, to: CATPIP}
+    - copy: {from: condition, to: CONDTN}
+    - apply: radarConspicuoustoCONRAD
+    # TODO: Multiplicity_to_INFORM — refer to S-65 Annex C for clarification
+    - apply: visualProminence_to_CONVIS
+    - apply: product_to_PRODCT_INFORM
+    - apply: status_to_STATUS_INFORM
+    - copy: {from: 'verticalClearanceFixed.verticalUncertainty.uncertaintyFixed', to: VERACC}
+    - copy: {from: 'verticalClearanceFixed.verticalClearanceValue',               to: VERCLR}
+    - copy: {from: verticalDatum, to: VERDAT}
+  status: true
+  datend_datsta: true
+  sordat: true
+  fileref: true
+  contact: true

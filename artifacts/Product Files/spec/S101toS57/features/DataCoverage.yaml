@@ -1,0 +1,23 @@
+feature: DataCoverage
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Produces two S-57 objects simultaneously: M_COVR (coverage available) and M_CSCL
+  (compilation scale). M_COVR always gets CATCOV=1 with an intervention message.
+  M_CSCL copies optimumDisplayScale to CSCALE with a check message.
+  Neither output uses featureName or SCAMIN.
+
+cases:
+  - create:
+      - object: M_COVR
+        actions:
+          - set: {attr: CATCOV, value: "1"}
+          - apply: information_to_INFORM_NINFOM
+          - message: {text: "M_COVR/CATCOV=1 created. Create further M_COVR as needed.", severity: intervention}
+
+      - object: M_CSCL
+        actions:
+          - debug: "DataCoverage: copying optimumDisplayScale to CSCALE"
+          - copy: {from: optimumDisplayScale, to: CSCALE}
+          - apply: information_to_INFORM_NINFOM
+          - message: {text: "M_CSCL created using optimumDisplayScale. Check for correct encoding.", severity: intervention}

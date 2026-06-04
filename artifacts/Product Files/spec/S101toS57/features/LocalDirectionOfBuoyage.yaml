@@ -1,0 +1,18 @@
+feature: LocalDirectionOfBuoyage
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  LocalDirectionOfBuoyage maps to M_NSYS (same target as NavigationalSystemOfMarks).
+  orientationValue → ORIENT. No featureName, no status, no NauticalInformation from_related
+  in the XML. SCAMIN is present.
+
+uses:
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+
+cases:
+  - create:
+      - object: M_NSYS
+        actions:
+          - copy: {from: orientationValue, to: ORIENT}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS

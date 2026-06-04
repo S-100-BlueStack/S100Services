@@ -1,0 +1,19 @@
+feature: MilitaryPracticeArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  speedLimit_populated and speedLimit_units are XML attribute-script rules —
+  flagged as TODO pending DSL support for speed-limit handling.
+
+extends: FeatureStandard
+params:
+  object: MIPARE
+  feature_attrs:
+    - copy: {from: categoryOfMilitaryPracticeArea, to: CATMPA}
+    - apply: restriction_to_RESTRN_INFORM
+    - apply: status_to_STATUS_INFORM
+    # TODO: speedLimit_populated and speedLimit_units — refer to S-65 Annex C for clarification
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true

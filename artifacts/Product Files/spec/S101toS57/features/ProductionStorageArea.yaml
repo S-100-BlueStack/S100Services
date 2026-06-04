@@ -1,0 +1,37 @@
+feature: ProductionStorageArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: PRDARE
+  feature_attrs:
+    - lookup:
+        source: categoryOfProductionArea
+        target: CATPRA
+        cases:
+          11:
+            actions:
+              - set: {attr: INFORM, value: "Production plant", append: true, sep: "; "}
+              - unknown: CATPRA
+          12:
+            actions:
+              - set: {attr: INFORM, value: "Solar Farm", append: true, sep: "; "}
+              - unknown: CATPRA
+        default: copy
+    - copy: {from: condition, to: CONDTN}
+    - apply: radarConspicuoustoCONRAD
+    - apply: visualProminence_to_CONVIS
+    - copy: {from: elevation, to: ELEVAT}
+    - copy: {from: height, to: HEIGHT}
+    - apply: product_to_PRODCT_INFORM
+    - apply: status_to_STATUS_INFORM
+    - copy: {from: verticalLength, to: VERLEN}
+  status: true
+  datend_datsta: true
+  sordat: true
+  fileref: true
+  picrep: true
+  contact: true
+  service_hours_dated: true
+  non_std_day_dated: true

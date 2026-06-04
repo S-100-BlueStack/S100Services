@@ -1,0 +1,23 @@
+feature: InformationArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  InformationArea maps to M_NPUB. The information.headline attribute maps to PUBREF.
+  information[0].text and information[1].text are copied directly (not via
+  information_to_INFORM_NINFOM shared rule).
+  No featureName, no SCAMIN, no NauticalInformation from_related in the XML.
+
+uses:
+  - Pad_SORDAT
+  - fileReference_to_TXTDSC_NTXTDS
+
+cases:
+  - create:
+      - object: M_NPUB
+        actions:
+          - apply: Pad_SORDAT
+          - copy: {from: 'information.headline', to: PUBREF}
+          - copy: {from: 'information[0].text',  to: INFORM}
+          - copy: {from: 'information[1].text',  to: NINFOM}
+          - apply: fileReference_to_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}

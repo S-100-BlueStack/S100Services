@@ -1,0 +1,108 @@
+feature: LightSectored
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+# TODO: review against a representative S-101 LightSectored dataset before finalising.
+#       repeat_for_each is now implemented — the outer loop and inner signalSequence loop
+#       both execute with scoped attribute resolution. Validate with real data.
+notes: >
+  Produces one LIGHTS feature per lightSector across ALL sectorCharacteristics entries.
+  The current CARIS XML implementation hard-codes up to 6 sectors from sectorCharacteristics[0]
+  only. Multiple sectorCharacteristics entries are unsupported and trigger an intervention.
+  This YAML defines the correct algorithm using nested repeat_for_each.
+
+  S-101 structure:
+    LightSectored
+      sectorCharacteristics[]          — one or more rhythm/signal blocks
+        lightCharacteristic            — LITCHR (per sectorCharacteristics)
+        signalGroup                    — SIGGRP (per sectorCharacteristics)
+        signalPeriod                   — SIGPER (per sectorCharacteristics)
+        signalSequence[]               — SIGSEQ (per sectorCharacteristics)
+        lightSector[]                  — one per arc → one LIGHTS each
+          colour                       — COLOUR
+          directionalCharacter         — ORIENT (when orientationValue set), CATLIT=16 (moiré)
+          lightVisibility              — LITVIS
+          sectorLimit                  — SECTR1 + SECTR2
+          sectorInformation            — appended to INFORM/NINFOM
+          valueOfNominalRange          — VALNMR
+
+  Path resolution within the nested loop (repeat_for_each sectorCharacteristics × lightSector):
+    - Plain attribute names that exist in lightSector resolve to the current lightSector.
+    - Attributes prefixed 'sectorCharacteristics.*' resolve to the parent sectorCharacteristics
+      element for the current iteration (not sectorCharacteristics[0]).
+    - Attributes not found in lightSector or sectorCharacteristics resolve to the root
+      LightSectored feature.
+
+  KNOWN BUG in current XSL (S-101_to_S-57_Attributes.xsl line 219):
+    sectorLimitTwo/sectorBearing is incorrectly mapped to SECTR1 instead of SECTR2.
+    The main XML table and this YAML correctly map it to SECTR2.
+
+  sectorInformation text starting with "S-57:" is a CARIS-specific FOID preservation
+  mechanism; the translator should strip this prefix or skip those entries.
+
+uses:
+  - marksNavigationalSystemOf_to_MARSYS_INFORM
+  - featureName_to_OBJNAM_NOBJNM
+  - status_to_STATUS_INFORM
+  - Pad_DATEND
+  - Pad_DATSTA
+  - Pad_PEREND
+  - Pad_PERSTA
+  - signalGenerationtoINFORM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - contactDetails_to_INFORM
+  - nauticalInformation_to_INFORM_NINFOM_PICREP
+
+cases:
+  # Outer loop: for each sectorCharacteristics[*], for each lightSector within it,
+  # produce one LIGHTS feature. Scope per iteration: [lightSector, sectorCharacteristics, ...root]
+  - repeat_for_each: 'sectorCharacteristics[*].lightSector'
+    create:
+      - object: LIGHTS
+        actions:
+          # --- Root LightSectored attributes (resolve via scope fallback to root) ---
+          - copy: {from: categoryOfLight,                             to: CATLIT}
+          # TODO: if directionalCharacter.moireEffect=True on the current lightSector,
+          #       also prepend CATLIT=16 (moiré effect). Needs conditional prepend support.
+          - copy: {from: exhibitionConditionOfLight,                  to: EXCLIT}
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: height,                                      to: HEIGHT}
+          - apply: marksNavigationalSystemOf_to_MARSYS_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: Pad_PEREND
+          - apply: Pad_PERSTA
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalDatum,                               to: VERDAT}
+          - copy: {from: scaleMinimum,                                to: SCAMIN}
+          - apply: signalGenerationtoINFORM
+          # --- Current sectorCharacteristics (parent of this lightSector, in scope by name) ---
+          - copy: {from: 'sectorCharacteristics.lightCharacteristic', to: LITCHR}
+          - copy: {from: 'sectorCharacteristics.signalGroup',         to: SIGGRP, sep: "NONE"}
+          - copy: {from: 'sectorCharacteristics.signalPeriod',        to: SIGPER}
+          # Inner loop: signalSequence children of the current sectorCharacteristics.
+          # Scope per iteration: [signalSequence, sectorCharacteristics, lightSector, ...root]
+          - repeat_for_each: 'sectorCharacteristics.signalSequence'
+            loop_actions:
+              - cases:
+                  - when: "signalStatus == '1'"
+                    actions:
+                      - copy: {from: signalDuration, to: SIGSEQ, append: true, sep: "+"}
+                  - when: "signalStatus == '2'"
+                    actions:
+                      - set:  {attr: SIGSEQ, value: "(", append: true, sep: "+"}
+                      - copy: {from: signalDuration, to: SIGSEQ, append: true, sep: "NONE"}
+                      - set:  {attr: SIGSEQ, value: ")", append: true, sep: "NONE"}
+          # --- Current lightSector attributes (resolve as children of lightSector node) ---
+          - copy: {from: colour,                                      to: COLOUR, sep: ","}
+          - copy: {from: 'directionalCharacter.orientation.orientationValue', to: ORIENT}
+          - copy: {from: lightVisibility,                             to: LITVIS}
+          - copy: {from: 'sectorLimit.sectorLimitOne.sectorBearing',  to: SECTR1}
+          - copy: {from: 'sectorLimit.sectorLimitTwo.sectorBearing',  to: SECTR2}
+          - copy: {from: valueOfNominalRange,                         to: VALNMR}
+          # sectorInformation: English text (language=eng or absent, not starting "S-57:")
+          - copy: {from: 'sectorInformation[0].text',                 to: INFORM,  append: true, sep: "; "}
+          - copy: {from: 'sectorInformation[1].text',                 to: NINFOM,  append: true, sep: "; "}
+          # --- Root information and related features ---
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: contactDetails_to_INFORM
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP

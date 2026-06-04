@@ -1,0 +1,36 @@
+feature: DredgedArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Produces two S-57 objects simultaneously: DRGARE and SEAARE.
+  SEAARE gets a composite OBJNAM of "Dredged depth <value>m " built from
+  literal strings and the depthRangeMinimumValue attribute.
+  SORDAT comes from a special Pad_dredgedDate_to_SORDAT rule (not the standard Pad_SORDAT).
+
+uses:
+  - featureName_to_OBJNAM_NOBJNM
+  - restriction_to_RESTRN_INFORM
+  - techniqueOfVerticalMeasurement_to_TECSOU
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - create:
+      - object: DRGARE
+        actions:
+          - copy: {from: depthRangeMinimumValue, to: DRVAL1}
+          - copy: {from: depthRangeMaximumValue, to: DRVAL2}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+          - apply: restriction_to_RESTRN_INFORM
+          - copy: {from: 'verticalUncertainty.uncertaintyFixed', to: SOUACC}
+          - apply: techniqueOfVerticalMeasurement_to_TECSOU
+          - apply: Pad_dredgedDate_to_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM
+
+      - object: SEAARE
+        actions:
+          - set:  {attr: OBJNAM, value: "Dredged depth "}
+          - copy: {from: depthRangeMinimumValue, to: OBJNAM, append: true, sep: "NONE"}
+          - set:  {attr: OBJNAM, value: "m ", append: true, sep: "NONE"}

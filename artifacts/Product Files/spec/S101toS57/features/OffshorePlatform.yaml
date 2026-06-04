@@ -1,0 +1,138 @@
+feature: OffshorePlatform
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Three dispatch cases:
+  1. Point with flareStack=True → OFSPLF + coincident LNDMRK(CATLMK=6, CONVIS=2).
+  2. Area with flareStack=True → OFSPLF + LNDMRK Point (geometry converted to Point).
+  3. Default → OFSPLF only.
+  Multiplicity_to_INFORM appears only on the LNDMRK output.
+
+uses:
+  - radarConspicuoustoCONRAD
+  - visualProminence_to_CONVIS
+  - featureName_to_OBJNAM_NOBJNM
+  - product_to_PRODCT_INFORM
+  - status_to_STATUS_INFORM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - Pad_DATEND
+  - Pad_DATSTA
+  - Pad_SORDAT
+  - Multiplicity_to_INFORM
+  - contactDetails_to_INFORM
+  - nauticalInformation_to_INFORM_NINFOM_PICREP
+
+cases:
+  - when: {and: [{geometry: Point}, {eq: [flareStack, "True"]}]}
+    create:
+      - object: OFSPLF
+        actions:
+          - lookup:
+              source: categoryOfOffshorePlatform
+              target: CATOFP
+              cases:
+                11:
+                  actions:
+                    - set: {attr: INFORM, value: "Floating oil tank", append: true, sep: "; "}
+              default: copy
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: height, to: HEIGHT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: product_to_PRODCT_INFORM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: contactDetails_to_INFORM
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+      - object: LNDMRK
+        actions:
+          - set: {attr: CATLMK, value: "6"}
+          - set: {attr: CONVIS, value: "2"}
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: Multiplicity_to_INFORM
+          - copy: {from: height, to: HEIGHT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+
+  - when: {and: [{geometry: Area}, {eq: [flareStack, "True"]}]}
+    create:
+      - object: OFSPLF
+        actions:
+          - apply: categoryOfOffshorePlatform_to_CATOFP_INFORM
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: height, to: HEIGHT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: product_to_PRODCT_INFORM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: contactDetails_to_INFORM
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+      - object: LNDMRK
+        # geometry converted to Point for LNDMRK
+        # TODO: ConvertGeometry Point — refer to S-65 Annex C for clarification
+        actions:
+          - set: {attr: CATLMK, value: "6"}
+          - set: {attr: CONVIS, value: "2"}
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: Multiplicity_to_INFORM
+          - copy: {from: height, to: HEIGHT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+
+  - create:
+      - object: OFSPLF
+        actions:
+          - apply: categoryOfOffshorePlatform_to_CATOFP_INFORM
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: height, to: HEIGHT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: product_to_PRODCT_INFORM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: contactDetails_to_INFORM
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP

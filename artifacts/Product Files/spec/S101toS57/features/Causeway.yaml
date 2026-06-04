@@ -1,0 +1,14 @@
+feature: Causeway
+s65_annex_c: Table 26
+notes: >
+
+extends: FeatureStandard
+params:
+  object: CAUSWY
+  feature_attrs:
+    - copy: {from: condition, to: CONDTN}
+    - apply: natureOfConstruction_to_NATCON_INFORM
+    - copy: {from: waterLevelEffect, to: WATLEV}
+  status: true
+  sordat: true
+  fileref: true

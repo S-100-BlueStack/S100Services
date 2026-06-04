@@ -1,0 +1,25 @@
+feature: SweptArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  SORDAT is populated from sweptDate via a custom Pad_sweptDate_to_SORDAT rule (not the standard
+  Pad_SORDAT). SOUACC comes from the feature's own verticalUncertainty.uncertaintyFixed.
+  # TODO: refer to S-65 Annex C for Pad_sweptDate_to_SORDAT logic.
+
+uses:
+  - techniqueOfVerticalMeasurement_to_TECSOU
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - create:
+      - object: SWPARE
+        actions:
+          - copy: {from: depthRangeMinimumValue, to: DRVAL1}
+          - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+          - copy: {from: 'verticalUncertainty.uncertaintyFixed', to: SOUACC}
+          - apply: techniqueOfVerticalMeasurement_to_TECSOU
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          # TODO: Pad_sweptDate_to_SORDAT — custom script for swept area date; refer to S-65 Annex C
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

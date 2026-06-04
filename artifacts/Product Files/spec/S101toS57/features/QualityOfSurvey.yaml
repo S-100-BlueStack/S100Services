@@ -1,0 +1,23 @@
+feature: QualityOfSurvey
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Maps to M_SREL. surveyType_to_SURTYP_INFORM is an XML attribute-mapping rule — flagged as TODO.
+
+cases:
+  - create:
+      - object: M_SREL
+        actions:
+          - copy: {from: qualityOfHorizontalMeasurement, to: QUAPOS}
+          - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+          - copy: {from: scaleValueMaximum, to: SCVAL1}
+          - copy: {from: scaleValueMinimum, to: SCVAL2}
+          - copy: {from: lineSpacingMinimum, to: SDISMN}
+          - copy: {from: lineSpacingMaximum, to: SDISMX}
+          - copy: {from: surveyAuthority, to: SURATH}
+          - apply: Pad_SUREND
+          - apply: Pad_SURSTA
+          # TODO: surveyType_to_SURTYP_INFORM — refer to S-65 Annex C for clarification
+          - apply: techniqueOfVerticalMeasurement_to_TECSOU
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

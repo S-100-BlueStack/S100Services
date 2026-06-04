@@ -1,0 +1,18 @@
+feature: DepthNoBottomFound
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Maps to SOUNDG with QUASOU hard-set to 5 (no bottom found at value shown).
+  SOUACC is sourced from the spatial object's SpatialQuality attribute
+  (CopyAttributeFromSpatialToFeature in XML) — confirm translator handles this.
+
+cases:
+  - create:
+      - object: SOUNDG
+        actions:
+          - set: {attr: QUASOU, value: "5"}
+          - apply: techniqueOfVerticalMeasurement_to_TECSOU
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          # TODO: SOUACC from SpatialQuality/spatialAccuracy/verticalUncertainty/uncertaintyFixed (spatial attribute) — confirm CopyAttributeFromSpatialToFeature handling
+          - apply: nauticalInformation_to_INFORM_NINFOM

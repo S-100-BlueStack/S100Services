@@ -1,0 +1,11 @@
+feature: SubmarineTransitLane
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: SUBTLN
+  feature_attrs:
+    - apply: restriction_to_RESTRN_INFORM
+    - apply: speedLimit_to_INFORM
+  fileref: true

@@ -1,0 +1,15 @@
+feature: Gridiron
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: GRIDRN
+  feature_attrs:
+    - copy: {from: horizontalLength, to: HORLEN}
+    - copy: {from: horizontalWidth, to: HORWID}
+    - apply: natureOfConstruction_to_NATCON_INFORM
+    - copy: {from: verticalLength, to: VERLEN}
+    - copy: {from: waterLevelEffect, to: WATLEV}
+  status: true
+  fileref: true

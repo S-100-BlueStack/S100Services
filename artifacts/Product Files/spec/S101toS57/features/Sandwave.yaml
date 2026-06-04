@@ -1,0 +1,10 @@
+feature: Sandwave
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: SNDWAV
+  feature_attrs:
+    - copy: {from: verticalLength, to: VERLEN}
+  fileref: true

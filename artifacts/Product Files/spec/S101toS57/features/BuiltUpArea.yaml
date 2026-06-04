@@ -1,0 +1,16 @@
+feature: BuiltUpArea
+s65_annex_c: Table 23
+notes: >
+
+extends: FeatureStandard
+params:
+  object: BUAARE
+  feature_attrs:
+    - copy: {from: categoryOfBuiltUpArea, to: CATBUA}
+    - copy: {from: condition, to: CONDTN}
+    - apply: radarConspicuoustoCONRAD
+    - apply: visualProminence_to_CONVIS
+    - copy: {from: height, to: HEIGHT}
+  sordat: true
+  fileref: true
+  picrep: true

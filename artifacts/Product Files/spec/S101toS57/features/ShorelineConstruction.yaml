@@ -1,0 +1,87 @@
+feature: ShorelineConstruction
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  ShorelineConstruction with categoryOfShorelineConstruction=23 (bollard) maps to MORFAC with
+  CATMOR=4 (bollard). All other ShorelineConstruction map to SLCONS. The two XML entries are
+  ordered so the MORFAC case fires first; other features see the SLCONS case.
+  Note: the MORFAC case includes PEREND/PERSTA; the SLCONS case does not.
+
+uses:
+  - radarConspicuoustoCONRAD
+  - visualProminence_to_CONVIS
+  - natureOfConstruction_to_NATCON_INFORM
+  - featureName_to_OBJNAM_NOBJNM
+  - status_to_STATUS_INFORM
+  - Pad_DATEND
+  - Pad_DATSTA
+  - Pad_PEREND
+  - Pad_PERSTA
+  - Pad_SORDAT
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - contactDetails_to_INFORM
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - when: {contains: [categoryOfShorelineConstruction, "23"]}
+    create:
+      - object: MORFAC
+        actions:
+          - set: {attr: CATMOR, value: "4"}
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: height, to: HEIGHT}
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: Pad_PEREND
+          - apply: Pad_PERSTA
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - copy: {from: waterLevelEffect, to: WATLEV}
+          - apply: contactDetails_to_INFORM
+          - apply: nauticalInformation_to_INFORM_NINFOM
+
+  - create:
+      - object: SLCONS
+        actions:
+          - lookup:
+              source: categoryOfShorelineConstruction
+              target: CATSLC
+              cases:
+                6:
+                  actions:
+                    - set: {attr: CATSLC, value: "6"}
+                    - warn: >
+                        S-101 categoryOfShorelineConstruction=6 (wharf) maps to CATSLC=6.
+                        Check whether encoding should be 6 (wharf) or 22 (quay).
+              default: copy
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: height, to: HEIGHT}
+          - copy: {from: 'horizontalClearanceFixed.horizontalDistanceUncertainty', to: HORACC}
+          - copy: {from: 'horizontalClearanceFixed.horizontalClearanceValue', to: HORCLR}
+          - copy: {from: horizontalLength, to: HORLEN}
+          - copy: {from: horizontalWidth, to: HORWID}
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: waterLevelEffect, to: WATLEV}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

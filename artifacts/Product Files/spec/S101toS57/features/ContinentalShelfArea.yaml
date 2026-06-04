@@ -1,0 +1,22 @@
+feature: ContinentalShelfArea
+s65_annex_c: Table 35
+notes: >
+  Line features have no S-57 equivalent and exit with an intervention message.
+
+uses:
+  - featureName_to_OBJNAM_NOBJNM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - when: {geometry: Line}
+    exit: "S-101 ContinentalShelfArea Line features have no match in S-57. Create an Area feature to cover."
+
+  - create:
+      - object: COSARE
+        actions:
+          - copy: {from: nationality, to: NATION}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

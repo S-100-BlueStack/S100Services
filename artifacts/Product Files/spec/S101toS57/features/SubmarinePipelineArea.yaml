@@ -1,0 +1,13 @@
+feature: SubmarinePipelineArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: PIPARE
+  feature_attrs:
+    - copy: {from: categoryOfPipelinePipe, to: CATPIP}
+  status: true
+  datend_datsta: true
+  fileref: true
+  contact: true

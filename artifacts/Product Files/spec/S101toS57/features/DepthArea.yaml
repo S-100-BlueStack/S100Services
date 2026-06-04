@@ -1,0 +1,14 @@
+feature: DepthArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Simple depth area — no featureName or SCAMIN in source XML.
+
+cases:
+  - create:
+      - object: DEPARE
+        actions:
+          - copy: {from: depthRangeMinimumValue, to: DRVAL1}
+          - copy: {from: depthRangeMaximumValue, to: DRVAL2}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

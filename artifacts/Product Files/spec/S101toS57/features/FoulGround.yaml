@@ -1,0 +1,29 @@
+feature: FoulGround
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  FoulGround maps to OBSTRN with CATOBS=7 and WATLEV=3 (always wet, always underwater).
+  valueOfSounding_to_UNKNOWN is a local rule — the sounding value has no direct S-57 target
+  for OBSTRN; confirm handling with S-65 Annex C.
+  techniqueOfVerticalMeasurement_to_TECSOU is a shared rule.
+
+extends: FeatureStandard
+params:
+  object: OBSTRN
+  feature_attrs:
+    - set: {attr: CATOBS, value: "7"}
+    - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+    - copy: {from: 'verticalUncertainty.uncertaintyFixed', to: SOUACC}
+    - apply: techniqueOfVerticalMeasurement_to_TECSOU
+    - cases:
+        - when: {undefined: valueOfSounding}
+          actions:
+            - unknown: VALSOU
+
+        - actions:
+            - copy: {from: valueOfSounding, to: VALSOU}
+    # TODO: valueOfSounding_to_UNKNOWN — no standard S-57 attribute; refer to S-65 Annex C
+    - set: {attr: WATLEV, value: "3"}
+  status: true
+  sordat: true
+  fileref: true

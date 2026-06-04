@@ -1,0 +1,14 @@
+feature: PilotageDistrictAssociation
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  PilotageDistrictAssociation is a collection/relationship container that links
+  PilotageDistrict to PilotBoardingPlace. It maps to C_AGGR with a collection
+  relationship code. No geographic output — purely structural.
+
+cases:
+  - create:
+      - object: C_AGGR
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+          # TODO: SetRelationshipCode collection — refer to S-65 Annex C for clarification

@@ -1,0 +1,10 @@
+feature: SpecialPurposeGeneralBuoy
+s65_annex_c: Table 19
+notes: >
+  TOPMAR is only produced when topmark.topmarkDaymarkShape is populated.
+
+extends: BuoyStandard
+params:
+  object: BOYSPP
+  category:
+    apply: categoryOfSpecialPurposeMark_to_CATSPM_INFORM

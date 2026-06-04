@@ -1,0 +1,8 @@
+feature: SafeWaterBuoy
+s65_annex_c: Table 17
+notes: >
+  TOPMAR is only produced when topmark.topmarkDaymarkShape is populated.
+
+extends: BuoyStandard
+params:
+  object: BOYSAW

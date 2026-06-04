@@ -1,0 +1,33 @@
+feature: OffshoreProductionArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  speedLimit_populated and speedLimit_units are XML attribute-script rules —
+  flagged as TODO pending DSL support.
+
+extends: FeatureStandard
+params:
+  object: OSPARE
+  feature_attrs:
+    - lookup:
+        source: categoryOfOffshoreProductionArea
+        target: CATPRA
+        cases:
+          2: "5"   # wave farm
+          3: "6"   # current farm
+          6: "9"   # solar
+        default: copy
+    - copy: {from: condition, to: CONDTN}
+    - apply: radarConspicuoustoCONRAD
+    - apply: visualProminence_to_CONVIS
+    - copy: {from: height, to: HEIGHT}
+    - apply: product_to_PRODCT_INFORM
+    - apply: restriction_to_RESTRN_INFORM
+    - apply: status_to_STATUS_INFORM
+    - copy: {from: verticalLength, to: VERLEN}
+        # TODO: speedLimit_populated and speedLimit_units — refer to S-65 Annex C for clarification
+  status: true
+  datend_datsta: true
+  sordat: true
+  fileref: true
+  contact: true

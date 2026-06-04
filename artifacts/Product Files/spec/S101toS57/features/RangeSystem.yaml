@@ -1,0 +1,31 @@
+feature: RangeSystem
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Three dispatch cases:
+  1. Has a LightAllAround child component with status=15 (synchronised) → C_ASSO collection.
+  2. Non-line geometry (no geometry) → C_AGGR with SetRelationshipCode.
+  3. Default (Line) → C_AGGR with ConvertToCollectionFeature.
+  Collection feature handling (ConvertToCollectionFeature / SetRelationshipCode) not fully
+  expressible in current DSL.
+
+cases:
+  - when: {has_child_component_with: {feature: LightAllAround, attr: status, value: "15"}}
+    create:
+      - object: C_ASSO
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+          # TODO: SetRelationshipCode collection — refer to S-65 Annex C for clarification
+
+  - when: {not: {geometry: Line}}
+    create:
+      - object: C_AGGR
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+          # TODO: SetRelationshipCode collection — refer to S-65 Annex C for clarification
+
+  - create:
+      - object: C_AGGR
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+          # TODO: ConvertToCollectionFeature — refer to S-65 Annex C for clarification

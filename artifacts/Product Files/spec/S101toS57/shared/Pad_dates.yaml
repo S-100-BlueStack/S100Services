@@ -1,0 +1,199 @@
+# Date-padding shared rules.
+#
+# S-101 stores dates in ISO 8601 partial format:
+#   YYYYMMDD  (full date — 8 digits)
+#   YYYYMM--  (year+month — 6 digits + --)
+#   YYYY----  (year only  — 4 digits + ----)
+#
+# S-57 stores only the numeric portion (strips the trailing dashes).
+# These rules strip the dashes and copy the result.
+# A fallback case emits a warning when the format is unrecognised.
+---
+rule: Pad_DATSTA
+description: Maps S-101 fixedDateRange.dateStart to S-57 DATSTA, stripping ISO date padding.
+
+cases:
+  - when: {matches_cs: ['fixedDateRange.dateStart', '^\\d{6}--$']}
+    actions:
+      - replace: {from: 'fixedDateRange.dateStart', to: DATSTA,
+                  pattern: '(\\d{6})(--)', capture: '$1'}
+
+  - when: {matches_cs: ['fixedDateRange.dateStart', '^\\d{4}----$']}
+    actions:
+      - replace: {from: 'fixedDateRange.dateStart', to: DATSTA,
+                  pattern: '(\\d{4})(----)', capture: '$1'}
+
+  - when:
+      or:
+        - {matches_cs: ['fixedDateRange.dateStart', '^\\d{8}$']}
+        - {unknown: 'fixedDateRange.dateStart'}
+    actions:
+      - copy: {from: 'fixedDateRange.dateStart', to: DATSTA}
+
+  - when:
+      not: {undefined: 'fixedDateRange.dateStart'}
+    actions:
+      - copy: {from: 'fixedDateRange.dateStart', to: DATSTA}
+      - warn: "S-101 fixedDateRange.dateStart copied to DATSTA; format may be incorrect."
+---
+rule: Pad_DATEND
+description: Maps S-101 fixedDateRange.dateEnd to S-57 DATEND, stripping ISO date padding.
+
+cases:
+  - when: {matches_cs: ['fixedDateRange.dateEnd', '^\\d{6}--$']}
+    actions:
+      - replace: {from: 'fixedDateRange.dateEnd', to: DATEND,
+                  pattern: '(\\d{6})(--)', capture: '$1'}
+
+  - when: {matches_cs: ['fixedDateRange.dateEnd', '^\\d{4}----$']}
+    actions:
+      - replace: {from: 'fixedDateRange.dateEnd', to: DATEND,
+                  pattern: '(\\d{4})(----)', capture: '$1'}
+
+  - when:
+      or:
+        - {matches_cs: ['fixedDateRange.dateEnd', '^\\d{8}$']}
+        - {unknown: 'fixedDateRange.dateEnd'}
+    actions:
+      - copy: {from: 'fixedDateRange.dateEnd', to: DATEND}
+
+  - when:
+      not: {undefined: 'fixedDateRange.dateEnd'}
+    actions:
+      - copy: {from: 'fixedDateRange.dateEnd', to: DATEND}
+      - warn: "S-101 fixedDateRange.dateEnd copied to DATEND; format may be incorrect."
+---
+rule: Pad_PERSTA
+description: Maps S-101 periodicDateRange.dateStart to S-57 PERSTA.
+
+cases:
+  - when: {matches_cs: ['periodicDateRange.dateStart', '^\\d{6}--$']}
+    actions:
+      - replace: {from: 'periodicDateRange.dateStart', to: PERSTA,
+                  pattern: '(\\d{6})(--)', capture: '$1'}
+
+  - when: {matches_cs: ['periodicDateRange.dateStart', '^\\d{4}----$']}
+    actions:
+      - replace: {from: 'periodicDateRange.dateStart', to: PERSTA,
+                  pattern: '(\\d{4})(----)', capture: '$1'}
+
+  - when:
+      or:
+        - {matches_cs: ['periodicDateRange.dateStart', '^\\d{8}$']}
+        - {unknown: 'periodicDateRange.dateStart'}
+    actions:
+      - copy: {from: 'periodicDateRange.dateStart', to: PERSTA}
+
+  - when:
+      not: {undefined: 'periodicDateRange.dateStart'}
+    actions:
+      - copy: {from: 'periodicDateRange.dateStart', to: PERSTA}
+      - warn: "S-101 periodicDateRange.dateStart copied to PERSTA; format may be incorrect."
+---
+rule: Pad_PEREND
+description: Maps S-101 periodicDateRange.dateEnd to S-57 PEREND.
+
+cases:
+  - when: {matches_cs: ['periodicDateRange.dateEnd', '^\\d{6}--$']}
+    actions:
+      - replace: {from: 'periodicDateRange.dateEnd', to: PEREND,
+                  pattern: '(\\d{6})(--)', capture: '$1'}
+
+  - when: {matches_cs: ['periodicDateRange.dateEnd', '^\\d{4}----$']}
+    actions:
+      - replace: {from: 'periodicDateRange.dateEnd', to: PEREND,
+                  pattern: '(\\d{4})(----)', capture: '$1'}
+
+  - when:
+      or:
+        - {matches_cs: ['periodicDateRange.dateEnd', '^\\d{8}$']}
+        - {unknown: 'periodicDateRange.dateEnd'}
+    actions:
+      - copy: {from: 'periodicDateRange.dateEnd', to: PEREND}
+
+  - when:
+      not: {undefined: 'periodicDateRange.dateEnd'}
+    actions:
+      - copy: {from: 'periodicDateRange.dateEnd', to: PEREND}
+      - warn: "S-101 periodicDateRange.dateEnd copied to PEREND; format may be incorrect."
+---
+rule: Pad_SORDAT
+description: Maps S-101 reportedDate to S-57 SORDAT.
+
+cases:
+  - when: {matches_cs: [reportedDate, '^\\d{6}--$']}
+    actions:
+      - replace: {from: reportedDate, to: SORDAT,
+                  pattern: '(\\d{6})(--)', capture: '$1'}
+
+  - when: {matches_cs: [reportedDate, '^\\d{4}----$']}
+    actions:
+      - replace: {from: reportedDate, to: SORDAT,
+                  pattern: '(\\d{4})(----)', capture: '$1'}
+
+  - when:
+      or:
+        - {matches_cs: [reportedDate, '^\\d{8}$']}
+        - {unknown: reportedDate}
+    actions:
+      - copy: {from: reportedDate, to: SORDAT}
+
+  - when:
+      not: {undefined: reportedDate}
+    actions:
+      - copy: {from: reportedDate, to: SORDAT}
+      - warn: "S-101 reportedDate copied to SORDAT; format may be incorrect."
+---
+rule: Pad_SURSTA
+description: Maps S-101 surveyDateRange.dateStart to S-57 SURSTA.
+
+cases:
+  - when: {matches_cs: ['surveyDateRange.dateStart', '^\\d{6}--$']}
+    actions:
+      - replace: {from: 'surveyDateRange.dateStart', to: SURSTA,
+                  pattern: '(\\d{6})(--)', capture: '$1'}
+
+  - when: {matches_cs: ['surveyDateRange.dateStart', '^\\d{4}----$']}
+    actions:
+      - replace: {from: 'surveyDateRange.dateStart', to: SURSTA,
+                  pattern: '(\\d{4})(----)', capture: '$1'}
+
+  - when:
+      or:
+        - {matches_cs: ['surveyDateRange.dateStart', '^\\d{8}$']}
+        - {unknown: 'surveyDateRange.dateStart'}
+    actions:
+      - copy: {from: 'surveyDateRange.dateStart', to: SURSTA}
+
+  - when:
+      not: {undefined: 'surveyDateRange.dateStart'}
+    actions:
+      - copy: {from: 'surveyDateRange.dateStart', to: SURSTA}
+      - warn: "S-101 surveyDateRange.dateStart copied to SURSTA; format may be incorrect."
+---
+rule: Pad_SUREND
+description: Maps S-101 surveyDateRange.dateEnd to S-57 SUREND.
+
+cases:
+  - when: {matches_cs: ['surveyDateRange.dateEnd', '^\\d{6}--$']}
+    actions:
+      - replace: {from: 'surveyDateRange.dateEnd', to: SUREND,
+                  pattern: '(\\d{6})(--)', capture: '$1'}
+
+  - when: {matches_cs: ['surveyDateRange.dateEnd', '^\\d{4}----$']}
+    actions:
+      - replace: {from: 'surveyDateRange.dateEnd', to: SUREND,
+                  pattern: '(\\d{4})(----)', capture: '$1'}
+
+  - when:
+      or:
+        - {matches_cs: ['surveyDateRange.dateEnd', '^\\d{8}$']}
+        - {unknown: 'surveyDateRange.dateEnd'}
+    actions:
+      - copy: {from: 'surveyDateRange.dateEnd', to: SUREND}
+
+  - when:
+      not: {undefined: 'surveyDateRange.dateEnd'}
+    actions:
+      - copy: {from: 'surveyDateRange.dateEnd', to: SUREND}
+      - warn: "S-101 surveyDateRange.dateEnd copied to SUREND; format may be incorrect."

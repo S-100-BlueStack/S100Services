@@ -1,0 +1,23 @@
+feature: Daymark
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: DAYMAR
+  feature_attrs:
+    - apply: categoryOfSpecialPurposeMark_to_CATSPM_INFORM
+    - copy: {from: colour, to: COLOUR}
+    - copy: {from: colourPattern, to: COLPAT}
+    - apply: Pad_DATEND
+    - apply: Pad_DATSTA
+    - copy: {from: elevation, to: ELEVAT}
+    - copy: {from: height, to: HEIGHT}
+    - apply: natureOfConstruction_to_NATCON_INFORM
+    - apply: Pad_PEREND
+    - apply: Pad_PERSTA
+    - copy: {from: topmarkDaymarkShape, to: TOPSHP}
+    - copy: {from: verticalLength, to: VERLEN}
+  status: true
+  fileref: true
+  contact: true

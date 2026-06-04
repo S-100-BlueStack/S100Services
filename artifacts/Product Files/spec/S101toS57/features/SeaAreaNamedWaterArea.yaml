@@ -1,0 +1,23 @@
+feature: SeaAreaNamedWaterArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: SEAARE
+  feature_attrs:
+    - lookup:
+        source: categoryOfSeaArea
+        target: CATSEA
+        cases:
+          19:
+            actions:
+              - set: {attr: INFORM, value: "Shoal area", append: true, sep: "; "}
+          20:
+            actions:
+              - set: {attr: INFORM, value: "Passage", append: true, sep: "; "}
+          21:
+            actions:
+              - set: {attr: INFORM, value: "Archipelago sea", append: true, sep: "; "}
+        default: copy
+  fileref: true

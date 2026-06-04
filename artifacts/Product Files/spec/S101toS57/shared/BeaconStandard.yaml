@@ -1,0 +1,67 @@
+template: BeaconStandard
+description: >
+  Standard beacon → S-57 conversion with optional TOPMAR.
+  Extending features declare params: object and (optionally) category.
+
+# Slots:
+#   ${object}     required  — S-57 object acronym (BCNCAR, BCNLAT, BCNSAW, BCNSPP, BCNISD …)
+#   ${category?}  optional  — copy or apply action inserted after natureOfConstruction_to_NATCON_INFORM
+#                             omit when the feature has no category attribute
+
+cases:
+  - create:
+      - object: ${object}
+        actions:
+          - info: "Creating ${object}"
+          - copy: {from: beaconShape, to: BCNSHP}
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - ${category?}
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: elevation, to: ELEVAT}
+          - copy: {from: height, to: HEIGHT}
+          - apply: marksNavigationalSystemOf_to_MARSYS_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: Pad_PEREND
+          - apply: Pad_PERSTA
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_to_INFORM_NINFOM
+          - apply: fileReference_to_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - from_related:
+              relation: AdditionalInformation/theInformation/ContactDetails
+              copy:
+                - {from: communicationChannel,           to: INFORM, append: true, sep: ";"}
+                - {from: callSign,                       to: INFORM, append: true, sep: ";"}
+                - {from: frequencyShoreStationTransmits, to: INFORM, append: true, sep: ";"}
+                - {from: contactInstructions,            to: INFORM, append: true, sep: ";"}
+          - from_related:
+              relation: AdditionalInformation/theInformation/NauticalInformation
+              copy:
+                - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+                - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+                - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+                - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+                - {from: pictorialRepresentation,        to: PICREP,  append: true, sep: ";"}
+
+      - object: TOPMAR
+        condition: {has: 'topmark.topmarkDaymarkShape'}
+        actions:
+          - info: "Creating TOPMAR"
+          - copy: {from: 'topmark.colour', to: COLOUR}
+          - copy: {from: 'topmark.colourPattern', to: COLPAT}
+          - copy: {from: 'topmark.topmarkDaymarkShape', to: TOPSHP}
+          - copy: {from: 'topmark.shapeInformation.text', to: INFORM}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - apply: Pad_PEREND
+          - apply: Pad_PERSTA

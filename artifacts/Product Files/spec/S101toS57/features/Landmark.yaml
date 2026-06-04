@@ -1,0 +1,123 @@
+feature: Landmark
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Four cases in order of priority:
+  1. categoryOfLandmark=22 or 23 (triangulation/survey point) → CTRPNT.
+  2. categoryOfLandmark=26 (bridge landmark), Point geometry → BRIDGE.
+  3. categoryOfLandmark=27 (dam landmark), Point geometry → DAMCON.
+  4. Default → LNDMRK; PILPNT added coincidentally when Point and inTheWater=True.
+  For BRIDGE, ServiceHours and NonStandardWorkingDay include fixedDateRange dates.
+  For LNDMRK, ServiceHours provides info text only (no dates).
+
+uses:
+  - radarConspicuoustoCONRAD
+  - visualProminence_to_CONVIS
+  - natureOfConstruction_to_NATCON_INFORM
+  - featureName_to_OBJNAM_NOBJNM
+  - Pad_SORDAT
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - Multiplicity_to_INFORM
+  - function_to_FUNCTN_INFORM
+  - status_to_STATUS_INFORM
+  - nauticalInformation_to_INFORM_NINFOM
+  - nauticalInformation_to_INFORM_NINFOM_PICREP
+  - serviceHours_to_INFORM_NINFOM
+  - serviceHours_dated_to_INFORM_NINFOM
+  - nonStandardWorkingDay_dated_to_INFORM_NINFOM
+
+cases:
+  - when: "categoryOfLandmark == '22' or categoryOfLandmark == '23'"
+    create:
+      - object: CTRPNT
+        actions:
+          - cases:
+              - when: {eq: [categoryOfLandmark, "22"]}
+                actions:
+                  - set: {attr: CATCTR, value: "1"}
+
+              - when: {eq: [categoryOfLandmark, "23"]}
+                actions:
+                  - set: {attr: CATCTR, value: "5"}
+          - copy: {from: elevation, to: ELEVAT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  - when: "categoryOfLandmark == '26' and geometry == Point"
+    create:
+      - object: BRIDGE
+        actions:
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: serviceHours_dated_to_INFORM_NINFOM
+          - apply: nonStandardWorkingDay_dated_to_INFORM_NINFOM
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  - when: "categoryOfLandmark == '27' and geometry == Point"
+    create:
+      - object: DAMCON
+        actions:
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: height, to: HEIGHT}
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM
+
+  - create:
+      - object: LNDMRK
+        actions:
+          - lookup:
+              source: categoryOfLandmark
+              target: CATLMK
+              cases:
+                24:
+                  actions:
+                    - set: {attr: INFORM, value: "Observation wheel", append: true, sep: "; "}
+                    - unknown: CATLMK
+                25:
+                  actions:
+                    - set: {attr: INFORM, value: "Torii", append: true, sep: "; "}
+                    - unknown: CATLMK
+              default: copy
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: Multiplicity_to_INFORM
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: elevation, to: ELEVAT}
+          - apply: function_to_FUNCTN_INFORM
+          - copy: {from: height, to: HEIGHT}
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: serviceHours_to_INFORM_NINFOM
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+      - object: PILPNT
+        condition: "geometry == Point and inTheWater == 'True'"
+        actions:
+          - message: {text: "PILPNT created coincident with LNDMRK in the water. Check for correct encoding.", severity: intervention}

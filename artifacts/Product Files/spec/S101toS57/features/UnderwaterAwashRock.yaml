@@ -1,0 +1,22 @@
+feature: UnderwaterAwashRock
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  SOUACC is pulled from the associated SpatialQuality feature's
+  spatialAccuracy/verticalUncertainty/uncertaintyFixed attribute.
+
+extends: FeatureStandard
+params:
+  object: UWTROC
+  feature_attrs:
+    - copy: {from: expositionOfSounding, to: EXPSOU}
+    - copy: {from: natureOfSurface, to: NATSUR}
+    - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+    - apply: status_to_STATUS_INFORM
+    - apply: techniqueOfVerticalMeasurement_to_TECSOU
+    - copy: {from: valueOfSounding, to: VALSOU}
+    - copy: {from: waterLevelEffect, to: WATLEV}
+    # SOUACC from SpatialQuality spatial association — not a standard from_related
+    # TODO: refer to S-65 Annex C for SpatialQuality SOUACC copy logic
+  sordat: true
+  fileref: true

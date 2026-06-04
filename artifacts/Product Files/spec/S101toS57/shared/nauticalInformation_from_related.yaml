@@ -1,0 +1,162 @@
+rule: nauticalInformation_to_INFORM_NINFOM
+actions:
+  - from_related:
+      relation: AdditionalInformation/theInformation/NauticalInformation
+      copy:
+        - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+        - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+        - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+        - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+---
+
+rule: contactDetails_to_INFORM
+actions:
+  - from_related:
+      relation: AdditionalInformation/theInformation/ContactDetails
+      copy:
+        - {from: communicationChannel,           to: INFORM, append: true, sep: ";"}
+        - {from: callSign,                       to: INFORM, append: true, sep: ";"}
+        - {from: frequencyShoreStationTransmits, to: INFORM, append: true, sep: ";"}
+        - {from: contactInstructions,            to: INFORM, append: true, sep: ";"}
+---
+
+rule: serviceHours_to_INFORM_NINFOM
+actions:
+  - from_related:
+      relation: AdditionalInformation/theInformation/ServiceHours
+      copy:
+        - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+        - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+        - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+        - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+---
+
+rule: serviceHours_dated_to_INFORM_NINFOM
+# Variant that also copies fixedDateRange dates to DATSTA/DATEND.
+actions:
+  - from_related:
+      relation: AdditionalInformation/theInformation/ServiceHours
+      copy:
+        - {from: 'fixedDateRange.dateStart',     to: DATSTA}
+        - {from: 'fixedDateRange.dateEnd',       to: DATEND}
+        - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+        - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+        - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+        - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+---
+
+rule: nonStandardWorkingDay_to_INFORM_NINFOM
+actions:
+  - from_related:
+      relation: AdditionalInformation/theInformation/NonStandardWorkingDay
+      copy:
+        - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+        - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+        - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+        - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+---
+
+rule: nonStandardWorkingDay_dated_to_INFORM_NINFOM
+# Variant that also copies fixedDateRange dates to DATSTA/DATEND.
+actions:
+  - from_related:
+      relation: AdditionalInformation/theInformation/NonStandardWorkingDay
+      copy:
+        - {from: 'fixedDateRange.dateStart',     to: DATSTA}
+        - {from: 'fixedDateRange.dateEnd',       to: DATEND}
+        - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+        - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+        - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+        - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+---
+
+rule: serviceHours_all_dates_to_INFORM_NINFOM
+# Variant that copies both fixedDateRange and periodicDateRange dates.
+actions:
+  - from_related:
+      relation: AdditionalInformation/theInformation/ServiceHours
+      copy:
+        - {from: 'fixedDateRange.dateStart',    to: DATSTA}
+        - {from: 'fixedDateRange.dateEnd',      to: DATEND}
+        - {from: 'periodicDateRange.dateStart', to: PERSTA}
+        - {from: 'periodicDateRange.dateEnd',   to: PEREND}
+        - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+        - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+        - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+        - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+---
+
+rule: serviceHours_periodic_to_INFORM_NINFOM
+# Variant that copies periodicDateRange dates only (no fixedDateRange).
+actions:
+  - from_related:
+      relation: AdditionalInformation/theInformation/ServiceHours
+      copy:
+        - {from: 'periodicDateRange.dateStart', to: PERSTA}
+        - {from: 'periodicDateRange.dateEnd',   to: PEREND}
+        - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+        - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+        - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+        - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+---
+
+rule: nonStandardWorkingDay_all_dates_to_INFORM_NINFOM
+# Variant that copies both fixedDateRange and periodicDateRange dates.
+actions:
+  - from_related:
+      relation: AdditionalInformation/theInformation/NonStandardWorkingDay
+      copy:
+        - {from: 'fixedDateRange.dateStart',    to: DATSTA}
+        - {from: 'fixedDateRange.dateEnd',      to: DATEND}
+        - {from: 'periodicDateRange.dateStart', to: PERSTA}
+        - {from: 'periodicDateRange.dateEnd',   to: PEREND}
+        - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+        - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+        - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+        - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+---
+
+rule: nonStandardWorkingDay_periodic_to_INFORM_NINFOM
+# Variant that copies periodicDateRange dates only (no fixedDateRange).
+actions:
+  - from_related:
+      relation: AdditionalInformation/theInformation/NonStandardWorkingDay
+      copy:
+        - {from: 'periodicDateRange.dateStart', to: PERSTA}
+        - {from: 'periodicDateRange.dateEnd',   to: PEREND}
+        - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+        - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+        - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+        - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+---
+
+rule: nauticalInformation_to_INFORM_NINFOM_PICREP
+actions:
+  - from_related:
+      relation: AdditionalInformation/theInformation/NauticalInformation
+      copy:
+        - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+        - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+        - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+        - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+        - {from: pictorialRepresentation,        to: PICREP,  append: true, sep: ";"}
+---
+
+rule: contactDetails_COMCHA_to_INFORM
+actions:
+  - from_related:
+      relation: AdditionalInformation/theInformation/ContactDetails
+      copy:
+        - {from: communicationChannel,           to: COMCHA, append: true, sep: ";"}
+        - {from: callSign,                       to: INFORM, append: true, sep: ";"}
+        - {from: frequencyShoreStationTransmits, to: INFORM, append: true, sep: ";"}
+        - {from: contactInstructions,            to: INFORM, append: true, sep: ";"}
+---
+
+rule: trafficSeparationScheme_to_CATTSS_INFORM
+actions:
+  - from_related:
+      relation: TrafficSeparationSchemeAggregation/theCollection/TrafficSeparationScheme
+      copy:
+        - {from: iMOAdopted,              to: CATTSS}
+        - {from: maximumPermittedDraught, to: INFORM, append: true, sep: "; "}

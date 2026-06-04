@@ -1,0 +1,7 @@
+feature: UpdateInformation
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+cases:
+  - do_not_map: true
+    message: "UpdateInformation features have no direct match in S-57"

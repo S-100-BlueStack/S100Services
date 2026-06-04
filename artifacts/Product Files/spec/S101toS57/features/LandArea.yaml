@@ -1,0 +1,13 @@
+feature: LandArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: LNDARE
+  feature_attrs:
+    - copy: {from: condition, to: CONDTN}
+  status: true
+  sordat: true
+  fileref: true
+  contact: true

@@ -1,0 +1,16 @@
+feature: InshoreTrafficZone
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  restriction_to_RESTRN_INFORM and speedLimit_populated/speedLimit_units are local shared rules.
+
+extends: FeatureStandard
+params:
+  object: ISTZNE
+  feature_attrs:
+    - apply: restriction_to_RESTRN_INFORM
+    - apply: speedLimit_populated
+    - apply: speedLimit_units
+  status: true
+  datend_datsta: true
+  fileref: true

@@ -1,0 +1,21 @@
+feature: LockBasin
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  horizontalClearanceFixed is a complex attribute with sub-attributes.
+  ServiceHours and NonStandardWorkingDay both provide fixedDateRange dates (DATSTA/DATEND)
+  as well as info text — use service_hours_dated and non_std_day_dated blocks.
+
+extends: FeatureStandard
+params:
+  object: LOKBSN
+  feature_attrs:
+    - copy: {from: 'horizontalClearanceFixed.horizontalDistanceUncertainty', to: HORACC}
+    - copy: {from: 'horizontalClearanceFixed.horizontalClearanceValue', to: HORCLR}
+    - copy: {from: horizontalLength, to: HORLEN}
+    - copy: {from: horizontalWidth, to: HORWID}
+  status: true
+  fileref: true
+  contact: true
+  service_hours_dated: true
+  non_std_day_dated: true

@@ -1,0 +1,8 @@
+feature: CollisionRegulationsLimit
+s65_annex_c: Table 33
+notes: >
+  Line geometry cannot be converted to CTNARE (Area or Point). All instances exit with
+  an intervention message.
+
+cases:
+  - exit: "S-101 CollisionRegulationsLimit Line feature cannot be converted to S-57 CTNARE. Check feature and digitise geometry as needed."

@@ -1,0 +1,33 @@
+feature: MooringArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  restriction_to_RESTRN_INFORM appears twice in the XML — preserved once here.
+  speedLimit_populated and speedLimit_units not in the XML for this feature (unlike some others).
+
+extends: FeatureStandard
+params:
+  object: ACHARE
+  feature_attrs:
+    - cases:
+        - when: {eq: [categoryOfMooringArea, "1"]}
+          actions:
+            - set: {attr: CATACH, value: "8"}
+
+        - when: {eq: [categoryOfMooringArea, "2"]}
+          actions:
+            - set: {attr: INFORM, value: "Mooring area for visitors", append: true, sep: "; "}
+
+        - when: {eq: [categoryOfMooringArea, "3"]}
+          actions:
+            - set: {attr: INFORM, value: "Mooring area for tankers", append: true, sep: "; "}
+    - apply: maximumPermittedDraught_to_INFORM
+    - apply: maximumPermittedVesselLength_to_INFORM
+    - apply: restriction_to_RESTRN_INFORM
+    - apply: status_to_STATUS_INFORM
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true
+  service_hours_all_dates: true
+  non_std_day_all_dates: true

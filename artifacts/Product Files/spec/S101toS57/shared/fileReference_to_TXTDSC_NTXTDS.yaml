@@ -1,0 +1,15 @@
+rule: fileReference_to_TXTDSC_NTXTDS
+description: >
+  Maps S-101 information file references to S-57 TXTDSC (English) and NTXTDS (national).
+  Uses the language of the first information item to determine which field is primary.
+
+cases:
+  - when: {contains: ['information[0].language', "eng"]}
+    actions:
+      - copy: {from: 'information[0].fileReference', to: TXTDSC, append: true, sep: "; "}
+      - copy: {from: 'information[1].fileReference', to: NTXTDS, append: true, sep: "; "}
+
+  - when: {contains: ['information[1].language', "eng"]}
+    actions:
+      - copy: {from: 'information[0].fileReference', to: NTXTDS, append: true, sep: "; "}
+      - copy: {from: 'information[1].fileReference', to: TXTDSC, append: true, sep: "; "}

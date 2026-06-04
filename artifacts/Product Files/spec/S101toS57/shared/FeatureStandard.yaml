@@ -1,0 +1,152 @@
+template: FeatureStandard
+description: >
+  Standard single-object feature. Always outputs: featureName → OBJNAM/NOBJNM, SCAMIN,
+  information → INFORM/NINFOM, and NauticalInformation from_related (with PICREP).
+  Everything else is opt-in via params.
+
+# Required params:
+#   ${object}                   S-57 object acronym
+#
+# Optional params — set true to include, omit to skip:
+#   ${feature_attrs?}           List of feature-specific actions inserted before featureName
+#   ${status?}                  true → status_to_STATUS_INFORM
+#   ${datend_datsta?}           true → Pad_DATEND + Pad_DATSTA
+#   ${perda?}                   true → Pad_PEREND + Pad_PERSTA
+#   ${sordat?}                  true → Pad_SORDAT
+#   ${fileref?}                 true → fileReference_to_TXTDSC_NTXTDS
+#   ${picrep?}                  true → copy pictorialRepresentation → PICREP (feature's own)
+#   ${contact?}                 true → ContactDetails from_related
+#   ${service_hours?}           true → ServiceHours: info text only
+#   ${service_hours_dated?}     true → ServiceHours: fixedDateRange + info text
+#   ${service_hours_all_dates?} true → ServiceHours: fixedDateRange + periodicDateRange + info text
+#   ${non_std_day?}             true → NonStandardWorkingDay: info text only
+#   ${non_std_day_dated?}       true → NonStandardWorkingDay: fixedDateRange + info text
+#   ${non_std_day_all_dates?}   true → NonStandardWorkingDay: fixedDateRange + periodicDateRange + info text
+
+optional_blocks:
+
+  status:
+    - apply: status_to_STATUS_INFORM
+
+  datend_datsta:
+    - apply: Pad_DATEND
+    - apply: Pad_DATSTA
+
+  perda:
+    - apply: Pad_PEREND
+    - apply: Pad_PERSTA
+
+  sordat:
+    - apply: Pad_SORDAT
+
+  fileref:
+    - apply: fileReference_to_TXTDSC_NTXTDS
+
+  picrep:
+    - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+
+  contact:
+    - from_related:
+        relation: AdditionalInformation/theInformation/ContactDetails
+        copy:
+          - {from: communicationChannel,           to: INFORM, append: true, sep: ";"}
+          - {from: callSign,                       to: INFORM, append: true, sep: ";"}
+          - {from: frequencyShoreStationTransmits, to: INFORM, append: true, sep: ";"}
+          - {from: contactInstructions,            to: INFORM, append: true, sep: ";"}
+
+  service_hours:
+    - from_related:
+        relation: AdditionalInformation/theInformation/ServiceHours
+        copy:
+          - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+          - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+          - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+          - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+
+  service_hours_dated:
+    - from_related:
+        relation: AdditionalInformation/theInformation/ServiceHours
+        copy:
+          - {from: 'fixedDateRange.dateStart',     to: DATSTA}
+          - {from: 'fixedDateRange.dateEnd',       to: DATEND}
+          - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+          - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+          - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+          - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+
+  service_hours_all_dates:
+    - from_related:
+        relation: AdditionalInformation/theInformation/ServiceHours
+        copy:
+          - {from: 'fixedDateRange.dateStart',     to: DATSTA}
+          - {from: 'fixedDateRange.dateEnd',       to: DATEND}
+          - {from: 'periodicDateRange.dateStart',  to: PERSTA}
+          - {from: 'periodicDateRange.dateEnd',    to: PEREND}
+          - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+          - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+          - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+          - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+
+  non_std_day:
+    - from_related:
+        relation: AdditionalInformation/theInformation/NonStandardWorkingDay
+        copy:
+          - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+          - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+          - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+          - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+
+  non_std_day_dated:
+    - from_related:
+        relation: AdditionalInformation/theInformation/NonStandardWorkingDay
+        copy:
+          - {from: 'fixedDateRange.dateStart',     to: DATSTA}
+          - {from: 'fixedDateRange.dateEnd',       to: DATEND}
+          - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+          - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+          - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+          - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+
+  non_std_day_all_dates:
+    - from_related:
+        relation: AdditionalInformation/theInformation/NonStandardWorkingDay
+        copy:
+          - {from: 'fixedDateRange.dateStart',     to: DATSTA}
+          - {from: 'fixedDateRange.dateEnd',       to: DATEND}
+          - {from: 'periodicDateRange.dateStart',  to: PERSTA}
+          - {from: 'periodicDateRange.dateEnd',    to: PEREND}
+          - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+          - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+          - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+          - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+
+cases:
+  - create:
+      - object: ${object}
+        actions:
+          - info: "Creating ${object}"
+          - ${feature_attrs?}
+          - ${status?}
+          - ${datend_datsta?}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - ${perda?}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - ${sordat?}
+          - apply: information_to_INFORM_NINFOM
+          - ${fileref?}
+          - ${picrep?}
+          - ${contact?}
+          - ${service_hours?}
+          - ${service_hours_dated?}
+          - ${service_hours_all_dates?}
+          - ${non_std_day?}
+          - ${non_std_day_dated?}
+          - ${non_std_day_all_dates?}
+          - from_related:
+              relation: AdditionalInformation/theInformation/NauticalInformation
+              copy:
+                - {from: 'information[0].text',          to: INFORM,  append: true, sep: ";"}
+                - {from: 'information[1].text',          to: NINFOM,  append: true, sep: ";"}
+                - {from: 'information[0].fileReference', to: TXTDSC,  append: true, sep: ";"}
+                - {from: 'information[1].fileReference', to: NTXTDS,  append: true, sep: ";"}
+                - {from: pictorialRepresentation,        to: PICREP,  append: true, sep: ";"}

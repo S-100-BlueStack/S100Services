@@ -1,0 +1,17 @@
+pipeline: S101toS57
+source:
+  catalogue: S-101
+  version: "2.0.0"
+target:
+  catalogue: S-57
+  edition: "3.1"
+
+debug: true                             # set true to enable - debug: "..." actions in rules
+
+defaults:
+  on_unmapped_feature: warn         # passthrough not valid cross-catalogue; warn | skip | error
+  on_unmapped_attribute: skip       # passthrough | skip | warn | error
+
+include:
+  - shared/*.yaml
+  - features/*.yaml

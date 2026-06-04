@@ -1,0 +1,15 @@
+feature: OilBarrier
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: OILBAR
+  feature_attrs:
+    - copy: {from: categoryOfOilBarrier, to: CATOLB}
+    - copy: {from: condition, to: CONDTN}
+    - apply: status_to_STATUS_INFORM
+  status: true
+  datend_datsta: true
+  sordat: true
+  fileref: true

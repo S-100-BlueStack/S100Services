@@ -1,0 +1,40 @@
+feature: ExclusiveEconomicZone
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Line geometry is not converted — S-57 has no line equivalent; encoder should create an Area
+  feature to cover. Area features with inDispute=True also produce a coincident CTNARE with
+  INFORM="In dispute". The CTNARE also carries its own information/fileReference attributes.
+
+uses:
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - when: {geometry: Line}
+    create:
+      - do_not_map: true
+        message: "not converted — no S-57 line equivalent; create an Area feature to cover"
+
+  - when: {eq: [inDispute, "True"]}
+    create:
+      - object: EXEZNE
+        actions:
+          - copy: {from: nationality, to: NATION}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM
+
+      - object: CTNARE
+        actions:
+          - set:   {attr: INFORM, value: "In dispute", append: true, sep: "; "}
+          - copy:  {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+
+  - create:
+      - object: EXEZNE
+        actions:
+          - copy: {from: nationality, to: NATION}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

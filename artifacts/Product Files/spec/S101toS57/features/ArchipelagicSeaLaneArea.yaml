@@ -1,0 +1,10 @@
+feature: ArchipelagicSeaLaneArea
+s65_annex_c: Table 4
+
+extends: FeatureStandard
+params:
+  object: ARCSLN
+  feature_attrs:
+    - copy: {from: nationality, to: NATION}
+  datend_datsta: true
+  fileref: true

@@ -1,0 +1,119 @@
+feature: Pile
+s65_annex_c: Clause 8.4  # S-65 Annex C Ed 1.0.0
+notes: >
+  Four dispatch cases in order:
+  1. categoryOfPile=8, Line, or (Area AND categoryOfPile != 6) → MORFAC (CATMOR=5).
+     Inline cases map category: 4→INFORM, 5→INFORM, !=8→CATPLE (8 suppressed — CATMOR=5 sufficient).
+  2. Area AND categoryOfPile = 6 → CTNARE with INFORM="Area of piles".
+  3. Point AND radarConspicuous=True → BCNSPP (BCNSHP=1, CATSPM=52, CONRAD=3).
+  4. Default → PILPNT.
+
+uses:
+  - radarConspicuoustoCONRAD
+  - visualProminence_to_CONVIS
+  - featureName_to_OBJNAM_NOBJNM
+  - status_to_STATUS_INFORM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - Pad_DATEND
+  - Pad_DATSTA
+  - Pad_PEREND
+  - Pad_PERSTA
+  - Pad_SORDAT
+  - contactDetails_to_INFORM
+  - nauticalInformation_to_INFORM_NINFOM
+  - nauticalInformation_to_INFORM_NINFOM_PICREP
+
+cases:
+  # categoryOfPile=8, Line, or Area(!= 6) → MORFAC
+  - when: "categoryOfPile == '8' or geometry == Line or (geometry == Area and categoryOfPile != '6')"
+    create:
+      - object: MORFAC
+        actions:
+          - set: {attr: CATMOR, value: "5"}
+          - cases:
+              - when: "categoryOfPile == '4'"
+                actions:
+                  - set: {attr: INFORM, value: "Fender pile", append: true, sep: "; "}
+              - when: "categoryOfPile == '5'"
+                actions:
+                  - set: {attr: INFORM, value: "Mooring pile", append: true, sep: "; "}
+              - when: "categoryOfPile != '8'"
+                actions:
+                  - copy: {from: categoryOfPile, to: CATPLE}
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: height, to: HEIGHT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: contactDetails_to_INFORM
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  # Area AND categoryOfPile = 6 → CTNARE
+  - when: "geometry == Area and categoryOfPile == '6'"
+    create:
+      - object: CTNARE
+        actions:
+          - set: {attr: INFORM, value: "Area of piles"}
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - apply: Pad_PEREND
+          - apply: Pad_PERSTA
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM
+
+  # Point AND radarConspicuous=True → BCNSPP
+  - when: "geometry == Point and radarConspicuous == 'True'"
+    create:
+      - object: BCNSPP
+        actions:
+          - set: {attr: BCNSHP, value: "1"}
+          - set: {attr: CATSPM, value: "52"}
+          - set: {attr: CONRAD, value: "3"}
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: visualProminence_to_CONVIS
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: height, to: HEIGHT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: Pad_PEREND
+          - apply: Pad_PERSTA
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+  # Default → PILPNT
+  - create:
+      - object: PILPNT
+        actions:
+          - copy: {from: categoryOfPile, to: CATPLE}
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: visualProminence_to_CONVIS
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: height, to: HEIGHT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

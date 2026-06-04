@@ -1,0 +1,40 @@
+feature: IslandGroup
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Two cases:
+  1. Area geometry — produces LNDRGN (INFORM="Island group") + C_AGGR collection.
+     The C_AGGR is created from the featureName attribute using CreateCollectionFeatureFromAttribute,
+     also with INFORM="Island group". ContactDetails information is copied to LNDRGN.
+  2. Non-area geometry (no geometry or line/point aggregation) — C_AGGR only (no geometry).
+  Note: the area case does NOT use featureName_to_OBJNAM_NOBJNM for the LNDRGN — the XML
+  calls featureName_to_OBJNAM_NOBJNM directly. The C_AGGR gets OBJNAM from featureName.
+
+uses:
+  - featureName_to_OBJNAM_NOBJNM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - contactDetails_to_INFORM
+
+cases:
+  - when: {not: {geometry: Area}}
+    create:
+      - object: C_AGGR
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+        # TODO: SetRelationshipCode="collection" — confirm YAML representation
+
+  - when: {geometry: Area}
+    create:
+      - object: LNDRGN
+        actions:
+          - set: {attr: INFORM, value: "Island group", append: true, sep: "; "}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: contactDetails_to_INFORM
+
+      - object: C_AGGR
+        actions:
+          - copy: {from: featureName, to: OBJNAM}
+          - set: {attr: INFORM, value: "Island group", append: true, sep: "; "}
+        # TODO: CreateCollectionFeatureFromAttribute semantics — confirm YAML equivalent

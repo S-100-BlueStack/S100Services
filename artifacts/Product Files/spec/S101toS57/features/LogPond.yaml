@@ -1,0 +1,9 @@
+feature: LogPond
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: LOGPON
+  status: true
+  fileref: true

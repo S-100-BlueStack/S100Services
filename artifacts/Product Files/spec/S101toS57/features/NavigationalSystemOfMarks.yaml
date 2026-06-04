@@ -1,0 +1,15 @@
+feature: NavigationalSystemOfMarks
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Maps to M_NSYS. The marksNavigationalSystemOf_to_MARSYS_INFORM rule handles the
+  MARSYS value and any INFORM fallback. Does not use the standard FeatureStandard
+  template because scaleMinimum is not copied (not present in XML for this feature).
+
+cases:
+  - create:
+      - object: M_NSYS
+        actions:
+          - apply: marksNavigationalSystemOf_to_MARSYS_INFORM
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

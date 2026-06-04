@@ -1,0 +1,43 @@
+feature: Dolphin
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Maps to MORFAC. categoryOfDolphin maps to CATMOR via a shared rule.
+  Also copies pictorialRepresentation from NauticalInformation related feature.
+
+extends: FeatureStandard
+params:
+  object: MORFAC
+  feature_attrs:
+    - cases:
+        - when:
+            or:
+              - {eq: [categoryOfDolphin, "1"]}
+              - {eq: [categoryOfDolphin, "2"]}
+          actions:
+            - copy: {from: categoryOfDolphin, to: CATMOR}
+
+        - when: {eq: [categoryOfDolphin, "3"]}
+          actions:
+            - set: {attr: INFORM, value: "berthing dolphin", append: true, sep: "; "}
+
+        - when: {eq: [categoryOfDolphin, "4"]}
+          actions:
+            - set: {attr: INFORM, value: "fender or breasting dolphin", append: true, sep: "; "}
+    - copy: {from: colour, to: COLOUR}
+    - copy: {from: colourPattern, to: COLPAT}
+    - copy: {from: condition, to: CONDTN}
+    - apply: radarConspicuoustoCONRAD
+    - apply: visualProminence_to_CONVIS
+    - apply: Pad_DATEND
+    - apply: Pad_DATSTA
+    - copy: {from: height, to: HEIGHT}
+    - apply: natureOfConstruction_to_NATCON_INFORM
+    - apply: Pad_PEREND
+    - apply: Pad_PERSTA
+    - copy: {from: verticalLength, to: VERLEN}
+  status: true
+  sordat: true
+  fileref: true
+  picrep: true
+  contact: true

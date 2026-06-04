@@ -1,0 +1,18 @@
+feature: StraightTerritorialSeaBaseline
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  No featureName mapping in XML — STSLNE has no OBJNAM attribute in S-57.
+
+uses:
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - create:
+      - object: STSLNE
+        actions:
+          - copy: {from: nationality, to: NATION}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

@@ -1,0 +1,55 @@
+feature: QualityOfBathymetricData
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Two dispatch cases:
+  1. categoryOfTemporalVariation = 2 or 3 → both CTNARE and M_QUAL.
+     CTNARE gets INFORM="likely to change" plus date padding and information.
+     M_QUAL gets the full quality attributes plus SpatialQuality related data.
+  2. Default → M_QUAL only.
+  SpatialQuality related copy uses AdditionalInformation/theQualityInformation path
+  (not theInformation) — note the different relation path.
+  Pad_ZOC_DATSTA and Pad_ZOC_DATEND are XML rules (ZOC-specific date padding) — flagged as TODO.
+
+uses:
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - Pad_SURSTA
+  - Pad_SUREND
+
+cases:
+  - when: "categoryOfTemporalVariation == '2' or categoryOfTemporalVariation == '3'"
+    create:
+      - object: CTNARE
+        actions:
+          - set: {attr: INFORM, value: "likely to change", append: true, sep: "; "}
+          # TODO: Pad_ZOC_DATSTA and Pad_ZOC_DATEND — refer to S-65 Annex C for clarification
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+      - object: M_QUAL
+        actions:
+          - copy: {from: 'zoneOfConfidence.categoryOfZoneOfConfidenceInData', to: CATZOC}
+          - copy: {from: depthRangeMinimumValue, to: DRVAL1}
+          - copy: {from: depthRangeMaximumValue, to: DRVAL2}
+          - apply: Pad_SURSTA
+          - apply: Pad_SUREND
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - from_related:
+              relation: AdditionalInformation/theQualityInformation/SpatialQuality
+              copy:
+                - {from: 'spatialAccuracy.verticalUncertainty.uncertaintyFixed',            to: SOUACC}
+                - {from: 'spatialAccuracy.horizontalPositionUncertainty.uncertaintyFixed',  to: POSACC}
+          - message: {text: "QualityOfBathymetricData with categoryOfTemporalVariation=2 or 3 converted to both CTNARE and M_QUAL. Check for correct encoding.", severity: intervention}
+
+  - create:
+      - object: M_QUAL
+        actions:
+          - copy: {from: 'zoneOfConfidence.categoryOfZoneOfConfidenceInData', to: CATZOC}
+          - copy: {from: depthRangeMinimumValue, to: DRVAL1}
+          - copy: {from: depthRangeMaximumValue, to: DRVAL2}
+          - apply: Pad_SUREND
+          - apply: Pad_SURSTA
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - from_related:
+              relation: AdditionalInformation/theQualityInformation/SpatialQuality
+              copy:
+                - {from: 'spatialAccuracy.verticalUncertainty.uncertaintyFixed',            to: SOUACC}
+                - {from: 'spatialAccuracy.horizontalPositionUncertainty.uncertaintyFixed',  to: POSACC}

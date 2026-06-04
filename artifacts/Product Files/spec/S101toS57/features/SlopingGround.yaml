@@ -1,0 +1,50 @@
+feature: SlopingGround
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Area features that are not a cliff (categoryOfSlope != 6) and not radar conspicuous also
+  produce a companion LNDMRK with CATLMK set to unknown. The LNDMRK is also produced for
+  area features where categoryOfSlope is undefined or unknown.
+  Non-area (Point/Line) and area cliff/radar features produce SLOGRD only.
+
+uses:
+  - radarConspicuoustoCONRAD
+  - visualProminence_to_CONVIS
+  - featureName_to_OBJNAM_NOBJNM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - when: "geometry == Area and (undefined categoryOfSlope or (categoryOfSlope != '6' and radarConspicuous != 'True'))"
+    create:
+      - object: SLOGRD
+        actions:
+          - copy: {from: categoryOfSlope, to: CATSLO}
+          - copy: {from: colour, to: COLOUR}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: natureOfSurface, to: NATSUR, append: true, sep: ","}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM
+      - object: LNDMRK
+        actions:
+          - undefined: CATLMK
+          - apply: visualProminence_to_CONVIS
+          - cases:
+              - when: {eq: [categoryOfSlope, "6"]}
+                actions:
+                  - set: {attr: INFORM, value: "Cliff", append: true, sep: "; "}
+  - create:
+      - object: SLOGRD
+        actions:
+          - copy: {from: categoryOfSlope, to: CATSLO}
+          - copy: {from: colour, to: COLOUR}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: natureOfSurface, to: NATSUR, append: true, sep: ","}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

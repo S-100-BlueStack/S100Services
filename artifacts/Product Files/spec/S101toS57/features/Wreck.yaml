@@ -1,0 +1,27 @@
+feature: Wreck
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  All Wreck features map to WRECKS regardless of categoryOfWreck.
+  SOUACC is pulled from the associated SpatialQuality feature's
+  spatialAccuracy/verticalUncertainty/uncertaintyFixed attribute.
+
+extends: FeatureStandard
+params:
+  object: WRECKS
+  feature_attrs:
+    - copy: {from: categoryOfWreck, to: CATWRK}
+    - apply: radarConspicuoustoCONRAD
+    - apply: visualProminence_to_CONVIS
+    - copy: {from: expositionOfSounding, to: EXPSOU}
+    - copy: {from: height, to: HEIGHT}
+    - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+    - apply: status_to_STATUS_INFORM
+    - apply: techniqueOfVerticalMeasurement_to_TECSOU
+    - copy: {from: valueOfSounding, to: VALSOU}
+    - copy: {from: waterLevelEffect, to: WATLEV}
+    # SOUACC from SpatialQuality spatial association — not a standard from_related
+    # TODO: refer to S-65 Annex C for SpatialQuality SOUACC copy logic
+  sordat: true
+  fileref: true
+  picrep: true

@@ -1,0 +1,77 @@
+feature: Building
+s65_annex_c: Table 24
+notes: >
+  Point features in the water also produce a coincident PILPNT.
+
+uses:
+  - radarConspicuoustoCONRAD
+  - Multiplicity_to_INFORM
+  - visualProminence_to_CONVIS
+  - function_to_FUNCTN_INFORM
+  - natureOfConstruction_to_NATCON_INFORM
+  - featureName_to_OBJNAM_NOBJNM
+  - status_to_STATUS_INFORM
+  - Pad_SORDAT
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - contactDetails_to_INFORM
+  - nauticalInformation_to_INFORM_NINFOM_PICREP
+  - nonStandardWorkingDay_to_INFORM_NINFOM
+  - serviceHours_to_INFORM_NINFOM
+
+cases:
+  - when: {and: [{geometry: Point}, {eq: [inTheWater, "True"]}]}
+    create:
+      - object: BUISGL
+        actions:
+          - copy: {from: buildingShape, to: BUISHP}
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: Multiplicity_to_INFORM
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: elevation, to: ELEVAT}
+          - apply: function_to_FUNCTN_INFORM
+          - copy: {from: height, to: HEIGHT}
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: contactDetails_to_INFORM
+          - apply: serviceHours_to_INFORM_NINFOM
+          - apply: nonStandardWorkingDay_to_INFORM_NINFOM
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+      - object: PILPNT
+        actions:
+          - warn: "PILPNT created coincident with BUISGL in the water. Check for correct encoding."
+
+  - create:
+      - object: BUISGL
+        actions:
+          - copy: {from: buildingShape, to: BUISHP}
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: Multiplicity_to_INFORM
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: elevation, to: ELEVAT}
+          - apply: function_to_FUNCTN_INFORM
+          - copy: {from: height, to: HEIGHT}
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: contactDetails_to_INFORM
+          - apply: serviceHours_to_INFORM_NINFOM
+          - apply: nonStandardWorkingDay_to_INFORM_NINFOM
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP

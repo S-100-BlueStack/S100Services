@@ -1,0 +1,10 @@
+feature: WeedKelp
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: WEDKLP
+  feature_attrs:
+    - copy: {from: categoryOfWeedKelp, to: CATWED}
+  fileref: true

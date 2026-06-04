@@ -1,0 +1,16 @@
+feature: Retroreflector
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: RETRFL
+  feature_attrs:
+    - copy: {from: colour, to: COLOUR}
+    - copy: {from: colourPattern, to: COLPAT}
+    - copy: {from: height, to: HEIGHT}
+    - apply: status_to_STATUS_INFORM
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true

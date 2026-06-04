@@ -1,0 +1,99 @@
+feature: Pontoon
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Three dispatch cases:
+  1. Area AND has fixedDateRange dates → PONTON + secondary CTNARE (fixeddates/periodicdates_to_INFORM).
+     PONTON in this case does NOT include DATEND/DATSTA/PEREND/PERSTA (omitted in XML).
+  2. Area (no specific dates filter) → PONTON with Pad_DATEND/DATSTA/PEREND/PERSTA.
+  3. Default (non-area) → PONTON with dates + scaleMinimum (IIC fix noted in XML).
+  PONTON is a Skin of the Earth feature in S-57 — cartographic intervention required.
+  fixeddates_to_INFORM and periodicdates_to_INFORM are XML attribute-mapping rules — flagged as TODO.
+
+uses:
+  - radarConspicuoustoCONRAD
+  - visualProminence_to_CONVIS
+  - featureName_to_OBJNAM_NOBJNM
+  - status_to_STATUS_INFORM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+  - Pad_DATEND
+  - Pad_DATSTA
+  - Pad_PEREND
+  - Pad_PERSTA
+
+cases:
+  # Area with fixedDateRange dates → PONTON (no date attrs) + CTNARE
+  - when: "geometry == Area and (has fixedDateRange.dateEnd or has fixedDateRange.dateStart)"
+    create:
+      - object: PONTON
+        actions:
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM
+          - message: {text: "Cartographic intervention required: PONTON is a Skin of the Earth feature. Amend surrounding Depth/Dredged area to cut a hole for the PONTON.", severity: intervention}
+      - object: CTNARE
+        actions:
+          # TODO: fixeddates_to_INFORM and periodicdates_to_INFORM — refer to S-65 Annex C for clarification
+          - apply: fixeddates_to_INFORM
+          - cases:
+              - when:
+                  and:
+                    - {has_value: 'periodicDateRange.dateStart'}
+                    - {has_value: 'periodicDateRange.dateEnd'}
+                actions:
+                  - set: {attr: INFORM, value: "Period from", append: true, sep: "; "}
+                  - copy: {from: 'periodicDateRange.dateStart', to: INFORM, append: true}
+                  - set: {attr: INFORM, value: "to", append: true}
+                  - copy: {from: 'periodicDateRange.dateEnd', to: INFORM, append: true}
+
+              - when: {has_value: 'periodicDateRange.dateStart'}
+                actions:
+                  - set: {attr: INFORM, value: "Period start on", append: true, sep: "; "}
+                  - copy: {from: 'periodicDateRange.dateStart', to: INFORM, append: true}
+
+              - when: {has_value: 'periodicDateRange.dateEnd'}
+                actions:
+                  - set: {attr: INFORM, value: "Period end on", append: true, sep: "; "}
+                  - copy: {from: 'periodicDateRange.dateEnd', to: INFORM, append: true}
+  # Area (no date condition) → PONTON with dates
+  - when: "geometry == Area"
+    create:
+      - object: PONTON
+        actions:
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: Pad_PEREND
+          - apply: Pad_PERSTA
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM
+          - message: {text: "Cartographic intervention required: PONTON is a Skin of the Earth feature. Amend surrounding Depth/Dredged area to cut a hole for the PONTON.", severity: intervention}
+
+  # Default (non-area) → PONTON with SCAMIN (IIC fix)
+  - create:
+      - object: PONTON
+        actions:
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: Pad_PEREND
+          - apply: Pad_PERSTA
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: nauticalInformation_to_INFORM_NINFOM

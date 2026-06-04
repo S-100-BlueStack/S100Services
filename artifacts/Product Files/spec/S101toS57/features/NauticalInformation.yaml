@@ -1,0 +1,11 @@
+feature: NauticalInformation
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  NauticalInformation is a pure information type with no direct S-57 equivalent.
+  Its attributes are copied into related feature objects via from_related blocks.
+  The feature itself produces no S-57 output.
+
+cases:
+  - do_not_map: true
+    message: "not converted to S-57 — attributes copied to related features"

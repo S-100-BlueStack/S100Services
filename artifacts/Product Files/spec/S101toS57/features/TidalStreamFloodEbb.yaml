@@ -1,0 +1,13 @@
+feature: TidalStreamFloodEbb
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: TS_FEB
+  feature_attrs:
+    - copy: {from: categoryOfTidalStream, to: CAT_TS}
+    - copy: {from: 'speed.speedMaximum', to: CURVEL}
+    - copy: {from: 'orientation.orientationValue', to: ORIENT}
+  datend_datsta: true
+  fileref: true

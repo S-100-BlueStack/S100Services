@@ -1,0 +1,17 @@
+feature: Dyke
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: DYKCON
+  feature_attrs:
+    - copy: {from: condition, to: CONDTN}
+    - apply: radarConspicuoustoCONRAD
+    - apply: Pad_DATEND
+    - apply: Pad_DATSTA
+    - copy: {from: height, to: HEIGHT}
+    - apply: natureOfConstruction_to_NATCON_INFORM
+    - copy: {from: verticalLength, to: VERLEN}
+  sordat: true
+  fileref: true

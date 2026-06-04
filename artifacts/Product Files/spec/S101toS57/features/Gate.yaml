@@ -1,0 +1,27 @@
+feature: Gate
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  horizontalClearanceOpen and verticalClearanceOpen are complex attributes with sub-attributes.
+  verticalUncertainty.uncertaintyFixed → SOUACC (depth quality).
+
+extends: FeatureStandard
+params:
+  object: GATCON
+  feature_attrs:
+    - copy: {from: categoryOfGate, to: CATGAT}
+    - copy: {from: condition, to: CONDTN}
+    - copy: {from: depthRangeMinimumValue, to: DRVAL1}
+    - copy: {from: 'horizontalClearanceOpen.horizontalDistanceUncertainty', to: HORACC}
+    - copy: {from: 'horizontalClearanceOpen.horizontalClearanceValue', to: HORCLR}
+    - apply: natureOfConstruction_to_NATCON_INFORM
+    - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+    - copy: {from: 'verticalUncertainty.uncertaintyFixed', to: SOUACC}
+    - copy: {from: 'verticalClearanceOpen.verticalUncertainty.uncertaintyFixed', to: VERACC}
+    - copy: {from: 'verticalClearanceOpen.verticalClearanceValue', to: VERCLR}
+    - copy: {from: verticalDatum, to: VERDAT}
+  status: true
+  fileref: true
+  contact: true
+  service_hours: true
+  non_std_day: true

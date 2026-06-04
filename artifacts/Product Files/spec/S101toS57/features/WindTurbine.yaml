@@ -1,0 +1,72 @@
+feature: WindTurbine
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  All WindTurbine features map to LNDMRK with CATLMK=19 (wind motor).
+  Point features with inTheWater=True also produce a coincident PILPNT.
+
+uses:
+  - radarConspicuoustoCONRAD
+  - Multiplicity_to_INFORM
+  - visualProminence_to_CONVIS
+  - natureOfConstruction_to_NATCON_INFORM
+  - featureName_to_OBJNAM_NOBJNM
+  - status_to_STATUS_INFORM
+  - Pad_SORDAT
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM_PICREP
+  - nonStandardWorkingDay_to_INFORM_NINFOM
+  - serviceHours_to_INFORM_NINFOM
+
+cases:
+  - when: {and: [{geometry: Point}, {eq: [inTheWater, "True"]}]}
+    create:
+      - object: LNDMRK
+        actions:
+          - set: {attr: CATLMK, value: "19"}
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: Multiplicity_to_INFORM
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: elevation, to: ELEVAT}
+          - copy: {from: height, to: HEIGHT}
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: serviceHours_to_INFORM_NINFOM
+          - apply: nonStandardWorkingDay_to_INFORM_NINFOM
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+      - object: PILPNT
+        actions:
+          - message: {text: "PILPNT created coincident with LNDMRK/CATLMK=19 (wind motor) in the water. Check for correct encoding.", severity: intervention}
+
+  - create:
+      - object: LNDMRK
+        actions:
+          - set: {attr: CATLMK, value: "19"}
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: Multiplicity_to_INFORM
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: elevation, to: ELEVAT}
+          - copy: {from: height, to: HEIGHT}
+          - apply: natureOfConstruction_to_NATCON_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: serviceHours_to_INFORM_NINFOM
+          - apply: nonStandardWorkingDay_to_INFORM_NINFOM
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP

@@ -1,0 +1,10 @@
+feature: ArchipelagicSeaLaneAxis
+s65_annex_c: Table 5
+
+extends: FeatureStandard
+params:
+  object: ASLXIS
+  feature_attrs:
+    - copy: {from: nationality, to: NATION}
+  datend_datsta: true
+  fileref: true

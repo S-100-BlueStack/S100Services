@@ -1,0 +1,43 @@
+feature: TerritorialSeaArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Line geometry has no S-57 equivalent and is explicitly not converted.
+  Area features with inDispute=True produce both TESARE and a companion CTNARE with
+  INFORM="In dispute".
+  All other area features produce TESARE only.
+
+uses:
+  - restriction_to_RESTRN_INFORM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - when: {geometry: Line}
+    create:
+      - do_not_map: true
+        message: "TerritorialSeaArea Line features have no match in S-57. Create an Area feature to cover."
+
+  - when: {eq: [inDispute, "True"]}
+    create:
+      - object: TESARE
+        actions:
+          - copy: {from: nationality, to: NATION}
+          - apply: restriction_to_RESTRN_INFORM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM
+      - object: CTNARE
+        actions:
+          - set: {attr: INFORM, value: "In dispute", append: true, sep: "; "}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+
+  - create:
+      - object: TESARE
+        actions:
+          - copy: {from: nationality, to: NATION}
+          - apply: restriction_to_RESTRN_INFORM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

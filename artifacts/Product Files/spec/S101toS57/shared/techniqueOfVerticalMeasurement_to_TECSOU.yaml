@@ -1,0 +1,21 @@
+rule: techniqueOfVerticalMeasurement_to_TECSOU
+description: >
+  Maps S-101 techniqueOfVerticalMeasurement to S-57 TECSOU.
+  Values 15 and 18 are remapped. Values 16 and 17 have no S-57 equivalent
+  and are written to INFORM instead.
+
+lookup:
+  source: techniqueOfVerticalMeasurement
+  target: TECSOU
+  cases:
+    15: "7"
+    18: "6"
+    16:
+      actions:
+        - set: {attr: INFORM, value: "Synthetic Aperture Radar", append: true, sep: "; "}
+        - undefined: TECSOU
+    17:
+      actions:
+        - set: {attr: INFORM, value: "Hyperspectral Imagery", append: true, sep: "; "}
+        - undefined: TECSOU
+  default: copy

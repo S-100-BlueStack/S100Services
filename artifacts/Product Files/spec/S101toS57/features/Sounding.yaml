@@ -1,0 +1,33 @@
+feature: Sounding
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  EXPSOU is populated by the SetEXPSOU script (CARIS). SOUACC is pulled from the associated
+  SpatialQuality feature's spatialAccuracy/verticalUncertainty/uncertaintyFixed attribute.
+  No featureName mapping in the XML despite featureName_to_OBJNAM_NOBJNM being applied —
+  soundings rarely have names.
+  # TODO: refer to S-65 Annex C for SetEXPSOU logic.
+
+uses:
+  - featureName_to_OBJNAM_NOBJNM
+  - status_to_STATUS_INFORM
+  - techniqueOfVerticalMeasurement_to_TECSOU
+  - Pad_SORDAT
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - create:
+      - object: SOUNDG
+        actions:
+          # TODO: SetEXPSOU script — refer to S-65 Annex C for expositionOfSounding logic
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+          - apply: status_to_STATUS_INFORM
+          - apply: techniqueOfVerticalMeasurement_to_TECSOU
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          # SOUACC from SpatialQuality spatial association (not a standard from_related)
+          # TODO: refer to S-65 Annex C for SpatialQuality SOUACC copy logic
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

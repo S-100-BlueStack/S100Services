@@ -1,0 +1,136 @@
+# Category and enumeration lookup rules.
+# Each rule maps one S-101 category attribute to its S-57 equivalent,
+# handling values that are remapped, deprecated, or overflow into INFORM.
+---
+rule: categoryOfSpecialPurposeMark_to_CATSPM_INFORM
+description: >
+  Maps S-101 categoryOfSpecialPurposeMark to S-57 CATSPM.
+  Values 57–62 collapse to CATSPM=27 (other) with the name written to INFORM.
+  Value 63 has no CATSPM equivalent.
+
+lookup:
+  source: categoryOfSpecialPurposeMark
+  target: CATSPM
+  cases:
+    57:
+      actions:
+        - set: {attr: INFORM, value: "Ice mark", append: true, sep: "; "}
+        - set: {attr: CATSPM, value: "27"}
+    58:
+      actions:
+        - set: {attr: INFORM, value: "Marine farm mark", append: true, sep: "; "}
+        - set: {attr: CATSPM, value: "27"}
+    59:
+      actions:
+        - set: {attr: INFORM, value: "Fish aggregating device", append: true, sep: "; "}
+        - set: {attr: CATSPM, value: "27"}
+    60:
+      actions:
+        - set: {attr: INFORM, value: "Wreck mark", append: true, sep: "; "}
+        - set: {attr: CATSPM, value: "27"}
+    61:
+      actions:
+        - set: {attr: INFORM, value: "Customs mark", append: true, sep: "; "}
+        - set: {attr: CATSPM, value: "27"}
+    62:
+      actions:
+        - set: {attr: INFORM, value: "Causeway mark", append: true, sep: "; "}
+        - set: {attr: CATSPM, value: "27"}
+    63:
+      actions:
+        - set: {attr: INFORM, value: "Wave recorder", append: true, sep: "; "}
+        - unknown: CATSPM
+  default: copy
+---
+rule: categoryOfCabletoCATCBL
+description: Maps S-101 categoryOfCable to S-57 CATCBL, with overflow to INFORM.
+
+lookup:
+  source: categoryOfCable
+  target: CATCBL
+  cases:
+    7:
+      actions:
+        - set: {attr: INFORM, value: "Ferry Cable", append: true, sep: "; "}
+    9:
+      actions:
+        - set: {attr: INFORM, value: "Junction Cable", append: true, sep: "; "}
+    10: "4"
+  default: copy
+---
+rule: categoryOfAnchorage_to_INFORM
+description: >
+  Maps S-101 categoryOfAnchorage to S-57 CATACH.
+  Values 14 and 15 have no direct CATACH equivalent.
+
+lookup:
+  source: categoryOfAnchorage
+  target: CATACH
+  cases:
+    14:
+      actions:
+        - set: {attr: INFORM, value: "Waiting anchorage", append: true, sep: "; "}
+    15:
+      actions:
+        - set: {attr: CATACH, value: "1"}
+        - set: {attr: INFORM, value: "Reported anchorage", append: true, sep: "; "}
+        - set: {attr: STATUS, value: "3"}
+  default: copy
+---
+rule: categoryOfCargo_to_INFORM
+description: >
+  Maps S-101 categoryOfCargo to S-57 CATACH (value 7 on AnchorageArea) or INFORM.
+
+cases:
+  - when:
+      and:
+        - {eq: [categoryOfCargo, "7"]}
+        - {feature_type: AnchorageArea}
+    actions:
+      - set: {attr: CATACH, value: "4", append: true, sep: "; "}
+
+  - when: {eq: [categoryOfCargo, "1"]}
+    actions:
+      - set: {attr: INFORM, value: "bulk cargo", append: true, sep: "; "}
+  - when: {eq: [categoryOfCargo, "2"]}
+    actions:
+      - set: {attr: INFORM, value: "container cargo", append: true, sep: "; "}
+  - when: {eq: [categoryOfCargo, "3"]}
+    actions:
+      - set: {attr: INFORM, value: "general cargo", append: true, sep: "; "}
+  - when: {eq: [categoryOfCargo, "4"]}
+    actions:
+      - set: {attr: INFORM, value: "liquid cargo", append: true, sep: "; "}
+  - when: {eq: [categoryOfCargo, "5"]}
+    actions:
+      - set: {attr: INFORM, value: "passenger cargo", append: true, sep: "; "}
+  - when: {eq: [categoryOfCargo, "6"]}
+    actions:
+      - set: {attr: INFORM, value: "livestock cargo", append: true, sep: "; "}
+  - when: {eq: [categoryOfCargo, "7"]}
+    actions:
+      - set: {attr: INFORM, value: "dangerous or hazardous cargo", append: true, sep: "; "}
+  - when: {eq: [categoryOfCargo, "8"]}
+    actions:
+      - set: {attr: INFORM, value: "heavy lift cargo", append: true, sep: "; "}
+  - when: {eq: [categoryOfCargo, "9"]}
+    actions:
+      - set: {attr: INFORM, value: "ballast cargo", append: true, sep: "; "}
+  - when: {eq: [categoryOfCargo, "10"]}
+    actions:
+      - set: {attr: INFORM, value: "dry bulk cargo", append: true, sep: "; "}
+  - when: {eq: [categoryOfCargo, "11"]}
+    actions:
+      - set: {attr: INFORM, value: "liquid bulk cargo", append: true, sep: "; "}
+  - when: {eq: [categoryOfCargo, "12"]}
+    actions:
+      - set: {attr: INFORM, value: "reefer container cargo", append: true, sep: "; "}
+  - when: {eq: [categoryOfCargo, "13"]}
+    actions:
+      - set: {attr: INFORM, value: "Ro-Ro cargo", append: true, sep: "; "}
+  - when: {eq: [categoryOfCargo, "14"]}
+    actions:
+      - set: {attr: INFORM, value: "project cargo", append: true, sep: "; "}
+  - when: {eq: [categoryOfCargo, "15"]}
+    actions:
+      - set: {attr: INFORM, value: "break bulk cargo", append: true, sep: "; "}

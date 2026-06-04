@@ -1,0 +1,34 @@
+feature: HarbourFacility
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  categoryOfHarbourFacility_to_CATHAF_INFORM is a local shared rule.
+  speedLimit_populated and speedLimit_units are local rules for speed limits → INFORM.
+
+extends: FeatureStandard
+params:
+  object: HRBFAC
+  feature_attrs:
+    - lookup:
+        source: categoryOfHarbourFacility
+        target: CATHAF
+        cases:
+          14:
+            actions:
+              - set: {attr: INFORM, value: "Service harbour", append: true, sep: "; "}
+              - unknown: CATHAF
+          15:
+            actions:
+              - set: {attr: INFORM, value: "Pilotage service", append: true, sep: "; "}
+              - unknown: CATHAF
+        default: copy
+    - copy: {from: condition, to: CONDTN}
+    - apply: natureOfConstruction_to_NATCON_INFORM
+    - apply: speedLimit_populated
+    - apply: speedLimit_units
+  status: true
+  datend_datsta: true
+  perda: true
+  sordat: true
+  fileref: true
+  contact: true

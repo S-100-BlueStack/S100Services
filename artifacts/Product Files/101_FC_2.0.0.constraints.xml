@@ -1,0 +1,500 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Rules xmlns:S100FC="http://www.iho.int/S100FC/5.2">
+	<Rule attribute="rhythmOfLight" code="LightAllAround">
+		<type>ConditionalMandatory</type>
+		<condition>
+			<attribute>lightCharacteristic</attribute>
+			<operator>ne</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="signalGroup" />
+			<attribute ref="signalPeriod" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule attribute="rhythmOfLight" code="LightFogDetector">
+		<type>ConditionalMandatory</type>
+		<condition>
+			<attribute>lightCharacteristic</attribute>
+			<operator>ne</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="signalGroup" />
+			<attribute ref="signalPeriod" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule attribute="rhythmOfLight" code="LightAirObstruction">
+		<type>ConditionalMandatory</type>
+		<condition>
+			<attribute>lightCharacteristic</attribute>
+			<operator>ne</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="signalGroup" />
+			<attribute ref="signalPeriod" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule attribute="sectorCharacteristics" code="LightSectored">
+		<type>ConditionalMandatory</type>
+		<condition>
+			<attribute>lightCharacteristic</attribute>
+			<operator>ne</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="signalGroup" />
+			<attribute ref="signalPeriod" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule attribute="verticalClearanceOpen" code="SpanOpening">
+		<type>ConditionalMandatory</type>
+		<condition>
+			<attribute>verticalClearanceUnlimited</attribute>
+			<operator>eq</operator>
+			<value>False</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="verticalClearanceValue" />
+		</subAttributeBinding>
+	</Rule>
+
+	<Rule code="LandRegion">
+		<type>ConditionalMandatory</type>
+		<subAttributeBinding>
+			<attribute ref="categoryOfLandRegion" />
+			<attribute ref="featureName" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="SeaAreaNamedWaterArea">
+		<type>ConditionalMandatory</type>
+		<subAttributeBinding>
+			<attribute ref="categoryOfSeaArea" />
+			<attribute ref="featureName" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="NonStandardWorkingDay">
+		<type>ConditionalMandatory</type>
+		<subAttributeBinding>
+			<attribute ref="dateFixed" />
+			<attribute ref="dateVariable" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="SpatialQuality">
+		<type>ConditionalMandatory</type>
+		<subAttributeBinding>
+			<attribute ref="qualityOfHorizontalMeasurement" />
+			<attribute ref="spatialAccuracy" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="Chart1Feature">
+		<type>ConditionalMandatory</type>
+		<subAttributeBinding>
+			<attribute ref="drawingInstruction" />
+			<attribute ref="featureName" />
+		</subAttributeBinding>
+	</Rule>
+
+	<Rule code="Building">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="Bridge">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="Conveyor">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="PylonBridgeSupport">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="FenceWall">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="Landmark">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="SiloTank">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="WindTurbine">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="Hulk">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="Pile">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="ShorelineConstruction">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="StructureOverNavigableWater">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="Dam">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="Crane">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="Dolphin">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="FloatingDock">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="OffshorePlatform">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="LateralBuoy">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="CardinalBuoy">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="IsolatedDangerBuoy">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="SafeWaterBuoy">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="SpecialPurposeGeneralBuoy">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="EmergencyWreckMarkingBuoy">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="InstallationBuoy">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="MooringBuoy">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="LateralBeacon">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="CardinalBeacon">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="IsolatedDangerBeacon">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="SafeWaterBeacon">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="SpecialPurposeGeneralBeacon">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="Daymark">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="LightFloat">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="LightVessel">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="Retroreflector">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>colour</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="colourPattern" />
+		</subAttributeBinding>
+	</Rule>
+
+	<Rule code="QualityOfBathymetricData">
+		<type>ConditionalMandatoryCount</type>
+		<condition>
+			<attribute>zoneOfConfidence</attribute>
+			<operator>gt</operator>
+			<value>1</value>
+		</condition>
+		<subAttributeBinding>
+			<attribute ref="fixedDateRange" />
+		</subAttributeBinding>
+	</Rule>
+
+	<Rule code="information">
+		<type>ConditionalMandatory</type>
+		<subAttributeBinding>
+			<attribute ref="fileReference" />
+			<attribute ref="text" />
+		</subAttributeBinding>
+	</Rule>
+	<Rule code="fixedDateRange">
+		<type>ConditionalMandatory</type>
+		<subAttributeBinding>
+			<attribute ref="dateStart" />
+			<attribute ref="dateEnd" />
+		</subAttributeBinding>
+	</Rule>
+</Rules>

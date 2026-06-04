@@ -1,0 +1,16 @@
+rule: featureName_to_OBJNAM_NOBJNM
+description: >
+  Maps S-101 featureName list to S-57 OBJNAM (primary name) and NOBJNM (national name).
+  English-language name goes to OBJNAM; non-English name goes to NOBJNM.
+
+cases:
+  - when: {contains: ['featureName[0].language', "eng"]}
+    actions:
+      - copy: {from: 'featureName[0].name', to: OBJNAM, append: true, sep: "; "}
+      - copy: {from: 'featureName[1].name', to: NOBJNM, append: true, sep: "; "}
+
+  - when:
+      not: {contains: ['featureName[1].language', "eng"]}
+    actions:
+      - copy: {from: 'featureName[0].name', to: NOBJNM, append: true, sep: "; "}
+      - copy: {from: 'featureName[1].name', to: OBJNAM, append: true, sep: "; "}

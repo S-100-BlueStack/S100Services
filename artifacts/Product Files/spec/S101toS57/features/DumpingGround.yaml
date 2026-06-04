@@ -1,0 +1,14 @@
+feature: DumpingGround
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: DMPGRD
+  feature_attrs:
+    - copy: {from: categoryOfDumpingGround, to: CATDPG}
+    - apply: restriction_to_RESTRN_INFORM
+    - apply: speedLimit_populated
+    - apply: speedLimit_units
+  status: true
+  fileref: true

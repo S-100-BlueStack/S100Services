@@ -1,0 +1,14 @@
+feature: CargoTranshipmentArea
+s65_annex_c: Table 39
+notes: >
+
+extends: FeatureStandard
+params:
+  object: CTSARE
+  feature_attrs:
+    - apply: speedLimit_populated
+    - apply: speedLimit_units
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true

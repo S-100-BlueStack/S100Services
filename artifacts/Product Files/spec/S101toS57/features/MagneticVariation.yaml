@@ -1,0 +1,21 @@
+feature: MagneticVariation
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: MAGVAR
+  feature_attrs:
+    - cases:
+        - when: {matches_cs: [referenceYearForMagneticVariation, '^\d{4}----$']}
+          actions:
+            - replace: {from: referenceYearForMagneticVariation, to: RYRMGV,
+                        pattern: '(\d{4})(----)', capture: '$1'}
+
+        - when:
+            not: {undefined: referenceYearForMagneticVariation}
+          actions:
+            - copy: {from: referenceYearForMagneticVariation, to: RYRMGV}
+            - warn: "S-101 referenceYearForMagneticVariation copied to RYRMGV; format may be incorrect."
+    - copy: {from: valueOfAnnualChangeInMagneticVariation, to: VALACM}
+    - copy: {from: valueOfMagneticVariation, to: VALMAG}

@@ -1,0 +1,59 @@
+feature: Crane
+s65_annex_c: Clause 8.13  # S-65 Annex C Ed 1.0.0
+notes: >
+  All Crane instances → CRANES. Point features in the water additionally produce
+  a coincident PILPNT (guarded by condition on the secondary output object).
+  categoryOfCrane value 6 (Goliath crane) maps to INFORM; all others copy to CATCRN.
+
+uses:
+  - radarConspicuoustoCONRAD
+  - visualProminence_to_CONVIS
+  - featureName_to_OBJNAM_NOBJNM
+  - status_to_STATUS_INFORM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - contactDetails_to_INFORM
+  - nauticalInformation_to_INFORM_NINFOM_PICREP
+  - nonStandardWorkingDay_to_INFORM_NINFOM
+  - serviceHours_to_INFORM_NINFOM
+
+cases:
+  - create:
+      - object: CRANES
+        actions:
+          - lookup:
+              source: categoryOfCrane
+              target: CATCRN
+              cases:
+                6:
+                  actions:
+                    - set: {attr: INFORM, value: "Goliath crane", append: true, sep: "; "}
+              default: copy
+          - copy: {from: colour, to: COLOUR}
+          - copy: {from: colourPattern, to: COLPAT}
+          - copy: {from: condition, to: CONDTN}
+          - apply: radarConspicuoustoCONRAD
+          - apply: visualProminence_to_CONVIS
+          - copy: {from: height, to: HEIGHT}
+          - copy: {from: liftingCapacity, to: LIFCAP}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: 'orientation.orientationValue', to: ORIENT}
+          - copy: {from: radius, to: RADIUS}
+          - apply: status_to_STATUS_INFORM
+          # S-65 Clause 8.13 Ed 1.0.0 states verticalClearanceFixed and verticalDatum are not converted,
+          # but S-101 FC v2.0.0 binds both attributes to Crane — S-65 is obsolete on this point. See IHO issue log.
+          - copy: {from: 'verticalClearanceFixed.verticalUncertainty.uncertaintyFixed', to: VERACC}
+          - copy: {from: 'verticalClearanceFixed.verticalClearanceValue',               to: VERCLR}
+          - copy: {from: verticalDatum, to: VERDAT}
+          - copy: {from: verticalLength, to: VERLEN}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - copy: {from: pictorialRepresentation, to: PICREP, append: true, sep: ";"}
+          - apply: contactDetails_to_INFORM
+          - apply: serviceHours_to_INFORM_NINFOM
+          - apply: nonStandardWorkingDay_to_INFORM_NINFOM
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+
+      - object: PILPNT
+        condition: "geometry == Point and inTheWater == 'True'"
+        actions:
+          - note: "PILPNT created coincident with CRANES in the water. Check for correct encoding."

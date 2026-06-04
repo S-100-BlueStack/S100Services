@@ -1,0 +1,36 @@
+feature: FogSignal
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  ContactDetails frequencyShoreStationTransmits goes to SIGFRQ (not INFORM) for FogSignal.
+  signalGenerationtoSIGGEN_INFORM and signalSequencetoSIGSEQ are local shared rules.
+
+extends: FeatureStandard
+params:
+  object: FOGSIG
+  feature_attrs:
+    - copy: {from: categoryOfFogSignal, to: CATFOG}
+    - copy: {from: signalFrequency, to: SIGFRQ}
+    - cases:
+        - when: {eq: [signalGeneration, "5"]}
+          actions:
+            - set: {attr: INFORM, value: "Radio activated", append: true, sep: "; "}
+
+        - when: {eq: [signalGeneration, "6"]}
+          actions:
+            - set: {attr: INFORM, value: "Call activated", append: true, sep: "; "}
+
+        - actions:
+            - copy: {from: signalGeneration, to: SIGGEN}
+    - copy: {from: signalGroup, to: SIGGRP, sep: "NONE"}
+    - copy: {from: signalPeriod, to: SIGPER}
+    - apply: signalSequencetoSIGSEQ
+    - copy: {from: valueOfMaximumRange, to: VALMXR}
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true
+  contact: true
+  # Note: ContactDetails frequencyShoreStationTransmits → SIGFRQ (not INFORM) for this feature.
+  # The standard contact: block writes to INFORM; override handled by local rule or manual case.
+  # TODO: confirm whether SIGFRQ appending from ContactDetails requires a separate case here.

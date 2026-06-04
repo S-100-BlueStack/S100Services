@@ -1,0 +1,34 @@
+feature: ContiguousZone
+s65_annex_c: Table 34
+notes: >
+  Line features have no S-57 equivalent and exit with an intervention message.
+  inDispute=True features also produce a CTNARE alongside CONZNE.
+
+uses:
+  - Pad_DATEND
+  - Pad_DATSTA
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - when: {geometry: Line}
+    exit: "S-101 ContiguousZone Line features have no match in S-57. Create an Area feature to cover."
+
+  - create:
+      - object: CONZNE
+        actions:
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: nationality, to: NATION}
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM
+
+      - object: CTNARE
+        condition: "inDispute == 'True'"
+        actions:
+          - set:  {attr: INFORM, value: "In dispute", append: true, sep: "; "}
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS

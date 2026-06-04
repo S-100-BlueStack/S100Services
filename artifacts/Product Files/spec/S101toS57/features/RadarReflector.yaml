@@ -1,0 +1,14 @@
+feature: RadarReflector
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Simple feature — no featureName copy (not in XML), only height and status.
+
+extends: FeatureStandard
+params:
+  object: RADRFL
+  feature_attrs:
+    - copy: {from: height, to: HEIGHT}
+    - apply: status_to_STATUS_INFORM
+  status: true
+  fileref: true

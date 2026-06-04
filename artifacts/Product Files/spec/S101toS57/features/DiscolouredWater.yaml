@@ -1,0 +1,16 @@
+feature: DiscolouredWater
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Maps to CTNARE (Caution Area) with a literal INFORM message "Discoloured Water".
+  No featureName in source XML.
+
+cases:
+  - create:
+      - object: CTNARE
+        actions:
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - set: {attr: INFORM, value: "Discoloured Water"}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

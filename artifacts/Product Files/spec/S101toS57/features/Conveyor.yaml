@@ -1,0 +1,40 @@
+feature: Conveyor
+s65_annex_c: Table 36
+notes: >
+
+extends: FeatureStandard
+params:
+  object: CONVYR
+  feature_attrs:
+    - lookup:
+        source: categoryOfConveyor
+        target: CATCON
+        cases:
+          3:
+            actions:
+              - set: {attr: INFORM, value: "Flume", append: true, sep: "; "}
+          4:
+            actions:
+              - set: {attr: INFORM, value: "Lift.elevator", append: true, sep: "; "}
+        default: copy
+    - copy: {from: colour, to: COLOUR}
+    - copy: {from: colourPattern, to: COLPAT}
+    - copy: {from: condition, to: CONDTN}
+    - apply: radarConspicuoustoCONRAD
+    - apply: Multiplicity_to_INFORM
+    - apply: visualProminence_to_CONVIS
+    - copy: {from: height, to: HEIGHT}
+    - copy: {from: liftingCapacity, to: LIFCAP}
+    - apply: product_to_PRODCT_INFORM
+    - copy: {from: 'verticalClearanceFixed.verticalUncertainty.uncertaintyFixed', to: VERACC}
+    - copy: {from: 'verticalClearanceFixed.verticalClearanceValue',               to: VERCLR}
+    - copy: {from: verticalDatum, to: VERDAT}
+    - copy: {from: verticalLength, to: VERLEN}
+  status: true
+  datend_datsta: true
+  sordat: true
+  fileref: true
+  picrep: true
+  contact: true
+  service_hours_dated: true
+  non_std_day_dated: true

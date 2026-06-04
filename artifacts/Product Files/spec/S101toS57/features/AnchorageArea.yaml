@@ -1,0 +1,18 @@
+feature: AnchorageArea
+s65_annex_c: Table 3
+
+extends: FeatureStandard
+params:
+  object: ACHARE
+  feature_attrs:
+    - apply: categoryOfAnchorage_to_INFORM
+    - apply: categoryOfCargo_to_INFORM
+    - apply: restriction_to_RESTRN_INFORM
+    - apply: speedLimit_to_INFORM
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true
+  contact:
+    - apply: contactDetails_to_INFORM
+  non_std_day_all_dates: true

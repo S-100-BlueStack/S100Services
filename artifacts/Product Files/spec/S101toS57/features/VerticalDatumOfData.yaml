@@ -1,0 +1,13 @@
+feature: VerticalDatumOfData
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+uses:
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+
+cases:
+  - create:
+      - object: M_VDAT
+        actions:
+          - copy: {from: verticalDatum, to: VERDAT}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS

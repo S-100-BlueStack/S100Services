@@ -1,0 +1,33 @@
+feature: Lake
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Lakes with status=5 (periodic/intermittent) are converted to RIVERS per S-57 Use of
+  Characteristics. All other Lakes become LAKARE.
+
+uses:
+  - featureName_to_OBJNAM_NOBJNM
+  - status_to_STATUS_INFORM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - when: {eq: [status, "5"]}
+    create:
+      - object: RIVERS
+        actions:
+          - apply: status_to_STATUS_INFORM
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - message: {text: "Lake with status=5 (periodic/intermittent) converted to RIVERS as per S-57 UoC.", severity: note}
+          - apply: nauticalInformation_to_INFORM_NINFOM
+
+  - create:
+      - object: LAKARE
+        actions:
+          - copy: {from: elevation, to: ELEVAT}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

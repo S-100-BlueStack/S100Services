@@ -1,0 +1,15 @@
+feature: FisheryZone
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  featureName_as_limits_to_INFORM is a local rule that writes the feature name as INFORM
+  limits text rather than OBJNAM. nationality maps directly to NATION.
+
+extends: FeatureStandard
+params:
+  object: FSHZNE
+  feature_attrs:
+    - apply: featureName_as_limits_to_INFORM
+    - copy: {from: nationality, to: NATION}
+  status: true
+  fileref: true

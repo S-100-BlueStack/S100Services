@@ -1,0 +1,40 @@
+feature: VesselTrafficServiceArea
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  VesselTrafficServiceArea features that are spatially coincident with (touch, contain, or
+  overlap) a RadioCallingInPoint also create a C_AGGR collection linking ADMARE to any
+  coincident RDOCAL features. This CreateCollectionFeature logic cannot be fully represented
+  in the YAML DSL.
+  The standalone case (no RadioCallingInPoint) still produces ADMARE with JRSDTN=3.
+  # TODO: refer to S-65 Annex C for CreateCollectionFeature logic.
+
+uses:
+  - featureName_to_OBJNAM_NOBJNM
+  - information_to_INFORM_NINFOM
+  - fileReference_to_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM_PICREP
+
+cases:
+  - when: {geometry_touches_or_contains: RadioCallingInPoint}
+    create:
+      - object: ADMARE
+        actions:
+          - set: {attr: INFORM, value: "Vessel traffic service area", append: true, sep: "; "}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - copy: {from: 'information.text', to: NINFOM}
+          - apply: fileReference_to_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP
+      # TODO: CreateCollectionFeature linking ADMARE to coincident RDOCAL — refer to S-65 Annex C
+
+  - create:
+      - object: ADMARE
+        actions:
+          - set: {attr: INFORM, value: "Vessel traffic service area", append: true, sep: "; "}
+          - set: {attr: JRSDTN, value: "3"}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - copy: {from: 'information.text', to: NINFOM}
+          - apply: fileReference_to_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM_PICREP

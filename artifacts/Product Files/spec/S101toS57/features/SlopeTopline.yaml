@@ -1,0 +1,15 @@
+feature: SlopeTopline
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: SLOTOP
+  feature_attrs:
+    - copy: {from: categoryOfSlope, to: CATSLO}
+    - copy: {from: colour, to: COLOUR}
+    - apply: radarConspicuoustoCONRAD
+    - apply: visualProminence_to_CONVIS
+    - copy: {from: elevation, to: ELEVAT}
+    - copy: {from: natureOfSurface, to: NATSUR, append: true, sep: ","}
+  fileref: true

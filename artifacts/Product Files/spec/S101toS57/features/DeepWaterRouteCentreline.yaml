@@ -1,0 +1,19 @@
+feature: DeepWaterRouteCentreline
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: DWRTCL
+  feature_attrs:
+    - apply: basedOnFixedMarkstoCATTRK
+    - apply: Pad_DATEND
+    - apply: Pad_DATSTA
+    - copy: {from: depthRangeMinimumValue, to: DRVAL1}
+    - copy: {from: orientationValue, to: ORIENT}
+    - copy: {from: qualityOfVerticalMeasurement, to: QUASOU}
+    - copy: {from: 'verticalUncertainty.uncertaintyFixed', to: SOUACC}
+    - apply: techniqueOfVerticalMeasurement_to_TECSOU
+    - copy: {from: trafficFlow, to: TRAFIC}
+  status: true
+  fileref: true

@@ -1,0 +1,8 @@
+feature: IsolatedDangerBuoy
+s65_annex_c: Table 11
+notes: >
+  TOPMAR is only produced when topmark.topmarkDaymarkShape is populated.
+
+extends: BuoyStandard
+params:
+  object: BOYISD

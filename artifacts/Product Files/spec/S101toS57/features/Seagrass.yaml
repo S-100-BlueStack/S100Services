@@ -1,0 +1,12 @@
+feature: Seagrass
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Seagrass maps to WEDKLP (weed/kelp) with CATWED set to 3 (seagrass).
+
+extends: FeatureStandard
+params:
+  object: WEDKLP
+  feature_attrs:
+    - set: {attr: CATWED, value: "3"}
+  fileref: true

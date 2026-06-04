@@ -1,0 +1,17 @@
+feature: Canal
+s65_annex_c: Table 25
+notes: >
+
+extends: FeatureStandard
+params:
+  object: CANALS
+  feature_attrs:
+    - copy: {from: categoryOfCanal, to: CATCAN}
+    - copy: {from: condition, to: CONDTN}
+    - copy: {from: 'horizontalClearanceFixed.horizontalDistanceUncertainty', to: HORACC}
+    - copy: {from: 'horizontalClearanceFixed.horizontalClearanceValue',      to: HORCLR}
+    - copy: {from: horizontalWidth, to: HORWID}
+  status: true
+  datend_datsta: true
+  sordat: true
+  fileref: true

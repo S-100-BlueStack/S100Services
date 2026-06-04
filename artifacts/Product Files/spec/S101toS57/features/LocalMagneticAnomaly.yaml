@@ -1,0 +1,16 @@
+feature: LocalMagneticAnomaly
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  SetMagneticAnomalyValues is a local rule that attempts to set negative (west) anomaly
+  values correctly, writing the result to INFORM.
+  No status in the XML mapping.
+
+extends: FeatureStandard
+params:
+  object: LOCMAG
+  feature_attrs:
+    - apply: SetMagneticAnomalyValues
+    # TODO: SetMagneticAnomalyValues — local rule; confirm YAML definition and output target
+  sordat: true
+  fileref: true

@@ -1,0 +1,27 @@
+feature: Coastline
+s65_annex_c: Table 32
+notes: >
+
+extends: FeatureStandard
+params:
+  object: COALNE
+  feature_attrs:
+    - copy: {from: categoryOfCoastline, to: CATCOA}
+    # Only specific natureOfSurface values map to CATCOA; others are not mapped.
+    - cases:
+        - when: {eq: [natureOfSurface, "4"]}
+          actions: [{set: {attr: CATCOA, value: "3"}}]
+        - when: {eq: [natureOfSurface, "5"]}
+          actions: [{set: {attr: CATCOA, value: "4"}}]
+        - when: {eq: [natureOfSurface, "7"]}
+          actions: [{set: {attr: CATCOA, value: "5"}}]
+        - when: {eq: [natureOfSurface, "14"]}
+          actions: [{set: {attr: CATCOA, value: "9"}}]
+        - when: {eq: [natureOfSurface, "17"]}
+          actions: [{set: {attr: CATCOA, value: "11"}}]
+    - copy: {from: colour, to: COLOUR}
+    - apply: radarConspicuoustoCONRAD
+    - apply: visualProminence_to_CONVIS
+    - copy: {from: elevation, to: ELEVAT}
+  fileref: true
+  picrep: true

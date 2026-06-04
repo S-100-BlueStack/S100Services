@@ -1,0 +1,36 @@
+feature: CautionArea
+s65_annex_c: Table 38
+notes: >
+  Features that have only pictorialRepresentation without information text or fileReference
+  are not converted. See S-65 Annex C 16.11.
+
+uses:
+  - Pad_DATEND
+  - Pad_DATSTA
+  - Pad_PEREND
+  - Pad_PERSTA
+  - Pad_SORDAT
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - when:
+      and:
+        - {has: pictorialRepresentation}
+        - or:
+            - {not: {has: information}}
+            - {unknown: 'information.text'}
+            - {unknown: 'information.fileReference'}
+    exit: "S-101 CautionArea with pictorialRepresentation and no information/text or fileReference is not converted. See S-65 Annex C 16.11."
+
+  - create:
+      - object: CTNARE
+        actions:
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - apply: Pad_PEREND
+          - apply: Pad_PERSTA
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: Pad_SORDAT
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: nauticalInformation_to_INFORM_NINFOM

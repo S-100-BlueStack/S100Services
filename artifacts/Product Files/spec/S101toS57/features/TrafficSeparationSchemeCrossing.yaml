@@ -1,0 +1,29 @@
+feature: TrafficSeparationSchemeCrossing
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  CATTSS and maximumPermittedDraught are pulled from the parent TrafficSeparationScheme feature
+  via the TrafficSeparationSchemeAggregation/theCollection relation.
+
+uses:
+  - Pad_DATEND
+  - Pad_DATSTA
+  - restriction_to_RESTRN_INFORM
+  - status_to_STATUS_INFORM
+  - information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+  - trafficSeparationScheme_to_CATTSS_INFORM
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - create:
+      - object: TSSCRS
+        actions:
+          - apply: Pad_DATEND
+          - apply: Pad_DATSTA
+          - apply: restriction_to_RESTRN_INFORM
+          - apply: status_to_STATUS_INFORM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - apply: speedLimit_to_INFORM
+          - apply: information_and_fileReference_to_INFORM_NINFOM_TXTDSC_NTXTDS
+          - apply: trafficSeparationScheme_to_CATTSS_INFORM
+          - apply: nauticalInformation_to_INFORM_NINFOM

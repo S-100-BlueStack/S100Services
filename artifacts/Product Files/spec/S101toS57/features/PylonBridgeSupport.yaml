@@ -1,0 +1,35 @@
+feature: PylonBridgeSupport
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Multiplicity_to_INFORM is an XML attribute-mapping rule — flagged as TODO.
+
+extends: FeatureStandard
+params:
+  object: PYLONS
+  feature_attrs:
+    - lookup:
+        source: categoryOfPylon
+        target: CATPYL
+        cases:
+          7:
+            actions:
+              - set: {attr: INFORM, value: "Ski lift pylon", append: true, sep: "; "}
+          8:
+            actions:
+              - set: {attr: INFORM, value: "Observation platform pylon", append: true, sep: "; "}
+        default: copy
+    - copy: {from: colour, to: COLOUR}
+    - copy: {from: colourPattern, to: COLPAT}
+    - copy: {from: condition, to: CONDTN}
+    - apply: radarConspicuoustoCONRAD
+        # TODO: Multiplicity_to_INFORM — refer to S-65 Annex C for clarification
+    - apply: visualProminence_to_CONVIS
+    - copy: {from: height, to: HEIGHT}
+    - apply: natureOfConstruction_to_NATCON_INFORM
+    - copy: {from: verticalLength, to: VERLEN}
+    - copy: {from: waterLevelEffect, to: WATLEV}
+  datend_datsta: true
+  sordat: true
+  fileref: true
+  picrep: true

@@ -1,0 +1,52 @@
+feature: PilotageDistrict
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Three dispatch cases:
+  1. Coincident with HarbourAreaAdministrative → do_not_map (S-65 C 16.26).
+  2. Has child PilotBoardingPlace (via PilotageDistrictAssociation) →
+     ADMARE + C_AGGR collection. Intervention message warns to transfer name/comms to PILBOP.
+  3. Default → ADMARE only. Same intervention message.
+  C_AGGR collection handling (ConvertToCollectionFeature) not fully expressible in current DSL.
+  information/text goes to NINFOM (not INFORM) — non-standard, preserved from XML.
+
+uses:
+  - featureName_to_OBJNAM_NOBJNM
+  - fileReference_to_TXTDSC_NTXTDS
+  - information_to_INFORM_NINFOM
+  - nauticalInformation_to_INFORM_NINFOM
+
+cases:
+  - when: {geometry_equals_feature: HarbourAreaAdministrative}
+    create:
+      - do_not_map: true
+        message: "PilotageDistrict coincident with HarbourAreaAdministrative not converted (S-65 C 16.26)"
+
+  - when: {has_child_via: "PilotageDistrictAssociation/PilotBoardingPlace"}
+    create:
+      - object: ADMARE
+        actions:
+          - set: {attr: INFORM, value: "Pilotage district", append: true, sep: "; "}
+          - set: {attr: JRSDTN, value: "3"}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - copy: {from: 'information.text', to: NINFOM}
+          - apply: fileReference_to_TXTDSC_NTXTDS
+          - message: {text: "Cartographic intervention may be required: PilotageDistrict → ADMARE. Transfer featureName/name to PILBOP PILDST/NPLDST and communicationChannel to COMCHA.", severity: intervention}
+          - apply: nauticalInformation_to_INFORM_NINFOM
+      - object: C_AGGR
+        actions:
+          - apply: featureName_to_OBJNAM_NOBJNM
+          # TODO: ConvertToCollectionFeature — refer to S-65 Annex C for clarification
+
+  - create:
+      - object: ADMARE
+        actions:
+          - set: {attr: INFORM, value: "Pilotage district", append: true, sep: "; "}
+          - set: {attr: JRSDTN, value: "3"}
+          - apply: featureName_to_OBJNAM_NOBJNM
+          - copy: {from: scaleMinimum, to: SCAMIN}
+          - copy: {from: 'information.text', to: NINFOM}
+          - apply: fileReference_to_TXTDSC_NTXTDS
+          - message: {text: "Cartographic intervention may be required: PilotageDistrict → ADMARE. Transfer featureName/name to PILBOP PILDST/NPLDST and communicationChannel to COMCHA.", severity: intervention}
+          - apply: nauticalInformation_to_INFORM_NINFOM

@@ -1,0 +1,13 @@
+feature: RecommendedTrafficLanePart
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+
+extends: FeatureStandard
+params:
+  object: RCTLPT
+  feature_attrs:
+    - copy: {from: orientationValue, to: ORIENT}
+    - apply: status_to_STATUS_INFORM
+  status: true
+  datend_datsta: true
+  fileref: true

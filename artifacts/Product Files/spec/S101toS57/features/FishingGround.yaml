@@ -1,0 +1,16 @@
+feature: FishingGround
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  speedLimit_populated and speedLimit_units are local rules that write speed-limit values
+  to INFORM.
+
+extends: FeatureStandard
+params:
+  object: FSHGRD
+  feature_attrs:
+    - apply: speedLimit_populated
+    - apply: speedLimit_units
+  status: true
+  perda: true
+  fileref: true

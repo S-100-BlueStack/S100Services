@@ -1,0 +1,21 @@
+feature: Runway
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  ServiceHours and NonStandardWorkingDay only pull periodicDateRange (not fixedDateRange)
+  for Runway — unlike most other features. This matches the XML exactly.
+
+extends: FeatureStandard
+params:
+  object: RUNWAY
+  feature_attrs:
+    - copy: {from: condition, to: CONDTN}
+    - apply: natureOfConstruction_to_NATCON_INFORM
+    - apply: status_to_STATUS_INFORM
+  status: true
+  perda: true
+  sordat: true
+  fileref: true
+  contact: true
+  service_hours: true
+  non_std_day: true

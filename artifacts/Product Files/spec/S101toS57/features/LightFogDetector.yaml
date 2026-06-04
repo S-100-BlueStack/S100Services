@@ -1,0 +1,30 @@
+feature: LightFogDetector
+s65_annex_c: Table XX
+# TODO: confirm S-65 Annex C table number
+notes: >
+  Always produces CATLIT=7 (fog detector). The XSL also appends any additional
+  categoryOfLight values that are not 7; the main XML simply sets CATLIT=7.
+  # TODO: copy: {from: categoryOfLight, to: CATLIT, append: true, exclude_value: "7"}
+  Has no exhibitionConditionOfLight, lightVisibility, marksNavigationalSystemOf,
+  multiplicityOfFeatures, or valueOfNominalRange.
+  verticalLengthToINFORM and signalGenerationtoINFORM apply (same as LightAllAround).
+
+extends: FeatureStandard
+params:
+  object: LIGHTS
+  feature_attrs:
+    - set:  {attr: CATLIT, value: "7"}
+    - copy: {from: colour,                              to: COLOUR}
+    - copy: {from: height,                              to: HEIGHT}
+    - copy: {from: 'rhythmOfLight.lightCharacteristic', to: LITCHR}
+    - copy: {from: 'rhythmOfLight.signalGroup',         to: SIGGRP, sep: "NONE"}
+    - copy: {from: 'rhythmOfLight.signalPeriod',        to: SIGPER}
+    - apply: rhythmOfLightSignalSequencetoSIGSEQ
+    - copy: {from: verticalDatum,                       to: VERDAT}
+    - apply: verticalLengthToINFORM
+    - apply: signalGenerationtoINFORM
+  status: true
+  datend_datsta: true
+  perda: true
+  fileref: true
+  contact: true
