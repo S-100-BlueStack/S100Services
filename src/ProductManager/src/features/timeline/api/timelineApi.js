@@ -1,5 +1,7 @@
 import { TIMELINE_MODE } from "../model/timelineTypes.js";
 
+export { fetchProductHistory } from "./productHistoryApi.js";
+
 export async function fetchMapTimelineMetadata() {
   return {
     endpointAvailable: false,
@@ -18,17 +20,5 @@ export async function fetchMapSnapshotAtTime(timestamp) {
     endpointAvailable: false,
     timestamp,
     layers: [],
-  };
-}
-
-export async function fetchProductHistory(datasetName) {
-  if (!datasetName) {
-    throw new Error("datasetName is required to fetch product history.");
-  }
-
-  return {
-    endpointAvailable: false,
-    datasetName,
-    events: [],
   };
 }

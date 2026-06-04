@@ -1,13 +1,16 @@
 import "@esri/calcite-components/components/calcite-icon";
 import { watch } from "@arcgis/core/core/reactiveUtils.js";
 import { noticeError } from "../../notices/services/noticeService.js";
-import { fetchProductHistory } from "../api/timelineApi.js";
+import { fetchProductHistory } from "../api/productHistoryApi.js";
 import { onProductHistoryOpen } from "../events/productHistoryEvents.js";
+import { getProductHistoryEventTypeLabel } from "../model/productHistoryTypes.js";
 
 export function initProductHistoryPanel({ view } = {}) {
   const panel = createPanel();
+
   let popupVisibilityHandle = null;
   let popupSelectionHandle = null;
+  let mapClickHandle = null;
   let requestId = 0;
 
   document.body.append(panel.root);
@@ -45,6 +48,25 @@ export function initProductHistoryPanel({ view } = {}) {
         }
       }
     );
+
+    mapClickHandle = view.on("click", () => {
+      if (panel.root.hidden || panel.isPinned) {
+        return;
+      }
+
+      // ArcGIS updates popup visibility/selection as part of the map click flow.
+      // Defer the close check so we react to the settled popup state instead of
+      // closing based on the state from before the click.
+      requestAnimationFrame(() => {
+        if (panel.root.hidden || panel.isPinned) {
+          return;
+        }
+
+        if (!hasVisiblePopupHistoryContext(view)) {
+          closePanel();
+        }
+      });
+    });
   }
 
   async function openHistory(datasetName, { source = "popup" } = {}) {
@@ -58,8 +80,8 @@ export function initProductHistoryPanel({ view } = {}) {
     }
 
     const currentRequestId = ++requestId;
-    panel.contextId = createHistoryContextId(datasetName);
 
+    panel.contextId = createHistoryContextId(datasetName);
     showPanel(panel);
     setBusy(panel, true);
     renderLoading(panel, datasetName);
@@ -101,6 +123,7 @@ export function initProductHistoryPanel({ view } = {}) {
     openHandle.remove();
     popupVisibilityHandle?.remove();
     popupSelectionHandle?.remove();
+    mapClickHandle?.remove();
     panel.root.remove();
   }
 
@@ -226,7 +249,6 @@ function syncPinnedButton(panel) {
 
 function renderLoading(panel, datasetName) {
   panel.title.textContent = datasetName;
-
   panel.content.replaceChildren(
     createStateMessage({
       title: "Loading history...",
@@ -238,45 +260,201 @@ function renderLoading(panel, datasetName) {
 function renderHistory(panel, history) {
   panel.title.textContent = history.datasetName;
 
-  if (!history.endpointAvailable) {
-    panel.content.replaceChildren(
-      createStateMessage({
-        title: "Historical changes are not available yet",
-        message: "The history UI is ready, but the backend endpoint has not been implemented yet.",
-      })
-    );
-    return;
-  }
-
   if (!history.events.length) {
     panel.content.replaceChildren(
       createStateMessage({
-        title: "No historical changes found",
-        message: "No history events were returned for this product.",
+        title: history.endpointAvailable
+          ? "No historical changes found"
+          : "Historical changes are not available yet",
+        message: history.endpointAvailable
+          ? "No history events were returned for this product."
+          : "The history UI is ready, but the backend endpoint has not been implemented yet.",
       })
     );
     return;
   }
 
-  const list = document.createElement("ol");
-  list.className = "pm-product-history-list";
+  const fragment = document.createDocumentFragment();
 
-  for (const event of history.events) {
-    list.appendChild(createHistoryEventItem(event));
+  if (history.isDemo) {
+    fragment.appendChild(
+      createBanner({
+        title: "Demo history",
+        message:
+          "This product history is generated in the frontend until the backend endpoint is available.",
+      })
+    );
   }
 
-  panel.content.replaceChildren(list);
+  for (const warning of history.warnings) {
+    fragment.appendChild(
+      createBanner({
+        title: "History note",
+        message: warning,
+      })
+    );
+  }
+
+  fragment.appendChild(createHistorySummary(history));
+  fragment.appendChild(createHistoryEventList(history.events));
+
+  panel.content.replaceChildren(fragment);
 }
 
 function renderError(panel, datasetName, error) {
   panel.title.textContent = datasetName;
-
   panel.content.replaceChildren(
     createStateMessage({
       title: "History could not be loaded",
       message: getErrorMessage(error),
     })
   );
+}
+
+function createHistorySummary(history) {
+  const container = document.createElement("section");
+  container.className = "pm-product-history-summary";
+  container.setAttribute("aria-label", "History summary");
+
+  container.appendChild(
+    createSummaryItem({
+      label: "Events",
+      value: history.events.length,
+    })
+  );
+
+  container.appendChild(
+    createSummaryItem({
+      label: "Source",
+      value: history.isDemo ? "Demo" : "Backend",
+    })
+  );
+
+  container.appendChild(
+    createSummaryItem({
+      label: "Latest",
+      value: formatHistoryTimestamp(history.events[0]?.timestamp),
+    })
+  );
+
+  return container;
+}
+
+function createSummaryItem({ label, value }) {
+  const item = document.createElement("div");
+  item.className = "pm-product-history-summary__item";
+
+  const labelElement = document.createElement("span");
+  labelElement.className = "pm-product-history-summary__label";
+  labelElement.textContent = label;
+
+  const valueElement = document.createElement("span");
+  valueElement.className = "pm-product-history-summary__value";
+  valueElement.textContent = value ?? "-";
+
+  item.append(labelElement, valueElement);
+
+  return item;
+}
+
+function createHistoryEventList(events) {
+  const list = document.createElement("ol");
+  list.className = "pm-product-history-list";
+
+  for (const event of events) {
+    list.appendChild(createHistoryEventItem(event));
+  }
+
+  return list;
+}
+
+function createHistoryEventItem(event) {
+  const item = document.createElement("li");
+  item.className = `pm-product-history-list__item pm-product-history-list__item--${event.type}`;
+
+  const marker = document.createElement("span");
+  marker.className = "pm-product-history-list__marker";
+  marker.appendChild(createEventIcon(event.type));
+
+  const body = document.createElement("div");
+  body.className = "pm-product-history-list__body";
+
+  const header = document.createElement("div");
+  header.className = "pm-product-history-list__header";
+
+  const title = document.createElement("div");
+  title.className = "pm-product-history-list__title";
+  title.textContent = event.title ?? "History event";
+
+  const type = document.createElement("span");
+  type.className = "pm-product-history-list__type";
+  type.textContent = getProductHistoryEventTypeLabel(event.type);
+
+  header.append(title, type);
+
+  const meta = document.createElement("div");
+  meta.className = "pm-product-history-list__meta";
+  meta.textContent = createEventMetaText(event);
+
+  body.append(header, meta);
+
+  if (event.description) {
+    const description = document.createElement("p");
+    description.className = "pm-product-history-list__description";
+    description.textContent = event.description;
+    body.appendChild(description);
+  }
+
+  if (event.details.length > 0) {
+    body.appendChild(createEventDetails(event.details));
+  }
+
+  item.append(marker, body);
+
+  return item;
+}
+
+function createEventIcon(type) {
+  const icon = document.createElement("calcite-icon");
+  icon.scale = "s";
+  icon.icon = getEventIcon(type);
+  icon.setAttribute("aria-hidden", "true");
+
+  return icon;
+}
+
+function createEventDetails(details) {
+  const list = document.createElement("dl");
+  list.className = "pm-product-history-list__details";
+
+  for (const detail of details) {
+    const term = document.createElement("dt");
+    term.textContent = detail.label;
+
+    const description = document.createElement("dd");
+    description.textContent = detail.value;
+
+    list.append(term, description);
+  }
+
+  return list;
+}
+
+function createBanner({ title, message }) {
+  const container = document.createElement("div");
+  container.className = "pm-product-history-banner";
+
+  const heading = document.createElement("h3");
+  heading.className = "pm-product-history-banner__title";
+  heading.textContent = title;
+
+  const body = document.createElement("p");
+  body.className = "pm-product-history-banner__message";
+  body.textContent = message;
+
+  container.append(heading, body);
+
+  return container;
 }
 
 function createStateMessage({ title, message }) {
@@ -296,28 +474,47 @@ function createStateMessage({ title, message }) {
   return container;
 }
 
-function createHistoryEventItem(event) {
-  const item = document.createElement("li");
-  item.className = "pm-product-history-list__item";
+function createEventMetaText(event) {
+  const parts = [formatHistoryTimestamp(event.timestamp), event.actor, event.source].filter(
+    Boolean
+  );
 
-  const title = document.createElement("div");
-  title.className = "pm-product-history-list__title";
-  title.textContent = event.title ?? "History event";
+  return parts.join(" • ");
+}
 
-  const meta = document.createElement("div");
-  meta.className = "pm-product-history-list__meta";
-  meta.textContent = event.timestamp ? formatHistoryTimestamp(event.timestamp) : "Unknown time";
+function getEventIcon(type) {
+  switch (type) {
+    case "freeze":
+      return "snow";
 
-  const description = document.createElement("p");
-  description.className = "pm-product-history-list__description";
-  description.textContent = event.description ?? "";
+    case "unfreeze":
+      return "brightness";
 
-  item.append(title, meta, description);
+    case "export":
+      return "upload";
 
-  return item;
+    case "send":
+      return "send";
+
+    case "rollback":
+      return "undo";
+
+    case "analysis":
+      return "magnifying-glass";
+
+    case "status":
+      return "information";
+
+    default:
+      return "clock";
+  }
 }
 
 function formatHistoryTimestamp(timestamp) {
+  if (!timestamp) {
+    return "Unknown time";
+  }
+
   const date = new Date(timestamp);
 
   if (Number.isNaN(date.getTime())) {
@@ -348,4 +545,12 @@ function createHistoryContextId(value) {
   const normalizedValue = String(value ?? "").trim();
 
   return normalizedValue ? normalizedValue : null;
+}
+
+function hasVisiblePopupHistoryContext(view) {
+  if (!view?.popup?.visible) {
+    return false;
+  }
+
+  return Boolean(getPopupHistoryContextId(view));
 }
