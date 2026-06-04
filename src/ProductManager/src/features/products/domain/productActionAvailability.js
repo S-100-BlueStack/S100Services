@@ -1,11 +1,14 @@
 import { isStatusFrozen } from "../../map/state/featureState.js";
 
 const EXPORT_RUNNING_REASON = "Wait until the current export finishes.";
+const PRODUCT_OPERATION_RUNNING_REASON = "Wait until the current product operation finishes.";
 
 export function createProductActionAvailability({
   attributes,
   frozen,
   exportHasRunningAction = false,
+  productHasRunningMutation = false,
+  productOperationDisabledReason = PRODUCT_OPERATION_RUNNING_REASON,
 } = {}) {
   const datasetName = getDatasetName(attributes);
   const hasDatasetName = Boolean(datasetName);
@@ -16,31 +19,42 @@ export function createProductActionAvailability({
     hasDatasetName,
     frozen: productIsFrozen,
     exportHasRunningAction,
+    productHasRunningMutation,
 
     freeze: createFreezeAvailability({
       hasDatasetName,
       exportHasRunningAction,
+      productHasRunningMutation,
+      productOperationDisabledReason,
     }),
 
     unfreeze: createUnfreezeAvailability({
       hasDatasetName,
       exportHasRunningAction,
+      productHasRunningMutation,
+      productOperationDisabledReason,
     }),
 
     sendImmediately: createSendAvailability({
       hasDatasetName,
       frozen: productIsFrozen,
       exportHasRunningAction,
+      productHasRunningMutation,
+      productOperationDisabledReason,
     }),
 
     rollback: createRollbackAvailability({
       hasDatasetName,
       exportHasRunningAction,
+      productHasRunningMutation,
+      productOperationDisabledReason,
     }),
 
     exportRoot: createExportRootAvailability({
       hasDatasetName,
       exportHasRunningAction,
+      productHasRunningMutation,
+      productOperationDisabledReason,
     }),
   };
 }
@@ -50,6 +64,8 @@ export function createProductExportAvailability({
   frozen,
   implemented,
   exportState,
+  productHasRunningMutation = false,
+  productOperationDisabledReason = PRODUCT_OPERATION_RUNNING_REASON,
 } = {}) {
   const datasetName = getDatasetName(attributes);
   const hasDatasetName = Boolean(datasetName);
@@ -70,6 +86,10 @@ export function createProductExportAvailability({
     return unavailable(exportState.disabledReason);
   }
 
+  if (productHasRunningMutation) {
+    return unavailable(productOperationDisabledReason);
+  }
+
   if (productIsFrozen) {
     return unavailable("Unfreeze the product before exporting.");
   }
@@ -81,9 +101,18 @@ export function createProductExportAvailability({
   return available();
 }
 
-function createFreezeAvailability({ hasDatasetName, exportHasRunningAction }) {
+function createFreezeAvailability({
+  hasDatasetName,
+  exportHasRunningAction,
+  productHasRunningMutation,
+  productOperationDisabledReason,
+}) {
   if (!hasDatasetName) {
     return unavailable("The selected feature does not have a datasetName.");
+  }
+
+  if (productHasRunningMutation) {
+    return unavailable(productOperationDisabledReason);
   }
 
   if (exportHasRunningAction) {
@@ -93,9 +122,18 @@ function createFreezeAvailability({ hasDatasetName, exportHasRunningAction }) {
   return available();
 }
 
-function createUnfreezeAvailability({ hasDatasetName, exportHasRunningAction }) {
+function createUnfreezeAvailability({
+  hasDatasetName,
+  exportHasRunningAction,
+  productHasRunningMutation,
+  productOperationDisabledReason,
+}) {
   if (!hasDatasetName) {
     return unavailable("The selected feature does not have a datasetName.");
+  }
+
+  if (productHasRunningMutation) {
+    return unavailable(productOperationDisabledReason);
   }
 
   if (exportHasRunningAction) {
@@ -105,9 +143,19 @@ function createUnfreezeAvailability({ hasDatasetName, exportHasRunningAction }) 
   return available();
 }
 
-function createSendAvailability({ hasDatasetName, frozen, exportHasRunningAction }) {
+function createSendAvailability({
+  hasDatasetName,
+  frozen,
+  exportHasRunningAction,
+  productHasRunningMutation,
+  productOperationDisabledReason,
+}) {
   if (!hasDatasetName) {
     return unavailable("The selected feature does not have a datasetName.");
+  }
+
+  if (productHasRunningMutation) {
+    return unavailable(productOperationDisabledReason);
   }
 
   if (exportHasRunningAction) {
@@ -121,9 +169,18 @@ function createSendAvailability({ hasDatasetName, frozen, exportHasRunningAction
   return available();
 }
 
-function createRollbackAvailability({ hasDatasetName, exportHasRunningAction }) {
+function createRollbackAvailability({
+  hasDatasetName,
+  exportHasRunningAction,
+  productHasRunningMutation,
+  productOperationDisabledReason,
+}) {
   if (!hasDatasetName) {
     return unavailable("The selected feature does not have a datasetName.");
+  }
+
+  if (productHasRunningMutation) {
+    return unavailable(productOperationDisabledReason);
   }
 
   if (exportHasRunningAction) {
@@ -133,9 +190,18 @@ function createRollbackAvailability({ hasDatasetName, exportHasRunningAction }) 
   return available();
 }
 
-function createExportRootAvailability({ hasDatasetName, exportHasRunningAction }) {
+function createExportRootAvailability({
+  hasDatasetName,
+  exportHasRunningAction,
+  productHasRunningMutation,
+  productOperationDisabledReason,
+}) {
   if (!hasDatasetName) {
     return unavailable("The selected feature does not have a datasetName.");
+  }
+
+  if (productHasRunningMutation) {
+    return unavailable(productOperationDisabledReason);
   }
 
   // Keep the root export action openable while an export runs. The leaf actions

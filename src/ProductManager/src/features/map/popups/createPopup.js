@@ -6,6 +6,7 @@ import { applyGraphicAttributes } from "../state/featureState.js";
 import { createPopupActionBar } from "./popupActionBar.js";
 import { closePopupActionDropdown } from "./popupActionDropdown.js";
 import { onPopupExportStateChanged } from "./popupExportState.js";
+import { onProductOperationStateChanged } from "../../products/state/productOperationState.js";
 
 const GENERIC_POPUP_EXCLUDED_FIELDS = new Set([
   "featureKey",
@@ -75,6 +76,21 @@ export function createPopup() {
       }
 
       const unsubscribeFromExportState = onPopupExportStateChanged(({ datasetName }) => {
+        rerenderWhenDatasetMatches(datasetName);
+      });
+
+      const unsubscribeFromProductOperationState = onProductOperationStateChanged(
+        ({ datasetName }) => {
+          rerenderWhenDatasetMatches(datasetName);
+        }
+      );
+
+      cleanupWhenDisconnected(
+        container,
+        combineCleanups(unsubscribeFromExportState, unsubscribeFromProductOperationState)
+      );
+
+      function rerenderWhenDatasetMatches(datasetName) {
         const currentDatasetName =
           currentAttributes.datasetName ?? graphic?.attributes?.datasetName;
 
@@ -84,9 +100,7 @@ export function createPopup() {
 
         closePopupActionDropdown();
         render();
-      });
-
-      cleanupWhenDisconnected(container, unsubscribeFromExportState);
+      }
 
       render();
 
@@ -283,6 +297,14 @@ function cleanupWhenDisconnected(element, cleanup) {
       hasBeenConnected = true;
     }
   });
+}
+
+function combineCleanups(...cleanups) {
+  return () => {
+    for (const cleanup of cleanups) {
+      cleanup?.();
+    }
+  };
 }
 
 function isSameDatasetName(left, right) {

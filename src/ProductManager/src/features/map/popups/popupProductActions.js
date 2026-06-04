@@ -6,12 +6,14 @@ import {
   noticeUnexpectedApiError,
 } from "../../notices/services/apiNoticeService.js";
 import { noticeError } from "../../notices/services/noticeService.js";
+import {
+  PRODUCT_OPERATION_TYPE,
+  beginProductOperation,
+  endProductOperation,
+} from "../../products/state/productOperationState.js";
 import { openProductHistoryPanel as dispatchProductHistoryOpen } from "../../timeline/events/productHistoryEvents.js";
 import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
 import { beginPopupExportAction, endPopupExportAction } from "./popupExportState.js";
-
-const activeFreezeActionIds = new Set();
-const activeSendActionIds = new Set();
 
 export function openAnalyzePage(datasetName) {
   if (!datasetName) {
@@ -44,18 +46,10 @@ export async function triggerFreeze(datasetName, state, anchorElement) {
     return null;
   }
 
+  const operationType = state ? PRODUCT_OPERATION_TYPE.FREEZE : PRODUCT_OPERATION_TYPE.UNFREEZE;
+  const operationLabel = state ? "Freezing" : "Unfreezing";
   const actionLabel = state ? "freezing" : "unfreezing";
-  const actionKey = `${datasetName}:${state ? "freeze" : "unfreeze"}`;
-
-  if (activeFreezeActionIds.has(actionKey)) {
-    return {
-      success: false,
-      skipped: true,
-      reason: "already-running",
-    };
-  }
-
-  activeFreezeActionIds.add(actionKey);
+  let runningOperation = null;
 
   try {
     const confirmed = await confirmAction({
@@ -70,6 +64,25 @@ export async function triggerFreeze(datasetName, state, anchorElement) {
 
     if (!confirmed) {
       return null;
+    }
+
+    runningOperation = beginProductOperation({
+      datasetName,
+      type: operationType,
+      label: operationLabel,
+    });
+
+    if (!runningOperation.started) {
+      noticeError(
+        "Product operation is already running",
+        runningOperation.reason ?? `${operationLabel} is already running for ${datasetName}.`
+      );
+
+      return {
+        success: false,
+        skipped: true,
+        reason: "already-running",
+      };
     }
 
     const result = await changeFreezeState(datasetName, state);
@@ -95,7 +108,9 @@ export async function triggerFreeze(datasetName, state, anchorElement) {
       error,
     };
   } finally {
-    activeFreezeActionIds.delete(actionKey);
+    if (runningOperation?.started) {
+      endProductOperation(runningOperation.key);
+    }
   }
 }
 
@@ -105,17 +120,7 @@ export async function sendImmediately(datasetName, anchorElement) {
     return null;
   }
 
-  const actionKey = datasetName;
-
-  if (activeSendActionIds.has(actionKey)) {
-    return {
-      success: false,
-      skipped: true,
-      reason: "already-running",
-    };
-  }
-
-  activeSendActionIds.add(actionKey);
+  let runningOperation = null;
 
   try {
     const confirmed = await confirmAction({
@@ -128,6 +133,25 @@ export async function sendImmediately(datasetName, anchorElement) {
 
     if (!confirmed) {
       return null;
+    }
+
+    runningOperation = beginProductOperation({
+      datasetName,
+      type: PRODUCT_OPERATION_TYPE.SEND,
+      label: "Sending",
+    });
+
+    if (!runningOperation.started) {
+      noticeError(
+        "Product operation is already running",
+        runningOperation.reason ?? `Sending is already running for ${datasetName}.`
+      );
+
+      return {
+        success: false,
+        skipped: true,
+        reason: "already-running",
+      };
     }
 
     const result = await uploadProduct(datasetName);
@@ -153,7 +177,9 @@ export async function sendImmediately(datasetName, anchorElement) {
       error,
     };
   } finally {
-    activeSendActionIds.delete(actionKey);
+    if (runningOperation?.started) {
+      endProductOperation(runningOperation.key);
+    }
   }
 }
 
@@ -175,7 +201,6 @@ export async function triggerExport({
       "Export is not configured",
       `${scope} ${exportType} does not have an export endpoint configured yet.`
     );
-
     return null;
   }
 

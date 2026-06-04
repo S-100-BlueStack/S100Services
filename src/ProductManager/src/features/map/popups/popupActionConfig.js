@@ -4,6 +4,10 @@ import {
   createProductActionAvailability,
   createProductExportAvailability,
 } from "../../products/domain/productActionAvailability.js";
+import {
+  PRODUCT_OPERATION_TYPE,
+  getProductOperationState,
+} from "../../products/state/productOperationState.js";
 import { getPopupExportActionState, isAnyPopupExportActionRunning } from "./popupExportState.js";
 import {
   openAnalyzePage,
@@ -100,10 +104,14 @@ const EXPORT_GROUPS = [
 
 export function createPopupActionGroups({ attributes, frozen, refreshAndRender } = {}) {
   const datasetName = getDatasetName(attributes);
+  const productOperationState = getProductOperationState(datasetName);
+
   const availability = createProductActionAvailability({
     attributes,
     frozen,
     exportHasRunningAction: isAnyPopupExportActionRunning(datasetName),
+    productHasRunningMutation: productOperationState.running,
+    productOperationDisabledReason: productOperationState.disabledReason,
   });
 
   return [
@@ -112,11 +120,13 @@ export function createPopupActionGroups({ attributes, frozen, refreshAndRender }
         attributes,
         frozen,
         availability,
+        productOperationState,
         refreshAndRender,
       }),
       createSendAction({
         attributes,
         availability,
+        productOperationState,
         refreshAndRender,
       }),
     ],
@@ -125,6 +135,7 @@ export function createPopupActionGroups({ attributes, frozen, refreshAndRender }
         attributes,
         frozen,
         availability,
+        productOperationState,
         refreshAndRender,
       }),
       createRollbackAction({
@@ -137,13 +148,25 @@ export function createPopupActionGroups({ attributes, frozen, refreshAndRender }
   ];
 }
 
-function createFreezeAction({ attributes, frozen, availability, refreshAndRender }) {
+function createFreezeAction({
+  attributes,
+  frozen,
+  availability,
+  productOperationState,
+  refreshAndRender,
+}) {
+  const operationType = frozen ? PRODUCT_OPERATION_TYPE.UNFREEZE : PRODUCT_OPERATION_TYPE.FREEZE;
+  const operationIsRunning = isOperationTypeRunning(productOperationState, operationType);
   const actionAvailability = frozen ? availability.unfreeze : availability.freeze;
 
   return {
     id: frozen ? "unfreeze-feature" : "freeze-feature",
-    label: frozen ? "Unfreeze" : "Freeze",
+    label: getFreezeActionLabel({
+      frozen,
+      operationIsRunning,
+    }),
     icon: frozen ? "brightness" : "snow",
+    loading: operationIsRunning,
     disabled: actionAvailability.disabled,
     disabledReason: actionAvailability.disabledReason,
     className: "popup-action-bar__action--freeze",
@@ -158,11 +181,17 @@ function createFreezeAction({ attributes, frozen, availability, refreshAndRender
   };
 }
 
-function createSendAction({ attributes, availability, refreshAndRender }) {
+function createSendAction({ attributes, availability, productOperationState, refreshAndRender }) {
+  const operationIsRunning = isOperationTypeRunning(
+    productOperationState,
+    PRODUCT_OPERATION_TYPE.SEND
+  );
+
   return {
     id: "send-immediately",
-    label: "Send to IC-ENC",
+    label: operationIsRunning ? "Sending..." : "Send to IC-ENC",
     icon: "send",
+    loading: operationIsRunning,
     disabled: availability.sendImmediately.disabled,
     disabledReason: availability.sendImmediately.disabledReason,
     className: "popup-action-bar__action--send",
@@ -176,7 +205,13 @@ function createSendAction({ attributes, availability, refreshAndRender }) {
   };
 }
 
-function createExportAction({ attributes, frozen, availability, refreshAndRender }) {
+function createExportAction({
+  attributes,
+  frozen,
+  availability,
+  productOperationState,
+  refreshAndRender,
+}) {
   return {
     id: "export",
     label: availability.exportRoot.label ?? "Export...",
@@ -189,13 +224,20 @@ function createExportAction({ attributes, frozen, availability, refreshAndRender
         group,
         attributes,
         frozen,
+        productOperationState,
         refreshAndRender,
       })
     ),
   };
 }
 
-function createExportGroupAction({ group, attributes, frozen, refreshAndRender }) {
+function createExportGroupAction({
+  group,
+  attributes,
+  frozen,
+  productOperationState,
+  refreshAndRender,
+}) {
   return {
     id: group.id,
     label: group.label,
@@ -206,13 +248,21 @@ function createExportGroupAction({ group, attributes, frozen, refreshAndRender }
         exportAction,
         attributes,
         frozen,
+        productOperationState,
         refreshAndRender,
       })
     ),
   };
 }
 
-function createExportLeafAction({ group, exportAction, attributes, frozen, refreshAndRender }) {
+function createExportLeafAction({
+  group,
+  exportAction,
+  attributes,
+  frozen,
+  productOperationState,
+  refreshAndRender,
+}) {
   const datasetName = getDatasetName(attributes);
   const exportState = getPopupExportActionState({
     datasetName,
@@ -225,6 +275,8 @@ function createExportLeafAction({ group, exportAction, attributes, frozen, refre
     frozen,
     implemented: exportAction.implemented,
     exportState,
+    productHasRunningMutation: productOperationState.running,
+    productOperationDisabledReason: productOperationState.disabledReason,
   });
 
   return {
@@ -295,6 +347,21 @@ function createToolsAction({ attributes }) {
     className: "popup-action-bar__action--dropdown",
     items,
   };
+}
+
+function getFreezeActionLabel({ frozen, operationIsRunning }) {
+  if (!operationIsRunning) {
+    return frozen ? "Unfreeze" : "Freeze";
+  }
+
+  return frozen ? "Unfreezing..." : "Freezing...";
+}
+
+function isOperationTypeRunning(productOperationState, operationType) {
+  return (
+    Boolean(productOperationState?.running) &&
+    productOperationState.operation?.type === operationType
+  );
 }
 
 function isAnalyzeRoute() {
