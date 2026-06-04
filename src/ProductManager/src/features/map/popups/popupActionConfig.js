@@ -105,12 +105,14 @@ const EXPORT_GROUPS = [
 export function createPopupActionGroups({ attributes, frozen, refreshAndRender } = {}) {
   const datasetName = getDatasetName(attributes);
   const productOperationState = getProductOperationState(datasetName);
+  const productHasRunningNonExportMutation =
+    hasRunningNonExportProductOperation(productOperationState);
 
   const availability = createProductActionAvailability({
     attributes,
     frozen,
     exportHasRunningAction: isAnyPopupExportActionRunning(datasetName),
-    productHasRunningMutation: productOperationState.running,
+    productHasRunningMutation: productHasRunningNonExportMutation,
     productOperationDisabledReason: productOperationState.disabledReason,
   });
 
@@ -275,7 +277,7 @@ function createExportLeafAction({
     frozen,
     implemented: exportAction.implemented,
     exportState,
-    productHasRunningMutation: productOperationState.running,
+    productHasRunningMutation: hasRunningNonExportProductOperation(productOperationState),
     productOperationDisabledReason: productOperationState.disabledReason,
   });
 
@@ -358,9 +360,19 @@ function getFreezeActionLabel({ frozen, operationIsRunning }) {
 }
 
 function isOperationTypeRunning(productOperationState, operationType) {
-  return (
-    Boolean(productOperationState?.running) &&
-    productOperationState.operation?.type === operationType
+  return Boolean(
+    productOperationState?.operations?.some((operation) => operation.type === operationType) ??
+    productOperationState?.operation?.type === operationType
+  );
+}
+
+function hasRunningNonExportProductOperation(productOperationState) {
+  return Boolean(
+    productOperationState?.operations?.some((operation) => {
+      return operation.type !== PRODUCT_OPERATION_TYPE.EXPORT;
+    }) ??
+    (productOperationState?.running &&
+      productOperationState.operation?.type !== PRODUCT_OPERATION_TYPE.EXPORT)
   );
 }
 

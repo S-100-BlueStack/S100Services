@@ -18,7 +18,13 @@ const PRODUCT_OPERATION_LABELS = Object.freeze({
 
 const activeOperationsByDatasetName = new Map();
 
-export function beginProductOperation({ datasetName, type, label } = {}) {
+export function beginProductOperation({
+  datasetName,
+  type,
+  label,
+  operationId,
+  allowConcurrentSameType = false,
+} = {}) {
   const normalizedDatasetName = normalizeDatasetName(datasetName);
   const normalizedType = normalizeOperationType(type);
 
@@ -31,7 +37,11 @@ export function beginProductOperation({ datasetName, type, label } = {}) {
     };
   }
 
-  const existingOperation = activeOperationsByDatasetName.get(normalizedDatasetName);
+  const operations = getOperationsForDataset(normalizedDatasetName);
+  const existingOperation = findBlockingOperation(operations, {
+    type: normalizedType,
+    allowConcurrentSameType,
+  });
 
   if (existingOperation) {
     return {
@@ -42,8 +52,24 @@ export function beginProductOperation({ datasetName, type, label } = {}) {
     };
   }
 
+  const normalizedOperationId =
+    normalizeOperationId(operationId) ?? createDefaultOperationId(normalizedType);
+  const key = `${normalizedDatasetName}:${normalizedType}:${normalizedOperationId}`;
+
+  if (operations.has(key)) {
+    const duplicateOperation = operations.get(key);
+
+    return {
+      started: false,
+      key: null,
+      operation: duplicateOperation,
+      reason: `${formatProductOperation(duplicateOperation)} is already running for ${duplicateOperation.datasetName}.`,
+    };
+  }
+
   const operation = {
-    key: `${normalizedDatasetName}:${normalizedType}`,
+    key,
+    operationId: normalizedOperationId,
     datasetName,
     normalizedDatasetName,
     type: normalizedType,
@@ -51,7 +77,8 @@ export function beginProductOperation({ datasetName, type, label } = {}) {
     startedAt: Date.now(),
   };
 
-  activeOperationsByDatasetName.set(normalizedDatasetName, operation);
+  operations.set(operation.key, operation);
+  activeOperationsByDatasetName.set(normalizedDatasetName, operations);
   emitProductOperationStateChanged(operation.datasetName);
 
   return {
@@ -67,12 +94,19 @@ export function endProductOperation(key) {
     return;
   }
 
-  for (const [normalizedDatasetName, operation] of activeOperationsByDatasetName) {
-    if (operation.key !== key) {
+  for (const [normalizedDatasetName, operations] of activeOperationsByDatasetName.entries()) {
+    const operation = operations.get(key);
+
+    if (!operation) {
       continue;
     }
 
-    activeOperationsByDatasetName.delete(normalizedDatasetName);
+    operations.delete(key);
+
+    if (operations.size === 0) {
+      activeOperationsByDatasetName.delete(normalizedDatasetName);
+    }
+
     emitProductOperationStateChanged(operation.datasetName);
     return;
   }
@@ -80,16 +114,16 @@ export function endProductOperation(key) {
 
 export function getProductOperationState(datasetName) {
   const normalizedDatasetName = normalizeDatasetName(datasetName);
-  const operation = normalizedDatasetName
-    ? (activeOperationsByDatasetName.get(normalizedDatasetName) ?? null)
-    : null;
+  const operations = normalizedDatasetName
+    ? getSortedOperations(activeOperationsByDatasetName.get(normalizedDatasetName))
+    : [];
+  const primaryOperation = operations[0] ?? null;
 
   return {
-    running: Boolean(operation),
-    operation,
-    disabledReason: operation
-      ? `${formatProductOperation(operation)} is already running for ${operation.datasetName}.`
-      : null,
+    running: operations.length > 0,
+    operation: primaryOperation,
+    operations,
+    disabledReason: primaryOperation ? createDisabledReason(primaryOperation, operations) : null,
   };
 }
 
@@ -113,6 +147,40 @@ export function getProductOperationTypeLabel(type) {
   return PRODUCT_OPERATION_LABELS[type] ?? "Product operation";
 }
 
+function getOperationsForDataset(normalizedDatasetName) {
+  return activeOperationsByDatasetName.get(normalizedDatasetName) ?? new Map();
+}
+
+function findBlockingOperation(operations, { type, allowConcurrentSameType } = {}) {
+  for (const operation of operations.values()) {
+    if (allowConcurrentSameType && operation.type === type) {
+      continue;
+    }
+
+    return operation;
+  }
+
+  return null;
+}
+
+function getSortedOperations(operations) {
+  if (!operations) {
+    return [];
+  }
+
+  return Array.from(operations.values()).sort((left, right) => {
+    return left.startedAt - right.startedAt;
+  });
+}
+
+function createDisabledReason(primaryOperation, operations) {
+  if (operations.length > 1) {
+    return `Multiple product operations are already running for ${primaryOperation.datasetName}.`;
+  }
+
+  return `${formatProductOperation(primaryOperation)} is already running for ${primaryOperation.datasetName}.`;
+}
+
 function formatProductOperation(operation) {
   return operation?.label ?? getProductOperationTypeLabel(operation?.type);
 }
@@ -125,6 +193,10 @@ function emitProductOperationStateChanged(datasetName) {
       },
     })
   );
+}
+
+function createDefaultOperationId(type) {
+  return type;
 }
 
 function normalizeDatasetName(value) {
@@ -145,4 +217,13 @@ function normalizeOperationType(value) {
   }
 
   return null;
+}
+
+function normalizeOperationId(value) {
+  const normalizedValue = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+
+  return normalizedValue || null;
 }

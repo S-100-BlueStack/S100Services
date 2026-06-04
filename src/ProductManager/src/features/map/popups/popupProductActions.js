@@ -206,6 +206,7 @@ export async function triggerExport({
 
   const exportLabel = `${scope} ${exportType}`;
   let runningExport = null;
+  let runningOperation = null;
 
   try {
     const confirmed = await confirmAction({
@@ -241,6 +242,31 @@ export async function triggerExport({
       };
     }
 
+    runningOperation = beginProductOperation({
+      datasetName,
+      type: PRODUCT_OPERATION_TYPE.EXPORT,
+      label: `Exporting ${exportLabel}`,
+      operationId: `${scope}:${exportType}`,
+      allowConcurrentSameType: true,
+    });
+
+    if (!runningOperation.started) {
+      endPopupExportAction(runningExport.key);
+      runningExport = null;
+
+      noticeError(
+        "Product operation is already running",
+        runningOperation.reason ??
+          `Another product operation is already running for ${datasetName}.`
+      );
+
+      return {
+        success: false,
+        skipped: true,
+        reason: "already-running",
+      };
+    }
+
     const result = await request(datasetName);
 
     if (result.success) {
@@ -265,6 +291,10 @@ export async function triggerExport({
       error,
     };
   } finally {
+    if (runningOperation?.started) {
+      endProductOperation(runningOperation.key);
+    }
+
     if (runningExport?.started) {
       endPopupExportAction(runningExport.key);
     }
