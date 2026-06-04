@@ -16,8 +16,6 @@
         Exported = 2,   // Exported as new edition/update.
         Frozen = 5,     // Frozen and awaits manual action.
         InTransit = 6,  // Awaiting IC-ENC confirmation.
-        Rejected = 7,    // Rejected by IC-ENC.
-        Invalid = 8,    // Invalid product record. TODO: REMOVE THIS. TEMPORARY.
-        NewUpdate = 9,   // New update record. TODO: REMOVE THIS. TEMPORARY.
+        Rejected = 7    // Rejected by IC-ENC.
     }
 }
