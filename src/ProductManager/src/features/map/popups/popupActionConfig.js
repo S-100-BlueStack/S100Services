@@ -174,11 +174,10 @@ function createFreezeAction({
     className: "popup-action-bar__action--freeze",
     onClick: async ({ anchorElement }) => {
       const nextFrozenState = !frozen;
-      const result = await triggerFreeze(attributes?.datasetName, nextFrozenState, anchorElement);
 
-      if (shouldRefreshAfterProductAction(result)) {
-        await refreshAndRender?.();
-      }
+      await triggerFreeze(attributes?.datasetName, nextFrozenState, anchorElement, {
+        afterResult: refreshAndRender,
+      });
     },
   };
 }
@@ -198,11 +197,9 @@ function createSendAction({ attributes, availability, productOperationState, ref
     disabledReason: availability.sendImmediately.disabledReason,
     className: "popup-action-bar__action--send",
     onClick: async ({ anchorElement }) => {
-      const result = await sendImmediately(attributes?.datasetName, anchorElement);
-
-      if (shouldRefreshAfterProductAction(result)) {
-        await refreshAndRender?.();
-      }
+      await sendImmediately(attributes?.datasetName, anchorElement, {
+        afterResult: refreshAndRender,
+      });
     },
   };
 }
@@ -289,18 +286,15 @@ function createExportLeafAction({
     disabled: availability.disabled,
     disabledReason: availability.disabledReason,
     onClick: async ({ anchorElement }) => {
-      const result = await triggerExport({
+      await triggerExport({
         datasetName,
         scope: group.scope,
         exportType: exportAction.exportType,
         request: exportAction.request,
         anchorElement,
         confirm: exportAction.createConfirm?.(datasetName),
+        afterResult: refreshAndRender,
       });
-
-      if (shouldRefreshAfterProductAction(result)) {
-        await refreshAndRender?.();
-      }
     },
   };
 }
@@ -388,8 +382,4 @@ function getDatasetName(attributes) {
     attributes?.Name ??
     null
   );
-}
-
-function shouldRefreshAfterProductAction(result) {
-  return Boolean(result && result.skipped !== true);
 }

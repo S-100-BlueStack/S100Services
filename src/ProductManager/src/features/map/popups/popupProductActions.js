@@ -40,7 +40,7 @@ export function openProductHistory(datasetName) {
   });
 }
 
-export async function triggerFreeze(datasetName, state, anchorElement) {
+export async function triggerFreeze(datasetName, state, anchorElement, { afterResult } = {}) {
   if (!datasetName) {
     noticeError("Cannot change freeze state", "The selected feature does not have a datasetName.");
     return null;
@@ -89,7 +89,7 @@ export async function triggerFreeze(datasetName, state, anchorElement) {
 
     if (result.success) {
       noticeApiSuccess(`Product ${datasetName} ${state ? "frozen" : "unfrozen"} successfully`);
-      return result;
+      return await finishProductActionResult(result, afterResult);
     }
 
     noticeApiFailure(result, {
@@ -97,16 +97,19 @@ export async function triggerFreeze(datasetName, state, anchorElement) {
       failureTitle: `Failed to ${state ? "freeze" : "unfreeze"} ${datasetName}`,
     });
 
-    return result;
+    return await finishProductActionResult(result, afterResult);
   } catch (error) {
     noticeUnexpectedApiError(error, {
       title: `Unexpected error while ${actionLabel} ${datasetName}`,
     });
 
-    return {
-      success: false,
-      error,
-    };
+    return await finishProductActionResult(
+      {
+        success: false,
+        error,
+      },
+      afterResult
+    );
   } finally {
     if (runningOperation?.started) {
       endProductOperation(runningOperation.key);
@@ -114,7 +117,7 @@ export async function triggerFreeze(datasetName, state, anchorElement) {
   }
 }
 
-export async function sendImmediately(datasetName, anchorElement) {
+export async function sendImmediately(datasetName, anchorElement, { afterResult } = {}) {
   if (!datasetName) {
     noticeError("Cannot send product", "The selected feature does not have a datasetName.");
     return null;
@@ -158,7 +161,7 @@ export async function sendImmediately(datasetName, anchorElement) {
 
     if (result.success) {
       noticeApiSuccess(`Product ${datasetName} sent successfully`);
-      return result;
+      return await finishProductActionResult(result, afterResult);
     }
 
     noticeApiFailure(result, {
@@ -166,16 +169,19 @@ export async function sendImmediately(datasetName, anchorElement) {
       failureTitle: `Failed to send ${datasetName}`,
     });
 
-    return result;
+    return await finishProductActionResult(result, afterResult);
   } catch (error) {
     noticeUnexpectedApiError(error, {
       title: `Unexpected error while sending ${datasetName}`,
     });
 
-    return {
-      success: false,
-      error,
-    };
+    return await finishProductActionResult(
+      {
+        success: false,
+        error,
+      },
+      afterResult
+    );
   } finally {
     if (runningOperation?.started) {
       endProductOperation(runningOperation.key);
@@ -190,6 +196,7 @@ export async function triggerExport({
   request,
   anchorElement,
   confirm,
+  afterResult,
 }) {
   if (!datasetName) {
     noticeError("Cannot export product", "The selected feature does not have a datasetName.");
@@ -271,7 +278,7 @@ export async function triggerExport({
 
     if (result.success) {
       noticeApiSuccess(`Export request sent for ${datasetName}`, exportLabel);
-      return result;
+      return await finishProductActionResult(result, afterResult);
     }
 
     noticeApiFailure(result, {
@@ -280,16 +287,19 @@ export async function triggerExport({
       fallbackMessage: exportLabel,
     });
 
-    return result;
+    return await finishProductActionResult(result, afterResult);
   } catch (error) {
     noticeUnexpectedApiError(error, {
       title: `Unexpected error while exporting ${datasetName}`,
     });
 
-    return {
-      success: false,
-      error,
-    };
+    return await finishProductActionResult(
+      {
+        success: false,
+        error,
+      },
+      afterResult
+    );
   } finally {
     if (runningOperation?.started) {
       endProductOperation(runningOperation.key);
@@ -299,4 +309,16 @@ export async function triggerExport({
       endPopupExportAction(runningExport.key);
     }
   }
+}
+
+async function finishProductActionResult(result, afterResult) {
+  if (shouldRunPostAction(result)) {
+    await afterResult?.(result);
+  }
+
+  return result;
+}
+
+function shouldRunPostAction(result) {
+  return Boolean(result && result.skipped !== true);
 }
