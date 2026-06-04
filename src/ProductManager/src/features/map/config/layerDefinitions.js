@@ -69,7 +69,8 @@ export function resolveLayerKind(source) {
 }
 
 export function resolveLayerCapabilities(source) {
-  const definition = getLayerDefinition(resolveLayerId(source));
+  const definition =
+    getLayerDefinition(resolveLayerId(source)) ?? getFallbackDefinitionForAttributes(source);
 
   return {
     ...DEFAULT_LAYER_CAPABILITIES,
@@ -83,7 +84,33 @@ export function layerSupportsCapability(source, capabilityName) {
 }
 
 export function attributesSupportLayerCapability(attributes, capabilityName) {
-  return layerSupportsCapability(attributes);
+  return layerSupportsCapability(attributes, capabilityName);
+}
+
+function getFallbackDefinitionForAttributes(source) {
+  if (!looksLikeProductCorrectionAttributes(source)) {
+    return null;
+  }
+
+  // Existing product graphics should have `layerId`, but this fallback keeps
+  // popup actions stable if refreshed API attributes omit frontend metadata.
+  return getLayerDefinition(PRODUCT_CORRECTIONS_LAYER_ID);
+}
+
+function looksLikeProductCorrectionAttributes(source) {
+  if (!source || typeof source !== "object") {
+    return false;
+  }
+
+  return Boolean(
+    source.datasetName ??
+    source.DatasetName ??
+    source.datasetname ??
+    source.edition ??
+    source.Edition ??
+    source.update ??
+    source.Update
+  );
 }
 
 function normalizeLayerId(value) {

@@ -7,7 +7,19 @@ import { createPopupActionBar } from "./popupActionBar.js";
 import { closePopupActionDropdown } from "./popupActionDropdown.js";
 import { onPopupExportStateChanged } from "./popupExportState.js";
 
-const GENERIC_POPUP_EXCLUDED_FIELDS = new Set(["featureKey", "layerId", "layerKind"]);
+const GENERIC_POPUP_EXCLUDED_FIELDS = new Set([
+  "featureKey",
+  "layerId",
+  "layerKind",
+
+  // Internal Analyze/report fields should not leak into generic map popups.
+  "aoiGeometry",
+  "errorMessage",
+  "isMock",
+  "loadError",
+  "raw",
+  "xml",
+]);
 
 export function createPopup() {
   return {
@@ -120,14 +132,18 @@ function renderProductRows(section, attributes) {
   section.appendChild(createRow("Update", attributes.update));
   section.appendChild(createStatusRow(attributes.status));
 
-  if (attributes.errorMessage) {
+  if (hasDisplayableValue(attributes.errorMessage)) {
     section.appendChild(createRow("Error Message", attributes.errorMessage));
   }
 }
 
 function renderGenericRows(section, attributes) {
-  const entries = Object.entries(attributes ?? {}).filter(([fieldName]) => {
-    return !GENERIC_POPUP_EXCLUDED_FIELDS.has(fieldName);
+  const entries = Object.entries(attributes ?? {}).filter(([fieldName, value]) => {
+    return (
+      !GENERIC_POPUP_EXCLUDED_FIELDS.has(fieldName) &&
+      hasDisplayableValue(value) &&
+      !isComplexValue(value)
+    );
   });
 
   if (entries.length === 0) {
@@ -209,15 +225,23 @@ function formatPopupValue(value) {
     return "";
   }
 
-  if (typeof value === "object") {
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
+  return String(value);
+}
+
+function hasDisplayableValue(value) {
+  if (value === null || value === undefined) {
+    return false;
   }
 
-  return String(value);
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+
+  return true;
+}
+
+function isComplexValue(value) {
+  return typeof value === "object" && value !== null;
 }
 
 function cleanupWhenDisconnected(element, cleanup) {
