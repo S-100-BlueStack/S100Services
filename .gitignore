@@ -446,3 +446,4 @@ dist-ssr
 *.zip
 /src/ProductCatalogueService/exports
 /src/ProductCatalogueAPI/exports
+/src/ProductCatalogueAPI/config
