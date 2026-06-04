@@ -14,6 +14,8 @@ const DEFAULT_LAYER_CAPABILITIES = Object.freeze({
   supportsOverlapPicker: false,
 });
 
+const KNOWN_LAYER_CAPABILITIES = new Set(Object.keys(DEFAULT_LAYER_CAPABILITIES));
+
 export const layerDefinitions = Object.freeze([
   Object.freeze({
     id: PRODUCT_CORRECTIONS_LAYER_ID,
@@ -80,11 +82,24 @@ export function resolveLayerCapabilities(source) {
 }
 
 export function layerSupportsCapability(source, capabilityName) {
+  if (!isKnownLayerCapability(capabilityName)) {
+    warnUnknownLayerCapability(capabilityName);
+    return false;
+  }
+
   return Boolean(resolveLayerCapabilities(source)[capabilityName]);
 }
 
 export function attributesSupportLayerCapability(attributes, capabilityName) {
   return layerSupportsCapability(attributes, capabilityName);
+}
+
+export function getKnownLayerCapabilities() {
+  return Array.from(KNOWN_LAYER_CAPABILITIES);
+}
+
+function isKnownLayerCapability(capabilityName) {
+  return KNOWN_LAYER_CAPABILITIES.has(capabilityName);
 }
 
 function getFallbackDefinitionForAttributes(source) {
@@ -111,6 +126,17 @@ function looksLikeProductCorrectionAttributes(source) {
     source.update ??
     source.Update
   );
+}
+
+function warnUnknownLayerCapability(capabilityName) {
+  if (!import.meta.env.DEV) {
+    return;
+  }
+
+  console.warn("[Layer definitions] Unknown layer capability", {
+    capabilityName,
+    knownCapabilities: getKnownLayerCapabilities(),
+  });
 }
 
 function normalizeLayerId(value) {
