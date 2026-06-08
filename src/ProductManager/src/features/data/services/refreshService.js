@@ -99,14 +99,15 @@ export function createRefreshService({
     isRefreshing = true;
 
     const startedAt = new Date();
-    const state = captureState();
-
-    onRefreshStart?.({
-      source,
-      startedAt,
-    });
 
     try {
+      const state = captureState();
+
+      onRefreshStart?.({
+        source,
+        startedAt,
+      });
+
       const result = await runWithRetry(loadAppData, {
         maxRetries: source === "manual" ? MANUAL_REFRESH_MAX_RETRIES : AUTO_REFRESH_MAX_RETRIES,
         baseDelay: 1000,
