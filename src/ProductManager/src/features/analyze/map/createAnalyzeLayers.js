@@ -40,8 +40,6 @@ function createAnalyzeFeature(product, index) {
       status: product.status,
       errorMessage: product.errorMessage,
       featureKey: `analyze:${product.datasetName}:${index}`,
-      analyzeLoadError: product.loadError,
-      analyzeIsMock: product.isMock,
     },
   };
 }
