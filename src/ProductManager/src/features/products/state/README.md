@@ -135,19 +135,6 @@ operations and backend operations.
 The popup should continue reading only from `getProductOperationState(datasetName)`.
 It should not call backend operation endpoints directly.
 
-## Backend export operations
-
-Backend export operations need special handling when backend operation sync is
-activated.
-
-Product operation state can show that an export is running for a product, but
-export leaf conflicts are still owned by `popupExportState.js`.
-
-When backend export operations become available, they must either be mapped into
-popup export state or passed into export availability as backend export conflict
-context. Otherwise the UI may know that an export is running without knowing which
-export leaf actions should be blocked.
-
 ## Important constraints
 
 Do not use this state as the source of truth for business rules.
