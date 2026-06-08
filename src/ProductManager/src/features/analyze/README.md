@@ -53,7 +53,12 @@ Expected Analyze graphic attributes:
 
 ```js
 {
-  (datasetName, edition, update, status, errorMessage, featureKey);
+  datasetName,
+  edition,
+  update,
+  status,
+  errorMessage,
+  featureKey,
 }
 ```
 
