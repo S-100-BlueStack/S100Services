@@ -138,11 +138,13 @@ export async function initAnalyzePage({ datasetNames }) {
     }
   };
 
-  document.addEventListener("pm-analyze-dataset-submit", async (event) => {
+  const handleAnalyzeDatasetSubmit = async (event) => {
     await loadAnalyzeDatasetNames(event.detail?.datasetNames ?? [], {
       updateUrl: true,
     });
-  });
+  };
+
+  document.addEventListener("pm-analyze-dataset-submit", handleAnalyzeDatasetSubmit);
 
   cleanupViewPadding = applyAnalyzeViewPadding(view);
 
@@ -163,13 +165,15 @@ export async function initAnalyzePage({ datasetNames }) {
     updateUrl: false,
   });
 
-  window.addEventListener("popstate", async () => {
+  const handlePopState = async () => {
     const route = getCurrentRoute();
 
     await loadAnalyzeDatasetNames(route.datasetNames, {
       updateUrl: false,
     });
-  });
+  };
+
+  window.addEventListener("popstate", handlePopState);
 
   return {
     map,
@@ -183,6 +187,8 @@ export async function initAnalyzePage({ datasetNames }) {
     loadAnalyzeDatasetNames,
     destroy() {
       loadRequestId += 1;
+      document.removeEventListener("pm-analyze-dataset-submit", handleAnalyzeDatasetSubmit);
+      window.removeEventListener("popstate", handlePopState);
       activeLoaderProgress?.cleanup();
       activeLoaderProgress = null;
       cleanupViewPadding?.();
