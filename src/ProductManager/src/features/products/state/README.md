@@ -116,6 +116,25 @@ Expected integration path:
 4. Keep `popupExportState.js` until the backend can describe export scope
    conflicts accurately.
 
+## Backend adapter skeleton
+
+Backend operation state should enter the UI through:
+
+- `features/products/api/productOperationApi.js`
+- `features/products/services/productOperationSyncService.js`
+- `features/products/state/productOperationState.js`
+
+`productOperationApi.js` owns the backend response shape and endpoint integration.
+
+`productOperationSyncService.js` owns when a product operation state is fetched and
+how it is applied to frontend state.
+
+`productOperationState.js` owns the UI-facing merged state for local optimistic
+operations and backend operations.
+
+The popup should continue reading only from `getProductOperationState(datasetName)`.
+It should not call backend operation endpoints directly.
+
 ## Important constraints
 
 Do not use this state as the source of truth for business rules.

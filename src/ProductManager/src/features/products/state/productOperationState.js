@@ -6,6 +6,11 @@ export const PRODUCT_OPERATION_TYPE = Object.freeze({
   ROLLBACK: "rollback",
 });
 
+export const PRODUCT_OPERATION_SOURCE = Object.freeze({
+  LOCAL: "local",
+  BACKEND: "backend",
+});
+
 const PRODUCT_OPERATION_STATE_CHANGED_EVENT = "pm:product-operation-state-changed";
 
 const PRODUCT_OPERATION_LABELS = Object.freeze({
@@ -16,7 +21,8 @@ const PRODUCT_OPERATION_LABELS = Object.freeze({
   [PRODUCT_OPERATION_TYPE.ROLLBACK]: "Rollback",
 });
 
-const activeOperationsByDatasetName = new Map();
+const activeLocalOperationsByDatasetName = new Map();
+const activeExternalOperationsByDatasetName = new Map();
 
 export function beginProductOperation({
   datasetName,
@@ -37,8 +43,9 @@ export function beginProductOperation({
     };
   }
 
-  const operations = getOperationsForDataset(normalizedDatasetName);
-  const existingOperation = findBlockingOperation(operations, {
+  const localOperations = getLocalOperationsForDataset(normalizedDatasetName);
+  const allOperations = getAllOperationsForDataset(normalizedDatasetName);
+  const existingOperation = findBlockingOperation(allOperations, {
     type: normalizedType,
     allowConcurrentSameType,
   });
@@ -54,10 +61,15 @@ export function beginProductOperation({
 
   const normalizedOperationId =
     normalizeOperationId(operationId) ?? createDefaultOperationId(normalizedType);
-  const key = `${normalizedDatasetName}:${normalizedType}:${normalizedOperationId}`;
+  const key = createOperationKey({
+    normalizedDatasetName,
+    type: normalizedType,
+    operationId: normalizedOperationId,
+    source: PRODUCT_OPERATION_SOURCE.LOCAL,
+  });
 
-  if (operations.has(key)) {
-    const duplicateOperation = operations.get(key);
+  if (localOperations.has(key)) {
+    const duplicateOperation = localOperations.get(key);
 
     return {
       started: false,
@@ -74,11 +86,14 @@ export function beginProductOperation({
     normalizedDatasetName,
     type: normalizedType,
     label: label ?? getProductOperationTypeLabel(normalizedType),
+    source: PRODUCT_OPERATION_SOURCE.LOCAL,
     startedAt: Date.now(),
+    startedAtText: null,
+    startedBy: null,
   };
 
-  operations.set(operation.key, operation);
-  activeOperationsByDatasetName.set(normalizedDatasetName, operations);
+  localOperations.set(operation.key, operation);
+  activeLocalOperationsByDatasetName.set(normalizedDatasetName, localOperations);
   emitProductOperationStateChanged(operation.datasetName);
 
   return {
@@ -94,7 +109,7 @@ export function endProductOperation(key) {
     return;
   }
 
-  for (const [normalizedDatasetName, operations] of activeOperationsByDatasetName.entries()) {
+  for (const [normalizedDatasetName, operations] of activeLocalOperationsByDatasetName.entries()) {
     const operation = operations.get(key);
 
     if (!operation) {
@@ -104,7 +119,7 @@ export function endProductOperation(key) {
     operations.delete(key);
 
     if (operations.size === 0) {
-      activeOperationsByDatasetName.delete(normalizedDatasetName);
+      activeLocalOperationsByDatasetName.delete(normalizedDatasetName);
     }
 
     emitProductOperationStateChanged(operation.datasetName);
@@ -112,10 +127,54 @@ export function endProductOperation(key) {
   }
 }
 
+export function replaceExternalProductOperations(datasetName, operations = []) {
+  const normalizedDatasetName = normalizeDatasetName(datasetName);
+
+  if (!normalizedDatasetName) {
+    return;
+  }
+
+  const nextOperations = new Map();
+
+  for (const operationInput of operations) {
+    const operation = normalizeExternalOperation(operationInput, {
+      datasetName,
+      normalizedDatasetName,
+    });
+
+    if (operation) {
+      nextOperations.set(operation.key, operation);
+    }
+  }
+
+  if (nextOperations.size > 0) {
+    activeExternalOperationsByDatasetName.set(normalizedDatasetName, nextOperations);
+  } else {
+    activeExternalOperationsByDatasetName.delete(normalizedDatasetName);
+  }
+
+  emitProductOperationStateChanged(datasetName);
+}
+
+export function clearExternalProductOperations(datasetName) {
+  const normalizedDatasetName = normalizeDatasetName(datasetName);
+
+  if (!normalizedDatasetName) {
+    return;
+  }
+
+  if (!activeExternalOperationsByDatasetName.has(normalizedDatasetName)) {
+    return;
+  }
+
+  activeExternalOperationsByDatasetName.delete(normalizedDatasetName);
+  emitProductOperationStateChanged(datasetName);
+}
+
 export function getProductOperationState(datasetName) {
   const normalizedDatasetName = normalizeDatasetName(datasetName);
   const operations = normalizedDatasetName
-    ? getSortedOperations(activeOperationsByDatasetName.get(normalizedDatasetName))
+    ? getSortedOperations(getAllOperationsForDataset(normalizedDatasetName))
     : [];
   const primaryOperation = operations[0] ?? null;
 
@@ -123,6 +182,8 @@ export function getProductOperationState(datasetName) {
     running: operations.length > 0,
     operation: primaryOperation,
     operations,
+    localOperations: operations.filter(isLocalOperation),
+    externalOperations: operations.filter(isExternalOperation),
     disabledReason: primaryOperation ? createDisabledReason(primaryOperation, operations) : null,
   };
 }
@@ -147,12 +208,23 @@ export function getProductOperationTypeLabel(type) {
   return PRODUCT_OPERATION_LABELS[type] ?? "Product operation";
 }
 
-function getOperationsForDataset(normalizedDatasetName) {
-  return activeOperationsByDatasetName.get(normalizedDatasetName) ?? new Map();
+function getLocalOperationsForDataset(normalizedDatasetName) {
+  return activeLocalOperationsByDatasetName.get(normalizedDatasetName) ?? new Map();
+}
+
+function getExternalOperationsForDataset(normalizedDatasetName) {
+  return activeExternalOperationsByDatasetName.get(normalizedDatasetName) ?? new Map();
+}
+
+function getAllOperationsForDataset(normalizedDatasetName) {
+  return [
+    ...getExternalOperationsForDataset(normalizedDatasetName).values(),
+    ...getLocalOperationsForDataset(normalizedDatasetName).values(),
+  ];
 }
 
 function findBlockingOperation(operations, { type, allowConcurrentSameType } = {}) {
-  for (const operation of operations.values()) {
+  for (const operation of operations) {
     if (allowConcurrentSameType && operation.type === type) {
       continue;
     }
@@ -164,12 +236,8 @@ function findBlockingOperation(operations, { type, allowConcurrentSameType } = {
 }
 
 function getSortedOperations(operations) {
-  if (!operations) {
-    return [];
-  }
-
-  return Array.from(operations.values()).sort((left, right) => {
-    return left.startedAt - right.startedAt;
+  return [...operations].sort((left, right) => {
+    return getOperationStartValue(left) - getOperationStartValue(right);
   });
 }
 
@@ -179,6 +247,52 @@ function createDisabledReason(primaryOperation, operations) {
   }
 
   return `${formatProductOperation(primaryOperation)} is already running for ${primaryOperation.datasetName}.`;
+}
+
+function normalizeExternalOperation(operationInput, { datasetName, normalizedDatasetName }) {
+  const type = normalizeOperationType(operationInput?.type);
+
+  if (!type) {
+    return null;
+  }
+
+  const operationId =
+    normalizeOperationId(operationInput?.id) ??
+    normalizeOperationId(operationInput?.operationId) ??
+    createDefaultOperationId(type);
+  const source = normalizeOperationSource(operationInput?.source);
+  const startedAtText = normalizeText(operationInput?.startedAt);
+  const startedAt = getStartedAtValue(startedAtText);
+
+  return {
+    key: createOperationKey({
+      normalizedDatasetName,
+      type,
+      operationId,
+      source,
+    }),
+    operationId,
+    datasetName: operationInput?.datasetName ?? datasetName,
+    normalizedDatasetName,
+    type,
+    label: normalizeText(operationInput?.label) ?? getProductOperationTypeLabel(type),
+    source,
+    startedAt,
+    startedAtText,
+    startedBy: normalizeText(operationInput?.startedBy),
+  };
+}
+
+function createOperationKey({ normalizedDatasetName, type, operationId, source }) {
+  return `${normalizedDatasetName}:${source}:${type}:${operationId}`;
+}
+
+function isLocalOperation(operation) {
+  return operation.source === PRODUCT_OPERATION_SOURCE.LOCAL;
+}
+
+function isExternalOperation(operation) {
+  return operation.source !== PRODUCT_OPERATION_SOURCE.LOCAL;
 }
 
 function formatProductOperation(operation) {
@@ -197,6 +311,24 @@ function emitProductOperationStateChanged(datasetName) {
 
 function createDefaultOperationId(type) {
   return type;
+}
+
+function getOperationStartValue(operation) {
+  if (Number.isFinite(operation?.startedAt)) {
+    return operation.startedAt;
+  }
+
+  return 0;
+}
+
+function getStartedAtValue(value) {
+  const timestamp = new Date(value).getTime();
+
+  if (Number.isFinite(timestamp)) {
+    return timestamp;
+  }
+
+  return Date.now();
 }
 
 function normalizeDatasetName(value) {
@@ -219,6 +351,18 @@ function normalizeOperationType(value) {
   return null;
 }
 
+function normalizeOperationSource(value) {
+  const normalizedValue = String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (Object.values(PRODUCT_OPERATION_SOURCE).includes(normalizedValue)) {
+    return normalizedValue;
+  }
+
+  return PRODUCT_OPERATION_SOURCE.BACKEND;
+}
+
 function normalizeOperationId(value) {
   const normalizedValue = String(value ?? "")
     .trim()
@@ -226,4 +370,10 @@ function normalizeOperationId(value) {
     .replace(/\s+/g, "-");
 
   return normalizedValue || null;
+}
+
+function normalizeText(value) {
+  const text = String(value ?? "").trim();
+
+  return text || null;
 }
