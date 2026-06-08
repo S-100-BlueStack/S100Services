@@ -20,6 +20,7 @@ export async function initAnalyzePage({ datasetNames }) {
   let loadRequestId = 0;
   let lookupsLoaded = false;
   let activeLoaderProgress = null;
+  let cleanupViewPadding = null;
 
   const normalizedDatasetNames = normalizeDatasetNames(datasetNames);
 
@@ -143,7 +144,7 @@ export async function initAnalyzePage({ datasetNames }) {
     });
   });
 
-  applyAnalyzeViewPadding(view);
+  cleanupViewPadding = applyAnalyzeViewPadding(view);
 
   await view.when();
 
@@ -180,6 +181,16 @@ export async function initAnalyzePage({ datasetNames }) {
       return currentLayers;
     },
     loadAnalyzeDatasetNames,
+    destroy() {
+      loadRequestId += 1;
+      activeLoaderProgress?.cleanup();
+      activeLoaderProgress = null;
+      cleanupViewPadding?.();
+      cleanupViewPadding = null;
+      removeLayers(map, currentLayers);
+      currentLayers = [];
+      currentProducts = [];
+    },
   };
 
   async function ensureLookupsLoaded() {
@@ -244,7 +255,11 @@ function removeLayers(map, layers) {
 }
 
 function applyAnalyzeViewPadding(view) {
+  let pendingAnimationFrame = null;
+
   const updatePadding = () => {
+    pendingAnimationFrame = null;
+
     const panel = document.getElementById("analyze-sidebar-panel");
     const panelWidth = panel?.getBoundingClientRect?.().width ?? 420;
     const isNarrowScreen = window.matchMedia("(max-width: 700px)").matches;
@@ -257,9 +272,26 @@ function applyAnalyzeViewPadding(view) {
     };
   };
 
+  const schedulePaddingUpdate = () => {
+    if (pendingAnimationFrame !== null) {
+      return;
+    }
+
+    pendingAnimationFrame = window.requestAnimationFrame(updatePadding);
+  };
+
   updatePadding();
-  requestAnimationFrame(updatePadding);
-  window.addEventListener("resize", updatePadding);
+  schedulePaddingUpdate();
+  window.addEventListener("resize", schedulePaddingUpdate);
+
+  return () => {
+    window.removeEventListener("resize", schedulePaddingUpdate);
+
+    if (pendingAnimationFrame !== null) {
+      window.cancelAnimationFrame(pendingAnimationFrame);
+      pendingAnimationFrame = null;
+    }
+  };
 }
 
 function showMockWarningIfNeeded(products) {
