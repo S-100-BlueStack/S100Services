@@ -49,10 +49,10 @@ export async function triggerFreeze(datasetName, state, anchorElement, { afterRe
   const operationType = state ? PRODUCT_OPERATION_TYPE.FREEZE : PRODUCT_OPERATION_TYPE.UNFREEZE;
   const operationLabel = state ? "Freezing" : "Unfreezing";
   const actionLabel = state ? "freezing" : "unfreezing";
+  let runningOperation = null;
 
-  return runConfirmedProductOperation({
-    datasetName,
-    confirm: {
+  try {
+    const confirmed = await confirmAction({
       title: `${state ? "Freeze" : "Unfreeze"} ${datasetName}`,
       message: `Are you sure you want to ${
         state ? "freeze" : "unfreeze"
@@ -60,22 +60,61 @@ export async function triggerFreeze(datasetName, state, anchorElement, { afterRe
       confirmText: "Confirm",
       cancelText: "Cancel",
       anchorElement,
-    },
-    operation: {
+    });
+
+    if (!confirmed) {
+      return null;
+    }
+
+    runningOperation = beginProductOperation({
+      datasetName,
       type: operationType,
       label: operationLabel,
-    },
-    execute: () => changeFreezeState(datasetName, state),
-    onSuccess: () => {
+    });
+
+    if (!runningOperation.started) {
+      noticeError(
+        "Product operation is already running",
+        runningOperation.reason ?? `${operationLabel} is already running for ${datasetName}.`
+      );
+
+      return {
+        success: false,
+        skipped: true,
+        reason: "already-running",
+      };
+    }
+
+    const result = await changeFreezeState(datasetName, state);
+
+    if (result.success) {
       noticeApiSuccess(`Product ${datasetName} ${state ? "frozen" : "unfrozen"} successfully`);
-    },
-    failureNotice: {
+      return await finishProductActionResult(result, afterResult);
+    }
+
+    noticeApiFailure(result, {
       networkTitle: `Network error while ${actionLabel} ${datasetName}`,
       failureTitle: `Failed to ${state ? "freeze" : "unfreeze"} ${datasetName}`,
-    },
-    unexpectedErrorTitle: `Unexpected error while ${actionLabel} ${datasetName}`,
-    afterResult,
-  });
+    });
+
+    return await finishProductActionResult(result, afterResult);
+  } catch (error) {
+    noticeUnexpectedApiError(error, {
+      title: `Unexpected error while ${actionLabel} ${datasetName}`,
+    });
+
+    return await finishProductActionResult(
+      {
+        success: false,
+        error,
+      },
+      afterResult
+    );
+  } finally {
+    if (runningOperation?.started) {
+      endProductOperation(runningOperation.key);
+    }
+  }
 }
 
 export async function sendImmediately(datasetName, anchorElement, { afterResult } = {}) {
@@ -84,30 +123,70 @@ export async function sendImmediately(datasetName, anchorElement, { afterResult 
     return null;
   }
 
-  return runConfirmedProductOperation({
-    datasetName,
-    confirm: {
+  let runningOperation = null;
+
+  try {
+    const confirmed = await confirmAction({
       title: `Send ${datasetName}`,
       message: `Are you sure you want to send ${datasetName} immediately? This will upload the product to IC-ENC immediately without waiting for the automated upload.`,
       confirmText: "Send",
       cancelText: "Cancel",
       anchorElement,
-    },
-    operation: {
+    });
+
+    if (!confirmed) {
+      return null;
+    }
+
+    runningOperation = beginProductOperation({
+      datasetName,
       type: PRODUCT_OPERATION_TYPE.SEND,
       label: "Sending",
-    },
-    execute: () => uploadProduct(datasetName),
-    onSuccess: () => {
+    });
+
+    if (!runningOperation.started) {
+      noticeError(
+        "Product operation is already running",
+        runningOperation.reason ?? `Sending is already running for ${datasetName}.`
+      );
+
+      return {
+        success: false,
+        skipped: true,
+        reason: "already-running",
+      };
+    }
+
+    const result = await uploadProduct(datasetName);
+
+    if (result.success) {
       noticeApiSuccess(`Product ${datasetName} sent successfully`);
-    },
-    failureNotice: {
+      return await finishProductActionResult(result, afterResult);
+    }
+
+    noticeApiFailure(result, {
       networkTitle: `Network error while sending ${datasetName}`,
       failureTitle: `Failed to send ${datasetName}`,
-    },
-    unexpectedErrorTitle: `Unexpected error while sending ${datasetName}`,
-    afterResult,
-  });
+    });
+
+    return await finishProductActionResult(result, afterResult);
+  } catch (error) {
+    noticeUnexpectedApiError(error, {
+      title: `Unexpected error while sending ${datasetName}`,
+    });
+
+    return await finishProductActionResult(
+      {
+        success: false,
+        error,
+      },
+      afterResult
+    );
+  } finally {
+    if (runningOperation?.started) {
+      endProductOperation(runningOperation.key);
+    }
+  }
 }
 
 export async function triggerExport({
@@ -133,14 +212,11 @@ export async function triggerExport({
   }
 
   const exportLabel = `${scope} ${exportType}`;
+  let runningExport = null;
+  let runningOperation = null;
 
-  return runConfirmedExportOperation({
-    datasetName,
-    scope,
-    exportType,
-    exportLabel,
-    request,
-    confirm: {
+  try {
+    const confirmed = await confirmAction({
       title: confirm?.title ?? `Export ${exportLabel} for ${datasetName}`,
       message:
         confirm?.message ??
@@ -148,89 +224,7 @@ export async function triggerExport({
       confirmText: confirm?.confirmText ?? "Export",
       cancelText: confirm?.cancelText ?? "Cancel",
       anchorElement,
-    },
-    afterResult,
-  });
-}
-
-async function runConfirmedProductOperation({
-  datasetName,
-  confirm,
-  operation,
-  execute,
-  onSuccess,
-  failureNotice,
-  unexpectedErrorTitle,
-  afterResult,
-}) {
-  let runningOperation = null;
-
-  try {
-    const confirmed = await confirmAction(confirm);
-
-    if (!confirmed) {
-      return null;
-    }
-
-    runningOperation = beginProductOperation({
-      datasetName,
-      type: operation.type,
-      label: operation.label,
-      operationId: operation.operationId,
-      allowConcurrentSameType: operation.allowConcurrentSameType,
     });
-
-    if (!runningOperation.started) {
-      noticeError(
-        "Product operation is already running",
-        runningOperation.reason ?? `${operation.label} is already running for ${datasetName}.`
-      );
-
-      return createSkippedActionResult("already-running");
-    }
-
-    const result = await execute();
-
-    if (result.success) {
-      onSuccess?.(result);
-    } else {
-      noticeApiFailure(result, failureNotice);
-    }
-
-    return await finishProductActionResult(result, afterResult);
-  } catch (error) {
-    noticeUnexpectedApiError(error, {
-      title: unexpectedErrorTitle,
-    });
-
-    return await finishProductActionResult(
-      {
-        success: false,
-        error,
-      },
-      afterResult
-    );
-  } finally {
-    if (runningOperation?.started) {
-      endProductOperation(runningOperation.key);
-    }
-  }
-}
-
-async function runConfirmedExportOperation({
-  datasetName,
-  scope,
-  exportType,
-  exportLabel,
-  request,
-  confirm,
-  afterResult,
-}) {
-  let runningExport = null;
-  let runningOperation = null;
-
-  try {
-    const confirmed = await confirmAction(confirm);
 
     if (!confirmed) {
       return null;
@@ -248,7 +242,11 @@ async function runConfirmedExportOperation({
         runningExport.reason ?? `${exportLabel} is already running for ${datasetName}.`
       );
 
-      return createSkippedActionResult("already-running");
+      return {
+        success: false,
+        skipped: true,
+        reason: "already-running",
+      };
     }
 
     runningOperation = beginProductOperation({
@@ -269,20 +267,25 @@ async function runConfirmedExportOperation({
           `Another product operation is already running for ${datasetName}.`
       );
 
-      return createSkippedActionResult("already-running");
+      return {
+        success: false,
+        skipped: true,
+        reason: "already-running",
+      };
     }
 
     const result = await request(datasetName);
 
     if (result.success) {
       noticeApiSuccess(`Export request sent for ${datasetName}`, exportLabel);
-    } else {
-      noticeApiFailure(result, {
-        networkTitle: `Network error while exporting ${datasetName}`,
-        failureTitle: `Failed to export ${datasetName}`,
-        fallbackMessage: exportLabel,
-      });
+      return await finishProductActionResult(result, afterResult);
     }
+
+    noticeApiFailure(result, {
+      networkTitle: `Network error while exporting ${datasetName}`,
+      failureTitle: `Failed to export ${datasetName}`,
+      fallbackMessage: exportLabel,
+    });
 
     return await finishProductActionResult(result, afterResult);
   } catch (error) {
@@ -318,12 +321,4 @@ async function finishProductActionResult(result, afterResult) {
 
 function shouldRunPostAction(result) {
   return Boolean(result && result.skipped !== true);
-}
-
-function createSkippedActionResult(reason) {
-  return {
-    success: false,
-    skipped: true,
-    reason,
-  };
 }
