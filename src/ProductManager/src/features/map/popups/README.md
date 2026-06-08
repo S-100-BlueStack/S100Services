@@ -38,6 +38,7 @@ This keeps the action UI consistent with Product Manager requirements:
 - `createPopup.js`  
   Renders popup content and subscribes to export-state and product-operation-state
   changes.
+
 - `popupExportConfig.js`  
   Defines popup export groups, scopes, export types, labels and endpoint wiring.
   S57/S100 exports should be activated here when backend endpoints become available.
@@ -139,6 +140,21 @@ Examples:
 - Running `S100 Update` blocks `S100` and `All`.
 
 This keeps the model extensible when more export formats are added.
+
+## Export configuration
+
+Popup export structure is defined in `popupExportConfig.js`.
+
+To activate a future export leaf action:
+
+1. Add the backend request function in `features/data/api/exportApi.js`.
+2. Import that request in `popupExportConfig.js`.
+3. Set the leaf action to `implemented: true`.
+4. Assign the request function.
+5. Add a confirm message if the default wording is not specific enough.
+
+Do not add export endpoint wiring directly in `popupActionConfig.js`.
+That file should build UI actions from export config, not define export formats.
 
 ## Product mutations during export
 
