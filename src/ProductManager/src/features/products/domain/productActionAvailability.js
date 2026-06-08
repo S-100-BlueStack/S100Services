@@ -1,5 +1,6 @@
 import { isStatusFrozen } from "../../map/state/featureState.js";
 
+const MISSING_DATASET_NAME_REASON = "The selected feature does not have a datasetName.";
 const EXPORT_RUNNING_REASON = "Wait until the current export finishes.";
 const PRODUCT_OPERATION_RUNNING_REASON = "Wait until the current product operation finishes.";
 
@@ -14,6 +15,13 @@ export function createProductActionAvailability({
   const hasDatasetName = Boolean(datasetName);
   const productIsFrozen = frozen ?? isStatusFrozen(attributes?.status);
 
+  const mutationContext = {
+    hasDatasetName,
+    exportHasRunningAction,
+    productHasRunningMutation,
+    productOperationDisabledReason,
+  };
+
   return {
     datasetName,
     hasDatasetName,
@@ -21,41 +29,17 @@ export function createProductActionAvailability({
     exportHasRunningAction,
     productHasRunningMutation,
 
-    freeze: createFreezeAvailability({
-      hasDatasetName,
-      exportHasRunningAction,
-      productHasRunningMutation,
-      productOperationDisabledReason,
-    }),
-
-    unfreeze: createUnfreezeAvailability({
-      hasDatasetName,
-      exportHasRunningAction,
-      productHasRunningMutation,
-      productOperationDisabledReason,
-    }),
+    freeze: createMutationAvailability(mutationContext),
+    unfreeze: createMutationAvailability(mutationContext),
 
     sendImmediately: createSendAvailability({
-      hasDatasetName,
+      ...mutationContext,
       frozen: productIsFrozen,
-      exportHasRunningAction,
-      productHasRunningMutation,
-      productOperationDisabledReason,
     }),
 
-    rollback: createRollbackAvailability({
-      hasDatasetName,
-      exportHasRunningAction,
-      productHasRunningMutation,
-      productOperationDisabledReason,
-    }),
+    rollback: createMutationAvailability(mutationContext),
 
-    exportRoot: createExportRootAvailability({
-      hasDatasetName,
-      exportHasRunningAction,
-      productHasRunningMutation,
-      productOperationDisabledReason,
-    }),
+    exportRoot: createExportRootAvailability(mutationContext),
   };
 }
 
@@ -72,7 +56,7 @@ export function createProductExportAvailability({
   const productIsFrozen = frozen ?? isStatusFrozen(attributes?.status);
 
   if (!hasDatasetName) {
-    return unavailable("The selected feature does not have a datasetName.");
+    return unavailable(MISSING_DATASET_NAME_REASON);
   }
 
   if (exportState?.running) {
@@ -101,35 +85,14 @@ export function createProductExportAvailability({
   return available();
 }
 
-function createFreezeAvailability({
+function createMutationAvailability({
   hasDatasetName,
   exportHasRunningAction,
   productHasRunningMutation,
   productOperationDisabledReason,
 }) {
   if (!hasDatasetName) {
-    return unavailable("The selected feature does not have a datasetName.");
-  }
-
-  if (productHasRunningMutation) {
-    return unavailable(productOperationDisabledReason);
-  }
-
-  if (exportHasRunningAction) {
-    return unavailable(EXPORT_RUNNING_REASON);
-  }
-
-  return available();
-}
-
-function createUnfreezeAvailability({
-  hasDatasetName,
-  exportHasRunningAction,
-  productHasRunningMutation,
-  productOperationDisabledReason,
-}) {
-  if (!hasDatasetName) {
-    return unavailable("The selected feature does not have a datasetName.");
+    return unavailable(MISSING_DATASET_NAME_REASON);
   }
 
   if (productHasRunningMutation) {
@@ -150,41 +113,19 @@ function createSendAvailability({
   productHasRunningMutation,
   productOperationDisabledReason,
 }) {
-  if (!hasDatasetName) {
-    return unavailable("The selected feature does not have a datasetName.");
-  }
+  const mutationAvailability = createMutationAvailability({
+    hasDatasetName,
+    exportHasRunningAction,
+    productHasRunningMutation,
+    productOperationDisabledReason,
+  });
 
-  if (productHasRunningMutation) {
-    return unavailable(productOperationDisabledReason);
-  }
-
-  if (exportHasRunningAction) {
-    return unavailable(EXPORT_RUNNING_REASON);
+  if (mutationAvailability.disabled) {
+    return mutationAvailability;
   }
 
   if (frozen) {
     return unavailable("Unfreeze the product before sending.");
-  }
-
-  return available();
-}
-
-function createRollbackAvailability({
-  hasDatasetName,
-  exportHasRunningAction,
-  productHasRunningMutation,
-  productOperationDisabledReason,
-}) {
-  if (!hasDatasetName) {
-    return unavailable("The selected feature does not have a datasetName.");
-  }
-
-  if (productHasRunningMutation) {
-    return unavailable(productOperationDisabledReason);
-  }
-
-  if (exportHasRunningAction) {
-    return unavailable(EXPORT_RUNNING_REASON);
   }
 
   return available();
@@ -197,7 +138,7 @@ function createExportRootAvailability({
   productOperationDisabledReason,
 }) {
   if (!hasDatasetName) {
-    return unavailable("The selected feature does not have a datasetName.");
+    return unavailable(MISSING_DATASET_NAME_REASON);
   }
 
   if (productHasRunningMutation) {
