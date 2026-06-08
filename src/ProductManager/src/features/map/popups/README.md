@@ -38,6 +38,9 @@ This keeps the action UI consistent with Product Manager requirements:
 - `createPopup.js`  
   Renders popup content and subscribes to export-state and product-operation-state
   changes.
+- `popupExportConfig.js`  
+  Defines popup export groups, scopes, export types, labels and endpoint wiring.
+  S57/S100 exports should be activated here when backend endpoints become available.
 
 ## Action availability
 

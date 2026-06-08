@@ -1,4 +1,3 @@
-import { exportNewEdition, exportNewUpdate } from "../../data/api/exportApi.js";
 import { noticeInfo } from "../../notices/services/noticeService.js";
 import {
   createProductActionAvailability,
@@ -9,6 +8,7 @@ import {
   getProductOperationState,
 } from "../../products/state/productOperationState.js";
 import { getPopupExportActionState, isAnyPopupExportActionRunning } from "./popupExportState.js";
+import { POPUP_EXPORT_GROUPS } from "./popupExportConfig.js";
 import {
   openAnalyzePage,
   openProductHistory,
@@ -16,91 +16,6 @@ import {
   triggerExport,
   triggerFreeze,
 } from "./popupProductActions.js";
-
-const EXPORT_GROUPS = [
-  {
-    id: "export-all",
-    label: "All",
-    icon: "plus-square",
-    scope: "All",
-    actions: [
-      {
-        id: "export-all-edition",
-        label: "Edition",
-        icon: "notepad-add",
-        exportType: "Edition",
-        implemented: true,
-        request: exportNewEdition,
-        createConfirm: (datasetName) => ({
-          title: `Export new edition for ${datasetName}`,
-          message:
-            `Are you sure you want to export a new Edition in ALL formats of ${datasetName}? ` +
-            "The export will include ALL formats of the product - Currently S57 and S100",
-          confirmText: "Export edition",
-        }),
-      },
-      {
-        id: "export-all-update",
-        label: "Update",
-        icon: "notepad-edit",
-        exportType: "Update",
-        implemented: true,
-        request: exportNewUpdate,
-        createConfirm: (datasetName) => ({
-          title: `Export new update for ${datasetName}`,
-          message:
-            `Are you sure you want to export a new Update in ALL formats of ${datasetName}? ` +
-            "The export will include ALL formats of the product - Currently S57 and S100",
-          confirmText: "Export update",
-        }),
-      },
-    ],
-  },
-  {
-    id: "export-s57",
-    label: "S57",
-    icon: "plus-square",
-    scope: "S57",
-    actions: [
-      {
-        id: "s57-export-edition",
-        label: "Edition",
-        icon: "notepad-add",
-        exportType: "Edition",
-        implemented: false,
-      },
-      {
-        id: "s57-export-update",
-        label: "Update",
-        icon: "notepad-edit",
-        exportType: "Update",
-        implemented: false,
-      },
-    ],
-  },
-  {
-    id: "export-s100",
-    label: "S100",
-    icon: "plus-square",
-    scope: "S100",
-    actions: [
-      {
-        id: "s100-export-edition",
-        label: "Edition",
-        icon: "notepad-add",
-        exportType: "Edition",
-        implemented: false,
-      },
-      {
-        id: "s100-export-update",
-        label: "Update",
-        icon: "notepad-edit",
-        exportType: "Update",
-        implemented: false,
-      },
-    ],
-  },
-];
 
 export function createPopupActionGroups({ attributes, frozen, refreshAndRender } = {}) {
   const datasetName = getDatasetName(attributes);
@@ -218,7 +133,7 @@ function createExportAction({
     disabled: availability.exportRoot.disabled,
     disabledReason: availability.exportRoot.disabledReason,
     className: "popup-action-bar__action--dropdown",
-    items: EXPORT_GROUPS.map((group) =>
+    items: POPUP_EXPORT_GROUPS.map((group) =>
       createExportGroupAction({
         group,
         attributes,
