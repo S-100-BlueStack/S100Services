@@ -121,7 +121,7 @@ function positionPopover(popover, card, anchorElement) {
   const minLeft = viewportPadding;
   const maxLeft = window.innerWidth - cardRect.width - viewportPadding;
 
-  const left = Math.min(Math.max(preferredLeft, minLeft), Math.max(minLeft, maxLeft));
+  let left = Math.min(Math.max(preferredLeft, minLeft), Math.max(minLeft, maxLeft));
 
   let top = anchorRect.bottom + gap;
   let placement = "bottom";

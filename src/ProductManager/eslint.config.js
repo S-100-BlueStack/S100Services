@@ -36,6 +36,17 @@ export default [
 
       "prefer-const": "warn",
       "no-var": "error",
+
+      // Large UI orchestration functions are allowed for now, but warnings
+      // help identify future split candidates during cleanup work.
+      "max-lines-per-function": [
+        "warn",
+        {
+          max: 100,
+          skipBlankLines: true,
+          skipComments: true,
+        },
+      ],
     },
   },
   prettier,
