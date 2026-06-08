@@ -100,9 +100,9 @@ function createFutureExportAction({ id, exportType }) {
     exportType,
     implemented: false,
 
-    // Add the endpoint request here when the backend supports this export.
+    // Add the endpoint request here and set `implemented` to true when the
+    // backend supports this export.
     request: null,
-    createConfirm: createFutureExportConfirm,
   };
 }
 
@@ -123,13 +123,5 @@ function createAllUpdateConfirm(datasetName) {
       `Are you sure you want to export a new Update in ALL formats of ${datasetName}? ` +
       "The export will include ALL formats of the product - Currently S57 and S100",
     confirmText: "Export update",
-  };
-}
-
-function createFutureExportConfirm(datasetName) {
-  return {
-    title: `Export is not available for ${datasetName}`,
-    message: "This export format is not connected to a backend endpoint yet.",
-    confirmText: "Export",
   };
 }
