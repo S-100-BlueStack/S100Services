@@ -25,7 +25,7 @@ namespace ProductCatalogueAPI
         public static async Task Main(string[] args) {
             var development = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")?.Equals("Development", StringComparison.OrdinalIgnoreCase) == true;
             var serilogPath = Environment.GetEnvironmentVariable("serilog_path");
-            
+
             // Bootstrap logging
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Information()
@@ -225,21 +225,21 @@ namespace ProductCatalogueAPI
 
             // Mail-Handling
             try {
-                builder.Services
-                    .AddOptions<MailImportOptions>()
-                    .Bind(builder.Configuration.GetSection(MailImportOptions.SectionName))
-                    .ValidateOnStart();
-                builder.Services.AddScoped<IProductStatusEmailParser, ProductStatusEmailParser>();
-                builder.Services.AddScoped<ProcessProductStatusEmailsJob>();
+                //builder.Services
+                //    .AddOptions<MailImportOptions>()
+                //    .Bind(builder.Configuration.GetSection(MailImportOptions.SectionName))
+                //    .ValidateOnStart();
+                //builder.Services.AddScoped<IProductStatusEmailParser, ProductStatusEmailParser>();
+                //builder.Services.AddScoped<ProcessProductStatusEmailsJob>();
 
-                // Graph
-                builder.Services
-                    .AddOptions<GraphAuthOptions>()
-                    .Bind(builder.Configuration.GetSection(GraphAuthOptions.SectionName))
-                    .ValidateOnStart();
+                //// Graph
+                //builder.Services
+                //    .AddOptions<GraphAuthOptions>()
+                //    .Bind(builder.Configuration.GetSection(GraphAuthOptions.SectionName))
+                //    .ValidateOnStart();
 
-                builder.Services.AddSingleton<IGraphClientFactory, GraphClientFactory>();
-                builder.Services.AddScoped<IGraphMailReaderService, GraphMailReaderService>();
+                //builder.Services.AddSingleton<IGraphClientFactory, GraphClientFactory>();
+                //builder.Services.AddScoped<IGraphMailReaderService, GraphMailReaderService>();
             }
             catch (Exception ex) {
                 Log.Error(ex, "Failed to configure mail import services. Mail import functionality will be unavailable.");
