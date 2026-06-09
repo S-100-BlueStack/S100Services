@@ -5,6 +5,8 @@ import {
 } from "../../../shared/api/apiResult.js";
 import { noticeError, noticeSuccess } from "./noticeService.js";
 
+const API_FAILURE_DEDUPE_MS = 30 * 1000;
+
 export function noticeApiSuccess(title, message = null, options = {}) {
   noticeSuccess(title, message, {
     countAsUnread: false,
@@ -25,19 +27,54 @@ export function noticeApiFailure(
   const message =
     getApiResultMessage(result) ?? fallbackMessage ?? getDefaultApiFailureMessage(result);
 
-  noticeError(title, message, options);
+  noticeError(title, message, {
+    dedupeKey: options.dedupeKey ?? createApiFailureDedupeKey(result, title),
+    dedupeMs: options.dedupeMs ?? API_FAILURE_DEDUPE_MS,
+    ...options,
+  });
 }
 
 export function noticeUnexpectedApiError(
   error,
   { title = "Unexpected error", fallbackMessage = "Unknown error.", options = {} } = {}
 ) {
-  noticeError(title, getErrorMessage(error, fallbackMessage), options);
+  const message = getErrorMessage(error, fallbackMessage);
+
+  noticeError(title, message, {
+    dedupeKey: options.dedupeKey ?? createUnexpectedErrorDedupeKey(title, message),
+    dedupeMs: options.dedupeMs ?? API_FAILURE_DEDUPE_MS,
+    ...options,
+  });
+}
+
+function createApiFailureDedupeKey(result, title) {
+  return [
+    "api-failure",
+    title,
+    result?.status,
+    result?.networkError ? "network" : null,
+    result?.timedOut ? "timeout" : null,
+    result?.aborted ? "aborted" : null,
+  ]
+    .filter(Boolean)
+    .join(":");
+}
+
+function createUnexpectedErrorDedupeKey(title, message) {
+  return ["unexpected-error", title, message].filter(Boolean).join(":");
 }
 
 function getDefaultApiFailureMessage(result) {
+  if (result?.timedOut) {
+    return "The API request timed out. Try again or check whether the backend is still processing.";
+  }
+
+  if (result?.aborted) {
+    return "The API request was cancelled.";
+  }
+
   if (result?.networkError) {
-    return "The API could not be reached. Check your network connection or API availability.";
+    return "The API could not be reached.\nCheck your network connection or API availability.";
   }
 
   if (result?.isUnauthorized) {
