@@ -1,6 +1,9 @@
 import { apiRequest } from "../../../shared/api/apiClient.js";
 import { getApiResultMessage } from "../../../shared/api/apiResult.js";
 
+const PRODUCT_MUTATION_TIMEOUT_MS = 30 * 1000;
+const SELECTED_PRODUCT_REFRESH_TIMEOUT_MS = 15 * 1000;
+
 export async function uploadProduct(datasetName) {
   return apiRequest(`upload/${encodeURIComponent(datasetName)}`, {
     method: "PUT",
@@ -12,6 +15,7 @@ export async function changeFreezeState(datasetName, state) {
 
   return apiRequest(`upload/${encodeURIComponent(datasetName)}/${action}`, {
     method: "PUT",
+    timeoutMs: PRODUCT_MUTATION_TIMEOUT_MS,
     headers: {
       "Content-Type": "application/json",
     },
@@ -28,6 +32,7 @@ export async function fetchProductPropertiesByDatasetName(datasetName) {
 
   const result = await apiRequest(`electronicproducts/${encodeURIComponent(datasetName)}`, {
     method: "GET",
+    timeoutMs: SELECTED_PRODUCT_REFRESH_TIMEOUT_MS,
     cache: "no-store",
     headers: {
       "Cache-Control": "no-cache",
