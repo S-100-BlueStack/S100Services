@@ -73,6 +73,7 @@ test("mutation actions are disabled while an export is running", () => {
   // The root export action must remain openable so users can inspect which
   // leaf action is running and why other export options are blocked.
   assert.equal(availability.exportRoot.disabled, false);
+  assert.equal(availability.exportRoot.loading, true);
   assert.equal(availability.exportRoot.label, "Exporting...");
 });
 
@@ -89,6 +90,7 @@ test("all product actions are disabled while a product mutation is running", () 
   assert.equal(availability.unfreeze.disabled, true);
   assert.equal(availability.sendImmediately.disabled, true);
   assert.equal(availability.rollback.disabled, true);
+  assert.equal(availability.exportRoot.loading, false);
   assert.equal(availability.exportRoot.disabled, true);
   assert.equal(
     availability.freeze.disabledReason,
