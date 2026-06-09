@@ -1,6 +1,7 @@
 import {
   getApiFailureTitle,
   getApiResultMessage,
+  getDefaultApiFailureMessage,
   getErrorMessage,
 } from "../../../shared/api/apiResult.js";
 import { noticeError, noticeSuccess } from "./noticeService.js";
@@ -62,40 +63,4 @@ function createApiFailureDedupeKey(result, title) {
 
 function createUnexpectedErrorDedupeKey(title, message) {
   return ["unexpected-error", title, message].filter(Boolean).join(":");
-}
-
-function getDefaultApiFailureMessage(result) {
-  if (result?.timedOut) {
-    return "The API request timed out. Try again or check whether the backend is still processing.";
-  }
-
-  if (result?.aborted) {
-    return "The API request was cancelled.";
-  }
-
-  if (result?.networkError) {
-    return "The API could not be reached.\nCheck your network connection or API availability.";
-  }
-
-  if (result?.isUnauthorized) {
-    return "You are not authenticated or your session has expired.";
-  }
-
-  if (result?.isForbidden) {
-    return "You do not have permission to perform this action.";
-  }
-
-  if (result?.status === 404) {
-    return "The requested product or endpoint was not found.";
-  }
-
-  if (result?.status >= 500) {
-    return "The server returned an unexpected error.";
-  }
-
-  if (result?.statusText) {
-    return result.statusText;
-  }
-
-  return "The request failed.";
 }

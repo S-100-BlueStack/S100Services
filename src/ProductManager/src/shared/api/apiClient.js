@@ -1,4 +1,4 @@
-import { getApiResultMessage } from "./apiResult.js";
+import { getApiResultErrorMessage } from "./apiResult.js";
 
 const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL || "/");
 const REQUEST_TIMEOUT_DISABLED = 0;
@@ -96,19 +96,7 @@ export async function apiGet(path, defaultMessage = "Request failed", options = 
   const result = await apiRequest(path, options);
 
   if (!result.success) {
-    if (result.networkError) {
-      throw new Error(result.errorMessage || defaultMessage);
-    }
-
-    const resultMessage = getApiResultMessage(result);
-
-    if (resultMessage) {
-      throw new Error(`${defaultMessage}: ${resultMessage}`);
-    }
-
-    throw new Error(
-      `${defaultMessage}: (${result.status}) ${result.statusText ?? "Request failed"}`
-    );
+    throw new Error(getApiResultErrorMessage(result, defaultMessage));
   }
 
   return result.data;

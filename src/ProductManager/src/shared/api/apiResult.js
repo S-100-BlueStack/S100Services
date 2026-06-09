@@ -69,6 +69,60 @@ export function getErrorMessage(error, fallbackMessage = "Unknown error.") {
   return fallbackMessage;
 }
 
+export function getApiResultErrorMessage(result, defaultMessage = "Request failed") {
+  if (result?.networkError) {
+    return result.errorMessage ?? defaultMessage;
+  }
+
+  const detail = getApiResultMessage(result);
+
+  if (detail) {
+    return `${defaultMessage}: ${detail}`;
+  }
+
+  if (result?.status) {
+    return `${defaultMessage}: (${result.status}) ${result.statusText ?? "Request failed"}`;
+  }
+
+  return defaultMessage;
+}
+
+export function getDefaultApiFailureMessage(result) {
+  if (result?.timedOut) {
+    return "The API request timed out. Try again or check whether the backend is still processing.";
+  }
+
+  if (result?.aborted) {
+    return "The API request was cancelled.";
+  }
+
+  if (result?.networkError) {
+    return "The API could not be reached.\nCheck your network connection or API availability.";
+  }
+
+  if (result?.isUnauthorized) {
+    return "You are not authenticated or your session has expired.";
+  }
+
+  if (result?.isForbidden) {
+    return "You do not have permission to perform this action.";
+  }
+
+  if (result?.status === 404) {
+    return "The requested product or endpoint was not found.";
+  }
+
+  if (result?.status >= 500) {
+    return "The server returned an unexpected error.";
+  }
+
+  if (result?.statusText) {
+    return result.statusText;
+  }
+
+  return "The request failed.";
+}
+
 function getObjectMessage(source) {
   const directMessage = getFirstStringValue(source, MESSAGE_KEYS);
 

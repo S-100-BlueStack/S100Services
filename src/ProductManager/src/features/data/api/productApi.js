@@ -1,5 +1,5 @@
 import { apiRequest } from "../../../shared/api/apiClient.js";
-import { getApiResultMessage } from "../../../shared/api/apiResult.js";
+import { getApiResultErrorMessage } from "../../../shared/api/apiResult.js";
 
 const PRODUCT_MUTATION_TIMEOUT_MS = 30 * 1000;
 const SELECTED_PRODUCT_REFRESH_TIMEOUT_MS = 15 * 1000;
@@ -43,10 +43,9 @@ export async function fetchProductPropertiesByDatasetName(datasetName) {
   if (!result.success) {
     return {
       ...result,
-      errorMessage: getProductRequestErrorMessage("Selected product refresh failed", result),
+      errorMessage: getApiResultErrorMessage(result, "Selected product refresh failed"),
     };
   }
-
   return {
     ...result,
     data: normalizeElectronicProductResponse(result.data),
@@ -136,18 +135,4 @@ function readFirstDefined(source, keys) {
   }
 
   return undefined;
-}
-
-function getProductRequestErrorMessage(defaultMessage, result) {
-  if (result.networkError) {
-    return result.errorMessage ?? defaultMessage;
-  }
-
-  const detail = getApiResultMessage(result);
-
-  if (detail) {
-    return `${defaultMessage}: ${detail}`;
-  }
-
-  return `${defaultMessage}${result.status ? ` (${result.status})` : ""}`;
 }
