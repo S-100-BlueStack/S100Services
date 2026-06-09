@@ -37,6 +37,7 @@ The goal is to improve maintainability, reliability, and structure without chang
 | FH-016 | P2       | Bootstrap | Review Calcite readiness/bootstrap timing                                                    | Todo   |                                          | Avoid relying on one component definition if more are required at startup.                                                                                              |
 | FH-017 | P2       | HTML/CSS  | Move inline shell/confirm-popover styling into CSS                                           | Todo   |                                          | Small maintainability cleanup.                                                                                                                                          |
 | FH-018 | P1       | Refresh   | Review duplicate refresh error notices between selected product refresh and full map refresh | Todo   |                                          | Manual refresh can show selected-product refresh failure before the full refresh retry flow finishes.                                                                   |
+| FH-019 | P2       | Export UI | Show a loading spinner on the parent `Export...` popup action while an export is running     | Todo   |                                          | Leaf export actions already show loading; parent action currently only changes to static `Exporting...`.                                                                |
 
 ## Deferred / backend-dependent notes
 
