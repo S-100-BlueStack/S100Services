@@ -10,7 +10,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
-    "check": "npm run format:check && npm run lint && npm run build"
+    "test": "node --test",
+    "check": "npm run format:check && npm run lint && npm run test && npm run build"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -1,6 +1,6 @@
 import { getApiResultErrorMessage } from "./apiResult.js";
 
-const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL || "/");
+const API_BASE_URL = normalizeBaseUrl(import.meta.env?.VITE_API_BASE_URL || "/");
 const REQUEST_TIMEOUT_DISABLED = 0;
 
 function normalizeBaseUrl(value) {
