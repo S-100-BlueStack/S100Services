@@ -4,7 +4,7 @@ const DROPDOWN_POINTER_CLOSE_DISTANCE = 90;
 
 export function togglePopupActionDropdown({ anchorElement, items }) {
   if (activeDropdown?.anchorElement === anchorElement) {
-    closePopupActionDropdown();
+    closePopupActionDropdown({ restoreFocus: true });
     return;
   }
 
@@ -14,18 +14,27 @@ export function togglePopupActionDropdown({ anchorElement, items }) {
   });
 }
 
-export function closePopupActionDropdown() {
+export function closePopupActionDropdown({ restoreFocus = false } = {}) {
   if (!activeDropdown) {
     return;
   }
 
-  activeDropdown.element.remove();
+  const { element, anchorElement } = activeDropdown;
+
+  element.remove();
+  resetDropdownAnchorState(anchorElement);
+
   activeDropdown = null;
 
   document.removeEventListener("click", handleOutsideDropdownClick);
   document.removeEventListener("pointermove", handleDropdownPointerMove);
+  document.removeEventListener("keydown", handleDropdownKeydown);
   window.removeEventListener("resize", closePopupActionDropdown);
   window.removeEventListener("scroll", closePopupActionDropdown, true);
+
+  if (restoreFocus) {
+    anchorElement?.focus?.();
+  }
 }
 
 function openPopupActionDropdown({ anchorElement, items }) {
@@ -36,6 +45,7 @@ function openPopupActionDropdown({ anchorElement, items }) {
   }
 
   const dropdown = document.createElement("div");
+  dropdown.id = createDropdownId(anchorElement);
   dropdown.className = "popup-action-dropdown";
   dropdown.setAttribute("role", "menu");
 
@@ -45,6 +55,7 @@ function openPopupActionDropdown({ anchorElement, items }) {
 
   document.body.appendChild(dropdown);
   positionDropdown(dropdown, anchorElement);
+  setDropdownAnchorState(anchorElement, dropdown.id);
   anchorElement.blur?.();
 
   activeDropdown = {
@@ -59,6 +70,7 @@ function openPopupActionDropdown({ anchorElement, items }) {
 
     document.addEventListener("click", handleOutsideDropdownClick);
     document.addEventListener("pointermove", handleDropdownPointerMove);
+    document.addEventListener("keydown", handleDropdownKeydown);
     window.addEventListener("resize", closePopupActionDropdown);
     window.addEventListener("scroll", closePopupActionDropdown, true);
   });
@@ -238,6 +250,34 @@ function handleDropdownPointerMove(event) {
   }
 
   closePopupActionDropdown();
+}
+
+function handleDropdownKeydown(event) {
+  if (event.key !== "Escape") {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  closePopupActionDropdown({ restoreFocus: true });
+}
+
+function setDropdownAnchorState(anchorElement, dropdownId) {
+  anchorElement?.setAttribute("aria-expanded", "true");
+  anchorElement?.setAttribute("aria-controls", dropdownId);
+}
+
+function resetDropdownAnchorState(anchorElement) {
+  anchorElement?.setAttribute("aria-expanded", "false");
+  anchorElement?.removeAttribute("aria-controls");
+}
+
+function createDropdownId(anchorElement) {
+  const actionId = anchorElement?.dataset?.popupActionId ?? "action";
+  const safeActionId = actionId.replace(/[^a-z0-9_-]/gi, "-").toLowerCase();
+
+  return `popup-action-dropdown-${safeActionId}-${crypto.randomUUID()}`;
 }
 
 function getExpandedDropdownSafeRect(dropdownState, distance) {

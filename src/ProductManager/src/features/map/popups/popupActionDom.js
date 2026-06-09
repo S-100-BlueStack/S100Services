@@ -17,6 +17,11 @@ export function createActionButton(actionConfig) {
   action.className = ["popup-action-bar__action", actionConfig.className].filter(Boolean).join(" ");
   action.dataset.popupActionId = actionConfig.id;
 
+  if (hasDropdown) {
+    action.setAttribute("aria-haspopup", "menu");
+    action.setAttribute("aria-expanded", "false");
+  }
+
   // Calcite upgrades custom elements asynchronously, so set attributes as well
   // as properties to keep first render and upgraded render aligned.
   action.setAttribute("text", actionConfig.label);
