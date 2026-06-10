@@ -354,6 +354,19 @@ html.calcite-mode-dark {
   box-shadow: none !important;
 }
 
+.popup-action-bar__action.is-programmatically-focused {
+  --pm-popup-action-restored-focus-color: var(--calcite-color-brand, #0079c1);
+  --calcite-action-background-color: var(--pm-popup-surface-alt);
+  --calcite-action-background-color-hover: var(--pm-popup-surface-alt);
+  --calcite-action-background-color-press: var(--pm-popup-surface-alt);
+
+  outline: none !important;
+  background: var(--pm-popup-surface-alt) !important;
+  box-shadow:
+    inset 0 0 0 1px var(--pm-popup-action-restored-focus-color),
+    inset 0 -1px 0 var(--pm-popup-action-restored-focus-color) !important;
+}
+
 /* =========================================================
    Popup action dropdowns
    ========================================================= */
@@ -716,6 +729,10 @@ html.calcite-mode-dark .overlap-picker__status-marker {
   box-shadow: var(--pm-shadow);
 }
 
+.confirm-popover__card:focus {
+  outline: none;
+}
+
 .confirm-popover__card::before {
   content: "";
   position: absolute;
@@ -745,6 +762,12 @@ html.calcite-mode-dark .overlap-picker__status-marker {
   color: var(--pm-text);
 }
 
+.confirm-popover__divider {
+  height: 3px;
+  margin: 8px 0;
+  background: #bbb;
+}
+
 .confirm-popover__message {
   margin-bottom: 12px;
   font-size: 13px;
@@ -765,6 +788,13 @@ html.calcite-mode-dark .overlap-picker__status-marker {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+}
+
+.confirm-popover .confirm-popover__button:focus,
+.confirm-popover .confirm-popover__button:focus-visible,
+.confirm-popover .confirm-popover__button.is-programmatically-focused {
+  outline: 2px solid var(--calcite-color-brand, #0079c1) !important;
+  outline-offset: 2px;
 }
 
 .confirm-popover__button--secondary {
