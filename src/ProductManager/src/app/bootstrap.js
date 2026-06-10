@@ -14,17 +14,7 @@ import { registerThemeToggle } from "../features/themes/themeToggle.js";
 import { initDisplayScaleOverrideControl } from "../features/map/scale/displayScaleOverrideControl.js";
 import { waitForCalciteComponents } from "../shared/ui/calciteComponentReady.js";
 
-const REQUIRED_CALCITE_COMPONENTS = [
-  "calcite-action",
-  "calcite-button",
-  "calcite-icon",
-  "calcite-loader",
-  "calcite-notice",
-  "calcite-panel",
-  "calcite-shell",
-  "calcite-shell-panel",
-  "calcite-switch",
-];
+const REQUIRED_CALCITE_COMPONENTS = ["calcite-shell", "calcite-shell-panel", "calcite-panel"];
 
 async function waitForCalcite() {
   await waitForCalciteComponents(REQUIRED_CALCITE_COMPONENTS);
@@ -48,20 +38,24 @@ async function bootstrapMainRoute() {
   document.title = "Product Manager";
 
   try {
-    await waitForCalcite();
-
-    showLoader("Initializing application...");
-    setLoaderText("Initializing UI...");
     await initUI();
     initDisplayScaleOverrideControl();
 
-    setLoaderText("Initializing map...");
     const app = initMap();
 
     initRefreshControls(app);
     initializeTheme(app.view);
     registerThemeToggle(app.view);
 
+    showLoader("Preparing UI components...", {
+      progress: 0.01,
+    });
+
+    await waitForNextPaint();
+
+    await waitForCalcite();
+
+    setLoaderText("Loading data...");
     await loadInitialData(app);
 
     app.bindMapVisibility?.();
@@ -76,8 +70,15 @@ async function bootstrapMainRoute() {
 
 async function bootstrapAnalyzeRoute(route) {
   try {
-    await waitForCalcite();
     await initUI();
+
+    showLoader("Preparing UI components...", {
+      progress: 0.01,
+    });
+
+    await waitForNextPaint();
+
+    await waitForCalcite();
 
     const app = await initAnalyzePage({
       datasetNames: route.datasetNames,
@@ -91,4 +92,12 @@ async function bootstrapAnalyzeRoute(route) {
     noticeError("Analyze page failed to start", error.message);
     console.error(error);
   }
+}
+
+function waitForNextPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve);
+    });
+  });
 }

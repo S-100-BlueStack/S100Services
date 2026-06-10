@@ -10,9 +10,9 @@ const abortController = new AbortController();
 export async function loadInitialData(app) {
   const loaderProgress = createLoaderProgressSession({
     loadStartProgress: 0.03,
-    loadEndProgress: 0.16,
-    dataReceivedProgress: 0.18,
-    renderStartProgress: 0.2,
+    loadEndProgress: 0.36,
+    dataReceivedProgress: 0.38,
+    renderStartProgress: 0.4,
     renderEndProgress: 0.96,
     simulatedProgressIntervalMs: 350,
     simulatedProgressStep: 0.012,
@@ -22,7 +22,7 @@ export async function loadInitialData(app) {
     loaderProgress.startLoading("Loading data...");
 
     const result = await runWithRetry(loadAppData, {
-      maxRetries: 5,
+      maxRetries: 10,
       baseDelay: 1000,
       maxDelay: 30000,
       backoffFactor: 2,
@@ -30,11 +30,11 @@ export async function loadInitialData(app) {
       onRetry: ({ attempt, delay, error }) => {
         loaderProgress.startRetryCountdown({
           attempt,
-          totalAttempts: 5,
+          totalAttempts: 10,
           delayMs: delay,
         });
 
-        noticeError(`Data load failed (${attempt}/5)`, error.message);
+        noticeError(`Data load failed (${attempt}/10)`, error.message);
       },
     });
 
