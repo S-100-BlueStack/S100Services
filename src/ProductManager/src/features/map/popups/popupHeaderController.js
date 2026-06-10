@@ -1,5 +1,5 @@
-import { getStatusColor } from "../../data/stores/statusStore";
-import { addNotice } from "../../notices/state/noticeStore";
+import { getStatusColor } from "../../data/stores/statusStore.js";
+import { addNotice } from "../../notices/state/noticeStore.js";
 
 let currentFeatureId = null;
 let headerMode = "default";

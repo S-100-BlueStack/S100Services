@@ -3,7 +3,10 @@ import { resolveFeatureKey } from "../core/featureIdentity.js";
 import { getCorrectionSymbol } from "../symbology/correctionSymbols.js";
 import { resolveDisplayScaleValue } from "../scale/displayScale.js";
 
-export function geoJsonToGraphics(geojson, { layerId, displayScale: layerDisplayScale } = {}) {
+export function geoJsonToGraphics(
+  geojson,
+  { layerId, layerKind, displayScale: layerDisplayScale } = {}
+) {
   return geojson.features
     .map((feature) => {
       const attributes = feature.properties ?? {};
@@ -22,6 +25,8 @@ export function geoJsonToGraphics(geojson, { layerId, displayScale: layerDisplay
         geometry,
         attributes: {
           ...attributes,
+          layerId,
+          layerKind,
           featureKey,
           displayScale,
           status,

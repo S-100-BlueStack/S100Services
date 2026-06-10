@@ -38,6 +38,7 @@ namespace S100FC.ProductCatalogue
         public required int? Update { get; set; }
 
         public required ExportTypes ExportTypes { get; set; }
+        public required string ProductSpecification { get; set; }
     }
 
     public class ArchiveRow

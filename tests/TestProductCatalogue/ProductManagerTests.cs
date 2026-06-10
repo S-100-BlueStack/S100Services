@@ -2,7 +2,7 @@ using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
 using Microsoft.Extensions.Logging.Abstractions;
 using ProductCatalogueAPI;
-using ProductCatalogueAPI.Services.ExchangeSet;
+using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
@@ -113,7 +113,9 @@ namespace TestProductCatalogueAPI
             // Build LalaLand arguments
             var boundary = "";
             var optimumDisplayScale = 22000;
-            var datasetName = "101DK00LALALAND";
+
+            //var datasetName = "101DK00LALALAND";
+            var datasetName = "101DK00LALATEST";
             var productSpecification = new S100FC.S128.ComplexAttributes.productSpecification {
                 editionDate = new DateOnly(2024, 10, 16),
                 name = "S-101",
@@ -136,6 +138,19 @@ namespace TestProductCatalogueAPI
 
                 var geometry = row.GetShape() as Polygon;
                 boundary = geometry.ToJson();
+
+                var sr = SpatialReferenceBuilder.CreateSpatialReference(4326);
+
+                var polygon = PolygonBuilderEx.CreatePolygon(
+                    [
+                        new Coordinate2D(12.5000, 55.7000),
+                        new Coordinate2D(12.5001, 55.7000),
+                        new Coordinate2D(12.5001, 55.7001),
+                        new Coordinate2D(12.5000, 55.7001),
+                        new Coordinate2D(12.5000, 55.7000)
+                    ], sr);
+                boundary = polygon.ToJson();
+
             }
 
             Assert.True(!string.IsNullOrEmpty(boundary));

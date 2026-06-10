@@ -40,7 +40,7 @@ namespace ProductCatalogueAPI.Jobs
 
                 // 3) Save new productstate
                 _logger.LogInformation("Saving productstate");
-                await _repository.AppendAsync(productName, Data.Models.ProductState.InTransit);
+                await _repository.AppendAsync(productName, Data.Models.ProductState.InTransit, "S-101", (int)electronicProduct.editionNumber!, (int)electronicProduct.updateNumber!);
 
 
 

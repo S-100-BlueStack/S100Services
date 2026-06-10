@@ -1,16 +1,12 @@
-import { fetchGeoJson } from "../../data/services/dataLoader.js";
 import { fetchAOI } from "../../data/services/dataLoader.js";
+import { PRODUCT_CORRECTIONS_LAYER_ID, getLayerDefinition } from "./layerDefinitions.js";
+
+const productCorrectionsLayer = getLayerDefinition(PRODUCT_CORRECTIONS_LAYER_ID);
 
 export const layerConfigs = [
-  // {
-  //   id: "mock",
-  //   type: "graphics",
-  //   dataFormat: "geojson",
-  //   fetch: fetchGeoJson,
-  // },
-
   {
-    id: "aoi",
+    ...(productCorrectionsLayer ?? {}),
+    id: PRODUCT_CORRECTIONS_LAYER_ID,
     type: "graphics",
     dataFormat: "esri-json",
     fetch: fetchAOI,

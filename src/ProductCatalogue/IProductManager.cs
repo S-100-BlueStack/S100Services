@@ -19,6 +19,7 @@ namespace S100FC.ProductCatalogue
         Task<YAML.Dataset> CreateNewUpdateAsync(string name);
 
         Task<YAML.Dataset> ReissueAsync(string name);
+        Task<bool> RollBackAsync(string name);
         Task<Dictionary<string, string>> GetDatasetAOIs();
         Task<bool> IsDirtyAsync(string name);
         Task<string> GetDatasetBoundary(string name);
@@ -28,6 +29,7 @@ namespace S100FC.ProductCatalogue
 
         Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition);
         Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign);
+        Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml);
 
         string OutputFolder { get; }
     }

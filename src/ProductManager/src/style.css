@@ -1518,6 +1518,191 @@ html.calcite-mode-dark .pm-product-history-panel__pin[active] {
   line-height: 1.4;
 }
 
+.pm-product-history-banner {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--calcite-color-brand, #0079c1) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--calcite-color-brand, #0079c1) 28%, var(--pm-border));
+  border-radius: 0;
+}
+
+.pm-product-history-banner__title {
+  margin: 0;
+  color: var(--pm-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pm-product-history-banner__message {
+  margin: 0;
+  color: var(--pm-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.pm-product-history-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.pm-product-history-summary__item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px;
+  background: var(--pm-surface-alt);
+  border: 1px solid var(--pm-border);
+}
+
+.pm-product-history-summary__label {
+  color: var(--pm-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pm-product-history-summary__value {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--pm-text);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-product-history-list {
+  position: relative;
+  gap: 0;
+}
+
+.pm-product-history-list::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 15px;
+  width: 1px;
+  background: var(--pm-border);
+}
+
+.pm-product-history-list__item {
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 8px;
+  padding: 0 0 14px;
+  background: transparent;
+  border: 0;
+}
+
+.pm-product-history-list__item::before {
+  display: none;
+}
+
+.pm-product-history-list__marker {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: #ffffff;
+  background: var(--calcite-color-brand, #0079c1);
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px var(--pm-surface);
+}
+
+.pm-product-history-list__body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  background: var(--pm-surface-alt);
+  border: 1px solid var(--pm-border);
+}
+
+.pm-product-history-list__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+
+.pm-product-history-list__type {
+  padding: 2px 7px;
+  color: var(--pm-text-muted);
+  background: var(--pm-surface);
+  border: 1px solid var(--pm-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pm-product-history-list__details {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 4px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--pm-border);
+  font-size: 12px;
+}
+
+.pm-product-history-list__details dt {
+  color: var(--pm-text-muted);
+  font-weight: 700;
+}
+
+.pm-product-history-list__details dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--pm-text);
+  word-break: break-word;
+}
+
+.pm-product-history-list__item--freeze .pm-product-history-list__marker {
+  background: #3b82f6;
+}
+
+.pm-product-history-list__item--unfreeze .pm-product-history-list__marker {
+  background: #f59e0b;
+}
+
+.pm-product-history-list__item--export .pm-product-history-list__marker {
+  background: #8b5cf6;
+}
+
+.pm-product-history-list__item--send .pm-product-history-list__marker {
+  background: #10b981;
+}
+
+.pm-product-history-list__item--rollback .pm-product-history-list__marker {
+  background: #ef4444;
+}
+
+.pm-product-history-list__item--analysis .pm-product-history-list__marker {
+  background: #6366f1;
+}
+
+@media (max-width: 480px) {
+  .pm-product-history-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .pm-product-history-list__header {
+    grid-template-columns: 1fr;
+  }
+
+  .pm-product-history-list__type {
+    justify-self: start;
+  }
+}
+
 @media (max-width: 700px) {
   .pm-product-history-panel {
     top: 58px;

@@ -5,7 +5,9 @@ This feature area contains two related but separate concepts:
 - Product history: history for one selected product or dataset.
 - Map timeline: global map-level timeline state, snapshots, or time stops.
 
-The current UI only implements the product history shell. The global map timeline is intentionally not implemented until the backend and database model are defined.
+The current UI implements product history content with frontend demo data. The
+global map timeline is intentionally not implemented until the backend and
+database model are defined.
 
 ## Naming conventions
 
@@ -24,34 +26,60 @@ Examples:
 - `fetchMapTimelineMetadata()`
 - `fetchMapSnapshotAtTime(timestamp)`
 
-Avoid generic `timeline` names in new UI code when the code only handles product history. The folder is named `timeline` because it is expected to contain both product history and map timeline functionality.
+Avoid generic `timeline` names in new UI code when the code only handles product
+history. The folder is named `timeline` because it is expected to contain both
+product history and map timeline functionality.
 
 ## Current product history contract
 
-`fetchProductHistory(datasetName)` currently returns a placeholder response:
+`fetchProductHistory(datasetName)` currently returns frontend demo data from
+`api/productHistoryApi.js`.
+
+Current frontend shape:
 
 ```js
 {
   endpointAvailable: false,
   datasetName,
-  events: []
+  source: "demo",
+  isDemo: true,
+  generatedAt: "2026-06-03T13:20:00Z",
+  warnings: [],
+  events: [
+    {
+      id: "stable-event-id",
+      timestamp: "2026-06-02T10:15:00Z",
+      title: "Product frozen",
+      description: "User froze the product before export.",
+      actor: "Product Manager",
+      source: "Demo data",
+      type: "freeze",
+      details: [
+        {
+          label: "Previous state",
+          value: "Active"
+        }
+      ]
+    }
+  ]
 }
 ```
 
-Expected future event shape:
+The demo data exists only so the Product History UI can be developed before the
+backend contract is ready.
 
-```js
-{
-  id: "stable-event-id",
-  timestamp: "2026-06-02T10:15:00Z",
-  title: "Product frozen",
-  description: "User froze the product before export.",
-  actor: "domain\\user",
-  type: "freeze"
-}
-```
+## Expected backend product history questions
 
-The exact fields must be confirmed with the backend before the UI depends on them.
+Before replacing the demo data, clarify:
+
+1. Is product history an audit log, product state snapshots, or both?
+2. Is `datasetName` a stable identifier, or will the backend provide a product id?
+3. Which event types are guaranteed?
+4. Are event timestamps UTC?
+5. Can history events arrive out of order?
+6. Should backend history include user/domain actor information?
+7. Should export/freeze/send actions appear immediately after successful frontend actions?
+8. Should product history include failed operations?
 
 ## Current map timeline contract
 
@@ -73,14 +101,12 @@ Expected future responsibilities:
 - Let the map request a snapshot for a selected timestamp.
 - Define whether the map should replace all graphics or only apply deltas.
 
-## Backend questions to resolve
+## Backend questions to resolve before global map timeline
 
 Before implementing the global map timeline, clarify:
 
-1. Is product history an audit log, product state snapshots, or both?
-2. Is `datasetName` a stable identifier, or will the backend provide a product id?
-3. Are map timeline snapshots full payloads or incremental changes?
-4. Should timeline state include frozen/sent/exported status?
-5. Should timeline requests respect the same filters as the live map?
-6. What timestamp format is guaranteed by the API?
-7. Can history events arrive out of order, or should the frontend sort them?
+1. Are map timeline snapshots full payloads or incremental changes?
+2. Should timeline state include frozen/sent/exported status?
+3. Should timeline requests respect the same filters as the live map?
+4. What timestamp format is guaranteed by the API?
+5. Can timeline events arrive out of order, or should the frontend sort them?

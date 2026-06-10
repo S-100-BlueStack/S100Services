@@ -179,12 +179,6 @@ function clampRangeIndex(value, maxIndex) {
   return Math.min(Math.max(index, 0), maxIndex);
 }
 
-function getRangeInput(panel, layerId, fieldName, bound) {
-  return panel.querySelector(
-    `[data-filter-range][data-layer-id="${CSS.escape(layerId)}"][data-field-name="${CSS.escape(fieldName)}"][data-range-bound="${bound}"]`
-  );
-}
-
 function getRangeSlider(panel, layerId, fieldName) {
   return panel.querySelector(
     `calcite-slider[data-filter-range][data-layer-id="${CSS.escape(layerId)}"][data-field-name="${CSS.escape(fieldName)}"]`
@@ -554,16 +548,6 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
 
     badge.hidden = activeCount === 0;
     badge.textContent = String(activeCount);
-  }
-
-  function autoDisableScaleHidingForDisplayScaleFilter() {
-    if (!filterService.hasActiveDisplayScaleFilter()) {
-      return;
-    }
-
-    setDisplayScaleHidingDisabled(true, {
-      source: "displayScaleFilter",
-    });
   }
 
   function syncDisplayScaleFilterAutoDisable() {

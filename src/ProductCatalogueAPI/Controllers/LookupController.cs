@@ -15,13 +15,13 @@ namespace ProductCatalogueAPI.Controllers
                 .Select(e => new {
                     Id = (int)e,
                     Name = e switch {
-                        ResponseTypes.ProductStatus.Ready => e.ToString(),
-                        ResponseTypes.ProductStatus.NewEdition => "New edition",
-                        ResponseTypes.ProductStatus.NewUpdate => "New update",
-                        ResponseTypes.ProductStatus.Invalid => e.ToString(),
-                        ResponseTypes.ProductStatus.InTransit => "In transit",
+                        //ResponseTypes.ProductStatus.Ready => e.ToString(),
+                        //ResponseTypes.ProductStatus.NewEdition => "New edition",
+                        //ResponseTypes.ProductStatus.NewUpdate => "New update",
+                        //ResponseTypes.ProductStatus.Invalid => e.ToString(),
+                        //ResponseTypes.ProductStatus.InTransit => "In transit",
 
-                        _ => throw new InvalidOperationException()
+                        _ => e.ToString()
                     }
                 });
 

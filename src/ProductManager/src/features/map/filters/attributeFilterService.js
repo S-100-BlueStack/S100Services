@@ -1,6 +1,7 @@
 import { getAllLayers } from "../core/layerRegistry.js";
+import { layerSupportsCapability } from "../config/layerDefinitions.js";
 
-const EXCLUDED_FIELDS = new Set(["datasetName", "featureKey"]);
+const EXCLUDED_FIELDS = new Set(["datasetName", "featureKey", "layerId", "layerKind"]);
 const EMPTY_FILTER_VALUE = "__pm_empty_value__";
 
 const FILTER_MODE = {
@@ -55,7 +56,13 @@ function normalizeFieldKey(fieldName) {
 }
 
 function getSourceLayers(layerId) {
-  return getAllLayers().filter((layer) => getLayerId(layer) === layerId);
+  return getAllLayers().filter((layer) => {
+    return getLayerId(layer) === layerId && isLayerFilterable(layer);
+  });
+}
+
+function isLayerFilterable(layer) {
+  return layerSupportsCapability(layer, "supportsAttributeFilters");
 }
 
 function isFilterableField(fieldName) {
@@ -270,6 +277,10 @@ export function createAttributeFilterService() {
     const layerIds = new Set();
 
     for (const layer of getAllLayers()) {
+      if (!isLayerFilterable(layer)) {
+        continue;
+      }
+
       const layerId = getLayerId(layer);
 
       if (layerId) {
@@ -328,7 +339,13 @@ export function createAttributeFilterService() {
   }
 
   function matchesGraphic(graphic, layer) {
-    const layerId = getLayerId(layer ?? graphic?.layer);
+    const sourceLayer = layer ?? graphic?.layer;
+
+    if (!isLayerFilterable(sourceLayer)) {
+      return true;
+    }
+
+    const layerId = getLayerId(sourceLayer);
     const layerFilters = filtersByLayer.get(layerId);
 
     if (!layerFilters) {

@@ -45,15 +45,15 @@ namespace ProductCatalogueAPI.Controllers
         }
 
         /// <summary>
-        /// Get all product names in the database
+        /// Get all product AOIs in the database as ESRI json feature collection.
         /// </summary>
         /// <returns>An ESRI json feature collection for all product AOIs</returns>
-        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse<ResponseTypes.AOIResponse[]>), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpGet("aoi")]
         public async Task<IActionResult> GetAllElectronicProductsAOI() {
             var aois = await _electronicProductManager.GetDatasetAOIs();
-            var features = new List<object>();
+            var responses = new List<AOIResponse>();
 
             foreach (var aoi in aois) {
                 var electronicProduct = _electronicProductManager.ElectronicProduct(aoi.Key);
@@ -61,25 +61,25 @@ namespace ProductCatalogueAPI.Controllers
                 if (electronicProduct == null) {
                     logger.LogWarning("No electronic product found for dataset {dataset}", aoi.Key);
                     continue;
-                }   
+                }
+
+
 
                 var polygon = aoi.Value;
                 var current = await _repository.GetCurrentByNameAsync(aoi.Key);
 
-                features.Add(new {
-                    geometry = polygon, // JsonSerializer.Deserialize<object>(polygon),
-                    attributes = new {
-                        datasetName = electronicProduct.datasetName,
-                        edition = electronicProduct.editionNumber,
-                        update = electronicProduct.updateDate,
-                        status = (int)(current?.State ?? Data.Models.ProductState.Idle),    // If no explicit state defined in JobTable, default to Ready,
-                        displayScale = electronicProduct.optimumDisplayScale,
+                responses.Add(new AOIResponse {
+                    Geometry = polygon, // JsonSerializer.Deserialize<object>(polygon),
+                    Attributes = new Attributes {
+                        DatasetName = electronicProduct.datasetName,
+                        Status = Enum.Parse<ProductStatus>((current?.State ?? Data.Models.ProductState.Idle).ToString()),    // If no explicit state defined in JobTable, default to Ready,
+                        DisplayScale = electronicProduct.optimumDisplayScale,
+                        UsageBand = electronicProduct.specificUsage
                     }
                 });
             }
 
-
-            return Ok(features);
+            return Ok(responses);
         }
 
         /// <summary>
@@ -95,25 +95,41 @@ namespace ProductCatalogueAPI.Controllers
             var response = new ApiResponse<ResponseTypes.ProductResponse>();
             var electronicProduct = this._electronicProductManager.ElectronicProduct(name);
 
+
+            // TODO: this is a temporary solution to get the S-57 product, until we have a better way to link S-128 products to their S-57 counterparts.
+            // Currently, we assume that the S-57 product has the same name as the S-128 product, but with the first 3 characters replaced with "101".
+            // This is based on the current naming convention of the S-57 products, but may need to be changed in the future if the naming convention changes or if there are exceptions.
+            // var s57product = _electronicProductManager.ElectronicProduct(name);
+
             if (electronicProduct == null) {
                 response.Success = false;
                 response.Message = $"No electronic product with name '{name}' was found.";
                 response.DurationMs = sw.ElapsedMilliseconds;
-                return this.NotFound(response);
+                return NotFound(response);
             }
 
-            var boundary = await _electronicProductManager.GetDatasetBoundary(name);
 
             var current = await _repository.GetCurrentByNameAsync(name);
+            // var s57current = await _repository.GetCurrentByNameAsync(s57product.datasetName);
+
+            var s128Status = Enum.Parse<ProductStatus>((current?.State ?? Data.Models.ProductState.Idle).ToString());
+
+            // var s57Status = Enum.Parse<ProductStatus>((s57current?.State ?? Data.Models.ProductState.Idle).ToString());
 
             var product = new ProductResponse {
-                Edition = electronicProduct.editionNumber,
                 IssueDate = electronicProduct.issueDate,
                 Name = electronicProduct.datasetName,
+
+                Edition = electronicProduct.editionNumber,
                 Update = electronicProduct.updateNumber,
+
+
                 UsageBand = electronicProduct.specificUsage,
-                Aoi = boundary,
-                Status = (int)(current?.State ?? Data.Models.ProductState.Idle)
+                Status = s128Status,
+                Exports = [
+                     //new(s57product.productSpecification.name, s57product.datasetName, s57product.editionNumber.Value, s57product.updateNumber, s57Status, s57current.Date_From)
+                     new("S-57", electronicProduct.datasetName.Replace("101DK00", "DK"), electronicProduct.editionNumber.Value, electronicProduct.updateNumber, s128Status, electronicProduct.issueDate.Value.ToDateTime(TimeOnly.MinValue))
+                ]
             };
 
 

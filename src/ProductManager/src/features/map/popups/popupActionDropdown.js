@@ -53,6 +53,10 @@ function openPopupActionDropdown({ anchorElement, items }) {
   };
 
   requestAnimationFrame(() => {
+    if (!activeDropdown || activeDropdown.element !== dropdown) {
+      return;
+    }
+
     document.addEventListener("click", handleOutsideDropdownClick);
     document.addEventListener("pointermove", handleDropdownPointerMove);
     window.addEventListener("resize", closePopupActionDropdown);
@@ -62,7 +66,8 @@ function openPopupActionDropdown({ anchorElement, items }) {
 
 function createDropdownItem(itemConfig, level = 0) {
   const hasChildren = Array.isArray(itemConfig.items) && itemConfig.items.length > 0;
-  const disabled = itemConfig.disabled === true;
+  const loading = itemConfig.loading === true;
+  const disabled = itemConfig.disabled === true || loading;
 
   const node = document.createElement("div");
   node.className = "popup-action-dropdown__node";
@@ -79,6 +84,12 @@ function createDropdownItem(itemConfig, level = 0) {
   item.dataset.dropdownActionId = itemConfig.id;
   item.style.setProperty("--popup-action-dropdown-level", String(level));
 
+  if (loading) {
+    item.classList.add("popup-action-dropdown__item--loading");
+    item.dataset.busy = "true";
+    item.setAttribute("aria-busy", "true");
+  }
+
   if (hasChildren) {
     item.classList.add("popup-action-dropdown__item--has-children");
     item.setAttribute("aria-haspopup", "menu");
@@ -89,7 +100,7 @@ function createDropdownItem(itemConfig, level = 0) {
     item.title = itemConfig.disabledReason ?? "This action is unavailable.";
   }
 
-  item.appendChild(createDropdownIcon(itemConfig.icon));
+  item.appendChild(createDropdownLeadingVisual(itemConfig));
 
   const label = document.createElement("span");
   label.className = "popup-action-dropdown__label";
@@ -133,7 +144,7 @@ function createDropdownItem(itemConfig, level = 0) {
     event.preventDefault();
     event.stopPropagation();
 
-    if (item.disabled) {
+    if (item.disabled || item.dataset.busy === "true") {
       return;
     }
 
@@ -145,12 +156,27 @@ function createDropdownItem(itemConfig, level = 0) {
 
     await itemConfig.onClick?.({
       anchorElement: stableAnchorElement,
+      actionElement: item,
     });
   });
 
   node.appendChild(item);
 
   return node;
+}
+
+function createDropdownLeadingVisual(itemConfig) {
+  if (itemConfig.loading) {
+    const loader = document.createElement("calcite-loader");
+    loader.scale = "s";
+    loader.inline = true;
+    loader.type = "indeterminate";
+    loader.className = "popup-action-dropdown__loader";
+
+    return loader;
+  }
+
+  return createDropdownIcon(itemConfig.icon);
 }
 
 function createDropdownIcon(iconName) {

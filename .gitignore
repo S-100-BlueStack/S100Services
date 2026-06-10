@@ -446,4 +446,5 @@ dist-ssr
 *.zip
 /src/ProductCatalogueService/exports
 /src/ProductCatalogueAPI/exports
+/src/ProductCatalogueAPI/config
 /src/ProductCatalogueAPI/appsettings.Development.json

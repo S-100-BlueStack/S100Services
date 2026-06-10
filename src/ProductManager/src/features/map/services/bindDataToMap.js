@@ -21,6 +21,8 @@ export async function bindDataToMap({ map, view, hoverManager, layers, onProgres
     renderedLayers: createdLayers.map((layer) => ({
       id: layer.customId,
       appLayerId: layer.appLayerId,
+      appLayerKind: layer.appLayerKind,
+      appLayerCapabilities: layer.appLayerCapabilities,
       title: layer.title,
       type: layer.type,
       visible: layer.visible,

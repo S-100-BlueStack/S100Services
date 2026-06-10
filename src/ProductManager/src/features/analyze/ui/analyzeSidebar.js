@@ -266,12 +266,15 @@ function createXmlBlock(xml) {
   const details = document.createElement("details");
   details.className = "analyze-xml";
 
+  const hasXml = hasText(xml);
+  details.open = hasXml;
+
   const summary = document.createElement("summary");
-  summary.textContent = "IC-ENC report XML";
+  summary.textContent = hasXml ? "IC-ENC report XML" : "IC-ENC report XML unavailable";
 
   const pre = document.createElement("pre");
   const code = document.createElement("code");
-  code.textContent = formatXml(xml);
+  code.textContent = hasXml ? formatXml(xml) : "No XML report was returned for this product.";
 
   pre.appendChild(code);
   details.appendChild(summary);
@@ -307,10 +310,6 @@ function createHistoryBlock(product) {
 function formatXml(xml) {
   const text = String(xml ?? "").trim();
 
-  if (!text) {
-    return "No XML report was returned.";
-  }
-
   try {
     const parser = new DOMParser();
     const documentXml = parser.parseFromString(text, "application/xml");
@@ -323,4 +322,8 @@ function formatXml(xml) {
   } catch {
     return text;
   }
+}
+
+function hasText(value) {
+  return String(value ?? "").trim().length > 0;
 }

@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc; // Required for ApiVersion
 using ProductCatalogueAPI.Data.Database;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
-using ProductCatalogueAPI.Services.ExchangeSet;
+using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.Graph;
 using ProductCatalogueAPI.Services.MailImport;
 using ProductCatalogueAPI.Services.SevenCs;
@@ -211,9 +211,16 @@ namespace ProductCatalogueAPI
             builder.Services.AddScoped<IProductRepository, ProductRepository>();
             Log.Information("SystemDB configured");
 
+            // var productFilesPath = builder.Configuration["ProductFilesPath"]!;
 
-            // ExchangeServive
-            builder.Services.AddSingleton<IExchangeSetService, ExchangeSetService>();
+            // ExportService
+            builder.Services.AddSingleton<IExportService>(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<ExportService>>();
+                var artifactsPath = builder.Configuration["ArtifactsPath"]!;
+
+                return new ExportService(logger, artifactsPath);
+            });
 
             builder.Services.AddSingleton<ISevenCsService, SevenCsService>();
 

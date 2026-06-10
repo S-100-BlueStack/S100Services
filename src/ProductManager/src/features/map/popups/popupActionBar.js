@@ -1,10 +1,15 @@
 import { isStatusFrozen } from "../state/featureState.js";
+import { attributesSupportLayerCapability } from "../config/layerDefinitions.js";
 import { createPopupActionGroups } from "./popupActionConfig.js";
 import { createActionButton } from "./popupActionDom.js";
 import { closePopupActionDropdown } from "./popupActionDropdown.js";
 
 export function createPopupActionBar({ attributes, refreshAndRender } = {}) {
   closePopupActionDropdown();
+
+  if (!attributesSupportLayerCapability(attributes, "supportsProductActions")) {
+    return null;
+  }
 
   const container = document.createElement("div");
   container.className = "popup-action-bar";

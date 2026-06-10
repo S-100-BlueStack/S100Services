@@ -102,7 +102,8 @@ namespace ProductCatalogue
                 Edition = electronicProduct.editionNumber!.Value,
                 Update = electronicProduct.updateNumber,
                 ExportTypes = exportType,
-                TimestampUTC = timestamp
+                TimestampUTC = timestamp,
+                ProductSpecification = electronicProduct.productSpecification!.name!
             });
             var memoryStream = Extensions.ZipIt(yaml, index, sign);
 
@@ -856,6 +857,14 @@ namespace ProductCatalogue
         }
 
         public Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc) {
+            throw new NotImplementedException();
+        }
+
+        public Task<bool> RollBackAsync(string name) {
+            throw new NotImplementedException();
+        }
+
+        public Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml) {
             throw new NotImplementedException();
         }
     }

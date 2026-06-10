@@ -23,7 +23,7 @@ namespace TestProductCatalogueAPI
             
 
             // Adds or updates row
-            await _repository.AppendAsync(name, state);
+            await _repository.AppendAsync(name, state, "S-101", 1, 0, "test-user");
 
 
             // Fetch row

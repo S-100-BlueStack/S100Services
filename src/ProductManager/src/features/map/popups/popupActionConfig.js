@@ -1,5 +1,14 @@
-import { exportNewEdition, exportNewUpdate } from "../../data/api/exportApi.js";
 import { noticeInfo } from "../../notices/services/noticeService.js";
+import {
+  createProductActionAvailability,
+  createProductExportAvailability,
+} from "../../products/domain/productActionAvailability.js";
+import {
+  PRODUCT_OPERATION_TYPE,
+  getProductOperationState,
+} from "../../products/state/productOperationState.js";
+import { getPopupExportActionState, isAnyPopupExportActionRunning } from "./popupExportState.js";
+import { POPUP_EXPORT_GROUPS } from "./popupExportConfig.js";
 import {
   openAnalyzePage,
   openProductHistory,
@@ -9,22 +18,41 @@ import {
 } from "./popupProductActions.js";
 
 export function createPopupActionGroups({ attributes, frozen, refreshAndRender } = {}) {
+  const datasetName = getDatasetName(attributes);
+  const productOperationState = getProductOperationState(datasetName);
+  const productHasRunningNonExportMutation =
+    hasRunningNonExportProductOperation(productOperationState);
+
+  const availability = createProductActionAvailability({
+    attributes,
+    frozen,
+    exportHasRunningAction: isAnyPopupExportActionRunning(datasetName),
+    productHasRunningMutation: productHasRunningNonExportMutation,
+    productOperationDisabledReason: productOperationState.disabledReason,
+  });
+
   return [
     [
       createFreezeAction({
         attributes,
         frozen,
+        availability,
+        productOperationState,
         refreshAndRender,
       }),
       createSendAction({
         attributes,
-        frozen,
+        availability,
+        productOperationState,
+        refreshAndRender,
       }),
     ],
     [
       createExportAction({
         attributes,
         frozen,
+        availability,
+        productOperationState,
         refreshAndRender,
       }),
       createRollbackAction({
@@ -37,199 +65,153 @@ export function createPopupActionGroups({ attributes, frozen, refreshAndRender }
   ];
 }
 
-function createFreezeAction({ attributes, frozen, refreshAndRender }) {
+function createFreezeAction({
+  attributes,
+  frozen,
+  availability,
+  productOperationState,
+  refreshAndRender,
+}) {
+  const operationType = frozen ? PRODUCT_OPERATION_TYPE.UNFREEZE : PRODUCT_OPERATION_TYPE.FREEZE;
+  const operationIsRunning = isOperationTypeRunning(productOperationState, operationType);
+  const actionAvailability = frozen ? availability.unfreeze : availability.freeze;
+
   return {
     id: frozen ? "unfreeze-feature" : "freeze-feature",
-    label: frozen ? "Unfreeze" : "Freeze",
+    label: getFreezeActionLabel({
+      frozen,
+      operationIsRunning,
+    }),
     icon: frozen ? "brightness" : "snow",
+    loading: operationIsRunning,
+    disabled: actionAvailability.disabled,
+    disabledReason: actionAvailability.disabledReason,
     className: "popup-action-bar__action--freeze",
     onClick: async ({ anchorElement }) => {
       const nextFrozenState = !frozen;
-      const result = await triggerFreeze(attributes?.datasetName, nextFrozenState, anchorElement);
 
-      if (!result?.success) {
-        return;
-      }
-
-      await refreshAndRender?.();
+      await triggerFreeze(attributes?.datasetName, nextFrozenState, anchorElement, {
+        afterResult: refreshAndRender,
+      });
     },
   };
 }
 
-function createSendAction({ attributes, frozen }) {
+function createSendAction({ attributes, availability, productOperationState, refreshAndRender }) {
+  const operationIsRunning = isOperationTypeRunning(
+    productOperationState,
+    PRODUCT_OPERATION_TYPE.SEND
+  );
+
   return {
     id: "send-immediately",
-    label: "Send to IC-ENC",
+    label: operationIsRunning ? "Sending..." : "Send to IC-ENC",
     icon: "send",
-    disabled: frozen,
-    disabledReason: "Unfreeze the product before sending.",
+    loading: operationIsRunning,
+    disabled: availability.sendImmediately.disabled,
+    disabledReason: availability.sendImmediately.disabledReason,
     className: "popup-action-bar__action--send",
     onClick: async ({ anchorElement }) => {
-      await sendImmediately(attributes?.datasetName, anchorElement);
+      await sendImmediately(attributes?.datasetName, anchorElement, {
+        afterResult: refreshAndRender,
+      });
     },
   };
 }
 
-function createExportAction({ attributes, frozen, refreshAndRender }) {
+function createExportAction({
+  attributes,
+  frozen,
+  availability,
+  productOperationState,
+  refreshAndRender,
+}) {
   return {
     id: "export",
-    label: "Export...",
+    label: availability.exportRoot.label ?? "Export...",
     icon: "plus-square",
+    disabled: availability.exportRoot.disabled,
+    disabledReason: availability.exportRoot.disabledReason,
     className: "popup-action-bar__action--dropdown",
-    items: [
-      {
-        id: "export-all",
-        label: "All",
-        icon: "plus-square",
-        items: [
-          createExportLeafAction({
-            id: "export-all-edition",
-            label: "Edition",
-            icon: "notepad-add",
-            attributes,
-            frozen,
-            implemented: true,
-            scope: "All",
-            exportType: "Edition",
-            request: exportNewEdition,
-            refreshAndRender,
-            confirm: {
-              title: `Export new edition for ${attributes?.datasetName}`,
-              message:
-                `Are you sure you want to export a new Edition in ALL formats of ${attributes?.datasetName}? ` +
-                "The export will include ALL formats of the product - Currently S57 and S100",
-              confirmText: "Export edition",
-            },
-          }),
-          createExportLeafAction({
-            id: "export-all-update",
-            label: "Update",
-            icon: "notepad-edit",
-            attributes,
-            frozen,
-            implemented: true,
-            scope: "All",
-            exportType: "Update",
-            request: exportNewUpdate,
-            refreshAndRender,
-            confirm: {
-              title: `Export new update for ${attributes?.datasetName}`,
-              message:
-                `Are you sure you want to export a new Update in ALL formats of ${attributes?.datasetName}? ` +
-                "The export will include ALL formats of the product - Currently S57 and S100",
-              confirmText: "Export update",
-            },
-          }),
-        ],
-      },
-      {
-        id: "export-s57",
-        label: "S57",
-        icon: "plus-square",
-        items: [
-          createExportLeafAction({
-            id: "s57-export-edition",
-            label: "Edition",
-            icon: "notepad-add",
-            attributes,
-            frozen,
-            implemented: false,
-            scope: "S57",
-            exportType: "Edition",
-          }),
-          createExportLeafAction({
-            id: "s57-export-update",
-            label: "Update",
-            icon: "notepad-edit",
-            attributes,
-            frozen,
-            implemented: false,
-            scope: "S57",
-            exportType: "Update",
-          }),
-        ],
-      },
-      {
-        id: "export-s100",
-        label: "S100",
-        icon: "plus-square",
-        items: [
-          createExportLeafAction({
-            id: "s100-export-edition",
-            label: "Edition",
-            icon: "notepad-add",
-            attributes,
-            frozen,
-            implemented: false,
-            scope: "S100",
-            exportType: "Edition",
-          }),
-          createExportLeafAction({
-            id: "s100-export-update",
-            label: "Update",
-            icon: "notepad-edit",
-            attributes,
-            frozen,
-            implemented: false,
-            scope: "S100",
-            exportType: "Update",
-          }),
-        ],
-      },
-    ],
+    items: POPUP_EXPORT_GROUPS.map((group) =>
+      createExportGroupAction({
+        group,
+        attributes,
+        frozen,
+        productOperationState,
+        refreshAndRender,
+      })
+    ),
+  };
+}
+
+function createExportGroupAction({
+  group,
+  attributes,
+  frozen,
+  productOperationState,
+  refreshAndRender,
+}) {
+  return {
+    id: group.id,
+    label: group.label,
+    icon: group.icon,
+    items: group.actions.map((exportAction) =>
+      createExportLeafAction({
+        group,
+        exportAction,
+        attributes,
+        frozen,
+        productOperationState,
+        refreshAndRender,
+      })
+    ),
   };
 }
 
 function createExportLeafAction({
-  id,
-  label,
-  icon,
+  group,
+  exportAction,
   attributes,
   frozen,
-  implemented,
-  scope,
-  exportType,
-  request,
+  productOperationState,
   refreshAndRender,
-  confirm,
 }) {
-  return {
-    id,
-    label,
-    icon,
-    disabled: frozen || !implemented,
-    disabledReason: getExportDisabledReason({
-      frozen,
-      implemented,
-    }),
-    onClick: async ({ anchorElement }) => {
-      const result = await triggerExport({
-        actionId: id,
-        datasetName: attributes?.datasetName,
-        scope,
-        exportType,
-        request,
-        anchorElement,
-        confirm,
-      });
+  const datasetName = getDatasetName(attributes);
+  const exportState = getPopupExportActionState({
+    datasetName,
+    scope: group.scope,
+    exportType: exportAction.exportType,
+  });
 
-      if (result?.success) {
-        await refreshAndRender?.();
-      }
+  const availability = createProductExportAvailability({
+    attributes,
+    frozen,
+    implemented: exportAction.implemented,
+    exportState,
+    productHasRunningMutation: hasRunningNonExportProductOperation(productOperationState),
+    productOperationDisabledReason: productOperationState.disabledReason,
+  });
+
+  return {
+    id: exportAction.id,
+    label: availability.label ?? exportAction.label,
+    icon: exportAction.icon,
+    loading: availability.loading,
+    disabled: availability.disabled,
+    disabledReason: availability.disabledReason,
+    onClick: async ({ anchorElement }) => {
+      await triggerExport({
+        datasetName,
+        scope: group.scope,
+        exportType: exportAction.exportType,
+        request: exportAction.request,
+        anchorElement,
+        confirm: exportAction.createConfirm?.(datasetName),
+        afterResult: refreshAndRender,
+      });
     },
   };
-}
-
-function getExportDisabledReason({ frozen, implemented }) {
-  if (frozen) {
-    return "Unfreeze the product before exporting.";
-  }
-
-  if (!implemented) {
-    return "Feature is not available yet.";
-  }
-
-  return null;
 }
 
 function createRollbackAction({ attributes }) {
@@ -237,6 +219,8 @@ function createRollbackAction({ attributes }) {
     id: "rollback",
     label: "Rollback",
     icon: "undo",
+    disabled: true,
+    disabledReason: "Feature is not available yet.",
     className: "popup-action-bar__action--rollback",
     onClick: () => {
       noticeInfo("Rollback is not available yet", attributes?.datasetName);
@@ -276,6 +260,41 @@ function createToolsAction({ attributes }) {
   };
 }
 
+function getFreezeActionLabel({ frozen, operationIsRunning }) {
+  if (!operationIsRunning) {
+    return frozen ? "Unfreeze" : "Freeze";
+  }
+
+  return frozen ? "Unfreezing..." : "Freezing...";
+}
+
+function isOperationTypeRunning(productOperationState, operationType) {
+  return Boolean(
+    productOperationState?.operations?.some((operation) => operation.type === operationType) ??
+    productOperationState?.operation?.type === operationType
+  );
+}
+
+function hasRunningNonExportProductOperation(productOperationState) {
+  return Boolean(
+    productOperationState?.operations?.some((operation) => {
+      return operation.type !== PRODUCT_OPERATION_TYPE.EXPORT;
+    }) ??
+    (productOperationState?.running &&
+      productOperationState.operation?.type !== PRODUCT_OPERATION_TYPE.EXPORT)
+  );
+}
+
 function isAnalyzeRoute() {
   return document.body.classList.contains("pm-analyze-route");
+}
+
+function getDatasetName(attributes) {
+  return (
+    attributes?.datasetName ??
+    attributes?.DatasetName ??
+    attributes?.name ??
+    attributes?.Name ??
+    null
+  );
 }

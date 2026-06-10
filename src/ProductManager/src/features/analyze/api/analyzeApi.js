@@ -1,7 +1,7 @@
 import { apiGet } from "../../../shared/api/apiClient.js";
 
 const ANALYZE_PRODUCT_ENDPOINT = "electronicproducts";
-const USE_MOCK_ANALYZE_API = false;
+const USE_MOCK_ANALYZE_API = import.meta.env.DEV && false;
 
 export async function fetchAnalyzeProducts(datasetNames) {
   const uniqueDatasetNames = [...new Set(datasetNames)];
@@ -61,6 +61,8 @@ function normalizeAnalyzeProduct(
     edition: payload?.Edition ?? payload?.edition ?? data?.Edition ?? data?.edition ?? "-",
     update: payload?.Update ?? payload?.update ?? data?.Update ?? data?.update ?? "-",
 
+    // Keep backend/product messages separate from transport/load warnings.
+    // The sidebar renders `loadError` as a dedicated "Load warning" row.
     errorMessage:
       payload?.ErrorMessage ??
       payload?.errorMessage ??
@@ -68,7 +70,6 @@ function normalizeAnalyzeProduct(
       payload?.message ??
       data?.ErrorMessage ??
       data?.errorMessage ??
-      loadError ??
       "",
 
     aoiGeometry:
@@ -108,7 +109,7 @@ function createMockAnalyzeProduct(datasetName) {
     Edition: "1",
     Update: "0",
     ErrorMessage:
-      "Mock IC-ENC rejection message. Replace this when the backend report payload is ready.",
+      "Demo IC-ENC rejection message. Replace this when the backend report payload is ready.",
     Data: {
       Aoi: JSON.stringify(geometry),
       Xml: createMockXml(datasetName),

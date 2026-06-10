@@ -20,6 +20,7 @@ export async function initAnalyzePage({ datasetNames }) {
   let loadRequestId = 0;
   let lookupsLoaded = false;
   let activeLoaderProgress = null;
+  let cleanupViewPadding = null;
 
   const normalizedDatasetNames = normalizeDatasetNames(datasetNames);
 
@@ -137,13 +138,15 @@ export async function initAnalyzePage({ datasetNames }) {
     }
   };
 
-  document.addEventListener("pm-analyze-dataset-submit", async (event) => {
+  const handleAnalyzeDatasetSubmit = async (event) => {
     await loadAnalyzeDatasetNames(event.detail?.datasetNames ?? [], {
       updateUrl: true,
     });
-  });
+  };
 
-  applyAnalyzeViewPadding(view);
+  document.addEventListener("pm-analyze-dataset-submit", handleAnalyzeDatasetSubmit);
+
+  cleanupViewPadding = applyAnalyzeViewPadding(view);
 
   await view.when();
 
@@ -162,13 +165,15 @@ export async function initAnalyzePage({ datasetNames }) {
     updateUrl: false,
   });
 
-  window.addEventListener("popstate", async () => {
+  const handlePopState = async () => {
     const route = getCurrentRoute();
 
     await loadAnalyzeDatasetNames(route.datasetNames, {
       updateUrl: false,
     });
-  });
+  };
+
+  window.addEventListener("popstate", handlePopState);
 
   return {
     map,
@@ -180,6 +185,18 @@ export async function initAnalyzePage({ datasetNames }) {
       return currentLayers;
     },
     loadAnalyzeDatasetNames,
+    destroy() {
+      loadRequestId += 1;
+      document.removeEventListener("pm-analyze-dataset-submit", handleAnalyzeDatasetSubmit);
+      window.removeEventListener("popstate", handlePopState);
+      activeLoaderProgress?.cleanup();
+      activeLoaderProgress = null;
+      cleanupViewPadding?.();
+      cleanupViewPadding = null;
+      removeLayers(map, currentLayers);
+      currentLayers = [];
+      currentProducts = [];
+    },
   };
 
   async function ensureLookupsLoaded() {
@@ -244,7 +261,11 @@ function removeLayers(map, layers) {
 }
 
 function applyAnalyzeViewPadding(view) {
+  let pendingAnimationFrame = null;
+
   const updatePadding = () => {
+    pendingAnimationFrame = null;
+
     const panel = document.getElementById("analyze-sidebar-panel");
     const panelWidth = panel?.getBoundingClientRect?.().width ?? 420;
     const isNarrowScreen = window.matchMedia("(max-width: 700px)").matches;
@@ -257,9 +278,26 @@ function applyAnalyzeViewPadding(view) {
     };
   };
 
+  const schedulePaddingUpdate = () => {
+    if (pendingAnimationFrame !== null) {
+      return;
+    }
+
+    pendingAnimationFrame = window.requestAnimationFrame(updatePadding);
+  };
+
   updatePadding();
-  requestAnimationFrame(updatePadding);
-  window.addEventListener("resize", updatePadding);
+  schedulePaddingUpdate();
+  window.addEventListener("resize", schedulePaddingUpdate);
+
+  return () => {
+    window.removeEventListener("resize", schedulePaddingUpdate);
+
+    if (pendingAnimationFrame !== null) {
+      window.cancelAnimationFrame(pendingAnimationFrame);
+      pendingAnimationFrame = null;
+    }
+  };
 }
 
 function showMockWarningIfNeeded(products) {

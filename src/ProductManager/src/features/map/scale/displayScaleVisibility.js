@@ -1,4 +1,5 @@
 import { watch } from "@arcgis/core/core/reactiveUtils.js";
+import { layerSupportsCapability } from "../config/layerDefinitions.js";
 import { isGraphicVisibleAtScale } from "./displayScale.js";
 import {
   isDisplayScaleHidingDisabled,
@@ -15,7 +16,9 @@ export function bindDisplayScaleVisibility(view, { layers, isGraphicAllowed = ()
   const boundLayers = normalizeLayers(layers);
 
   const updateVisibility = () => {
-    applyDisplayScaleVisibility(view, boundLayers, { isGraphicAllowed });
+    applyDisplayScaleVisibility(view, boundLayers, {
+      isGraphicAllowed,
+    });
   };
 
   const scheduleVisibilityUpdate = () => {
@@ -64,9 +67,11 @@ export function applyDisplayScaleVisibility(view, layers, { isGraphicAllowed = (
 
   for (const layer of targetLayers) {
     const graphics = layer.graphics?.toArray?.() ?? [];
+    const supportsDisplayScale = layerSupportsCapability(layer, "supportsDisplayScale");
 
     for (const graphic of graphics) {
-      const visibleAtScale = ignoreDisplayScale || isGraphicVisibleAtScale(graphic, viewScale);
+      const visibleAtScale =
+        !supportsDisplayScale || ignoreDisplayScale || isGraphicVisibleAtScale(graphic, viewScale);
 
       // Keep filter visibility separate from displayScale visibility so filters
       // still hide graphics even when the user disables scale-based hiding.

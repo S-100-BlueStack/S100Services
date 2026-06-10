@@ -4,12 +4,12 @@ namespace ProductCatalogueAPI.Models
 {
     public static class RequestTypes
     {
-        public enum ExportType : int
+        public enum ExportFormat
         {
-            NewEdition = 1,
-            Update = 2,
-            Reissue = 3
-        };
+            Both,
+            S100,
+            S57
+        }
 
         public enum SpecificUsage : int
         {

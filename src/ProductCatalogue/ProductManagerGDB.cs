@@ -1,9 +1,7 @@
 ﻿using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
 using ArcGIS.Core.Internal.Geometry;
-using S100FC.S128;
 using S100FC.S128.FeatureTypes;
-using S100FC.S128.SimpleAttributes;
 using S100FC.YAML;
 using S100Horizon.Settings;
 using Serilog;
@@ -11,8 +9,11 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
+using System.Reflection.Metadata;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 using IO = System.IO;
 
 namespace S100FC.ProductCatalogue
@@ -32,13 +33,7 @@ namespace S100FC.ProductCatalogue
         private string _databaseName = string.Empty;
         private string _ownerName = string.Empty;
 
-        readonly JsonSerializerOptions jsonSerializerOptionsS128 = new JsonSerializerOptions {
-            WriteIndented = false,
-            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-            PropertyNameCaseInsensitive = true,
-        }.AppendTypeInfoResolver();
-
-        readonly JsonSerializerOptions jsonSerializerOptionsS101 = new JsonSerializerOptions {
+        readonly JsonSerializerOptions jsonSerializerOptions = new() {
             WriteIndented = false,
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             PropertyNameCaseInsensitive = true,
@@ -65,7 +60,7 @@ namespace S100FC.ProductCatalogue
         }
 
         protected async Task<ProductManagerGDB> InitializeAsync(Func<Geodatabase> creator) {
-            S100FC.S101.Extensions.AppendTypeInfoResolver(this.jsonSerializerOptionsS101);
+            S100FC.S101.Extensions.AppendTypeInfoResolver(this.jsonSerializerOptions);
 
             await this.Dispatch(() => {
                 this._geodatabase = creator();
@@ -97,7 +92,7 @@ namespace S100FC.ProductCatalogue
 
                         if (settings != null) {
                             var connections = settings.Connections.Select(e => {
-                                // var uri = e.ConnectionFile; 
+                                // var uri = e.ConnectionFile;
                                 var path = $"config/{e.ConnectionFile.OriginalString}";
 
                                 var exist = IO.Path.Exists(path);
@@ -508,7 +503,7 @@ namespace S100FC.ProductCatalogue
                     var id = row["UID"]?.ToString();
 
                     if (string.IsNullOrWhiteSpace(id)) {
-  
+
                         Log.Warning("Row in {tableName} for connection {connectionName} is missing UID. Skipping geometry check.", baseTableName, connectionName);
                         continue;
                     }
@@ -996,27 +991,26 @@ namespace S100FC.ProductCatalogue
                 }
 
                 // Apply Edits
-                if (applyEdits) {
-                    this._geodatabase!.ApplyEdits(() => {
-                        using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
 
-                        using var cursorS128 = surface.Search(new QueryFilter {
-                            WhereClause = $"attributebindings LIKE '%\"{electronicProduct.datasetName}\"%'",
+                if (applyEdits) {
+                    using var surface = this._geodatabase.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
+
+                    this._geodatabase.ApplyEdits(() => {
+                        using var cursor = surface.Search(new QueryFilter {
+                            WhereClause = $"attributebindings LIKE '%\"{electronicProduct.datasetName}\"%'"
                         }, false);
 
-                        cursorS128.MoveNext();
+                        if (!cursor.MoveNext())
+                            throw new InvalidOperationException("No matching surface row found.");
 
-                        Debug.Assert(cursorS128.Current != null);
+                        using var row = cursor.Current;
 
-                        var flatten = electronicProduct.Flatten();
+                        row["attributebindings"] = electronicProduct.Flatten();
+                        row.Store();
 
-                        var row128 = cursorS128.Current;
-                        row128["attributebindings"] = flatten;
-                        row128.Store();
-                        row128.Dispose();
-
-                        this._electronicProducts[electronicProduct.datasetName!.ToUpperInvariant()] = electronicProduct;
                     });
+
+                    this._electronicProducts[electronicProduct.datasetName!.ToUpperInvariant()] = electronicProduct;
                 }
                 return dataset!;
             });
@@ -1038,10 +1032,45 @@ namespace S100FC.ProductCatalogue
                         Edition = electronicProduct.editionNumber!.Value,
                         Update = electronicProduct.updateNumber,
                         ExportTypes = exportType,
-                        TimestampUTC = timestamp
-                    }, this.jsonSerializerOptionsS128);
+                        TimestampUTC = timestamp,
+                        ProductSpecification = electronicProduct.productSpecification!.name!
+                    }, this.jsonSerializerOptions);
 
                     var memoryStream = Extensions.ZipIt(yaml, index, sign);
+
+                    buffer["data_size"] = memoryStream.Length;
+                    buffer["data"] = memoryStream;
+
+                    attachment.CreateRow(buffer);
+
+                    Log.Information("Attachment created for dataset {datasetName} with edition {edition} and update {update}", electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
+                });
+            });
+        }
+
+        public async Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml) {
+            var electronicProduct = this._electronicProducts[name.ToUpperInvariant()];
+            var timestamp = DateTime.UtcNow;
+            await this.Dispatch(() => {
+                this._geodatabase!.ApplyEdits(() => {
+                    using var attachment = this._geodatabase!.OpenDataset<Table>(this.QualifyTableName("attachment"));
+
+                    using var buffer = attachment.CreateRowBuffer();
+
+                    buffer["ps"] = "S-128.NuvionPro";
+                    buffer["code"] = nameof(Dataset);
+                    buffer["json"] = System.Text.Json.JsonSerializer.Serialize(new Dataset {
+                        DatasetName = electronicProduct.datasetName!,
+                        Edition = electronicProduct.editionNumber!.Value,
+                        Update = electronicProduct.updateNumber,
+                        ExportTypes = exportType,
+                        TimestampUTC = timestamp,
+                        ProductSpecification = "S-57" //electronicProduct.productSpecification!.name!
+
+                    }, this.jsonSerializerOptions);
+
+                    var memoryStream = new MemoryStream(Encoding.UTF8.GetBytes(yaml));
+                    //var memoryStream = Extensions.ZipIt(yaml, index, sign);
 
                     buffer["data_size"] = memoryStream.Length;
                     buffer["data"] = memoryStream;
@@ -1167,7 +1196,7 @@ namespace S100FC.ProductCatalogue
                 };
             });
         }
-        
+
         public async Task<Dictionary<string, string>> GetDatasetAOIs() {
             return await this.Dispatch(() => {
                 var result = new Dictionary<string, string>();
@@ -1237,6 +1266,78 @@ namespace S100FC.ProductCatalogue
                 return boundary.ToJson()!;
             });
 
+        }
+
+        public async Task<bool> RollBackAsync(string name) {
+            await this.Dispatch(() => {
+
+                var electronicProduct = this._electronicProducts[name.ToUpperInvariant()];
+
+                // Delete most recent attachment from attachmenttable
+                this._geodatabase!.ApplyEdits(() => {
+                    using var attachment = this._geodatabase!.OpenDataset<Table>(this.QualifyTableName("attachment"));
+
+                    var datasetName = electronicProduct.datasetName!;
+                    var editionNo = electronicProduct.editionNumber!.Value;
+                    var updateNo = electronicProduct.updateNumber;
+
+                    var escapedDatasetName = datasetName.Replace("'", "''");
+
+                    using var cursor = attachment.Search(new QueryFilter {
+                        WhereClause =
+                            $"ps = 'S-128.NuvionPro' " +
+                            $"AND code = '{nameof(Dataset)}' " +
+                            $"AND json LIKE '%\"DatasetName\":\"{escapedDatasetName}\"%'"
+                    }, false);
+
+                    while (cursor.MoveNext()) {
+                        using var row = cursor.Current;
+
+                        var dataset = JsonSerializer.Deserialize<Dataset>(row["json"].ToString()!, this.jsonSerializerOptions);
+
+                        if (dataset?.Edition == editionNo && dataset.Update == updateNo) {
+                            row.Delete();
+
+                            Log.Information("Deleted attachment for dataset {datasetName} edition {edition} update {update}", datasetName, editionNo, updateNo);
+
+                            break;
+                        }
+                    }
+
+
+
+                    // Rollback edition/updateno and save to concurrect dict aswell
+                    using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
+
+                    using var cursorS128 = surface.Search(new QueryFilter {
+                        WhereClause = $"attributebindings LIKE '%\"{electronicProduct.datasetName}\"%'",
+                    }, false);
+
+                    cursorS128.MoveNext();
+
+                    Debug.Assert(cursorS128.Current != null);
+
+                    if (electronicProduct.updateNumber > 0)
+                        electronicProduct.updateNumber--;
+                    else
+                        electronicProduct.editionNumber--;
+
+
+                    var flatten = electronicProduct.Flatten();
+
+                    var row128 = cursorS128.Current;
+                    row128["attributebindings"] = flatten;
+                    row128.Store();
+                    row128.Dispose();
+
+                    this._electronicProducts[electronicProduct.datasetName!.ToUpperInvariant()] = electronicProduct;
+
+
+                });
+                return true;
+            });
+
+            return false;
         }
     }
 

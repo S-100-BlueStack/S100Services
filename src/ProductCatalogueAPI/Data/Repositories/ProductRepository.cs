@@ -11,7 +11,7 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
 
     private static readonly DateTime MaxDate = new(9999, 12, 31);
 
-    public async Task AppendAsync(string name, ProductState state, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null) {
+    public async Task AppendAsync(string name, ProductState state, string productSpecification, int editionNo, int updateNo, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null) {
         using var conn = _connectionFactory.Create();
         conn.Open();
         using var transaction = conn.BeginTransaction();
@@ -37,9 +37,9 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
         // insert new version
         var insertSql = """
             INSERT INTO dbo.JobTable
-            (name, state, owner, date_from, date_to, attachment, attachment_file_name)
+            (name, state, product_specification, edition_number, update_number, owner, date_from, date_to, attachment, attachment_file_name)
             VALUES
-            (@Name, @State, @Owner, @DateFrom, @DateTo, @Attachment, @AttachmentFileName)
+            (@Name, @State, @ProductSpecification, @EditionNo, @UpdateNo, @Owner, @DateFrom, @DateTo, @Attachment, @AttachmentFileName)
         """;
 
         await conn.ExecuteAsync(
@@ -47,6 +47,9 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
             new {
                 Name = name,
                 State = state,
+                ProductSpecification = productSpecification,
+                EditionNo = editionNo,
+                UpdateNo = updateNo,
                 Owner = owner,
                 DateFrom = now,
                 DateTo = MaxDate,
@@ -61,7 +64,7 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
     public async Task<IEnumerable<ProductRecord>> GetCurrentAsync() {
         using var connection = _connectionFactory.Create();
         var sql = """
-            SELECT id, name, state, owner, date_from, date_to, attachment, attachment_file_name
+            SELECT id, name, state, product_specification, edition_number, update_number, owner, date_from, date_to, attachment, attachment_file_name
             FROM dbo.JobTable
             WHERE date_to = (
                 SELECT MAX(date_to)
@@ -76,7 +79,7 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
         using var connection = _connectionFactory.Create();
 
         var sql = """
-            SELECT TOP 1 id, name, state, owner, date_from, date_to, attachment, attachment_file_name
+            SELECT TOP 1 id, name, state, product_specification, edition_number, update_number, owner, date_from, date_to, attachment, attachment_file_name
             FROM dbo.JobTable
             WHERE name = @Name
             ORDER BY date_from DESC
@@ -162,7 +165,7 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
         """;
 
         var names = await connection.QueryAsync<string>(sql, new {
-            States = new[] { ProductState.NewUpdate, ProductState.Exported }
+            States = new[] {  ProductState.Exported }
         });
 
         return [.. names];
@@ -176,10 +179,13 @@ public class InMemoryProductRepository : IProductRepository
 
     private static readonly DateTime MaxDate = new(9999, 12, 31);
 
-    public Task AppendAsync(string name, ProductState state, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null) {
+    public Task AppendAsync(string name, ProductState state, string productSpecification, int editionNo, int updateNo, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null) {
         _products.Add(new ProductRecord {
             Name = name,
             State = state,
+            ProductSpecification = productSpecification,
+            EditionNo = editionNo,
+            UpdateNo = updateNo,
             Owner = owner,
             Date_From = DateTime.UtcNow,
             Date_to = MaxDate,
@@ -206,7 +212,7 @@ public class InMemoryProductRepository : IProductRepository
 
     public Task<string[]> GetEligibleProductsAsync() {
         return Task.FromResult(
-            _products.Where(p => p.State == ProductState.Exported || p.State == ProductState.NewUpdate)
+            _products.Where(p => p.State == ProductState.Exported)
                      .Select(p => p.Name)
                      .ToArray());
     }

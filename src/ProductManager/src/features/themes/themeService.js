@@ -1,6 +1,5 @@
 import lightThemeUrl from "@arcgis/core/assets/esri/themes/light/main.css?url";
 import darkThemeUrl from "@arcgis/core/assets/esri/themes/dark/main.css?url";
-import { applyBasemapTheme } from "./basemapTheme.js";
 
 const THEME_STORAGE_KEY = "app-theme";
 
@@ -58,7 +57,6 @@ export function applyTheme(theme, view = null) {
   applyCalciteMode(theme);
   applyArcgisTheme(theme);
   applyAttributionTheme(view, theme);
-  //applyBasemapTheme(view, theme);
   localStorage.setItem(THEME_STORAGE_KEY, theme);
 }
 

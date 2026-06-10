@@ -6,7 +6,10 @@ import { resolveFeatureKey } from "../core/featureIdentity.js";
 import { getCorrectionSymbol } from "../symbology/correctionSymbols.js";
 import { resolveDisplayScaleValue } from "../scale/displayScale.js";
 
-export function esriJsonToGraphics(data, { layerId, displayScale: layerDisplayScale } = {}) {
+export function esriJsonToGraphics(
+  data,
+  { layerId, layerKind, displayScale: layerDisplayScale } = {}
+) {
   const features = getFeatures(data);
 
   return features
@@ -27,7 +30,6 @@ export function esriJsonToGraphics(data, { layerId, displayScale: layerDisplaySc
           feature,
           geometryValue: feature.geometry,
         });
-
         return null;
       }
 
@@ -44,14 +46,15 @@ export function esriJsonToGraphics(data, { layerId, displayScale: layerDisplaySc
         attributes: {
           ...attributes,
 
-          // Other map systems rely on this stable key for indexing, hover state,
-          // popup actions, and future refresh reconciliation.
+          // Other map systems rely on these stable keys for indexing, hover
+          // state, popup actions, filtering and future refresh reconciliation.
+          layerId,
+          layerKind,
           featureKey,
 
           // Keep displayScale normalized so map visibility logic does not need
           // to understand every possible API field shape.
           displayScale,
-
           status,
         },
         symbol: getCorrectionSymbol(status),
@@ -108,7 +111,6 @@ function parseGeometryJson(rawGeometry) {
         rawGeometry,
         error,
       });
-
       return null;
     }
   }

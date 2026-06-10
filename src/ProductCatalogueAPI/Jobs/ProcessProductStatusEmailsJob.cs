@@ -141,29 +141,26 @@ public class ProcessProductStatusEmailsJob(
         var type = GetRegistrationType(parsedMail.RegistrationId);
         switch (parsedMail.Outcome) { // TODO: Ensure mapping is correct
             case ProductStatusEmailOutcome.Unknown: // Unknown = Information could not be extracted from subject
-                state = ProductState.Invalid;
+                state = ProductState.Frozen;
                 break;
             case ProductStatusEmailOutcome.Successful: // Successful = Fully accepted registration of new cell
                 state = ProductState.Exported;
                 break;
             case ProductStatusEmailOutcome.AcceptedForDistribution: // Accepted For Distribution = Fully accepted and awaiting next patch-window
-                if (type == ProductStatusType.NewEdition)
                     state = ProductState.Exported;
-                else
-                    state = ProductState.NewUpdate;
                 break;
             case ProductStatusEmailOutcome.PassedInHolding: // Passed In Holding = Accepted but missing some information before publishing
-                state = ProductState.Invalid;
+                state = ProductState.Frozen;
                 break;
             case ProductStatusEmailOutcome.FailureToRegister: // Failure to register = Rejected registration of new cell
-                state = ProductState.Invalid;
+                state = ProductState.Rejected;
                 break;
         }
         if (parsedMail.RegistrationName != null) {
             if (state != product?.State || product == null) {
                 try {
                     _logger.LogInformation("Product {Name} has new state: {newState} from old state: {oldState}. Attempting upsert.", parsedMail.RegistrationName, state, product?.State);
-                    await _productRepository.AppendAsync(parsedMail.RegistrationName, state, null, parsedMail.DocumentAttachment?.Content, parsedMail.DocumentAttachment?.FileName);
+                    await _productRepository.AppendAsync(parsedMail.RegistrationName, state, "S-101", product.EditionNo, product.UpdateNo, null, parsedMail.DocumentAttachment?.Content, parsedMail.DocumentAttachment?.FileName);
                     _logger.LogInformation("Product {Name} successfully upserted with new state {newState}.", parsedMail.RegistrationName, state);
                     return true;
                 }

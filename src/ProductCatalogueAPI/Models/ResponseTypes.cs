@@ -16,17 +16,36 @@
             public T? Data { get; set; }
         }
 
+        public class AOIResponse
+        {
+            public required string Geometry { get; set; }
+            public required Attributes Attributes { get; set; }
+        }
+
+        public class Attributes
+        {
+            public string? DatasetName { get; set; }
+            public int? DisplayScale { get; set; }
+            public int? UsageBand { get; set; }
+            public ProductStatus? Status { get; set; }
+        }
+
         public class ProductResponse
         {
-            // public Guid Uuid { get; set; }
             public string? Name { get; set; }
             public int? Edition { get; set; }
             public int? Update { get; set; }
-            public int? Status { get; set; }     // Enumeration
-            public int? UsageBand { get; set; }  // Enumeration
-            public string? Aoi { get; set; }
+            public ProductStatus? Status { get; set; }
+            public int? UsageBand { get; set; }
             public DateOnly? IssueDate { get; set; }
+            public List<ProductExport>? Exports { get; set; }
+            public string? ErrorMessage { get; set; }
         }
+
+
+
+        public sealed record ProductExport(string Type, string Name, int Edition, int? Update, ProductStatus Status, DateTime Date, string? ErrorMessage = default);
+
 
         public enum ProductStatus : int
         {

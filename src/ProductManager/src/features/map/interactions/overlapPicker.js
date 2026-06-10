@@ -1,4 +1,5 @@
 import { getAllLayers } from "../core/layerRegistry.js";
+import { layerSupportsCapability } from "../config/layerDefinitions.js";
 import { statusColorConfig } from "../../../shared/config/colorsConfig.js";
 import { formatStatusDisplayValue } from "../attributes/attributeDisplay.js";
 import { applyHeaderColor, resetHeaderColor } from "../popups/popupHeaderController.js";
@@ -51,10 +52,14 @@ export function bindOverlapPicker(view) {
 }
 
 function getInteractiveLayers() {
-  return getAllLayers().filter(
-    (layer) =>
-      layer?.type === "graphics" && layer.layerType === "graphics" && layer.visible !== false
-  );
+  return getAllLayers().filter((layer) => {
+    return (
+      layer?.type === "graphics" &&
+      layer.layerType === "graphics" &&
+      layer.visible !== false &&
+      layerSupportsCapability(layer, "supportsOverlapPicker")
+    );
+  });
 }
 
 function getUniqueGraphics(results) {
