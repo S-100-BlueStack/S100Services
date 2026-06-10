@@ -1,8 +1,8 @@
 export const ATTRIBUTE_FILTER_CONFIG = {
-  storageKey: "pm.attributeFilters.v1",
+  storageKey: "pm.attributeFilters.v2",
 
   global: {
-    rangeFilterFields: new Set(["displayScale"]),
+    rangeFilterFields: new Set(["DisplayScale"]),
 
     defaultExcludedValues: [
       {

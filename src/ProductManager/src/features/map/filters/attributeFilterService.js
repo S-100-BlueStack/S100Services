@@ -1,7 +1,7 @@
 import { getAllLayers } from "../core/layerRegistry.js";
 import { layerSupportsCapability } from "../config/layerDefinitions.js";
 
-const EXCLUDED_FIELDS = new Set(["datasetName", "featureKey", "layerId", "layerKind"]);
+const EXCLUDED_FIELD_KEYS = new Set(["datasetname", "featurekey", "layerid", "layerkind"]);
 const EMPTY_FILTER_VALUE = "__pm_empty_value__";
 
 const FILTER_MODE = {
@@ -66,7 +66,7 @@ function isLayerFilterable(layer) {
 }
 
 function isFilterableField(fieldName) {
-  return fieldName && !EXCLUDED_FIELDS.has(fieldName);
+  return fieldName && !EXCLUDED_FIELD_KEYS.has(normalizeFieldKey(fieldName));
 }
 
 export function createAttributeFilterService() {
