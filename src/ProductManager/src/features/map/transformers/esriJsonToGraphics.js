@@ -14,9 +14,12 @@ export function esriJsonToGraphics(
 
   return features
     .map((feature, index) => {
-      const attributes = feature.attributes ?? feature.properties ?? {};
+      const rawAttributes = getFeatureAttributes(feature);
+      const attributes = normalizeFeatureAttributes(rawAttributes);
+      const rawGeometry = getFeatureGeometry(feature);
+
       const status = attributes.status;
-      const geometry = createGeometry(feature.geometry);
+      const geometry = createGeometry(rawGeometry);
       const featureKey = resolveFeatureKey(attributes, layerId);
       const displayScale = resolveDisplayScaleValue(attributes, feature, {
         displayScale: layerDisplayScale,
@@ -28,7 +31,7 @@ export function esriJsonToGraphics(
           layerId,
           featureKey,
           feature,
-          geometryValue: feature.geometry,
+          geometryValue: rawGeometry,
         });
         return null;
       }
@@ -72,7 +75,45 @@ function getFeatures(data) {
     return data.features;
   }
 
+  if (Array.isArray(data?.Features)) {
+    return data.Features;
+  }
+
   return [];
+}
+
+function getFeatureAttributes(feature) {
+  return (
+    feature?.attributes ?? feature?.Attributes ?? feature?.properties ?? feature?.Properties ?? {}
+  );
+}
+
+function getFeatureGeometry(feature) {
+  return feature?.geometry ?? feature?.Geometry ?? null;
+}
+
+function normalizeFeatureAttributes(attributes) {
+  return {
+    ...attributes,
+
+    // Backend AOI records currently use PascalCase attributes. The rest of the
+    // frontend relies on stable lowercase keys for identity, popup rendering,
+    // filtering, action availability and display-scale hiding.
+    datasetName: readFirstDefined(attributes, ["datasetName", "DatasetName", "name", "Name"]),
+    displayScale: readFirstDefined(attributes, ["displayScale", "DisplayScale"]),
+    usageBand: readFirstDefined(attributes, ["usageBand", "UsageBand"]),
+    status: readFirstDefined(attributes, ["status", "Status", "productState", "ProductState"]),
+  };
+}
+
+function readFirstDefined(source, keys) {
+  for (const key of keys) {
+    if (Object.hasOwn(source, key) && source[key] !== undefined && source[key] !== null) {
+      return source[key];
+    }
+  }
+
+  return undefined;
 }
 
 function createGeometry(rawGeometry) {
