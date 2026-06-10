@@ -3,6 +3,8 @@ import { closePopupActionDropdown, togglePopupActionDropdown } from "./popupActi
 export function createActionButton(actionConfig) {
   const action = document.createElement("calcite-action");
   const hasDropdown = Array.isArray(actionConfig.items) && actionConfig.items.length > 0;
+  const showsLoading = Boolean(actionConfig.loading);
+  const blocksClickWhileLoading = showsLoading && !hasDropdown;
 
   action.icon = actionConfig.icon;
   action.text = actionConfig.label;
@@ -10,10 +12,15 @@ export function createActionButton(actionConfig) {
   action.scale = "m";
   action.appearance = "transparent";
   action.disabled = Boolean(actionConfig.disabled);
-  action.loading = Boolean(actionConfig.loading);
+  action.loading = showsLoading;
   action.textEnabled = true;
   action.className = ["popup-action-bar__action", actionConfig.className].filter(Boolean).join(" ");
   action.dataset.popupActionId = actionConfig.id;
+
+  if (hasDropdown) {
+    action.setAttribute("aria-haspopup", "menu");
+    action.setAttribute("aria-expanded", "false");
+  }
 
   // Calcite upgrades custom elements asynchronously, so set attributes as well
   // as properties to keep first render and upgraded render aligned.
@@ -26,10 +33,13 @@ export function createActionButton(actionConfig) {
     action.setAttribute("aria-disabled", "true");
   }
 
-  if (actionConfig.loading) {
-    action.dataset.busy = "true";
+  if (showsLoading) {
     action.setAttribute("loading", "");
     action.setAttribute("aria-busy", "true");
+  }
+
+  if (blocksClickWhileLoading) {
+    action.dataset.busy = "true";
   }
 
   action.addEventListener("click", async (event) => {

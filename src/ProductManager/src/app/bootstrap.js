@@ -12,9 +12,22 @@ import { loadInitialData } from "./loadInitialData.js";
 import { initializeTheme } from "../features/themes/themeService.js";
 import { registerThemeToggle } from "../features/themes/themeToggle.js";
 import { initDisplayScaleOverrideControl } from "../features/map/scale/displayScaleOverrideControl.js";
+import { waitForCalciteComponents } from "../shared/ui/calciteComponentReady.js";
+
+const REQUIRED_CALCITE_COMPONENTS = [
+  "calcite-action",
+  "calcite-button",
+  "calcite-icon",
+  "calcite-loader",
+  "calcite-notice",
+  "calcite-panel",
+  "calcite-shell",
+  "calcite-shell-panel",
+  "calcite-switch",
+];
 
 async function waitForCalcite() {
-  await customElements.whenDefined("calcite-loader");
+  await waitForCalciteComponents(REQUIRED_CALCITE_COMPONENTS);
 }
 
 export async function bootstrap() {

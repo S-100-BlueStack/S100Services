@@ -44,7 +44,7 @@ export function createPopup() {
         });
       }
 
-      async function refreshAndRender() {
+      async function refreshAndRender({ showFailureNotice = true } = {}) {
         const refreshId = ++latestRefreshId;
         const datasetName = currentAttributes.datasetName ?? graphic?.attributes?.datasetName;
 
@@ -65,7 +65,10 @@ export function createPopup() {
         }
 
         if (!result.success) {
-          noticeError("Selected product could not be refreshed", result.errorMessage);
+          if (showFailureNotice) {
+            noticeError("Selected product could not be refreshed", result.errorMessage);
+          }
+
           return false;
         }
 
@@ -104,8 +107,10 @@ export function createPopup() {
 
       render();
 
-      // Initial freshness check when the popup opens.
-      void refreshAndRender();
+      // Initial popup freshness should be silent on failure. A restored popup can be
+      // opened while a full map refresh is still retrying, and the full refresh flow
+      // owns the user-facing failure notice in that case.
+      void refreshAndRender({ showFailureNotice: false });
 
       return container;
     },

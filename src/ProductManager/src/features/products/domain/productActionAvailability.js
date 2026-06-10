@@ -149,6 +149,7 @@ function createExportRootAvailability({
   // explain which export is running and which actions are blocked.
   return available({
     label: exportHasRunningAction ? "Exporting..." : "Export...",
+    loading: exportHasRunningAction,
   });
 }
 

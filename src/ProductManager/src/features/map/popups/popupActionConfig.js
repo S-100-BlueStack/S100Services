@@ -130,6 +130,7 @@ function createExportAction({
     id: "export",
     label: availability.exportRoot.label ?? "Export...",
     icon: "plus-square",
+    loading: availability.exportRoot.loading,
     disabled: availability.exportRoot.disabled,
     disabledReason: availability.exportRoot.disabledReason,
     className: "popup-action-bar__action--dropdown",
