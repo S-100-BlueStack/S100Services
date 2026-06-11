@@ -538,8 +538,9 @@ html.calcite-mode-dark {
   transform: rotate(45deg);
 }
 
-/* Submenu keyboard navigation is handled separately from this focus cleanup. */
-.popup-action-dropdown__node--has-children:hover > .popup-action-dropdown--submenu {
+/* Submenus open on pointer hover or explicit keyboard/menu state. */
+.popup-action-dropdown__node--has-children:hover > .popup-action-dropdown--submenu,
+.popup-action-dropdown__node--has-children.is-open > .popup-action-dropdown--submenu {
   display: block;
 }
 

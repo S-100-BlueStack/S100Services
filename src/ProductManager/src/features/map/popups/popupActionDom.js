@@ -17,7 +17,9 @@ export function createActionButton(actionConfig) {
   action.textEnabled = true;
   action.className = ["popup-action-bar__action", actionConfig.className].filter(Boolean).join(" ");
   action.dataset.popupActionId = actionConfig.id;
+
   bindVisibleFocusState(action);
+
   if (hasDropdown) {
     action.setAttribute("aria-haspopup", "menu");
     action.setAttribute("aria-expanded", "false");
@@ -43,6 +45,26 @@ export function createActionButton(actionConfig) {
     action.dataset.busy = "true";
   }
 
+  action.addEventListener("keydown", (event) => {
+    if (!hasDropdown || event.key !== "ArrowDown") {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (action.disabled || action.dataset.busy === "true") {
+      return;
+    }
+
+    togglePopupActionDropdown({
+      anchorElement: action,
+      items: actionConfig.items,
+      focusFirstItem: true,
+      restoreFocusOnClose: true,
+    });
+  });
+
   action.addEventListener("click", async (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -52,9 +74,13 @@ export function createActionButton(actionConfig) {
     }
 
     if (hasDropdown) {
+      const focusFirstItem = event.detail === 0;
+
       togglePopupActionDropdown({
         anchorElement: action,
         items: actionConfig.items,
+        focusFirstItem,
+        restoreFocusOnClose: focusFirstItem,
       });
       return;
     }
