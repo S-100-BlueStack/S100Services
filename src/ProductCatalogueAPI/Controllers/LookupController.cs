@@ -47,5 +47,16 @@ namespace ProductCatalogueAPI.Controllers
 
             return Ok(values);
         }
+
+        [HttpGet("exportformats")]
+        public IActionResult GetExportFormats() {
+            var values = Enum.GetValues<RequestTypes.ExportFormat>()
+                .Select(e => new {
+                    Id = (int)e,
+                    Name = e.ToString()
+                });
+
+            return Ok(values);
+        }
     }
 }

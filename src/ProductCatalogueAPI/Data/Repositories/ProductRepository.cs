@@ -170,6 +170,21 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
 
         return [.. names];
     }
+
+    public async Task<IEnumerable<ProductRecord>> GetHistoryByNameAsync(string name) {
+        using var connection = _connectionFactory.Create();
+
+        var sql = """
+        SELECT name, state, product_specification, edition_number, update_number, owner, date_from, date_to
+        FROM dbo.JobTable
+        WHERE name = @Name
+        ORDER BY date_from DESC
+    """;
+
+        return await connection.QueryAsync<ProductRecord>(
+            sql,
+            new { Name = name });
+    }
 }
 
 // In memory implementation for development and testing purposes.
@@ -223,6 +238,10 @@ public class InMemoryProductRepository : IProductRepository
     }
 
     Task<DateTime?> IProductRepository.GetLastSuccessfulRunUtcAsync(string jobName) {
+        throw new NotImplementedException();
+    }
+
+    Task<IEnumerable<ProductRecord>> IProductRepository.GetHistoryByNameAsync(string name) {
         throw new NotImplementedException();
     }
 }

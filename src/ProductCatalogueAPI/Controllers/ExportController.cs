@@ -50,6 +50,8 @@ namespace ProductCatalogueAPI.Controllers
                 return StatusCode(StatusCodes.Status404NotFound, response);
             }
 
+            // TODO: Check if product is already in process
+
             // Create YAML Dataset
             var dataset = await _electronicProductManager.CreateNewEditionAsync(name);
 

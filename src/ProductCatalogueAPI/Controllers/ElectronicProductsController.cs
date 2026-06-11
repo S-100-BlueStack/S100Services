@@ -197,6 +197,47 @@ namespace ProductCatalogueAPI.Controllers
         }
 
 
+        /// <summary>
+        /// Get the history of a specific electronic product
+        /// </summary>
+        /// <param name="name">The name of the dataset.</param>
+        /// <returns>The product</returns>
+        [ProducesResponseType(typeof(ApiResponse<ResponseTypes.ProductHistoryResponse[]>), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
+        [HttpGet("{name}/history", Name = "GetElectronicProductHistory")]
+        public async Task<IActionResult> GetElectronicProductHistory(string name) {
+            var sw = Stopwatch.StartNew();
+            var response = new ApiResponse<ResponseTypes.ProductHistoryResponse[]>();
+            var electronicProduct = this._electronicProductManager.ElectronicProduct(name);
+
+
+            if (electronicProduct == null) {
+                response.Success = false;
+                response.Message = $"No electronic product with name '{name}' was found.";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return NotFound(response);
+            }
+
+
+            var rows = await _repository.GetHistoryByNameAsync(name);
+
+
+            response.Data = [.. rows.Select(r => new ProductHistoryResponse {
+                Name = r.Name,
+                Edition = r.EditionNo,
+                Update = r.UpdateNo,
+                Status = Enum.Parse<ProductStatus>(r.State.ToString()),
+                From = r.Date_From,
+                To = r.Date_to,
+                Owner = TrimUsername(r.Owner)
+            })];
+            response.TotalHits = rows.Count();
+            response.DurationMs = sw.ElapsedMilliseconds;
+
+            return this.Ok(response);
+        }
+
+        private static string? TrimUsername(string? username) => username?.ToUpper().Replace("PROD\\", "");
 
 
 
