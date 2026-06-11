@@ -1,6 +1,6 @@
-import { findFeature } from "../../map/core/featureAdapter.js";
-import { getAllLayers, getLayer } from "../../map/core/layerRegistry.js";
-import { rebuildLayers } from "../../map/core/rebuildLayers.js";
+import { findFeature } from "../core/featureAdapter.js";
+import { getAllLayers, getLayer } from "../core/layerRegistry.js";
+import { rebuildLayers } from "../core/rebuildLayers.js";
 import { runWithRetry } from "../../../shared/utils/retryRunner.js";
 
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;

@@ -1,5 +1,5 @@
 import { loadAppData } from "../features/data/services/dataLoader.js";
-import { createRefreshService } from "../features/data/services/refreshService.js";
+import { createRefreshService } from "../features/map/services/refreshService.js";
 import { noticeError, noticeSuccess } from "../features/notices/services/noticeService.js";
 import { createMap } from "../features/map/core/createMap.js";
 import { createView } from "../features/map/core/createView.js";
