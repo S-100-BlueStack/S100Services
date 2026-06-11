@@ -1,3 +1,4 @@
+import { focusWithVisibleState } from "../../../shared/ui/focus/visibleFocus.js";
 let activeDropdown = null;
 
 const DROPDOWN_POINTER_CLOSE_DISTANCE = 90;
@@ -33,7 +34,7 @@ export function closePopupActionDropdown({ restoreFocus = false } = {}) {
   window.removeEventListener("scroll", closePopupActionDropdown, true);
 
   if (restoreFocus) {
-    anchorElement?.focus?.();
+    void focusWithVisibleState(anchorElement);
   }
 }
 

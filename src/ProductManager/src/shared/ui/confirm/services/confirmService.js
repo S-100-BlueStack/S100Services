@@ -1,9 +1,12 @@
+import {
+  clearVisibleFocusClass,
+  focusElement,
+  focusWithVisibleState,
+} from "../../focus/visibleFocus.js";
 let activeResolver = null;
 let activeAnchorElement = null;
 let activePreviouslyFocusedElement = null;
 let handlersRegistered = false;
-
-const PROGRAMMATIC_FOCUS_CLASS = "is-programmatically-focused";
 
 export function confirmAction({
   title = "Confirm action",
@@ -54,16 +57,20 @@ export function registerConfirmDialog() {
 
   const { popover, confirmButton, cancelButton } = getConfirmElements();
 
-  confirmButton.addEventListener("click", () => {
-    closeActivePopover(true);
+  confirmButton.addEventListener("click", (event) => {
+    closeActivePopover(true, {
+      visibleFocus: event.detail === 0,
+    });
   });
 
-  cancelButton.addEventListener("click", () => {
-    closeActivePopover(false);
+  cancelButton.addEventListener("click", (event) => {
+    closeActivePopover(false, {
+      visibleFocus: event.detail === 0,
+    });
   });
 
   document.addEventListener("pointerdown", (event) => {
-    clearProgrammaticFocusClass();
+    clearVisibleFocusClass();
 
     if (popover.hidden) {
       return;
@@ -113,7 +120,7 @@ export function registerConfirmDialog() {
   });
 
   document.addEventListener("focusin", (event) => {
-    clearProgrammaticFocusClass(event.target);
+    clearVisibleFocusClass(event.target);
   });
 
   handlersRegistered = true;
@@ -258,41 +265,6 @@ function restoreFocusAfterActionSettles(element, { visibleFocus = false } = {}) 
       void focusElement(element);
     });
   });
-}
-
-async function focusWithVisibleState(element) {
-  if (!isConnectedFocusableElement(element)) {
-    return;
-  }
-
-  clearProgrammaticFocusClass();
-
-  await focusElement(element);
-
-  if (isConnectedFocusableElement(element)) {
-    element.classList.add(PROGRAMMATIC_FOCUS_CLASS);
-  }
-}
-
-async function focusElement(element) {
-  if (!isConnectedFocusableElement(element)) {
-    return;
-  }
-
-  if (typeof element.setFocus === "function") {
-    await element.setFocus();
-    return;
-  }
-
-  element.focus();
-}
-
-function clearProgrammaticFocusClass(nextTarget = null) {
-  for (const element of document.querySelectorAll(`.${PROGRAMMATIC_FOCUS_CLASS}`)) {
-    if (element !== nextTarget) {
-      element.classList.remove(PROGRAMMATIC_FOCUS_CLASS);
-    }
-  }
 }
 
 function positionPopover(card, anchorElement) {

@@ -268,6 +268,8 @@ html.calcite-mode-dark {
 }
 
 .popup-action-bar {
+  --pm-popup-focus-ring: var(--calcite-color-focus, var(--calcite-color-brand, #0079c1));
+
   background: var(--pm-popup-surface);
   border-bottom: 1px solid var(--pm-popup-border);
 }
@@ -286,6 +288,13 @@ html.calcite-mode-dark {
 }
 
 .popup-action-bar__action {
+  /*
+   * calcite-action renders its own focus ring inside Shadow DOM.
+   * Popup actions use a shared host-level visible focus policy instead,
+   * so the internal Calcite ring is disabled here to avoid double outlines.
+   */
+  --calcite-color-focus: transparent;
+
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
@@ -304,10 +313,21 @@ html.calcite-mode-dark {
   cursor: pointer;
 }
 
-.popup-action-bar__action:hover,
-.popup-action-bar__action:focus-visible {
+.popup-action-bar__action:hover {
   background: var(--pm-popup-surface-alt);
+}
+
+.popup-action-bar__action:focus {
   outline: none;
+}
+
+.popup-action-bar__action:not([disabled]):not([aria-disabled="true"]).is-visible-focused {
+  --calcite-action-background-color: var(--pm-popup-surface-alt);
+  --calcite-action-background-color-hover: var(--pm-popup-surface-alt);
+  --calcite-action-background-color-press: var(--pm-popup-surface-alt);
+
+  background: var(--pm-popup-surface-alt);
+  box-shadow: inset 0 0 0 2px var(--pm-popup-focus-ring);
 }
 
 .popup-action-bar__action:disabled,
@@ -344,29 +364,6 @@ html.calcite-mode-dark {
   --calcite-action-icon-color: var(--pm-popup-text);
 }
 
-.popup-action-bar calcite-action {
-  --calcite-color-focus: transparent;
-}
-
-.popup-action-bar__action:focus,
-.popup-action-bar__action:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-.popup-action-bar__action.is-programmatically-focused {
-  --pm-popup-action-restored-focus-color: var(--calcite-color-brand, #0079c1);
-  --calcite-action-background-color: var(--pm-popup-surface-alt);
-  --calcite-action-background-color-hover: var(--pm-popup-surface-alt);
-  --calcite-action-background-color-press: var(--pm-popup-surface-alt);
-
-  outline: none !important;
-  background: var(--pm-popup-surface-alt) !important;
-  box-shadow:
-    inset 0 0 0 1px var(--pm-popup-action-restored-focus-color),
-    inset 0 -1px 0 var(--pm-popup-action-restored-focus-color) !important;
-}
-
 /* =========================================================
    Popup action dropdowns
    ========================================================= */
@@ -375,6 +372,7 @@ html.calcite-mode-dark {
   --pm-popup-dropdown-width: 180px;
   --pm-popup-dropdown-submenu-offset: 8px;
   --pm-popup-dropdown-arrow-size: 10px;
+  --pm-popup-focus-ring: var(--calcite-color-focus, var(--calcite-color-brand, #0079c1));
 
   position: fixed;
   z-index: 1400;
@@ -446,10 +444,20 @@ html.calcite-mode-dark {
   cursor: pointer;
 }
 
-.popup-action-dropdown__item:hover,
-.popup-action-dropdown__item:focus-visible {
+.popup-action-dropdown__item:hover {
   background: var(--pm-popup-surface-alt);
+}
+
+.popup-action-dropdown__item:focus {
   outline: none;
+}
+
+.popup-action-dropdown__item:not(:disabled):not([aria-disabled="true"]):is(
+    :focus-visible,
+    .is-visible-focused
+  ) {
+  background: var(--pm-popup-surface-alt);
+  box-shadow: inset 0 0 0 2px var(--pm-popup-focus-ring);
 }
 
 .popup-action-dropdown__item:disabled,
@@ -461,10 +469,13 @@ html.calcite-mode-dark {
 
 .popup-action-dropdown__item:disabled:hover,
 .popup-action-dropdown__item:disabled:focus-visible,
+.popup-action-dropdown__item:disabled.is-visible-focused,
 .popup-action-dropdown__item[aria-disabled="true"]:hover,
-.popup-action-dropdown__item[aria-disabled="true"]:focus-visible {
+.popup-action-dropdown__item[aria-disabled="true"]:focus-visible,
+.popup-action-dropdown__item[aria-disabled="true"].is-visible-focused {
   background: transparent;
   outline: none;
+  box-shadow: none;
 }
 
 .popup-action-dropdown__item:disabled calcite-icon,
@@ -527,8 +538,7 @@ html.calcite-mode-dark {
   transform: rotate(45deg);
 }
 
-/* Submenus are hover-only. Do not add :focus-within or persistent click state,
-   because clicked parent items should not remain open after the pointer leaves. */
+/* Submenu keyboard navigation is handled separately from this focus cleanup. */
 .popup-action-dropdown__node--has-children:hover > .popup-action-dropdown--submenu {
   display: block;
 }
@@ -790,10 +800,13 @@ html.calcite-mode-dark .overlap-picker__status-marker {
   cursor: pointer;
 }
 
-.confirm-popover .confirm-popover__button:focus,
+.confirm-popover .confirm-popover__button:focus {
+  outline: none;
+}
+
 .confirm-popover .confirm-popover__button:focus-visible,
-.confirm-popover .confirm-popover__button.is-programmatically-focused {
-  outline: 2px solid var(--calcite-color-brand, #0079c1) !important;
+.confirm-popover .confirm-popover__button.is-visible-focused {
+  outline: 2px solid var(--calcite-color-brand, #0079c1);
   outline-offset: 2px;
 }
 

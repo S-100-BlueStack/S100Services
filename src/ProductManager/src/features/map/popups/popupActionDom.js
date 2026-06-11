@@ -1,4 +1,5 @@
 import { closePopupActionDropdown, togglePopupActionDropdown } from "./popupActionDropdown.js";
+import { bindVisibleFocusState } from "../../../shared/ui/focus/visibleFocus.js";
 
 export function createActionButton(actionConfig) {
   const action = document.createElement("calcite-action");
@@ -16,7 +17,7 @@ export function createActionButton(actionConfig) {
   action.textEnabled = true;
   action.className = ["popup-action-bar__action", actionConfig.className].filter(Boolean).join(" ");
   action.dataset.popupActionId = actionConfig.id;
-
+  bindVisibleFocusState(action);
   if (hasDropdown) {
     action.setAttribute("aria-haspopup", "menu");
     action.setAttribute("aria-expanded", "false");
