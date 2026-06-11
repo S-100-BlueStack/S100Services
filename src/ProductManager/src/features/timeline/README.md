@@ -30,6 +30,17 @@ Avoid generic `timeline` names in new UI code when the code only handles product
 history. The folder is named `timeline` because it is expected to contain both
 product history and map timeline functionality.
 
+## Current decision
+
+No folder split is needed while the global map timeline is only a placeholder.
+
+Product history files must continue to use explicit `productHistory` naming.
+Global map timeline files must use explicit `mapTimeline` or timeline metadata/snapshot naming.
+
+Do not move product history into a separate feature folder unless the product
+history UI grows into a larger standalone feature or the global map timeline
+backend contract introduces enough code to make this folder ambiguous.
+
 ## Current product history contract
 
 `fetchProductHistory(datasetName)` currently returns frontend demo data from
