@@ -16,5 +16,8 @@ namespace ProductCatalogueAPI.Data.Repositories
         Task<string[]> GetIneligbleProductsAsync();
         Task<string[]> GetEligibleProductsAsync();
 
+        
+        Task<IEnumerable<ProductRecord>> GetHistoryByNameAsync(string name);
+
     }
 }

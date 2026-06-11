@@ -42,6 +42,17 @@
             public string? ErrorMessage { get; set; }
         }
 
+        public class ProductHistoryResponse
+        {
+            public required string Name { get; set; }
+            public int? Edition { get; set; }
+            public int? Update { get; set; }
+            public required ProductStatus Status { get; set; }
+            public required DateTime From { get; set; }
+            public required DateTime To { get; set; }
+            public string? Owner { get; set;  }
+        }
+
 
 
         public sealed record ProductExport(string Type, string Name, int Edition, int? Update, ProductStatus Status, DateTime Date, string? ErrorMessage = default);
