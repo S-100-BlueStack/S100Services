@@ -4,12 +4,22 @@ export function registerThemeToggle(view = null) {
   const button = document.getElementById("theme-toggle");
   if (!button) return;
 
-  updateThemeToggle(button);
+  syncThemeToggle();
 
   button.addEventListener("click", () => {
     toggleTheme(view);
-    updateThemeToggle(button);
+    syncThemeToggle();
   });
+}
+
+export function syncThemeToggle() {
+  const button = document.getElementById("theme-toggle");
+
+  if (!button) {
+    return;
+  }
+
+  updateThemeToggle(button);
 }
 
 function updateThemeToggle(button) {

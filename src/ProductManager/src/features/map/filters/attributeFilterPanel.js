@@ -489,6 +489,15 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
 
   document.body.append(panel);
 
+  function clearAllFilters() {
+    filterService.clearAll();
+    writeFilterSnapshot(filterService);
+    syncDisplayScaleFilterAutoDisable();
+
+    applyVisibility();
+    render();
+  }
+
   function isOpen() {
     return !panel.hidden;
   }
@@ -703,12 +712,7 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
     const clearAllButton = target.closest("[data-clear-all-filters]");
 
     if (clearAllButton) {
-      filterService.clearAll();
-      writeFilterSnapshot(filterService);
-      syncDisplayScaleFilterAutoDisable();
-
-      applyVisibility();
-      render();
+      clearAllFilters();
       return;
     }
 
@@ -787,5 +791,6 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
   return {
     refresh: render,
     close: () => setOpen(false),
+    clearAllFilters,
   };
 }

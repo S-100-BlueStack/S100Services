@@ -53,6 +53,10 @@ function applyAttributionTheme(view, theme) {
   });
 }
 
+export function resetThemePreference(view = null) {
+  applyTheme(themes.light, view);
+}
+
 export function applyTheme(theme, view = null) {
   applyCalciteMode(theme);
   applyArcgisTheme(theme);

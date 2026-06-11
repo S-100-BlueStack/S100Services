@@ -50,6 +50,22 @@ export function onDisplayScaleOverrideChange(callback) {
   };
 }
 
+export function resetDisplayScaleHidingPreference() {
+  removePersistedDisplayScaleHidingDisabled();
+
+  setDisplayScaleHidingDisabled(false, {
+    source: "preferences",
+  });
+}
+
+function removePersistedDisplayScaleHidingDisabled() {
+  try {
+    window.localStorage.removeItem(DISPLAY_SCALE_OVERRIDE_STORAGE_KEY);
+  } catch (error) {
+    console.warn("Failed to remove display scale hiding preference.", error);
+  }
+}
+
 function readPersistedDisplayScaleHidingDisabled() {
   try {
     return window.localStorage.getItem(DISPLAY_SCALE_OVERRIDE_STORAGE_KEY) === "true";

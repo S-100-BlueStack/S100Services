@@ -3,6 +3,12 @@ import { watch } from "@arcgis/core/core/reactiveUtils.js";
 const MAP_VIEWPOINT_STORAGE_KEY = "pm:main-map-viewpoint:v1";
 const SAVE_DEBOUNCE_MS = 300;
 
+export const DEFAULT_MAIN_MAP_VIEWPOINT = Object.freeze({
+  center: [10.3, 56],
+  zoom: 6,
+  rotation: 0,
+});
+
 export function bindMapViewpointPersistence(view) {
   if (!view) {
     return {
@@ -47,6 +53,45 @@ export function bindMapViewpointPersistence(view) {
       stationaryHandle?.remove?.();
     },
   };
+}
+
+export async function resetMapViewpoint(view) {
+  clearStoredMapViewpoint();
+
+  if (!view) {
+    return false;
+  }
+
+  try {
+    await view.when();
+
+    await view.goTo(
+      {
+        center: DEFAULT_MAIN_MAP_VIEWPOINT.center,
+        zoom: DEFAULT_MAIN_MAP_VIEWPOINT.zoom,
+        rotation: DEFAULT_MAIN_MAP_VIEWPOINT.rotation,
+      },
+      {
+        animate: true,
+      }
+    );
+
+    saveMapViewpoint(view);
+    return true;
+  } catch (error) {
+    console.warn("[Map viewpoint] Failed to reset viewpoint", error);
+    return false;
+  }
+}
+
+export function clearStoredMapViewpoint() {
+  try {
+    window.localStorage.removeItem(MAP_VIEWPOINT_STORAGE_KEY);
+    return true;
+  } catch (error) {
+    console.warn("[Map viewpoint] Failed to clear saved viewpoint", error);
+    return false;
+  }
 }
 
 async function restoreMapViewpoint(view) {

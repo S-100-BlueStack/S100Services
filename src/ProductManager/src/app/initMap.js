@@ -17,6 +17,7 @@ import { createAttributeFilterService } from "../features/map/filters/attributeF
 import { initAttributeFilterPanel } from "../features/map/filters/attributeFilterPanel.js";
 import { initProductHistoryPanel } from "../features/timeline/ui/productHistoryPanel.js";
 import { bindMapViewpointPersistence } from "../features/map/state/mapViewpointPersistence.js";
+import { initPreferencesPanel } from "../features/preferences/ui/preferencesPanel.js";
 
 function updateLastUpdated(date = new Date()) {
   const el = document.getElementById("last-updated");
@@ -77,6 +78,11 @@ export function initMap() {
   const filterPanel = initAttributeFilterPanel({
     filterService,
     applyVisibility: applyMapVisibility,
+  });
+
+  const preferencesPanel = initPreferencesPanel({
+    view,
+    filterPanel,
   });
 
   const productHistoryPanel = initProductHistoryPanel({
@@ -151,5 +157,6 @@ export function initMap() {
     bindMapVisibility,
     updateLastUpdated,
     mapViewpointPersistence,
+    preferencesPanel,
   };
 }
