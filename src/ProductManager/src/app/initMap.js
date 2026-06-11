@@ -1,6 +1,7 @@
 import { loadAppData } from "../features/data/services/dataLoader.js";
 import { createRefreshService } from "../features/map/services/refreshService.js";
 import { noticeError, noticeSuccess } from "../features/notices/services/noticeService.js";
+import { cancelActiveConfirmPopover } from "../shared/ui/confirm/services/confirmService.js";
 import { createMap } from "../features/map/core/createMap.js";
 import { createView } from "../features/map/core/createView.js";
 import { createLayer } from "../features/map/core/layerFactory.js";
@@ -89,6 +90,10 @@ export function initMap() {
     loadAppData,
     createLayer,
     onLayersRebuilt: (layers) => {
+      cancelActiveConfirmPopover({
+        restoreFocus: false,
+      });
+
       bindMapVisibility(layers);
       filterPanel.refresh();
     },
@@ -96,6 +101,10 @@ export function initMap() {
       if (source !== "manual") {
         return;
       }
+
+      cancelActiveConfirmPopover({
+        restoreFocus: false,
+      });
 
       previousLastUpdatedStatus = readLastUpdatedStatus();
       setLastUpdatedStatus("Refreshing...");

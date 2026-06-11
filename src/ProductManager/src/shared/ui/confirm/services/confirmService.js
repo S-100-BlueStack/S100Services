@@ -50,6 +50,21 @@ export function confirmAction({
   });
 }
 
+export function cancelActiveConfirmPopover({ restoreFocus = false, visibleFocus = false } = {}) {
+  if (!activeResolver) {
+    return false;
+  }
+
+  clearVisibleFocusClass();
+
+  closeActivePopover(false, {
+    restoreFocus,
+    visibleFocus,
+  });
+
+  return true;
+}
+
 export function registerConfirmDialog() {
   if (handlersRegistered) {
     return;
