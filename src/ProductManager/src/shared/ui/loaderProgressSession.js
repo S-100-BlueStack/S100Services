@@ -36,6 +36,7 @@ export function createLoaderProgressSession({
   let currentProgress = null;
   let currentProgressLabel = null;
   let pendingTextRotation = null;
+  let failHideTimeoutId = null;
 
   return {
     startLoading,
@@ -50,7 +51,8 @@ export function createLoaderProgressSession({
   };
 
   function startLoading(text, { rotateImmediately = false } = {}) {
-    simulatedProgressIntervalId = null;
+    cleanup();
+
     currentText = text;
     setSessionProgress(loadStartProgress);
 
@@ -163,7 +165,8 @@ export function createLoaderProgressSession({
     }
 
     if (hideAfterMs !== null) {
-      window.setTimeout(() => {
+      failHideTimeoutId = window.setTimeout(() => {
+        failHideTimeoutId = null;
         hideLoader();
         loaderWasShownBySession = false;
       }, hideAfterMs);
@@ -175,6 +178,7 @@ export function createLoaderProgressSession({
     stopSimulatedProgress();
     stopSessionTextRotation();
     cancelDelayedLoaderShow();
+    cancelFailHide();
   }
 
   function scheduleLoaderShow() {
@@ -212,6 +216,15 @@ export function createLoaderProgressSession({
 
     window.clearTimeout(delayedShowTimeoutId);
     delayedShowTimeoutId = null;
+  }
+
+  function cancelFailHide() {
+    if (failHideTimeoutId === null) {
+      return;
+    }
+
+    window.clearTimeout(failHideTimeoutId);
+    failHideTimeoutId = null;
   }
 
   function startSessionTextRotation(stage, rotateImmediately) {

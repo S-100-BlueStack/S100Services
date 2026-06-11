@@ -6,6 +6,7 @@ let progressFillElement;
 let progressLabelElement;
 let textRotationIntervalId = null;
 let isInitialized = false;
+let loaderVisibilityRevision = 0;
 
 function initLoader() {
   if (isInitialized) return;
@@ -25,19 +26,25 @@ export function showLoader(text = "Loading...", { progress = null } = {}) {
 
   if (!loaderElement) return;
 
+  const visibilityRevision = ++loaderVisibilityRevision;
+
   setLoaderText(text);
   setLoaderProgress(progress);
 
   requestAnimationFrame(() => {
+    if (visibilityRevision !== loaderVisibilityRevision) {
+      return;
+    }
+
     loaderElement.classList.remove("hidden");
   });
 }
-
 export function hideLoader() {
   initLoader();
 
   if (!loaderElement) return;
 
+  loaderVisibilityRevision += 1;
   stopLoaderTextRotation();
   loaderElement.classList.add("hidden");
 }
