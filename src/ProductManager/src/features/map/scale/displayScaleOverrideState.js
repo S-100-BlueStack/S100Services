@@ -1,7 +1,25 @@
+import {
+  PREFERENCE_PERSISTENCE_KEY,
+  isPreferencePersistenceEnabled,
+  onPreferencePersistenceChanged,
+} from "../../preferences/state/preferencePersistenceState.js";
 const DISPLAY_SCALE_OVERRIDE_CHANGE_EVENT = "pm-display-scale-override-change";
 const DISPLAY_SCALE_OVERRIDE_STORAGE_KEY = "pm.displayScale.hidingDisabled";
 
 let displayScaleHidingDisabled = readPersistedDisplayScaleHidingDisabled();
+
+onPreferencePersistenceChanged(({ key, enabled }) => {
+  if (key !== PREFERENCE_PERSISTENCE_KEY.DISPLAY_SCALE_OVERRIDE) {
+    return;
+  }
+
+  if (!enabled) {
+    removePersistedDisplayScaleHidingDisabled();
+    return;
+  }
+
+  writePersistedDisplayScaleHidingDisabled(displayScaleHidingDisabled);
+});
 
 export function isDisplayScaleHidingDisabled() {
   return displayScaleHidingDisabled;
@@ -67,6 +85,10 @@ function removePersistedDisplayScaleHidingDisabled() {
 }
 
 function readPersistedDisplayScaleHidingDisabled() {
+  if (!isPreferencePersistenceEnabled(PREFERENCE_PERSISTENCE_KEY.DISPLAY_SCALE_OVERRIDE)) {
+    return false;
+  }
+
   try {
     return window.localStorage.getItem(DISPLAY_SCALE_OVERRIDE_STORAGE_KEY) === "true";
   } catch (error) {
@@ -76,6 +98,10 @@ function readPersistedDisplayScaleHidingDisabled() {
 }
 
 function writePersistedDisplayScaleHidingDisabled(disabled) {
+  if (!isPreferencePersistenceEnabled(PREFERENCE_PERSISTENCE_KEY.DISPLAY_SCALE_OVERRIDE)) {
+    return;
+  }
+
   try {
     window.localStorage.setItem(DISPLAY_SCALE_OVERRIDE_STORAGE_KEY, String(Boolean(disabled)));
   } catch (error) {

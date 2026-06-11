@@ -1,5 +1,10 @@
 import lightThemeUrl from "@arcgis/core/assets/esri/themes/light/main.css?url";
 import darkThemeUrl from "@arcgis/core/assets/esri/themes/dark/main.css?url";
+import {
+  PREFERENCE_PERSISTENCE_KEY,
+  isPreferencePersistenceEnabled,
+  onPreferencePersistenceChanged,
+} from "../preferences/state/preferencePersistenceState.js";
 
 const THEME_STORAGE_KEY = "app-theme";
 
@@ -7,6 +12,19 @@ export const themes = {
   light: "light",
   dark: "dark",
 };
+
+onPreferencePersistenceChanged(({ key, enabled }) => {
+  if (key !== PREFERENCE_PERSISTENCE_KEY.THEME) {
+    return;
+  }
+
+  if (!enabled) {
+    removeStoredTheme();
+    return;
+  }
+
+  writeStoredTheme(getCurrentTheme());
+});
 
 function getModeClass(theme) {
   return theme === themes.dark ? "calcite-mode-dark" : "calcite-mode-light";
@@ -54,18 +72,36 @@ function applyAttributionTheme(view, theme) {
 }
 
 export function resetThemePreference(view = null) {
+  removeStoredTheme();
   applyTheme(themes.light, view);
 }
 
 export function applyTheme(theme, view = null) {
-  applyCalciteMode(theme);
-  applyArcgisTheme(theme);
-  applyAttributionTheme(view, theme);
-  localStorage.setItem(THEME_STORAGE_KEY, theme);
+  const normalizedTheme = normalizeTheme(theme);
+
+  applyCalciteMode(normalizedTheme);
+  applyArcgisTheme(normalizedTheme);
+  applyAttributionTheme(view, normalizedTheme);
+  writeStoredTheme(normalizedTheme);
 }
 
 export function getStoredTheme() {
-  return localStorage.getItem(THEME_STORAGE_KEY) || themes.light;
+  if (!isPreferencePersistenceEnabled(PREFERENCE_PERSISTENCE_KEY.THEME)) {
+    return themes.light;
+  }
+
+  try {
+    return normalizeTheme(localStorage.getItem(THEME_STORAGE_KEY));
+  } catch (error) {
+    console.warn("Failed to read theme preference.", error);
+    return themes.light;
+  }
+}
+
+export function getCurrentTheme() {
+  return document.documentElement.classList.contains("calcite-mode-dark")
+    ? themes.dark
+    : themes.light;
 }
 
 export function initializeTheme(view = null) {
@@ -73,7 +109,31 @@ export function initializeTheme(view = null) {
 }
 
 export function toggleTheme(view = null) {
-  const nextTheme = getStoredTheme() === themes.dark ? themes.light : themes.dark;
+  const nextTheme = getCurrentTheme() === themes.dark ? themes.light : themes.dark;
   applyTheme(nextTheme, view);
   return nextTheme;
+}
+
+function normalizeTheme(theme) {
+  return theme === themes.dark ? themes.dark : themes.light;
+}
+
+function writeStoredTheme(theme) {
+  if (!isPreferencePersistenceEnabled(PREFERENCE_PERSISTENCE_KEY.THEME)) {
+    return;
+  }
+
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, normalizeTheme(theme));
+  } catch (error) {
+    console.warn("Failed to save theme preference.", error);
+  }
+}
+
+function removeStoredTheme() {
+  try {
+    localStorage.removeItem(THEME_STORAGE_KEY);
+  } catch (error) {
+    console.warn("Failed to remove theme preference.", error);
+  }
 }

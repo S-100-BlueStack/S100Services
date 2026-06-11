@@ -3,6 +3,42 @@ import { resetMapViewpoint } from "../../map/state/mapViewpointPersistence.js";
 import { resetDisplayScaleHidingPreference } from "../../map/scale/displayScaleOverrideState.js";
 import { resetThemePreference } from "../../themes/themeService.js";
 import { syncThemeToggle } from "../../themes/themeToggle.js";
+import {
+  PREFERENCE_PERSISTENCE_KEY,
+  getPreferencePersistenceState,
+  setPreferencePersistenceEnabled,
+} from "../state/preferencePersistenceState.js";
+
+const PREFERENCE_ITEMS = [
+  {
+    key: PREFERENCE_PERSISTENCE_KEY.MAP_VIEWPOINT,
+    resetAction: "reset-map-view",
+    title: "Map view",
+    description: "Save center, scale and rotation in this browser.",
+    resetLabel: "Reset",
+  },
+  {
+    key: PREFERENCE_PERSISTENCE_KEY.ATTRIBUTE_FILTERS,
+    resetAction: "reset-filters",
+    title: "Filters",
+    description: "Save active attribute filters in this browser.",
+    resetLabel: "Reset",
+  },
+  {
+    key: PREFERENCE_PERSISTENCE_KEY.DISPLAY_SCALE_OVERRIDE,
+    resetAction: "reset-display-scale",
+    title: "Display scale setting",
+    description: "Save the display-scale hiding setting in this browser.",
+    resetLabel: "Reset",
+  },
+  {
+    key: PREFERENCE_PERSISTENCE_KEY.THEME,
+    resetAction: "reset-theme",
+    title: "Theme",
+    description: "Save light or dark mode in this browser.",
+    resetLabel: "Reset",
+  },
+];
 
 export function initPreferencesPanel({ view, filterPanel } = {}) {
   const button = ensurePreferencesButton();
@@ -20,43 +56,8 @@ export function initPreferencesPanel({ view, filterPanel } = {}) {
   panel.hidden = true;
   panel.setAttribute("aria-label", "Preferences");
 
-  panel.innerHTML = `
-    <div class="pm-preferences-panel__header">
-      <div>
-        <h2>Preferences</h2>
-        <p>Reset saved frontend preferences for this browser.</p>
-      </div>
-    </div>
-
-    <div class="pm-preferences-panel__content">
-      <button type="button" class="pm-preferences-panel__action" data-preference-action="reset-map-view">
-        <span>Reset map view</span>
-        <small>Clear saved center, scale and rotation.</small>
-      </button>
-
-      <button type="button" class="pm-preferences-panel__action" data-preference-action="reset-filters">
-        <span>Reset filters</span>
-        <small>Clear active attribute filters.</small>
-      </button>
-
-      <button type="button" class="pm-preferences-panel__action" data-preference-action="reset-display-scale">
-        <span>Reset display scale setting</span>
-        <small>Use the default display-scale hiding behavior.</small>
-      </button>
-
-      <button type="button" class="pm-preferences-panel__action" data-preference-action="reset-theme">
-        <span>Reset theme</span>
-        <small>Switch back to light mode.</small>
-      </button>
-
-      <button type="button" class="pm-preferences-panel__action pm-preferences-panel__action--danger" data-preference-action="reset-all">
-        <span>Reset all preferences</span>
-        <small>Reset map view, filters, display scale setting and theme.</small>
-      </button>
-    </div>
-  `;
-
   document.body.append(panel);
+  render();
 
   function isOpen() {
     return !panel.hidden;
@@ -67,8 +68,35 @@ export function initPreferencesPanel({ view, filterPanel } = {}) {
     button.toggleAttribute("active", open);
 
     if (open) {
+      render();
       positionPanel(button, panel);
     }
+  }
+
+  function render() {
+    const persistenceState = getPreferencePersistenceState();
+
+    panel.innerHTML = `
+      <div class="pm-preferences-panel__header">
+        <div>
+          <h2>Preferences</h2>
+          <p>Manage saved frontend preferences for this browser.</p>
+        </div>
+      </div>
+
+      <div class="pm-preferences-panel__content">
+        ${PREFERENCE_ITEMS.map((item) => renderPreferenceItem(item, persistenceState)).join("")}
+
+        <button
+          type="button"
+          class="pm-preferences-panel__reset-all"
+          data-preference-action="reset-all"
+        >
+          <span>Reset all preferences</span>
+          <small>Reset map view, filters, display scale setting and theme.</small>
+        </button>
+      </div>
+    `;
   }
 
   async function handleAction(action) {
@@ -108,6 +136,22 @@ export function initPreferencesPanel({ view, filterPanel } = {}) {
     }
   }
 
+  function handlePersistenceToggle(key, enabled) {
+    const didChange = setPreferencePersistenceEnabled(key, enabled);
+
+    if (!didChange) {
+      return;
+    }
+
+    const item = PREFERENCE_ITEMS.find((entry) => entry.key === key);
+    const label = item?.title ?? "Preference";
+    const stateLabel = enabled ? "enabled" : "disabled";
+
+    noticeSuccess(`${label} persistence ${stateLabel}`, null, {
+      countAsUnread: false,
+    });
+  }
+
   button.addEventListener("click", (event) => {
     event.stopPropagation();
     setOpen(!isOpen());
@@ -116,7 +160,7 @@ export function initPreferencesPanel({ view, filterPanel } = {}) {
   panel.addEventListener("click", (event) => {
     event.stopPropagation();
 
-    const target = event.target instanceof Element ? event.target : null;
+    const target = getTargetElement(event);
     const actionButton = target?.closest("[data-preference-action]");
 
     if (!actionButton) {
@@ -126,8 +170,21 @@ export function initPreferencesPanel({ view, filterPanel } = {}) {
     void handleAction(actionButton.dataset.preferenceAction);
   });
 
+  panel.addEventListener("calciteSwitchChange", (event) => {
+    event.stopPropagation();
+
+    const target = getTargetElement(event);
+    const switchElement = target?.closest("calcite-switch[data-preference-persistence-key]");
+
+    if (!switchElement) {
+      return;
+    }
+
+    handlePersistenceToggle(switchElement.dataset.preferencePersistenceKey, switchElement.checked);
+  });
+
   document.addEventListener("click", (event) => {
-    const target = event.target instanceof Element ? event.target : null;
+    const target = getTargetElement(event);
 
     if (!target || panel.hidden) {
       return;
@@ -154,6 +211,34 @@ export function initPreferencesPanel({ view, filterPanel } = {}) {
       button.remove();
     },
   };
+}
+
+function renderPreferenceItem(item, persistenceState) {
+  const checked = persistenceState[item.key] !== false;
+
+  return `
+    <section class="pm-preferences-panel__item">
+      <div class="pm-preferences-panel__copy">
+        <h3>${escapeHtml(item.title)}</h3>
+        <p>${escapeHtml(item.description)}</p>
+      </div>
+
+      <calcite-switch
+        class="pm-preferences-panel__switch"
+        data-preference-persistence-key="${escapeHtml(item.key)}"
+        label="${escapeHtml(`Save ${item.title.toLowerCase()} in this browser`)}"
+        ${checked ? "checked" : ""}
+      ></calcite-switch>
+
+      <button
+        type="button"
+        class="pm-preferences-panel__reset"
+        data-preference-action="${escapeHtml(item.resetAction)}"
+      >
+        ${escapeHtml(item.resetLabel)}
+      </button>
+    </section>
+  `;
 }
 
 function ensurePreferencesButton() {
@@ -186,4 +271,22 @@ function positionPanel(button, panel) {
 
   panel.style.top = `${rect.bottom + 8}px`;
   panel.style.right = `${Math.max(12, window.innerWidth - rect.right)}px`;
+}
+
+function getTargetElement(event) {
+  return event.target instanceof Element ? event.target : null;
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => {
+    const entities = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    };
+
+    return entities[character];
+  });
 }

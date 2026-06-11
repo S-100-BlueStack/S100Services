@@ -1,4 +1,4 @@
-import { getStoredTheme, themes, toggleTheme } from "./themeService.js";
+import { getCurrentTheme, themes, toggleTheme } from "./themeService.js";
 
 export function registerThemeToggle(view = null) {
   const button = document.getElementById("theme-toggle");
@@ -23,7 +23,7 @@ export function syncThemeToggle() {
 }
 
 function updateThemeToggle(button) {
-  const isDark = getStoredTheme() === themes.dark;
+  const isDark = getCurrentTheme() === themes.dark;
   const nextThemeLabel = isDark ? "Switch to light mode" : "Switch to dark mode";
   const nextThemeIcon = isDark ? "brightness" : "moon";
 

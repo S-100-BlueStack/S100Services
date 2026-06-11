@@ -1,4 +1,5 @@
 const PREFERENCE_PERSISTENCE_STORAGE_KEY = "pm.preferences.persistence.v1";
+const PREFERENCE_PERSISTENCE_CHANGE_EVENT = "pm-preference-persistence-change";
 
 export const PREFERENCE_PERSISTENCE_KEY = Object.freeze({
   MAP_VIEWPOINT: "mapViewpoint",
@@ -14,8 +15,6 @@ const DEFAULT_PERSISTENCE_STATE = Object.freeze({
   [PREFERENCE_PERSISTENCE_KEY.THEME]: true,
 });
 
-const PREFERENCE_PERSISTENCE_CHANGE_EVENT = "pm-preference-persistence-change";
-
 let persistenceState = readPersistenceState();
 
 export function getPreferencePersistenceState() {
@@ -29,27 +28,28 @@ export function isPreferencePersistenceEnabled(key) {
 }
 
 export function setPreferencePersistenceEnabled(key, enabled) {
-  if (!Object.hasOwn(DEFAULT_PERSISTENCE_STATE, key)) {
+  if (!hasPersistenceKey(key)) {
     return false;
   }
 
-  const nextState = {
+  const nextEnabled = Boolean(enabled);
+
+  if (persistenceState[key] === nextEnabled) {
+    return false;
+  }
+
+  persistenceState = {
     ...persistenceState,
-    [key]: Boolean(enabled),
+    [key]: nextEnabled,
   };
 
-  if (persistenceState[key] === nextState[key]) {
-    return false;
-  }
-
-  persistenceState = nextState;
   writePersistenceState(persistenceState);
 
   document.dispatchEvent(
     new CustomEvent(PREFERENCE_PERSISTENCE_CHANGE_EVENT, {
       detail: {
         key,
-        enabled: persistenceState[key],
+        enabled: nextEnabled,
         state: getPreferencePersistenceState(),
       },
     })
@@ -115,4 +115,8 @@ function normalizePersistenceState(value) {
   }
 
   return state;
+}
+
+function hasPersistenceKey(key) {
+  return Object.prototype.hasOwnProperty.call(DEFAULT_PERSISTENCE_STATE, key);
 }

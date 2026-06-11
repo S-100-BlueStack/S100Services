@@ -2,6 +2,11 @@ import "@esri/calcite-components/components/calcite-slider";
 import { formatAttributeDisplayValue } from "../attributes/attributeDisplay.js";
 import { ATTRIBUTE_FILTER_CONFIG } from "./attributeFilterConfig.js";
 import { setDisplayScaleHidingDisabled } from "../scale/displayScaleOverrideState.js";
+import {
+  PREFERENCE_PERSISTENCE_KEY,
+  isPreferencePersistenceEnabled,
+  onPreferencePersistenceChanged,
+} from "../../preferences/state/preferencePersistenceState.js";
 
 function readSavedFilterSnapshot() {
   try {
@@ -29,6 +34,10 @@ function readSavedFilterSnapshot() {
 }
 
 function writeFilterSnapshot(filterService) {
+  if (!isPreferencePersistenceEnabled(PREFERENCE_PERSISTENCE_KEY.ATTRIBUTE_FILTERS)) {
+    return;
+  }
+
   try {
     window.localStorage.setItem(
       ATTRIBUTE_FILTER_CONFIG.storageKey,
@@ -489,6 +498,19 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
 
   document.body.append(panel);
 
+  const persistenceHandle = onPreferencePersistenceChanged(({ key, enabled }) => {
+    if (key !== PREFERENCE_PERSISTENCE_KEY.ATTRIBUTE_FILTERS) {
+      return;
+    }
+
+    if (!enabled) {
+      removeSavedFilterSnapshot();
+      return;
+    }
+
+    writeFilterSnapshot(filterService);
+  });
+
   function clearAllFilters() {
     filterService.clearAll();
     writeFilterSnapshot(filterService);
@@ -508,7 +530,12 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
     }
 
     const savedFilterState = readSavedFilterSnapshot();
-
+    if (!isPreferencePersistenceEnabled(PREFERENCE_PERSISTENCE_KEY.ATTRIBUTE_FILTERS)) {
+      return {
+        exists: false,
+        snapshot: null,
+      };
+    }
     if (savedFilterState.exists) {
       const didApplySavedState = filterService.applyFilterSnapshot(savedFilterState.snapshot);
 
@@ -792,5 +819,10 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
     refresh: render,
     close: () => setOpen(false),
     clearAllFilters,
+
+    destroy() {
+      persistenceHandle?.remove?.();
+      panel.remove();
+    },
   };
 }

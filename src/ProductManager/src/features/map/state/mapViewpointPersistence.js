@@ -1,5 +1,9 @@
 import { watch } from "@arcgis/core/core/reactiveUtils.js";
-
+import {
+  PREFERENCE_PERSISTENCE_KEY,
+  isPreferencePersistenceEnabled,
+  onPreferencePersistenceChanged,
+} from "../../preferences/state/preferencePersistenceState.js";
 const MAP_VIEWPOINT_STORAGE_KEY = "pm:main-map-viewpoint:v1";
 const SAVE_DEBOUNCE_MS = 300;
 
@@ -30,9 +34,24 @@ export function bindMapViewpointPersistence(view) {
         return;
       }
 
-      scheduleSave(view);
+      scheduleSave();
     }
   );
+
+  const persistenceHandle = onPreferencePersistenceChanged(({ key, enabled }) => {
+    if (key !== PREFERENCE_PERSISTENCE_KEY.MAP_VIEWPOINT) {
+      return;
+    }
+
+    if (!enabled) {
+      window.clearTimeout(saveTimeoutId);
+      saveTimeoutId = null;
+      clearStoredMapViewpoint();
+      return;
+    }
+
+    scheduleSave();
+  });
 
   function scheduleSave() {
     window.clearTimeout(saveTimeoutId);
@@ -51,6 +70,7 @@ export function bindMapViewpointPersistence(view) {
     remove() {
       window.clearTimeout(saveTimeoutId);
       stationaryHandle?.remove?.();
+      persistenceHandle?.remove?.();
     },
   };
 }
@@ -95,6 +115,10 @@ export function clearStoredMapViewpoint() {
 }
 
 async function restoreMapViewpoint(view) {
+  if (!isPreferencePersistenceEnabled(PREFERENCE_PERSISTENCE_KEY.MAP_VIEWPOINT)) {
+    return false;
+  }
+
   const storedViewpoint = readStoredMapViewpoint();
 
   if (!storedViewpoint) {
@@ -123,6 +147,9 @@ async function restoreMapViewpoint(view) {
 }
 
 function saveMapViewpoint(view) {
+  if (!isPreferencePersistenceEnabled(PREFERENCE_PERSISTENCE_KEY.MAP_VIEWPOINT)) {
+    return false;
+  }
   const viewpoint = createStoredMapViewpoint(view);
 
   if (!viewpoint) {
