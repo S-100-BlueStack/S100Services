@@ -63,9 +63,9 @@ export function registerConfirmDialog() {
     });
   });
 
-  cancelButton.addEventListener("click", (event) => {
+  cancelButton.addEventListener("click", () => {
     closeActivePopover(false, {
-      visibleFocus: event.detail === 0,
+      visibleFocus: true,
     });
   });
 
