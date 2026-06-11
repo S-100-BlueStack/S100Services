@@ -448,3 +448,7 @@ dist-ssr
 /src/ProductCatalogueAPI/exports
 /src/ProductCatalogueAPI/config
 /src/ProductCatalogueAPI/appsettings.Development.json
+/src/ProductManager/fh013-boundary-hints.txt
+/src/ProductManager/fh013-file-list.txt
+/src/ProductManager/fh013-imports.txt
+/src/ProductManager/fh013-context.txt
