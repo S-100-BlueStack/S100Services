@@ -16,6 +16,7 @@ import {
 import { createAttributeFilterService } from "../features/map/filters/attributeFilterService.js";
 import { initAttributeFilterPanel } from "../features/map/filters/attributeFilterPanel.js";
 import { initProductHistoryPanel } from "../features/timeline/ui/productHistoryPanel.js";
+import { bindMapViewpointPersistence } from "../features/map/state/mapViewpointPersistence.js";
 
 function updateLastUpdated(date = new Date()) {
   const el = document.getElementById("last-updated");
@@ -49,6 +50,7 @@ function readLastUpdatedStatus() {
 export function initMap() {
   const map = createMap();
   const view = createView(map);
+  const mapViewpointPersistence = bindMapViewpointPersistence(view);
   const hoverManager = createHoverManager(view);
 
   let previousLastUpdatedStatus = "";
@@ -148,5 +150,6 @@ export function initMap() {
     applyMapVisibility,
     bindMapVisibility,
     updateLastUpdated,
+    mapViewpointPersistence,
   };
 }
