@@ -1,14 +1,13 @@
+import { dataLayerSources } from "../config/dataLayerSources.js";
 import { loadStatuses } from "../stores/statusStore.js";
 import { loadUsages } from "../stores/usageStore.js";
-import { layerConfigs } from "../../map/config/layerConfigs.js";
-import { apiGet } from "../../../shared/api/apiClient.js";
 
 export async function loadAppData() {
   await Promise.all([loadStatuses(), loadUsages()]);
 
   const layers = await Promise.all(
-    layerConfigs.map(async (config) => {
-      const { fetch, ...layerConfig } = config;
+    dataLayerSources.map(async (source) => {
+      const { fetch, ...layerConfig } = source;
       const data = await fetch();
 
       return {
@@ -19,12 +18,4 @@ export async function loadAppData() {
   );
 
   return { layers };
-}
-
-export async function fetchGeoJson() {
-  return await apiGet("mock/products", "GeoJSON request failed");
-}
-
-export async function fetchAOI() {
-  return await apiGet("electronicproducts/aoi", "AOI request failed");
 }

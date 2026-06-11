@@ -1,11 +1,8 @@
-import { fetchAOI } from "../../data/services/dataLoader.js";
-import { PRODUCT_CORRECTIONS_LAYER_ID, getLayerDefinition } from "./layerDefinitions.js";
+import { PRODUCT_CORRECTIONS_LAYER_ID } from "../../../shared/config/layerIds.js";
+import { fetchAOI } from "../api/layerDataApi.js";
 
-const productCorrectionsLayer = getLayerDefinition(PRODUCT_CORRECTIONS_LAYER_ID);
-
-export const layerConfigs = [
+export const dataLayerSources = [
   {
-    ...(productCorrectionsLayer ?? {}),
     id: PRODUCT_CORRECTIONS_LAYER_ID,
     type: "graphics",
     dataFormat: "esri-json",

@@ -1,19 +1,17 @@
-import { isStatusFrozen } from "../../map/state/featureState.js";
-
 const MISSING_DATASET_NAME_REASON = "The selected feature does not have a datasetName.";
 const EXPORT_RUNNING_REASON = "Wait until the current export finishes.";
 const PRODUCT_OPERATION_RUNNING_REASON = "Wait until the current product operation finishes.";
 
 export function createProductActionAvailability({
   attributes,
-  frozen,
+  frozen = false,
   exportHasRunningAction = false,
   productHasRunningMutation = false,
   productOperationDisabledReason = PRODUCT_OPERATION_RUNNING_REASON,
 } = {}) {
   const datasetName = getDatasetName(attributes);
   const hasDatasetName = Boolean(datasetName);
-  const productIsFrozen = frozen ?? isStatusFrozen(attributes?.status);
+  const productIsFrozen = Boolean(frozen);
 
   const mutationContext = {
     hasDatasetName,
@@ -45,7 +43,7 @@ export function createProductActionAvailability({
 
 export function createProductExportAvailability({
   attributes,
-  frozen,
+  frozen = false,
   implemented,
   exportState,
   productHasRunningMutation = false,
@@ -53,7 +51,7 @@ export function createProductExportAvailability({
 } = {}) {
   const datasetName = getDatasetName(attributes);
   const hasDatasetName = Boolean(datasetName);
-  const productIsFrozen = frozen ?? isStatusFrozen(attributes?.status);
+  const productIsFrozen = Boolean(frozen);
 
   if (!hasDatasetName) {
     return unavailable(MISSING_DATASET_NAME_REASON);

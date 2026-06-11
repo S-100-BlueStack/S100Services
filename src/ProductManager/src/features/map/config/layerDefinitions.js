@@ -1,8 +1,10 @@
+import { PRODUCT_CORRECTIONS_LAYER_ID } from "../../../shared/config/layerIds.js";
+
+export { PRODUCT_CORRECTIONS_LAYER_ID };
+
 export const LAYER_KINDS = Object.freeze({
   PRODUCT_CORRECTIONS: "product-corrections",
 });
-
-export const PRODUCT_CORRECTIONS_LAYER_ID = "aoi";
 
 const DEFAULT_LAYER_CAPABILITIES = Object.freeze({
   supportsPopup: false,
