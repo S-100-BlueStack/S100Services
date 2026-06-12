@@ -456,3 +456,5 @@ dist-ssr
 /src/ProductManager/fh025-usage.txt
 /src/ProductManager/fh026-storage-usage.txt
 /src/ProductManager/fh027-analyze-usage.txt
+/src/ProductManager/fh006-class-usage.txt
+/src/ProductManager/fh006-file-list.txt
