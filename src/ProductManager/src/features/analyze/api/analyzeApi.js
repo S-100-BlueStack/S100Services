@@ -38,60 +38,65 @@ function normalizeAnalyzeProduct(
   requestedDatasetName,
   { isMock = false, loadError = null } = {}
 ) {
-  const data = payload?.Data ?? payload?.data ?? {};
+  const product = getAnalyzeProductPayload(payload);
+  const datasetName =
+    readFirstDefined(product, ["datasetName", "DatasetName", "name", "Name"]) ??
+    requestedDatasetName;
 
   return {
-    datasetName:
-      payload?.DatasetName ??
-      payload?.datasetName ??
-      data?.DatasetName ??
-      data?.datasetName ??
-      requestedDatasetName,
+    datasetName,
+    name: datasetName,
 
     status: normalizeStatus(
-      payload?.Status ??
-        payload?.status ??
-        payload?.ProductStateId ??
-        payload?.productStateId ??
-        data?.Status ??
-        data?.status ??
-        4
+      readFirstDefined(product, ["status", "Status", "productState", "ProductState"]) ?? 4
     ),
 
-    edition: payload?.Edition ?? payload?.edition ?? data?.Edition ?? data?.edition ?? "-",
-    update: payload?.Update ?? payload?.update ?? data?.Update ?? data?.update ?? "-",
+    edition: readFirstDefined(product, ["edition", "Edition"]) ?? "-",
+    update: readFirstDefined(product, ["update", "Update", "updateNumber", "UpdateNumber"]) ?? "-",
+    usageBand: readFirstDefined(product, ["usageBand", "UsageBand"]) ?? "-",
+    issueDate: readFirstDefined(product, ["issueDate", "IssueDate"]) ?? "-",
 
-    // Keep backend/product messages separate from transport/load warnings.
-    // The sidebar renders `loadError` as a dedicated "Load warning" row.
-    errorMessage:
-      payload?.ErrorMessage ??
-      payload?.errorMessage ??
-      payload?.Message ??
-      payload?.message ??
-      data?.ErrorMessage ??
-      data?.errorMessage ??
-      "",
+    // Only read the top-level product error message. Do not read Data.Exports[*].
+    errorMessage: readFirstDefined(product, ["errorMessage", "ErrorMessage"]) ?? "",
 
+    // These are optional. Current backend response may not include them.
     aoiGeometry:
-      data?.Aoi ?? data?.AOI ?? data?.aoi ?? payload?.Aoi ?? payload?.AOI ?? payload?.aoi ?? null,
+      readFirstDefined(product, ["aoiGeometry", "AoiGeometry", "aoi", "Aoi", "AOI"]) ?? null,
 
-    xml:
-      data?.Xml ??
-      data?.XML ??
-      data?.xml ??
-      data?.ReportXml ??
-      data?.reportXml ??
-      payload?.Xml ??
-      payload?.XML ??
-      payload?.xml ??
-      payload?.ReportXml ??
-      payload?.reportXml ??
-      null,
+    xml: readFirstDefined(product, ["xml", "Xml", "XML", "reportXml", "ReportXml"]) ?? null,
 
     raw: payload,
     isMock,
     loadError,
   };
+}
+
+function getAnalyzeProductPayload(payload) {
+  const data = payload?.Data ?? payload?.data;
+
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    return data;
+  }
+
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    return payload;
+  }
+
+  return {};
+}
+
+function readFirstDefined(source, keys) {
+  if (!source || typeof source !== "object") {
+    return undefined;
+  }
+
+  for (const key of keys) {
+    if (Object.hasOwn(source, key) && source[key] !== undefined && source[key] !== null) {
+      return source[key];
+    }
+  }
+
+  return undefined;
 }
 
 function normalizeStatus(value) {
@@ -104,16 +109,32 @@ function createMockAnalyzeProduct(datasetName) {
   const geometry = createMockAoiGeometry(datasetName);
 
   return {
-    DatasetName: datasetName,
-    Status: 4,
-    Edition: "1",
-    Update: "0",
-    ErrorMessage:
-      "Demo IC-ENC rejection message. Replace this when the backend report payload is ready.",
     Data: {
+      Name: datasetName,
+      Status: 4,
+      Edition: 1,
+      Update: 0,
+      UsageBand: 1,
+      IssueDate: "2026-05-29",
+      ErrorMessage:
+        "Demo IC-ENC rejection message. Replace this when the backend report payload is ready.",
       Aoi: JSON.stringify(geometry),
       Xml: createMockXml(datasetName),
+      Exports: [
+        {
+          Type: "S-57",
+          Name: datasetName,
+          Edition: 1,
+          Update: 0,
+          Status: 4,
+          Date: "2026-05-29T00:00:00",
+          ErrorMessage: null,
+        },
+      ],
     },
+    Success: true,
+    Message: null,
+    TotalHits: 1,
   };
 }
 

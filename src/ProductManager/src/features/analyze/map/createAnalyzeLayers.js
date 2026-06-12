@@ -38,6 +38,8 @@ function createAnalyzeFeature(product, index) {
       edition: product.edition,
       update: product.update,
       status: product.status,
+      usageBand: product.usageBand,
+      issueDate: product.issueDate,
       errorMessage: product.errorMessage,
       featureKey: `analyze:${product.datasetName}:${index}`,
     },

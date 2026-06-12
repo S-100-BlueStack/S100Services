@@ -224,6 +224,8 @@ function createProductCard(product) {
   rows.appendChild(createInfoRow("Edition", product.edition));
   rows.appendChild(createInfoRow("Update", product.update));
   rows.appendChild(createInfoRow("Status", getStatusName(product.status)));
+  rows.appendChild(createInfoRow("Usage band", product.usageBand));
+  rows.appendChild(createInfoRow("Issue date", product.issueDate));
   rows.appendChild(createInfoRow("AOI geometry", product.aoiGeometry ? "Loaded" : "Missing"));
 
   if (product.errorMessage) {

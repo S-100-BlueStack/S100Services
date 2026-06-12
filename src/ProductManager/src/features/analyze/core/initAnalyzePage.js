@@ -102,18 +102,25 @@ export async function initAnalyzePage({ datasetNames }) {
 
       showMockWarningIfNeeded(products);
 
-      await waitForLayerViews(view, layers);
+      if (layers.length > 0) {
+        await waitForLayerViews(view, layers);
 
-      if (requestId !== loadRequestId) {
-        return;
-      }
+        if (requestId !== loadRequestId) {
+          return;
+        }
 
-      const didZoom = await zoomToGraphicsExtent(view, layers);
+        const didZoom = await zoomToGraphicsExtent(view, layers);
 
-      if (!didZoom) {
-        noticeError(
-          "Analyze geometry not found",
-          "The product was loaded, but no AOI geometry could be rendered on the map."
+        if (!didZoom) {
+          noticeWarning(
+            "Analyze geometry not found",
+            "The product metadata was loaded, but no AOI geometry could be rendered on the map."
+          );
+        }
+      } else if (products.length > 0) {
+        noticeWarning(
+          "Analyze geometry unavailable",
+          "The product metadata was loaded, but the backend response did not include AOI geometry."
         );
       }
 
