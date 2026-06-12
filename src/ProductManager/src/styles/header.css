@@ -1,0 +1,136 @@
+﻿/* =========================================================
+   Header / navbar
+   ========================================================= */
+
+#header {
+  display: flex;
+  align-items: center;
+  height: 50px;
+  padding: 0 12px;
+  gap: 18px;
+  background-color: #456178;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.header-center {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 30px;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+#header calcite-action {
+  border-radius: 10px;
+  --calcite-color-foreground-1: transparent;
+  --calcite-color-text-3: white;
+  --calcite-action-background-color-hover: rgba(255, 255, 255, 0.25);
+  --calcite-action-text-color-press: white;
+}
+
+#header calcite-action:hover {
+  --calcite-color-foreground-1: white;
+  --calcite-action-background-color-hover: rgba(255, 255, 255, 0.25);
+}
+
+#notification-count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  line-height: 1;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #e74c3c;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.notification-wrapper {
+  position: relative;
+}
+
+#notification-button[active] {
+  --calcite-color-foreground-1: rgb(255, 255, 255);
+}
+
+#refresh-button[active] {
+  --calcite-color-foreground-1: rgb(255, 255, 255);
+}
+
+.navbar-title-link,
+.navbar-title-link:visited {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 2px;
+  color: inherit;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.navbar-title-link:hover,
+.navbar-title-link:focus,
+.navbar-title-link:active {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.navbar-switch-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 8px;
+  color: #ffffff;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.navbar-switch-control:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.navbar-switch-control__label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  color: #ffffff;
+}
+
+#display-scale-toggle {
+  --calcite-switch-track-color: rgba(255, 255, 255, 0.35);
+  --calcite-switch-track-color-hover: rgba(255, 255, 255, 0.45);
+  --calcite-switch-track-color-checked: #ffffff;
+  --calcite-switch-handle-color: #ffffff;
+  --calcite-switch-handle-color-checked: #456178;
+}
+
+.pm-analyze-route #display-scale-toggle-wrapper {
+  display: none;
+}
+

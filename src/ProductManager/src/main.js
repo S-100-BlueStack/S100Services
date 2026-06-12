@@ -13,7 +13,7 @@ import "@esri/calcite-components/components/calcite-switch";
 // import "@arcgis/core/assets/esri/css/main.css";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "@esri/calcite-components/main.css";
-import "./style.css";
+import "./styles/index.css";
 
 import { bootstrap } from "./app/bootstrap.js";
 

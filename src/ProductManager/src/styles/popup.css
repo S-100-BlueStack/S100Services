@@ -1,0 +1,155 @@
+﻿/* =========================================================
+   Popup content
+   These are your own popup DOM nodes, so styling them here is stable.
+   ========================================================= */
+
+.popup-container {
+  color: var(--pm-popup-text);
+}
+
+.popup-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: inherit;
+}
+
+.popup-row {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--pm-popup-border);
+}
+
+.popup-row:last-child {
+  border-bottom: none;
+}
+
+.popup-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pm-popup-text-muted);
+}
+
+.popup-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pm-popup-text);
+  word-break: break-word;
+}
+
+.esri-popup__content:has(.popup-container--with-action-bar) {
+  padding: 0;
+}
+
+.popup-container--with-action-bar {
+  /*
+   * Esri wraps popup content with internal padding. Pulling the custom
+   * action area back out makes it sit flush under the popup header.
+   */
+  margin: -12px -10px 0;
+}
+
+.popup-container--with-action-bar .popup-section {
+  padding: 6px 10px;
+}
+
+.popup-action-bar {
+  --pm-popup-focus-ring: var(--calcite-color-focus, var(--calcite-color-brand, #0079c1));
+
+  background: var(--pm-popup-surface);
+  border-bottom: 1px solid var(--pm-popup-border);
+}
+
+.popup-action-bar__row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-height: 40px;
+  padding: 4px;
+  background: var(--pm-popup-surface);
+}
+
+.popup-action-bar__row + .popup-action-bar__row {
+  border-top: 1px solid color-mix(in srgb, var(--pm-popup-border) 70%, transparent);
+}
+
+.popup-action-bar__action {
+  /*
+   * calcite-action renders its own focus ring inside Shadow DOM.
+   * Popup actions use a shared host-level visible focus policy instead,
+   * so the internal Calcite ring is disabled here to avoid double outlines.
+   */
+  --calcite-color-focus: transparent;
+
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
+  min-height: 32px;
+  margin: 0;
+  padding: 6px 8px;
+  color: var(--pm-popup-text);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.popup-action-bar__action:hover {
+  background: var(--pm-popup-surface-alt);
+}
+
+.popup-action-bar__action:focus {
+  outline: none;
+}
+
+.popup-action-bar__action:not([disabled]):not([aria-disabled="true"]).is-visible-focused {
+  --calcite-action-background-color: var(--pm-popup-surface-alt);
+  --calcite-action-background-color-hover: var(--pm-popup-surface-alt);
+  --calcite-action-background-color-press: var(--pm-popup-surface-alt);
+
+  background: var(--pm-popup-surface-alt);
+  box-shadow: inset 0 0 0 2px var(--pm-popup-focus-ring);
+}
+
+.popup-action-bar__action:disabled,
+.popup-action-bar__action[disabled],
+.popup-action-bar__action[aria-disabled="true"] {
+  color: var(--pm-popup-text-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.popup-action-bar__icon {
+  flex: 0 0 auto;
+}
+
+.popup-action-bar__label {
+  display: inline-block;
+  min-width: 0;
+}
+
+.popup-action-bar__action[data-popup-action-id="freeze-feature"] {
+  --calcite-ui-icon-color: #0d6efd;
+  --calcite-action-icon-color: #0d6efd;
+}
+
+.popup-action-bar__action[data-popup-action-id="unfreeze-feature"] {
+  --calcite-ui-icon-color: #fd7e14;
+  --calcite-action-icon-color: #fd7e14;
+}
+
+.popup-action-bar__action[data-popup-action-id="send-immediately"],
+.popup-action-bar__action[data-popup-action-id="export"],
+.popup-action-bar__action[data-popup-action-id="tools"] {
+  --calcite-ui-icon-color: var(--pm-popup-text);
+  --calcite-action-icon-color: var(--pm-popup-text);
+}
+

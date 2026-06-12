@@ -1,0 +1,319 @@
+﻿/* =========================================================
+   Filter panel
+   The panel is plain DOM instead of a Calcite overlay, so it needs
+   stronger surface, spacing, and interaction styling to match the app.
+   ========================================================= */
+
+.filter-wrapper {
+  position: relative;
+}
+
+#filter-button[active] {
+  --calcite-color-foreground-1: rgb(255, 255, 255);
+}
+
+#filter-count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  line-height: 1;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #e74c3c;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.pm-filter-panel {
+  position: fixed;
+  z-index: 1300;
+  width: min(380px, calc(100vw - 24px));
+  max-height: min(640px, calc(100vh - 76px));
+  overflow: hidden;
+  color: var(--pm-text);
+  background: var(--pm-surface);
+  border: 1px solid var(--pm-border);
+  border-radius: 10px;
+  box-shadow: var(--pm-shadow);
+}
+
+.pm-filter-panel[hidden] {
+  display: none;
+}
+
+.pm-filter-panel::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  right: 17px;
+  width: 12px;
+  height: 12px;
+  background: var(--pm-surface);
+  border-top: 1px solid var(--pm-border);
+  border-left: 1px solid var(--pm-border);
+  transform: rotate(45deg);
+}
+
+.pm-filter-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px 12px;
+  background: var(--pm-surface);
+  border-bottom: 1px solid var(--pm-border);
+}
+
+.pm-filter-panel__header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.pm-filter-panel__header p,
+.pm-filter-empty {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--pm-text-muted);
+}
+
+.pm-filter-clear-all,
+.pm-filter-field__actions button {
+  border: 0;
+  padding: 0;
+  color: var(--calcite-color-brand, #0079c1);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.pm-filter-clear-all {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.pm-filter-clear-all:hover,
+.pm-filter-field__actions button:hover {
+  color: var(--calcite-color-brand-hover, #00619b);
+  text-decoration: underline;
+}
+
+.pm-filter-layer {
+  padding: 12px 14px 14px;
+  overflow: auto;
+}
+
+.pm-filter-layer + .pm-filter-layer {
+  border-top: 1px solid var(--pm-border);
+}
+
+.pm-filter-layer h3 {
+  margin: 0 0 8px;
+  color: var(--pm-text);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.pm-filter-field {
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.pm-filter-field + .pm-filter-field {
+  margin-top: 4px;
+}
+
+.pm-filter-field[open] {
+  margin: 8px 0;
+  background: var(--pm-surface-alt);
+  border-color: var(--pm-border);
+}
+
+.pm-filter-field summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 8px;
+  color: var(--pm-text);
+  cursor: pointer;
+  list-style: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.pm-filter-field summary::-webkit-details-marker {
+  display: none;
+}
+
+.pm-filter-field summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--pm-text-muted);
+  border-bottom: 1.5px solid var(--pm-text-muted);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 120ms ease;
+}
+
+.pm-filter-field[open] summary::after {
+  transform: rotate(225deg) translate(-1px, -1px);
+}
+
+.pm-filter-field summary:hover {
+  background: var(--pm-surface-alt);
+}
+
+.pm-filter-field[open] summary:hover {
+  background: transparent;
+}
+
+.pm-filter-field__summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  padding: 2px 7px;
+  color: var(--pm-text-muted);
+  background: var(--pm-surface);
+  border: 1px solid var(--pm-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.pm-filter-value__count {
+  min-width: 34px;
+  padding: 2px 6px;
+  color: var(--pm-text-muted);
+  background: var(--pm-surface);
+  border: 1px solid var(--pm-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.pm-filter-field__actions {
+  display: flex;
+  gap: 12px;
+  padding: 2px 10px 8px;
+}
+
+.pm-filter-values {
+  display: grid;
+  gap: 2px;
+  padding: 0 6px 8px;
+}
+
+.pm-filter-value {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 30px;
+  margin: 0;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.pm-filter-value:hover {
+  background: var(--pm-surface);
+}
+
+.pm-filter-value input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--calcite-color-brand, #0079c1);
+}
+
+.pm-filter-value__label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--pm-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .pm-filter-panel {
+    right: 12px !important;
+    left: 12px;
+    width: auto;
+  }
+
+  .pm-filter-panel::before {
+    right: 23px;
+  }
+}
+
+#attribute-filter-panel.pm-filter-panel {
+  max-height: calc(100dvh - 96px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.pm-filter-values {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.pm-filter-range {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.5rem 0.25rem 0.75rem;
+}
+
+.pm-filter-range__values {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pm-filter-range__values output {
+  min-width: 4rem;
+}
+
+.pm-filter-range__values output:last-child {
+  text-align: right;
+}
+
+.pm-filter-range calcite-slider {
+  display: block;
+  width: 100%;
+  min-height: 1.75rem;
+  margin-block: 0.125rem 0.25rem;
+  font-size: 0.75rem;
+
+  --calcite-slider-track-fill-color: var(--calcite-color-brand, #007ac2);
+  --calcite-slider-handle-fill-color: var(--calcite-color-brand, #007ac2);
+  --calcite-slider-accent-color: var(--calcite-color-brand, #007ac2);
+}
+
+.pm-filter-range__hint {
+  color: var(--calcite-color-text-2, #6c757d);
+  font-size: 0.8125rem;
+}
+

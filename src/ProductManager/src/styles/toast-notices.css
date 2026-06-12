@@ -1,0 +1,17 @@
+﻿/* =========================================================
+   Toast notices
+   ========================================================= */
+
+#notice-container calcite-notice {
+  position: relative;
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+#notice-container calcite-notice:hover .notice-progress {
+  animation-play-state: paused;
+}
+

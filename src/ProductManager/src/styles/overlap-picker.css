@@ -1,0 +1,74 @@
+﻿/* =========================================================
+   Overlap picker
+   Uses popup tokens because this UI appears inside an ArcGIS popup.
+   ========================================================= */
+
+.overlap-picker {
+  display: grid;
+  gap: 6px;
+  min-width: 320px;
+  max-width: 380px;
+  padding: 4px 2px;
+  color: var(--pm-popup-text);
+  background: var(--pm-popup-surface);
+}
+
+.overlap-picker__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 54px;
+  padding: 9px 10px;
+  color: var(--pm-popup-text);
+  background: var(--pm-popup-surface-alt);
+  border: 1px solid var(--pm-popup-border);
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.overlap-picker__item:hover,
+.overlap-picker__item:focus-visible {
+  background: var(--pm-button-secondary-bg-hover);
+  outline: none;
+}
+
+.overlap-picker__content {
+  min-width: 0;
+}
+
+.overlap-picker__title {
+  overflow: hidden;
+  color: var(--pm-popup-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overlap-picker__subtitle {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--pm-popup-text-muted);
+  font-size: 12px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overlap-picker__status-marker {
+  flex: 0 0 auto;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-top: 0.2rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+}
+
+html.calcite-mode-dark .overlap-picker__status-marker {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
