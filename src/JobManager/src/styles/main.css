@@ -1,0 +1,32 @@
+@import "@esri/calcite-components/main.css";
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+.job-manager-shell {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  background: var(--calcite-color-background, #f8f9fa);
+  color: var(--calcite-color-text-1, #212529);
+}
+
+.job-manager-placeholder {
+  max-width: 42rem;
+  padding: 2rem;
+  text-align: center;
+}
