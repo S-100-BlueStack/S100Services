@@ -201,24 +201,6 @@ function createRow(label, value, withCopy = false) {
   return row;
 }
 
-function createStatusRow(status) {
-  const row = document.createElement("div");
-  row.className = "popup-row";
-
-  const label = document.createElement("span");
-  label.className = "popup-label";
-  label.textContent = "Status";
-
-  const value = document.createElement("span");
-  value.className = "popup-value";
-  value.textContent = getStatusName(status);
-
-  row.appendChild(label);
-  row.appendChild(value);
-
-  return row;
-}
-
 function getPopupTitle(attributes) {
   return (
     attributes?.datasetName ??
