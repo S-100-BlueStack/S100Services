@@ -808,16 +808,18 @@ Goal:
 
 Create a maintainable app shell with shared helpers before adding domain-heavy map logic.
 
+Status: In progress
+
 Tasks:
 
-| ID      | Task                                  |      Status | Notes                                                          |
-| ------- | ------------------------------------- | ----------: | -------------------------------------------------------------- |
-| JM-0101 | Create root app layout shell          | Not started | Should prepare space for map, toolbar/panel and notices.       |
-| JM-0102 | Add shared config helper              | Not started | Reads safe `VITE_` config values.                              |
-| JM-0103 | Add shared API result helper          | Not started | Similar principle to Product Manager, adapted for Job Manager. |
-| JM-0104 | Add shared error normalization        | Not started | Used by mock and future backend.                               |
-| JM-0105 | Add notice service shell              | Not started | UI-visible success/error messages.                             |
-| JM-0106 | Add basic dark/light theme foundation | Not started | Follow Product Manager pattern after verifying current code.   |
+| ID      | Task                                  |      Status | Notes                                                                     |
+| ------- | ------------------------------------- | ----------: | ------------------------------------------------------------------------- |
+| JM-0101 | Create root app layout shell          |        Done | Root layout now has header, map panel, Jobs panel and notice region.      |
+| JM-0102 | Add shared config helper              |        Done | Runtime config reads safe `VITE_` values from `import.meta.env`.          |
+| JM-0103 | Add shared API result helper          |        Done | Added success/error result helpers for future services.                   |
+| JM-0104 | Add shared error normalization        |        Done | Added normalized frontend error shape for mock and future backend errors. |
+| JM-0105 | Add notice service shell              |        Done | Added notice service and UI container for user-visible messages.          |
+| JM-0106 | Add basic dark/light theme foundation | Not started | Deferred until Product Manager theme pattern is verified.                 |
 
 Exit criteria:
 

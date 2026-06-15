@@ -1,5 +1,13 @@
 @import "@esri/calcite-components/main.css";
 
+:root {
+  color-scheme: light;
+  --job-manager-header-height: 4.5rem;
+  --job-manager-panel-radius: 0.75rem;
+  --job-manager-panel-border: 1px solid rgba(33, 37, 41, 0.12);
+  --job-manager-panel-shadow: 0 0.75rem 2rem rgba(15, 23, 42, 0.08);
+}
+
 html,
 body,
 #app {
@@ -15,18 +23,199 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-}
-
-.job-manager-shell {
-  min-height: 100%;
-  display: grid;
-  place-items: center;
   background: var(--calcite-color-background, #f8f9fa);
   color: var(--calcite-color-text-1, #212529);
 }
 
-.job-manager-placeholder {
-  max-width: 42rem;
-  padding: 2rem;
-  text-align: center;
+button {
+  font: inherit;
+}
+
+.job-manager-app {
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: var(--calcite-color-background, #f8f9fa);
+}
+
+.job-manager-header {
+  min-height: var(--job-manager-header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgba(33, 37, 41, 0.12);
+  background: var(--calcite-color-foreground-1, #ffffff);
+}
+
+.job-manager-header__title-group {
+  min-width: 0;
+}
+
+.job-manager-header__title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.job-manager-header__subtitle {
+  margin: 0.15rem 0 0;
+  color: var(--calcite-color-text-2, #495057);
+  font-size: 0.95rem;
+}
+
+.job-manager-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.job-manager-main {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(22rem, 28rem);
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.job-manager-panel {
+  min-width: 0;
+  min-height: 0;
+  padding: 1rem;
+  border: var(--job-manager-panel-border);
+  border-radius: var(--job-manager-panel-radius);
+  background: var(--calcite-color-foreground-1, #ffffff);
+  box-shadow: var(--job-manager-panel-shadow);
+}
+
+.job-manager-map-panel {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+}
+
+.job-manager-jobs-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.job-manager-panel__title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.job-manager-panel__description {
+  margin: 0.5rem 0 0;
+  color: var(--calcite-color-text-2, #495057);
+}
+
+.job-manager-panel__meta {
+  margin: 0.75rem 0 0;
+  color: var(--calcite-color-text-3, #6c757d);
+  font-size: 0.9rem;
+}
+
+.job-manager-map-placeholder {
+  min-height: 24rem;
+  display: grid;
+  place-items: center;
+  margin-top: 1rem;
+  border: 1px dashed rgba(13, 110, 253, 0.35);
+  border-radius: 0.75rem;
+  background:
+    linear-gradient(135deg, rgba(13, 110, 253, 0.08), transparent),
+    var(--calcite-color-foreground-2, #f8f9fa);
+  color: var(--calcite-color-text-2, #495057);
+  font-weight: 700;
+}
+
+.job-manager-placeholder-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--calcite-color-text-2, #495057);
+}
+
+.job-manager-notices {
+  position: fixed;
+  z-index: 1000;
+  right: 1rem;
+  bottom: 1rem;
+  width: min(26rem, calc(100vw - 2rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  pointer-events: none;
+}
+
+.job-manager-notice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid rgba(33, 37, 41, 0.16);
+  border-left-width: 0.35rem;
+  border-radius: 0.75rem;
+  background: var(--calcite-color-foreground-1, #ffffff);
+  box-shadow: var(--job-manager-panel-shadow);
+  pointer-events: auto;
+}
+
+.job-manager-notice--success {
+  border-left-color: #198754;
+}
+
+.job-manager-notice--error {
+  border-left-color: #dc3545;
+}
+
+.job-manager-notice--warning {
+  border-left-color: #ffc107;
+}
+
+.job-manager-notice--info {
+  border-left-color: #0d6efd;
+}
+
+.job-manager-notice__content {
+  min-width: 0;
+}
+
+.job-manager-notice__title {
+  display: block;
+  margin: 0;
+}
+
+.job-manager-notice__message {
+  margin: 0.25rem 0 0;
+  color: var(--calcite-color-text-2, #495057);
+}
+
+.job-manager-notice__close {
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--calcite-color-text-2, #495057);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.job-manager-notice__close:hover,
+.job-manager-notice__close:focus-visible {
+  background: rgba(33, 37, 41, 0.08);
+  color: var(--calcite-color-text-1, #212529);
+}
+
+@media (max-width: 52rem) {
+  .job-manager-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .job-manager-main {
+    grid-template-columns: 1fr;
+  }
 }

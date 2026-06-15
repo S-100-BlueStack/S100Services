@@ -1,13 +1,18 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles/main.css";
 
+import { createApp } from "./app/createApp.js";
+
 const appElement = document.querySelector("#app");
 
-appElement.innerHTML = `
-  <main class="job-manager-shell">
-    <section class="job-manager-placeholder">
-      <h1>Job Manager</h1>
-      <p>Initial project shell is ready.</p>
-    </section>
-  </main>
-`;
+if (!appElement) {
+  throw new Error("Job Manager could not start because #app was not found.");
+}
+
+const app = createApp(appElement);
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    app.destroy();
+  });
+}
