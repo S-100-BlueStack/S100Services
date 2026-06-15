@@ -666,6 +666,16 @@ Rationale:
 
 This avoids coupling UI labels to logic and makes future localization or label changes safer.
 
+## 8.9 Use Product Manager-style map-first shell
+
+Status: Done
+
+Job Manager should use a Product Manager-style map-first shell instead of a generic dashboard layout. The map should be the primary workspace, with navigation/header and panels layered over the map where practical.
+
+Rationale:
+
+Product Manager uses a full-height map workspace with app UI around and over the map. Job Manager should preserve that UX direction so Jobs, filters and AOI details can become panels or overlays without later layout refactoring.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -812,14 +822,14 @@ Status: In progress
 
 Tasks:
 
-| ID      | Task                                  |      Status | Notes                                                                     |
-| ------- | ------------------------------------- | ----------: | ------------------------------------------------------------------------- |
-| JM-0101 | Create root app layout shell          |        Done | Root layout now has header, map panel, Jobs panel and notice region.      |
-| JM-0102 | Add shared config helper              |        Done | Runtime config reads safe `VITE_` values from `import.meta.env`.          |
-| JM-0103 | Add shared API result helper          |        Done | Added success/error result helpers for future services.                   |
-| JM-0104 | Add shared error normalization        |        Done | Added normalized frontend error shape for mock and future backend errors. |
-| JM-0105 | Add notice service shell              |        Done | Added notice service and UI container for user-visible messages.          |
-| JM-0106 | Add basic dark/light theme foundation | Not started | Deferred until Product Manager theme pattern is verified.                 |
+| ID      | Task                                  |      Status | Notes                                                                                                                               |
+| ------- | ------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0101 | Create root app layout shell          |        Done | Root layout now follows a Product Manager-style map-first workspace with header, map surface, overlay Jobs panel and notice region. |
+| JM-0102 | Add shared config helper              |        Done | Runtime config reads safe `VITE_` values from `import.meta.env`.                                                                    |
+| JM-0103 | Add shared API result helper          |        Done | Added success/error result helpers for future services.                                                                             |
+| JM-0104 | Add shared error normalization        |        Done | Added normalized frontend error shape for mock and future backend errors.                                                           |
+| JM-0105 | Add notice service shell              |        Done | Added notice service and UI container for user-visible messages.                                                                    |
+| JM-0106 | Add basic dark/light theme foundation | Not started | Deferred until Product Manager theme pattern is verified.                                                                           |
 
 Exit criteria:
 

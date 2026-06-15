@@ -7,18 +7,20 @@ import {
 
 export function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
+  const noticeRegion = createNoticeRegion();
 
   const shellElement = document.createElement("div");
   shellElement.className = "job-manager-app";
 
   shellElement.appendChild(createHeader());
-  shellElement.appendChild(createMainContent(runtimeConfig));
-  shellElement.appendChild(createNoticeRegion());
+  shellElement.appendChild(createMapWorkspace(runtimeConfig));
+  shellElement.appendChild(noticeRegion);
 
   rootElement.replaceChildren(shellElement);
 
   return {
     destroy() {
+      noticeRegion.destroy?.();
       rootElement.replaceChildren();
     },
   };
@@ -26,28 +28,49 @@ export function createApp(rootElement) {
 
 function createHeader() {
   const headerElement = document.createElement("header");
-  headerElement.className = "job-manager-header";
+  headerElement.className = "job-manager-navbar";
+
+  const brandElement = document.createElement("div");
+  brandElement.className = "job-manager-navbar__brand";
+
+  const logoElement = document.createElement("div");
+  logoElement.className = "job-manager-navbar__logo";
+  logoElement.setAttribute("aria-label", "GST");
+  logoElement.textContent = "GST";
 
   const titleGroupElement = document.createElement("div");
-  titleGroupElement.className = "job-manager-header__title-group";
+  titleGroupElement.className = "job-manager-navbar__title-group";
 
   const titleElement = document.createElement("h1");
-  titleElement.className = "job-manager-header__title";
+  titleElement.className = "job-manager-navbar__title";
   titleElement.textContent = "Job Manager";
 
   const subtitleElement = document.createElement("p");
-  subtitleElement.className = "job-manager-header__subtitle";
-  subtitleElement.textContent = "Areas of Interest and related Jobs";
+  subtitleElement.className = "job-manager-navbar__subtitle";
+  subtitleElement.textContent = "Areas of Interest and Jobs";
 
   titleGroupElement.append(titleElement, subtitleElement);
+  brandElement.append(logoElement, titleGroupElement);
 
   const actionsElement = document.createElement("div");
-  actionsElement.className = "job-manager-header__actions";
+  actionsElement.className = "job-manager-navbar__actions";
+
+  const jobsButton = document.createElement("button");
+  jobsButton.type = "button";
+  jobsButton.className = "btn btn-sm btn-primary";
+  jobsButton.textContent = "Jobs";
+
+  jobsButton.addEventListener("click", () => {
+    showInfoNotice({
+      title: "Jobs panel",
+      message: "The Jobs panel is already visible in the map workspace.",
+    });
+  });
 
   const noticeTestButton = document.createElement("button");
   noticeTestButton.type = "button";
-  noticeTestButton.className = "btn btn-outline-primary btn-sm";
-  noticeTestButton.textContent = "Show test notice";
+  noticeTestButton.className = "btn btn-sm btn-outline-light";
+  noticeTestButton.textContent = "Test notice";
 
   // This temporary action validates the notice pipeline before real Job mutations exist.
   noticeTestButton.addEventListener("click", () => {
@@ -57,81 +80,112 @@ function createHeader() {
     });
   });
 
-  actionsElement.appendChild(noticeTestButton);
-  headerElement.append(titleGroupElement, actionsElement);
+  const updatedElement = document.createElement("span");
+  updatedElement.className = "job-manager-navbar__meta";
+  updatedElement.textContent = "Updated: -";
+
+  actionsElement.append(jobsButton, noticeTestButton, updatedElement);
+  headerElement.append(brandElement, actionsElement);
 
   return headerElement;
 }
 
-function createMainContent(runtimeConfig) {
-  const mainElement = document.createElement("main");
-  mainElement.className = "job-manager-main";
+function createMapWorkspace(runtimeConfig) {
+  const workspaceElement = document.createElement("main");
+  workspaceElement.className = "job-manager-workspace";
 
-  const mapSectionElement = createMapPlaceholder(runtimeConfig);
-  const jobsSectionElement = createJobsPlaceholder();
+  const mapElement = createMapPlaceholder(runtimeConfig);
+  const overlayElement = createJobsOverlay();
 
-  mainElement.append(mapSectionElement, jobsSectionElement);
+  workspaceElement.append(mapElement, overlayElement);
 
-  return mainElement;
+  return workspaceElement;
 }
 
 function createMapPlaceholder(runtimeConfig) {
-  const sectionElement = document.createElement("section");
-  sectionElement.className = "job-manager-panel job-manager-map-panel";
-  sectionElement.setAttribute("aria-labelledby", "job-manager-map-title");
+  const mapElement = document.createElement("section");
+  mapElement.className = "job-manager-map";
+  mapElement.setAttribute("aria-labelledby", "job-manager-map-title");
+
+  const contentElement = document.createElement("div");
+  contentElement.className = "job-manager-map__placeholder";
 
   const titleElement = document.createElement("h2");
   titleElement.id = "job-manager-map-title";
-  titleElement.className = "job-manager-panel__title";
+  titleElement.className = "job-manager-map__title";
   titleElement.textContent = "Map";
 
   const descriptionElement = document.createElement("p");
-  descriptionElement.className = "job-manager-panel__description";
+  descriptionElement.className = "job-manager-map__description";
   descriptionElement.textContent =
-    "The ArcGIS map will show Areas of Interest and Job-aware filtering.";
+    "The ArcGIS map will fill this workspace and show Areas of Interest.";
 
   const configStatusElement = document.createElement("p");
-  configStatusElement.className = "job-manager-panel__meta";
+  configStatusElement.className = "job-manager-map__meta";
 
-  if (runtimeConfig.aoiFeatureServiceUrl) {
-    configStatusElement.textContent =
-      "AOI Feature Service configuration found.";
-  } else {
-    configStatusElement.textContent =
-      "AOI Feature Service configuration is not set yet.";
-  }
+  configStatusElement.textContent = runtimeConfig.aoiFeatureServiceUrl
+    ? "AOI Feature Service configuration found."
+    : "AOI Feature Service configuration is not set yet.";
 
-  const placeholderElement = document.createElement("div");
-  placeholderElement.className = "job-manager-map-placeholder";
-  placeholderElement.textContent = "Map area";
+  contentElement.append(titleElement, descriptionElement, configStatusElement);
+  mapElement.appendChild(contentElement);
 
-  sectionElement.append(
-    titleElement,
-    descriptionElement,
-    configStatusElement,
-    placeholderElement,
-  );
-
-  return sectionElement;
+  return mapElement;
 }
 
-function createJobsPlaceholder() {
-  const sectionElement = document.createElement("section");
-  sectionElement.className = "job-manager-panel job-manager-jobs-panel";
-  sectionElement.setAttribute("aria-labelledby", "job-manager-jobs-title");
+function createJobsOverlay() {
+  const panelElement = document.createElement("aside");
+  panelElement.className = "job-manager-overlay-panel job-manager-jobs-overlay";
+  panelElement.setAttribute("aria-labelledby", "job-manager-jobs-title");
+
+  const headerElement = document.createElement("div");
+  headerElement.className = "job-manager-overlay-panel__header";
+
+  const titleGroupElement = document.createElement("div");
 
   const titleElement = document.createElement("h2");
   titleElement.id = "job-manager-jobs-title";
-  titleElement.className = "job-manager-panel__title";
+  titleElement.className = "job-manager-overlay-panel__title";
   titleElement.textContent = "Jobs";
 
-  const descriptionElement = document.createElement("p");
-  descriptionElement.className = "job-manager-panel__description";
-  descriptionElement.textContent =
-    "The Job list will show status, priority, deadline and related AOIs.";
+  const subtitleElement = document.createElement("p");
+  subtitleElement.className = "job-manager-overlay-panel__subtitle";
+  subtitleElement.textContent = "Initial workspace panel";
 
-  const statusListElement = document.createElement("ul");
-  statusListElement.className = "job-manager-placeholder-list";
+  titleGroupElement.append(titleElement, subtitleElement);
+
+  const statusBadgeElement = document.createElement("span");
+  statusBadgeElement.className = "job-manager-status-badge";
+  statusBadgeElement.textContent = "Mock";
+
+  headerElement.append(titleGroupElement, statusBadgeElement);
+
+  const descriptionElement = document.createElement("p");
+  descriptionElement.className = "job-manager-overlay-panel__description";
+  descriptionElement.textContent =
+    "This panel will show the Job list, quick filters and selected Job details while the map remains the primary workspace.";
+
+  const quickActionsElement = document.createElement("div");
+  quickActionsElement.className = "job-manager-quick-actions";
+
+  for (const label of ["AOIs with Jobs", "Active Jobs", "High Priority"]) {
+    const buttonElement = document.createElement("button");
+    buttonElement.type = "button";
+    buttonElement.className = "btn btn-sm btn-outline-secondary";
+    buttonElement.textContent = label;
+
+    buttonElement.addEventListener("click", () => {
+      showInfoNotice({
+        title: "Quick filter placeholder",
+        message: `${label} will be connected after Job and AOI state exists.`,
+      });
+    });
+
+    quickActionsElement.appendChild(buttonElement);
+  }
+
+  const placeholderListElement = document.createElement("ul");
+  placeholderListElement.className = "job-manager-overlay-list";
 
   for (const item of [
     "Mock Job service",
@@ -141,27 +195,15 @@ function createJobsPlaceholder() {
   ]) {
     const itemElement = document.createElement("li");
     itemElement.textContent = item;
-    statusListElement.appendChild(itemElement);
+    placeholderListElement.appendChild(itemElement);
   }
 
-  const infoButton = document.createElement("button");
-  infoButton.type = "button";
-  infoButton.className = "btn btn-outline-secondary btn-sm";
-  infoButton.textContent = "Show next step";
-
-  infoButton.addEventListener("click", () => {
-    showInfoNotice({
-      title: "Next implementation step",
-      message: "Mock Jobs service should be implemented before map complexity.",
-    });
-  });
-
-  sectionElement.append(
-    titleElement,
+  panelElement.append(
+    headerElement,
     descriptionElement,
-    statusListElement,
-    infoButton,
+    quickActionsElement,
+    placeholderListElement,
   );
 
-  return sectionElement;
+  return panelElement;
 }
