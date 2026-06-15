@@ -1,4 +1,5 @@
 import { apiGet } from "../../../shared/api/apiClient.js";
+import { normalizeProductExportMetadata } from "../../data/normalizers/productExportMetadata.js";
 
 const ANALYZE_PRODUCT_ENDPOINT = "electronicproducts";
 const USE_MOCK_ANALYZE_API = import.meta.env.DEV && false;
@@ -68,6 +69,9 @@ function normalizeAnalyzeProduct(
     raw: payload,
     isMock,
     loadError,
+    exportMetadata: normalizeProductExportMetadata(
+      readFirstDefined(product, ["exports", "Exports"])
+    ),
   };
 }
 

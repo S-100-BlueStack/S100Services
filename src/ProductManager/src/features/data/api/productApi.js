@@ -1,5 +1,6 @@
 import { apiRequest } from "../../../shared/api/apiClient.js";
 import { getApiResultErrorMessage } from "../../../shared/api/apiResult.js";
+import { normalizeProductExportMetadata } from "../normalizers/productExportMetadata.js";
 
 const PRODUCT_MUTATION_TIMEOUT_MS = 30 * 1000;
 const SELECTED_PRODUCT_REFRESH_TIMEOUT_MS = 15 * 1000;
@@ -74,6 +75,9 @@ function normalizeElectronicProductResponse(data) {
       "OptimumDisplayScale",
     ]),
     errorMessage: readFirstDefined(product, ["errorMessage", "ErrorMessage"]),
+    exportMetadata: normalizeProductExportMetadata(
+      readFirstDefined(product, ["exports", "Exports"])
+    ),
   };
 }
 

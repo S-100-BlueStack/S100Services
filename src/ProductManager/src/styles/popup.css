@@ -152,3 +152,48 @@
   --calcite-ui-icon-color: var(--pm-popup-text);
   --calcite-action-icon-color: var(--pm-popup-text);
 }
+
+.popup-product-table-wrapper {
+  margin-top: 0;
+  overflow: visible;
+}
+
+.popup-product-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--pm-popup-text);
+  font-size: 12px;
+  table-layout: fixed;
+}
+
+.popup-product-table th,
+.popup-product-table td {
+  padding: 5px 7px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--pm-popup-border);
+  word-break: break-word;
+}
+
+.popup-product-table thead th {
+  padding-top: 8px;
+  padding-bottom: 6px;
+  color: var(--pm-popup-text-muted);
+  background: transparent;
+  font-weight: 700;
+  text-align: left;
+}
+
+.popup-product-table tbody th {
+  color: var(--pm-popup-text-muted);
+  font-weight: 700;
+  text-align: left;
+}
+
+.popup-product-table tbody tr:last-child th,
+.popup-product-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.popup-product-table__attribute {
+  width: 92px;
+}
