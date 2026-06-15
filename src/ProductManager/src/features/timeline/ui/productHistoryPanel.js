@@ -3,7 +3,6 @@ import { watch } from "@arcgis/core/core/reactiveUtils.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { fetchProductHistory } from "../api/productHistoryApi.js";
 import { onProductHistoryOpen } from "../events/productHistoryEvents.js";
-import { getProductHistoryEventTypeLabel } from "../model/productHistoryTypes.js";
 
 export function initProductHistoryPanel({ view } = {}) {
   const panel = createPanel();
@@ -325,13 +324,6 @@ function createHistorySummary(history) {
 
   container.appendChild(
     createSummaryItem({
-      label: "Source",
-      value: history.isDemo ? "Demo" : "Backend",
-    })
-  );
-
-  container.appendChild(
-    createSummaryItem({
       label: "Latest",
       value: formatHistoryTimestamp(history.events[0]?.timestamp),
     })
@@ -386,11 +378,7 @@ function createHistoryEventItem(event) {
   title.className = "pm-product-history-list__title";
   title.textContent = event.title ?? "History event";
 
-  const type = document.createElement("span");
-  type.className = "pm-product-history-list__type";
-  type.textContent = getProductHistoryEventTypeLabel(event.type);
-
-  header.append(title, type);
+  header.appendChild(title);
 
   const meta = document.createElement("div");
   meta.className = "pm-product-history-list__meta";
@@ -405,8 +393,10 @@ function createHistoryEventItem(event) {
     body.appendChild(description);
   }
 
-  if (event.details.length > 0) {
-    body.appendChild(createEventDetails(event.details));
+  const visibleDetails = getVisibleEventDetails(event.details);
+
+  if (visibleDetails.length > 0) {
+    body.appendChild(createEventDetails(visibleDetails));
   }
 
   item.append(marker, body);
@@ -438,6 +428,18 @@ function createEventDetails(details) {
   }
 
   return list;
+}
+
+function getVisibleEventDetails(details) {
+  return details.filter((detail) => {
+    return normalizeDetailLabel(detail.label) !== "owner";
+  });
+}
+
+function normalizeDetailLabel(label) {
+  return String(label ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 function createBanner({ title, message }) {
