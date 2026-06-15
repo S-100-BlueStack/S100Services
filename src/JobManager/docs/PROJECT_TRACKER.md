@@ -786,14 +786,14 @@ Create the project shell and establish the source-of-truth documentation.
 
 Tasks:
 
-| ID      | Task                                                   |      Status | Notes                                                                                  |
-| ------- | ------------------------------------------------------ | ----------: | -------------------------------------------------------------------------------------- |
-| JM-0001 | Create Job Manager Vite project under `src/JobManager` |        Done | Initial shell created and pushed.                                                      |
-| JM-0002 | Align package versions with Product Manager baseline   |        Done | Vite range corrected to avoid Vite 8 drift.                                            |
-| JM-0003 | Create initial feature-based folder structure          |        Done | AOI, Jobs, Map, Notices, Theme and Shared folders created.                             |
-| JM-0004 | Create project tracker/source-of-truth document        | In progress | This document.                                                                         |
-| JM-0005 | Create backend contract notes document                 | Not started | Should capture future backend assumptions and open questions.                          |
-| JM-0006 | Create architecture notes document                     | Not started | Should document feature boundaries and map/layer decisions once implementation starts. |
+| ID      | Task                                                   |      Status | Notes                                                      |
+| ------- | ------------------------------------------------------ | ----------: | ---------------------------------------------------------- |
+| JM-0001 | Create Job Manager Vite project under `src/JobManager` |        Done | Initial shell created and pushed.                          |
+| JM-0002 | Align package versions with Product Manager baseline   |        Done | Vite range corrected to avoid Vite 8 drift.                |
+| JM-0003 | Create initial feature-based folder structure          |        Done | AOI, Jobs, Map, Notices, Theme and Shared folders created. |
+| JM-0004 | Create project tracker/source-of-truth document        | In progress | This document.                                             |
+| JM-0005 | Create backend contract notes document                 |        Done | Initial skeleton created in `docs/BACKEND_CONTRACTS.md`.   |
+| JM-0006 | Create architecture notes document                     |        Done | Initial skeleton created in `docs/ARCHITECTURE.md`.        |
 
 Exit criteria:
 
@@ -1222,10 +1222,10 @@ Do not duplicate content across documents. Link or summarize instead.
 
 Recommended next tasks:
 
-| ID          | Task                                     |      Status | Notes                                    |
-| ----------- | ---------------------------------------- | ----------: | ---------------------------------------- |
-| JM-NEXT-001 | Add `docs/BACKEND_CONTRACTS.md` skeleton | Not started | Keep backend uncertainty explicit.       |
-| JM-NEXT-002 | Add `docs/ARCHITECTURE.md` skeleton      | Not started | Capture folder ownership and data flow.  |
-| JM-NEXT-003 | Implement app shell layout               | Not started | Prepare map/list/notices regions.        |
-| JM-NEXT-004 | Implement notice service foundation      | Not started | Needed before mock failure work.         |
-| JM-NEXT-005 | Implement mock Jobs service              | Not started | Foundation for Job list and status flow. |
+| ID          | Task                                     |      Status | Notes                                                      |
+| ----------- | ---------------------------------------- | ----------: | ---------------------------------------------------------- |
+| JM-NEXT-001 | Add `docs/BACKEND_CONTRACTS.md` skeleton |        Done | Initial backend assumptions and open questions documented. |
+| JM-NEXT-002 | Add `docs/ARCHITECTURE.md` skeleton      |        Done | Initial architecture boundaries and data flow documented.  |
+| JM-NEXT-003 | Implement app shell layout               | Not started | Prepare map/list/notices regions.                          |
+| JM-NEXT-004 | Implement notice service foundation      | Not started | Needed before mock failure work.                           |
+| JM-NEXT-005 | Implement mock Jobs service              | Not started | Foundation for Job list and status flow.                   |
