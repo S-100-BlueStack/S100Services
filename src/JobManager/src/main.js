@@ -1,3 +1,8 @@
+import "@esri/calcite-components/components/calcite-action";
+import "@esri/calcite-components/components/calcite-dropdown";
+import "@esri/calcite-components/components/calcite-dropdown-group";
+import "@esri/calcite-components/components/calcite-dropdown-item";
+
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles/main.css";
 
@@ -9,7 +14,7 @@ if (!appElement) {
   throw new Error("Job Manager could not start because #app was not found.");
 }
 
-const app = createApp(appElement);
+const app = await createApp(appElement);
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {

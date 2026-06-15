@@ -5,18 +5,49 @@ import {
   showSuccessNotice,
 } from "../features/notices/services/noticeService.js";
 
-export function createApp(rootElement) {
+export async function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
   const noticeRegion = createNoticeRegion();
 
+  const header = await createHeader();
+  const jobsPanel = createJobsOverlay();
+  const workspaceElement = createMapWorkspace(runtimeConfig);
+
+  workspaceElement.appendChild(jobsPanel.element);
+
   const shellElement = document.createElement("div");
   shellElement.className = "job-manager-app";
-
-  shellElement.appendChild(createHeader());
-  shellElement.appendChild(createMapWorkspace(runtimeConfig));
-  shellElement.appendChild(noticeRegion);
+  shellElement.append(header.element, workspaceElement, noticeRegion);
 
   rootElement.replaceChildren(shellElement);
+
+  setPanelOpen(jobsPanel.element, header.jobsButton, true);
+
+  header.jobsButton.addEventListener("click", () => {
+    togglePanel(jobsPanel.element, header.jobsButton);
+  });
+
+  jobsPanel.closeButton.addEventListener("click", () => {
+    setPanelOpen(jobsPanel.element, header.jobsButton, false);
+  });
+
+  header.testNoticeButton.addEventListener("click", () => {
+    showSuccessNotice({
+      title: "Notice pipeline ready",
+      message: "User-facing notices can now be triggered from services.",
+    });
+  });
+
+  for (const filterItem of header.filterItems) {
+    filterItem.addEventListener("click", () => {
+      const filterLabel = filterItem.dataset.filterPlaceholder;
+
+      showInfoNotice({
+        title: "Filter placeholder",
+        message: `${filterLabel} will be connected after shared filter state exists.`,
+      });
+    });
+  }
 
   return {
     destroy() {
@@ -26,66 +57,47 @@ export function createApp(rootElement) {
   };
 }
 
-function createHeader() {
-  const headerElement = document.createElement("header");
-  headerElement.className = "job-manager-navbar";
+async function createHeader() {
+  const headerElement = await loadNavbarTemplate();
 
-  const brandElement = document.createElement("div");
-  brandElement.className = "job-manager-navbar__brand";
+  const jobsButton = getRequiredElement(headerElement, "#jobs-toggle");
+  const testNoticeButton = getRequiredElement(
+    headerElement,
+    "#test-notice-button",
+  );
+  const filterItems = [
+    ...headerElement.querySelectorAll("[data-filter-placeholder]"),
+  ];
 
-  const logoElement = document.createElement("div");
-  logoElement.className = "job-manager-navbar__logo";
-  logoElement.setAttribute("aria-label", "GST");
-  logoElement.textContent = "GST";
+  return {
+    element: headerElement,
+    jobsButton,
+    testNoticeButton,
+    filterItems,
+  };
+}
 
-  const titleGroupElement = document.createElement("div");
-  titleGroupElement.className = "job-manager-navbar__title-group";
-
-  const titleElement = document.createElement("h1");
-  titleElement.className = "job-manager-navbar__title";
-  titleElement.textContent = "Job Manager";
-
-  const subtitleElement = document.createElement("p");
-  subtitleElement.className = "job-manager-navbar__subtitle";
-  subtitleElement.textContent = "Areas of Interest and Jobs";
-
-  titleGroupElement.append(titleElement, subtitleElement);
-  brandElement.append(logoElement, titleGroupElement);
-
-  const actionsElement = document.createElement("div");
-  actionsElement.className = "job-manager-navbar__actions";
-
-  const jobsButton = document.createElement("button");
-  jobsButton.type = "button";
-  jobsButton.className = "btn btn-sm btn-primary";
-  jobsButton.textContent = "Jobs";
-
-  jobsButton.addEventListener("click", () => {
-    showInfoNotice({
-      title: "Jobs panel",
-      message: "The Jobs panel is already visible in the map workspace.",
-    });
+async function loadNavbarTemplate() {
+  const response = await fetch("/components/navbar.html", {
+    cache: "no-cache",
   });
 
-  const noticeTestButton = document.createElement("button");
-  noticeTestButton.type = "button";
-  noticeTestButton.className = "btn btn-sm btn-outline-light";
-  noticeTestButton.textContent = "Test notice";
+  if (!response.ok) {
+    throw new Error(
+      `Job Manager could not load the navbar template. Status: ${response.status}`,
+    );
+  }
 
-  // This temporary action validates the notice pipeline before real Job mutations exist.
-  noticeTestButton.addEventListener("click", () => {
-    showSuccessNotice({
-      title: "Notice pipeline ready",
-      message: "User-facing notices can now be triggered from services.",
-    });
-  });
+  const template = document.createElement("template");
+  template.innerHTML = await response.text();
 
-  const updatedElement = document.createElement("span");
-  updatedElement.className = "job-manager-navbar__meta";
-  updatedElement.textContent = "Updated: -";
+  const headerElement = template.content.firstElementChild;
 
-  actionsElement.append(jobsButton, noticeTestButton, updatedElement);
-  headerElement.append(brandElement, actionsElement);
+  if (!headerElement) {
+    throw new Error(
+      "Job Manager navbar template did not contain a root element.",
+    );
+  }
 
   return headerElement;
 }
@@ -94,15 +106,6 @@ function createMapWorkspace(runtimeConfig) {
   const workspaceElement = document.createElement("main");
   workspaceElement.className = "job-manager-workspace";
 
-  const mapElement = createMapPlaceholder(runtimeConfig);
-  const overlayElement = createJobsOverlay();
-
-  workspaceElement.append(mapElement, overlayElement);
-
-  return workspaceElement;
-}
-
-function createMapPlaceholder(runtimeConfig) {
   const mapElement = document.createElement("section");
   mapElement.className = "job-manager-map";
   mapElement.setAttribute("aria-labelledby", "job-manager-map-title");
@@ -129,12 +132,14 @@ function createMapPlaceholder(runtimeConfig) {
 
   contentElement.append(titleElement, descriptionElement, configStatusElement);
   mapElement.appendChild(contentElement);
+  workspaceElement.appendChild(mapElement);
 
-  return mapElement;
+  return workspaceElement;
 }
 
 function createJobsOverlay() {
   const panelElement = document.createElement("aside");
+  panelElement.id = "job-manager-jobs-panel";
   panelElement.className = "job-manager-overlay-panel job-manager-jobs-overlay";
   panelElement.setAttribute("aria-labelledby", "job-manager-jobs-title");
 
@@ -142,6 +147,7 @@ function createJobsOverlay() {
   headerElement.className = "job-manager-overlay-panel__header";
 
   const titleGroupElement = document.createElement("div");
+  titleGroupElement.className = "job-manager-overlay-panel__title-group";
 
   const titleElement = document.createElement("h2");
   titleElement.id = "job-manager-jobs-title";
@@ -154,35 +160,18 @@ function createJobsOverlay() {
 
   titleGroupElement.append(titleElement, subtitleElement);
 
-  const statusBadgeElement = document.createElement("span");
-  statusBadgeElement.className = "job-manager-status-badge";
-  statusBadgeElement.textContent = "Mock";
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "job-manager-overlay-panel__close";
+  closeButton.setAttribute("aria-label", "Close Jobs panel");
+  closeButton.textContent = "×";
 
-  headerElement.append(titleGroupElement, statusBadgeElement);
+  headerElement.append(titleGroupElement, closeButton);
 
   const descriptionElement = document.createElement("p");
   descriptionElement.className = "job-manager-overlay-panel__description";
   descriptionElement.textContent =
-    "This panel will show the Job list, quick filters and selected Job details while the map remains the primary workspace.";
-
-  const quickActionsElement = document.createElement("div");
-  quickActionsElement.className = "job-manager-quick-actions";
-
-  for (const label of ["AOIs with Jobs", "Active Jobs", "High Priority"]) {
-    const buttonElement = document.createElement("button");
-    buttonElement.type = "button";
-    buttonElement.className = "btn btn-sm btn-outline-secondary";
-    buttonElement.textContent = label;
-
-    buttonElement.addEventListener("click", () => {
-      showInfoNotice({
-        title: "Quick filter placeholder",
-        message: `${label} will be connected after Job and AOI state exists.`,
-      });
-    });
-
-    quickActionsElement.appendChild(buttonElement);
-  }
+    "This panel will show the Job list, selected Job details and related AOIs while the map remains the primary workspace.";
 
   const placeholderListElement = document.createElement("ul");
   placeholderListElement.className = "job-manager-overlay-list";
@@ -201,9 +190,31 @@ function createJobsOverlay() {
   panelElement.append(
     headerElement,
     descriptionElement,
-    quickActionsElement,
     placeholderListElement,
   );
 
-  return panelElement;
+  return {
+    element: panelElement,
+    closeButton,
+  };
+}
+
+function getRequiredElement(rootElement, selector) {
+  const element = rootElement.querySelector(selector);
+
+  if (!element) {
+    throw new Error(`Expected navbar element was not found: ${selector}`);
+  }
+
+  return element;
+}
+
+function togglePanel(panelElement, triggerButton) {
+  setPanelOpen(panelElement, triggerButton, panelElement.hidden);
+}
+
+function setPanelOpen(panelElement, triggerButton, isOpen) {
+  panelElement.hidden = !isOpen;
+  panelElement.setAttribute("aria-hidden", String(!isOpen));
+  triggerButton.setAttribute("aria-expanded", String(isOpen));
 }

@@ -1,0 +1,65 @@
+<header id="header">
+  <div class="header-left">
+    <img
+      src="/images/logo96.png"
+      alt="GST"
+      class="navbar-logo"
+      width="42"
+      height="42"
+    />
+  </div>
+
+  <nav class="header-center" aria-label="Primary navigation">
+    <a href="#" class="navbar-title-link">Job Manager</a>
+
+    <button
+      id="jobs-toggle"
+      type="button"
+      class="navbar-title-link navbar-button"
+      aria-controls="job-manager-jobs-panel"
+      aria-expanded="true"
+    >
+      Jobs
+    </button>
+  </nav>
+
+  <div class="header-right">
+    <span id="last-updated">Updated: -</span>
+
+    <calcite-dropdown
+      id="filters-dropdown"
+      placement="bottom-end"
+      scale="s"
+      close-on-select-disabled
+    >
+      <calcite-action
+        id="filters-button"
+        slot="trigger"
+        icon="filter"
+        text="Filters"
+        title="Filters"
+        text-enabled="false"
+      ></calcite-action>
+
+      <calcite-dropdown-group group-title="Quick filters" selection-mode="none">
+        <calcite-dropdown-item data-filter-placeholder="AOIs with Jobs">
+          AOIs with Jobs
+        </calcite-dropdown-item>
+        <calcite-dropdown-item data-filter-placeholder="Active Jobs">
+          Active Jobs
+        </calcite-dropdown-item>
+        <calcite-dropdown-item data-filter-placeholder="High Priority">
+          High Priority
+        </calcite-dropdown-item>
+      </calcite-dropdown-group>
+    </calcite-dropdown>
+
+    <calcite-action
+      id="test-notice-button"
+      icon="bell"
+      text="Test notice"
+      title="Test notice"
+      text-enabled="false"
+    ></calcite-action>
+  </div>
+</header>

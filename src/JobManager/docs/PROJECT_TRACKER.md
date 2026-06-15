@@ -676,6 +676,30 @@ Rationale:
 
 Product Manager uses a full-height map workspace with app UI around and over the map. Job Manager should preserve that UX direction so Jobs, filters and AOI details can become panels or overlays without later layout refactoring.
 
+## 8.10 Match Product Manager navbar and overlay behavior
+
+Status: Done
+
+Job Manager should use Product Manager's navbar baseline more closely: GST logo, `#456178` navbar color, 50px header height, text navigation in the navbar and action/filter controls in the header area.
+
+Jobs should open as a left-side overlay panel above the map and must be closable. This preserves the right side of the map workspace for future Job-related tools and detail actions.
+
+Quick filters should be accessible from the navbar. A dedicated Filters panel can be used when filters need more explanatory text or advanced controls.
+
+## 8.11 Use a navbar HTML template like Product Manager
+
+Status: Done
+
+Job Manager should use a static navbar template in `public/components/navbar.html` and enrich it from JavaScript, matching the Product Manager pattern more closely than constructing the entire navbar in JS.
+
+The navbar should use Product Manager's header baseline: `#456178`, 50px height, GST logo, centered text navigation and Calcite action icons on the right.
+
+Filters should be opened from a right-side navbar Calcite dropdown, not as a permanent map panel. Quick filters should live inside that dropdown until shared filter state is implemented.
+
+Rationale:
+
+This keeps the shell closer to Product Manager, makes the navbar easier to compare and maintain, and avoids hardcoding too much Product Manager-style markup inside `createApp.js`.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -822,14 +846,14 @@ Status: In progress
 
 Tasks:
 
-| ID      | Task                                  |      Status | Notes                                                                                                                               |
-| ------- | ------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------- |
-| JM-0101 | Create root app layout shell          |        Done | Root layout now follows a Product Manager-style map-first workspace with header, map surface, overlay Jobs panel and notice region. |
-| JM-0102 | Add shared config helper              |        Done | Runtime config reads safe `VITE_` values from `import.meta.env`.                                                                    |
-| JM-0103 | Add shared API result helper          |        Done | Added success/error result helpers for future services.                                                                             |
-| JM-0104 | Add shared error normalization        |        Done | Added normalized frontend error shape for mock and future backend errors.                                                           |
-| JM-0105 | Add notice service shell              |        Done | Added notice service and UI container for user-visible messages.                                                                    |
-| JM-0106 | Add basic dark/light theme foundation | Not started | Deferred until Product Manager theme pattern is verified.                                                                           |
+| ID      | Task                                  |      Status | Notes                                                                                                                                                       |
+| ------- | ------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0101 | Create root app layout shell          |        Done | Root layout now uses a Product Manager-style navbar HTML template, GST logo, map-first workspace, closable left Jobs panel and right-side Filters dropdown. |
+| JM-0102 | Add shared config helper              |        Done | Runtime config reads safe `VITE_` values from `import.meta.env`.                                                                                            |
+| JM-0103 | Add shared API result helper          |        Done | Added success/error result helpers for future services.                                                                                                     |
+| JM-0104 | Add shared error normalization        |        Done | Added normalized frontend error shape for mock and future backend errors.                                                                                   |
+| JM-0105 | Add notice service shell              |        Done | Added notice service and UI container for user-visible messages.                                                                                            |
+| JM-0106 | Add basic dark/light theme foundation | Not started | Deferred until Product Manager theme pattern is verified.                                                                                                   |
 
 Exit criteria:
 
