@@ -828,6 +828,16 @@ Rationale:
 
 Deadline editing introduces mutation handling, validation and backend contract assumptions. It should not be implemented before the workflow is confirmed.
 
+## 8.24 Split global CSS by UI area
+
+Status: Done
+
+Job Manager CSS should be split by UI area once the app has more than generic bootstrap styling. `main.css` should only import CSS sections, while navbar, map, overlays, notices, Jobs UI, filter popover and design tokens live in separate files.
+
+Rationale:
+
+This follows the Product Manager direction and prevents `main.css` from becoming a large mixed-responsibility stylesheet.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -1034,14 +1044,14 @@ Provide list-based work access before complex map interaction.
 
 Tasks:
 
-| ID      | Task                                         |      Status | Notes                                                                                                                                                                   |
-| ------- | -------------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-0301 | Create Job list component                    |        Done | Jobs panel now renders active mock Jobs with collapsible cards showing title, status, priority, status actions and expandable details. Done Jobs are hidden by default. |
-| JM-0302 | Create Job detail/selection component        | In progress | Collapsible Job cards provide the first detail surface. Dedicated selection/details flow is still deferred until map interaction exists.                                |
-| JM-0303 | Add Job status buttons                       |        Done | Added To do, In Progress and Done buttons per Job.                                                                                                                      |
-| JM-0304 | Add per-Job mutation loading state           |        Done | Updating Jobs disable status buttons and show mutation text.                                                                                                            |
-| JM-0305 | Show success/failure notices for Job updates |        Done | Status updates show success and error notices.                                                                                                                          |
-| JM-0306 | Show cyclic Job creation notice              |        Done | Mock-created follow-up Jobs show an info notice.                                                                                                                        |
+| ID      | Task                                         |      Status | Notes                                                                                                                                                                                                |
+| ------- | -------------------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0301 | Create Job list component                    |        Done | Jobs panel now renders active mock Jobs with compact collapsible cards showing title, priority, created/deadline date chips, affected AOI count and status actions. Done Jobs are hidden by default. |
+| JM-0302 | Create Job detail/selection component        | In progress | Collapsible Job cards provide the first detail surface. Expanded content currently only shows summary; dedicated selection/details flow is deferred until map interaction exists.                    |
+| JM-0303 | Add Job status buttons                       |        Done | Added To do, In Progress and Done buttons per Job.                                                                                                                                                   |
+| JM-0304 | Add per-Job mutation loading state           |        Done | Updating Jobs disable status buttons and show mutation text.                                                                                                                                         |
+| JM-0305 | Show success/failure notices for Job updates |        Done | Status updates show success and error notices.                                                                                                                                                       |
+| JM-0306 | Show cyclic Job creation notice              |        Done | Mock-created follow-up Jobs show an info notice.                                                                                                                                                     |
 
 Exit criteria:
 

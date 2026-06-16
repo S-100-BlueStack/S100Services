@@ -4,7 +4,7 @@ import {
   showSuccessNotice,
 } from "../../notices/services/noticeService.js";
 import { getJobPriorityLabel } from "../domain/jobPriority.js";
-import { getJobStatusLabel, JOB_STATUS, JOB_STATUS_OPTIONS } from "../domain/jobStatus.js";
+import { JOB_STATUS, JOB_STATUS_OPTIONS } from "../domain/jobStatus.js";
 import { createJobStore } from "../state/jobStore.js";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
@@ -65,11 +65,17 @@ function renderJobList(rootElement, state, store, expandedJobIds, render) {
     return;
   }
 
+  const toolbarElement = createListToolbar({
+    state,
+    visibleJobs,
+    hiddenDoneCount,
+    expandedJobIds,
+    store,
+    render,
+  });
+
   if (visibleJobs.length === 0) {
-    rootElement.replaceChildren(
-      createListToolbar({ state, visibleJobs, hiddenDoneCount, store }),
-      createEmptyState(hiddenDoneCount)
-    );
+    rootElement.replaceChildren(toolbarElement, createEmptyState(hiddenDoneCount));
     return;
   }
 
@@ -88,10 +94,7 @@ function renderJobList(rootElement, state, store, expandedJobIds, render) {
     );
   }
 
-  rootElement.replaceChildren(
-    createListToolbar({ state, visibleJobs, hiddenDoneCount, store }),
-    listElement
-  );
+  rootElement.replaceChildren(toolbarElement, listElement);
 }
 
 function getVisibleJobs(jobs) {
@@ -110,11 +113,12 @@ function removeExpandedDoneJobs(expandedJobIds, jobs) {
   }
 }
 
-function createListToolbar({ state, visibleJobs, hiddenDoneCount, store }) {
+function createListToolbar({ state, visibleJobs, hiddenDoneCount, expandedJobIds, store, render }) {
   const toolbarElement = document.createElement("div");
   toolbarElement.className = "job-list__toolbar";
 
   const countGroupElement = document.createElement("div");
+  countGroupElement.className = "job-list__count-group";
 
   const countElement = document.createElement("p");
   countElement.className = "job-list__count";
@@ -127,11 +131,10 @@ function createListToolbar({ state, visibleJobs, hiddenDoneCount, store }) {
 
   countGroupElement.append(countElement, hiddenDoneElement);
 
-  const refreshButton = document.createElement("calcite-button");
-  refreshButton.appearance = "outline";
-  refreshButton.kind = "neutral";
-  refreshButton.scale = "s";
-  refreshButton.textContent = state.isLoading ? "Refreshing..." : "Refresh";
+  const toolbarActionsElement = document.createElement("div");
+  toolbarActionsElement.className = "job-list__toolbar-actions";
+
+  const refreshButton = createToolbarButton(state.isLoading ? "Refreshing..." : "Refresh");
   refreshButton.disabled = state.isLoading;
 
   refreshButton.addEventListener("click", async () => {
@@ -150,9 +153,39 @@ function createListToolbar({ state, visibleJobs, hiddenDoneCount, store }) {
     }
   });
 
-  toolbarElement.append(countGroupElement, refreshButton);
+  const expandAllButton = createToolbarButton("Expand all");
+  expandAllButton.disabled = visibleJobs.length === 0;
+
+  expandAllButton.addEventListener("click", () => {
+    for (const job of visibleJobs) {
+      expandedJobIds.add(job.id);
+    }
+
+    render();
+  });
+
+  const collapseAllButton = createToolbarButton("Collapse all");
+  collapseAllButton.disabled = expandedJobIds.size === 0;
+
+  collapseAllButton.addEventListener("click", () => {
+    expandedJobIds.clear();
+    render();
+  });
+
+  toolbarActionsElement.append(refreshButton, expandAllButton, collapseAllButton);
+  toolbarElement.append(countGroupElement, toolbarActionsElement);
 
   return toolbarElement;
+}
+
+function createToolbarButton(label) {
+  const buttonElement = document.createElement("calcite-button");
+  buttonElement.appearance = "outline";
+  buttonElement.kind = "neutral";
+  buttonElement.scale = "s";
+  buttonElement.textContent = label;
+
+  return buttonElement;
 }
 
 function createJobCard({ job, state, store, expandedJobIds, render }) {
@@ -164,16 +197,16 @@ function createJobCard({ job, state, store, expandedJobIds, render }) {
   cardElement.dataset.jobStatus = job.status;
   cardElement.dataset.jobPriority = job.priority;
 
-  const headerElement = createJobCardHeader({
-    job,
-    isExpanded,
-    expandedJobIds,
-    render,
-  });
-
-  const actionsElement = createStatusActions({ job, isUpdating, store });
-
-  cardElement.append(headerElement, actionsElement);
+  cardElement.appendChild(
+    createJobCardSummary({
+      job,
+      isExpanded,
+      isUpdating,
+      expandedJobIds,
+      store,
+      render,
+    })
+  );
 
   if (isExpanded) {
     cardElement.appendChild(createJobDetails(job));
@@ -186,13 +219,38 @@ function createJobCard({ job, state, store, expandedJobIds, render }) {
   return cardElement;
 }
 
-function createJobCardHeader({ job, isExpanded, expandedJobIds, render }) {
-  const headerElement = document.createElement("div");
-  headerElement.className = "job-card__header";
+function createJobCardSummary({ job, isExpanded, isUpdating, expandedJobIds, store, render }) {
+  const summaryElement = document.createElement("div");
+  summaryElement.className = "job-card__summary-layout";
 
-  const titleGroupElement = document.createElement("div");
-  titleGroupElement.className = "job-card__title-group";
+  const leftElement = document.createElement("div");
+  leftElement.className = "job-card__left";
 
+  leftElement.append(
+    createJobTitleRow({
+      job,
+      isExpanded,
+      expandedJobIds,
+      render,
+    }),
+    createDateChips(job)
+  );
+
+  const rightElement = document.createElement("div");
+  rightElement.className = "job-card__right";
+
+  rightElement.append(
+    createPriorityBadge(job),
+    createAffectedAoiBadge(job),
+    createStatusActions({ job, isUpdating, store })
+  );
+
+  summaryElement.append(leftElement, rightElement);
+
+  return summaryElement;
+}
+
+function createJobTitleRow({ job, isExpanded, expandedJobIds, render }) {
   const titleRowElement = document.createElement("div");
   titleRowElement.className = "job-card__title-row";
 
@@ -218,19 +276,83 @@ function createJobCardHeader({ job, isExpanded, expandedJobIds, render }) {
 
   titleRowElement.append(expandButton, titleElement);
 
-  const statusElement = document.createElement("span");
-  statusElement.className = `job-card__status job-card__status--${job.status}`;
-  statusElement.textContent = getJobStatusLabel(job.status);
+  return titleRowElement;
+}
 
-  titleGroupElement.append(titleRowElement, statusElement);
+function createDateChips(job) {
+  const containerElement = document.createElement("div");
+  containerElement.className = "job-card__date-chips";
 
+  containerElement.append(
+    createDateChip({
+      icon: "calendar",
+      label: "Created",
+      value: formatDate(job.createdAt),
+    }),
+    createDateChip({
+      icon: "date-time",
+      label: "Deadline",
+      value: formatDate(job.deadline),
+    })
+  );
+
+  return containerElement;
+}
+
+function createDateChip({ icon, label, value }) {
+  const chipElement = document.createElement("span");
+  chipElement.className = "job-card__date-chip";
+  chipElement.title = `${label}: ${value}`;
+  chipElement.setAttribute("aria-label", `${label}: ${value}`);
+
+  const iconElement = document.createElement("calcite-icon");
+  iconElement.icon = icon;
+  iconElement.scale = "s";
+  iconElement.setAttribute("aria-hidden", "true");
+
+  const valueElement = document.createElement("span");
+  valueElement.textContent = value;
+
+  chipElement.append(iconElement, valueElement);
+
+  return chipElement;
+}
+
+function createPriorityBadge(job) {
   const priorityElement = document.createElement("span");
   priorityElement.className = `job-card__priority job-card__priority--${job.priority}`;
   priorityElement.textContent = getJobPriorityLabel(job.priority);
 
-  headerElement.append(titleGroupElement, priorityElement);
+  return priorityElement;
+}
 
-  return headerElement;
+function createAffectedAoiBadge(job) {
+  const aoiCount = job.relatedAoiIds.length;
+  const impact = getAffectedAoiImpact(aoiCount);
+
+  const badgeElement = document.createElement("span");
+  badgeElement.className = `job-card__aoi-count job-card__aoi-count--${impact}`;
+  badgeElement.textContent = String(aoiCount);
+  badgeElement.title = `${aoiCount} affected AOI${aoiCount === 1 ? "" : "s"}`;
+  badgeElement.setAttribute("aria-label", `${aoiCount} affected AOI${aoiCount === 1 ? "" : "s"}`);
+
+  return badgeElement;
+}
+
+function getAffectedAoiImpact(aoiCount) {
+  if (aoiCount <= 0) {
+    return "none";
+  }
+
+  if (aoiCount === 1) {
+    return "low";
+  }
+
+  if (aoiCount <= 3) {
+    return "medium";
+  }
+
+  return "high";
 }
 
 function createStatusActions({ job, isUpdating, store }) {
@@ -256,17 +378,10 @@ function createJobDetails(job) {
   detailsElement.className = "job-card__details";
 
   const summaryElement = document.createElement("p");
-  summaryElement.className = "job-card__summary";
+  summaryElement.className = "job-card__description";
   summaryElement.textContent = job.summary || "No summary provided.";
 
-  const metaElement = document.createElement("dl");
-  metaElement.className = "job-card__meta";
-
-  appendMetaItem(metaElement, "Created", formatDate(job.createdAt));
-  appendMetaItem(metaElement, "Deadline", formatDate(job.deadline));
-  appendMetaItem(metaElement, "Related AOIs", String(job.relatedAoiIds.length));
-
-  detailsElement.append(summaryElement, metaElement);
+  detailsElement.append(summaryElement);
 
   return detailsElement;
 }
@@ -280,12 +395,19 @@ function createUpdatingState() {
 }
 
 function createStatusButton({ job, statusOption, isUpdating, store }) {
+  const isActive = job.status === statusOption.value;
+
   const buttonElement = document.createElement("calcite-button");
   buttonElement.className = `job-status-button job-status-button--${statusOption.value}`;
+
+  if (isActive) {
+    buttonElement.classList.add("job-status-button--active");
+  }
+
   buttonElement.scale = "s";
-  buttonElement.kind = "neutral";
-  buttonElement.appearance = job.status === statusOption.value ? "solid" : "outline";
-  buttonElement.disabled = isUpdating || job.status === statusOption.value;
+  buttonElement.kind = getStatusButtonKind(statusOption.value);
+  buttonElement.appearance = isActive ? "solid" : "outline";
+  buttonElement.disabled = isUpdating || isActive;
   buttonElement.textContent = statusOption.label;
 
   buttonElement.addEventListener("click", async () => {
@@ -313,6 +435,19 @@ function createStatusButton({ job, statusOption, isUpdating, store }) {
   });
 
   return buttonElement;
+}
+
+function getStatusButtonKind(status) {
+  switch (status) {
+    case JOB_STATUS.TODO:
+      return "brand";
+    case JOB_STATUS.IN_PROGRESS:
+      return "warning";
+    case JOB_STATUS.DONE:
+      return "success";
+    default:
+      return "neutral";
+  }
 }
 
 function createLoadingState() {
@@ -353,16 +488,6 @@ function createEmptyState(hiddenDoneCount) {
       : "No Jobs found.";
 
   return element;
-}
-
-function appendMetaItem(metaElement, label, value) {
-  const termElement = document.createElement("dt");
-  termElement.textContent = label;
-
-  const valueElement = document.createElement("dd");
-  valueElement.textContent = value || "-";
-
-  metaElement.append(termElement, valueElement);
 }
 
 function formatDate(value) {

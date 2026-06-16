@@ -3,11 +3,15 @@
 }
 
 .job-list__toolbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 0.75rem;
   margin-bottom: 0.85rem;
+}
+
+.job-list__count-group {
+  min-width: 0;
 }
 
 .job-list__count {
@@ -26,9 +30,9 @@
 .job-list__toolbar-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.4rem;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
 .job-list__toolbar-actions calcite-button::part(button) {
@@ -76,10 +80,23 @@
   border-left-color: var(--jm-color-status-done-text);
 }
 
-.job-card__summary-grid {
+.job-card__summary-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.7rem;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.job-card__left {
+  min-width: 0;
+}
+
+.job-card__right {
+  display: grid;
+  grid-template-columns: max-content;
+  justify-items: end;
+  align-content: start;
+  gap: 0.45rem;
 }
 
 .job-card__title-row {
@@ -91,7 +108,7 @@
 
 .job-card__expand-action {
   flex: 0 0 auto;
-  margin-top: -0.2rem;
+  margin-top: -0.25rem;
   --calcite-color-foreground-1: transparent;
 }
 
@@ -102,33 +119,29 @@
   line-height: 1.25;
 }
 
-.job-card__left {
-  min-width: 0;
-}
-
-.job-card__right {
+.job-card__date-chips {
   display: grid;
-  justify-items: end;
-  align-content: start;
-  gap: 0.45rem;
+  grid-template-columns: max-content;
+  gap: 0.3rem;
+  margin-top: 0.55rem;
 }
 
-.job-card__compact-meta {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 0.25rem 0.65rem;
-  margin: 0.55rem 0 0;
-  font-size: 0.82rem;
-}
-
-.job-card__compact-meta dt {
-  color: var(--jm-text-muted);
-  font-weight: 700;
-}
-
-.job-card__compact-meta dd {
-  margin: 0;
+.job-card__date-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: max-content;
+  min-height: 1.5rem;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--jm-border);
+  background: var(--calcite-color-foreground-2, #f8f9fa);
   color: var(--jm-text);
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.job-card__date-chip calcite-icon {
+  color: var(--jm-text-muted);
 }
 
 .job-card__priority,
@@ -136,10 +149,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 1.45rem;
-  padding: 0.15rem 0.5rem;
+  min-height: 1.55rem;
+  min-width: 2.25rem;
+  padding: 0.15rem 0.55rem;
   border: 1px solid transparent;
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   font-weight: 800;
   line-height: 1;
   text-transform: uppercase;
@@ -193,41 +207,15 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.35rem;
-  margin-top: 0.15rem;
+  margin-top: 0.05rem;
 }
 
 .job-status-button::part(button) {
   border-radius: 0;
 }
 
-.job-status-button--todo::part(button) {
-  border-color: var(--jm-color-status-todo-text);
-  color: var(--jm-color-status-todo-text);
-}
-
-.job-status-button--todo.job-status-button--active::part(button) {
-  background: var(--jm-color-status-todo-text);
-  color: #ffffff;
-}
-
-.job-status-button--inProgress::part(button) {
-  border-color: var(--jm-color-status-in-progress-text);
-  color: var(--jm-color-status-in-progress-text);
-}
-
-.job-status-button--inProgress.job-status-button--active::part(button) {
-  background: var(--jm-color-status-in-progress-bg);
-  color: var(--jm-color-status-in-progress-text);
-}
-
-.job-status-button--done::part(button) {
-  border-color: var(--jm-color-status-done-text);
-  color: var(--jm-color-status-done-text);
-}
-
-.job-status-button--done.job-status-button--active::part(button) {
-  background: var(--jm-color-status-done-text);
-  color: #ffffff;
+.job-status-button--active::part(button) {
+  font-weight: 700;
 }
 
 .job-card__details {
@@ -236,7 +224,7 @@
   border-top: 1px solid var(--jm-border);
 }
 
-.job-card__summary {
+.job-card__description {
   margin: 0;
   color: var(--jm-text-muted);
   font-size: 0.88rem;
@@ -249,7 +237,7 @@
 }
 
 @media (max-width: 34rem) {
-  .job-card__summary-grid {
+  .job-card__summary-layout {
     grid-template-columns: 1fr;
   }
 
