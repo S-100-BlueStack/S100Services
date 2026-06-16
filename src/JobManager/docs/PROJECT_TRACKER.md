@@ -730,6 +730,38 @@ Rationale:
 
 Linting and formatting should be available early so implementation quality does not drift. HTTPS should be available from the start because ArcGIS/browser integrations and future auth-related flows may require secure local development behavior.
 
+## 8.15 Align package versions with current Product Manager state
+
+Status: Done
+
+Job Manager should align package versions with the current Product Manager implementation, not only with the originally documented package versions. Vite is kept on version 8 because Product Manager has also been updated to Vite 8.
+
+Rationale:
+
+Product Manager is the practical baseline for Job Manager. Package alignment should follow the actively maintained project state to avoid unnecessary divergence.
+
+## 8.16 Use square corners for panels and app surfaces
+
+Status: Done
+
+Job Manager should generally use square corners for panels, popovers, notices, map overlays and app surfaces. Rounded corners are acceptable for navbar actions and compact header controls where they match the Product Manager style.
+
+Rationale:
+
+This keeps Job Manager closer to the visual style used in Product Manager and avoids drifting into a generic rounded dashboard look.
+
+## 8.17 Include Job geometry in mock data without coupling UI to spatial logic
+
+Status: Done
+
+Mock Jobs should include simple polygon geometry within Denmark and the surrounding seas. This makes the mock backend realistic enough for later map and spatial-relation testing.
+
+The UI should not use Job geometry directly for AOI/Job relation logic. Initial relation flow should use mocked `relatedAoiIds` through the relation/service layer. Later, relation logic can be replaced by frontend spatial calculation or backend-provided AOI/Job relations.
+
+Rationale:
+
+This supports realistic map-oriented development while avoiding early coupling to an unconfirmed backend or spatial relation strategy.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -769,6 +801,15 @@ Mock backend rules:
 - must be accessed through service functions
 - must have clear comments explaining what behavior is mock-only and why
 - must be easy to remove when real backend is introduced
+
+Mock Jobs must include at least:
+
+- title
+- created date
+- priority
+- status
+- geometry within Denmark or surrounding Danish waters
+- related AOI ids for initial UI testing
 
 Suggested initial mock configuration:
 
