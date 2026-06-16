@@ -754,9 +754,9 @@ This keeps Job Manager closer to the visual style used in Product Manager and av
 
 Status: Done
 
-Mock Jobs should include simple polygon geometry within Denmark and the surrounding seas. This makes the mock backend realistic enough for later map and spatial-relation testing.
+Mock Jobs include geometry within Denmark and the surrounding Danish waters. Mock geometry may be either point or polygon geometry.
 
-The UI should not use Job geometry directly for AOI/Job relation logic. Initial relation flow should use mocked `relatedAoiIds` through the relation/service layer. Later, relation logic can be replaced by frontend spatial calculation or backend-provided AOI/Job relations.
+The UI must not use Job geometry directly for AOI/Job relation logic. Initial relation flow should use mocked `relatedAoiIds` through the relation/service layer. Later, relation logic can be replaced by frontend spatial calculation or backend-provided AOI/Job relations.
 
 Rationale:
 
@@ -942,14 +942,14 @@ Implement Jobs without UI depending directly on mock data.
 
 Tasks:
 
-| ID      | Task                                            |      Status | Notes                                                             |
-| ------- | ----------------------------------------------- | ----------: | ----------------------------------------------------------------- |
-| JM-0201 | Define Job status and priority domain constants | Not started | Internal values separate from UI labels.                          |
-| JM-0202 | Define Job model normalization helpers          | Not started | Protect UI from later backend changes.                            |
-| JM-0203 | Implement mock Job data                         | Not started | Include varied statuses, priorities, deadlines and AOI relations. |
-| JM-0204 | Implement mock Job backend adapter              | Not started | Latency, failure simulation and cyclic creation.                  |
-| JM-0205 | Implement Job service facade                    | Not started | UI imports service, not mock backend.                             |
-| JM-0206 | Implement status update service flow            | Not started | Return result shape, not raw thrown errors.                       |
+| ID      | Task                                            | Status | Notes                                                                                          |
+| ------- | ----------------------------------------------- | -----: | ---------------------------------------------------------------------------------------------- |
+| JM-0201 | Define Job status and priority domain constants |   Done | Added stable internal status and priority values with user-facing labels.                      |
+| JM-0202 | Define Job model normalization helpers          |   Done | Added normalization for Job fields and point/polygon geometry.                                 |
+| JM-0203 | Implement mock Job data                         |   Done | Mock Jobs include titles, dates, priority, status, point/polygon geometry and related AOI ids. |
+| JM-0204 | Implement mock Job backend adapter              |   Done | Mock backend supports latency, failures, status mutation and cyclic follow-up Job creation.    |
+| JM-0205 | Implement Job service facade                    |   Done | UI consumes Job service/store instead of importing mock backend directly.                      |
+| JM-0206 | Implement status update service flow            |   Done | Status updates return API result objects and support created follow-up Jobs.                   |
 
 Exit criteria:
 
@@ -967,14 +967,14 @@ Provide list-based work access before complex map interaction.
 
 Tasks:
 
-| ID      | Task                                         |      Status | Notes                                                                |
-| ------- | -------------------------------------------- | ----------: | -------------------------------------------------------------------- |
-| JM-0301 | Create Job list component                    | Not started | Shows title, status, priority, created date, deadline and AOI count. |
-| JM-0302 | Create Job detail/selection component        | Not started | Keep simple.                                                         |
-| JM-0303 | Add Job status buttons                       | Not started | To do, In Progress, Done.                                            |
-| JM-0304 | Add per-Job mutation loading state           | Not started | Prevent duplicate updates.                                           |
-| JM-0305 | Show success/failure notices for Job updates | Not started | Use centralized notice service.                                      |
-| JM-0306 | Show cyclic Job creation notice              | Not started | Mock-only behavior must be visible.                                  |
+| ID      | Task                                         |      Status | Notes                                                                                                      |
+| ------- | -------------------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------- |
+| JM-0301 | Create Job list component                    |        Done | Jobs panel now renders mock Jobs with title, status, priority, dates, geometry type and related AOI count. |
+| JM-0302 | Create Job detail/selection component        | Not started | Deferred until list/map selection flow is clearer.                                                         |
+| JM-0303 | Add Job status buttons                       |        Done | Added To do, In Progress and Done buttons per Job.                                                         |
+| JM-0304 | Add per-Job mutation loading state           |        Done | Updating Jobs disable status buttons and show mutation text.                                               |
+| JM-0305 | Show success/failure notices for Job updates |        Done | Status updates show success and error notices.                                                             |
+| JM-0306 | Show cyclic Job creation notice              |        Done | Mock-created follow-up Jobs show an info notice.                                                           |
 
 Exit criteria:
 

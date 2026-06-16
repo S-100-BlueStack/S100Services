@@ -1,6 +1,7 @@
-import { getRuntimeConfig } from "../shared/config/runtimeConfig.js";
+import { createJobList } from "../features/jobs/ui/jobList.js";
 import { createNoticeRegion } from "../features/notices/ui/noticeContainer.js";
 import { showInfoNotice, showSuccessNotice } from "../features/notices/services/noticeService.js";
+import { getRuntimeConfig } from "../shared/config/runtimeConfig.js";
 
 export async function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
@@ -74,6 +75,7 @@ export async function createApp(rootElement) {
   return {
     destroy() {
       document.removeEventListener("click", handleDocumentClick);
+      jobsPanel.destroy();
       noticeRegion.destroy?.();
       rootElement.replaceChildren();
     },
@@ -179,6 +181,8 @@ function createMapWorkspace(runtimeConfig) {
 }
 
 function createJobsOverlay() {
+  const jobList = createJobList();
+
   const panelElement = document.createElement("aside");
   panelElement.id = "job-manager-jobs-panel";
   panelElement.className = "job-manager-overlay-panel job-manager-jobs-overlay";
@@ -197,7 +201,7 @@ function createJobsOverlay() {
 
   const subtitleElement = document.createElement("p");
   subtitleElement.className = "job-manager-overlay-panel__subtitle";
-  subtitleElement.textContent = "Initial workspace panel";
+  subtitleElement.textContent = "Mock backend";
 
   titleGroupElement.append(titleElement, subtitleElement);
 
@@ -209,25 +213,14 @@ function createJobsOverlay() {
 
   headerElement.append(titleGroupElement, closeButton);
 
-  const descriptionElement = document.createElement("p");
-  descriptionElement.className = "job-manager-overlay-panel__description";
-  descriptionElement.textContent =
-    "This panel will show the Job list, selected Job details and related AOIs while the map remains the primary workspace.";
-
-  const placeholderListElement = document.createElement("ul");
-  placeholderListElement.className = "job-manager-overlay-list";
-
-  for (const item of ["Mock Job service", "Job list", "Status mutations", "AOI relation summary"]) {
-    const itemElement = document.createElement("li");
-    itemElement.textContent = item;
-    placeholderListElement.appendChild(itemElement);
-  }
-
-  panelElement.append(headerElement, descriptionElement, placeholderListElement);
+  panelElement.append(headerElement, jobList.element);
 
   return {
     element: panelElement,
     closeButton,
+    destroy() {
+      jobList.destroy();
+    },
   };
 }
 

@@ -53,8 +53,24 @@ The frontend should normalize backend or mock Job data into this shape:
   deadline: "2026-06-30T00:00:00.000Z",
   priority: "medium",
   status: "todo",
+  geometry: {
+    type: "polygon",
+    rings: [],
+    spatialReference: {
+      wkid: 4326
+    }
+  },
   relatedAoiIds: ["aoi-001", "aoi-002"]
 }
+```
+
+Mock Jobs may use either point or polygon geometry. Geometry should be within Denmark or the surrounding Danish waters.
+
+Initial geometry types:
+
+```txt
+point
+polygon
 ```
 
 Internal status values:
