@@ -1,0 +1,72 @@
+.job-manager-overlay-panel {
+  position: absolute;
+  z-index: 10;
+  top: 0;
+  width: min(31rem, calc(100vw - 2rem));
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  overflow: auto;
+  border: 1px solid var(--jm-border);
+  border-top: 0;
+  border-left: 0;
+  border-radius: 0;
+  background: var(--jm-overlay);
+  box-shadow: var(--jm-shadow);
+  backdrop-filter: blur(14px);
+}
+
+.job-manager-overlay-panel[hidden] {
+  display: none;
+}
+
+.job-manager-jobs-overlay {
+  left: 0;
+}
+
+.job-manager-overlay-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.job-manager-overlay-panel__title-group {
+  min-width: 0;
+}
+
+.job-manager-overlay-panel__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.job-manager-overlay-panel__subtitle {
+  margin: 0.2rem 0 0;
+  color: var(--jm-text-muted);
+  font-size: 0.85rem;
+}
+
+.job-manager-overlay-panel__description {
+  margin: 0;
+  color: var(--jm-text);
+  font-size: 0.92rem;
+}
+
+.job-manager-overlay-panel__close {
+  --calcite-color-foreground-1: transparent;
+}
+
+@media (max-width: 54rem) {
+  .job-manager-overlay-panel {
+    top: auto;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    left: 0.75rem;
+    width: auto;
+    max-height: 50%;
+    border: 1px solid var(--jm-border);
+  }
+}

@@ -1,0 +1,61 @@
+#filters-popover {
+  z-index: 1001;
+}
+
+.job-manager-filter-popover {
+  width: min(28rem, calc(100vw - 2rem));
+  padding: 0.85rem;
+  color: var(--jm-text);
+}
+
+.job-manager-filter-popover__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--jm-border);
+}
+
+.job-manager-filter-popover__header calcite-action {
+  --calcite-color-foreground-1: transparent;
+}
+
+.job-manager-filter-popover__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.job-manager-filter-popover__subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--jm-text-muted);
+  font-size: 0.85rem;
+}
+
+.job-manager-filter-popover__section {
+  padding-top: 0.85rem;
+}
+
+.job-manager-filter-popover__section-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--jm-text-muted);
+}
+
+.job-manager-filter-popover__quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.job-manager-filter-popover__placeholder {
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px dashed var(--jm-border);
+  color: var(--jm-text-muted);
+  font-size: 0.9rem;
+}

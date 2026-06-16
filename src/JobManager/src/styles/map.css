@@ -1,0 +1,59 @@
+.job-manager-workspace {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.job-manager-map {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.26) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.26) 1px, transparent 1px),
+    radial-gradient(circle at 35% 35%, rgba(69, 97, 120, 0.2), transparent 32%),
+    linear-gradient(135deg, #c8d8e6, #e5eef5);
+  background-size:
+    42px 42px,
+    42px 42px,
+    auto,
+    auto;
+}
+
+.job-manager-map__placeholder {
+  max-width: min(34rem, calc(100vw - 4rem));
+  padding: 1.25rem 1.5rem;
+  border: 1px solid rgba(69, 97, 120, 0.28);
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: var(--jm-shadow);
+  text-align: center;
+  backdrop-filter: blur(10px);
+}
+
+.job-manager-map__title {
+  margin: 0;
+  color: var(--jm-header-bg);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.job-manager-map__description {
+  margin: 0.5rem 0 0;
+  color: var(--jm-text);
+}
+
+.job-manager-map__meta {
+  margin: 0.75rem 0 0;
+  color: var(--jm-text-muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 54rem) {
+  .job-manager-map__placeholder {
+    transform: translateY(-35%);
+  }
+}

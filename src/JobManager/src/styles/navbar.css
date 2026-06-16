@@ -1,0 +1,135 @@
+#header {
+  display: flex;
+  align-items: center;
+  height: var(--jm-navbar-height);
+  padding: 0 12px;
+  gap: 18px;
+  background-color: var(--jm-header-bg);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.header-center {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 24px;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.navbar-logo {
+  display: block;
+  width: 42px;
+  height: 42px;
+}
+
+.navbar-title-link,
+.navbar-title-link:visited {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 2px;
+  color: inherit;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.navbar-title-link:hover,
+.navbar-title-link:focus,
+.navbar-title-link:active {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.navbar-panel-button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.55rem;
+  border: 0;
+  border-radius: 10px;
+  color: #ffffff;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.navbar-panel-button calcite-icon {
+  color: currentColor;
+}
+
+.navbar-panel-button:hover,
+.navbar-panel-button:focus-visible,
+.navbar-panel-button[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.22);
+  outline: none;
+}
+
+.navbar-panel-button:focus-visible {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.65);
+}
+
+#last-updated {
+  color: #ffffff;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.header-right > calcite-action {
+  border-radius: 10px;
+  --calcite-color-foreground-1: transparent;
+  --calcite-color-text-3: white;
+  --calcite-action-background-color-hover: rgba(255, 255, 255, 0.25);
+  --calcite-action-text-color-press: white;
+}
+
+.header-right > calcite-action:hover {
+  --calcite-color-foreground-1: white;
+  --calcite-action-background-color-hover: rgba(255, 255, 255, 0.25);
+}
+
+#filters-button[active],
+#test-notice-button[active] {
+  --calcite-color-foreground-1: rgb(255, 255, 255);
+}
+
+@media (max-width: 54rem) {
+  #header {
+    align-items: flex-start;
+    height: auto;
+    min-height: var(--jm-navbar-height);
+    padding: 0.5rem 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .header-center {
+    order: 3;
+    flex-basis: 100%;
+    gap: 20px;
+  }
+
+  .header-right {
+    margin-left: auto;
+  }
+}

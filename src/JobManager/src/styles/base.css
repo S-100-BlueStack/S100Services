@@ -1,0 +1,41 @@
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  overflow: hidden;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  background: #d7e3ef;
+  color: var(--jm-text);
+}
+
+button {
+  font: inherit;
+}
+
+.job-manager-app {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: var(--jm-navbar-height) minmax(0, 1fr);
+  overflow: hidden;
+}
+
+@media (max-width: 54rem) {
+  .job-manager-app {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+}
