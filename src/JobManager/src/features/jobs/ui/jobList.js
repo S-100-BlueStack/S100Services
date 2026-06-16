@@ -3,7 +3,6 @@ import {
   showInfoNotice,
   showSuccessNotice,
 } from "../../notices/services/noticeService.js";
-import { getJobPriorityLabel } from "../domain/jobPriority.js";
 import { JOB_STATUS, JOB_STATUS_OPTIONS } from "../domain/jobStatus.js";
 import { createJobStore } from "../state/jobStore.js";
 
@@ -134,6 +133,9 @@ function createListToolbar({ state, visibleJobs, hiddenDoneCount, expandedJobIds
   const toolbarActionsElement = document.createElement("div");
   toolbarActionsElement.className = "job-list__toolbar-actions";
 
+  const refreshActionsElement = document.createElement("div");
+  refreshActionsElement.className = "job-list__toolbar-action-row";
+
   const refreshButton = createToolbarButton(state.isLoading ? "Refreshing..." : "Refresh");
   refreshButton.disabled = state.isLoading;
 
@@ -153,8 +155,14 @@ function createListToolbar({ state, visibleJobs, hiddenDoneCount, expandedJobIds
     }
   });
 
+  refreshActionsElement.appendChild(refreshButton);
+
+  const expandActionsElement = document.createElement("div");
+  expandActionsElement.className = "job-list__toolbar-action-row";
+
   const expandAllButton = createToolbarButton("Expand all");
-  expandAllButton.disabled = visibleJobs.length === 0;
+  expandAllButton.disabled =
+    visibleJobs.length === 0 || areAllVisibleJobsExpanded(visibleJobs, expandedJobIds);
 
   expandAllButton.addEventListener("click", () => {
     for (const job of visibleJobs) {
@@ -165,17 +173,26 @@ function createListToolbar({ state, visibleJobs, hiddenDoneCount, expandedJobIds
   });
 
   const collapseAllButton = createToolbarButton("Collapse all");
-  collapseAllButton.disabled = expandedJobIds.size === 0;
+  collapseAllButton.disabled = !hasExpandedVisibleJobs(visibleJobs, expandedJobIds);
 
   collapseAllButton.addEventListener("click", () => {
     expandedJobIds.clear();
     render();
   });
 
-  toolbarActionsElement.append(refreshButton, expandAllButton, collapseAllButton);
+  expandActionsElement.append(expandAllButton, collapseAllButton);
+  toolbarActionsElement.append(refreshActionsElement, expandActionsElement);
   toolbarElement.append(countGroupElement, toolbarActionsElement);
 
   return toolbarElement;
+}
+
+function areAllVisibleJobsExpanded(visibleJobs, expandedJobIds) {
+  return visibleJobs.length > 0 && visibleJobs.every((job) => expandedJobIds.has(job.id));
+}
+
+function hasExpandedVisibleJobs(visibleJobs, expandedJobIds) {
+  return visibleJobs.some((job) => expandedJobIds.has(job.id));
 }
 
 function createToolbarButton(label) {
@@ -239,11 +256,11 @@ function createJobCardSummary({ job, isExpanded, isUpdating, expandedJobIds, sto
   const rightElement = document.createElement("div");
   rightElement.className = "job-card__right";
 
-  rightElement.append(
-    createPriorityBadge(job),
-    createAffectedAoiBadge(job),
-    createStatusActions({ job, isUpdating, store })
-  );
+  const badgeColumnElement = document.createElement("div");
+  badgeColumnElement.className = "job-card__badge-column";
+  badgeColumnElement.append(createPriorityBadge(job), createAffectedAoiBadge(job));
+
+  rightElement.append(badgeColumnElement, createStatusActions({ job, isUpdating, store }));
 
   summaryElement.append(leftElement, rightElement);
 
@@ -311,6 +328,7 @@ function createDateChip({ icon, label, value }) {
   iconElement.setAttribute("aria-hidden", "true");
 
   const valueElement = document.createElement("span");
+  valueElement.className = "job-card__date-chip-text";
   valueElement.textContent = value;
 
   chipElement.append(iconElement, valueElement);
@@ -321,9 +339,22 @@ function createDateChip({ icon, label, value }) {
 function createPriorityBadge(job) {
   const priorityElement = document.createElement("span");
   priorityElement.className = `job-card__priority job-card__priority--${job.priority}`;
-  priorityElement.textContent = getJobPriorityLabel(job.priority);
+  priorityElement.textContent = getPriorityBadgeLabel(job.priority);
 
   return priorityElement;
+}
+
+function getPriorityBadgeLabel(priority) {
+  switch (priority) {
+    case "low":
+      return "LOW";
+    case "medium":
+      return "MED";
+    case "high":
+      return "HIGH";
+    default:
+      return "MED";
+  }
 }
 
 function createAffectedAoiBadge(job) {
@@ -402,15 +433,20 @@ function createStatusButton({ job, statusOption, isUpdating, store }) {
 
   if (isActive) {
     buttonElement.classList.add("job-status-button--active");
+    buttonElement.setAttribute("aria-current", "true");
   }
 
   buttonElement.scale = "s";
-  buttonElement.kind = getStatusButtonKind(statusOption.value);
+  buttonElement.kind = "neutral";
   buttonElement.appearance = isActive ? "solid" : "outline";
-  buttonElement.disabled = isUpdating || isActive;
+  buttonElement.disabled = isUpdating;
   buttonElement.textContent = statusOption.label;
 
   buttonElement.addEventListener("click", async () => {
+    if (isActive) {
+      return;
+    }
+
     const result = await store.updateJobStatus(job.id, statusOption.value);
 
     if (!result.ok) {
@@ -435,19 +471,6 @@ function createStatusButton({ job, statusOption, isUpdating, store }) {
   });
 
   return buttonElement;
-}
-
-function getStatusButtonKind(status) {
-  switch (status) {
-    case JOB_STATUS.TODO:
-      return "brand";
-    case JOB_STATUS.IN_PROGRESS:
-      return "warning";
-    case JOB_STATUS.DONE:
-      return "success";
-    default:
-      return "neutral";
-  }
 }
 
 function createLoadingState() {
