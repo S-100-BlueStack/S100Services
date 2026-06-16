@@ -838,6 +838,16 @@ Rationale:
 
 This follows the Product Manager direction and prevents `main.css` from becoming a large mixed-responsibility stylesheet.
 
+## 8.25 Keep newly completed Jobs visible until refresh or panel close
+
+Status: Done
+
+When a user marks a Job as Done, the Job should remain visible in the current Jobs panel session so the result of the action is visible. Done Jobs are hidden again after refresh or when the Jobs panel is closed and reopened.
+
+Rationale:
+
+Removing a Job immediately after clicking Done makes the UI feel abrupt and can make users unsure whether the update succeeded.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -1044,14 +1054,14 @@ Provide list-based work access before complex map interaction.
 
 Tasks:
 
-| ID      | Task                                         |      Status | Notes                                                                                                                                                                                                                                         |
-| ------- | -------------------------------------------- | ----------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-0301 | Create Job list component                    |        Done | Jobs panel now renders active mock Jobs with compact collapsible cards showing title, fixed-width created/deadline date chips, fixed-width priority and affected AOI badges, and color-coded status actions. Done Jobs are hidden by default. |
-| JM-0302 | Create Job detail/selection component        | In progress | Collapsible Job cards provide the first detail surface. Expanded content currently only shows summary; dedicated selection/details flow is deferred until map interaction exists.                                                             |
-| JM-0303 | Add Job status buttons                       |        Done | Added To do, In Progress and Done buttons per Job.                                                                                                                                                                                            |
-| JM-0304 | Add per-Job mutation loading state           |        Done | Updating Jobs disable status buttons and show mutation text.                                                                                                                                                                                  |
-| JM-0305 | Show success/failure notices for Job updates |        Done | Status updates show success and error notices.                                                                                                                                                                                                |
-| JM-0306 | Show cyclic Job creation notice              |        Done | Mock-created follow-up Jobs show an info notice.                                                                                                                                                                                              |
+| ID      | Task                                         |      Status | Notes                                                                                                                                                                                                                                                                                            |
+| ------- | -------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| JM-0301 | Create Job list component                    |        Done | Jobs panel now renders active mock Jobs with compact collapsible cards using separate title/badge and date/action rows, fixed-width date chips, fixed-width priority/AOI badges and Calcite brand status actions. Done Jobs remain visible until refresh or panel close after being marked Done. |
+| JM-0302 | Create Job detail/selection component        | In progress | Collapsible Job cards provide the first detail surface. Expanded content currently only shows summary; dedicated selection/details flow is deferred until map interaction exists.                                                                                                                |
+| JM-0303 | Add Job status buttons                       |        Done | Added To do, In Progress and Done buttons per Job.                                                                                                                                                                                                                                               |
+| JM-0304 | Add per-Job mutation loading state           |        Done | Updating Jobs disable status buttons and show mutation text.                                                                                                                                                                                                                                     |
+| JM-0305 | Show success/failure notices for Job updates |        Done | Status updates show success and error notices.                                                                                                                                                                                                                                                   |
+| JM-0306 | Show cyclic Job creation notice              |        Done | Mock-created follow-up Jobs show an info notice.                                                                                                                                                                                                                                                 |
 
 Exit criteria:
 

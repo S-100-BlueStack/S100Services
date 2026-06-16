@@ -25,10 +25,17 @@ export async function createApp(rootElement) {
   setFilterPopoverOpen(header.filtersPopover, header.filtersButton, false);
 
   header.jobsButton.addEventListener("click", () => {
-    togglePanel(jobsPanel.element, header.jobsButton);
+    const shouldOpen = jobsPanel.element.hidden;
+
+    if (!shouldOpen) {
+      jobsPanel.hideCompletedJobs();
+    }
+
+    setPanelOpen(jobsPanel.element, header.jobsButton, shouldOpen);
   });
 
   jobsPanel.closeButton.addEventListener("click", () => {
+    jobsPanel.hideCompletedJobs();
     setPanelOpen(jobsPanel.element, header.jobsButton, false);
   });
 
@@ -218,6 +225,9 @@ function createJobsOverlay() {
   return {
     element: panelElement,
     closeButton,
+    hideCompletedJobs() {
+      jobList.hideCompletedJobs();
+    },
     destroy() {
       jobList.destroy();
     },
@@ -232,10 +242,6 @@ function getRequiredElement(rootElement, selector) {
   }
 
   return element;
-}
-
-function togglePanel(panelElement, triggerButton) {
-  setPanelOpen(panelElement, triggerButton, panelElement.hidden);
 }
 
 function setPanelOpen(panelElement, triggerButton, isOpen) {

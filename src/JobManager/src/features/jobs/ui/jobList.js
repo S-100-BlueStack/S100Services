@@ -17,21 +17,28 @@ export function createJobList() {
 
   let currentState = store.getSnapshot();
   const expandedJobIds = new Set();
+  const visibleDoneJobIds = new Set();
 
   const render = () => {
-    renderJobList(rootElement, currentState, store, expandedJobIds, render);
+    renderJobList(rootElement, currentState, store, expandedJobIds, visibleDoneJobIds, render);
   };
 
   const unsubscribe = store.subscribe((state) => {
     currentState = state;
-    removeExpandedDoneJobs(expandedJobIds, state.jobs);
+    removeInvisibleExpandedJobs(expandedJobIds, state.jobs, visibleDoneJobIds);
+    removeMissingVisibleDoneJobs(visibleDoneJobIds, state.jobs);
     render();
   });
 
-  loadJobs(store);
+  loadJobs(store, visibleDoneJobIds);
 
   return {
     element: rootElement,
+    hideCompletedJobs() {
+      visibleDoneJobIds.clear();
+      removeInvisibleExpandedJobs(expandedJobIds, currentState.jobs, visibleDoneJobIds);
+      render();
+    },
     destroy() {
       unsubscribe();
       rootElement.replaceChildren();
@@ -39,7 +46,9 @@ export function createJobList() {
   };
 }
 
-async function loadJobs(store) {
+async function loadJobs(store, visibleDoneJobIds) {
+  visibleDoneJobIds.clear();
+
   const result = await store.loadJobs();
 
   if (!result.ok) {
@@ -50,9 +59,9 @@ async function loadJobs(store) {
   }
 }
 
-function renderJobList(rootElement, state, store, expandedJobIds, render) {
-  const visibleJobs = getVisibleJobs(state.jobs);
-  const hiddenDoneCount = state.jobs.length - visibleJobs.length;
+function renderJobList(rootElement, state, store, expandedJobIds, visibleDoneJobIds, render) {
+  const visibleJobs = getVisibleJobs(state.jobs, visibleDoneJobIds);
+  const hiddenDoneCount = getHiddenDoneCount(state.jobs, visibleDoneJobIds);
 
   if (state.isLoading && state.jobs.length === 0) {
     rootElement.replaceChildren(createLoadingState());
@@ -60,7 +69,7 @@ function renderJobList(rootElement, state, store, expandedJobIds, render) {
   }
 
   if (state.error && state.jobs.length === 0) {
-    rootElement.replaceChildren(createErrorState(state.error, store));
+    rootElement.replaceChildren(createErrorState(state.error, store, visibleDoneJobIds));
     return;
   }
 
@@ -69,6 +78,7 @@ function renderJobList(rootElement, state, store, expandedJobIds, render) {
     visibleJobs,
     hiddenDoneCount,
     expandedJobIds,
+    visibleDoneJobIds,
     store,
     render,
   });
@@ -88,6 +98,7 @@ function renderJobList(rootElement, state, store, expandedJobIds, render) {
         state,
         store,
         expandedJobIds,
+        visibleDoneJobIds,
         render,
       })
     );
@@ -96,23 +107,44 @@ function renderJobList(rootElement, state, store, expandedJobIds, render) {
   rootElement.replaceChildren(toolbarElement, listElement);
 }
 
-function getVisibleJobs(jobs) {
-  return jobs.filter((job) => job.status !== JOB_STATUS.DONE);
+function getVisibleJobs(jobs, visibleDoneJobIds) {
+  return jobs.filter((job) => job.status !== JOB_STATUS.DONE || visibleDoneJobIds.has(job.id));
 }
 
-function removeExpandedDoneJobs(expandedJobIds, jobs) {
-  const activeJobIds = new Set(
-    jobs.filter((job) => job.status !== JOB_STATUS.DONE).map((job) => job.id)
-  );
+function getHiddenDoneCount(jobs, visibleDoneJobIds) {
+  return jobs.filter((job) => job.status === JOB_STATUS.DONE && !visibleDoneJobIds.has(job.id))
+    .length;
+}
+
+function removeInvisibleExpandedJobs(expandedJobIds, jobs, visibleDoneJobIds) {
+  const visibleJobIds = new Set(getVisibleJobs(jobs, visibleDoneJobIds).map((job) => job.id));
 
   for (const jobId of expandedJobIds) {
-    if (!activeJobIds.has(jobId)) {
+    if (!visibleJobIds.has(jobId)) {
       expandedJobIds.delete(jobId);
     }
   }
 }
 
-function createListToolbar({ state, visibleJobs, hiddenDoneCount, expandedJobIds, store, render }) {
+function removeMissingVisibleDoneJobs(visibleDoneJobIds, jobs) {
+  const jobIds = new Set(jobs.map((job) => job.id));
+
+  for (const jobId of visibleDoneJobIds) {
+    if (!jobIds.has(jobId)) {
+      visibleDoneJobIds.delete(jobId);
+    }
+  }
+}
+
+function createListToolbar({
+  state,
+  visibleJobs,
+  hiddenDoneCount,
+  expandedJobIds,
+  visibleDoneJobIds,
+  store,
+  render,
+}) {
   const toolbarElement = document.createElement("div");
   toolbarElement.className = "job-list__toolbar";
 
@@ -121,7 +153,7 @@ function createListToolbar({ state, visibleJobs, hiddenDoneCount, expandedJobIds
 
   const countElement = document.createElement("p");
   countElement.className = "job-list__count";
-  countElement.textContent = `${visibleJobs.length} active Jobs`;
+  countElement.textContent = `${visibleJobs.length} visible Jobs`;
 
   const hiddenDoneElement = document.createElement("p");
   hiddenDoneElement.className = "job-list__hidden-done-count";
@@ -140,7 +172,7 @@ function createListToolbar({ state, visibleJobs, hiddenDoneCount, expandedJobIds
   refreshButton.disabled = state.isLoading;
 
   refreshButton.addEventListener("click", async () => {
-    const result = await store.loadJobs();
+    const result = await loadJobsFromToolbar(store, visibleDoneJobIds);
 
     if (result.ok) {
       showSuccessNotice({
@@ -187,6 +219,12 @@ function createListToolbar({ state, visibleJobs, hiddenDoneCount, expandedJobIds
   return toolbarElement;
 }
 
+async function loadJobsFromToolbar(store, visibleDoneJobIds) {
+  visibleDoneJobIds.clear();
+
+  return store.loadJobs();
+}
+
 function areAllVisibleJobsExpanded(visibleJobs, expandedJobIds) {
   return visibleJobs.length > 0 && visibleJobs.every((job) => expandedJobIds.has(job.id));
 }
@@ -205,7 +243,7 @@ function createToolbarButton(label) {
   return buttonElement;
 }
 
-function createJobCard({ job, state, store, expandedJobIds, render }) {
+function createJobCard({ job, state, store, expandedJobIds, visibleDoneJobIds, render }) {
   const isExpanded = expandedJobIds.has(job.id);
   const isUpdating = state.updatingJobIds.has(job.id);
 
@@ -220,6 +258,7 @@ function createJobCard({ job, state, store, expandedJobIds, render }) {
       isExpanded,
       isUpdating,
       expandedJobIds,
+      visibleDoneJobIds,
       store,
       render,
     })
@@ -236,33 +275,46 @@ function createJobCard({ job, state, store, expandedJobIds, render }) {
   return cardElement;
 }
 
-function createJobCardSummary({ job, isExpanded, isUpdating, expandedJobIds, store, render }) {
+function createJobCardSummary({
+  job,
+  isExpanded,
+  isUpdating,
+  expandedJobIds,
+  visibleDoneJobIds,
+  store,
+  render,
+}) {
   const summaryElement = document.createElement("div");
   summaryElement.className = "job-card__summary-layout";
 
-  const leftElement = document.createElement("div");
-  leftElement.className = "job-card__left";
+  const topRowElement = document.createElement("div");
+  topRowElement.className = "job-card__top-row";
 
-  leftElement.append(
+  topRowElement.append(
     createJobTitleRow({
       job,
       isExpanded,
       expandedJobIds,
       render,
     }),
-    createDateChips(job)
+    createBadgeColumn(job)
   );
 
-  const rightElement = document.createElement("div");
-  rightElement.className = "job-card__right";
+  const bottomRowElement = document.createElement("div");
+  bottomRowElement.className = "job-card__bottom-row";
 
-  const badgeColumnElement = document.createElement("div");
-  badgeColumnElement.className = "job-card__badge-column";
-  badgeColumnElement.append(createPriorityBadge(job), createAffectedAoiBadge(job));
+  bottomRowElement.append(
+    createDateChips(job),
+    createStatusActions({
+      job,
+      isUpdating,
+      visibleDoneJobIds,
+      store,
+      render,
+    })
+  );
 
-  rightElement.append(badgeColumnElement, createStatusActions({ job, isUpdating, store }));
-
-  summaryElement.append(leftElement, rightElement);
+  summaryElement.append(topRowElement, bottomRowElement);
 
   return summaryElement;
 }
@@ -294,6 +346,15 @@ function createJobTitleRow({ job, isExpanded, expandedJobIds, render }) {
   titleRowElement.append(expandButton, titleElement);
 
   return titleRowElement;
+}
+
+function createBadgeColumn(job) {
+  const badgeColumnElement = document.createElement("div");
+  badgeColumnElement.className = "job-card__badge-column";
+
+  badgeColumnElement.append(createPriorityBadge(job), createAffectedAoiBadge(job));
+
+  return badgeColumnElement;
 }
 
 function createDateChips(job) {
@@ -386,7 +447,7 @@ function getAffectedAoiImpact(aoiCount) {
   return "high";
 }
 
-function createStatusActions({ job, isUpdating, store }) {
+function createStatusActions({ job, isUpdating, visibleDoneJobIds, store, render }) {
   const actionsElement = document.createElement("div");
   actionsElement.className = "job-card__actions";
 
@@ -396,7 +457,9 @@ function createStatusActions({ job, isUpdating, store }) {
         job,
         statusOption,
         isUpdating,
+        visibleDoneJobIds,
         store,
+        render,
       })
     );
   }
@@ -425,11 +488,11 @@ function createUpdatingState() {
   return updatingElement;
 }
 
-function createStatusButton({ job, statusOption, isUpdating, store }) {
+function createStatusButton({ job, statusOption, isUpdating, visibleDoneJobIds, store, render }) {
   const isActive = job.status === statusOption.value;
 
   const buttonElement = document.createElement("calcite-button");
-  buttonElement.className = `job-status-button job-status-button--${statusOption.value}`;
+  buttonElement.className = "job-status-button";
 
   if (isActive) {
     buttonElement.classList.add("job-status-button--active");
@@ -437,7 +500,7 @@ function createStatusButton({ job, statusOption, isUpdating, store }) {
   }
 
   buttonElement.scale = "s";
-  buttonElement.kind = "neutral";
+  buttonElement.kind = "brand";
   buttonElement.appearance = isActive ? "solid" : "outline";
   buttonElement.disabled = isUpdating;
   buttonElement.textContent = statusOption.label;
@@ -455,6 +518,11 @@ function createStatusButton({ job, statusOption, isUpdating, store }) {
         message: result.error.message,
       });
       return;
+    }
+
+    if (statusOption.value === JOB_STATUS.DONE) {
+      visibleDoneJobIds.add(result.data.job.id);
+      render();
     }
 
     showSuccessNotice({
@@ -481,7 +549,7 @@ function createLoadingState() {
   return element;
 }
 
-function createErrorState(error, store) {
+function createErrorState(error, store, visibleDoneJobIds) {
   const containerElement = document.createElement("div");
   containerElement.className = "job-list__state job-list__state--error";
 
@@ -494,7 +562,7 @@ function createErrorState(error, store) {
   retryButton.textContent = "Retry";
 
   retryButton.addEventListener("click", () => {
-    loadJobs(store);
+    loadJobs(store, visibleDoneJobIds);
   });
 
   containerElement.append(messageElement, retryButton);

@@ -86,26 +86,15 @@
 
 .job-card__summary-layout {
   display: grid;
+  gap: 0.65rem;
+}
+
+.job-card__top-row,
+.job-card__bottom-row {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) max-content;
   gap: 0.75rem;
   align-items: start;
-}
-
-.job-card__left {
-  min-width: 0;
-}
-
-.job-card__right {
-  display: grid;
-  justify-items: end;
-  align-content: start;
-  gap: 0.6rem;
-}
-
-.job-card__badge-column {
-  display: grid;
-  justify-items: end;
-  gap: 0.35rem;
 }
 
 .job-card__title-row {
@@ -122,17 +111,23 @@
 }
 
 .job-card__title {
+  min-width: 0;
   margin: 0;
-  font-size: 0.96rem;
+  font-size: 0.93rem;
   font-weight: 700;
   line-height: 1.25;
+}
+
+.job-card__badge-column {
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
 }
 
 .job-card__date-chips {
   display: grid;
   grid-template-columns: max-content;
   gap: 0.3rem;
-  margin-top: 0.55rem;
 }
 
 .job-card__date-chip {
@@ -222,7 +217,6 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.35rem;
-  margin-top: 0;
 }
 
 .job-status-button::part(button) {
@@ -230,34 +224,8 @@
   font-weight: 600;
 }
 
-.job-status-button--todo::part(button) {
-  border-color: var(--jm-color-status-todo-text);
-  color: var(--jm-color-status-todo-text);
-}
-
-.job-status-button--todo.job-status-button--active::part(button) {
-  background: var(--jm-color-status-todo-text);
-  color: #ffffff;
-}
-
-.job-status-button--inProgress::part(button) {
-  border-color: var(--jm-color-status-in-progress-text);
-  color: var(--jm-color-status-in-progress-text);
-}
-
-.job-status-button--inProgress.job-status-button--active::part(button) {
-  background: var(--jm-color-status-in-progress-bg);
-  color: var(--jm-color-status-in-progress-text);
-}
-
-.job-status-button--done::part(button) {
-  border-color: var(--jm-color-status-done-text);
-  color: var(--jm-color-status-done-text);
-}
-
-.job-status-button--done.job-status-button--active::part(button) {
-  background: var(--jm-color-status-done-text);
-  color: #ffffff;
+.job-status-button--active::part(button) {
+  font-weight: 800;
 }
 
 .job-card__details {
@@ -291,11 +259,11 @@
     justify-content: flex-start;
   }
 
-  .job-card__summary-layout {
+  .job-card__top-row,
+  .job-card__bottom-row {
     grid-template-columns: 1fr;
   }
 
-  .job-card__right,
   .job-card__badge-column {
     justify-items: start;
   }
