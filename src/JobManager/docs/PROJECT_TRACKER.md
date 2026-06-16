@@ -700,6 +700,36 @@ Rationale:
 
 This keeps the shell closer to Product Manager, makes the navbar easier to compare and maintain, and avoids hardcoding too much Product Manager-style markup inside `createApp.js`.
 
+## 8.12 Prefer Calcite components and log active opt-outs
+
+Status: Done
+
+Job Manager should use Calcite and Calcite Components where they fit the UI need. When the project actively chooses not to use Calcite for a UI element where a relevant Calcite component was considered, the decision must be logged in `docs/CALCITE_USAGE_LOG.md` with the reason and any feedback that may be useful to Esri.
+
+ALCITE_USAGE_LOG.md` with the reason and any feedback that may be useful to Esri.
+
+Normal semantic HTML used for layout and document structure is not considered a Calcite opt-out.
+
+## 8.13 Use native navbar panel toggle when Calcite button styling does not fit
+
+Status: Done
+
+The Jobs navbar control uses a native `button` with `calcite-icon` instead of `calcite-button`.
+
+Rationale:
+
+`calcite-button` worked functionally but produced styling and focus behavior that did not fit the Product Manager-style navbar. The decision is logged in `docs/CALCITE_USAGE_LOG.md` as an active Calcite opt-out.
+
+## 8.14 Add lint, format and HTTPS dev server foundation
+
+Status: Done
+
+Job Manager uses ESLint flat config, Prettier and an HTTPS Vite dev server through `vite-plugin-mkcert`.
+
+Rationale:
+
+Linting and formatting should be available early so implementation quality does not drift. HTTPS should be available from the start because ArcGIS/browser integrations and future auth-related flows may require secure local development behavior.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -846,14 +876,14 @@ Status: In progress
 
 Tasks:
 
-| ID      | Task                                  |      Status | Notes                                                                                                                                                       |
-| ------- | ------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-0101 | Create root app layout shell          |        Done | Root layout now uses a Product Manager-style navbar HTML template, GST logo, map-first workspace, closable left Jobs panel and right-side Filters dropdown. |
-| JM-0102 | Add shared config helper              |        Done | Runtime config reads safe `VITE_` values from `import.meta.env`.                                                                                            |
-| JM-0103 | Add shared API result helper          |        Done | Added success/error result helpers for future services.                                                                                                     |
-| JM-0104 | Add shared error normalization        |        Done | Added normalized frontend error shape for mock and future backend errors.                                                                                   |
-| JM-0105 | Add notice service shell              |        Done | Added notice service and UI container for user-visible messages.                                                                                            |
-| JM-0106 | Add basic dark/light theme foundation | Not started | Deferred until Product Manager theme pattern is verified.                                                                                                   |
+| ID      | Task                                  |      Status | Notes                                                                                                                                                                                    |
+| ------- | ------------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0101 | Create root app layout shell          |        Done | Root layout uses Product Manager-style navbar template, GST logo, map-first workspace, native Jobs panel toggle with Calcite icon, closable left Jobs panel and Calcite Filters popover. |
+| JM-0102 | Add shared config helper              |        Done | Runtime config reads safe `VITE_` values from `import.meta.env`.                                                                                                                         |
+| JM-0103 | Add shared API result helper          |        Done | Added success/error result helpers for future services.                                                                                                                                  |
+| JM-0104 | Add shared error normalization        |        Done | Added normalized frontend error shape for mock and future backend errors.                                                                                                                |
+| JM-0105 | Add notice service shell              |        Done | Added notice service and UI container for user-visible messages. Notice UI is currently custom and should be reviewed against Calcite alert/notice options before hardening.             |
+| JM-0106 | Add basic dark/light theme foundation | Not started | Deferred until Product Manager theme pattern is verified.                                                                                                                                |
 
 Exit criteria:
 

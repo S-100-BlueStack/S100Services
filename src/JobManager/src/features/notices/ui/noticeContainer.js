@@ -1,7 +1,4 @@
-import {
-  dismissNotice,
-  subscribeToNotices,
-} from "../services/noticeService.js";
+import { dismissNotice, subscribeToNotices } from "../services/noticeService.js";
 
 export function createNoticeRegion() {
   const regionElement = document.createElement("section");
@@ -20,18 +17,13 @@ export function createNoticeRegion() {
 }
 
 function renderNotices(regionElement, notices) {
-  regionElement.replaceChildren(
-    ...notices.map((notice) => createNoticeElement(notice)),
-  );
+  regionElement.replaceChildren(...notices.map((notice) => createNoticeElement(notice)));
 }
 
 function createNoticeElement(notice) {
   const noticeElement = document.createElement("article");
   noticeElement.className = `job-manager-notice job-manager-notice--${notice.type}`;
-  noticeElement.setAttribute(
-    "role",
-    notice.type === "error" ? "alert" : "status",
-  );
+  noticeElement.setAttribute("role", notice.type === "error" ? "alert" : "status");
 
   const contentElement = document.createElement("div");
   contentElement.className = "job-manager-notice__content";
@@ -49,10 +41,7 @@ function createNoticeElement(notice) {
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "job-manager-notice__close";
-  closeButton.setAttribute(
-    "aria-label",
-    `Dismiss notification: ${notice.title}`,
-  );
+  closeButton.setAttribute("aria-label", `Dismiss notification: ${notice.title}`);
   closeButton.textContent = "×";
 
   closeButton.addEventListener("click", () => {

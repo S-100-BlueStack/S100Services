@@ -1,9 +1,6 @@
 import { getRuntimeConfig } from "../shared/config/runtimeConfig.js";
 import { createNoticeRegion } from "../features/notices/ui/noticeContainer.js";
-import {
-  showInfoNotice,
-  showSuccessNotice,
-} from "../features/notices/services/noticeService.js";
+import { showInfoNotice, showSuccessNotice } from "../features/notices/services/noticeService.js";
 
 export async function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
@@ -21,7 +18,10 @@ export async function createApp(rootElement) {
 
   rootElement.replaceChildren(shellElement);
 
+  await configureFiltersPopover(header);
+
   setPanelOpen(jobsPanel.element, header.jobsButton, true);
+  setFilterPopoverOpen(header.filtersPopover, header.filtersButton, false);
 
   header.jobsButton.addEventListener("click", () => {
     togglePanel(jobsPanel.element, header.jobsButton);
@@ -29,6 +29,14 @@ export async function createApp(rootElement) {
 
   jobsPanel.closeButton.addEventListener("click", () => {
     setPanelOpen(jobsPanel.element, header.jobsButton, false);
+  });
+
+  header.filtersButton.addEventListener("click", () => {
+    setFilterPopoverOpen(header.filtersPopover, header.filtersButton, !header.filtersPopover.open);
+  });
+
+  header.filtersCloseButton.addEventListener("click", () => {
+    setFilterPopoverOpen(header.filtersPopover, header.filtersButton, false);
   });
 
   header.testNoticeButton.addEventListener("click", () => {
@@ -49,8 +57,23 @@ export async function createApp(rootElement) {
     });
   }
 
+  const handleDocumentClick = (event) => {
+    if (!header.filtersPopover.open) {
+      return;
+    }
+
+    if (isEventInsideElements(event, [header.filtersButton, header.filtersPopover])) {
+      return;
+    }
+
+    setFilterPopoverOpen(header.filtersPopover, header.filtersButton, false);
+  };
+
+  document.addEventListener("click", handleDocumentClick);
+
   return {
     destroy() {
+      document.removeEventListener("click", handleDocumentClick);
       noticeRegion.destroy?.();
       rootElement.replaceChildren();
     },
@@ -58,23 +81,35 @@ export async function createApp(rootElement) {
 }
 
 async function createHeader() {
+  await ensureNavbarComponentsDefined();
+
   const headerElement = await loadNavbarTemplate();
 
   const jobsButton = getRequiredElement(headerElement, "#jobs-toggle");
-  const testNoticeButton = getRequiredElement(
-    headerElement,
-    "#test-notice-button",
-  );
-  const filterItems = [
-    ...headerElement.querySelectorAll("[data-filter-placeholder]"),
-  ];
+  const filtersButton = getRequiredElement(headerElement, "#filters-button");
+  const filtersPopover = getRequiredElement(headerElement, "#filters-popover");
+  const filtersCloseButton = getRequiredElement(headerElement, "#filters-close-button");
+  const testNoticeButton = getRequiredElement(headerElement, "#test-notice-button");
+  const filterItems = [...headerElement.querySelectorAll("[data-filter-placeholder]")];
 
   return {
     element: headerElement,
     jobsButton,
+    filtersButton,
+    filtersPopover,
+    filtersCloseButton,
     testNoticeButton,
     filterItems,
   };
+}
+
+async function ensureNavbarComponentsDefined() {
+  await Promise.all([
+    customElements.whenDefined("calcite-action"),
+    customElements.whenDefined("calcite-button"),
+    customElements.whenDefined("calcite-icon"),
+    customElements.whenDefined("calcite-popover"),
+  ]);
 }
 
 async function loadNavbarTemplate() {
@@ -83,9 +118,7 @@ async function loadNavbarTemplate() {
   });
 
   if (!response.ok) {
-    throw new Error(
-      `Job Manager could not load the navbar template. Status: ${response.status}`,
-    );
+    throw new Error(`Job Manager could not load the navbar template. Status: ${response.status}`);
   }
 
   const template = document.createElement("template");
@@ -94,12 +127,20 @@ async function loadNavbarTemplate() {
   const headerElement = template.content.firstElementChild;
 
   if (!headerElement) {
-    throw new Error(
-      "Job Manager navbar template did not contain a root element.",
-    );
+    throw new Error("Job Manager navbar template did not contain a root element.");
   }
 
   return headerElement;
+}
+
+async function configureFiltersPopover({ filtersButton, filtersPopover }) {
+  await filtersPopover.componentOnReady?.();
+
+  // Use the actual element reference to avoid brittle document-wide id lookups.
+  filtersPopover.referenceElement = filtersButton;
+  filtersPopover.triggerDisabled = true;
+  filtersPopover.overlayPositioning = "fixed";
+  filtersPopover.placement = "bottom-end";
 }
 
 function createMapWorkspace(runtimeConfig) {
@@ -160,11 +201,11 @@ function createJobsOverlay() {
 
   titleGroupElement.append(titleElement, subtitleElement);
 
-  const closeButton = document.createElement("button");
-  closeButton.type = "button";
+  const closeButton = document.createElement("calcite-action");
   closeButton.className = "job-manager-overlay-panel__close";
-  closeButton.setAttribute("aria-label", "Close Jobs panel");
-  closeButton.textContent = "×";
+  closeButton.icon = "x";
+  closeButton.text = "Close Jobs panel";
+  closeButton.title = "Close Jobs panel";
 
   headerElement.append(titleGroupElement, closeButton);
 
@@ -176,22 +217,13 @@ function createJobsOverlay() {
   const placeholderListElement = document.createElement("ul");
   placeholderListElement.className = "job-manager-overlay-list";
 
-  for (const item of [
-    "Mock Job service",
-    "Job list",
-    "Status mutations",
-    "AOI relation summary",
-  ]) {
+  for (const item of ["Mock Job service", "Job list", "Status mutations", "AOI relation summary"]) {
     const itemElement = document.createElement("li");
     itemElement.textContent = item;
     placeholderListElement.appendChild(itemElement);
   }
 
-  panelElement.append(
-    headerElement,
-    descriptionElement,
-    placeholderListElement,
-  );
+  panelElement.append(headerElement, descriptionElement, placeholderListElement);
 
   return {
     element: panelElement,
@@ -217,4 +249,21 @@ function setPanelOpen(panelElement, triggerButton, isOpen) {
   panelElement.hidden = !isOpen;
   panelElement.setAttribute("aria-hidden", String(!isOpen));
   triggerButton.setAttribute("aria-expanded", String(isOpen));
+}
+
+function setFilterPopoverOpen(popoverElement, triggerButton, isOpen) {
+  popoverElement.open = isOpen;
+  popoverElement.toggleAttribute("open", isOpen);
+
+  triggerButton.active = isOpen;
+  triggerButton.toggleAttribute("active", isOpen);
+  triggerButton.setAttribute("aria-expanded", String(isOpen));
+}
+
+function isEventInsideElements(event, elements) {
+  const composedPath = event.composedPath?.() ?? [];
+
+  return elements.some(
+    (element) => element.contains(event.target) || composedPath.includes(element)
+  );
 }

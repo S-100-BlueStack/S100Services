@@ -329,7 +329,23 @@ The layout should support both:
 
 The exact responsive behavior can be refined later.
 
-## 15. Validation principles
+## 15. Calcite-first UI principle
+
+Job Manager should use Calcite and Calcite Components where they fit the UI need.
+
+Default approach:
+
+- use Calcite for interactive UI controls
+- use Calcite for forms and filter controls where practical
+- use Calcite for popovers, dropdowns, panels and actions where practical
+- keep semantic HTML for layout and document structure
+- follow Product Manager patterns when they are already established
+
+When Calcite is actively not used for a UI element where a relevant Calcite component was considered, log the decision in `docs/CALCITE_USAGE_LOG.md`.
+
+This log is intended to preserve project reasoning and provide useful feedback to Esri.
+
+## 16. Validation principles
 
 For implementation changes, validate relevant flows:
 
@@ -344,7 +360,7 @@ For implementation changes, validate relevant flows:
 - user-facing text is English
 - no secrets are committed
 
-## 16. Documentation rules
+## 17. Documentation rules
 
 Update documentation when:
 

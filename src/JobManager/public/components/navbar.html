@@ -1,12 +1,6 @@
 <header id="header">
   <div class="header-left">
-    <img
-      src="/images/logo96.png"
-      alt="GST"
-      class="navbar-logo"
-      width="42"
-      height="42"
-    />
+    <img src="/images/logo96.png" alt="GST" class="navbar-logo" width="42" height="42" />
   </div>
 
   <nav class="header-center" aria-label="Primary navigation">
@@ -15,51 +9,106 @@
     <button
       id="jobs-toggle"
       type="button"
-      class="navbar-title-link navbar-button"
+      class="navbar-panel-button"
       aria-controls="job-manager-jobs-panel"
       aria-expanded="true"
     >
-      Jobs
+      <calcite-icon icon="list" scale="s" aria-hidden="true"></calcite-icon>
+      <span>Jobs</span>
     </button>
   </nav>
 
   <div class="header-right">
     <span id="last-updated">Updated: -</span>
 
-    <calcite-dropdown
-      id="filters-dropdown"
-      placement="bottom-end"
-      scale="s"
-      close-on-select-disabled
-    >
-      <calcite-action
-        id="filters-button"
-        slot="trigger"
-        icon="filter"
-        text="Filters"
-        title="Filters"
-        text-enabled="false"
-      ></calcite-action>
+    <calcite-action
+      id="filters-button"
+      icon="filter"
+      text="Filters"
+      title="Filters"
+      aria-expanded="false"
+    ></calcite-action>
 
-      <calcite-dropdown-group group-title="Quick filters" selection-mode="none">
-        <calcite-dropdown-item data-filter-placeholder="AOIs with Jobs">
-          AOIs with Jobs
-        </calcite-dropdown-item>
-        <calcite-dropdown-item data-filter-placeholder="Active Jobs">
-          Active Jobs
-        </calcite-dropdown-item>
-        <calcite-dropdown-item data-filter-placeholder="High Priority">
-          High Priority
-        </calcite-dropdown-item>
-      </calcite-dropdown-group>
-    </calcite-dropdown>
+    <calcite-popover
+      id="filters-popover"
+      label="Filters"
+      placement="bottom-end"
+      overlay-positioning="fixed"
+      scale="m"
+      trigger-disabled
+    >
+      <section class="job-manager-filter-popover" aria-label="Filters">
+        <div class="job-manager-filter-popover__header">
+          <div>
+            <h2 class="job-manager-filter-popover__title">Filters</h2>
+            <p class="job-manager-filter-popover__subtitle">Filter AOIs and Jobs.</p>
+          </div>
+
+          <calcite-action
+            id="filters-close-button"
+            icon="x"
+            text="Close Filters"
+            title="Close Filters"
+          ></calcite-action>
+        </div>
+
+        <section class="job-manager-filter-popover__section">
+          <h3 class="job-manager-filter-popover__section-title">Quick filters</h3>
+
+          <div class="job-manager-filter-popover__quick-filters">
+            <calcite-button
+              appearance="outline"
+              kind="neutral"
+              scale="s"
+              data-filter-placeholder="AOIs with Jobs"
+            >
+              AOIs with Jobs
+            </calcite-button>
+
+            <calcite-button
+              appearance="outline"
+              kind="neutral"
+              scale="s"
+              data-filter-placeholder="Active Jobs"
+            >
+              Active Jobs
+            </calcite-button>
+
+            <calcite-button
+              appearance="outline"
+              kind="neutral"
+              scale="s"
+              data-filter-placeholder="High Priority"
+            >
+              High Priority
+            </calcite-button>
+          </div>
+        </section>
+
+        <section class="job-manager-filter-popover__section">
+          <h3 class="job-manager-filter-popover__section-title">AOI filters</h3>
+
+          <p class="job-manager-filter-popover__placeholder">
+            AOI attribute filters will be added after the AOI Feature Service fields are verified.
+          </p>
+        </section>
+
+        <section class="job-manager-filter-popover__section">
+          <h3 class="job-manager-filter-popover__section-title">Job filters</h3>
+
+          <p class="job-manager-filter-popover__placeholder">
+            Status, priority and deadline filters will be connected after shared filter state
+            exists.
+          </p>
+        </section>
+      </section>
+    </calcite-popover>
 
     <calcite-action
       id="test-notice-button"
       icon="bell"
       text="Test notice"
       title="Test notice"
-      text-enabled="false"
     ></calcite-action>
   </div>
 </header>

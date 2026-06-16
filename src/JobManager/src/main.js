@@ -1,7 +1,7 @@
 import "@esri/calcite-components/components/calcite-action";
-import "@esri/calcite-components/components/calcite-dropdown";
-import "@esri/calcite-components/components/calcite-dropdown-group";
-import "@esri/calcite-components/components/calcite-dropdown-item";
+import "@esri/calcite-components/components/calcite-button";
+import "@esri/calcite-components/components/calcite-icon";
+import "@esri/calcite-components/components/calcite-popover";
 
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles/main.css";

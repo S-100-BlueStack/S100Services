@@ -67,7 +67,7 @@ button {
   display: flex;
   align-items: center;
   flex: 0 0 auto;
-  gap: 30px;
+  gap: 24px;
   min-width: 0;
   font-size: 16px;
   font-weight: 600;
@@ -108,15 +108,36 @@ button {
   text-underline-offset: 4px;
 }
 
-.navbar-button {
+.navbar-panel-button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.55rem;
   border: 0;
+  border-radius: 10px;
+  color: #ffffff;
   background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.navbar-button[aria-expanded="true"] {
-  text-decoration: underline;
-  text-underline-offset: 4px;
+.navbar-panel-button calcite-icon {
+  color: currentColor;
+}
+
+.navbar-panel-button:hover,
+.navbar-panel-button:focus-visible,
+.navbar-panel-button[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.22);
+  outline: none;
+}
+
+.navbar-panel-button:focus-visible {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.65);
 }
 
 #last-updated {
@@ -125,7 +146,7 @@ button {
   white-space: nowrap;
 }
 
-#header calcite-action {
+.header-right > calcite-action {
   border-radius: 10px;
   --calcite-color-foreground-1: transparent;
   --calcite-color-text-3: white;
@@ -133,7 +154,7 @@ button {
   --calcite-action-text-color-press: white;
 }
 
-#header calcite-action:hover {
+.header-right > calcite-action:hover {
   --calcite-color-foreground-1: white;
   --calcite-action-background-color-hover: rgba(255, 255, 255, 0.25);
 }
@@ -141,6 +162,68 @@ button {
 #filters-button[active],
 #test-notice-button[active] {
   --calcite-color-foreground-1: rgb(255, 255, 255);
+}
+
+#filters-popover {
+  z-index: 1001;
+}
+
+.job-manager-filter-popover {
+  width: min(28rem, calc(100vw - 2rem));
+  padding: 0.85rem;
+  color: var(--jm-text);
+}
+
+.job-manager-filter-popover__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--jm-border);
+}
+
+.job-manager-filter-popover__header calcite-action {
+  --calcite-color-foreground-1: transparent;
+}
+
+.job-manager-filter-popover__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.job-manager-filter-popover__subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--jm-text-muted);
+  font-size: 0.85rem;
+}
+
+.job-manager-filter-popover__section {
+  padding-top: 0.85rem;
+}
+
+.job-manager-filter-popover__section-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--jm-text-muted);
+}
+
+.job-manager-filter-popover__quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.job-manager-filter-popover__placeholder {
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px dashed var(--jm-border);
+  color: var(--jm-text-muted);
+  font-size: 0.9rem;
 }
 
 .job-manager-workspace {
@@ -253,23 +336,7 @@ button {
 }
 
 .job-manager-overlay-panel__close {
-  flex: 0 0 auto;
-  width: 2rem;
-  height: 2rem;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--jm-text-muted);
-  font-size: 1.35rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.job-manager-overlay-panel__close:hover,
-.job-manager-overlay-panel__close:focus-visible {
-  background: rgba(33, 37, 41, 0.08);
-  color: var(--jm-text);
-  outline: none;
+  --calcite-color-foreground-1: transparent;
 }
 
 .job-manager-overlay-list {
