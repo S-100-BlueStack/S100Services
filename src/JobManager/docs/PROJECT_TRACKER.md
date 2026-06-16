@@ -762,6 +762,30 @@ Rationale:
 
 This supports realistic map-oriented development while avoiding early coupling to an unconfirmed backend or spatial relation strategy.
 
+## 8.18 Add lightweight color guide before expanding UI states
+
+Status: Done
+
+Job Manager should define a lightweight color guide early instead of letting priority, status, filter and notice colors emerge randomly during implementation.
+
+The first color guide should be implemented as CSS variables and used for Job priority and status UI. It should stay small and practical, and can be refined later when dark mode and map symbology are implemented.
+
+Rationale:
+
+Priority and status are central to the Job workflow. Defining their colors early improves consistency and avoids a later UI color refactor.
+
+## 8.18 Add lightweight color guide before expanding UI states
+
+Status: Done
+
+Job Manager should define a lightweight color guide early instead of letting priority, status, filter and notice colors emerge randomly during implementation.
+
+The first color guide should be implemented as CSS variables and used for Job priority and status UI. It should stay small and practical, and can be refined later when dark mode and map symbology are implemented.
+
+Rationale:
+
+Priority and status are central to the Job workflow. Defining their colors early improves consistency and avoids a later UI color refactor.
+
 ## 9. Backend assumptions
 
 Status: Draft
