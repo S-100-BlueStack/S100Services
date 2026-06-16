@@ -774,17 +774,59 @@ Rationale:
 
 Priority and status are central to the Job workflow. Defining their colors early improves consistency and avoids a later UI color refactor.
 
-## 8.18 Add lightweight color guide before expanding UI states
+## 8.19 Hide Done Jobs from the default Jobs list
 
 Status: Done
 
-Job Manager should define a lightweight color guide early instead of letting priority, status, filter and notice colors emerge randomly during implementation.
+Done Jobs should remain in state/mock data but be hidden from the default Jobs list. The default list should focus on actionable work.
 
-The first color guide should be implemented as CSS variables and used for Job priority and status UI. It should stay small and practical, and can be refined later when dark mode and map symbology are implemented.
+A later filter can allow users to include Done Jobs when needed.
 
 Rationale:
 
-Priority and status are central to the Job workflow. Defining their colors early improves consistency and avoids a later UI color refactor.
+The main workflow is to identify remaining work. Showing Done Jobs by default adds noise and reduces the usefulness of the Jobs panel.
+
+## 8.20 Use collapsible Job cards in the Jobs panel
+
+Status: Done
+
+Job cards should be collapsed by default and show only title, status, priority and status action buttons. Users can expand a Job to inspect summary, created date, deadline and related AOI count.
+
+Geometry type should not be shown in the Job card because geometry is primarily map information.
+
+Rationale:
+
+The Jobs panel should remain scannable. Users need to identify and act on Jobs quickly, while detailed metadata should still be available on demand.
+
+## 8.21 Use status buttons as the primary Job status indicator
+
+Status: Done
+
+Job cards should not show a separate status badge when status action buttons are already visible. The active status button should visually indicate the current Job status.
+
+Rationale:
+
+Showing both a status badge and status buttons duplicates information and makes the card harder to scan.
+
+## 8.22 Keep collapsed Job cards information-dense
+
+Status: Done
+
+Collapsed Job cards should show the key operational information: title, priority, created date, deadline, affected AOI count and status actions. Expanded content should be reserved for summary text and later supporting links/actions.
+
+Rationale:
+
+The Jobs panel is primarily a work queue. Users should be able to scan and act on Jobs without expanding each card.
+
+## 8.23 Defer deadline editing until workflow is confirmed
+
+Status: Done
+
+Deadline should be displayed in the Job card, but editing deadline should not be implemented until it is confirmed as part of the frontend workflow.
+
+Rationale:
+
+Deadline editing introduces mutation handling, validation and backend contract assumptions. It should not be implemented before the workflow is confirmed.
 
 ## 9. Backend assumptions
 
@@ -839,12 +881,13 @@ Suggested initial mock configuration:
 
 ```txt
 latencyMinMs: 250
-latencyMaxMs: 1200
+latencyMaxMs: 1000
+loadFailureRate: 0.05
 mutationFailureRate: 0.15
-cyclicJobCreationRate: 0.25
+cyclicJobCreationRate: 0.85
 ```
 
-These values are not final and should be adjusted after UX testing.
+These values are tuned for frontend UX testing and are not final backend behavior.
 
 ## 11. Data model draft
 
@@ -991,14 +1034,14 @@ Provide list-based work access before complex map interaction.
 
 Tasks:
 
-| ID      | Task                                         |      Status | Notes                                                                                                      |
-| ------- | -------------------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------- |
-| JM-0301 | Create Job list component                    |        Done | Jobs panel now renders mock Jobs with title, status, priority, dates, geometry type and related AOI count. |
-| JM-0302 | Create Job detail/selection component        | Not started | Deferred until list/map selection flow is clearer.                                                         |
-| JM-0303 | Add Job status buttons                       |        Done | Added To do, In Progress and Done buttons per Job.                                                         |
-| JM-0304 | Add per-Job mutation loading state           |        Done | Updating Jobs disable status buttons and show mutation text.                                               |
-| JM-0305 | Show success/failure notices for Job updates |        Done | Status updates show success and error notices.                                                             |
-| JM-0306 | Show cyclic Job creation notice              |        Done | Mock-created follow-up Jobs show an info notice.                                                           |
+| ID      | Task                                         |      Status | Notes                                                                                                                                                                   |
+| ------- | -------------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0301 | Create Job list component                    |        Done | Jobs panel now renders active mock Jobs with collapsible cards showing title, status, priority, status actions and expandable details. Done Jobs are hidden by default. |
+| JM-0302 | Create Job detail/selection component        | In progress | Collapsible Job cards provide the first detail surface. Dedicated selection/details flow is still deferred until map interaction exists.                                |
+| JM-0303 | Add Job status buttons                       |        Done | Added To do, In Progress and Done buttons per Job.                                                                                                                      |
+| JM-0304 | Add per-Job mutation loading state           |        Done | Updating Jobs disable status buttons and show mutation text.                                                                                                            |
+| JM-0305 | Show success/failure notices for Job updates |        Done | Status updates show success and error notices.                                                                                                                          |
+| JM-0306 | Show cyclic Job creation notice              |        Done | Mock-created follow-up Jobs show an info notice.                                                                                                                        |
 
 Exit criteria:
 
@@ -1228,18 +1271,19 @@ Clustering should not be implemented too early because the correct approach depe
 
 ## 14. Open questions
 
-| ID     | Question                                                          | Status | Notes                                                                   |
-| ------ | ----------------------------------------------------------------- | -----: | ----------------------------------------------------------------------- |
-| OQ-001 | What is the actual AOI geometry type?                             |   Open | Expected polygon, but must be verified.                                 |
-| OQ-002 | Are AOIs small/uniform enough for direct polygon clustering?      |   Open | Important for cluster strategy.                                         |
-| OQ-003 | Which AOI fields are stable and user-friendly?                    |   Open | Needed for popup/list display.                                          |
-| OQ-004 | Will AOI Feature Service require authentication?                  |   Open | Must avoid committing secrets.                                          |
-| OQ-005 | Will backend return AOI/Job relations directly?                   |   Open | Frontend should remain flexible.                                        |
-| OQ-006 | Will backend calculate spatial intersections?                     |   Open | Preferred for authoritative relation logic.                             |
-| OQ-007 | What counts as “due soon”?                                        |   Open | Suggested default: deadline within 7 days.                              |
-| OQ-008 | Should `Done` Jobs remain visible by default?                     |   Open | Suggested: visible in list, filtered out by “active Jobs” quick filter. |
-| OQ-009 | Should cyclic mock Job creation be deterministic in dev?          |   Open | A seed option may make testing easier.                                  |
-| OQ-010 | Should the app use Product Manager’s server/SSPI setup initially? |   Open | Only if needed for auth or deployment.                                  |
+| ID     | Question                                                          | Status | Notes                                                                                  |
+| ------ | ----------------------------------------------------------------- | -----: | -------------------------------------------------------------------------------------- |
+| OQ-001 | What is the actual AOI geometry type?                             |   Open | Expected polygon, but must be verified.                                                |
+| OQ-002 | Are AOIs small/uniform enough for direct polygon clustering?      |   Open | Important for cluster strategy.                                                        |
+| OQ-003 | Which AOI fields are stable and user-friendly?                    |   Open | Needed for popup/list display.                                                         |
+| OQ-004 | Will AOI Feature Service require authentication?                  |   Open | Must avoid committing secrets.                                                         |
+| OQ-005 | Will backend return AOI/Job relations directly?                   |   Open | Frontend should remain flexible.                                                       |
+| OQ-006 | Will backend calculate spatial intersections?                     |   Open | Preferred for authoritative relation logic.                                            |
+| OQ-007 | What counts as “due soon”?                                        |   Open | Suggested default: deadline within 7 days.                                             |
+| OQ-008 | Should `Done` Jobs remain visible by default?                     |   Open | Suggested: visible in list, filtered out by “active Jobs” quick filter.                |
+| OQ-009 | Should cyclic mock Job creation be deterministic in dev?          |   Open | A seed option may make testing easier.                                                 |
+| OQ-010 | Should the app use Product Manager’s server/SSPI setup initially? |   Open | Only if needed for auth or deployment.                                                 |
+| OQ-011 | Should users be able to edit Job deadlines in the frontend?       |   Open | Display deadline now, but defer editing until workflow/backend ownership is confirmed. |
 
 ## 15. Risks and mitigations
 

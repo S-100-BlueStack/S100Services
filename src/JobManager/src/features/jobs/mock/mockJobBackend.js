@@ -12,7 +12,7 @@ const DEFAULT_MOCK_CONFIG = Object.freeze({
   latencyMaxMs: 1000,
   loadFailureRate: 0.05,
   mutationFailureRate: 0.15,
-  cyclicJobCreationRate: 0.3,
+  cyclicJobCreationRate: 0.85,
 });
 
 let mockConfig = { ...DEFAULT_MOCK_CONFIG };
