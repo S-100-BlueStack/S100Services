@@ -5,7 +5,6 @@ export function createJobStore({ service = jobService } = {}) {
     jobs: [],
     isLoading: false,
     error: null,
-    updatingJobIds: new Set(),
   };
 
   const listeners = new Set();
@@ -27,7 +26,6 @@ export function createJobStore({ service = jobService } = {}) {
       })),
       isLoading: state.isLoading,
       error: state.error,
-      updatingJobIds: new Set(state.updatingJobIds),
     };
   }
 
@@ -58,8 +56,6 @@ export function createJobStore({ service = jobService } = {}) {
   }
 
   async function updateJobStatus(jobId, status) {
-    setUpdatingJob(jobId, true);
-
     const result = await service.updateJobStatus(jobId, status);
 
     if (result.ok) {
@@ -73,23 +69,7 @@ export function createJobStore({ service = jobService } = {}) {
       });
     }
 
-    setUpdatingJob(jobId, false);
-
     return result;
-  }
-
-  function setUpdatingJob(jobId, isUpdating) {
-    const updatingJobIds = new Set(state.updatingJobIds);
-
-    if (isUpdating) {
-      updatingJobIds.add(jobId);
-    } else {
-      updatingJobIds.delete(jobId);
-    }
-
-    setState({
-      updatingJobIds,
-    });
   }
 
   function setState(partialState) {

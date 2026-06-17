@@ -18,9 +18,18 @@ export function createJobList() {
   let currentState = store.getSnapshot();
   const expandedJobIds = new Set();
   const visibleDoneJobIds = new Set();
+  const pendingMutationJobIds = new Set();
 
   const render = () => {
-    renderJobList(rootElement, currentState, store, expandedJobIds, visibleDoneJobIds, render);
+    renderJobList({
+      rootElement,
+      state: currentState,
+      store,
+      expandedJobIds,
+      visibleDoneJobIds,
+      pendingMutationJobIds,
+      render,
+    });
   };
 
   const unsubscribe = store.subscribe((state) => {
@@ -64,7 +73,15 @@ async function loadJobs(store, visibleDoneJobIds) {
   return result;
 }
 
-function renderJobList(rootElement, state, store, expandedJobIds, visibleDoneJobIds, render) {
+function renderJobList({
+  rootElement,
+  state,
+  store,
+  expandedJobIds,
+  visibleDoneJobIds,
+  pendingMutationJobIds,
+  render,
+}) {
   const visibleJobs = getVisibleJobs(state.jobs, visibleDoneJobIds);
   const hiddenDoneCount = getHiddenDoneCount(state.jobs, visibleDoneJobIds);
 
@@ -100,10 +117,10 @@ function renderJobList(rootElement, state, store, expandedJobIds, visibleDoneJob
     listElement.appendChild(
       createJobCard({
         job,
-        state,
         store,
         expandedJobIds,
         visibleDoneJobIds,
+        pendingMutationJobIds,
         render,
       })
     );
@@ -242,9 +259,15 @@ function createToolbarButton(label) {
   return buttonElement;
 }
 
-function createJobCard({ job, state, store, expandedJobIds, visibleDoneJobIds, render }) {
+function createJobCard({
+  job,
+  store,
+  expandedJobIds,
+  visibleDoneJobIds,
+  pendingMutationJobIds,
+  render,
+}) {
   const isExpanded = expandedJobIds.has(job.id);
-  const isUpdating = state.updatingJobIds.has(job.id);
 
   const cardElement = document.createElement("article");
   cardElement.className = "job-card";
@@ -255,9 +278,9 @@ function createJobCard({ job, state, store, expandedJobIds, visibleDoneJobIds, r
     createJobCardSummary({
       job,
       isExpanded,
-      isUpdating,
       expandedJobIds,
       visibleDoneJobIds,
+      pendingMutationJobIds,
       store,
       render,
     })
@@ -267,19 +290,15 @@ function createJobCard({ job, state, store, expandedJobIds, visibleDoneJobIds, r
     cardElement.appendChild(createJobDetails(job));
   }
 
-  if (isUpdating) {
-    cardElement.appendChild(createUpdatingState());
-  }
-
   return cardElement;
 }
 
 function createJobCardSummary({
   job,
   isExpanded,
-  isUpdating,
   expandedJobIds,
   visibleDoneJobIds,
+  pendingMutationJobIds,
   store,
   render,
 }) {
@@ -306,8 +325,8 @@ function createJobCardSummary({
     createDateChips(job),
     createStatusActions({
       job,
-      isUpdating,
       visibleDoneJobIds,
+      pendingMutationJobIds,
       store,
       render,
     })
@@ -446,7 +465,7 @@ function getAffectedAoiImpact(aoiCount) {
   return "high";
 }
 
-function createStatusActions({ job, isUpdating, visibleDoneJobIds, store, render }) {
+function createStatusActions({ job, visibleDoneJobIds, pendingMutationJobIds, store, render }) {
   const actionsElement = document.createElement("div");
   actionsElement.className = "job-card__actions";
 
@@ -455,8 +474,8 @@ function createStatusActions({ job, isUpdating, visibleDoneJobIds, store, render
       createStatusButton({
         job,
         statusOption,
-        isUpdating,
         visibleDoneJobIds,
+        pendingMutationJobIds,
         store,
         render,
       })
@@ -479,41 +498,41 @@ function createJobDetails(job) {
   return detailsElement;
 }
 
-function createUpdatingState() {
-  const updatingElement = document.createElement("p");
-  updatingElement.className = "job-card__updating";
-  updatingElement.textContent = "Updating Job status...";
-
-  return updatingElement;
-}
-
-function createStatusButton({ job, statusOption, isUpdating, visibleDoneJobIds, store, render }) {
+function createStatusButton({
+  job,
+  statusOption,
+  visibleDoneJobIds,
+  pendingMutationJobIds,
+  store,
+}) {
   const isActive = job.status === statusOption.value;
 
   const buttonElement = document.createElement("calcite-button");
   buttonElement.className = "job-status-button";
+  buttonElement.scale = "s";
+  buttonElement.kind = "brand";
+  buttonElement.appearance = isActive ? "solid" : "outline";
+  buttonElement.textContent = statusOption.label;
 
   if (isActive) {
     buttonElement.classList.add("job-status-button--active");
     buttonElement.setAttribute("aria-current", "true");
   }
 
-  buttonElement.scale = "s";
-  buttonElement.kind = "brand";
-  buttonElement.appearance = isActive ? "solid" : "outline";
-  buttonElement.disabled = isUpdating;
-  buttonElement.textContent = statusOption.label;
-
   buttonElement.addEventListener("click", async () => {
-    if (isActive) {
+    if (isActive || pendingMutationJobIds.has(job.id)) {
       return;
     }
+
+    pendingMutationJobIds.add(job.id);
 
     if (statusOption.value === JOB_STATUS.DONE) {
       visibleDoneJobIds.add(job.id);
     }
 
     const result = await store.updateJobStatus(job.id, statusOption.value);
+
+    pendingMutationJobIds.delete(job.id);
 
     if (!result.ok) {
       visibleDoneJobIds.delete(job.id);
