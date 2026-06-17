@@ -272,6 +272,38 @@ Possible backend options:
 
 No option is final yet.
 
+### Current frontend relation implementation
+
+Status: In progress
+
+The frontend now has a relation foundation under `features/relations`.
+
+Current behavior:
+
+- relation model uses `jobId`, `aoiIds` and `source`
+- initial relation source is `mock`
+- mock relations are derived from normalized Job `relatedAoiIds`
+- AOI summaries can be derived from Jobs and relations
+- relation lookup supports both AOI-to-Jobs and Job-to-AOIs direction
+
+Current AOI summary fields:
+
+```txt
+total
+active
+highPriority
+jobIds
+```
+
+The `jobIds` field is intended for frontend lookup and diagnostics. User-facing AOI summaries should normally display counts, not raw IDs.
+
+Backend assumptions remain unchanged:
+
+- backend may later return AOI/Job relations directly
+- backend may later calculate spatial intersections
+- frontend relation source can change from `mock` to `frontendGeometry` or `backend`
+- UI should not need to change when the relation source changes
+
 ## 9. Error handling assumptions
 
 Backend errors should eventually be normalized into user-safe frontend errors.

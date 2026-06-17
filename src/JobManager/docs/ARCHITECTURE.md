@@ -46,6 +46,7 @@ src/
   features/
     aoi/
     jobs/
+    relations/
     map/
     notices/
     theme/
@@ -136,6 +137,35 @@ Rules:
 - Mock behavior must be accessed through services.
 - Cyclic mock Job creation must stay isolated from UI logic.
 - Backend-specific fields must be normalized before UI use.
+
+## 6.1 `src/features/relations`
+
+Owns AOI/Job relation behavior.
+
+Subfolders:
+
+```txt
+relations/
+  domain/
+  services/
+```
+
+Responsibilities:
+
+- relation frontend model
+- relation source values
+- relation lookup helpers
+- deriving mock relations from Job `relatedAoiIds`
+- deriving AOI Job summaries
+- resolving Jobs for an AOI
+- resolving AOIs for a Job
+
+Rules:
+
+- relation code must not import from `features/jobs/mock`.
+- relation code may use Job service functions.
+- relation code must not own canonical Job or AOI state.
+- UI must consume relation helpers/services without knowing whether relation data is mocked, geometry-derived or backend-provided.
 
 ## 7. `src/features/map`
 
@@ -291,39 +321,30 @@ features/jobs/services
   updateJobStatus
   getJobById
   getJobsByStatus
-  getJobsForAoi
 
 features/aoi/services
   loadAois
   getAoiById
-  getAoisForJob
 
-relation service/domain helper
+features/relations/services
+  loadAoiJobRelations
+  loadAoiJobRelationSnapshot
   getJobsForAoi
   getAoisForJob
+
+features/relations/domain
+  buildRelationsFromJobs
   buildAoiJobSummaries
 ```
 
-The exact file placement can change once implementation starts, but UI must not depend on mock/backend details directly.
+The exact APIs can change as implementation matures, but UI must not depend on mock/backend details directly.
 
-### Current AOI service foundation
+Current relation service behavior:
 
-Status: In progress
-
-The AOI service currently provides a skeleton facade so app and map code can integrate against stable service boundaries before the real AOI Feature Service contract is confirmed.
-
-Current responsibilities:
-
-- `features/aoi/config` resolves AOI source configuration from safe runtime config.
-- `features/aoi/domain` normalizes raw AOI-like data into the frontend AOI model.
-- `features/aoi/services` exposes AOI service functions and must hide Feature Service details from UI.
-
-Rules:
-
-- UI must not import raw AOI Feature Service responses.
-- UI must not depend on provisional AOI field candidates.
-- Required AOI identifier, display and metadata fields must be confirmed before hardening popup/list behavior.
-- Feature Service authentication requirements must be documented before adding auth-related code.
+- derives initial mock relations from normalized Job `relatedAoiIds`
+- returns relation source metadata
+- supports AOI summary derivation for future map renderer and popup use
+- supports lookup from AOI to Jobs and from Job to AOIs
 
 ## 13. Map and clustering architecture
 

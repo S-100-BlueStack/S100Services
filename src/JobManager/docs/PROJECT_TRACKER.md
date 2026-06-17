@@ -466,6 +466,10 @@ JobManager/
         state/
         ui/
 
+      relations/
+        domain/
+        services/
+
       map/
         config/
         core/
@@ -542,6 +546,26 @@ Allowed responsibilities:
 Rule:
 
 UI may use `jobs/services`, but must not import from `jobs/mock` directly.
+
+### `src/features/relations`
+
+AOI/Job relation-specific logic.
+
+Allowed responsibilities:
+
+- relation frontend model
+- relation source values
+- relation lookup helpers
+- deriving relations from mock Jobs
+- deriving AOI Job summaries
+- finding Jobs for an AOI
+- finding AOIs for a Job
+
+Rules:
+
+- relation code may use `jobs/services`, but must not import from `jobs/mock` directly
+- relation code must not own canonical Job or AOI state
+- UI must not know whether relations came from mock Jobs, frontend geometry or backend data
 
 ### `src/features/map`
 
@@ -876,6 +900,16 @@ Rationale:
 
 The inline updating state made the Jobs panel flash and made small status updates feel visually heavier than necessary.
 
+## 8.28 Add dedicated relation feature boundary
+
+Status: Done
+
+AOI/Job relation logic lives under `features/relations` instead of being owned by either `features/aoi` or `features/jobs`.
+
+Rationale:
+
+AOI/Job relations are shared by AOI popups, Job details, filters and map rendering. A dedicated relation feature keeps cross-domain logic out of UI components and avoids making either AOI or Jobs responsible for the other domain's canonical state.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -1131,14 +1165,14 @@ Make AOI/Job relations available without coupling UI to relation source.
 
 Tasks:
 
-| ID      | Task                                  |      Status | Notes                                               |
-| ------- | ------------------------------------- | ----------: | --------------------------------------------------- |
-| JM-0501 | Define relation model                 | Not started | `jobId`, `aoiIds`, `source`.                        |
-| JM-0502 | Implement mock relation lookup        | Not started | Based on mock Jobs initially.                       |
-| JM-0503 | Implement AOI summary derivation      | Not started | total, active, high-priority counts.                |
-| JM-0504 | Implement Job related AOI lookup      | Not started | For Job detail and map filtering.                   |
-| JM-0505 | Implement AOI related Jobs lookup     | Not started | For popup and AOI panels.                           |
-| JM-0506 | Document backend relation assumptions | Not started | Move details to `BACKEND_CONTRACTS.md` when needed. |
+| ID      | Task                                  |      Status | Notes                                                                                                              |
+| ------- | ------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------ |
+| JM-0501 | Define relation model                 |        Done | Added relation model helpers with `jobId`, `aoiIds` and `source`.                                                  |
+| JM-0502 | Implement mock relation lookup        | In progress | Added relation derivation from Jobs using `relatedAoiIds`. UI is not connected yet.                                |
+| JM-0503 | Implement AOI summary derivation      |        Done | Added total, active and high-priority Job summary derivation per AOI.                                              |
+| JM-0504 | Implement Job related AOI lookup      | In progress | Added helper to resolve AOIs for a Job from relation data. Needs UI/map integration later.                         |
+| JM-0505 | Implement AOI related Jobs lookup     | In progress | Added helper to resolve Jobs for an AOI from relation data. Needs popup/panel integration later.                   |
+| JM-0506 | Document backend relation assumptions | In progress | Relation implementation uses source markers so mock, frontend geometry and backend relations can be swapped later. |
 
 Exit criteria:
 
