@@ -15,9 +15,64 @@ const DEFAULT_MOCK_CONFIG = Object.freeze({
   cyclicJobCreationRate: 0.85,
 });
 
+const GENERATED_JOB_TEMPLATES = Object.freeze([
+  {
+    title: "Review Baltic Sea source update",
+    summary:
+      "Assess a new source update east of Denmark and decide whether nearby AOIs require work.",
+    priority: JOB_PRIORITY.HIGH,
+    deadlineDaysFromNow: 9,
+    geometry: createPolygonGeometry([
+      [12.9, 54.6],
+      [14.15, 54.6],
+      [14.15, 55.35],
+      [12.9, 55.35],
+      [12.9, 54.6],
+    ]),
+    relatedAoiIds: ["mock-aoi-baltic-sea", "mock-aoi-eastern-denmark"],
+  },
+  {
+    title: "Validate Sound data report",
+    summary:
+      "Review reported data changes in the Sound and prepare follow-up if AOIs are affected.",
+    priority: JOB_PRIORITY.MEDIUM,
+    deadlineDaysFromNow: 12,
+    geometry: createPointGeometry(12.62, 55.78),
+    relatedAoiIds: ["mock-aoi-sound"],
+  },
+  {
+    title: "Inspect Wadden Sea update",
+    summary: "Check whether new Wadden Sea information affects current AOI coverage.",
+    priority: JOB_PRIORITY.LOW,
+    deadlineDaysFromNow: 18,
+    geometry: createPolygonGeometry([
+      [7.95, 54.75],
+      [8.65, 54.75],
+      [8.65, 55.35],
+      [7.95, 55.35],
+      [7.95, 54.75],
+    ]),
+    relatedAoiIds: ["mock-aoi-wadden-sea"],
+  },
+  {
+    title: "Assess Fehmarn Belt update",
+    summary: "Determine whether the Fehmarn Belt update introduces work for nearby AOIs.",
+    priority: JOB_PRIORITY.MEDIUM,
+    deadlineDaysFromNow: 14,
+    geometry: createPolygonGeometry([
+      [10.75, 54.35],
+      [12.0, 54.35],
+      [12.0, 55.05],
+      [10.75, 55.05],
+      [10.75, 54.35],
+    ]),
+    relatedAoiIds: ["mock-aoi-fehmarn-belt", "mock-aoi-danish-straits"],
+  },
+]);
+
 let mockConfig = { ...DEFAULT_MOCK_CONFIG };
 let jobs = createInitialMockJobs().map(normalizeJob);
-let followUpJobCounter = 1;
+let generatedJobCounter = 1;
 
 export async function loadMockJobs() {
   await simulateLatency();
@@ -45,8 +100,8 @@ export async function updateMockJobStatus(jobId, nextStatus) {
   jobs = [...jobs.slice(0, jobIndex), updatedJob, ...jobs.slice(jobIndex + 1)];
 
   const createdJobs =
-    normalizedStatus === JOB_STATUS.DONE && shouldCreateFollowUpJob()
-      ? [createFollowUpJob(updatedJob)]
+    normalizedStatus === JOB_STATUS.DONE && shouldCreateGeneratedJob()
+      ? [createGeneratedJob(updatedJob)]
       : [];
 
   if (createdJobs.length > 0) {
@@ -69,16 +124,23 @@ export function configureMockJobBackend(nextConfig) {
 export function resetMockJobBackend() {
   mockConfig = { ...DEFAULT_MOCK_CONFIG };
   jobs = createInitialMockJobs().map(normalizeJob);
-  followUpJobCounter = 1;
+  generatedJobCounter = 1;
+}
+
+function createGeneratedJob(sourceJob) {
+  if (Math.random() < 0.5) {
+    return createFollowUpJob(sourceJob);
+  }
+
+  return createSeparateJob();
 }
 
 function createFollowUpJob(sourceJob) {
   const createdAt = new Date();
-  const deadline = new Date(createdAt);
-  deadline.setUTCDate(deadline.getUTCDate() + 14);
+  const deadline = createDeadlineDate(createdAt, 14);
 
-  const followUpJob = normalizeJob({
-    id: `job-follow-up-${String(followUpJobCounter).padStart(3, "0")}`,
+  const generatedJob = normalizeJob({
+    id: createGeneratedJobId(),
     title: `Follow-up: ${sourceJob.title}`,
     summary: "Automatically created by the mock backend to simulate cyclic Job work.",
     createdAt: createdAt.toISOString(),
@@ -89,9 +151,38 @@ function createFollowUpJob(sourceJob) {
     relatedAoiIds: [...sourceJob.relatedAoiIds],
   });
 
-  followUpJobCounter += 1;
+  return generatedJob;
+}
 
-  return followUpJob;
+function createSeparateJob() {
+  const template = getNextSeparateJobTemplate();
+  const createdAt = new Date();
+  const deadline = createDeadlineDate(createdAt, template.deadlineDaysFromNow);
+
+  return normalizeJob({
+    id: createGeneratedJobId(),
+    title: template.title,
+    summary: template.summary,
+    createdAt: createdAt.toISOString(),
+    deadline: deadline.toISOString(),
+    priority: template.priority,
+    status: JOB_STATUS.TODO,
+    geometry: template.geometry,
+    relatedAoiIds: [...template.relatedAoiIds],
+  });
+}
+
+function getNextSeparateJobTemplate() {
+  const templateIndex = (generatedJobCounter - 1) % GENERATED_JOB_TEMPLATES.length;
+
+  return GENERATED_JOB_TEMPLATES[templateIndex];
+}
+
+function createGeneratedJobId() {
+  const id = `job-generated-${String(generatedJobCounter).padStart(3, "0")}`;
+  generatedJobCounter += 1;
+
+  return id;
 }
 
 function createFollowUpGeometry(sourceJob) {
@@ -115,7 +206,15 @@ function createFollowUpGeometry(sourceJob) {
   return createPointGeometry(10.5, 56.0);
 }
 
-function shouldCreateFollowUpJob() {
+function createDeadlineDate(createdAt, daysFromNow) {
+  const deadline = new Date(createdAt);
+  deadline.setUTCDate(deadline.getUTCDate() + daysFromNow);
+  deadline.setUTCHours(9, 0, 0, 0);
+
+  return deadline;
+}
+
+function shouldCreateGeneratedJob() {
   return Math.random() < mockConfig.cyclicJobCreationRate;
 }
 

@@ -34,6 +34,9 @@ export function createJobList() {
 
   return {
     element: rootElement,
+    refreshJobs() {
+      return loadJobs(store, visibleDoneJobIds);
+    },
     hideCompletedJobs() {
       visibleDoneJobIds.clear();
       removeInvisibleExpandedJobs(expandedJobIds, currentState.jobs, visibleDoneJobIds);
@@ -57,6 +60,8 @@ async function loadJobs(store, visibleDoneJobIds) {
       message: result.error.message,
     });
   }
+
+  return result;
 }
 
 function renderJobList(rootElement, state, store, expandedJobIds, visibleDoneJobIds, render) {
@@ -172,7 +177,7 @@ function createListToolbar({
   refreshButton.disabled = state.isLoading;
 
   refreshButton.addEventListener("click", async () => {
-    const result = await loadJobsFromToolbar(store, visibleDoneJobIds);
+    const result = await loadJobs(store, visibleDoneJobIds);
 
     if (result.ok) {
       showSuccessNotice({
@@ -217,12 +222,6 @@ function createListToolbar({
   toolbarElement.append(countGroupElement, toolbarActionsElement);
 
   return toolbarElement;
-}
-
-async function loadJobsFromToolbar(store, visibleDoneJobIds) {
-  visibleDoneJobIds.clear();
-
-  return store.loadJobs();
 }
 
 function areAllVisibleJobsExpanded(visibleJobs, expandedJobIds) {
@@ -510,19 +509,20 @@ function createStatusButton({ job, statusOption, isUpdating, visibleDoneJobIds, 
       return;
     }
 
+    if (statusOption.value === JOB_STATUS.DONE) {
+      visibleDoneJobIds.add(job.id);
+    }
+
     const result = await store.updateJobStatus(job.id, statusOption.value);
 
     if (!result.ok) {
+      visibleDoneJobIds.delete(job.id);
+
       showErrorNotice({
         title: "Job update failed",
         message: result.error.message,
       });
       return;
-    }
-
-    if (statusOption.value === JOB_STATUS.DONE) {
-      visibleDoneJobIds.add(result.data.job.id);
-      render();
     }
 
     showSuccessNotice({
@@ -532,8 +532,9 @@ function createStatusButton({ job, statusOption, isUpdating, visibleDoneJobIds, 
 
     if (result.data.createdJobs.length > 0) {
       showInfoNotice({
-        title: "New Job created",
-        message: "The mock backend created a follow-up Job to simulate cyclic work.",
+        title: "New Job queued",
+        message:
+          "The mock backend created new work. It will appear after refresh or when the Jobs panel is reopened.",
       });
     }
   });

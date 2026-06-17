@@ -27,7 +27,9 @@ export async function createApp(rootElement) {
   header.jobsButton.addEventListener("click", () => {
     const shouldOpen = jobsPanel.element.hidden;
 
-    if (!shouldOpen) {
+    if (shouldOpen) {
+      jobsPanel.refreshJobs();
+    } else {
       jobsPanel.hideCompletedJobs();
     }
 
@@ -225,6 +227,9 @@ function createJobsOverlay() {
   return {
     element: panelElement,
     closeButton,
+    refreshJobs() {
+      return jobList.refreshJobs();
+    },
     hideCompletedJobs() {
       jobList.hideCompletedJobs();
     },

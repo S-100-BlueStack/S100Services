@@ -848,6 +848,18 @@ Rationale:
 
 Removing a Job immediately after clicking Done makes the UI feel abrupt and can make users unsure whether the update succeeded.
 
+## 8.26 Queue mock-created Jobs until refresh or panel reopen
+
+Status: Done
+
+Mock-created Jobs should be stored in the mock backend immediately, but should not be inserted into the currently visible Jobs list immediately after a status update.
+
+New mock-created Jobs should become visible after refresh or after the Jobs panel is closed and reopened.
+
+Rationale:
+
+The real backend is expected to create later Jobs through a slower process. Showing newly created Jobs immediately after clicking Done makes the mock UI feel less realistic and visually abrupt.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -1029,14 +1041,14 @@ Implement Jobs without UI depending directly on mock data.
 
 Tasks:
 
-| ID      | Task                                            | Status | Notes                                                                                          |
-| ------- | ----------------------------------------------- | -----: | ---------------------------------------------------------------------------------------------- |
-| JM-0201 | Define Job status and priority domain constants |   Done | Added stable internal status and priority values with user-facing labels.                      |
-| JM-0202 | Define Job model normalization helpers          |   Done | Added normalization for Job fields and point/polygon geometry.                                 |
-| JM-0203 | Implement mock Job data                         |   Done | Mock Jobs include titles, dates, priority, status, point/polygon geometry and related AOI ids. |
-| JM-0204 | Implement mock Job backend adapter              |   Done | Mock backend supports latency, failures, status mutation and cyclic follow-up Job creation.    |
-| JM-0205 | Implement Job service facade                    |   Done | UI consumes Job service/store instead of importing mock backend directly.                      |
-| JM-0206 | Implement status update service flow            |   Done | Status updates return API result objects and support created follow-up Jobs.                   |
+| ID      | Task                                            | Status | Notes                                                                                                                                                                          |
+| ------- | ----------------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| JM-0201 | Define Job status and priority domain constants |   Done | Added stable internal status and priority values with user-facing labels.                                                                                                      |
+| JM-0202 | Define Job model normalization helpers          |   Done | Added normalization for Job fields and point/polygon geometry.                                                                                                                 |
+| JM-0203 | Implement mock Job data                         |   Done | Mock Jobs include titles, dates, priority, status, point/polygon geometry and related AOI ids.                                                                                 |
+| JM-0204 | Implement mock Job backend adapter              |   Done | Mock backend supports latency, failures, status mutation, cyclic Job creation and both follow-up/separate generated Jobs. Generated Jobs appear after refresh or panel reopen. |
+| JM-0205 | Implement Job service facade                    |   Done | UI consumes Job service/store instead of importing mock backend directly.                                                                                                      |
+| JM-0206 | Implement status update service flow            |   Done | Status updates return API result objects and support created follow-up Jobs.                                                                                                   |
 
 Exit criteria:
 

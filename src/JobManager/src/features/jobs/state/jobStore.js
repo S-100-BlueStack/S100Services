@@ -118,16 +118,5 @@ export function createJobStore({ service = jobService } = {}) {
 }
 
 function applyJobMutationResult(currentJobs, mutationResult) {
-  const updatedJobs = currentJobs.map((job) =>
-    job.id === mutationResult.job.id ? mutationResult.job : job
-  );
-
-  if (!mutationResult.createdJobs?.length) {
-    return updatedJobs;
-  }
-
-  const existingJobIds = new Set(updatedJobs.map((job) => job.id));
-  const newJobs = mutationResult.createdJobs.filter((job) => !existingJobIds.has(job.id));
-
-  return [...newJobs, ...updatedJobs];
+  return currentJobs.map((job) => (job.id === mutationResult.job.id ? mutationResult.job : job));
 }
