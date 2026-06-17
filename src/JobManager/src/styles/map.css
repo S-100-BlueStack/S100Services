@@ -8,52 +8,69 @@
 .job-manager-map {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
   overflow: hidden;
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.26) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.26) 1px, transparent 1px),
-    radial-gradient(circle at 35% 35%, rgba(69, 97, 120, 0.2), transparent 32%),
-    linear-gradient(135deg, #c8d8e6, #e5eef5);
-  background-size:
-    42px 42px,
-    42px 42px,
-    auto,
-    auto;
+  background: #d7e3ef;
 }
 
-.job-manager-map__placeholder {
-  max-width: min(34rem, calc(100vw - 4rem));
-  padding: 1.25rem 1.5rem;
-  border: 1px solid rgba(69, 97, 120, 0.28);
+.job-manager-map__view {
+  position: absolute;
+  inset: 0;
+}
+
+.job-manager-map__screen-reader-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+  white-space: nowrap;
+}
+
+.job-manager-map-status {
+  position: absolute;
+  z-index: 5;
+  top: 1rem;
+  left: 50%;
+  width: min(26rem, calc(100vw - 2rem));
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--jm-border);
   border-radius: 0;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--jm-overlay);
   box-shadow: var(--jm-shadow);
-  text-align: center;
-  backdrop-filter: blur(10px);
+  transform: translateX(-50%);
+  backdrop-filter: blur(12px);
 }
 
-.job-manager-map__title {
+.job-manager-map-status[hidden] {
+  display: none;
+}
+
+.job-manager-map-status[data-status="error"] {
+  border-color: rgba(155, 28, 49, 0.42);
+}
+
+.job-manager-map-status[data-status="warning"] {
+  border-color: rgba(255, 174, 0, 0.55);
+}
+
+.job-manager-map-status__title {
   margin: 0;
   color: var(--jm-header-bg);
-  font-size: 1.15rem;
+  font-size: 0.9rem;
   font-weight: 700;
 }
 
-.job-manager-map__description {
-  margin: 0.5rem 0 0;
+.job-manager-map-status__message {
+  margin: 0.25rem 0 0;
   color: var(--jm-text);
-}
-
-.job-manager-map__meta {
-  margin: 0.75rem 0 0;
-  color: var(--jm-text-muted);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 @media (max-width: 54rem) {
-  .job-manager-map__placeholder {
-    transform: translateY(-35%);
+  .job-manager-map-status {
+    top: 0.75rem;
   }
 }

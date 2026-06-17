@@ -169,6 +169,26 @@ Rules:
 - Popup action flows should be documented when they become non-trivial.
 - Clustering decisions must be documented because AOI polygons can be misleading if clustered incorrectly.
 
+### Current MapView foundation
+
+Status: In progress
+
+ArcGIS `Map` and `MapView` creation is isolated under `features/map/core`.
+
+Current responsibilities:
+
+- `features/map/core/createMapView.js` creates the ArcGIS `Map`, operational layers and `MapView`.
+- `features/map/core/mapController.js` owns map startup, loading/error status and cleanup.
+- `features/map/layers/createAoiLayer.js` owns AOI `FeatureLayer` construction.
+- `src/app/createApp.js` only creates the DOM container, wires lifecycle and handles app-level notices.
+
+Rules:
+
+- Do not add ArcGIS layer construction directly to `src/app`.
+- Do not put AOI field normalization in map layer code.
+- Do not make map code the canonical owner of AOI or Job state.
+- Keep future AOI renderer, popup, filter and clustering logic under `features/map`.
+
 ## 8. `src/features/notices`
 
 Owns user-facing notices.
@@ -286,6 +306,25 @@ relation service/domain helper
 
 The exact file placement can change once implementation starts, but UI must not depend on mock/backend details directly.
 
+### Current AOI service foundation
+
+Status: In progress
+
+The AOI service currently provides a skeleton facade so app and map code can integrate against stable service boundaries before the real AOI Feature Service contract is confirmed.
+
+Current responsibilities:
+
+- `features/aoi/config` resolves AOI source configuration from safe runtime config.
+- `features/aoi/domain` normalizes raw AOI-like data into the frontend AOI model.
+- `features/aoi/services` exposes AOI service functions and must hide Feature Service details from UI.
+
+Rules:
+
+- UI must not import raw AOI Feature Service responses.
+- UI must not depend on provisional AOI field candidates.
+- Required AOI identifier, display and metadata fields must be confirmed before hardening popup/list behavior.
+- Feature Service authentication requirements must be documented before adding auth-related code.
+
 ## 13. Map and clustering architecture
 
 Clustering must be treated as an explicit design decision.
@@ -305,9 +344,18 @@ Detailed AOI polygon layer
 
 Derived AOI overview layer
   -> used for clustering or high-density overview if needed
-```
 
 Do not finalize clustering implementation before real AOI geometry or representative sample data has been inspected.
+
+Current implementation status:
+
+ArcGIS Map and MapView lifecycle is implemented under features/map/core.
+AOI layer creation is isolated under features/map/layers.
+AOI layer creation can use a configured Feature Service URL, but renderer, popup content and clustering are intentionally not finalized.
+The app shows an initial map status warning when AOI Feature Service configuration is missing.
+
+Do not finalize clustering implementation before real AOI geometry or representative sample data has been inspected.
+```
 
 ## 14. UI composition direction
 

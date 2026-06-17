@@ -1,21 +1,36 @@
 import { createJobList } from "../features/jobs/ui/jobList.js";
+import { createMapController } from "../features/map/core/mapController.js";
+import {
+  showErrorNotice,
+  showInfoNotice,
+  showSuccessNotice,
+} from "../features/notices/services/noticeService.js";
 import { createNoticeRegion } from "../features/notices/ui/noticeContainer.js";
-import { showInfoNotice, showSuccessNotice } from "../features/notices/services/noticeService.js";
 import { getRuntimeConfig } from "../shared/config/runtimeConfig.js";
 
 export async function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
   const noticeRegion = createNoticeRegion();
-
   const header = await createHeader();
   const jobsPanel = createJobsOverlay();
-  const workspaceElement = createMapWorkspace(runtimeConfig);
+  const workspace = createMapWorkspace();
+  const mapController = createMapController({
+    container: workspace.mapViewElement,
+    statusElement: workspace.mapStatusElement,
+    runtimeConfig,
+    onError(error) {
+      showErrorNotice({
+        title: "Map could not be loaded",
+        message: error.message,
+      });
+    },
+  });
 
-  workspaceElement.appendChild(jobsPanel.element);
+  workspace.element.appendChild(jobsPanel.element);
 
   const shellElement = document.createElement("div");
   shellElement.className = "job-manager-app";
-  shellElement.append(header.element, workspaceElement, noticeRegion);
+  shellElement.append(header.element, workspace.element, noticeRegion);
 
   rootElement.replaceChildren(shellElement);
 
@@ -80,10 +95,12 @@ export async function createApp(rootElement) {
   };
 
   document.addEventListener("click", handleDocumentClick);
+  mapController.start();
 
   return {
     destroy() {
       document.removeEventListener("click", handleDocumentClick);
+      mapController.destroy();
       jobsPanel.destroy();
       noticeRegion.destroy?.();
       rootElement.replaceChildren();
@@ -95,7 +112,6 @@ async function createHeader() {
   await ensureNavbarComponentsDefined();
 
   const headerElement = await loadNavbarTemplate();
-
   const jobsButton = getRequiredElement(headerElement, "#jobs-toggle");
   const filtersButton = getRequiredElement(headerElement, "#filters-button");
   const filtersPopover = getRequiredElement(headerElement, "#filters-popover");
@@ -129,7 +145,7 @@ async function loadNavbarTemplate() {
   });
 
   if (!response.ok) {
-    throw new Error(`Job Manager could not load the navbar template. Status: ${response.status}`);
+    throw new Error(`Job Manager could not load the navbar template.\nStatus: ${response.status}`);
   }
 
   const template = document.createElement("template");
@@ -154,7 +170,7 @@ async function configureFiltersPopover({ filtersButton, filtersPopover }) {
   filtersPopover.placement = "bottom-end";
 }
 
-function createMapWorkspace(runtimeConfig) {
+function createMapWorkspace() {
   const workspaceElement = document.createElement("main");
   workspaceElement.className = "job-manager-workspace";
 
@@ -162,36 +178,31 @@ function createMapWorkspace(runtimeConfig) {
   mapElement.className = "job-manager-map";
   mapElement.setAttribute("aria-labelledby", "job-manager-map-title");
 
-  const contentElement = document.createElement("div");
-  contentElement.className = "job-manager-map__placeholder";
-
   const titleElement = document.createElement("h2");
   titleElement.id = "job-manager-map-title";
-  titleElement.className = "job-manager-map__title";
+  titleElement.className = "job-manager-map__screen-reader-title";
   titleElement.textContent = "Map";
 
-  const descriptionElement = document.createElement("p");
-  descriptionElement.className = "job-manager-map__description";
-  descriptionElement.textContent =
-    "The ArcGIS map will fill this workspace and show Areas of Interest.";
+  const mapViewElement = document.createElement("div");
+  mapViewElement.className = "job-manager-map__view";
 
-  const configStatusElement = document.createElement("p");
-  configStatusElement.className = "job-manager-map__meta";
+  const mapStatusElement = document.createElement("div");
+  mapStatusElement.className = "job-manager-map-status";
+  mapStatusElement.setAttribute("role", "status");
+  mapStatusElement.setAttribute("aria-live", "polite");
 
-  configStatusElement.textContent = runtimeConfig.aoiFeatureServiceUrl
-    ? "AOI Feature Service configuration found."
-    : "AOI Feature Service configuration is not set yet.";
-
-  contentElement.append(titleElement, descriptionElement, configStatusElement);
-  mapElement.appendChild(contentElement);
+  mapElement.append(titleElement, mapViewElement, mapStatusElement);
   workspaceElement.appendChild(mapElement);
 
-  return workspaceElement;
+  return {
+    element: workspaceElement,
+    mapViewElement,
+    mapStatusElement,
+  };
 }
 
 function createJobsOverlay() {
   const jobList = createJobList();
-
   const panelElement = document.createElement("aside");
   panelElement.id = "job-manager-jobs-panel";
   panelElement.className = "job-manager-overlay-panel job-manager-jobs-overlay";
@@ -221,7 +232,6 @@ function createJobsOverlay() {
   closeButton.title = "Close Jobs panel";
 
   headerElement.append(titleGroupElement, closeButton);
-
   panelElement.append(headerElement, jobList.element);
 
   return {
@@ -258,7 +268,6 @@ function setPanelOpen(panelElement, triggerButton, isOpen) {
 function setFilterPopoverOpen(popoverElement, triggerButton, isOpen) {
   popoverElement.open = isOpen;
   popoverElement.toggleAttribute("open", isOpen);
-
   triggerButton.active = isOpen;
   triggerButton.toggleAttribute("active", isOpen);
   triggerButton.setAttribute("aria-expanded", String(isOpen));

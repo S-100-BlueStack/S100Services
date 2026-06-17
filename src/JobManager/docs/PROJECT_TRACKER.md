@@ -23,17 +23,21 @@ Job Manager should follow Product Manager patterns where they fit, but the domai
 
 ## 2. Current project status
 
-Status: Bootstrap completed
+Status: Map foundation in progress
 
-The initial Vite project shell has been created and pushed.
+The initial Vite project shell has been created and pushed. The app shell now uses a Product Manager-style navbar, map-first workspace, left-side Jobs overlay panel, centralized notices, mock Jobs service and an initial ArcGIS MapView foundation.
 
 Current known baseline:
 
 - `JobManager` project exists under `src`.
 - Vite dev server works.
 - Calcite stylesheet import uses `@esri/calcite-components/main.css`.
+- ArcGIS Maps SDK stylesheet import uses `@arcgis/core/assets/esri/themes/light/main.css`.
 - Package versions are intentionally aligned with Product Manager major versions.
 - Feature-based folder structure has been created from the start.
+- Jobs are loaded through a mock backend hidden behind services.
+- ArcGIS Map/MapView lifecycle is isolated under `features/map/core`.
+- AOI Feature Service configuration and AOI frontend model skeletons exist, but real AOI field mapping is not confirmed.
 
 ## 3. Product principles
 
@@ -1103,13 +1107,13 @@ Load AOIs through a service layer and prepare them for map display and relation 
 
 Tasks:
 
-| ID      | Task                                |      Status | Notes                                       |
-| ------- | ----------------------------------- | ----------: | ------------------------------------------- |
-| JM-0401 | Add AOI Feature Service config      | Not started | Use `.env.example` placeholders.            |
-| JM-0402 | Implement AOI service facade        | Not started | Hide Feature Service details from UI.       |
-| JM-0403 | Implement AOI normalization helpers | Not started | Stable frontend AOI model.                  |
-| JM-0404 | Add AOI loading state               | Not started | Include error and empty states.             |
-| JM-0405 | Document required AOI fields        | Not started | Must be updated when real service is known. |
+| ID      | Task                                |      Status | Notes                                                                                                                                          |
+| ------- | ----------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0401 | Add AOI Feature Service config      |        Done | Added AOI Feature Service config helper using safe runtime config from `VITE_AOI_FEATURE_SERVICE_URL`. No private URL or credential is stored. |
+| JM-0402 | Implement AOI service facade        | In progress | Added service facade skeleton returning a stable API result shape. Real Feature Service querying is deferred until source fields are known.    |
+| JM-0403 | Implement AOI normalization helpers | In progress | Added frontend AOI normalization helper with provisional field candidates. Stable AOI fields still need confirmation from the real service.    |
+| JM-0404 | Add AOI loading state               | In progress | Added initial map-level status for missing AOI service configuration and map load failures. Full AOI loading/empty/error states are deferred.  |
+| JM-0405 | Document required AOI fields        | In progress | Backend contract notes now track unresolved AOI identifier, display field, geometry and authentication requirements.                           |
 
 Exit criteria:
 
@@ -1151,14 +1155,14 @@ Create the ArcGIS map and layer architecture.
 
 Tasks:
 
-| ID      | Task                                    |      Status | Notes                                                          |
-| ------- | --------------------------------------- | ----------: | -------------------------------------------------------------- |
-| JM-0601 | Implement ArcGIS Map/MapView creation   | Not started | Keep lifecycle isolated in `features/map/core`.                |
-| JM-0602 | Add map container to app shell          | Not started | Layout must leave space for panels.                            |
-| JM-0603 | Add AOI layer creation                  | Not started | Use FeatureLayer or suitable layer after verifying AOI source. |
-| JM-0604 | Add AOI renderer foundation             | Not started | Include visual difference for AOIs with active Jobs.           |
-| JM-0605 | Add map loading/error state integration | Not started | Avoid silent failures.                                         |
-| JM-0606 | Add basic view cleanup                  | Not started | Prevent leaks during dev reload/navigation.                    |
+| ID      | Task                                    |      Status | Notes                                                                                                                            |
+| ------- | --------------------------------------- | ----------: | -------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0601 | Implement ArcGIS Map/MapView creation   |        Done | Added isolated ArcGIS Map/MapView creation under `features/map/core`.                                                            |
+| JM-0602 | Add map container to app shell          |        Done | Replaced the map placeholder with a real MapView container while preserving the overlay Jobs panel layout.                       |
+| JM-0603 | Add AOI layer creation                  | In progress | Added AOI `FeatureLayer` creation from configured service URL. Renderer, field mapping and popup content are still placeholders. |
+| JM-0604 | Add AOI renderer foundation             | Not started | Requires AOI/Job summaries before AOIs can visually distinguish active or high-priority Jobs.                                    |
+| JM-0605 | Add map loading/error state integration | In progress | Added initial loading, warning and error status surface for the map. Full AOI layer load/error states still need to be refined.  |
+| JM-0606 | Add basic view cleanup                  |        Done | Added MapView cleanup through the app lifecycle destroy flow.                                                                    |
 
 Exit criteria:
 
@@ -1298,18 +1302,21 @@ Recommended order:
 3. Implement notices early.
 4. Implement mock Jobs service.
 5. Implement Job list and status mutations.
-6. Implement AOI service and normalization.
-7. Implement AOI/Job relation service.
-8. Implement map foundation.
-9. Implement AOI popup and related Jobs flow.
-10. Implement filters and quick filters.
-11. Implement clustering/overview after AOI geometry is understood.
-12. Harden refresh, errors and UX.
-13. Prepare backend contracts.
+6. Add ArcGIS MapView foundation.
+7. Continue AOI service and normalization.
+8. Implement AOI/Job relation service.
+9. Connect AOI Feature Service loading to AOI state.
+10. Implement AOI popup and related Jobs flow.
+11. Implement filters and quick filters.
+12. Implement clustering/overview after AOI geometry is understood.
+13. Harden refresh, errors and UX.
+14. Prepare backend contracts.
 
 Reasoning:
 
-The Job service and list should come before map complexity because they let us validate domain behavior, mutation flow, notices and mock backend behavior without being blocked by ArcGIS geometry details.
+The Job service and list came before map complexity because they validate domain behavior, mutation flow, notices and mock backend behavior without being blocked by ArcGIS geometry details.
+
+The initial MapView foundation is now in place before full AOI loading so future AOI layer, popup, selection and filtering work can be added inside `features/map` and `features/aoi` without putting ArcGIS lifecycle details in `src/app`.
 
 Clustering should not be implemented too early because the correct approach depends on real AOI geometry.
 
@@ -1441,10 +1448,13 @@ Do not duplicate content across documents. Link or summarize instead.
 
 Recommended next tasks:
 
-| ID          | Task                                     |      Status | Notes                                                      |
-| ----------- | ---------------------------------------- | ----------: | ---------------------------------------------------------- |
-| JM-NEXT-001 | Add `docs/BACKEND_CONTRACTS.md` skeleton |        Done | Initial backend assumptions and open questions documented. |
-| JM-NEXT-002 | Add `docs/ARCHITECTURE.md` skeleton      |        Done | Initial architecture boundaries and data flow documented.  |
-| JM-NEXT-003 | Implement app shell layout               | Not started | Prepare map/list/notices regions.                          |
-| JM-NEXT-004 | Implement notice service foundation      | Not started | Needed before mock failure work.                           |
-| JM-NEXT-005 | Implement mock Jobs service              | Not started | Foundation for Job list and status flow.                   |
+| ID          | Task                                     |      Status | Notes                                                                                                 |
+| ----------- | ---------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------- |
+| JM-NEXT-001 | Add `docs/BACKEND_CONTRACTS.md` skeleton |        Done | Initial backend assumptions and open questions documented.                                            |
+| JM-NEXT-002 | Add `docs/ARCHITECTURE.md` skeleton      |        Done | Initial architecture boundaries and data flow documented.                                             |
+| JM-NEXT-003 | Implement app shell layout               |        Done | Product Manager-style navbar, map-first workspace, Jobs panel and notices are implemented.            |
+| JM-NEXT-004 | Implement notice service foundation      |        Done | Notice service and UI container are implemented.                                                      |
+| JM-NEXT-005 | Implement mock Jobs service              |        Done | Mock Jobs service supports loading, failures, status mutation and cyclic mock Job creation.           |
+| JM-NEXT-006 | Connect AOI Feature Service loading      | Not started | Replace AOI service skeleton with real Feature Service query once URL, fields and auth are confirmed. |
+| JM-NEXT-007 | Add AOI/Job relation service             | Not started | Use mock `relatedAoiIds` first, while keeping source abstraction ready for backend relations.         |
+| JM-NEXT-008 | Add AOI renderer and popup foundation    | Not started | Requires AOI fields and relation summaries.                                                           |
