@@ -1141,13 +1141,13 @@ Load AOIs through a service layer and prepare them for map display and relation 
 
 Tasks:
 
-| ID      | Task                                |      Status | Notes                                                                                                                                          |
-| ------- | ----------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-0401 | Add AOI Feature Service config      |        Done | Added AOI Feature Service config helper using safe runtime config from `VITE_AOI_FEATURE_SERVICE_URL`. No private URL or credential is stored. |
-| JM-0402 | Implement AOI service facade        | In progress | Added service facade skeleton returning a stable API result shape. Real Feature Service querying is deferred until source fields are known.    |
-| JM-0403 | Implement AOI normalization helpers | In progress | Added frontend AOI normalization helper with provisional field candidates. Stable AOI fields still need confirmation from the real service.    |
-| JM-0404 | Add AOI loading state               | In progress | Added initial map-level status for missing AOI service configuration and map load failures. Full AOI loading/empty/error states are deferred.  |
-| JM-0405 | Document required AOI fields        | In progress | Backend contract notes now track unresolved AOI identifier, display field, geometry and authentication requirements.                           |
+| ID      | Task                                |      Status | Notes                                                                                                                                                |
+| ------- | ----------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0401 | Add AOI Feature Service config      |        Done | Added AOI Feature Service config helper using safe runtime config from `VITE_AOI_FEATURE_SERVICE_URL`. No private URL or credential is stored.       |
+| JM-0402 | Implement AOI service facade        | In progress | Added service facade skeleton returning a stable API result shape. Real Feature Service querying is deferred until source fields and auth are final. |
+| JM-0403 | Implement AOI normalization helpers | In progress | Added frontend AOI normalization helper and centralized field config for the current test Feature Service fields.                                    |
+| JM-0404 | Add AOI loading state               | In progress | Added initial map-level status for missing AOI service configuration and map load failures. Full AOI loading/empty/error states are deferred.        |
+| JM-0405 | Document required AOI fields        | In progress | Documented current test Feature Service fields in `BACKEND_CONTRACTS.md`. Final AOI fields remain open until the real service is created.            |
 
 Exit criteria:
 
@@ -1189,14 +1189,14 @@ Create the ArcGIS map and layer architecture.
 
 Tasks:
 
-| ID      | Task                                    |      Status | Notes                                                                                                                            |
-| ------- | --------------------------------------- | ----------: | -------------------------------------------------------------------------------------------------------------------------------- |
-| JM-0601 | Implement ArcGIS Map/MapView creation   |        Done | Added isolated ArcGIS Map/MapView creation under `features/map/core`.                                                            |
-| JM-0602 | Add map container to app shell          |        Done | Replaced the map placeholder with a real MapView container while preserving the overlay Jobs panel layout.                       |
-| JM-0603 | Add AOI layer creation                  | In progress | Added AOI `FeatureLayer` creation from configured service URL. Renderer, field mapping and popup content are still placeholders. |
-| JM-0604 | Add AOI renderer foundation             | Not started | Requires AOI/Job summaries before AOIs can visually distinguish active or high-priority Jobs.                                    |
-| JM-0605 | Add map loading/error state integration | In progress | Added initial loading, warning and error status surface for the map. Full AOI layer load/error states still need to be refined.  |
-| JM-0606 | Add basic view cleanup                  |        Done | Added MapView cleanup through the app lifecycle destroy flow.                                                                    |
+| ID      | Task                                    |      Status | Notes                                                                                                                             |
+| ------- | --------------------------------------- | ----------: | --------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0601 | Implement ArcGIS Map/MapView creation   |        Done | Added isolated ArcGIS Map/MapView creation under `features/map/core`.                                                             |
+| JM-0602 | Add map container to app shell          |        Done | Replaced the map placeholder with a real MapView container while preserving the overlay Jobs panel layout.                        |
+| JM-0603 | Add AOI layer creation                  | In progress | Added AOI `FeatureLayer` creation from configured service URL and connected popup/outFields to centralized AOI field config.      |
+| JM-0604 | Add AOI renderer foundation             | Not started | Requires AOI/Job summaries that can be matched to real AOI Feature Service ids before active/high-priority styling is meaningful. |
+| JM-0605 | Add map loading/error state integration | In progress | Added initial loading, warning and error status surface for the map. Full AOI layer load/error states still need to be refined.   |
+| JM-0606 | Add basic view cleanup                  |        Done | Added MapView cleanup through the app lifecycle destroy flow.                                                                     |
 
 Exit criteria:
 
@@ -1213,14 +1213,14 @@ Make AOIs inspectable from the map.
 
 Tasks:
 
-| ID      | Task                                  |      Status | Notes                                                          |
-| ------- | ------------------------------------- | ----------: | -------------------------------------------------------------- |
-| JM-0701 | Add AOI hover feedback                | Not started | Follow Product Manager pattern if current code supports reuse. |
-| JM-0702 | Add AOI selection feedback            | Not started | Selection should sync with app state.                          |
-| JM-0703 | Add AOI popup shell                   | Not started | Use custom popup action approach where useful.                 |
-| JM-0704 | Show related Job summary in popup     | Not started | total, active, high-priority.                                  |
-| JM-0705 | Add popup action to open related Jobs | Not started | Similar concept to Product Manager History action.             |
-| JM-0706 | Document popup flow                   | Not started | Add README under `features/map/popups` when implemented.       |
+| ID      | Task                                  |      Status | Notes                                                                                                                   |
+| ------- | ------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------- |
+| JM-0701 | Add AOI hover feedback                | Not started | Follow Product Manager pattern if current code supports reuse.                                                          |
+| JM-0702 | Add AOI selection feedback            | Not started | Selection should sync with app state.                                                                                   |
+| JM-0703 | Add AOI popup shell                   | In progress | Added first ArcGIS popup template using current test Feature Service metadata. Custom popup actions are still deferred. |
+| JM-0704 | Show related Job summary in popup     | Not started | Requires relation summaries matched to real AOI ids.                                                                    |
+| JM-0705 | Add popup action to open related Jobs | Not started | Similar concept to Product Manager History action.                                                                      |
+| JM-0706 | Document popup flow                   | Not started | Add README under `features/map/popups` when implemented.                                                                |
 
 Exit criteria:
 
@@ -1356,19 +1356,19 @@ Clustering should not be implemented too early because the correct approach depe
 
 ## 14. Open questions
 
-| ID     | Question                                                          | Status | Notes                                                                                  |
-| ------ | ----------------------------------------------------------------- | -----: | -------------------------------------------------------------------------------------- |
-| OQ-001 | What is the actual AOI geometry type?                             |   Open | Expected polygon, but must be verified.                                                |
-| OQ-002 | Are AOIs small/uniform enough for direct polygon clustering?      |   Open | Important for cluster strategy.                                                        |
-| OQ-003 | Which AOI fields are stable and user-friendly?                    |   Open | Needed for popup/list display.                                                         |
-| OQ-004 | Will AOI Feature Service require authentication?                  |   Open | Must avoid committing secrets.                                                         |
-| OQ-005 | Will backend return AOI/Job relations directly?                   |   Open | Frontend should remain flexible.                                                       |
-| OQ-006 | Will backend calculate spatial intersections?                     |   Open | Preferred for authoritative relation logic.                                            |
-| OQ-007 | What counts as “due soon”?                                        |   Open | Suggested default: deadline within 7 days.                                             |
-| OQ-008 | Should `Done` Jobs remain visible by default?                     |   Open | Suggested: visible in list, filtered out by “active Jobs” quick filter.                |
-| OQ-009 | Should cyclic mock Job creation be deterministic in dev?          |   Open | A seed option may make testing easier.                                                 |
-| OQ-010 | Should the app use Product Manager’s server/SSPI setup initially? |   Open | Only if needed for auth or deployment.                                                 |
-| OQ-011 | Should users be able to edit Job deadlines in the frontend?       |   Open | Display deadline now, but defer editing until workflow/backend ownership is confirmed. |
+| ID     | Question                                                          |      Status | Notes                                                                                                                                 |
+| ------ | ----------------------------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------------------------- |
+| OQ-001 | What is the actual AOI geometry type?                             |        Open | Test service exposes a geometry field, but final geometry type and density must still be verified against the real service.           |
+| OQ-002 | Are AOIs small/uniform enough for direct polygon clustering?      |        Open | Important for cluster strategy.                                                                                                       |
+| OQ-003 | Which AOI fields are stable and user-friendly?                    | In progress | Test service uses `GlobalID` as provisional id and `PRODUCTNAME` as provisional display name. Final service fields are not confirmed. |
+| OQ-004 | Will AOI Feature Service require authentication?                  |        Open | Must avoid committing secrets. Current test integration does not settle final auth requirements.                                      |
+| OQ-005 | Will backend return AOI/Job relations directly?                   |        Open | Frontend should remain flexible.                                                                                                      |
+| OQ-006 | Will backend calculate spatial intersections?                     |        Open | Preferred for authoritative relation logic.                                                                                           |
+| OQ-007 | What counts as “due soon”?                                        |        Open | Suggested default: deadline within 7 days.                                                                                            |
+| OQ-008 | Should `Done` Jobs remain visible by default?                     |        Open | Suggested: visible in list, filtered out by “active Jobs” quick filter.                                                               |
+| OQ-009 | Should cyclic mock Job creation be deterministic in dev?          |        Open | A seed option may make testing easier.                                                                                                |
+| OQ-010 | Should the app use Product Manager’s server/SSPI setup initially? |        Open | Only if needed for auth or deployment.                                                                                                |
+| OQ-011 | Should users be able to edit Job deadlines in the frontend?       |        Open | Display deadline now, but defer editing until workflow/backend ownership is confirmed.                                                |
 
 ## 15. Risks and mitigations
 

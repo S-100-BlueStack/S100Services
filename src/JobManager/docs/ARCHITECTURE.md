@@ -104,6 +104,26 @@ Rules:
 - AOI geometry handling should stay out of generic shared utilities.
 - Required AOI source fields must be documented once known.
 
+### Current test AOI field configuration
+
+Status: In progress
+
+The current test AOI Feature Service fields are centralized in `features/aoi/config/aoiFieldConfig.js`.
+
+Current provisional field decisions:
+
+- `GlobalID` is used as the provisional frontend AOI identifier.
+- `PRODUCTNAME` is used as the provisional AOI display name.
+- `PRODUCTID`, `SERIES`, `EDITION`, `ISSUEDATE`, `LOCKED`, `IS_TECHNICAL` and `UPDT` are treated as metadata.
+- `OBJECTID` is preserved for ArcGIS/service mechanics, but should not be treated as the long-term AOI/Job relation id.
+
+Rules:
+
+- Keep test-service field names centralized.
+- Do not spread raw field names across UI components.
+- Do not treat the test-service field mapping as final backend contract.
+- Update this section when the real AOI Feature Service is created.
+
 ## 6. `src/features/jobs`
 
 Owns Job-specific behavior.
@@ -209,7 +229,7 @@ Current responsibilities:
 
 - `features/map/core/createMapView.js` creates the ArcGIS `Map`, operational layers and `MapView`.
 - `features/map/core/mapController.js` owns map startup, loading/error status and cleanup.
-- `features/map/layers/createAoiLayer.js` owns AOI `FeatureLayer` construction.
+- `features/map/layers/createAoiLayer.js` owns AOI `FeatureLayer` construction and connects popup/outFields to AOI field config.
 - `src/app/createApp.js` only creates the DOM container, wires lifecycle and handles app-level notices.
 
 Rules:
@@ -217,7 +237,7 @@ Rules:
 - Do not add ArcGIS layer construction directly to `src/app`.
 - Do not put AOI field normalization in map layer code.
 - Do not make map code the canonical owner of AOI or Job state.
-- Keep future AOI renderer, popup, filter and clustering logic under `features/map`.
+- Keep future AOI renderer, popup action, filter and clustering logic under `features/map`.
 
 ## 8. `src/features/notices`
 

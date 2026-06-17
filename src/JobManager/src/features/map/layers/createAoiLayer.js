@@ -1,6 +1,7 @@
 import FeatureLayer from "@arcgis/core/layers/FeatureLayer.js";
 
 import { createAoiFeatureServiceConfig } from "../../aoi/config/aoiConfig.js";
+import { createAoiOutFields, createAoiPopupTemplate } from "../../aoi/config/aoiFieldConfig.js";
 
 export function createAoiLayer({ runtimeConfig } = {}) {
   const config = createAoiFeatureServiceConfig(runtimeConfig);
@@ -13,11 +14,8 @@ export function createAoiLayer({ runtimeConfig } = {}) {
     id: "job-manager-aoi-layer",
     title: "Areas of Interest",
     url: config.url,
-    outFields: ["*"],
+    outFields: createAoiOutFields(),
     popupEnabled: true,
-    popupTemplate: {
-      title: "Area of Interest",
-      content: "AOI popup content will be configured after the source fields are confirmed.",
-    },
+    popupTemplate: createAoiPopupTemplate(),
   });
 }

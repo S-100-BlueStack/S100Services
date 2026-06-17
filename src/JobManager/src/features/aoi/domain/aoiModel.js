@@ -1,38 +1,31 @@
+import {
+  AOI_FIELD,
+  AOI_ID_FIELD_CANDIDATES,
+  AOI_NAME_FIELD_CANDIDATES,
+} from "../config/aoiFieldConfig.js";
+
 const DEFAULT_AOI_JOB_SUMMARY = Object.freeze({
   total: 0,
   active: 0,
   highPriority: 0,
 });
 
-const AOI_ID_FIELD_CANDIDATES = Object.freeze([
-  "id",
-  "aoiId",
-  "aoi_id",
-  "globalId",
-  "GlobalID",
-  "OBJECTID",
-  "ObjectID",
-  "objectid",
-]);
-
-const AOI_NAME_FIELD_CANDIDATES = Object.freeze([
-  "name",
-  "Name",
-  "title",
-  "Title",
-  "aoiName",
-  "aoi_name",
-]);
-
 export function normalizeAoi(rawAoi) {
   const attributes = normalizeAttributes(rawAoi?.attributes);
+  const globalId = resolveFieldValue(rawAoi, attributes, AOI_FIELD.GLOBAL_ID);
+  const objectId = resolveFieldValue(rawAoi, attributes, AOI_FIELD.OBJECT_ID);
+  const productId = resolveFieldValue(rawAoi, attributes, AOI_FIELD.PRODUCT_ID);
+  const name = resolveFirstStringValue(rawAoi, attributes, AOI_NAME_FIELD_CANDIDATES);
   const id = resolveFirstStringValue(rawAoi, attributes, AOI_ID_FIELD_CANDIDATES);
 
   return {
-    id: id || createFallbackAoiId(attributes),
-    name:
-      resolveFirstStringValue(rawAoi, attributes, AOI_NAME_FIELD_CANDIDATES) ||
-      "Unnamed Area of Interest",
+    id: id || createFallbackAoiId({ globalId, productId, objectId }),
+    name: name || "Unnamed Area of Interest",
+    objectId,
+    globalId,
+    productId,
+    series: resolveFieldValue(rawAoi, attributes, AOI_FIELD.SERIES),
+    edition: normalizeNullableInteger(resolveFieldValue(rawAoi, attributes, AOI_FIELD.EDITION)),
     geometry: rawAoi?.geometry ?? null,
     attributes,
     jobSummary: normalizeAoiJobSummary(rawAoi?.jobSummary),
@@ -61,21 +54,28 @@ function normalizeAttributes(attributes) {
 
 function resolveFirstStringValue(rawAoi, attributes, candidateKeys) {
   for (const key of candidateKeys) {
-    const value = rawAoi?.[key] ?? attributes[key];
-    const normalizedValue = normalizeOptionalString(value);
+    const value = resolveFieldValue(rawAoi, attributes, key);
 
-    if (normalizedValue) {
-      return normalizedValue;
+    if (value) {
+      return value;
     }
   }
 
   return "";
 }
 
-function createFallbackAoiId(attributes) {
-  const objectId = normalizeOptionalString(
-    attributes.OBJECTID ?? attributes.ObjectID ?? attributes.objectid
-  );
+function resolveFieldValue(rawAoi, attributes, fieldName) {
+  return normalizeOptionalString(rawAoi?.[fieldName] ?? attributes[fieldName]);
+}
+
+function createFallbackAoiId({ globalId, productId, objectId }) {
+  if (globalId) {
+    return globalId;
+  }
+
+  if (productId) {
+    return productId;
+  }
 
   if (objectId) {
     return `aoi-${objectId}`;
@@ -90,6 +90,20 @@ function normalizeOptionalString(value) {
   }
 
   return String(value).trim();
+}
+
+function normalizeNullableInteger(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue)) {
+    return null;
+  }
+
+  return Math.trunc(numberValue);
 }
 
 function normalizeCount(value) {

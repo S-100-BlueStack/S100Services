@@ -137,40 +137,72 @@ Current frontend implementation:
 
 - resolves AOI source configuration from runtime config
 - can create an ArcGIS `FeatureLayer` from the configured AOI Feature Service URL
+- centralizes current test-service field names in `features/aoi/config/aoiFieldConfig.js`
 - exposes an AOI service facade with a stable API result shape
-- includes provisional AOI normalization helpers for likely identifier and display fields
+- includes AOI normalization helpers for current test-service field names and legacy/provisional fallbacks
+- configures an initial AOI popup template using test-service metadata
 
 Current limitations:
 
 - real AOI querying is not implemented in the AOI service yet
-- AOI popup content is placeholder-only
 - AOI renderer is not connected to Job summaries yet
 - AOI load/empty/error states are only partially represented through map status
 - AOI clustering is deferred until real geometry characteristics are known
+- current field mapping is based on a temporary test Feature Service and must not be treated as the final backend contract
 
-Provisional AOI field candidates:
+Current test AOI Feature Service fields:
 
 ```txt
-Identifier:
-id
-aoiId
-aoi_id
-globalId
-GlobalID
 OBJECTID
-ObjectID
-objectid
-
-Display name:
-name
-Name
-title
-Title
-aoiName
-aoi_name
+Shape
+PRODUCTNAME
+SERIES
+EDITION
+LOCKED
+FILELINK
+JSON
+ISSUEDATE
+IS_TECHNICAL
+UPDT
+PRODUCTID
+GlobalID
+created_user
+created_date
+last_edited_user
+last_edited_date
+Shape.STArea()
+Shape.STLength()
 ```
 
-These field candidates are not a backend contract. They are only temporary frontend fallbacks until the actual Feature Service fields are confirmed.
+Current provisional frontend field decisions:
+
+```txt
+Stable test AOI id:
+GlobalID
+
+ArcGIS object id:
+OBJECTID
+
+Display name:
+PRODUCTNAME
+
+Optional product id metadata:
+PRODUCTID
+
+Secondary display metadata:
+SERIES
+EDITION
+
+Other useful metadata:
+ISSUEDATE
+LOCKED
+IS_TECHNICAL
+UPDT
+```
+
+Decision:
+
+Use `GlobalID` as the provisional frontend AOI identifier for the test Feature Service. Use `PRODUCTNAME` as the provisional display name. Use `OBJECTID` for ArcGIS/service mechanics only. Do not treat this as the final backend contract until the real AOI Feature Service is created.
 
 ## 6. Draft relation model
 
@@ -322,19 +354,20 @@ User-facing error messages must be English.
 
 ## 10. Open backend questions
 
-| ID     | Question                                                | Status | Notes                                                                           |
-| ------ | ------------------------------------------------------- | -----: | ------------------------------------------------------------------------------- |
-| BE-001 | Will the backend provide AOI/Job relations directly?    |   Open | Important for relation service design.                                          |
-| BE-002 | Will backend calculate spatial intersections?           |   Open | Preferred if backend has authoritative geometry access.                         |
-| BE-003 | What Job fields are guaranteed?                         |   Open | Needed before final normalization.                                              |
-| BE-004 | Can updating a Job return newly created follow-up Jobs? |   Open | Useful for cyclic work UX.                                                      |
-| BE-005 | Will status updates support conflict responses?         |   Open | Useful for multi-user safety.                                                   |
-| BE-006 | Will AOI Feature Service require authentication?        |   Open | Important for config/security. Do not add tokens or credentials to source code. |
-| BE-007 | Which AOI fields are stable identifiers?                |   Open | Required for relations and popups. Current frontend candidates are provisional. |
-| BE-008 | Will priority be returned as a current computed value?  |   Open | Frontend should not compute long-term priority.                                 |
-| BE-009 | What AOI field should be used as the display name?      |   Open | Required before replacing placeholder AOI popup content.                        |
-| BE-010 | What is the AOI geometry type and spatial reference?    |   Open | Required before deciding renderer, selection behavior and clustering strategy.  |
-| BE-011 | How large and dense is the AOI Feature Service?         |   Open | Required before deciding whether to query all AOIs eagerly or page/filter.      |
+| ID     | Question                                                |      Status | Notes                                                                                                                    |
+| ------ | ------------------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------------ |
+| BE-001 | Will the backend provide AOI/Job relations directly?    |        Open | Important for relation service design.                                                                                   |
+| BE-002 | Will backend calculate spatial intersections?           |        Open | Preferred if backend has authoritative geometry access.                                                                  |
+| BE-003 | What Job fields are guaranteed?                         |        Open | Needed before final normalization.                                                                                       |
+| BE-004 | Can updating a Job return newly created follow-up Jobs? |        Open | Useful for cyclic work UX.                                                                                               |
+| BE-005 | Will status updates support conflict responses?         |        Open | Useful for multi-user safety.                                                                                            |
+| BE-006 | Will AOI Feature Service require authentication?        |        Open | Important for config/security. Do not add tokens or credentials to source code.                                          |
+| BE-007 | Which AOI fields are stable identifiers?                | In progress | Test service uses `GlobalID` provisionally. Final service identifier is not confirmed.                                   |
+| BE-008 | Will priority be returned as a current computed value?  |        Open | Frontend should not compute long-term priority.                                                                          |
+| BE-009 | What AOI field should be used as the display name?      | In progress | Test service uses `PRODUCTNAME` provisionally. Final display field is not confirmed.                                     |
+| BE-010 | What is the AOI geometry type and spatial reference?    |        Open | Required before deciding renderer, selection behavior and clustering strategy.                                           |
+| BE-011 | How large and dense is the AOI Feature Service?         |        Open | Required before deciding whether to query all AOIs eagerly or page/filter.                                               |
+| BE-012 | Should `PRODUCTID` participate in AOI/Job relations?    |        Open | It may be domain-relevant, but current test field is nullable, so it should not replace `GlobalID` without confirmation. |
 
 ## 11. Notes for future updates
 
