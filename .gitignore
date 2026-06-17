@@ -458,3 +458,4 @@ dist-ssr
 /src/ProductManager/fh027-analyze-usage.txt
 /src/ProductManager/fh006-class-usage.txt
 /src/ProductManager/fh006-file-list.txt
+/src/JobManager/.env.development
