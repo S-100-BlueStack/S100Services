@@ -8,6 +8,7 @@ export function createEmptyAoiJobSummary(aoiId = "") {
     total: 0,
     active: 0,
     highPriority: 0,
+    activeHighPriority: 0,
     jobIds: [],
   };
 }
@@ -39,15 +40,22 @@ export function buildAoiJobSummaryByAoiId({ jobs = [], relations } = {}) {
         continue;
       }
 
+      const isActive = isActiveJobStatus(job.status);
+      const isHighPriority = job.priority === JOB_PRIORITY.HIGH;
+
       summaryState.jobIds.add(relation.jobId);
       summaryState.total += 1;
 
-      if (isActiveJobStatus(job.status)) {
+      if (isActive) {
         summaryState.active += 1;
       }
 
-      if (job.priority === JOB_PRIORITY.HIGH) {
+      if (isHighPriority) {
         summaryState.highPriority += 1;
+      }
+
+      if (isActive && isHighPriority) {
+        summaryState.activeHighPriority += 1;
       }
     }
   }
@@ -93,6 +101,7 @@ function getOrCreateSummaryState(summaryStateByAoiId, aoiId) {
     total: 0,
     active: 0,
     highPriority: 0,
+    activeHighPriority: 0,
     jobIds: new Set(),
   };
 
@@ -107,6 +116,7 @@ function freezeSummary(summaryState) {
     total: summaryState.total,
     active: summaryState.active,
     highPriority: summaryState.highPriority,
+    activeHighPriority: summaryState.activeHighPriority,
     jobIds: [...summaryState.jobIds],
   });
 }

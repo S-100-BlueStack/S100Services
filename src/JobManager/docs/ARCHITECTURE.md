@@ -228,8 +228,10 @@ ArcGIS `Map` and `MapView` creation is isolated under `features/map/core`.
 Current responsibilities:
 
 - `features/map/core/createMapView.js` creates the ArcGIS `Map`, operational layers and `MapView`.
-- `features/map/core/mapController.js` owns map startup, loading/error status and cleanup.
+- `features/map/core/mapController.js` owns map startup, loading/error status, renderer enrichment and cleanup.
 - `features/map/layers/createAoiLayer.js` owns AOI `FeatureLayer` construction and connects popup/outFields to AOI field config.
+- `features/map/layers/aoiRenderer.js` owns AOI renderer configuration.
+- `features/map/layers/applyAoiRenderer.js` applies AOI renderer enrichment from relation summaries without blocking map startup.
 - `src/app/createApp.js` only creates the DOM container, wires lifecycle and handles app-level notices.
 
 Rules:
@@ -237,7 +239,7 @@ Rules:
 - Do not add ArcGIS layer construction directly to `src/app`.
 - Do not put AOI field normalization in map layer code.
 - Do not make map code the canonical owner of AOI or Job state.
-- Keep future AOI renderer, popup action, filter and clustering logic under `features/map`.
+- Keep future AOI popup action, filter and clustering logic under `features/map`.
 
 ## 8. `src/features/notices`
 
@@ -397,6 +399,36 @@ The app shows an initial map status warning when AOI Feature Service configurati
 
 Do not finalize clustering implementation before real AOI geometry or representative sample data has been inspected.
 ```
+
+### AOI renderer architecture
+
+Status: In progress
+
+AOI rendering is split into two levels:
+
+```txt
+Neutral AOI renderer
+  -> used when relation summaries are missing or cannot be matched to AOI ids
+
+Job summary renderer
+  -> used when relation summaries can be matched to the AOI Feature Service id field
+```
+
+Current behavior:
+
+- `features/map/layers/aoiRenderer.js` creates ArcGIS renderer definitions.
+- `features/map/layers/applyAoiRenderer.js` loads relation summaries as best-effort data and applies a renderer to the AOI layer.
+- Renderer enrichment is non-blocking. The map should remain usable even if mock Jobs fail to load.
+
+Renderer severity values:
+
+```txt
+0 = No active Jobs
+1 = Active Jobs
+2 = High-priority active Jobs
+```
+
+The renderer currently uses `GlobalID` as the provisional AOI id field for matching relation summaries to Feature Service features. This must be revisited when the real AOI Feature Service and backend relation source are confirmed.
 
 ## 14. UI composition direction
 

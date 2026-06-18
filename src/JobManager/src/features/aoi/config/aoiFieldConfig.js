@@ -35,9 +35,6 @@ export const AOI_ID_FIELD_CANDIDATES = Object.freeze([
   "id",
   "aoiId",
   "aoi_id",
-  AOI_FIELD.OBJECT_ID,
-  "ObjectID",
-  "objectid",
 ]);
 
 export const AOI_NAME_FIELD_CANDIDATES = Object.freeze([

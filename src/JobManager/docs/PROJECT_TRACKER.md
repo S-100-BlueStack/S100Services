@@ -910,6 +910,22 @@ Rationale:
 
 AOI/Job relations are shared by AOI popups, Job details, filters and map rendering. A dedicated relation feature keeps cross-domain logic out of UI components and avoids making either AOI or Jobs responsible for the other domain's canonical state.
 
+## 8.29 Add AOI renderer foundation before final relation matching
+
+Status: Done
+
+AOI renderer logic lives under `features/map/layers` and uses relation summaries as best-effort input.
+
+Current behavior:
+
+- AOIs get a neutral default renderer when no relation summaries match.
+- AOIs can be styled as having active Jobs or high-priority active Jobs when relation summary ids match the AOI Feature Service id field.
+- Renderer enrichment does not block map startup.
+
+Rationale:
+
+The current test Feature Service uses `GlobalID` as the provisional AOI id, while mock Jobs may still use mock AOI ids. The renderer must therefore be ready for real relation matching without making the current map depend on matching test data.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -1168,9 +1184,9 @@ Tasks:
 | ID      | Task                                  |      Status | Notes                                                                                                              |
 | ------- | ------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------ |
 | JM-0501 | Define relation model                 |        Done | Added relation model helpers with `jobId`, `aoiIds` and `source`.                                                  |
-| JM-0502 | Implement mock relation lookup        | In progress | Added relation derivation from Jobs using `relatedAoiIds`. UI is not connected yet.                                |
-| JM-0503 | Implement AOI summary derivation      |        Done | Added total, active and high-priority Job summary derivation per AOI.                                              |
-| JM-0504 | Implement Job related AOI lookup      | In progress | Added helper to resolve AOIs for a Job from relation data. Needs UI/map integration later.                         |
+| JM-0502 | Implement mock relation lookup        | In progress | Added relation derivation from Jobs using `relatedAoiIds`. Map renderer consumes summaries as best-effort data.    |
+| JM-0503 | Implement AOI summary derivation      |        Done | Added total, active, high-priority and active high-priority Job summary derivation per AOI.                        |
+| JM-0504 | Implement Job related AOI lookup      | In progress | Added helper to resolve AOIs for a Job from relation data. Needs UI/map selection integration later.               |
 | JM-0505 | Implement AOI related Jobs lookup     | In progress | Added helper to resolve Jobs for an AOI from relation data. Needs popup/panel integration later.                   |
 | JM-0506 | Document backend relation assumptions | In progress | Relation implementation uses source markers so mock, frontend geometry and backend relations can be swapped later. |
 
@@ -1189,14 +1205,14 @@ Create the ArcGIS map and layer architecture.
 
 Tasks:
 
-| ID      | Task                                    |      Status | Notes                                                                                                                             |
-| ------- | --------------------------------------- | ----------: | --------------------------------------------------------------------------------------------------------------------------------- |
-| JM-0601 | Implement ArcGIS Map/MapView creation   |        Done | Added isolated ArcGIS Map/MapView creation under `features/map/core`.                                                             |
-| JM-0602 | Add map container to app shell          |        Done | Replaced the map placeholder with a real MapView container while preserving the overlay Jobs panel layout.                        |
-| JM-0603 | Add AOI layer creation                  | In progress | Added AOI `FeatureLayer` creation from configured service URL and connected popup/outFields to centralized AOI field config.      |
-| JM-0604 | Add AOI renderer foundation             | Not started | Requires AOI/Job summaries that can be matched to real AOI Feature Service ids before active/high-priority styling is meaningful. |
-| JM-0605 | Add map loading/error state integration | In progress | Added initial loading, warning and error status surface for the map. Full AOI layer load/error states still need to be refined.   |
-| JM-0606 | Add basic view cleanup                  |        Done | Added MapView cleanup through the app lifecycle destroy flow.                                                                     |
+| ID      | Task                                    |      Status | Notes                                                                                                                        |
+| ------- | --------------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------------- |
+| JM-0601 | Implement ArcGIS Map/MapView creation   |        Done | Added isolated ArcGIS Map/MapView creation under `features/map/core`.                                                        |
+| JM-0602 | Add map container to app shell          |        Done | Replaced the map placeholder with a real MapView container while preserving the overlay Jobs panel layout.                   |
+| JM-0603 | Add AOI layer creation                  | In progress | Added AOI `FeatureLayer` creation from configured service URL and connected popup/outFields to centralized AOI field config. |
+| JM-0604 | Add AOI renderer foundation             | In progress | Added neutral AOI renderer and best-effort Job summary renderer support using relation summaries matched by AOI id.          |
+| JM-0605 | Add map loading/error state integration | In progress | Added initial loading, warning and error status surface for the map. Renderer enrichment failures do not block map loading.  |
+| JM-0606 | Add basic view cleanup                  |        Done | Added MapView cleanup through the app lifecycle destroy flow.                                                                |
 
 Exit criteria:
 

@@ -317,6 +317,7 @@ Current behavior:
 - mock relations are derived from normalized Job `relatedAoiIds`
 - AOI summaries can be derived from Jobs and relations
 - relation lookup supports both AOI-to-Jobs and Job-to-AOIs direction
+- map renderer can consume AOI summaries as best-effort data
 
 Current AOI summary fields:
 
@@ -324,10 +325,19 @@ Current AOI summary fields:
 total
 active
 highPriority
+activeHighPriority
 jobIds
 ```
 
-The `jobIds` field is intended for frontend lookup and diagnostics. User-facing AOI summaries should normally display counts, not raw IDs.
+Field meaning:
+
+- `total` counts all related Jobs.
+- `active` counts related Jobs that are not `Done`.
+- `highPriority` counts all related high-priority Jobs.
+- `activeHighPriority` counts related high-priority Jobs that are not `Done`.
+- `jobIds` is intended for frontend lookup and diagnostics.
+
+User-facing AOI summaries should normally display counts, not raw IDs.
 
 Backend assumptions remain unchanged:
 

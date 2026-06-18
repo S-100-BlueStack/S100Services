@@ -1,4 +1,5 @@
 import { normalizeError } from "../../../shared/errors/normalizeError.js";
+import { applyAoiJobSummaryRenderer } from "../layers/applyAoiRenderer.js";
 import { createMapView } from "./createMapView.js";
 
 const MAP_STATUS = Object.freeze({
@@ -27,6 +28,7 @@ export function createMapController({ container, statusElement, runtimeConfig, o
         return { ok: false, error: null };
       }
 
+      applyAoiRendererWithoutBlockingMapReady(mapResult.layers.aoiLayer);
       setReadyStatus(Boolean(mapResult.layers.aoiLayer));
 
       return {
@@ -63,6 +65,13 @@ export function createMapController({ container, statusElement, runtimeConfig, o
 
   function getMap() {
     return mapResult?.map ?? null;
+  }
+
+  function applyAoiRendererWithoutBlockingMapReady(aoiLayer) {
+    void applyAoiJobSummaryRenderer({ aoiLayer }).catch(() => {
+      // Keep the map usable if the mock relation source fails while the renderer is being enriched.
+      aoiLayer?.set?.("renderer", aoiLayer.renderer);
+    });
   }
 
   function setReadyStatus(hasAoiLayer) {
