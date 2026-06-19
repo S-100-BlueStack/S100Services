@@ -20,6 +20,21 @@ test("createAoiSelectionFromGraphic uses GlobalID and PRODUCTNAME from AOI attri
   });
 });
 
+test("createAoiSelectionFromGraphic falls back to PRODUCTID before OBJECTID", () => {
+  const selectedAoi = createAoiSelectionFromGraphic({
+    attributes: {
+      OBJECTID: 9,
+      PRODUCTID: "{PRODUCT-ID}",
+    },
+  });
+
+  assert.deepEqual(selectedAoi, {
+    aoiId: "{PRODUCT-ID}",
+    aoiName: "Selected AOI",
+    objectId: "9",
+  });
+});
+
 test("createAoiSelectionFromGraphic falls back to prefixed OBJECTID", () => {
   const selectedAoi = createAoiSelectionFromGraphic({
     attributes: {

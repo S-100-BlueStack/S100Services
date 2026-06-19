@@ -426,8 +426,8 @@ Status: In progress
 Current flow:
 
 ```txt
-AOI popup action
-  -> map popup action handler
+AOI PopupTemplate action
+  -> PopupViewModel trigger-action event
   -> app-level selected AOI callback
   -> selected AOI state
   -> Jobs panel scoped to selected AOI
@@ -435,7 +435,9 @@ AOI popup action
 
 Rules:
 
-- Popup action handlers should extract stable AOI values from the selected graphic.
+- Popup actions should be defined on the AOI `PopupTemplate`.
+- Popup action wiring should wait for `view.popup.viewModel` with `reactiveUtils.whenOnce` because popup internals can be created lazily.
+- Popup action handlers should extract stable AOI values from the selected popup feature.
 - Popup action handlers should not load mock Jobs directly.
 - Jobs panel filtering should use relation service/domain helpers.
 - App-level composition should wire map events to Jobs UI behavior.

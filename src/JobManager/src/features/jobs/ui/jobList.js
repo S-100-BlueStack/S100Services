@@ -178,8 +178,12 @@ function renderJobList({
 }
 
 function getScopedJobs(jobs, aoiFilter) {
-  if (!aoiFilter?.aoiId) {
+  if (!aoiFilter) {
     return jobs;
+  }
+
+  if (!aoiFilter.aoiId) {
+    return [];
   }
 
   return getJobsForAoiFromJobs({
@@ -187,7 +191,6 @@ function getScopedJobs(jobs, aoiFilter) {
     jobs,
   });
 }
-
 function getVisibleJobs(jobs, visibleDoneJobIds) {
   return jobs.filter((job) => job.status !== JOB_STATUS.DONE || visibleDoneJobIds.has(job.id));
 }

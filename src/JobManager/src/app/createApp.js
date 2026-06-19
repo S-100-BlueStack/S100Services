@@ -27,10 +27,28 @@ export async function createApp(rootElement) {
       });
     },
     onShowRelatedJobs(selectedAoi) {
+      debugAoiPopup("app callback received selected AOI", selectedAoi);
+
       const normalizedSelectedAoi = selectedAoiStore.selectAoi(selectedAoi);
+
+      debugAoiPopup("normalized selected AOI", normalizedSelectedAoi);
+
+      if (!normalizedSelectedAoi.aoiId) {
+        showErrorNotice({
+          title: "AOI selection failed",
+          message: "The selected AOI does not expose a usable identifier.",
+        });
+
+        return;
+      }
 
       jobsPanel.showJobsForAoi(normalizedSelectedAoi);
       setPanelOpen(jobsPanel.element, header.jobsButton, true);
+
+      debugAoiPopup("Jobs panel open requested", {
+        panelHidden: jobsPanel.element.hidden,
+        selectedAoi: normalizedSelectedAoi,
+      });
     },
   });
 
@@ -287,6 +305,19 @@ function setFilterPopoverOpen(popoverElement, triggerButton, isOpen) {
   triggerButton.active = isOpen;
   triggerButton.toggleAttribute("active", isOpen);
   triggerButton.setAttribute("aria-expanded", String(isOpen));
+}
+
+function debugAoiPopup(message, payload) {
+  if (globalThis.localStorage?.getItem("jobManager.debug.aoiPopup") !== "1") {
+    return;
+  }
+
+  if (payload === undefined) {
+    console.debug(`[Job Manager AOI popup] ${message}`);
+    return;
+  }
+
+  console.debug(`[Job Manager AOI popup] ${message}`, payload);
 }
 
 function isEventInsideElements(event, elements) {
