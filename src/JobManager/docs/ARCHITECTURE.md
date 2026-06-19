@@ -246,9 +246,12 @@ ArcGIS `Map` and `MapView` creation is isolated under `features/map/core`.
 Current responsibilities:
 
 - `features/map/core/createMapView.js` creates the ArcGIS `Map`, operational layers and `MapView`.
-- `features/map/core/mapController.js` owns map startup, loading/error status, renderer enrichment, popup action wiring and cleanup.
+- `features/map/core/mapController.js` owns map startup, loading/error status, renderer enrichment, Job layer data enrichment, popup action wiring and cleanup.
 - `features/map/layers/createAoiLayer.js` owns AOI `FeatureLayer` construction and connects popup/outFields/actions to AOI field config and popup helpers.
+- `features/map/layers/createJobLayers.js` owns read-only Job geometry layer construction.
+- `features/map/layers/applyJobLayerData.js` loads Job service data into the Job geometry layers.
 - `features/map/layers/aoiRenderer.js` owns AOI renderer configuration.
+- `features/map/layers/jobRenderer.js` owns Job geometry renderer configuration.
 - `features/map/layers/applyAoiRenderer.js` applies AOI renderer enrichment from relation summaries without blocking map startup.
 - `features/map/popups/aoiPopupActions.js` owns AOI popup action definitions and selected AOI extraction from popup graphics.
 - `src/app/createApp.js` only creates the DOM container, wires lifecycle and handles app-level callbacks/notices.
@@ -418,6 +421,37 @@ The app shows an initial map status warning when AOI Feature Service configurati
 
 Do not finalize clustering implementation before real AOI geometry or representative sample data has been inspected.
 ```
+
+### Job geometry layer architecture
+
+Status: In progress
+
+Job geometry is displayed through read-only client-side ArcGIS FeatureLayers.
+
+Current layer split:
+
+```txt
+Job polygon layer
+  -> displays Jobs with polygon geometry
+
+Job point layer
+  -> displays Jobs with point geometry
+```
+
+Current behavior:
+
+- Job geometry layers are created under `features/map/layers`.
+- Job layer source data is loaded from `jobs/services`.
+- Job layer source data is not loaded directly from `jobs/mock`.
+- Job geometry renderer distinguishes active priority and Done status.
+- Job geometry popup shows basic Job metadata.
+- Job geometry selection and highlight are deferred.
+
+Rules:
+
+- Keep point and polygon Jobs in separate layers because client-side FeatureLayers are geometry-type specific.
+- Keep Job geometry display read-only until editing/selection workflows are explicitly introduced.
+- Keep Job layer data refresh replaceable so it can later consume central Job state or backend data instead of a separate service snapshot.
 
 ### AOI popup action flow
 

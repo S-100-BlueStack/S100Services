@@ -105,6 +105,34 @@ Medium
 High
 ```
 
+### Current frontend Job geometry map implementation
+
+Status: In progress
+
+The frontend now displays mock Job geometry on the map through read-only client-side FeatureLayers.
+
+Current behavior:
+
+- point Job geometry is displayed in a dedicated point layer
+- polygon Job geometry is displayed in a dedicated polygon layer
+- Job map attributes are derived from the normalized frontend Job model
+- Job layer data is loaded through `jobs/services`
+- Job geometry popup shows basic Job metadata
+
+Current limitations:
+
+- Job geometry layers use a separate service snapshot from the Jobs panel
+- selecting a Job on the map is not implemented yet
+- highlighting related AOIs from a selected Job is not implemented yet
+- editing Job geometry is not supported
+- final backend geometry ownership is not confirmed
+
+Backend assumptions remain unchanged:
+
+- backend may later provide Jobs and Job geometry directly
+- backend may later own authoritative Job/AOI relation calculation
+- frontend should continue normalizing incoming Job geometry before UI or map use
+
 ## 5. Draft frontend AOI model
 
 The frontend should normalize AOI data into a stable model before UI use.

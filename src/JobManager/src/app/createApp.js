@@ -26,6 +26,12 @@ export async function createApp(rootElement) {
         message: error.message,
       });
     },
+    onJobLayerError(error) {
+      showErrorNotice({
+        title: "Job geometry could not be loaded",
+        message: error.message,
+      });
+    },
     onShowRelatedJobs(selectedAoi) {
       const normalizedSelectedAoi = selectedAoiStore.selectAoi(selectedAoi);
 

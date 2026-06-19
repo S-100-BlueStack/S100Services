@@ -3,6 +3,7 @@ import MapView from "@arcgis/core/views/MapView.js";
 
 import { createDefaultMapConfig, configureArcGisRuntime } from "../config/mapConfig.js";
 import { createAoiLayer } from "../layers/createAoiLayer.js";
+import { createJobLayers } from "../layers/createJobLayers.js";
 
 export function createMapView({ container, runtimeConfig, mapConfig } = {}) {
   if (!container) {
@@ -13,7 +14,8 @@ export function createMapView({ container, runtimeConfig, mapConfig } = {}) {
 
   const resolvedMapConfig = mapConfig ?? createDefaultMapConfig();
   const aoiLayer = createAoiLayer({ runtimeConfig });
-  const operationalLayers = aoiLayer ? [aoiLayer] : [];
+  const jobLayers = createJobLayers();
+  const operationalLayers = [...(aoiLayer ? [aoiLayer] : []), ...jobLayers.layers];
   const map = new ArcGISMap({
     basemap: resolvedMapConfig.basemap,
     layers: operationalLayers,
@@ -32,6 +34,7 @@ export function createMapView({ container, runtimeConfig, mapConfig } = {}) {
     view,
     layers: {
       aoiLayer,
+      jobLayers,
     },
   };
 }

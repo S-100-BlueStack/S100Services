@@ -956,6 +956,25 @@ Rationale:
 
 The popup action debug logs were useful while diagnosing the lazy ArcGIS popup lifecycle, but they should not remain in normal development output. Moving focus before hiding the panel avoids browser accessibility warnings caused by hiding a panel while a descendant still has focus.
 
+## 8.32 Add read-only Job geometry layer foundation
+
+Status: Done
+
+Job geometry is displayed on the map through client-side ArcGIS `FeatureLayer`s populated from Job service data.
+
+Current behavior:
+
+- Point Jobs are displayed in a dedicated Job point layer.
+- Polygon Jobs are displayed in a dedicated Job polygon layer.
+- Job geometry layers are read-only.
+- Job geometry is styled by active priority and Done status.
+- Job geometry popups show basic Job metadata.
+- Job data is loaded through `jobs/services`, not directly from `jobs/mock`.
+
+Rationale:
+
+Jobs may use different geometry types, and ArcGIS client-side FeatureLayers are geometry-type specific. Splitting point and polygon Jobs keeps renderer, popup and later selection/highlight behavior isolated while preserving the service boundary around mock data.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -1236,14 +1255,15 @@ Create the ArcGIS map and layer architecture.
 
 Tasks:
 
-| ID      | Task                                    |      Status | Notes                                                                                                                        |
-| ------- | --------------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------------- |
-| JM-0601 | Implement ArcGIS Map/MapView creation   |        Done | Added isolated ArcGIS Map/MapView creation under `features/map/core`.                                                        |
-| JM-0602 | Add map container to app shell          |        Done | Replaced the map placeholder with a real MapView container while preserving the overlay Jobs panel layout.                   |
-| JM-0603 | Add AOI layer creation                  | In progress | Added AOI `FeatureLayer` creation from configured service URL and connected popup/outFields to centralized AOI field config. |
-| JM-0604 | Add AOI renderer foundation             | In progress | Added neutral AOI renderer and best-effort Job summary renderer support using relation summaries matched by AOI id.          |
-| JM-0605 | Add map loading/error state integration | In progress | Added initial loading, warning and error status surface for the map. Renderer enrichment failures do not block map loading.  |
-| JM-0606 | Add basic view cleanup                  |        Done | Added MapView cleanup through the app lifecycle destroy flow.                                                                |
+| ID      | Task                                    |      Status | Notes                                                                                                                                     |
+| ------- | --------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0601 | Implement ArcGIS Map/MapView creation   |        Done | Added isolated ArcGIS Map/MapView creation under `features/map/core`.                                                                     |
+| JM-0602 | Add map container to app shell          |        Done | Replaced the map placeholder with a real MapView container while preserving the overlay Jobs panel layout.                                |
+| JM-0603 | Add AOI layer creation                  | In progress | Added AOI `FeatureLayer` creation from configured service URL and connected popup/outFields to centralized AOI field config.              |
+| JM-0604 | Add AOI renderer foundation             | In progress | Added neutral AOI renderer and best-effort Job summary renderer support using relation summaries matched by AOI id.                       |
+| JM-0605 | Add map loading/error state integration | In progress | Added initial loading, warning and error status surface for the map. Renderer and Job layer enrichment failures do not block map loading. |
+| JM-0606 | Add basic view cleanup                  |        Done | Added MapView cleanup through the app lifecycle destroy flow.                                                                             |
+| JM-0607 | Add read-only Job geometry layers       | In progress | Added client-side point and polygon FeatureLayers populated from Job service geometry. Selection/highlight is deferred.                   |
 
 Exit criteria:
 

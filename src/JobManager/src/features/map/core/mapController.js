@@ -1,5 +1,6 @@
 import { normalizeError } from "../../../shared/errors/normalizeError.js";
 import { applyAoiJobSummaryRenderer } from "../layers/applyAoiRenderer.js";
+import { applyJobLayerData } from "../layers/applyJobLayerData.js";
 import { registerAoiPopupActions } from "../popups/aoiPopupActions.js";
 import { createMapView } from "./createMapView.js";
 
@@ -15,6 +16,7 @@ export function createMapController({
   statusElement,
   runtimeConfig,
   onError,
+  onJobLayerError,
   onShowRelatedJobs,
 } = {}) {
   let mapResult = null;
@@ -38,6 +40,7 @@ export function createMapController({
 
       registerAoiInteractionHandlers();
       applyAoiRendererWithoutBlockingMapReady(mapResult.layers.aoiLayer);
+      applyJobGeometryWithoutBlockingMapReady(mapResult.layers.jobLayers);
       setReadyStatus(Boolean(mapResult.layers.aoiLayer));
 
       return {
@@ -94,6 +97,18 @@ export function createMapController({
       // Keep the map usable if the mock relation source fails while the renderer is being enriched.
       aoiLayer?.set?.("renderer", aoiLayer.renderer);
     });
+  }
+
+  function applyJobGeometryWithoutBlockingMapReady(jobLayers) {
+    void applyJobLayerData({ jobLayers })
+      .then((result) => {
+        if (!result.ok) {
+          onJobLayerError?.(result.error);
+        }
+      })
+      .catch((error) => {
+        onJobLayerError?.(normalizeError(error, "Job geometry could not be loaded."));
+      });
   }
 
   function setReadyStatus(hasAoiLayer) {
