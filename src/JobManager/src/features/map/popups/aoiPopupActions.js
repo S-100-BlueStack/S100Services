@@ -6,39 +6,18 @@ export const AOI_POPUP_ACTION = Object.freeze({
   SHOW_RELATED_JOBS: "show-related-jobs",
 });
 
-const DEBUG_STORAGE_KEY = "jobManager.debug.aoiPopup";
-
 export function createAoiPopupActions() {
-  const actions = [
+  return [
     {
       id: AOI_POPUP_ACTION.SHOW_RELATED_JOBS,
       title: "Show related Jobs",
       icon: "list",
     },
   ];
-
-  debugPopup("createAoiPopupActions", {
-    actions,
-  });
-
-  return actions;
 }
 
 export function registerAoiPopupActions({ view, onShowRelatedJobs } = {}) {
-  debugPopup("registerAoiPopupActions called", {
-    hasView: Boolean(view),
-    hasPopup: Boolean(view?.popup),
-    hasPopupOn: Boolean(view?.popup?.on),
-    hasPopupViewModel: Boolean(view?.popup?.viewModel),
-    hasPopupViewModelOn: Boolean(view?.popup?.viewModel?.on),
-    hasCallback: typeof onShowRelatedJobs === "function",
-  });
-
   if (!view || typeof onShowRelatedJobs !== "function") {
-    debugPopup("registerAoiPopupActions skipped", {
-      reason: "missing-view-or-callback",
-    });
-
     return () => {};
   }
 
@@ -46,81 +25,41 @@ export function registerAoiPopupActions({ view, onShowRelatedJobs } = {}) {
   let popupActionHandle = null;
 
   const registerPopupViewModelHandler = (popupViewModel) => {
-    debugPopup("registerPopupViewModelHandler called", {
-      hasPopupViewModel: Boolean(popupViewModel),
-      hasPopupViewModelOn: Boolean(popupViewModel?.on),
-      alreadyRegistered: Boolean(popupActionHandle),
-      aborted: abortController.signal.aborted,
-      popupViewModelActions: getActionsForDebug(popupViewModel?.actions),
-      popupViewModelAllActions: getActionsForDebug(popupViewModel?.allActions),
-    });
-
     if (!popupViewModel?.on || popupActionHandle || abortController.signal.aborted) {
       return;
     }
 
     popupActionHandle = popupViewModel.on("trigger-action", (event) => {
-      debugPopup("popup viewModel trigger-action fired", {
-        action: event.action,
-        expectedActionId: AOI_POPUP_ACTION.SHOW_RELATED_JOBS,
-        selectedFeature: popupViewModel.selectedFeature,
-        activeFeature: popupViewModel.activeFeature,
-        selectedFeatureIndex: popupViewModel.selectedFeatureIndex,
-      });
-
       if (event.action?.id !== AOI_POPUP_ACTION.SHOW_RELATED_JOBS) {
-        debugPopup("popup viewModel trigger-action ignored", {
-          actionId: event.action?.id,
-        });
-
         return;
       }
 
       const selectedFeature = getSelectedPopupFeature(popupViewModel);
       const selectedAoi = createAoiSelectionFromGraphic(selectedFeature);
 
-      debugPopup("selected AOI extracted", {
-        selectedFeature,
-        attributes: selectedFeature?.attributes,
-        selectedAoi,
-      });
-
       onShowRelatedJobs(selectedAoi);
     });
-
-    debugPopup("popup viewModel trigger-action handler registered");
   };
 
   const popupViewModel = view.popup?.viewModel;
 
   if (popupViewModel?.on) {
-    debugPopup("popup viewModel available immediately");
     registerPopupViewModelHandler(popupViewModel);
   } else {
-    debugPopup("waiting for view.popup.viewModel with reactiveUtils.whenOnce");
-
+    // Popup internals can be created lazily, so wait for the ViewModel before wiring actions.
     void reactiveUtils
       .whenOnce(() => view.popup?.viewModel, {
         signal: abortController.signal,
       })
-      .then((resolvedPopupViewModel) => {
-        debugPopup("reactiveUtils.whenOnce resolved", {
-          hasPopupViewModel: Boolean(resolvedPopupViewModel),
-          hasPopupViewModelOn: Boolean(resolvedPopupViewModel?.on),
-        });
-
-        registerPopupViewModelHandler(resolvedPopupViewModel);
-      })
+      .then(registerPopupViewModelHandler)
       .catch((error) => {
-        debugPopup("reactiveUtils.whenOnce failed", {
-          name: error?.name,
-          message: error?.message,
-        });
+        if (error?.name !== "AbortError") {
+          throw error;
+        }
       });
   }
 
   return () => {
-    debugPopup("registerAoiPopupActions cleanup");
     abortController.abort();
     popupActionHandle?.remove();
     popupActionHandle = null;
@@ -166,30 +105,6 @@ function getSelectedPopupFeature(popupViewModel) {
   return features?.[selectedIndex] ?? features?.[0] ?? null;
 }
 
-function getActionsForDebug(actions) {
-  if (!actions) {
-    return null;
-  }
-
-  if (Array.isArray(actions)) {
-    return actions.map(toDebugAction);
-  }
-
-  if (typeof actions.toArray === "function") {
-    return actions.toArray().map(toDebugAction);
-  }
-
-  return actions;
-}
-
-function toDebugAction(action) {
-  return {
-    id: action?.id,
-    title: action?.title,
-    type: action?.type,
-  };
-}
-
 function createObjectIdFallback(objectId) {
   if (!objectId) {
     return "";
@@ -204,21 +119,4 @@ function normalizeOptionalString(value) {
   }
 
   return String(value).trim();
-}
-
-function debugPopup(message, payload) {
-  if (!isPopupDebugEnabled()) {
-    return;
-  }
-
-  if (payload === undefined) {
-    console.debug(`[Job Manager AOI popup] ${message}`);
-    return;
-  }
-
-  console.debug(`[Job Manager AOI popup] ${message}`, payload);
-}
-
-function isPopupDebugEnabled() {
-  return globalThis.localStorage?.getItem(DEBUG_STORAGE_KEY) === "1";
 }

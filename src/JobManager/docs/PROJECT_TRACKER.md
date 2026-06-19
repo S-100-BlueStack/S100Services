@@ -944,6 +944,18 @@ Rationale:
 
 The main workflow requires users to start from an AOI and inspect related Jobs. This flow connects the map and Jobs panel while keeping relation-source details isolated behind service/domain code.
 
+## 8.31 Keep AOI popup action wiring production-safe
+
+Status: Done
+
+Temporary AOI popup debug logging was removed after the `PopupViewModel` action flow was verified.
+
+The Jobs overlay close flow now moves focus back to the navbar Jobs control before hiding the panel.
+
+Rationale:
+
+The popup action debug logs were useful while diagnosing the lazy ArcGIS popup lifecycle, but they should not remain in normal development output. Moving focus before hiding the panel avoids browser accessibility warnings caused by hiding a panel while a descendant still has focus.
+
 ## 9. Backend assumptions
 
 Status: Draft

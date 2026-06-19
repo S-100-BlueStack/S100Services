@@ -441,6 +441,7 @@ Rules:
 - Popup action handlers should not load mock Jobs directly.
 - Jobs panel filtering should use relation service/domain helpers.
 - App-level composition should wire map events to Jobs UI behavior.
+- Temporary popup debug logging should not remain in production-ready code.
 
 Current action:
 
@@ -449,6 +450,10 @@ Show related Jobs
 ```
 
 The action opens the Jobs panel and scopes it to Jobs related to the selected AOI.
+
+Accessibility note:
+
+When closing the Jobs panel, focus is moved back to the navbar Jobs control before the panel is hidden. This avoids hiding focused descendants from assistive technology.
 
 ## 14. UI composition direction
 

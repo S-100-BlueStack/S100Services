@@ -27,11 +27,7 @@ export async function createApp(rootElement) {
       });
     },
     onShowRelatedJobs(selectedAoi) {
-      debugAoiPopup("app callback received selected AOI", selectedAoi);
-
       const normalizedSelectedAoi = selectedAoiStore.selectAoi(selectedAoi);
-
-      debugAoiPopup("normalized selected AOI", normalizedSelectedAoi);
 
       if (!normalizedSelectedAoi.aoiId) {
         showErrorNotice({
@@ -44,11 +40,6 @@ export async function createApp(rootElement) {
 
       jobsPanel.showJobsForAoi(normalizedSelectedAoi);
       setPanelOpen(jobsPanel.element, header.jobsButton, true);
-
-      debugAoiPopup("Jobs panel open requested", {
-        panelHidden: jobsPanel.element.hidden,
-        selectedAoi: normalizedSelectedAoi,
-      });
     },
   });
 
@@ -294,9 +285,27 @@ function getRequiredElement(rootElement, selector) {
 }
 
 function setPanelOpen(panelElement, triggerButton, isOpen) {
+  if (!isOpen) {
+    moveFocusOutOfPanel(panelElement, triggerButton);
+  }
+
   panelElement.hidden = !isOpen;
+  panelElement.inert = !isOpen;
   panelElement.setAttribute("aria-hidden", String(!isOpen));
   triggerButton.setAttribute("aria-expanded", String(isOpen));
+}
+
+function moveFocusOutOfPanel(panelElement, fallbackElement) {
+  const activeElement = document.activeElement;
+
+  if (!activeElement || !panelElement.contains(activeElement)) {
+    return;
+  }
+
+  // Move focus before hiding the panel so browsers do not block aria-hidden on focused content.
+  fallbackElement?.focus?.({
+    preventScroll: true,
+  });
 }
 
 function setFilterPopoverOpen(popoverElement, triggerButton, isOpen) {
@@ -305,19 +314,6 @@ function setFilterPopoverOpen(popoverElement, triggerButton, isOpen) {
   triggerButton.active = isOpen;
   triggerButton.toggleAttribute("active", isOpen);
   triggerButton.setAttribute("aria-expanded", String(isOpen));
-}
-
-function debugAoiPopup(message, payload) {
-  if (globalThis.localStorage?.getItem("jobManager.debug.aoiPopup") !== "1") {
-    return;
-  }
-
-  if (payload === undefined) {
-    console.debug(`[Job Manager AOI popup] ${message}`);
-    return;
-  }
-
-  console.debug(`[Job Manager AOI popup] ${message}`, payload);
 }
 
 function isEventInsideElements(event, elements) {
