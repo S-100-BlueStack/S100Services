@@ -22,7 +22,11 @@ export function createInitialMockJobs() {
         [7.25, 56.05],
         [7.25, 55.2],
       ]),
-      relatedAoiIds: ["mock-aoi-north-sea", "mock-aoi-western-denmark"],
+      relatedAoiIds: [
+        "{123AB663-0487-4411-AAAE-DC7C630BB03E}",
+        "{C5CEB79C-339B-49E3-93F3-BD0EFF1A3EE7}",
+        "{08DF4863-F0F6-4158-A01F-B64D96B3B8FB}",
+      ],
     },
     {
       id: "job-002",

@@ -1,3 +1,4 @@
+import { createSelectedAoiStore } from "../features/aoi/state/selectedAoiStore.js";
 import { createJobList } from "../features/jobs/ui/jobList.js";
 import { createMapController } from "../features/map/core/mapController.js";
 import {
@@ -10,6 +11,7 @@ import { getRuntimeConfig } from "../shared/config/runtimeConfig.js";
 
 export async function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
+  const selectedAoiStore = createSelectedAoiStore();
   const noticeRegion = createNoticeRegion();
   const header = await createHeader();
   const jobsPanel = createJobsOverlay();
@@ -23,6 +25,12 @@ export async function createApp(rootElement) {
         title: "Map could not be loaded",
         message: error.message,
       });
+    },
+    onShowRelatedJobs(selectedAoi) {
+      const normalizedSelectedAoi = selectedAoiStore.selectAoi(selectedAoi);
+
+      jobsPanel.showJobsForAoi(normalizedSelectedAoi);
+      setPanelOpen(jobsPanel.element, header.jobsButton, true);
     },
   });
 
@@ -43,6 +51,8 @@ export async function createApp(rootElement) {
     const shouldOpen = jobsPanel.element.hidden;
 
     if (shouldOpen) {
+      selectedAoiStore.clearSelection();
+      jobsPanel.clearAoiFilter();
       jobsPanel.refreshJobs();
     } else {
       jobsPanel.hideCompletedJobs();
@@ -239,6 +249,12 @@ function createJobsOverlay() {
     closeButton,
     refreshJobs() {
       return jobList.refreshJobs();
+    },
+    showJobsForAoi(selectedAoi) {
+      return jobList.showJobsForAoi(selectedAoi);
+    },
+    clearAoiFilter() {
+      jobList.clearAoiFilter();
     },
     hideCompletedJobs() {
       jobList.hideCompletedJobs();

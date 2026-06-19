@@ -1,5 +1,6 @@
 import { normalizeError } from "../../../shared/errors/normalizeError.js";
 import { applyAoiJobSummaryRenderer } from "../layers/applyAoiRenderer.js";
+import { registerAoiPopupActions } from "../popups/aoiPopupActions.js";
 import { createMapView } from "./createMapView.js";
 
 const MAP_STATUS = Object.freeze({
@@ -9,9 +10,16 @@ const MAP_STATUS = Object.freeze({
   ERROR: "error",
 });
 
-export function createMapController({ container, statusElement, runtimeConfig, onError } = {}) {
+export function createMapController({
+  container,
+  statusElement,
+  runtimeConfig,
+  onError,
+  onShowRelatedJobs,
+} = {}) {
   let mapResult = null;
   let isDestroyed = false;
+  let removeAoiPopupActions = () => {};
 
   async function start() {
     setStatus({
@@ -28,6 +36,7 @@ export function createMapController({ container, statusElement, runtimeConfig, o
         return { ok: false, error: null };
       }
 
+      registerAoiInteractionHandlers();
       applyAoiRendererWithoutBlockingMapReady(mapResult.layers.aoiLayer);
       setReadyStatus(Boolean(mapResult.layers.aoiLayer));
 
@@ -55,6 +64,8 @@ export function createMapController({ container, statusElement, runtimeConfig, o
 
   function destroy() {
     isDestroyed = true;
+    removeAoiPopupActions();
+    removeAoiPopupActions = () => {};
     mapResult?.view?.destroy();
     mapResult = null;
   }
@@ -65,6 +76,17 @@ export function createMapController({ container, statusElement, runtimeConfig, o
 
   function getMap() {
     return mapResult?.map ?? null;
+  }
+
+  function registerAoiInteractionHandlers() {
+    if (!mapResult?.layers?.aoiLayer) {
+      return;
+    }
+
+    removeAoiPopupActions = registerAoiPopupActions({
+      view: mapResult.view,
+      onShowRelatedJobs,
+    });
   }
 
   function applyAoiRendererWithoutBlockingMapReady(aoiLayer) {

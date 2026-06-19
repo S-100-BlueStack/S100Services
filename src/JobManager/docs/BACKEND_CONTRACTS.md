@@ -318,6 +318,7 @@ Current behavior:
 - AOI summaries can be derived from Jobs and relations
 - relation lookup supports both AOI-to-Jobs and Job-to-AOIs direction
 - map renderer can consume AOI summaries as best-effort data
+- Jobs panel can show Jobs scoped to a selected AOI using relation helpers
 
 Current AOI summary fields:
 

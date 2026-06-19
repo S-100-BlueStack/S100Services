@@ -2,6 +2,7 @@ import FeatureLayer from "@arcgis/core/layers/FeatureLayer.js";
 
 import { createAoiFeatureServiceConfig } from "../../aoi/config/aoiConfig.js";
 import { createAoiOutFields, createAoiPopupTemplate } from "../../aoi/config/aoiFieldConfig.js";
+import { createAoiPopupActions } from "../popups/aoiPopupActions.js";
 import { createDefaultAoiRenderer } from "./aoiRenderer.js";
 
 export function createAoiLayer({ runtimeConfig } = {}) {
@@ -17,7 +18,14 @@ export function createAoiLayer({ runtimeConfig } = {}) {
     url: config.url,
     outFields: createAoiOutFields(),
     popupEnabled: true,
-    popupTemplate: createAoiPopupTemplate(),
+    popupTemplate: createAoiLayerPopupTemplate(),
     renderer: createDefaultAoiRenderer(),
   });
+}
+
+function createAoiLayerPopupTemplate() {
+  return {
+    ...createAoiPopupTemplate(),
+    actions: createAoiPopupActions(),
+  };
 }

@@ -124,6 +124,24 @@ Rules:
 - Do not treat the test-service field mapping as final backend contract.
 - Update this section when the real AOI Feature Service is created.
 
+### Current selected AOI state
+
+Status: In progress
+
+Selected AOI state lives under `features/aoi/state`.
+
+Current behavior:
+
+- selected AOI state stores the selected AOI id, display name and object id
+- map popup actions can update selected AOI state through app-level wiring
+- Jobs UI can consume selected AOI scope without owning map state
+
+Rules:
+
+- selected AOI state must not depend on mock Jobs
+- selected AOI state must not contain raw ArcGIS Graphic objects
+- selection should store stable frontend values, not full Feature Service responses
+
 ## 6. `src/features/jobs`
 
 Owns Job-specific behavior.
@@ -228,18 +246,19 @@ ArcGIS `Map` and `MapView` creation is isolated under `features/map/core`.
 Current responsibilities:
 
 - `features/map/core/createMapView.js` creates the ArcGIS `Map`, operational layers and `MapView`.
-- `features/map/core/mapController.js` owns map startup, loading/error status, renderer enrichment and cleanup.
-- `features/map/layers/createAoiLayer.js` owns AOI `FeatureLayer` construction and connects popup/outFields to AOI field config.
+- `features/map/core/mapController.js` owns map startup, loading/error status, renderer enrichment, popup action wiring and cleanup.
+- `features/map/layers/createAoiLayer.js` owns AOI `FeatureLayer` construction and connects popup/outFields/actions to AOI field config and popup helpers.
 - `features/map/layers/aoiRenderer.js` owns AOI renderer configuration.
 - `features/map/layers/applyAoiRenderer.js` applies AOI renderer enrichment from relation summaries without blocking map startup.
-- `src/app/createApp.js` only creates the DOM container, wires lifecycle and handles app-level notices.
+- `features/map/popups/aoiPopupActions.js` owns AOI popup action definitions and selected AOI extraction from popup graphics.
+- `src/app/createApp.js` only creates the DOM container, wires lifecycle and handles app-level callbacks/notices.
 
 Rules:
 
 - Do not add ArcGIS layer construction directly to `src/app`.
 - Do not put AOI field normalization in map layer code.
 - Do not make map code the canonical owner of AOI or Job state.
-- Keep future AOI popup action, filter and clustering logic under `features/map`.
+- Keep future AOI popup content, filter and clustering logic under `features/map`.
 
 ## 8. `src/features/notices`
 
@@ -400,35 +419,34 @@ The app shows an initial map status warning when AOI Feature Service configurati
 Do not finalize clustering implementation before real AOI geometry or representative sample data has been inspected.
 ```
 
-### AOI renderer architecture
+### AOI popup action flow
 
 Status: In progress
 
-AOI rendering is split into two levels:
+Current flow:
 
 ```txt
-Neutral AOI renderer
-  -> used when relation summaries are missing or cannot be matched to AOI ids
-
-Job summary renderer
-  -> used when relation summaries can be matched to the AOI Feature Service id field
+AOI popup action
+  -> map popup action handler
+  -> app-level selected AOI callback
+  -> selected AOI state
+  -> Jobs panel scoped to selected AOI
 ```
 
-Current behavior:
+Rules:
 
-- `features/map/layers/aoiRenderer.js` creates ArcGIS renderer definitions.
-- `features/map/layers/applyAoiRenderer.js` loads relation summaries as best-effort data and applies a renderer to the AOI layer.
-- Renderer enrichment is non-blocking. The map should remain usable even if mock Jobs fail to load.
+- Popup action handlers should extract stable AOI values from the selected graphic.
+- Popup action handlers should not load mock Jobs directly.
+- Jobs panel filtering should use relation service/domain helpers.
+- App-level composition should wire map events to Jobs UI behavior.
 
-Renderer severity values:
+Current action:
 
 ```txt
-0 = No active Jobs
-1 = Active Jobs
-2 = High-priority active Jobs
+Show related Jobs
 ```
 
-The renderer currently uses `GlobalID` as the provisional AOI id field for matching relation summaries to Feature Service features. This must be revisited when the real AOI Feature Service and backend relation source are confirmed.
+The action opens the Jobs panel and scopes it to Jobs related to the selected AOI.
 
 ## 14. UI composition direction
 

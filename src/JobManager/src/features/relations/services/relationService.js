@@ -78,6 +78,18 @@ export function getJobsForAoi({ aoiId, jobs = [], relations = [] } = {}) {
   return normalizeArray(jobs).filter((job) => jobIds.has(normalizeOptionalString(job.id)));
 }
 
+export function getJobsForAoiFromJobs({ aoiId, jobs = [] } = {}) {
+  const resolvedJobs = normalizeArray(jobs);
+  const relations = buildRelationsFromJobs(resolvedJobs);
+
+  // Keep UI filtering source-agnostic so this can later use backend relations without changing Job UI.
+  return getJobsForAoi({
+    aoiId,
+    jobs: resolvedJobs,
+    relations,
+  });
+}
+
 export function getAoisForJob({ jobId, aois = [], relations = [] } = {}) {
   const aoiIds = new Set(getAoiIdsForJob({ relations, jobId }));
 

@@ -2,6 +2,41 @@
   min-height: 0;
 }
 
+.job-list__scope {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: start;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+  padding: 0.75rem;
+  border: 1px solid var(--jm-border);
+  border-left: 4px solid var(--jm-color-brand);
+  background: var(--jm-surface);
+}
+
+.job-list__scope-text {
+  min-width: 0;
+}
+
+.job-list__scope-label {
+  margin: 0;
+  color: var(--jm-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.job-list__scope-title {
+  margin: 0.2rem 0 0;
+  color: var(--jm-text);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.job-list__scope calcite-button::part(button) {
+  border-radius: 0;
+}
+
 .job-list__toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

@@ -926,6 +926,24 @@ Rationale:
 
 The current test Feature Service uses `GlobalID` as the provisional AOI id, while mock Jobs may still use mock AOI ids. The renderer must therefore be ready for real relation matching without making the current map depend on matching test data.
 
+## 8.30 Add selected AOI to related Jobs flow
+
+Status: Done
+
+AOI popup actions can now open the Jobs panel scoped to Jobs related to the selected AOI.
+
+Current behavior:
+
+- AOI popup includes a `Show related Jobs` action.
+- The action resolves the selected AOI id from the Feature Service attributes.
+- Selected AOI state is stored in `features/aoi/state`.
+- The Jobs panel can show a scoped view for the selected AOI.
+- The scoped Jobs list uses relation service helpers instead of importing mock data directly.
+
+Rationale:
+
+The main workflow requires users to start from an AOI and inspect related Jobs. This flow connects the map and Jobs panel while keeping relation-source details isolated behind service/domain code.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -1135,11 +1153,12 @@ Tasks:
 | ID      | Task                                         |      Status | Notes                                                                                                                                                                                                                                                                                            |
 | ------- | -------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | JM-0301 | Create Job list component                    |        Done | Jobs panel now renders active mock Jobs with compact collapsible cards using separate title/badge and date/action rows, fixed-width date chips, fixed-width priority/AOI badges and Calcite brand status actions. Done Jobs remain visible until refresh or panel close after being marked Done. |
-| JM-0302 | Create Job detail/selection component        | In progress | Collapsible Job cards provide the first detail surface. Expanded content currently only shows summary; dedicated selection/details flow is deferred until map interaction exists.                                                                                                                |
+| JM-0302 | Create Job detail/selection component        | In progress | Collapsible Job cards provide the first detail surface. Jobs panel can also show Jobs scoped to a selected AOI from the map. Dedicated full Job details flow is deferred until map selection and Job geometry workflows mature.                                                                  |
 | JM-0303 | Add Job status buttons                       |        Done | Added To do, In Progress and Done buttons per Job.                                                                                                                                                                                                                                               |
 | JM-0304 | Add per-Job mutation loading state           |        Done | Replaced visible per-Job loading text with a local pending guard to avoid card flashing while still preventing duplicate status updates.                                                                                                                                                         |
 | JM-0305 | Show success/failure notices for Job updates |        Done | Status updates show success and error notices.                                                                                                                                                                                                                                                   |
 | JM-0306 | Show cyclic Job creation notice              |        Done | Mock-created follow-up Jobs show an info notice.                                                                                                                                                                                                                                                 |
+| JM-0307 | Add selected AOI Jobs scope                  |        Done | AOI popup action can open the Jobs panel filtered to Jobs related to the selected AOI.                                                                                                                                                                                                           |
 
 Exit criteria:
 
@@ -1232,10 +1251,10 @@ Tasks:
 | ID      | Task                                  |      Status | Notes                                                                                                                   |
 | ------- | ------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------- |
 | JM-0701 | Add AOI hover feedback                | Not started | Follow Product Manager pattern if current code supports reuse.                                                          |
-| JM-0702 | Add AOI selection feedback            | Not started | Selection should sync with app state.                                                                                   |
-| JM-0703 | Add AOI popup shell                   | In progress | Added first ArcGIS popup template using current test Feature Service metadata. Custom popup actions are still deferred. |
-| JM-0704 | Show related Job summary in popup     | Not started | Requires relation summaries matched to real AOI ids.                                                                    |
-| JM-0705 | Add popup action to open related Jobs | Not started | Similar concept to Product Manager History action.                                                                      |
+| JM-0702 | Add AOI selection feedback            | In progress | Added selected AOI state and AOI popup action flow. Visual map highlight is still deferred.                             |
+| JM-0703 | Add AOI popup shell                   | In progress | Added ArcGIS popup template using current test Feature Service metadata and a Show related Jobs action.                 |
+| JM-0704 | Show related Job summary in popup     | Not started | Requires richer popup content or custom popup UI. Relation summaries currently drive renderer and Jobs panel filtering. |
+| JM-0705 | Add popup action to open related Jobs |        Done | AOI popup action opens the Jobs panel scoped to Jobs related to the selected AOI.                                       |
 | JM-0706 | Document popup flow                   | Not started | Add README under `features/map/popups` when implemented.                                                                |
 
 Exit criteria:
