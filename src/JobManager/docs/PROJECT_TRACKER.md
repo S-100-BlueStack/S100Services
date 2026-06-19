@@ -979,6 +979,24 @@ Implementation note:
 
 Client-side Job FeatureLayer data is replaced with `FeatureLayer.applyEdits()` instead of mutating `layer.source` after load. ArcGIS does not propagate `source` mutations after a client-side FeatureLayer has loaded.
 
+## 8.33 Add Job selection as shared map/list state
+
+Status: Not started
+
+Job selection should be represented as frontend state shared by the map and Jobs panel.
+
+Planned behavior:
+
+- selecting a Job geometry on the map opens the Jobs panel
+- the matching Job card is focused and expanded
+- selected Job geometry is highlighted on the map
+- AOI scoped mode is cleared when opening a specific Job from the map
+- related AOI highlighting is deferred until the basic Job selection flow is stable
+
+Rationale:
+
+Job geometry is now visible on the map, but the user still needs a direct way to move from map geometry to the operational Job details. Keeping selected Job state outside the map layer keeps map UI, Jobs UI and later backend integration decoupled.
+
 ## 9. Backend assumptions
 
 Status: Draft
