@@ -1,7 +1,9 @@
 import { normalizeError } from "../../../shared/errors/normalizeError.js";
 import { applyAoiJobSummaryRenderer } from "../layers/applyAoiRenderer.js";
 import { applyJobLayerData } from "../layers/applyJobLayerData.js";
+import { createJobHighlightController } from "../layers/jobHighlight.js";
 import { registerAoiPopupActions } from "../popups/aoiPopupActions.js";
+import { registerJobPopupActions } from "../popups/jobPopupActions.js";
 import { createMapView } from "./createMapView.js";
 
 const MAP_STATUS = Object.freeze({
@@ -18,10 +20,13 @@ export function createMapController({
   onError,
   onJobLayerError,
   onShowRelatedJobs,
+  onShowJobDetails,
 } = {}) {
   let mapResult = null;
   let isDestroyed = false;
   let removeAoiPopupActions = () => {};
+  let removeJobPopupActions = () => {};
+  let jobHighlightController = null;
 
   async function start() {
     setStatus({
@@ -38,7 +43,12 @@ export function createMapController({
         return { ok: false, error: null };
       }
 
-      registerAoiInteractionHandlers();
+      jobHighlightController = createJobHighlightController({
+        view: mapResult.view,
+        jobLayers: mapResult.layers.jobLayers,
+      });
+
+      registerMapInteractionHandlers();
       applyAoiRendererWithoutBlockingMapReady(mapResult.layers.aoiLayer);
       applyJobGeometryWithoutBlockingMapReady(mapResult.layers.jobLayers);
       setReadyStatus(Boolean(mapResult.layers.aoiLayer));
@@ -68,7 +78,11 @@ export function createMapController({
   function destroy() {
     isDestroyed = true;
     removeAoiPopupActions();
+    removeJobPopupActions();
     removeAoiPopupActions = () => {};
+    removeJobPopupActions = () => {};
+    jobHighlightController?.destroy();
+    jobHighlightController = null;
     mapResult?.view?.destroy();
     mapResult = null;
   }
@@ -81,15 +95,28 @@ export function createMapController({
     return mapResult?.map ?? null;
   }
 
-  function registerAoiInteractionHandlers() {
-    if (!mapResult?.layers?.aoiLayer) {
-      return;
+  function highlightJob(selectedJob) {
+    return jobHighlightController?.highlightJob(selectedJob) ?? Promise.resolve();
+  }
+
+  function clearJobHighlight() {
+    jobHighlightController?.clearHighlight();
+  }
+
+  function registerMapInteractionHandlers() {
+    if (mapResult?.layers?.aoiLayer) {
+      removeAoiPopupActions = registerAoiPopupActions({
+        view: mapResult.view,
+        onShowRelatedJobs,
+      });
     }
 
-    removeAoiPopupActions = registerAoiPopupActions({
-      view: mapResult.view,
-      onShowRelatedJobs,
-    });
+    if (mapResult?.layers?.jobLayers) {
+      removeJobPopupActions = registerJobPopupActions({
+        view: mapResult.view,
+        onShowJobDetails,
+      });
+    }
   }
 
   function applyAoiRendererWithoutBlockingMapReady(aoiLayer) {
@@ -153,5 +180,7 @@ export function createMapController({
     destroy,
     getView,
     getMap,
+    highlightJob,
+    clearJobHighlight,
   };
 }

@@ -453,6 +453,33 @@ Rules:
 - Keep Job geometry display read-only until editing/selection workflows are explicitly introduced.
 - Keep Job layer data refresh replaceable so it can later consume central Job state or backend data instead of a separate service snapshot.
 
+### Job selection flow
+
+Status: In progress
+
+Current flow:
+
+```txt
+Job geometry popup action
+  -> PopupViewModel trigger-action event
+  -> app-level selected Job callback
+  -> selected Job state
+  -> Jobs panel opens
+  -> matching Job card expands and receives focus
+  -> selected Job geometry is highlighted on the map
+```
+
+Rules:
+
+- Job popup actions should be defined on the Job geometry popup template.
+- Job popup action wiring should wait for `view.popup.viewModel` with `reactiveUtils.whenOnce`.
+- Selected Job state should live outside map layer construction.
+- Map highlight should be owned by map layer/controller code.
+- Jobs panel focus/expanded state should be owned by Jobs UI code.
+- Selecting a Job from the map clears AOI-scoped list mode.
+- Closing the Jobs panel or returning to the normal Jobs list clears selected Job highlight.
+- Related AOI highlight for selected Job is deferred.
+
 ### AOI popup action flow
 
 Status: In progress

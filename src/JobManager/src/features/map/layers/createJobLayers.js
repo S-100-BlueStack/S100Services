@@ -1,5 +1,6 @@
 import FeatureLayer from "@arcgis/core/layers/FeatureLayer.js";
 
+import { createJobPopupActions } from "../popups/jobPopupActions.js";
 import { createJobLayerFields, JOB_LAYER_FIELD } from "./jobLayerFeatureData.js";
 import { createJobPointRenderer, createJobPolygonRenderer } from "./jobRenderer.js";
 
@@ -77,5 +78,6 @@ function createJobPopupTemplate() {
         ],
       },
     ],
+    actions: createJobPopupActions(),
   };
 }

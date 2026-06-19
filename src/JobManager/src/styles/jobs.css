@@ -288,6 +288,31 @@
   font-size: 0.84rem;
 }
 
+.job-card--selected {
+  outline: 2px solid var(--calcite-color-brand);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--calcite-color-brand) 18%, transparent);
+}
+
+.job-card:focus {
+  outline: 2px solid var(--calcite-color-brand);
+  outline-offset: 2px;
+}
+
+.job-card--selected .job-card__title::after {
+  content: "Selected";
+  display: inline-flex;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--calcite-color-brand);
+  border-radius: 0;
+  color: var(--calcite-color-brand);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 @media (max-width: 34rem) {
   .job-list__toolbar {
     grid-template-columns: 1fr;

@@ -8,10 +8,12 @@ import {
 } from "../features/notices/services/noticeService.js";
 import { createNoticeRegion } from "../features/notices/ui/noticeContainer.js";
 import { getRuntimeConfig } from "../shared/config/runtimeConfig.js";
+import { createSelectedJobStore } from "../features/jobs/state/selectedJobStore.js";
 
 export async function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
   const selectedAoiStore = createSelectedAoiStore();
+  const selectedJobStore = createSelectedJobStore();
   const noticeRegion = createNoticeRegion();
   const header = await createHeader();
   const jobsPanel = createJobsOverlay();
@@ -43,9 +45,34 @@ export async function createApp(rootElement) {
 
         return;
       }
-
+      selectedJobStore.clearSelection();
+      jobsPanel.clearSelectedJob();
+      mapController.clearJobHighlight();
       jobsPanel.showJobsForAoi(normalizedSelectedAoi);
       setPanelOpen(jobsPanel.element, header.jobsButton, true);
+    },
+    onShowJobDetails(selectedJob) {
+      const normalizedSelectedJob = selectedJobStore.selectJob(selectedJob);
+
+      if (!normalizedSelectedJob.jobId) {
+        showErrorNotice({
+          title: "Job selection failed",
+          message: "The selected Job does not expose a usable identifier.",
+        });
+
+        return;
+      }
+
+      selectedAoiStore.clearSelection();
+      jobsPanel.showJobDetails(normalizedSelectedJob);
+      setPanelOpen(jobsPanel.element, header.jobsButton, true);
+
+      void mapController.highlightJob(normalizedSelectedJob).catch((error) => {
+        showErrorNotice({
+          title: "Job highlight failed",
+          message: error.message,
+        });
+      });
     },
   });
 
@@ -65,6 +92,10 @@ export async function createApp(rootElement) {
   header.jobsButton.addEventListener("click", () => {
     const shouldOpen = jobsPanel.element.hidden;
 
+    selectedJobStore.clearSelection();
+    jobsPanel.clearSelectedJob();
+    mapController.clearJobHighlight();
+
     if (shouldOpen) {
       selectedAoiStore.clearSelection();
       jobsPanel.clearAoiFilter();
@@ -77,6 +108,9 @@ export async function createApp(rootElement) {
   });
 
   jobsPanel.closeButton.addEventListener("click", () => {
+    selectedJobStore.clearSelection();
+    jobsPanel.clearSelectedJob();
+    mapController.clearJobHighlight();
     jobsPanel.hideCompletedJobs();
     setPanelOpen(jobsPanel.element, header.jobsButton, false);
   });
@@ -267,6 +301,12 @@ function createJobsOverlay() {
     },
     showJobsForAoi(selectedAoi) {
       return jobList.showJobsForAoi(selectedAoi);
+    },
+    showJobDetails(selectedJob) {
+      return jobList.showJobDetails(selectedJob);
+    },
+    clearSelectedJob() {
+      jobList.clearSelectedJob();
     },
     clearAoiFilter() {
       jobList.clearAoiFilter();

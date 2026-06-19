@@ -981,21 +981,22 @@ Client-side Job FeatureLayer data is replaced with `FeatureLayer.applyEdits()` i
 
 ## 8.33 Add Job selection as shared map/list state
 
-Status: Not started
+Status: Done
 
-Job selection should be represented as frontend state shared by the map and Jobs panel.
+Job selection is represented as frontend state shared by the map and Jobs panel.
 
-Planned behavior:
+Current behavior:
 
-- selecting a Job geometry on the map opens the Jobs panel
-- the matching Job card is focused and expanded
+- selecting a Job geometry popup action opens the Jobs panel
+- the matching Job card is expanded and focused
 - selected Job geometry is highlighted on the map
 - AOI scoped mode is cleared when opening a specific Job from the map
+- selected Job state is cleared when returning to the normal Jobs list or closing the Jobs panel
 - related AOI highlighting is deferred until the basic Job selection flow is stable
 
 Rationale:
 
-Job geometry is now visible on the map, but the user still needs a direct way to move from map geometry to the operational Job details. Keeping selected Job state outside the map layer keeps map UI, Jobs UI and later backend integration decoupled.
+Job geometry is now visible on the map, and users can move directly from map geometry to operational Job details. Keeping selected Job state outside the map layer keeps map UI, Jobs UI and later backend integration decoupled.
 
 ## 9. Backend assumptions
 

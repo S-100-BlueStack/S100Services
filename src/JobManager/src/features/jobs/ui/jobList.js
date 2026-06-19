@@ -18,7 +18,7 @@ export function createJobList() {
 
   let currentState = store.getSnapshot();
   let aoiFilter = null;
-
+  let selectedJobId = "";
   const expandedJobIds = new Set();
   const visibleDoneJobIds = new Set();
   const pendingMutationJobIds = new Set();
@@ -29,12 +29,22 @@ export function createJobList() {
     render();
   };
 
+  const clearSelectedJob = () => {
+    if (!selectedJobId) {
+      return;
+    }
+
+    selectedJobId = "";
+    render();
+  };
+
   const render = () => {
     renderJobList({
       rootElement,
       state: currentState,
       store,
       aoiFilter,
+      selectedJobId,
       expandedJobIds,
       visibleDoneJobIds,
       pendingMutationJobIds,
@@ -45,6 +55,7 @@ export function createJobList() {
 
   const unsubscribe = store.subscribe((state) => {
     currentState = state;
+    makeSelectedDoneJobVisible(visibleDoneJobIds, state.jobs, selectedJobId);
     removeInvisibleExpandedJobs(
       expandedJobIds,
       getScopedJobs(state.jobs, aoiFilter),
@@ -62,6 +73,7 @@ export function createJobList() {
       return loadJobs(store, visibleDoneJobIds);
     },
     showJobsForAoi(selectedAoi) {
+      selectedJobId = "";
       aoiFilter = normalizeAoiFilter(selectedAoi);
       expandedJobIds.clear();
 
@@ -70,13 +82,48 @@ export function createJobList() {
       }
 
       render();
+
+      return Promise.resolve({
+        ok: true,
+      });
+    },
+    async showJobDetails(selectedJob) {
+      const normalizedSelectedJob = normalizeSelectedJob(selectedJob);
+
+      if (!normalizedSelectedJob.jobId) {
+        return {
+          ok: false,
+        };
+      }
+
+      selectedJobId = normalizedSelectedJob.jobId;
+      aoiFilter = null;
+      expandedJobIds.add(selectedJobId);
+
+      if (currentState.jobs.length === 0 && !currentState.isLoading) {
+        const result = await loadJobs(store, visibleDoneJobIds);
+
+        makeSelectedDoneJobVisible(visibleDoneJobIds, currentState.jobs, selectedJobId);
+        expandedJobIds.add(selectedJobId);
+        render();
+        focusJobCard(rootElement, selectedJobId);
+
+        return result;
+      }
+
+      makeSelectedDoneJobVisible(visibleDoneJobIds, currentState.jobs, selectedJobId);
+      render();
+      focusJobCard(rootElement, selectedJobId);
+
       return Promise.resolve({
         ok: true,
       });
     },
     clearAoiFilter,
+    clearSelectedJob,
     hideCompletedJobs() {
       visibleDoneJobIds.clear();
+      makeSelectedDoneJobVisible(visibleDoneJobIds, currentState.jobs, selectedJobId);
       removeInvisibleExpandedJobs(
         expandedJobIds,
         getScopedJobs(currentState.jobs, aoiFilter),
@@ -111,6 +158,7 @@ function renderJobList({
   state,
   store,
   aoiFilter,
+  selectedJobId,
   expandedJobIds,
   visibleDoneJobIds,
   pendingMutationJobIds,
@@ -164,6 +212,7 @@ function renderJobList({
     listElement.appendChild(
       createJobCard({
         job,
+        selectedJobId,
         store,
         expandedJobIds,
         visibleDoneJobIds,
@@ -191,6 +240,7 @@ function getScopedJobs(jobs, aoiFilter) {
     jobs,
   });
 }
+
 function getVisibleJobs(jobs, visibleDoneJobIds) {
   return jobs.filter((job) => job.status !== JOB_STATUS.DONE || visibleDoneJobIds.has(job.id));
 }
@@ -198,6 +248,18 @@ function getVisibleJobs(jobs, visibleDoneJobIds) {
 function getHiddenDoneCount(jobs, visibleDoneJobIds) {
   return jobs.filter((job) => job.status === JOB_STATUS.DONE && !visibleDoneJobIds.has(job.id))
     .length;
+}
+
+function makeSelectedDoneJobVisible(visibleDoneJobIds, jobs, selectedJobId) {
+  if (!selectedJobId) {
+    return;
+  }
+
+  const selectedJob = jobs.find((job) => job.id === selectedJobId);
+
+  if (selectedJob?.status === JOB_STATUS.DONE) {
+    visibleDoneJobIds.add(selectedJobId);
+  }
 }
 
 function removeInvisibleExpandedJobs(expandedJobIds, jobs, visibleDoneJobIds) {
@@ -346,6 +408,7 @@ function createToolbarButton(label) {
 
 function createJobCard({
   job,
+  selectedJobId,
   store,
   expandedJobIds,
   visibleDoneJobIds,
@@ -353,10 +416,19 @@ function createJobCard({
   render,
 }) {
   const isExpanded = expandedJobIds.has(job.id);
+  const isSelected = job.id === selectedJobId;
   const cardElement = document.createElement("article");
+
   cardElement.className = "job-card";
+  cardElement.dataset.jobId = job.id;
   cardElement.dataset.jobStatus = job.status;
   cardElement.dataset.jobPriority = job.priority;
+  cardElement.tabIndex = -1;
+
+  if (isSelected) {
+    cardElement.classList.add("job-card--selected");
+    cardElement.setAttribute("aria-label", `Selected Job: ${job.title}`);
+  }
 
   cardElement.appendChild(
     createJobCardSummary({
@@ -392,12 +464,7 @@ function createJobCardSummary({
   const topRowElement = document.createElement("div");
   topRowElement.className = "job-card__top-row";
   topRowElement.append(
-    createJobTitleRow({
-      job,
-      isExpanded,
-      expandedJobIds,
-      render,
-    }),
+    createJobTitleRow({ job, isExpanded, expandedJobIds, render }),
     createBadgeColumn(job)
   );
 
@@ -458,7 +525,6 @@ function createBadgeColumn(job) {
 function createDateChips(job) {
   const containerElement = document.createElement("div");
   containerElement.className = "job-card__date-chips";
-
   containerElement.append(
     createDateChip({
       icon: "calendar",
@@ -520,6 +586,7 @@ function createAffectedAoiBadge(job) {
   const aoiCount = job.relatedAoiIds.length;
   const impact = getAffectedAoiImpact(aoiCount);
   const badgeElement = document.createElement("span");
+
   badgeElement.className = `job-card__aoi-count job-card__aoi-count--${impact}`;
   badgeElement.textContent = String(aoiCount);
   badgeElement.title = `${aoiCount} affected AOI${aoiCount === 1 ? "" : "s"}`;
@@ -586,6 +653,7 @@ function createStatusButton({
 }) {
   const isActive = job.status === statusOption.value;
   const buttonElement = document.createElement("calcite-button");
+
   buttonElement.className = "job-status-button";
   buttonElement.scale = "s";
   buttonElement.kind = "brand";
@@ -695,6 +763,32 @@ function normalizeAoiFilter(selectedAoi = {}) {
     aoiId: normalizeOptionalString(selectedAoi.aoiId ?? selectedAoi.id),
     aoiName: normalizeOptionalString(selectedAoi.aoiName ?? selectedAoi.name) || "Selected AOI",
   };
+}
+
+function normalizeSelectedJob(selectedJob = {}) {
+  return {
+    jobId: normalizeOptionalString(selectedJob.jobId ?? selectedJob.id),
+  };
+}
+
+function focusJobCard(rootElement, jobId) {
+  window.requestAnimationFrame(() => {
+    const jobCard = [...rootElement.querySelectorAll("[data-job-id]")].find(
+      (element) => element.dataset.jobId === jobId
+    );
+
+    if (!jobCard) {
+      return;
+    }
+
+    jobCard.scrollIntoView({
+      block: "nearest",
+    });
+
+    jobCard.focus({
+      preventScroll: true,
+    });
+  });
 }
 
 function normalizeOptionalString(value) {
