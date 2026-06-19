@@ -34,8 +34,7 @@ export function registerJobPopupActions({ view, onShowJobDetails } = {}) {
         return;
       }
 
-      const selectedFeature = getSelectedPopupFeature(popupViewModel);
-      const selectedJob = createJobSelectionFromGraphic(selectedFeature);
+      const selectedJob = createJobSelectionFromPopupViewModel(popupViewModel);
 
       onShowJobDetails(selectedJob);
     });
@@ -66,6 +65,10 @@ export function registerJobPopupActions({ view, onShowJobDetails } = {}) {
   };
 }
 
+export function createJobSelectionFromPopupViewModel(popupViewModel) {
+  return createJobSelectionFromGraphic(getSelectedJobPopupFeature(popupViewModel));
+}
+
 export function createJobSelectionFromGraphic(graphic) {
   const attributes = graphic?.attributes ?? {};
 
@@ -73,33 +76,71 @@ export function createJobSelectionFromGraphic(graphic) {
     jobId: normalizeOptionalString(attributes[JOB_LAYER_FIELD.JOB_ID]),
     jobTitle: normalizeOptionalString(attributes[JOB_LAYER_FIELD.TITLE]) || "Selected Job",
     objectId: attributes[JOB_LAYER_FIELD.OBJECT_ID],
-    geometryType: normalizeOptionalString(attributes[JOB_LAYER_FIELD.GEOMETRY_TYPE]),
+    geometryType: normalizeOptionalString(
+      attributes[JOB_LAYER_FIELD.GEOMETRY_TYPE] ?? graphic?.geometry?.type
+    ),
   };
 }
 
-function getSelectedPopupFeature(popupViewModel) {
-  if (popupViewModel?.selectedFeature) {
-    return popupViewModel.selectedFeature;
-  }
-
-  if (popupViewModel?.activeFeature) {
-    return popupViewModel.activeFeature;
-  }
-
-  const features = popupViewModel?.features;
+function getSelectedJobPopupFeature(popupViewModel) {
+  const features = getPopupFeatures(popupViewModel);
   const selectedIndex = Number.isInteger(popupViewModel?.selectedFeatureIndex)
     ? popupViewModel.selectedFeatureIndex
     : 0;
 
+  const candidates = dedupeFeatures([
+    popupViewModel?.activeFeature,
+    features[selectedIndex],
+    popupViewModel?.selectedFeature,
+    ...features,
+  ]);
+
+  return (
+    candidates.find(hasJobAttributes) ?? candidates.find((candidate) => Boolean(candidate)) ?? null
+  );
+}
+
+function getPopupFeatures(popupViewModel) {
+  const features = popupViewModel?.features;
+
   if (Array.isArray(features)) {
-    return features[selectedIndex] ?? features[0] ?? null;
+    return features;
+  }
+
+  if (typeof features?.toArray === "function") {
+    return features.toArray();
   }
 
   if (typeof features?.at === "function") {
-    return features.at(selectedIndex) ?? features.at(0) ?? null;
+    const length = Number(features.length ?? 0);
+    const resolvedFeatures = [];
+
+    for (let index = 0; index < length; index += 1) {
+      const feature = features.at(index);
+
+      if (feature) {
+        resolvedFeatures.push(feature);
+      }
+    }
+
+    return resolvedFeatures;
   }
 
-  return features?.[selectedIndex] ?? features?.[0] ?? null;
+  return [];
+}
+
+function dedupeFeatures(features) {
+  return features.filter((feature, index) => {
+    if (!feature) {
+      return false;
+    }
+
+    return features.indexOf(feature) === index;
+  });
+}
+
+function hasJobAttributes(feature) {
+  return Boolean(normalizeOptionalString(feature?.attributes?.[JOB_LAYER_FIELD.JOB_ID]));
 }
 
 function normalizeOptionalString(value) {

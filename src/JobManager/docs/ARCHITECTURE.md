@@ -479,6 +479,7 @@ Rules:
 - Selecting a Job from the map clears AOI-scoped list mode.
 - Closing the Jobs panel or returning to the normal Jobs list clears selected Job highlight.
 - Related AOI highlight for selected Job is deferred.
+- Job popup action handlers should select the popup feature with Job attributes from the popup feature collection, because `PopupViewModel.selectedFeature` can be ambiguous when multiple layers participate in a popup.
 
 ### AOI popup action flow
 

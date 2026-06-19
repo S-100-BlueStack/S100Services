@@ -998,6 +998,10 @@ Rationale:
 
 Job geometry is now visible on the map, and users can move directly from map geometry to operational Job details. Keeping selected Job state outside the map layer keeps map UI, Jobs UI and later backend integration decoupled.
 
+Implementation note:
+
+Job popup feature extraction now searches the popup feature collection for a feature with Job attributes instead of trusting `PopupViewModel.selectedFeature` first. This keeps point Job popups reliable when ArcGIS popup state includes multiple map features at the clicked location.
+
 ## 9. Backend assumptions
 
 Status: Draft
