@@ -1,4 +1,9 @@
 import {
+  filterJobs,
+  getActiveJobFilterSummary,
+  hasActiveJobFilters,
+} from "../domain/jobFilters.js";
+import {
   showErrorNotice,
   showInfoNotice,
   showSuccessNotice,
@@ -11,12 +16,13 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
 });
 
-export function createJobList() {
+export function createJobList({ jobFilterStore } = {}) {
   const store = createJobStore();
   const rootElement = document.createElement("div");
   rootElement.className = "job-list";
 
   let currentState = store.getSnapshot();
+  let jobFilters = jobFilterStore?.getSnapshot?.().filters ?? null;
   let aoiFilter = null;
   let selectedJobId = "";
   const expandedJobIds = new Set();
@@ -38,32 +44,49 @@ export function createJobList() {
     render();
   };
 
+  const clearJobFilters = () => {
+    jobFilterStore?.clearFilters?.();
+  };
+
   const render = () => {
     renderJobList({
       rootElement,
       state: currentState,
       store,
+      jobFilters,
       aoiFilter,
       selectedJobId,
       expandedJobIds,
       visibleDoneJobIds,
       pendingMutationJobIds,
       clearAoiFilter,
+      clearJobFilters,
       render,
     });
   };
 
-  const unsubscribe = store.subscribe((state) => {
+  const unsubscribeJobs = store.subscribe((state) => {
     currentState = state;
     makeSelectedDoneJobVisible(visibleDoneJobIds, state.jobs, selectedJobId);
     removeInvisibleExpandedJobs(
       expandedJobIds,
-      getScopedJobs(state.jobs, aoiFilter),
+      getFilteredScopedJobs(state.jobs, aoiFilter, jobFilters),
       visibleDoneJobIds
     );
     removeMissingVisibleDoneJobs(visibleDoneJobIds, state.jobs);
     render();
   });
+
+  const unsubscribeFilters =
+    jobFilterStore?.subscribe?.((snapshot) => {
+      jobFilters = snapshot.filters;
+      removeInvisibleExpandedJobs(
+        expandedJobIds,
+        getFilteredScopedJobs(currentState.jobs, aoiFilter, jobFilters),
+        visibleDoneJobIds
+      );
+      render();
+    }) ?? (() => {});
 
   loadJobs(store, visibleDoneJobIds);
 
@@ -126,13 +149,14 @@ export function createJobList() {
       makeSelectedDoneJobVisible(visibleDoneJobIds, currentState.jobs, selectedJobId);
       removeInvisibleExpandedJobs(
         expandedJobIds,
-        getScopedJobs(currentState.jobs, aoiFilter),
+        getFilteredScopedJobs(currentState.jobs, aoiFilter, jobFilters),
         visibleDoneJobIds
       );
       render();
     },
     destroy() {
-      unsubscribe();
+      unsubscribeJobs();
+      unsubscribeFilters();
       rootElement.replaceChildren();
     },
   };
@@ -157,21 +181,28 @@ function renderJobList({
   rootElement,
   state,
   store,
+  jobFilters,
   aoiFilter,
   selectedJobId,
   expandedJobIds,
   visibleDoneJobIds,
   pendingMutationJobIds,
   clearAoiFilter,
+  clearJobFilters,
   render,
 }) {
   const scopedJobs = getScopedJobs(state.jobs, aoiFilter);
-  const visibleJobs = getVisibleJobs(scopedJobs, visibleDoneJobIds);
-  const hiddenDoneCount = getHiddenDoneCount(scopedJobs, visibleDoneJobIds);
+  const filteredScopedJobs = filterJobs(scopedJobs, jobFilters);
+  const visibleJobs = getVisibleJobs(filteredScopedJobs, visibleDoneJobIds);
+  const hiddenDoneCount = getHiddenDoneCount(filteredScopedJobs, visibleDoneJobIds);
   const contentElements = [];
 
   if (aoiFilter) {
     contentElements.push(createAoiFilterScope({ aoiFilter, clearAoiFilter }));
+  }
+
+  if (hasActiveJobFilters(jobFilters)) {
+    contentElements.push(createJobFilterScope({ jobFilters, clearJobFilters }));
   }
 
   if (state.isLoading && state.jobs.length === 0) {
@@ -200,7 +231,7 @@ function renderJobList({
   contentElements.push(toolbarElement);
 
   if (visibleJobs.length === 0) {
-    contentElements.push(createEmptyState({ hiddenDoneCount, aoiFilter }));
+    contentElements.push(createEmptyState({ hiddenDoneCount, aoiFilter, jobFilters }));
     rootElement.replaceChildren(...contentElements);
     return;
   }
@@ -224,6 +255,10 @@ function renderJobList({
 
   contentElements.push(listElement);
   rootElement.replaceChildren(...contentElements);
+}
+
+function getFilteredScopedJobs(jobs, aoiFilter, jobFilters) {
+  return filterJobs(getScopedJobs(jobs, aoiFilter), jobFilters);
 }
 
 function getScopedJobs(jobs, aoiFilter) {
@@ -302,6 +337,32 @@ function createAoiFilterScope({ aoiFilter, clearAoiFilter }) {
 
   const clearButton = createToolbarButton("Clear AOI filter");
   clearButton.addEventListener("click", clearAoiFilter);
+
+  scopeElement.append(textElement, clearButton);
+
+  return scopeElement;
+}
+
+function createJobFilterScope({ jobFilters, clearJobFilters }) {
+  const scopeElement = document.createElement("div");
+  scopeElement.className = "job-list__scope job-list__scope--filters";
+  scopeElement.setAttribute("role", "status");
+
+  const textElement = document.createElement("div");
+  textElement.className = "job-list__scope-text";
+
+  const labelElement = document.createElement("p");
+  labelElement.className = "job-list__scope-label";
+  labelElement.textContent = "Filters active";
+
+  const titleElement = document.createElement("p");
+  titleElement.className = "job-list__scope-title";
+  titleElement.textContent = getActiveJobFilterSummary(jobFilters);
+
+  textElement.append(labelElement, titleElement);
+
+  const clearButton = createToolbarButton("Clear filters");
+  clearButton.addEventListener("click", clearJobFilters);
 
   scopeElement.append(textElement, clearButton);
 
@@ -736,9 +797,19 @@ function createErrorState(error, store, visibleDoneJobIds) {
   return containerElement;
 }
 
-function createEmptyState({ hiddenDoneCount, aoiFilter }) {
+function createEmptyState({ hiddenDoneCount, aoiFilter, jobFilters }) {
   const element = document.createElement("p");
   element.className = "job-list__state";
+
+  if (aoiFilter && hasActiveJobFilters(jobFilters)) {
+    element.textContent = "No related Jobs match the active filters for this AOI.";
+    return element;
+  }
+
+  if (hasActiveJobFilters(jobFilters)) {
+    element.textContent = "No Jobs match the active filters.";
+    return element;
+  }
 
   if (aoiFilter && hiddenDoneCount > 0) {
     element.textContent = "Only Done related Jobs were found. Done Jobs are hidden by default.";

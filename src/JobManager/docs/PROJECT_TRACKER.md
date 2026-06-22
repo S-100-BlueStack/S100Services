@@ -1028,6 +1028,34 @@ Implementation note:
 
 Related AOI highlight queries AOI graphics through the `FeatureLayerView` and highlights the returned graphics. The first implementation queried the AOI `FeatureLayer` and passed object ids to `FeatureLayerView.highlight()`, which was not reliable for the current AOI service/view state.
 
+## 8.35 Add shared Jobs filter state before clustering
+
+Status: Done
+
+Shared Jobs filter state has been introduced before clustering and broader AOI filtering.
+
+Current behavior:
+
+- navbar filter controls update central frontend Job filter state
+- Jobs panel uses the shared filter state
+- Jobs can be filtered by active-only, high priority and Jobs with AOIs
+- Jobs can be filtered by explicit status values
+- Jobs can be filtered by explicit priority values
+- active filter state is shown in the Jobs panel
+- the navbar filter action shows an indicator when filters are active
+- map Job layers do not yet consume the shared filter state
+- Job filter state is owned by `features/jobs` because the filter rules are Job-domain rules. Map-specific application of the same filter state should live under `features/map/filters`.
+
+Rationale:
+
+The app now supports AOI-to-Job and Job-to-AOI navigation. Shared filtering is the next foundation needed before clustering, because clusters and map counts should reflect the same filtered Job set shown in the Jobs panel.
+
+Deferred:
+
+- apply shared Job filters to Job point and polygon layers
+- reconcile AOI renderer summaries with filtered Jobs
+- clustering
+
 ## 9. Backend assumptions
 
 Status: Draft

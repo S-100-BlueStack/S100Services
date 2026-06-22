@@ -1,5 +1,13 @@
+import {
+  getActiveJobFilterSummary,
+  hasActiveJobFilters,
+} from "../features/jobs/domain/jobFilters.js";
+import { createJobFilterStore } from "../features/jobs/state/jobFilterStore.js";
 import { createSelectedAoiStore } from "../features/aoi/state/selectedAoiStore.js";
+import { JOB_PRIORITY_OPTIONS } from "../features/jobs/domain/jobPriority.js";
+import { JOB_STATUS_OPTIONS } from "../features/jobs/domain/jobStatus.js";
 import { createJobList } from "../features/jobs/ui/jobList.js";
+import { createSelectedJobStore } from "../features/jobs/state/selectedJobStore.js";
 import { createMapController } from "../features/map/core/mapController.js";
 import {
   showErrorNotice,
@@ -8,15 +16,15 @@ import {
 } from "../features/notices/services/noticeService.js";
 import { createNoticeRegion } from "../features/notices/ui/noticeContainer.js";
 import { getRuntimeConfig } from "../shared/config/runtimeConfig.js";
-import { createSelectedJobStore } from "../features/jobs/state/selectedJobStore.js";
 
 export async function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
   const selectedAoiStore = createSelectedAoiStore();
   const selectedJobStore = createSelectedJobStore();
+  const jobFilterStore = createJobFilterStore();
   const noticeRegion = createNoticeRegion();
   const header = await createHeader();
-  const jobsPanel = createJobsOverlay();
+  const jobsPanel = createJobsOverlay({ jobFilterStore });
   const workspace = createMapWorkspace();
   const mapController = createMapController({
     container: workspace.mapViewElement,
@@ -45,6 +53,7 @@ export async function createApp(rootElement) {
 
         return;
       }
+
       selectedJobStore.clearSelection();
       jobsPanel.clearSelectedJob();
       mapController.clearJobHighlight();
@@ -99,6 +108,7 @@ export async function createApp(rootElement) {
   rootElement.replaceChildren(shellElement);
 
   await configureFiltersPopover(header);
+  configureJobFilterControls(header, jobFilterStore);
 
   setPanelOpen(jobsPanel.element, header.jobsButton, true);
   setFilterPopoverOpen(header.filtersPopover, header.filtersButton, false);
@@ -110,6 +120,7 @@ export async function createApp(rootElement) {
     jobsPanel.clearSelectedJob();
     mapController.clearJobHighlight();
     mapController.clearAoiHighlight();
+
     if (shouldOpen) {
       selectedAoiStore.clearSelection();
       jobsPanel.clearAoiFilter();
@@ -145,17 +156,6 @@ export async function createApp(rootElement) {
     });
   });
 
-  for (const filterItem of header.filterItems) {
-    filterItem.addEventListener("click", () => {
-      const filterLabel = filterItem.dataset.filterPlaceholder;
-
-      showInfoNotice({
-        title: "Filter placeholder",
-        message: `${filterLabel} will be connected after shared filter state exists.`,
-      });
-    });
-  }
-
   const handleDocumentClick = (event) => {
     if (!header.filtersPopover.open) {
       return;
@@ -174,6 +174,7 @@ export async function createApp(rootElement) {
   return {
     destroy() {
       document.removeEventListener("click", handleDocumentClick);
+      header.unsubscribeJobFilters?.();
       mapController.destroy();
       jobsPanel.destroy();
       noticeRegion.destroy?.();
@@ -191,7 +192,6 @@ async function createHeader() {
   const filtersPopover = getRequiredElement(headerElement, "#filters-popover");
   const filtersCloseButton = getRequiredElement(headerElement, "#filters-close-button");
   const testNoticeButton = getRequiredElement(headerElement, "#test-notice-button");
-  const filterItems = [...headerElement.querySelectorAll("[data-filter-placeholder]")];
 
   return {
     element: headerElement,
@@ -200,7 +200,7 @@ async function createHeader() {
     filtersPopover,
     filtersCloseButton,
     testNoticeButton,
-    filterItems,
+    unsubscribeJobFilters: null,
   };
 }
 
@@ -208,7 +208,9 @@ async function ensureNavbarComponentsDefined() {
   await Promise.all([
     customElements.whenDefined("calcite-action"),
     customElements.whenDefined("calcite-button"),
+    customElements.whenDefined("calcite-checkbox"),
     customElements.whenDefined("calcite-icon"),
+    customElements.whenDefined("calcite-label"),
     customElements.whenDefined("calcite-popover"),
   ]);
 }
@@ -244,6 +246,237 @@ async function configureFiltersPopover({ filtersButton, filtersPopover }) {
   filtersPopover.placement = "bottom-end";
 }
 
+function configureJobFilterControls(header, jobFilterStore) {
+  const filterControlRefs = createJobFilterPopoverContent({
+    filtersPopover: header.filtersPopover,
+    jobFilterStore,
+  });
+
+  header.filtersCloseButton = filterControlRefs.closeButton;
+
+  header.unsubscribeJobFilters = jobFilterStore.subscribe((snapshot) => {
+    syncJobFilterControls({
+      filtersButton: header.filtersButton,
+      filterControlRefs,
+      filters: snapshot.filters,
+    });
+  });
+}
+
+function createJobFilterPopoverContent({ filtersPopover, jobFilterStore }) {
+  const contentElement = document.createElement("div");
+  contentElement.className = "job-manager-filters";
+
+  const headerElement = document.createElement("div");
+  headerElement.className = "job-manager-filters__header";
+
+  const titleElement = document.createElement("h2");
+  titleElement.className = "job-manager-filters__title";
+  titleElement.textContent = "Filters";
+
+  const closeButton = document.createElement("calcite-action");
+  closeButton.id = "filters-close-button";
+  closeButton.icon = "x";
+  closeButton.text = "Close filters";
+  closeButton.title = "Close filters";
+
+  headerElement.append(titleElement, closeButton);
+
+  const summaryElement = document.createElement("p");
+  summaryElement.className = "job-manager-filters__summary";
+  summaryElement.textContent = "No filters active";
+
+  const quickFilterSection = createFilterSection("Quick filters");
+  const activeOnlyCheckbox = createFilterCheckbox({
+    label: "Active Jobs",
+    onChange(checked) {
+      jobFilterStore.setFilters({
+        activeOnly: checked,
+      });
+    },
+  });
+  const highPriorityOnlyCheckbox = createFilterCheckbox({
+    label: "High Priority",
+    onChange(checked) {
+      jobFilterStore.setFilters({
+        highPriorityOnly: checked,
+      });
+    },
+  });
+  const withRelatedAoisOnlyCheckbox = createFilterCheckbox({
+    label: "Jobs with AOIs",
+    onChange(checked) {
+      jobFilterStore.setFilters({
+        withRelatedAoisOnly: checked,
+      });
+    },
+  });
+
+  quickFilterSection.body.append(
+    activeOnlyCheckbox.labelElement,
+    highPriorityOnlyCheckbox.labelElement,
+    withRelatedAoisOnlyCheckbox.labelElement
+  );
+
+  const statusSection = createFilterSection("Job status");
+  const statusCheckboxes = JOB_STATUS_OPTIONS.map((statusOption) =>
+    createMultiValueFilterCheckbox({
+      label: statusOption.label,
+      value: statusOption.value,
+      getCurrentValues() {
+        return jobFilterStore.getSnapshot().filters.statusValues;
+      },
+      setCurrentValues(nextValues) {
+        jobFilterStore.setFilters({
+          statusValues: nextValues,
+        });
+      },
+    })
+  );
+
+  statusSection.body.append(...statusCheckboxes.map((checkbox) => checkbox.labelElement));
+
+  const prioritySection = createFilterSection("Job priority");
+  const priorityCheckboxes = JOB_PRIORITY_OPTIONS.map((priorityOption) =>
+    createMultiValueFilterCheckbox({
+      label: priorityOption.label,
+      value: priorityOption.value,
+      getCurrentValues() {
+        return jobFilterStore.getSnapshot().filters.priorityValues;
+      },
+      setCurrentValues(nextValues) {
+        jobFilterStore.setFilters({
+          priorityValues: nextValues,
+        });
+      },
+    })
+  );
+
+  prioritySection.body.append(...priorityCheckboxes.map((checkbox) => checkbox.labelElement));
+
+  const actionsElement = document.createElement("div");
+  actionsElement.className = "job-manager-filters__actions";
+
+  const clearButton = document.createElement("calcite-button");
+  clearButton.appearance = "outline";
+  clearButton.kind = "neutral";
+  clearButton.scale = "s";
+  clearButton.textContent = "Clear filters";
+  clearButton.addEventListener("click", () => {
+    jobFilterStore.clearFilters();
+  });
+
+  actionsElement.append(clearButton);
+
+  contentElement.append(
+    headerElement,
+    summaryElement,
+    quickFilterSection.element,
+    statusSection.element,
+    prioritySection.element,
+    actionsElement
+  );
+
+  filtersPopover.replaceChildren(contentElement);
+
+  return {
+    closeButton,
+    summaryElement,
+    clearButton,
+    activeOnlyCheckbox: activeOnlyCheckbox.checkboxElement,
+    highPriorityOnlyCheckbox: highPriorityOnlyCheckbox.checkboxElement,
+    withRelatedAoisOnlyCheckbox: withRelatedAoisOnlyCheckbox.checkboxElement,
+    statusCheckboxes,
+    priorityCheckboxes,
+  };
+}
+
+function createFilterSection(title) {
+  const element = document.createElement("section");
+  element.className = "job-manager-filters__section";
+
+  const titleElement = document.createElement("h3");
+  titleElement.className = "job-manager-filters__section-title";
+  titleElement.textContent = title;
+
+  const body = document.createElement("div");
+  body.className = "job-manager-filters__checkbox-grid";
+
+  element.append(titleElement, body);
+
+  return {
+    element,
+    body,
+  };
+}
+
+function createMultiValueFilterCheckbox({ label, value, getCurrentValues, setCurrentValues }) {
+  return createFilterCheckbox({
+    label,
+    value,
+    onChange(checked) {
+      const currentValues = new Set(getCurrentValues());
+
+      if (checked) {
+        currentValues.add(value);
+      } else {
+        currentValues.delete(value);
+      }
+
+      setCurrentValues([...currentValues]);
+    },
+  });
+}
+
+function createFilterCheckbox({ label, value = "", onChange }) {
+  const labelElement = document.createElement("calcite-label");
+  labelElement.className = "job-manager-filters__checkbox-label";
+  labelElement.layout = "inline";
+
+  const checkboxElement = document.createElement("calcite-checkbox");
+  checkboxElement.scale = "s";
+
+  if (value) {
+    checkboxElement.value = value;
+  }
+
+  checkboxElement.addEventListener("calciteCheckboxChange", () => {
+    onChange(Boolean(checkboxElement.checked));
+  });
+
+  const textElement = document.createElement("span");
+  textElement.textContent = label;
+
+  labelElement.append(checkboxElement, textElement);
+
+  return {
+    labelElement,
+    checkboxElement,
+    value,
+  };
+}
+
+function syncJobFilterControls({ filtersButton, filterControlRefs, filters }) {
+  filterControlRefs.activeOnlyCheckbox.checked = filters.activeOnly;
+  filterControlRefs.highPriorityOnlyCheckbox.checked = filters.highPriorityOnly;
+  filterControlRefs.withRelatedAoisOnlyCheckbox.checked = filters.withRelatedAoisOnly;
+
+  syncValueCheckboxes(filterControlRefs.statusCheckboxes, filters.statusValues);
+  syncValueCheckboxes(filterControlRefs.priorityCheckboxes, filters.priorityValues);
+
+  filterControlRefs.summaryElement.textContent = getActiveJobFilterSummary(filters);
+  filterControlRefs.clearButton.disabled = !hasActiveJobFilters(filters);
+  filtersButton.indicator = hasActiveJobFilters(filters);
+}
+
+function syncValueCheckboxes(checkboxRefs, activeValues) {
+  const activeValueSet = new Set(activeValues);
+
+  for (const checkboxRef of checkboxRefs) {
+    checkboxRef.checkboxElement.checked = activeValueSet.has(checkboxRef.value);
+  }
+}
+
 function createMapWorkspace() {
   const workspaceElement = document.createElement("main");
   workspaceElement.className = "job-manager-workspace";
@@ -275,8 +508,8 @@ function createMapWorkspace() {
   };
 }
 
-function createJobsOverlay() {
-  const jobList = createJobList();
+function createJobsOverlay({ jobFilterStore }) {
+  const jobList = createJobList({ jobFilterStore });
   const panelElement = document.createElement("aside");
   panelElement.id = "job-manager-jobs-panel";
   panelElement.className = "job-manager-overlay-panel job-manager-jobs-overlay";

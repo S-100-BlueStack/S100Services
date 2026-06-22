@@ -176,6 +176,35 @@ Rules:
 - Cyclic mock Job creation must stay isolated from UI logic.
 - Backend-specific fields must be normalized before UI use.
 
+### Jobs filter ownership
+
+Job filter rules and filter state are owned by `src/features/jobs`.
+
+Current planned ownership:
+
+```txt
+jobs/domain/jobFilters.js
+  -> normalize Job filters
+  -> apply Job filter predicates
+  -> summarize active Job filters
+
+jobs/state/jobFilterStore.js
+  -> own current frontend Job filter state
+  -> notify Jobs UI and app composition when filters change
+
+jobs/ui/jobList.js
+  -> consume Job filter state
+  -> render filtered Jobs
+```
+
+Rules:
+
+- Job filter predicates belong in `features/jobs/domain` because status, priority and related AOI rules are Job-domain rules.
+- Job filter state belongs in `features/jobs/state` while the filters only describe Jobs.
+- Jobs UI may consume Job filter state, but it must not own the filter rules.
+- Map-specific application of Job filters must live under `features/map/filters`.
+- Do not introduce a generic top-level `features/filters` folder unless filters become truly cross-domain app state.
+
 ## 6.1 `src/features/relations`
 
 Owns AOI/Job relation behavior.
@@ -349,7 +378,9 @@ State rules:
 
 - keep canonical Jobs state in Jobs feature/state
 - keep canonical AOI state in AOI feature/state
-- keep filter state in a shared feature-level place, likely `features/map/filters` or a later dedicated app state module
+- keep Job filter rules and Job filter state in `features/jobs` while they only describe Jobs
+- keep map-specific application of filters in `features/map/filters`
+- introduce a broader app-level filter state only if filters become truly cross-domain
 - avoid hidden global mutable state unless documented
 - preserve selected AOI/Job across refresh where practical
 

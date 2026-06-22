@@ -133,3 +133,61 @@
     margin-left: auto;
   }
 }
+
+.job-manager-filters {
+  display: grid;
+  gap: 0.9rem;
+  width: min(22rem, calc(100vw - 2rem));
+  padding: 0.85rem;
+  color: var(--jm-text);
+}
+
+.job-manager-filters__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.job-manager-filters__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.job-manager-filters__summary {
+  margin: 0;
+  color: var(--jm-text-muted);
+  font-size: 0.82rem;
+}
+
+.job-manager-filters__section {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.job-manager-filters__section-title {
+  margin: 0;
+  color: var(--jm-text);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.job-manager-filters__checkbox-grid {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.job-manager-filters__checkbox-label {
+  margin: 0;
+  color: var(--jm-text);
+}
+
+.job-manager-filters__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.job-manager-filters calcite-button::part(button) {
+  border-radius: 0;
+}
