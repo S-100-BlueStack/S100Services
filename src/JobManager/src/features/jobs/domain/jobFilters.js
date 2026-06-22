@@ -1,5 +1,5 @@
-import { JOB_PRIORITY, JOB_PRIORITY_OPTIONS } from "../../jobs/domain/jobPriority.js";
-import { JOB_STATUS, JOB_STATUS_OPTIONS } from "../../jobs/domain/jobStatus.js";
+import { JOB_PRIORITY, JOB_PRIORITY_OPTIONS } from "./jobPriority.js";
+import { JOB_STATUS, JOB_STATUS_OPTIONS } from "./jobStatus.js";
 
 const VALID_STATUS_VALUES = new Set(JOB_STATUS_OPTIONS.map((option) => option.value));
 const VALID_PRIORITY_VALUES = new Set(JOB_PRIORITY_OPTIONS.map((option) => option.value));
