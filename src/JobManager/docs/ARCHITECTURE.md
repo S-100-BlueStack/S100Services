@@ -279,6 +279,27 @@ Rules:
 - Popup action flows should be documented when they become non-trivial.
 - Clustering decisions must be documented because AOI polygons can be misleading if clustered incorrectly.
 
+### Job point clustering
+
+Job point clustering is owned by `src/features/map/layers`.
+
+Current flow:
+
+```txt
+createJobLayers()
+  -> point FeatureLayer
+  -> jobClustering.createJobPointFeatureReduction()
+  -> ArcGIS FeatureLayer.featureReduction
+```
+
+Rules:
+
+- Job point clustering may be enabled directly on the Job point `FeatureLayer`.
+- Job polygon clustering must not be enabled casually, because centroid-based clustering can hide the actual polygon footprint.
+- AOI clustering or AOI cluster-like overview must be designed separately from Job point clustering.
+- Cluster configuration belongs in `features/map/layers`, not in Jobs UI or relation services.
+- Cluster behavior must continue to respect shared Job layer filters.
+
 ### Current MapView foundation
 
 Status: In progress

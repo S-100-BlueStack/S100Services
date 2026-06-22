@@ -1080,6 +1080,44 @@ Deferred:
 
 - clustering
 
+## 8.36 Add Job point clustering foundation
+
+Status: Done
+
+Job point clustering has been enabled through the ArcGIS `FeatureLayer.featureReduction` cluster configuration.
+
+Current behavior:
+
+- Job point layer uses `featureReduction: { type: "cluster" }`
+- cluster labels show the number of Jobs in each cluster
+- cluster popup shows the cluster Job count
+- Job point clusters respect the existing Job layer `definitionExpression` filters
+- individual Job point popups still use the existing `Show Job details` popup action
+- Job polygon layer is not clustered yet
+- mock data includes enough active point Jobs to visibly exercise clustering
+- mock polygon Jobs use compact footprints so they do not dominate the map
+
+Rationale:
+
+Initial clustering is limited to Job points because it provides a low-risk geographic overview without changing polygon rendering. Polygon and AOI clustering can be misleading if centroid-based clusters hide the actual polygon footprint, so those strategies remain deferred until the actual AOI geometry density and scale are better understood.
+
+Known limitation:
+
+AOI renderer color updates can take roughly a second after filters are cleared because relation summaries and the AOI renderer are rebuilt asynchronously. This is acceptable for now and should be optimized later only if it becomes disruptive.
+
+Deferred:
+
+- AOI clustering or cluster-like overview
+- polygon Job clustering strategy
+- cluster styling based on priority/severity
+- AOI renderer refresh performance optimization
+
+Implementation note:
+
+Initial point clustering did not visibly cluster because the mock dataset had too few active point Jobs and oversized polygon Jobs dominated the map. The mock dataset now includes clustered point Jobs around several Danish waters and smaller polygon Jobs that better approximate realistic Job footprints.
+
+Point clustering remains limited to the Job point layer. Polygon Jobs are still rendered individually.
+
 ## 9. Backend assumptions
 
 Status: Draft

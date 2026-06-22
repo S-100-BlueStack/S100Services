@@ -4,7 +4,7 @@ import { JOB_STATUS, normalizeJobStatus } from "../domain/jobStatus.js";
 import {
   createInitialMockJobs,
   createPointGeometry,
-  createPolygonGeometry,
+  createRectanglePolygonGeometry,
 } from "./mockJobData.js";
 
 const DEFAULT_MOCK_CONFIG = Object.freeze({
@@ -22,13 +22,7 @@ const GENERATED_JOB_TEMPLATES = Object.freeze([
       "Assess a new source update east of Denmark and decide whether nearby AOIs require work.",
     priority: JOB_PRIORITY.HIGH,
     deadlineDaysFromNow: 9,
-    geometry: createPolygonGeometry([
-      [12.9, 54.6],
-      [14.15, 54.6],
-      [14.15, 55.35],
-      [12.9, 55.35],
-      [12.9, 54.6],
-    ]),
+    geometry: createRectanglePolygonGeometry([13.5, 55.0], [0.3, 0.2]),
     relatedAoiIds: ["mock-aoi-baltic-sea", "mock-aoi-eastern-denmark"],
   },
   {
@@ -45,13 +39,7 @@ const GENERATED_JOB_TEMPLATES = Object.freeze([
     summary: "Check whether new Wadden Sea information affects current AOI coverage.",
     priority: JOB_PRIORITY.LOW,
     deadlineDaysFromNow: 18,
-    geometry: createPolygonGeometry([
-      [7.95, 54.75],
-      [8.65, 54.75],
-      [8.65, 55.35],
-      [7.95, 55.35],
-      [7.95, 54.75],
-    ]),
+    geometry: createRectanglePolygonGeometry([8.3, 55.05], [0.24, 0.18]),
     relatedAoiIds: ["mock-aoi-wadden-sea"],
   },
   {
@@ -59,13 +47,7 @@ const GENERATED_JOB_TEMPLATES = Object.freeze([
     summary: "Determine whether the Fehmarn Belt update introduces work for nearby AOIs.",
     priority: JOB_PRIORITY.MEDIUM,
     deadlineDaysFromNow: 14,
-    geometry: createPolygonGeometry([
-      [10.75, 54.35],
-      [12.0, 54.35],
-      [12.0, 55.05],
-      [10.75, 55.05],
-      [10.75, 54.35],
-    ]),
+    geometry: createRectanglePolygonGeometry([11.35, 54.7], [0.3, 0.18]),
     relatedAoiIds: ["mock-aoi-fehmarn-belt", "mock-aoi-danish-straits"],
   },
 ]);
@@ -192,15 +174,8 @@ function createFollowUpGeometry(sourceJob) {
 
   if (sourceJob.geometry?.type === "point") {
     const { longitude, latitude } = sourceJob.geometry;
-    const offset = 0.18;
 
-    return createPolygonGeometry([
-      [longitude - offset, latitude - offset],
-      [longitude + offset, latitude - offset],
-      [longitude + offset, latitude + offset],
-      [longitude - offset, latitude + offset],
-      [longitude - offset, latitude - offset],
-    ]);
+    return createRectanglePolygonGeometry([longitude, latitude], [0.16, 0.16]);
   }
 
   return createPointGeometry(10.5, 56.0);
