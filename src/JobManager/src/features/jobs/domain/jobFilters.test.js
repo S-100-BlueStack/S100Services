@@ -7,6 +7,7 @@ import {
   getActiveJobFilterSummary,
   hasActiveJobFilters,
   normalizeJobFilters,
+  shouldRevealDoneJobsForFilters,
 } from "./jobFilters.js";
 
 const JOBS = Object.freeze([
@@ -71,6 +72,29 @@ test("filterJobs applies quick filters and explicit multi-select filters", () =>
       priorityValues: ["high"],
     }).map((job) => job.id),
     ["job-3"]
+  );
+});
+
+test("shouldRevealDoneJobsForFilters only reveals Done Jobs for explicit Done status filter", () => {
+  assert.equal(
+    shouldRevealDoneJobsForFilters({
+      statusValues: ["done"],
+    }),
+    true
+  );
+
+  assert.equal(
+    shouldRevealDoneJobsForFilters({
+      activeOnly: true,
+    }),
+    false
+  );
+
+  assert.equal(
+    shouldRevealDoneJobsForFilters({
+      priorityValues: ["high"],
+    }),
+    false
   );
 });
 

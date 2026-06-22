@@ -2,6 +2,7 @@ import {
   filterJobs,
   getActiveJobFilterSummary,
   hasActiveJobFilters,
+  shouldRevealDoneJobsForFilters,
 } from "../domain/jobFilters.js";
 import {
   showErrorNotice,
@@ -71,7 +72,8 @@ export function createJobList({ jobFilterStore } = {}) {
     removeInvisibleExpandedJobs(
       expandedJobIds,
       getFilteredScopedJobs(state.jobs, aoiFilter, jobFilters),
-      visibleDoneJobIds
+      visibleDoneJobIds,
+      jobFilters
     );
     removeMissingVisibleDoneJobs(visibleDoneJobIds, state.jobs);
     render();
@@ -83,7 +85,8 @@ export function createJobList({ jobFilterStore } = {}) {
       removeInvisibleExpandedJobs(
         expandedJobIds,
         getFilteredScopedJobs(currentState.jobs, aoiFilter, jobFilters),
-        visibleDoneJobIds
+        visibleDoneJobIds,
+        jobFilters
       );
       render();
     }) ?? (() => {});
@@ -150,7 +153,8 @@ export function createJobList({ jobFilterStore } = {}) {
       removeInvisibleExpandedJobs(
         expandedJobIds,
         getFilteredScopedJobs(currentState.jobs, aoiFilter, jobFilters),
-        visibleDoneJobIds
+        visibleDoneJobIds,
+        jobFilters
       );
       render();
     },
@@ -193,8 +197,8 @@ function renderJobList({
 }) {
   const scopedJobs = getScopedJobs(state.jobs, aoiFilter);
   const filteredScopedJobs = filterJobs(scopedJobs, jobFilters);
-  const visibleJobs = getVisibleJobs(filteredScopedJobs, visibleDoneJobIds);
-  const hiddenDoneCount = getHiddenDoneCount(filteredScopedJobs, visibleDoneJobIds);
+  const visibleJobs = getVisibleJobs(filteredScopedJobs, visibleDoneJobIds, jobFilters);
+  const hiddenDoneCount = getHiddenDoneCount(filteredScopedJobs, visibleDoneJobIds, jobFilters);
   const contentElements = [];
 
   if (aoiFilter) {
@@ -222,6 +226,7 @@ function renderJobList({
     state,
     visibleJobs,
     hiddenDoneCount,
+    jobFilters,
     expandedJobIds,
     visibleDoneJobIds,
     store,
@@ -276,11 +281,19 @@ function getScopedJobs(jobs, aoiFilter) {
   });
 }
 
-function getVisibleJobs(jobs, visibleDoneJobIds) {
-  return jobs.filter((job) => job.status !== JOB_STATUS.DONE || visibleDoneJobIds.has(job.id));
+function getVisibleJobs(jobs, visibleDoneJobIds, jobFilters) {
+  const revealDoneJobs = shouldRevealDoneJobsForFilters(jobFilters);
+
+  return jobs.filter(
+    (job) => revealDoneJobs || job.status !== JOB_STATUS.DONE || visibleDoneJobIds.has(job.id)
+  );
 }
 
-function getHiddenDoneCount(jobs, visibleDoneJobIds) {
+function getHiddenDoneCount(jobs, visibleDoneJobIds, jobFilters) {
+  if (shouldRevealDoneJobsForFilters(jobFilters)) {
+    return 0;
+  }
+
   return jobs.filter((job) => job.status === JOB_STATUS.DONE && !visibleDoneJobIds.has(job.id))
     .length;
 }
@@ -297,8 +310,10 @@ function makeSelectedDoneJobVisible(visibleDoneJobIds, jobs, selectedJobId) {
   }
 }
 
-function removeInvisibleExpandedJobs(expandedJobIds, jobs, visibleDoneJobIds) {
-  const visibleJobIds = new Set(getVisibleJobs(jobs, visibleDoneJobIds).map((job) => job.id));
+function removeInvisibleExpandedJobs(expandedJobIds, jobs, visibleDoneJobIds, jobFilters) {
+  const visibleJobIds = new Set(
+    getVisibleJobs(jobs, visibleDoneJobIds, jobFilters).map((job) => job.id)
+  );
 
   for (const jobId of expandedJobIds) {
     if (!visibleJobIds.has(jobId)) {
@@ -373,6 +388,7 @@ function createListToolbar({
   state,
   visibleJobs,
   hiddenDoneCount,
+  jobFilters,
   expandedJobIds,
   visibleDoneJobIds,
   store,
@@ -390,8 +406,10 @@ function createListToolbar({
 
   const hiddenDoneElement = document.createElement("p");
   hiddenDoneElement.className = "job-list__hidden-done-count";
-  hiddenDoneElement.textContent =
-    hiddenDoneCount > 0 ? `${hiddenDoneCount} Done hidden` : "Done Jobs hidden";
+  hiddenDoneElement.textContent = getDoneVisibilityText({
+    hiddenDoneCount,
+    jobFilters,
+  });
 
   countGroupElement.append(countElement, hiddenDoneElement);
 
@@ -447,6 +465,14 @@ function createListToolbar({
   toolbarElement.append(countGroupElement, toolbarActionsElement);
 
   return toolbarElement;
+}
+
+function getDoneVisibilityText({ hiddenDoneCount, jobFilters }) {
+  if (shouldRevealDoneJobsForFilters(jobFilters)) {
+    return "Done filter active";
+  }
+
+  return hiddenDoneCount > 0 ? `${hiddenDoneCount} Done hidden` : "Done Jobs hidden";
 }
 
 function areAllVisibleJobsExpanded(visibleJobs, expandedJobIds) {

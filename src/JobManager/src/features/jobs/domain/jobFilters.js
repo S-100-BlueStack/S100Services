@@ -66,6 +66,12 @@ export function hasActiveJobFilters(filters = createDefaultJobFilters()) {
   );
 }
 
+export function shouldRevealDoneJobsForFilters(filters = createDefaultJobFilters()) {
+  const normalizedFilters = normalizeJobFilters(filters);
+
+  return normalizedFilters.statusValues.includes(JOB_STATUS.DONE);
+}
+
 export function getActiveJobFilterSummary(filters = createDefaultJobFilters()) {
   const normalizedFilters = normalizeJobFilters(filters);
   const summaryParts = [];

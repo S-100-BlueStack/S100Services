@@ -204,6 +204,7 @@ Rules:
 - Jobs UI may consume Job filter state, but it must not own the filter rules.
 - Map-specific application of Job filters must live under `features/map/filters`.
 - Do not introduce a generic top-level `features/filters` folder unless filters become truly cross-domain app state.
+- Done Jobs are hidden by default in the Jobs panel, but the explicit `Done` status filter reveals matching Done Jobs.
 
 ## 6.1 `src/features/relations`
 

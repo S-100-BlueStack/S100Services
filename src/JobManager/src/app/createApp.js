@@ -9,11 +9,7 @@ import { JOB_STATUS_OPTIONS } from "../features/jobs/domain/jobStatus.js";
 import { createJobList } from "../features/jobs/ui/jobList.js";
 import { createSelectedJobStore } from "../features/jobs/state/selectedJobStore.js";
 import { createMapController } from "../features/map/core/mapController.js";
-import {
-  showErrorNotice,
-  showInfoNotice,
-  showSuccessNotice,
-} from "../features/notices/services/noticeService.js";
+import { showErrorNotice, showSuccessNotice } from "../features/notices/services/noticeService.js";
 import { createNoticeRegion } from "../features/notices/ui/noticeContainer.js";
 import { getRuntimeConfig } from "../shared/config/runtimeConfig.js";
 
