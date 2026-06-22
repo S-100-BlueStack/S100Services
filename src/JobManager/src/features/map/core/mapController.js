@@ -3,6 +3,7 @@ import { applyAoiJobSummaryRenderer } from "../layers/applyAoiRenderer.js";
 import { createAoiHighlightController } from "../layers/aoiHighlight.js";
 import { applyJobLayerData } from "../layers/applyJobLayerData.js";
 import { createJobHighlightController } from "../layers/jobHighlight.js";
+import { applyJobLayerFilters } from "../filters/applyJobLayerFilters.js";
 import { registerAoiPopupActions } from "../popups/aoiPopupActions.js";
 import { registerJobPopupActions } from "../popups/jobPopupActions.js";
 import { createMapView } from "./createMapView.js";
@@ -29,6 +30,7 @@ export function createMapController({
   let removeJobPopupActions = () => {};
   let jobHighlightController = null;
   let aoiHighlightController = null;
+  let currentJobFilters = null;
 
   async function start() {
     setStatus({
@@ -56,6 +58,7 @@ export function createMapController({
       });
 
       registerMapInteractionHandlers();
+      applyCurrentJobFilters();
       applyAoiRendererWithoutBlockingMapReady(mapResult.layers.aoiLayer);
       applyJobGeometryWithoutBlockingMapReady(mapResult.layers.jobLayers);
       setReadyStatus(Boolean(mapResult.layers.aoiLayer));
@@ -120,6 +123,23 @@ export function createMapController({
 
   function clearAoiHighlight() {
     aoiHighlightController?.clearHighlight();
+  }
+
+  function applyJobFilters(filters) {
+    currentJobFilters = filters;
+
+    applyCurrentJobFilters();
+  }
+
+  function applyCurrentJobFilters() {
+    if (!mapResult?.layers?.jobLayers) {
+      return;
+    }
+
+    applyJobLayerFilters({
+      jobLayers: mapResult.layers.jobLayers,
+      filters: currentJobFilters,
+    });
   }
 
   function registerMapInteractionHandlers() {
@@ -203,5 +223,6 @@ export function createMapController({
     clearJobHighlight,
     highlightRelatedAoisForJob,
     clearAoiHighlight,
+    applyJobFilters,
   };
 }

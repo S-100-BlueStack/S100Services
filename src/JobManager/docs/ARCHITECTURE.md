@@ -180,7 +180,7 @@ Rules:
 
 Job filter rules and filter state are owned by `src/features/jobs`.
 
-Current planned ownership:
+Current ownership:
 
 ```txt
 jobs/domain/jobFilters.js
@@ -190,21 +190,24 @@ jobs/domain/jobFilters.js
 
 jobs/state/jobFilterStore.js
   -> own current frontend Job filter state
-  -> notify Jobs UI and app composition when filters change
+  -> notify Jobs UI, map UI and app composition when filters change
 
 jobs/ui/jobList.js
   -> consume Job filter state
   -> render filtered Jobs
+
+map/filters/applyJobLayerFilters.js
+  -> translate Job filter state into ArcGIS layer definition expressions
 ```
 
 Rules:
 
 - Job filter predicates belong in `features/jobs/domain` because status, priority and related AOI rules are Job-domain rules.
 - Job filter state belongs in `features/jobs/state` while the filters only describe Jobs.
-- Jobs UI may consume Job filter state, but it must not own the filter rules.
 - Map-specific application of Job filters must live under `features/map/filters`.
-- Do not introduce a generic top-level `features/filters` folder unless filters become truly cross-domain app state.
 - Done Jobs are hidden by default in the Jobs panel, but the explicit `Done` status filter reveals matching Done Jobs.
+- Map Job layers use shared Job filter state, but do not inherit the Jobs panel's hidden-Done default unless `Active Jobs` is selected.
+- Do not introduce a generic top-level `features/filters` folder unless filters become truly cross-domain app state.
 
 ## 6.1 `src/features/relations`
 

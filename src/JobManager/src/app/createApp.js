@@ -106,6 +106,10 @@ export async function createApp(rootElement) {
   await configureFiltersPopover(header);
   configureJobFilterControls(header, jobFilterStore);
 
+  const unsubscribeMapJobFilters = jobFilterStore.subscribe((snapshot) => {
+    mapController.applyJobFilters(snapshot.filters);
+  });
+
   setPanelOpen(jobsPanel.element, header.jobsButton, true);
   setFilterPopoverOpen(header.filtersPopover, header.filtersButton, false);
 
@@ -171,6 +175,7 @@ export async function createApp(rootElement) {
     destroy() {
       document.removeEventListener("click", handleDocumentClick);
       header.unsubscribeJobFilters?.();
+      unsubscribeMapJobFilters?.();
       mapController.destroy();
       jobsPanel.destroy();
       noticeRegion.destroy?.();

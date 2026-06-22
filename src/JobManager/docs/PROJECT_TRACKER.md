@@ -1054,9 +1054,21 @@ Rationale:
 
 The app now supports AOI-to-Job and Job-to-AOI navigation. Shared filtering is the next foundation needed before clustering, because clusters and map counts should reflect the same filtered Job set shown in the Jobs panel.
 
+Implementation note:
+
+Job filter rules and filter state are owned by `features/jobs` because the filters describe Job-domain properties. ArcGIS-specific application of those filters lives under `features/map/filters`.
+
+Done Jobs remain hidden by default in the Jobs panel unless the user explicitly selects the `Done` status filter. Selecting `Done` disables the Jobs panel's hidden-Done rule for the filtered result set, so the status filter behaves as an explicit request to view Done Jobs.
+
+Current map behavior:
+
+- shared Job filters are applied to Job point and polygon layers through `definitionExpression`
+- map Job layers use the same filter state as the Jobs panel
+- map Job layers do not inherit the Jobs panel's hidden-Done default unless `Active Jobs` is selected
+- selected Job highlight and related AOI highlight remain independent of layer filter state
+
 Deferred:
 
-- apply shared Job filters to Job point and polygon layers
 - reconcile AOI renderer summaries with filtered Jobs
 - clustering
 
