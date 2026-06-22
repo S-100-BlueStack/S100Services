@@ -1,9 +1,9 @@
 import { normalizeError } from "../../../shared/errors/normalizeError.js";
+import { applyJobLayerFilters } from "../filters/applyJobLayerFilters.js";
 import { applyAoiJobSummaryRenderer } from "../layers/applyAoiRenderer.js";
 import { createAoiHighlightController } from "../layers/aoiHighlight.js";
 import { applyJobLayerData } from "../layers/applyJobLayerData.js";
 import { createJobHighlightController } from "../layers/jobHighlight.js";
-import { applyJobLayerFilters } from "../filters/applyJobLayerFilters.js";
 import { registerAoiPopupActions } from "../popups/aoiPopupActions.js";
 import { registerJobPopupActions } from "../popups/jobPopupActions.js";
 import { createMapView } from "./createMapView.js";
@@ -31,6 +31,7 @@ export function createMapController({
   let jobHighlightController = null;
   let aoiHighlightController = null;
   let currentJobFilters = null;
+  let aoiRendererRequestId = 0;
 
   async function start() {
     setStatus({
@@ -40,18 +41,24 @@ export function createMapController({
     });
 
     try {
-      mapResult = createMapView({ container, runtimeConfig });
+      mapResult = createMapView({
+        container,
+        runtimeConfig,
+      });
+
       await mapResult.view.when();
 
       if (isDestroyed) {
-        return { ok: false, error: null };
+        return {
+          ok: false,
+          error: null,
+        };
       }
 
       jobHighlightController = createJobHighlightController({
         view: mapResult.view,
         jobLayers: mapResult.layers.jobLayers,
       });
-
       aoiHighlightController = createAoiHighlightController({
         view: mapResult.view,
         aoiLayer: mapResult.layers.aoiLayer,
@@ -59,7 +66,7 @@ export function createMapController({
 
       registerMapInteractionHandlers();
       applyCurrentJobFilters();
-      applyAoiRendererWithoutBlockingMapReady(mapResult.layers.aoiLayer);
+      applyCurrentAoiRendererWithoutBlockingMapReady();
       applyJobGeometryWithoutBlockingMapReady(mapResult.layers.jobLayers);
       setReadyStatus(Boolean(mapResult.layers.aoiLayer));
 
@@ -75,7 +82,6 @@ export function createMapController({
         title: "Map could not be loaded",
         message: normalizedError.message,
       });
-
       onError?.(normalizedError);
 
       return {
@@ -87,6 +93,7 @@ export function createMapController({
 
   function destroy() {
     isDestroyed = true;
+    aoiRendererRequestId += 1;
     removeAoiPopupActions();
     removeJobPopupActions();
     removeAoiPopupActions = () => {};
@@ -129,6 +136,7 @@ export function createMapController({
     currentJobFilters = filters;
 
     applyCurrentJobFilters();
+    applyCurrentAoiRendererWithoutBlockingMapReady();
   }
 
   function applyCurrentJobFilters() {
@@ -140,6 +148,14 @@ export function createMapController({
       jobLayers: mapResult.layers.jobLayers,
       filters: currentJobFilters,
     });
+  }
+
+  function applyCurrentAoiRendererWithoutBlockingMapReady() {
+    if (!mapResult?.layers?.aoiLayer) {
+      return;
+    }
+
+    applyAoiRendererWithoutBlockingMapReady(mapResult.layers.aoiLayer);
   }
 
   function registerMapInteractionHandlers() {
@@ -159,9 +175,20 @@ export function createMapController({
   }
 
   function applyAoiRendererWithoutBlockingMapReady(aoiLayer) {
-    void applyAoiJobSummaryRenderer({ aoiLayer }).catch(() => {
-      // Keep the map usable if the mock relation source fails while the renderer is being enriched.
-      aoiLayer?.set?.("renderer", aoiLayer.renderer);
+    const rendererRequestId = aoiRendererRequestId + 1;
+    aoiRendererRequestId = rendererRequestId;
+
+    void applyAoiJobSummaryRenderer({
+      aoiLayer,
+      jobFilters: currentJobFilters,
+      shouldApply() {
+        return !isDestroyed && rendererRequestId === aoiRendererRequestId;
+      },
+    }).catch(() => {
+      if (!isDestroyed && rendererRequestId === aoiRendererRequestId) {
+        // Keep the map usable if the mock relation source fails while the renderer is being enriched.
+        aoiLayer?.set?.("renderer", aoiLayer.renderer);
+      }
     });
   }
 
@@ -185,6 +212,7 @@ export function createMapController({
         message: "",
         hidden: true,
       });
+
       return;
     }
 

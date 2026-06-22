@@ -186,6 +186,7 @@ Current ownership:
 jobs/domain/jobFilters.js
   -> normalize Job filters
   -> apply Job filter predicates
+  -> build shared visible Job sets for map-derived features
   -> summarize active Job filters
 
 jobs/state/jobFilterStore.js
@@ -198,6 +199,12 @@ jobs/ui/jobList.js
 
 map/filters/applyJobLayerFilters.js
   -> translate Job filter state into ArcGIS layer definition expressions
+
+map/layers/applyAoiRenderer.js
+  -> apply AOI renderer summaries from filtered relation snapshots
+
+relations/services/relationService.js
+  -> optionally build AOI/Job relation snapshots from filtered Job sets
 ```
 
 Rules:
@@ -208,6 +215,7 @@ Rules:
 - Done Jobs are hidden by default in the Jobs panel, but the explicit `Done` status filter reveals matching Done Jobs.
 - Map Job layers use shared Job filter state and hide Done Jobs by default, matching the Jobs panel.
 - Map Job layers reveal Done Jobs when the explicit `Done` status filter is active.
+- AOI renderer summaries must use the same shared visible Job set as map filtering.
 - Do not introduce a generic top-level `features/filters` folder unless filters become truly cross-domain app state.
 
 ## 6.1 `src/features/relations`

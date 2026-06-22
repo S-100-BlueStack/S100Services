@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createDefaultJobFilters,
   filterJobs,
+  filterJobsForVisibleJobSet,
   getActiveJobFilterSummary,
   hasActiveJobFilters,
   normalizeJobFilters,
@@ -56,6 +57,10 @@ test("normalizeJobFilters removes invalid status and priority values", () => {
   );
 });
 
+test("normalizeJobFilters handles nullish filter input", () => {
+  assert.deepEqual(normalizeJobFilters(null), createDefaultJobFilters());
+});
+
 test("filterJobs applies quick filters and explicit multi-select filters", () => {
   assert.deepEqual(
     filterJobs(JOBS, {
@@ -72,6 +77,32 @@ test("filterJobs applies quick filters and explicit multi-select filters", () =>
       priorityValues: ["high"],
     }).map((job) => job.id),
     ["job-3"]
+  );
+});
+
+test("filterJobsForVisibleJobSet hides Done Jobs by default", () => {
+  assert.deepEqual(
+    filterJobsForVisibleJobSet(JOBS).map((job) => job.id),
+    ["job-1", "job-2"]
+  );
+});
+
+test("filterJobsForVisibleJobSet reveals Done Jobs for explicit Done status filter", () => {
+  assert.deepEqual(
+    filterJobsForVisibleJobSet(JOBS, {
+      statusValues: ["done"],
+    }).map((job) => job.id),
+    ["job-3"]
+  );
+});
+
+test("filterJobsForVisibleJobSet keeps contradictory Active and Done filters empty", () => {
+  assert.deepEqual(
+    filterJobsForVisibleJobSet(JOBS, {
+      activeOnly: true,
+      statusValues: ["done"],
+    }).map((job) => job.id),
+    []
   );
 });
 

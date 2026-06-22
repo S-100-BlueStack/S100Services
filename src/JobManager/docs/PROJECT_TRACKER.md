@@ -1067,16 +1067,18 @@ Current map behavior:
 - map Job layers use the same filter state as the Jobs panel
 - map Job layers hide Done Jobs by default, matching the Jobs panel
 - map Job layers reveal Done Jobs when the user explicitly selects the `Done` status filter
+- AOI renderer summaries are rebuilt from the same visible Job set used by map filtering
 - selected Job highlight and related AOI highlight remain independent of layer filter state
-
-Deferred:
-
-- reconcile AOI renderer summaries with filtered Jobs
-- clustering
 
 Implementation note:
 
 The map filter expression includes `status <> 'done'` by default so Job point and polygon layers match the Jobs panel's hidden-Done behavior. The default Done exclusion is removed only when the explicit `Done` status filter is active.
+
+AOI renderer summaries use `filterJobsForVisibleJobSet(...)` before relations and summaries are built, so AOI severity follows active Job filters and the hidden-Done default. Existing unfiltered relation-service calls remain supported when no `jobFilters` argument is provided.
+
+Deferred:
+
+- clustering
 
 ## 9. Backend assumptions
 

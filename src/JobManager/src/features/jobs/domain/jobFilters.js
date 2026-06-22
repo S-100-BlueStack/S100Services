@@ -15,12 +15,14 @@ export function createDefaultJobFilters() {
 }
 
 export function normalizeJobFilters(filters = {}) {
+  const source = filters && typeof filters === "object" ? filters : {};
+
   return {
-    activeOnly: Boolean(filters.activeOnly),
-    highPriorityOnly: Boolean(filters.highPriorityOnly),
-    withRelatedAoisOnly: Boolean(filters.withRelatedAoisOnly),
-    statusValues: normalizeValues(filters.statusValues, VALID_STATUS_VALUES),
-    priorityValues: normalizeValues(filters.priorityValues, VALID_PRIORITY_VALUES),
+    activeOnly: Boolean(source.activeOnly),
+    highPriorityOnly: Boolean(source.highPriorityOnly),
+    withRelatedAoisOnly: Boolean(source.withRelatedAoisOnly),
+    statusValues: normalizeValues(source.statusValues, VALID_STATUS_VALUES),
+    priorityValues: normalizeValues(source.priorityValues, VALID_PRIORITY_VALUES),
   };
 }
 
@@ -52,6 +54,16 @@ export function filterJobs(jobs = [], filters = createDefaultJobFilters()) {
 
     return true;
   });
+}
+
+export function filterJobsForVisibleJobSet(jobs = [], filters = createDefaultJobFilters()) {
+  const filteredJobs = filterJobs(jobs, filters);
+
+  if (shouldRevealDoneJobsForFilters(filters)) {
+    return filteredJobs;
+  }
+
+  return filteredJobs.filter((job) => job.status !== JOB_STATUS.DONE);
 }
 
 export function hasActiveJobFilters(filters = createDefaultJobFilters()) {

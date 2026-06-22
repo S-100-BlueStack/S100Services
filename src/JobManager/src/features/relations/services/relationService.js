@@ -1,4 +1,5 @@
 import { createErrorResult, createSuccessResult } from "../../../shared/api/apiResult.js";
+import { filterJobsForVisibleJobSet } from "../../jobs/domain/jobFilters.js";
 import * as defaultJobService from "../../jobs/services/jobService.js";
 import { buildAoiJobSummaries, buildAoiJobSummaryByAoiId } from "../domain/aoiJobSummary.js";
 import {
@@ -40,6 +41,7 @@ export async function loadAoiJobRelationSnapshot({
   jobs,
   jobService = defaultJobService,
   source = RELATION_SOURCE.MOCK,
+  jobFilters,
 } = {}) {
   const jobsResult = await resolveJobs({ jobs, jobService });
 
@@ -50,7 +52,11 @@ export async function loadAoiJobRelationSnapshot({
     });
   }
 
-  const resolvedJobs = jobsResult.data.jobs;
+  const resolvedJobs = getSnapshotJobs({
+    jobs: jobsResult.data.jobs,
+    jobFilters,
+    shouldApplyJobFilters: isJobFilterInputProvided(jobFilters),
+  });
   const relations = buildRelationsFromJobs(resolvedJobs, { source });
   const summaryByAoiId = buildAoiJobSummaryByAoiId({
     jobs: resolvedJobs,
@@ -83,17 +89,27 @@ export function getJobsForAoiFromJobs({ aoiId, jobs = [] } = {}) {
   const relations = buildRelationsFromJobs(resolvedJobs);
 
   // Keep UI filtering source-agnostic so this can later use backend relations without changing Job UI.
-  return getJobsForAoi({
-    aoiId,
-    jobs: resolvedJobs,
-    relations,
-  });
+  return getJobsForAoi({ aoiId, jobs: resolvedJobs, relations });
 }
 
 export function getAoisForJob({ jobId, aois = [], relations = [] } = {}) {
   const aoiIds = new Set(getAoiIdsForJob({ relations, jobId }));
 
   return normalizeArray(aois).filter((aoi) => aoiIds.has(normalizeOptionalString(aoi.id)));
+}
+
+function getSnapshotJobs({ jobs, jobFilters, shouldApplyJobFilters }) {
+  const resolvedJobs = normalizeArray(jobs);
+
+  if (!shouldApplyJobFilters) {
+    return resolvedJobs;
+  }
+
+  return filterJobsForVisibleJobSet(resolvedJobs, jobFilters);
+}
+
+function isJobFilterInputProvided(jobFilters) {
+  return jobFilters !== undefined;
 }
 
 async function resolveJobs({ jobs, jobService }) {
