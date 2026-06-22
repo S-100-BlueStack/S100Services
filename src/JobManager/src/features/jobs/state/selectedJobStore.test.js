@@ -10,27 +10,31 @@ test("normalizeSelectedJob normalizes popup-derived Job values", () => {
       jobTitle: "Harbour update",
       objectId: "12",
       geometryType: "polygon",
+      relatedAoiIds: ["{AOI-1}", "{AOI-2}", "{AOI-1}"],
     }),
     {
       jobId: "job-001",
       jobTitle: "Harbour update",
       objectId: 12,
       geometryType: "polygon",
+      relatedAoiIds: ["{AOI-1}", "{AOI-2}"],
     }
   );
 });
 
-test("normalizeSelectedJob falls back to id and title aliases", () => {
+test("normalizeSelectedJob parses serialized related AOI ids", () => {
   assert.deepEqual(
     normalizeSelectedJob({
       id: "job-002",
       title: "Depth review",
+      relatedAoiIds: '["{AOI-1}","{AOI-2}"]',
     }),
     {
       jobId: "job-002",
       jobTitle: "Depth review",
       objectId: null,
       geometryType: "",
+      relatedAoiIds: ["{AOI-1}", "{AOI-2}"],
     }
   );
 });
@@ -48,10 +52,11 @@ test("createSelectedJobStore stores and clears selected Job state", () => {
     jobTitle: "Navigation warning",
     objectId: 7,
     geometryType: "point",
+    relatedAoiIds: ["{AOI-3}"],
   });
 
   assert.equal(selectedJob.jobId, "job-003");
-  assert.equal(store.getSnapshot().selectedJob.jobId, "job-003");
+  assert.deepEqual(store.getSnapshot().selectedJob.relatedAoiIds, ["{AOI-3}"]);
 
   store.clearSelection();
 

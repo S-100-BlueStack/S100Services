@@ -484,6 +484,30 @@ Implementation note:
 
 Job details uses a `PopupTemplate` action for action bar placement. A hidden Esri `CustomContent` item captures the feature-scoped Job selection from the rendered popup graphic, because `PopupViewModel` selected feature state can be ambiguous for point Jobs when multiple popup features are present.
 
+### Selected Job related AOI highlight
+
+Status: In progress
+
+Current flow:
+
+```txt
+Selected Job
+  -> relatedAoiIds from Job layer popup attributes
+  -> app-level selected Job state
+  -> map controller AOI highlight request
+  -> AOI FeatureLayerView query by GlobalID
+  -> AOI FeatureLayerView highlight returned graphics
+```
+
+Rules:
+
+- Related AOI highlight should use selected Job state, not direct mock imports.
+- Related AOI ids should come from normalized Job data carried through the Job map layer attributes.
+- AOI matching currently uses `GlobalID`, matching the provisional frontend AOI id strategy.
+- Clearing selected Job should clear related AOI highlight.
+- Related AOI highlight is visual only; it does not change the AOI layer source or apply a permanent filter.
+- Clustering and de-emphasis effects remain deferred.
+
 ### AOI popup action flow
 
 Status: In progress

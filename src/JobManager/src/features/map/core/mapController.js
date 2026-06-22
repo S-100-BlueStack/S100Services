@@ -1,5 +1,6 @@
 import { normalizeError } from "../../../shared/errors/normalizeError.js";
 import { applyAoiJobSummaryRenderer } from "../layers/applyAoiRenderer.js";
+import { createAoiHighlightController } from "../layers/aoiHighlight.js";
 import { applyJobLayerData } from "../layers/applyJobLayerData.js";
 import { createJobHighlightController } from "../layers/jobHighlight.js";
 import { registerAoiPopupActions } from "../popups/aoiPopupActions.js";
@@ -27,6 +28,7 @@ export function createMapController({
   let removeAoiPopupActions = () => {};
   let removeJobPopupActions = () => {};
   let jobHighlightController = null;
+  let aoiHighlightController = null;
 
   async function start() {
     setStatus({
@@ -46,6 +48,11 @@ export function createMapController({
       jobHighlightController = createJobHighlightController({
         view: mapResult.view,
         jobLayers: mapResult.layers.jobLayers,
+      });
+
+      aoiHighlightController = createAoiHighlightController({
+        view: mapResult.view,
+        aoiLayer: mapResult.layers.aoiLayer,
       });
 
       registerMapInteractionHandlers();
@@ -82,7 +89,9 @@ export function createMapController({
     removeAoiPopupActions = () => {};
     removeJobPopupActions = () => {};
     jobHighlightController?.destroy();
+    aoiHighlightController?.destroy();
     jobHighlightController = null;
+    aoiHighlightController = null;
     mapResult?.view?.destroy();
     mapResult = null;
   }
@@ -101,6 +110,16 @@ export function createMapController({
 
   function clearJobHighlight() {
     jobHighlightController?.clearHighlight();
+  }
+
+  function highlightRelatedAoisForJob(selectedJob = {}) {
+    return (
+      aoiHighlightController?.highlightAoisByIds(selectedJob.relatedAoiIds) ?? Promise.resolve()
+    );
+  }
+
+  function clearAoiHighlight() {
+    aoiHighlightController?.clearHighlight();
   }
 
   function registerMapInteractionHandlers() {
@@ -182,5 +201,7 @@ export function createMapController({
     getMap,
     highlightJob,
     clearJobHighlight,
+    highlightRelatedAoisForJob,
+    clearAoiHighlight,
   };
 }

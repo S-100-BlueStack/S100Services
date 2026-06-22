@@ -19,6 +19,27 @@ test("createJobSelectionFromGraphic extracts selected Job values from popup grap
     jobTitle: "Review harbour update",
     objectId: 14,
     geometryType: "polygon",
+    relatedAoiIds: [],
+  });
+});
+
+test("createJobSelectionFromGraphic extracts related AOI ids from serialized popup attributes", () => {
+  const selectedJob = createJobSelectionFromGraphic({
+    attributes: {
+      [JOB_LAYER_FIELD.OBJECT_ID]: 14,
+      [JOB_LAYER_FIELD.JOB_ID]: "job-001",
+      [JOB_LAYER_FIELD.TITLE]: "Review harbour update",
+      [JOB_LAYER_FIELD.GEOMETRY_TYPE]: "polygon",
+      [JOB_LAYER_FIELD.RELATED_AOI_IDS]: '["{AOI-1}","{AOI-2}"]',
+    },
+  });
+
+  assert.deepEqual(selectedJob, {
+    jobId: "job-001",
+    jobTitle: "Review harbour update",
+    objectId: 14,
+    geometryType: "polygon",
+    relatedAoiIds: ["{AOI-1}", "{AOI-2}"],
   });
 });
 
@@ -39,6 +60,7 @@ test("createJobSelectionFromGraphic falls back to graphic geometry type", () => 
     jobTitle: "Point Job",
     objectId: 2,
     geometryType: "point",
+    relatedAoiIds: [],
   });
 });
 
@@ -56,6 +78,7 @@ test("createJobSelectionFromGraphic uses fallback title for missing title", () =
     jobTitle: "Selected Job",
     objectId: 2,
     geometryType: "point",
+    relatedAoiIds: [],
   });
 });
 
@@ -71,5 +94,6 @@ test("createJobSelectionFromGraphic returns empty Job id when graphic is missing
     jobTitle: "Selected Job",
     objectId: undefined,
     geometryType: "",
+    relatedAoiIds: [],
   });
 });

@@ -16,7 +16,12 @@ export function createSelectedJobStore() {
 
   function getSnapshot() {
     return {
-      selectedJob: state.selectedJob ? { ...state.selectedJob } : null,
+      selectedJob: state.selectedJob
+        ? {
+            ...state.selectedJob,
+            relatedAoiIds: [...state.selectedJob.relatedAoiIds],
+          }
+        : null,
     };
   }
 
@@ -66,7 +71,40 @@ export function normalizeSelectedJob(job = {}) {
     jobTitle: normalizeOptionalString(job.jobTitle ?? job.title) || "Selected Job",
     objectId: normalizeObjectId(job.objectId),
     geometryType: normalizeOptionalString(job.geometryType),
+    relatedAoiIds: normalizeRelatedAoiIds(job.relatedAoiIds),
   };
+}
+
+function normalizeRelatedAoiIds(value) {
+  if (Array.isArray(value)) {
+    return [...new Set(value.map(normalizeOptionalString).filter(Boolean))];
+  }
+
+  if (typeof value === "string") {
+    return parseRelatedAoiIds(value);
+  }
+
+  return [];
+}
+
+function parseRelatedAoiIds(value) {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return [];
+  }
+
+  try {
+    const parsedValue = JSON.parse(trimmedValue);
+
+    if (Array.isArray(parsedValue)) {
+      return normalizeRelatedAoiIds(parsedValue);
+    }
+  } catch {
+    // Support older delimiter-based popup attributes while keeping JSON as the preferred format.
+  }
+
+  return [...new Set(trimmedValue.split("|").map(normalizeOptionalString).filter(Boolean))];
 }
 
 function normalizeObjectId(value) {

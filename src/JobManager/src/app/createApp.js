@@ -48,6 +48,7 @@ export async function createApp(rootElement) {
       selectedJobStore.clearSelection();
       jobsPanel.clearSelectedJob();
       mapController.clearJobHighlight();
+      mapController.clearAoiHighlight();
       jobsPanel.showJobsForAoi(normalizedSelectedAoi);
       setPanelOpen(jobsPanel.element, header.jobsButton, true);
     },
@@ -73,6 +74,19 @@ export async function createApp(rootElement) {
           message: error.message,
         });
       });
+
+      if (normalizedSelectedJob.relatedAoiIds.length > 0) {
+        void mapController.highlightRelatedAoisForJob(normalizedSelectedJob).catch((error) => {
+          mapController.clearAoiHighlight();
+
+          showErrorNotice({
+            title: "Related AOIs could not be highlighted",
+            message: error.message,
+          });
+        });
+      } else {
+        mapController.clearAoiHighlight();
+      }
     },
   });
 
@@ -95,7 +109,7 @@ export async function createApp(rootElement) {
     selectedJobStore.clearSelection();
     jobsPanel.clearSelectedJob();
     mapController.clearJobHighlight();
-
+    mapController.clearAoiHighlight();
     if (shouldOpen) {
       selectedAoiStore.clearSelection();
       jobsPanel.clearAoiFilter();
@@ -111,6 +125,7 @@ export async function createApp(rootElement) {
     selectedJobStore.clearSelection();
     jobsPanel.clearSelectedJob();
     mapController.clearJobHighlight();
+    mapController.clearAoiHighlight();
     jobsPanel.hideCompletedJobs();
     setPanelOpen(jobsPanel.element, header.jobsButton, false);
   });

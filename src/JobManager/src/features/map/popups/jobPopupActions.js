@@ -94,6 +94,7 @@ export function createJobSelectionFromGraphic(graphic) {
     geometryType: normalizeOptionalString(
       attributes[JOB_LAYER_FIELD.GEOMETRY_TYPE] ?? graphic?.geometry?.type
     ),
+    relatedAoiIds: parseRelatedAoiIds(attributes[JOB_LAYER_FIELD.RELATED_AOI_IDS]),
   };
 }
 
@@ -164,6 +165,34 @@ function dedupeFeatures(features) {
 
 function hasJobAttributes(feature) {
   return Boolean(normalizeOptionalString(feature?.attributes?.[JOB_LAYER_FIELD.JOB_ID]));
+}
+
+function parseRelatedAoiIds(value) {
+  const normalizedValue = normalizeOptionalString(value);
+
+  if (!normalizedValue) {
+    return [];
+  }
+
+  try {
+    const parsedValue = JSON.parse(normalizedValue);
+
+    if (Array.isArray(parsedValue)) {
+      return normalizeRelatedAoiIds(parsedValue);
+    }
+  } catch {
+    // JSON is the current format, but tolerate delimiter strings from earlier local data.
+  }
+
+  return normalizeRelatedAoiIds(normalizedValue.split("|"));
+}
+
+function normalizeRelatedAoiIds(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return [...new Set(values.map(normalizeOptionalString).filter(Boolean))];
 }
 
 function normalizeOptionalString(value) {

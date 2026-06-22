@@ -11,6 +11,7 @@ export const JOB_LAYER_FIELD = Object.freeze({
   PRIORITY: "priority",
   PRIORITY_LABEL: "priorityLabel",
   RELATED_AOI_COUNT: "relatedAoiCount",
+  RELATED_AOI_IDS: "relatedAoiIds",
   CREATED_AT: "createdAt",
   DEADLINE: "deadline",
   GEOMETRY_TYPE: "geometryType",
@@ -75,6 +76,12 @@ export function createJobLayerFields() {
       name: JOB_LAYER_FIELD.RELATED_AOI_COUNT,
       alias: "Affected AOIs",
       type: "integer",
+    },
+    {
+      name: JOB_LAYER_FIELD.RELATED_AOI_IDS,
+      alias: "Related AOI IDs",
+      type: "string",
+      length: 2048,
     },
     {
       name: JOB_LAYER_FIELD.CREATED_AT,
@@ -165,6 +172,7 @@ function createJobAttributes({ job, objectId, geometryType }) {
     [JOB_LAYER_FIELD.PRIORITY]: normalizeOptionalString(job.priority),
     [JOB_LAYER_FIELD.PRIORITY_LABEL]: getJobPriorityLabel(job.priority),
     [JOB_LAYER_FIELD.RELATED_AOI_COUNT]: normalizeArray(job.relatedAoiIds).length,
+    [JOB_LAYER_FIELD.RELATED_AOI_IDS]: serializeRelatedAoiIds(job.relatedAoiIds),
     [JOB_LAYER_FIELD.CREATED_AT]: formatDateForDisplay(job.createdAt),
     [JOB_LAYER_FIELD.DEADLINE]: formatDateForDisplay(job.deadline),
     [JOB_LAYER_FIELD.GEOMETRY_TYPE]: geometryType,
@@ -238,6 +246,10 @@ function normalizeSpatialReference(spatialReference) {
   return {
     ...spatialReference,
   };
+}
+
+function serializeRelatedAoiIds(relatedAoiIds) {
+  return JSON.stringify(normalizeArray(relatedAoiIds).map(normalizeOptionalString).filter(Boolean));
 }
 
 function formatDateForDisplay(value) {

@@ -1004,6 +1004,30 @@ AOI popup actions use `PopupViewModel trigger-action` because the selected AOI f
 
 Job details uses a `PopupTemplate` action for action bar placement. A hidden Esri `CustomContent` item captures the feature-scoped Job selection from the rendered popup graphic, because `PopupViewModel` selected feature state can be ambiguous for point Jobs when multiple popup features are present.
 
+## 8.34 Add selected Job related AOI highlight
+
+Status: Done
+
+Selecting a Job highlights the AOIs listed in the selected Job's `relatedAoiIds`.
+
+Current behavior:
+
+- selected Job geometry remains highlighted
+- related AOIs are highlighted on the map through the AOI FeatureLayerView
+- clearing selected Job also clears related AOI highlight
+- AOI popup and related Jobs flow continue to work while highlight is active
+- clustering remains deferred
+
+Rationale:
+
+The user can now move from Job geometry to Job details and see which AOIs are affected by the selected Job. This closes the basic Job-to-AOI navigation loop before broader shared filters and clustering are introduced.
+
+Status: Done
+
+Implementation note:
+
+Related AOI highlight queries AOI graphics through the `FeatureLayerView` and highlights the returned graphics. The first implementation queried the AOI `FeatureLayer` and passed object ids to `FeatureLayerView.highlight()`, which was not reliable for the current AOI service/view state.
+
 ## 9. Backend assumptions
 
 Status: Draft
