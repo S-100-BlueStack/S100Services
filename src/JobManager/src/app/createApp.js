@@ -8,7 +8,12 @@ import { JOB_PRIORITY_OPTIONS } from "../features/jobs/domain/jobPriority.js";
 import { JOB_STATUS_OPTIONS } from "../features/jobs/domain/jobStatus.js";
 import { createJobList } from "../features/jobs/ui/jobList.js";
 import { createSelectedJobStore } from "../features/jobs/state/selectedJobStore.js";
+import {
+  JOB_CLUSTER_PRESET_OPTIONS,
+  getJobClusterSettingSummary,
+} from "../features/map/domain/jobClusterSettings.js";
 import { createMapController } from "../features/map/core/mapController.js";
+import { createJobClusterSettingsStore } from "../features/map/state/jobClusterSettingsStore.js";
 import { showErrorNotice, showSuccessNotice } from "../features/notices/services/noticeService.js";
 import { createNoticeRegion } from "../features/notices/ui/noticeContainer.js";
 import { getRuntimeConfig } from "../shared/config/runtimeConfig.js";
@@ -18,6 +23,7 @@ export async function createApp(rootElement) {
   const selectedAoiStore = createSelectedAoiStore();
   const selectedJobStore = createSelectedJobStore();
   const jobFilterStore = createJobFilterStore();
+  const jobClusterSettingsStore = createJobClusterSettingsStore();
   const noticeRegion = createNoticeRegion();
   const header = await createHeader();
   const jobsPanel = createJobsOverlay({ jobFilterStore });
@@ -104,10 +110,14 @@ export async function createApp(rootElement) {
   rootElement.replaceChildren(shellElement);
 
   await configureFiltersPopover(header);
-  configureJobFilterControls(header, jobFilterStore);
+  configureJobFilterControls(header, jobFilterStore, jobClusterSettingsStore);
 
   const unsubscribeMapJobFilters = jobFilterStore.subscribe((snapshot) => {
     mapController.applyJobFilters(snapshot.filters);
+  });
+
+  const unsubscribeMapJobClusterSettings = jobClusterSettingsStore.subscribe((snapshot) => {
+    mapController.applyJobClusterSettings(snapshot.settings);
   });
 
   setPanelOpen(jobsPanel.element, header.jobsButton, true);
@@ -175,9 +185,10 @@ export async function createApp(rootElement) {
     destroy() {
       document.removeEventListener("click", handleDocumentClick);
       header.unsubscribeJobFilters?.();
-      unsubscribeMapJobFilters?.();
+      header.unsubscribeJobClusterSettings?.();
+      unsubscribeMapJobFilters();
+      unsubscribeMapJobClusterSettings();
       mapController.destroy();
-      jobsPanel.destroy();
       noticeRegion.destroy?.();
       rootElement.replaceChildren();
     },
@@ -202,6 +213,7 @@ async function createHeader() {
     filtersCloseButton,
     testNoticeButton,
     unsubscribeJobFilters: null,
+    unsubscribeJobClusterSettings: null,
   };
 }
 
@@ -247,10 +259,11 @@ async function configureFiltersPopover({ filtersButton, filtersPopover }) {
   filtersPopover.placement = "bottom-end";
 }
 
-function configureJobFilterControls(header, jobFilterStore) {
+function configureJobFilterControls(header, jobFilterStore, jobClusterSettingsStore) {
   const filterControlRefs = createJobFilterPopoverContent({
     filtersPopover: header.filtersPopover,
     jobFilterStore,
+    jobClusterSettingsStore,
   });
 
   header.filtersCloseButton = filterControlRefs.closeButton;
@@ -262,9 +275,20 @@ function configureJobFilterControls(header, jobFilterStore) {
       filters: snapshot.filters,
     });
   });
+
+  header.unsubscribeJobClusterSettings = jobClusterSettingsStore.subscribe((snapshot) => {
+    syncJobClusterSettingControls({
+      filterControlRefs,
+      settings: snapshot.settings,
+    });
+  });
 }
 
-function createJobFilterPopoverContent({ filtersPopover, jobFilterStore }) {
+function createJobFilterPopoverContent({
+  filtersPopover,
+  jobFilterStore,
+  jobClusterSettingsStore,
+}) {
   const contentElement = document.createElement("div");
   contentElement.className = "job-manager-filters";
 
@@ -355,6 +379,27 @@ function createJobFilterPopoverContent({ filtersPopover, jobFilterStore }) {
 
   prioritySection.body.append(...priorityCheckboxes.map((checkbox) => checkbox.labelElement));
 
+  const clusteringSection = createFilterSection("Job point clustering radius");
+  clusteringSection.body.classList.add("job-manager-filters__button-grid");
+
+  const clusteringSummaryElement = document.createElement("p");
+  clusteringSummaryElement.className = "job-manager-filters__section-hint";
+  clusteringSummaryElement.textContent = "Radius: Medium";
+  clusteringSection.element.insertBefore(clusteringSummaryElement, clusteringSection.body);
+
+  const clusterPresetButtons = JOB_CLUSTER_PRESET_OPTIONS.map((presetOption) =>
+    createClusterPresetButton({
+      option: presetOption,
+      onSelect() {
+        jobClusterSettingsStore.setSettings({
+          preset: presetOption.value,
+        });
+      },
+    })
+  );
+
+  clusteringSection.body.append(...clusterPresetButtons.map((button) => button.buttonElement));
+
   const actionsElement = document.createElement("div");
   actionsElement.className = "job-manager-filters__actions";
 
@@ -375,6 +420,7 @@ function createJobFilterPopoverContent({ filtersPopover, jobFilterStore }) {
     quickFilterSection.element,
     statusSection.element,
     prioritySection.element,
+    clusteringSection.element,
     actionsElement
   );
 
@@ -389,6 +435,8 @@ function createJobFilterPopoverContent({ filtersPopover, jobFilterStore }) {
     withRelatedAoisOnlyCheckbox: withRelatedAoisOnlyCheckbox.checkboxElement,
     statusCheckboxes,
     priorityCheckboxes,
+    clusteringSummaryElement,
+    clusterPresetButtons,
   };
 }
 
@@ -427,6 +475,23 @@ function createMultiValueFilterCheckbox({ label, value, getCurrentValues, setCur
       setCurrentValues([...currentValues]);
     },
   });
+}
+
+function createClusterPresetButton({ option, onSelect }) {
+  const buttonElement = document.createElement("calcite-button");
+
+  buttonElement.className = "job-manager-filters__preset-button";
+  buttonElement.appearance = "outline";
+  buttonElement.kind = "neutral";
+  buttonElement.scale = "s";
+  buttonElement.title = option.description;
+  buttonElement.textContent = option.label;
+  buttonElement.addEventListener("click", onSelect);
+
+  return {
+    buttonElement,
+    value: option.value,
+  };
 }
 
 function createFilterCheckbox({ label, value = "", onChange }) {
@@ -468,6 +533,18 @@ function syncJobFilterControls({ filtersButton, filterControlRefs, filters }) {
   filterControlRefs.summaryElement.textContent = getActiveJobFilterSummary(filters);
   filterControlRefs.clearButton.disabled = !hasActiveJobFilters(filters);
   filtersButton.indicator = hasActiveJobFilters(filters);
+}
+
+function syncJobClusterSettingControls({ filterControlRefs, settings }) {
+  filterControlRefs.clusteringSummaryElement.textContent = getJobClusterSettingSummary(settings);
+
+  for (const presetButton of filterControlRefs.clusterPresetButtons) {
+    const isActive = presetButton.value === settings.preset;
+
+    presetButton.buttonElement.appearance = isActive ? "solid" : "outline";
+    presetButton.buttonElement.kind = isActive ? "brand" : "neutral";
+    presetButton.buttonElement.setAttribute("aria-pressed", String(isActive));
+  }
 }
 
 function syncValueCheckboxes(checkboxRefs, activeValues) {

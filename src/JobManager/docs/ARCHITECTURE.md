@@ -281,23 +281,33 @@ Rules:
 
 ### Job point clustering
 
-Job point clustering is owned by `src/features/map/layers`.
+Job point clustering is owned by `src/features/map`.
 
 Current flow:
 
 ```txt
-createJobLayers()
-  -> point FeatureLayer
-  -> jobClustering.createJobPointFeatureReduction()
-  -> ArcGIS FeatureLayer.featureReduction
+Navbar popover
+  -> map/state/jobClusterSettingsStore.js
+  -> map/core/mapController.js
+  -> map/layers/jobClustering.js
+  -> point FeatureLayer.featureReduction
 ```
+
+Responsibilities:
+
+- `map/domain/jobClusterSettings.js` owns clustering presets and normalization.
+- `map/state/jobClusterSettingsStore.js` owns selected clustering setting.
+- `map/layers/jobClustering.js` translates clustering settings into ArcGIS `featureReduction` config.
+- `map/core/mapController.js` applies clustering settings to the Job point layer.
+- `src/app/createApp.js` wires navbar UI controls to the clustering settings store.
 
 Rules:
 
 - Job point clustering may be enabled directly on the Job point `FeatureLayer`.
+- Job clustering settings are map presentation state, not Job filter state.
 - Job polygon clustering must not be enabled casually, because centroid-based clustering can hide the actual polygon footprint.
 - AOI clustering or AOI cluster-like overview must be designed separately from Job point clustering.
-- Cluster configuration belongs in `features/map/layers`, not in Jobs UI or relation services.
+- Cluster configuration belongs in `features/map`, not in Jobs UI or relation services.
 - Cluster behavior must continue to respect shared Job layer filters.
 
 ### Current MapView foundation

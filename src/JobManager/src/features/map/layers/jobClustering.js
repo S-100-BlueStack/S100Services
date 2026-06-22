@@ -1,12 +1,20 @@
-export function createJobPointFeatureReduction() {
-  return {
+import { getJobClusterPresetConfig } from "../domain/jobClusterSettings.js";
+
+export function createJobPointFeatureReduction(settings) {
+  const presetConfig = getJobClusterPresetConfig(settings);
+
+  if (!presetConfig) {
+    return null;
+  }
+
+  return removeUndefinedProperties({
     type: "cluster",
-    clusterRadius: "128px",
-    clusterMinSize: "26px",
-    clusterMaxSize: "48px",
+    clusterRadius: presetConfig.clusterRadius,
+    clusterMinSize: presetConfig.clusterMinSize,
+    clusterMaxSize: presetConfig.clusterMaxSize,
     labelingInfo: [createClusterCountLabel()],
     popupTemplate: createJobClusterPopupTemplate(),
-  };
+  });
 }
 
 export function createJobClusterPopupTemplate() {
@@ -37,12 +45,15 @@ function createClusterCountLabel() {
       type: "text",
       color: "white",
       font: {
-        family: "Arial",
-        size: 11,
-        weight: "bold",
+        family: "Noto Sans",
+        size: "12px",
       },
-      haloColor: "black",
-      haloSize: 1,
     },
   };
+}
+
+function removeUndefinedProperties(value) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, propertyValue]) => propertyValue !== undefined)
+  );
 }

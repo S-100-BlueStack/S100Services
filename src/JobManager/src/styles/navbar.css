@@ -191,3 +191,18 @@
 .job-manager-filters calcite-button::part(button) {
   border-radius: 0;
 }
+
+.job-manager-filters__section-hint {
+  margin: 0;
+  color: var(--jm-text-muted);
+  font-size: 0.76rem;
+}
+
+.job-manager-filters__button-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.job-manager-filters__preset-button::part(button) {
+  justify-content: center;
+  border-radius: 0;
+}

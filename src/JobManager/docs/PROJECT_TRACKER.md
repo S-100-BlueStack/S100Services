@@ -1118,6 +1118,30 @@ Initial point clustering did not visibly cluster because the mock dataset had to
 
 Point clustering remains limited to the Job point layer. Polygon Jobs are still rendered individually.
 
+## 8.37 Add Job point clustering UI settings
+
+Status: Done
+
+Job point clustering can now be controlled from the navbar popover.
+
+Current behavior:
+
+- clustering is map state, not Job filter state
+- available presets are `Off`, `Low`, `Medium` and `High`
+- `Medium` remains the default clustering preset
+- `Off` disables point clustering by setting the point layer feature reduction to `null`
+- `Low`, `Medium` and `High` map to different ArcGIS cluster radius values
+- Job polygon layer remains unclustered
+- Job filters continue to affect clustered Job points through layer filtering
+
+Rationale:
+
+Clustering distance is a map presentation concern, not a Job-domain rule. Presets are used instead of a free slider to keep the behavior predictable and easier to test.
+
+Known limitation:
+
+Clustering settings are frontend runtime state only and are not persisted across reloads.
+
 ## 9. Backend assumptions
 
 Status: Draft
