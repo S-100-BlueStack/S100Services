@@ -3,8 +3,8 @@ import { applyJobLayerFilters } from "../filters/applyJobLayerFilters.js";
 import { applyAoiJobSummaryRenderer } from "../layers/applyAoiRenderer.js";
 import { createAoiHighlightController } from "../layers/aoiHighlight.js";
 import { applyJobLayerData } from "../layers/applyJobLayerData.js";
+import { applyJobPointClustering } from "../layers/jobClustering.js";
 import { createJobHighlightController } from "../layers/jobHighlight.js";
-import { createJobPointFeatureReduction } from "../layers/jobClustering.js";
 import { registerAoiPopupActions } from "../popups/aoiPopupActions.js";
 import { registerJobPopupActions } from "../popups/jobPopupActions.js";
 import { createMapView } from "./createMapView.js";
@@ -34,6 +34,7 @@ export function createMapController({
   let currentJobFilters = null;
   let currentJobClusterSettings = null;
   let aoiRendererRequestId = 0;
+  let jobClusterRequestId = 0;
 
   async function start() {
     setStatus({
@@ -67,7 +68,7 @@ export function createMapController({
       });
 
       registerMapInteractionHandlers();
-      applyCurrentJobClusterSettings();
+      applyCurrentJobClusterSettingsWithoutBlocking();
       applyCurrentJobFilters();
       applyCurrentAoiRendererWithoutBlockingMapReady();
       applyJobGeometryWithoutBlockingMapReady(mapResult.layers.jobLayers);
@@ -97,6 +98,7 @@ export function createMapController({
   function destroy() {
     isDestroyed = true;
     aoiRendererRequestId += 1;
+    jobClusterRequestId += 1;
     removeAoiPopupActions();
     removeJobPopupActions();
     removeAoiPopupActions = () => {};
@@ -138,17 +140,34 @@ export function createMapController({
   function applyJobClusterSettings(settings) {
     currentJobClusterSettings = settings;
 
-    applyCurrentJobClusterSettings();
+    applyCurrentJobClusterSettingsWithoutBlocking();
   }
 
-  function applyCurrentJobClusterSettings() {
-    const pointLayer = mapResult?.layers?.jobLayers?.pointLayer;
-
-    if (!pointLayer) {
+  function applyCurrentJobClusterSettingsWithoutBlocking() {
+    if (!mapResult?.layers?.jobLayers) {
       return;
     }
 
-    pointLayer.featureReduction = createJobPointFeatureReduction(currentJobClusterSettings);
+    const clusterRequestId = jobClusterRequestId + 1;
+    jobClusterRequestId = clusterRequestId;
+
+    void applyJobPointClustering({
+      jobLayers: mapResult.layers.jobLayers,
+      settings: currentJobClusterSettings,
+      shouldApply() {
+        return !isDestroyed && clusterRequestId === jobClusterRequestId;
+      },
+    }).catch(() => {
+      if (!isDestroyed && clusterRequestId === jobClusterRequestId) {
+        void applyJobPointClustering({
+          jobLayers: mapResult.layers.jobLayers,
+          settings: {
+            ...currentJobClusterSettings,
+            style: "count",
+          },
+        });
+      }
+    });
   }
 
   function applyJobFilters(filters) {

@@ -94,6 +94,7 @@ export function createJobSelectionFromGraphic(graphic) {
     geometryType: normalizeOptionalString(
       attributes[JOB_LAYER_FIELD.GEOMETRY_TYPE] ?? graphic?.geometry?.type
     ),
+    priority: normalizeOptionalString(attributes[JOB_LAYER_FIELD.PRIORITY]),
     relatedAoiIds: parseRelatedAoiIds(attributes[JOB_LAYER_FIELD.RELATED_AOI_IDS]),
   };
 }

@@ -9,7 +9,7 @@ test("createInitialMockJobs creates enough active point Jobs to demonstrate clus
     (job) => job.geometry?.type === "point" && job.status !== "done"
   );
 
-  assert.ok(activePointJobs.length >= 16);
+  assert.ok(activePointJobs.length >= 40);
 });
 
 test("createInitialMockJobs keeps polygon Jobs compact for realistic map testing", () => {

@@ -1142,6 +1142,32 @@ Known limitation:
 
 Clustering settings are frontend runtime state only and are not persisted across reloads.
 
+## 8.38 Add priority-aware Job point clustering modes
+
+Status: Done
+
+Job point clustering now supports multiple demo styles.
+
+Current behavior:
+
+- `Count` keeps the existing count-based cluster style.
+- `Priority pie` uses ArcGIS smart mapping pie-chart cluster rendering to show the priority distribution inside each cluster.
+- `Priority groups` uses separate Low, Medium and High point layers so clusters only contain Jobs with the same priority.
+- Priority group layers reuse the same point Job features but add priority-specific layer filters.
+- Job filters still apply to all point clustering modes.
+- Job polygon layer remains unclustered.
+- Mock point Job density has been increased to make clustering modes easier to test.
+
+Rationale:
+
+Priority pie clustering is useful for overview and demo value because mixed-priority clusters show their composition directly. Priority-separated clustering cannot be expressed as one normal spatial cluster layer, so it is implemented with separate priority point layers.
+
+Deferred:
+
+- polygon Job clustering
+- AOI clustering or AOI overview aggregation
+- persisting clustering settings across reloads
+
 ## 9. Backend assumptions
 
 Status: Draft

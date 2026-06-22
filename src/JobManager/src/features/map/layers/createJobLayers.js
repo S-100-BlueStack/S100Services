@@ -1,12 +1,41 @@
 import FeatureLayer from "@arcgis/core/layers/FeatureLayer.js";
 
+import { JOB_PRIORITY } from "../../jobs/domain/jobPriority.js";
 import { createJobPopupActions, createJobPopupContextContent } from "../popups/jobPopupActions.js";
-import { createJobPointFeatureReduction } from "./jobClustering.js";
+import { createCountJobPointFeatureReduction } from "./jobClustering.js";
 import { createJobLayerFields, JOB_LAYER_FIELD } from "./jobLayerFeatureData.js";
-import { createJobPointRenderer, createJobPolygonRenderer } from "./jobRenderer.js";
+import {
+  createJobPointRenderer,
+  createJobPolygonRenderer,
+  createJobPriorityPointRenderer,
+} from "./jobRenderer.js";
 
 export function createJobLayers() {
-  const polygonLayer = new FeatureLayer({
+  const polygonLayer = createJobPolygonLayer();
+  const pointLayer = createJobPointLayer({
+    id: "job-manager-job-point-layer",
+    title: "Job points",
+    visible: true,
+    renderer: createJobPointRenderer(),
+  });
+  const priorityPointLayers = createPriorityPointLayers();
+
+  return {
+    polygonLayer,
+    pointLayer,
+    priorityPointLayers,
+    layers: [
+      polygonLayer,
+      pointLayer,
+      priorityPointLayers[JOB_PRIORITY.LOW],
+      priorityPointLayers[JOB_PRIORITY.MEDIUM],
+      priorityPointLayers[JOB_PRIORITY.HIGH],
+    ],
+  };
+}
+
+function createJobPolygonLayer() {
+  return new FeatureLayer({
     id: "job-manager-job-polygon-layer",
     title: "Job polygons",
     source: [],
@@ -21,10 +50,35 @@ export function createJobLayers() {
     popupTemplate: createJobPopupTemplate(),
     renderer: createJobPolygonRenderer(),
   });
+}
 
-  const pointLayer = new FeatureLayer({
-    id: "job-manager-job-point-layer",
-    title: "Job points",
+function createPriorityPointLayers() {
+  return {
+    [JOB_PRIORITY.LOW]: createJobPointLayer({
+      id: "job-manager-job-point-layer-low-priority",
+      title: "Low priority Job points",
+      visible: false,
+      renderer: createJobPriorityPointRenderer(),
+    }),
+    [JOB_PRIORITY.MEDIUM]: createJobPointLayer({
+      id: "job-manager-job-point-layer-medium-priority",
+      title: "Medium priority Job points",
+      visible: false,
+      renderer: createJobPriorityPointRenderer(),
+    }),
+    [JOB_PRIORITY.HIGH]: createJobPointLayer({
+      id: "job-manager-job-point-layer-high-priority",
+      title: "High priority Job points",
+      visible: false,
+      renderer: createJobPriorityPointRenderer(),
+    }),
+  };
+}
+
+function createJobPointLayer({ id, title, visible, renderer }) {
+  return new FeatureLayer({
+    id,
+    title,
     source: [],
     fields: createJobLayerFields(),
     objectIdField: JOB_LAYER_FIELD.OBJECT_ID,
@@ -35,15 +89,10 @@ export function createJobLayers() {
     outFields: ["*"],
     popupEnabled: true,
     popupTemplate: createJobPopupTemplate(),
-    renderer: createJobPointRenderer(),
-    featureReduction: createJobPointFeatureReduction(),
+    renderer,
+    visible,
+    featureReduction: createCountJobPointFeatureReduction(),
   });
-
-  return {
-    polygonLayer,
-    pointLayer,
-    layers: [polygonLayer, pointLayer],
-  };
 }
 
 function createJobPopupTemplate() {

@@ -256,6 +256,17 @@ const POINT_CLUSTER_SPECS = Object.freeze([
   },
 ]);
 
+const EXTRA_CLUSTER_POINT_OFFSETS = Object.freeze([
+  [-0.2, -0.12, JOB_PRIORITY.HIGH, JOB_STATUS.TODO, -11, 5],
+  [-0.16, 0.16, JOB_PRIORITY.MEDIUM, JOB_STATUS.IN_PROGRESS, -9, 10],
+  [-0.08, 0.2, JOB_PRIORITY.LOW, JOB_STATUS.TODO, -7, 17],
+  [0.06, -0.18, JOB_PRIORITY.HIGH, JOB_STATUS.TODO, -6, 6],
+  [0.1, 0.18, JOB_PRIORITY.MEDIUM, JOB_STATUS.TODO, -5, 14],
+  [0.22, -0.14, JOB_PRIORITY.LOW, JOB_STATUS.IN_PROGRESS, -4, 19],
+  [0.26, 0.04, JOB_PRIORITY.HIGH, JOB_STATUS.DONE, -18, -2],
+  [-0.24, 0.02, JOB_PRIORITY.MEDIUM, JOB_STATUS.DONE, -15, -1],
+]);
+
 const POLYGON_JOB_SPECS = Object.freeze([
   {
     id: "job-001",
@@ -401,7 +412,7 @@ export function createRectanglePolygonGeometry(center, size) {
 }
 
 function createClusterPointJobs() {
-  return POINT_CLUSTER_SPECS.flatMap((clusterSpec) =>
+  const basePointJobs = POINT_CLUSTER_SPECS.flatMap((clusterSpec) =>
     clusterSpec.points.map(
       ([
         id,
@@ -428,6 +439,46 @@ function createClusterPointJobs() {
       })
     )
   );
+
+  return [...basePointJobs, ...createExtraClusterPointJobs()];
+}
+
+function createExtraClusterPointJobs() {
+  return POINT_CLUSTER_SPECS.flatMap((clusterSpec, clusterIndex) =>
+    EXTRA_CLUSTER_POINT_OFFSETS.map(
+      (
+        [longitudeOffset, latitudeOffset, priority, status, createdAtDays, deadlineDays],
+        offsetIndex
+      ) => ({
+        id: `job-point-extra-${String(clusterIndex + 1).padStart(2, "0")}-${String(
+          offsetIndex + 1
+        ).padStart(2, "0")}`,
+        title: `${getPriorityTitlePrefix(priority)} ${clusterSpec.area} cluster sample`,
+        summary: `Additional ${clusterSpec.area} mock Job used to exercise clustering behavior.`,
+        createdAt: createIsoDateDaysFromNow(createdAtDays),
+        deadline: createIsoDateDaysFromNow(deadlineDays),
+        priority,
+        status,
+        geometry: createPointGeometry(
+          clusterSpec.center[0] + longitudeOffset,
+          clusterSpec.center[1] + latitudeOffset
+        ),
+        relatedAoiIds: [...clusterSpec.relatedAoiIds],
+      })
+    )
+  );
+}
+
+function getPriorityTitlePrefix(priority) {
+  if (priority === JOB_PRIORITY.HIGH) {
+    return "High priority";
+  }
+
+  if (priority === JOB_PRIORITY.LOW) {
+    return "Low priority";
+  }
+
+  return "Medium priority";
 }
 
 function createPolygonJobs() {

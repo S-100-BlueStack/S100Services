@@ -1,3 +1,4 @@
+import { JOB_PRIORITY } from "../../jobs/domain/jobPriority.js";
 import { JOB_LAYER_FIELD, JOB_RENDER_CLASS } from "./jobLayerFeatureData.js";
 
 const JOB_SYMBOL_COLOR = Object.freeze({
@@ -37,6 +38,32 @@ export function createJobPointRenderer() {
         value: JOB_RENDER_CLASS.DONE,
         label: "Done Jobs",
         symbol: createPointSymbol(JOB_RENDER_CLASS.DONE),
+      },
+    ],
+  };
+}
+
+export function createJobPriorityPointRenderer() {
+  return {
+    type: "unique-value",
+    field: JOB_LAYER_FIELD.PRIORITY,
+    defaultSymbol: createPointSymbol(JOB_RENDER_CLASS.ACTIVE_MEDIUM),
+    defaultLabel: "Medium Priority",
+    uniqueValueInfos: [
+      {
+        value: JOB_PRIORITY.LOW,
+        label: "Low Priority",
+        symbol: createPointSymbol(JOB_RENDER_CLASS.ACTIVE_LOW),
+      },
+      {
+        value: JOB_PRIORITY.MEDIUM,
+        label: "Medium Priority",
+        symbol: createPointSymbol(JOB_RENDER_CLASS.ACTIVE_MEDIUM),
+      },
+      {
+        value: JOB_PRIORITY.HIGH,
+        label: "High Priority",
+        symbol: createPointSymbol(JOB_RENDER_CLASS.ACTIVE_HIGH),
       },
     ],
   };

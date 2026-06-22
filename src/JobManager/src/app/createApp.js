@@ -10,6 +10,7 @@ import { createJobList } from "../features/jobs/ui/jobList.js";
 import { createSelectedJobStore } from "../features/jobs/state/selectedJobStore.js";
 import {
   JOB_CLUSTER_PRESET_OPTIONS,
+  JOB_CLUSTER_STYLE_OPTIONS,
   getJobClusterSettingSummary,
 } from "../features/map/domain/jobClusterSettings.js";
 import { createMapController } from "../features/map/core/mapController.js";
@@ -400,6 +401,22 @@ function createJobFilterPopoverContent({
 
   clusteringSection.body.append(...clusterPresetButtons.map((button) => button.buttonElement));
 
+  const clusterStyleSection = createFilterSection("Job point cluster style");
+  clusterStyleSection.body.classList.add("job-manager-filters__button-grid");
+
+  const clusterStyleButtons = JOB_CLUSTER_STYLE_OPTIONS.map((styleOption) =>
+    createClusterPresetButton({
+      option: styleOption,
+      onSelect() {
+        jobClusterSettingsStore.setSettings({
+          style: styleOption.value,
+        });
+      },
+    })
+  );
+
+  clusterStyleSection.body.append(...clusterStyleButtons.map((button) => button.buttonElement));
+
   const actionsElement = document.createElement("div");
   actionsElement.className = "job-manager-filters__actions";
 
@@ -421,6 +438,7 @@ function createJobFilterPopoverContent({
     statusSection.element,
     prioritySection.element,
     clusteringSection.element,
+    clusterStyleSection.element,
     actionsElement
   );
 
@@ -437,6 +455,7 @@ function createJobFilterPopoverContent({
     priorityCheckboxes,
     clusteringSummaryElement,
     clusterPresetButtons,
+    clusterStyleButtons,
   };
 }
 
@@ -538,8 +557,19 @@ function syncJobFilterControls({ filtersButton, filterControlRefs, filters }) {
 function syncJobClusterSettingControls({ filterControlRefs, settings }) {
   filterControlRefs.clusteringSummaryElement.textContent = getJobClusterSettingSummary(settings);
 
-  for (const presetButton of filterControlRefs.clusterPresetButtons) {
-    const isActive = presetButton.value === settings.preset;
+  syncPresetButtons({
+    buttons: filterControlRefs.clusterPresetButtons,
+    activeValue: settings.preset,
+  });
+  syncPresetButtons({
+    buttons: filterControlRefs.clusterStyleButtons,
+    activeValue: settings.style,
+  });
+}
+
+function syncPresetButtons({ buttons, activeValue }) {
+  for (const presetButton of buttons) {
+    const isActive = presetButton.value === activeValue;
 
     presetButton.buttonElement.appearance = isActive ? "solid" : "outline";
     presetButton.buttonElement.kind = isActive ? "brand" : "neutral";

@@ -17,10 +17,7 @@ export function createSelectedJobStore() {
   function getSnapshot() {
     return {
       selectedJob: state.selectedJob
-        ? {
-            ...state.selectedJob,
-            relatedAoiIds: [...state.selectedJob.relatedAoiIds],
-          }
+        ? { ...state.selectedJob, relatedAoiIds: [...state.selectedJob.relatedAoiIds] }
         : null,
     };
   }
@@ -71,6 +68,7 @@ export function normalizeSelectedJob(job = {}) {
     jobTitle: normalizeOptionalString(job.jobTitle ?? job.title) || "Selected Job",
     objectId: normalizeObjectId(job.objectId),
     geometryType: normalizeOptionalString(job.geometryType),
+    priority: normalizeOptionalString(job.priority),
     relatedAoiIds: normalizeRelatedAoiIds(job.relatedAoiIds),
   };
 }

@@ -10,6 +10,7 @@ test("normalizeSelectedJob normalizes popup-derived Job values", () => {
       jobTitle: "Harbour update",
       objectId: "12",
       geometryType: "polygon",
+      priority: "high",
       relatedAoiIds: ["{AOI-1}", "{AOI-2}", "{AOI-1}"],
     }),
     {
@@ -17,6 +18,7 @@ test("normalizeSelectedJob normalizes popup-derived Job values", () => {
       jobTitle: "Harbour update",
       objectId: 12,
       geometryType: "polygon",
+      priority: "high",
       relatedAoiIds: ["{AOI-1}", "{AOI-2}"],
     }
   );
@@ -34,6 +36,7 @@ test("normalizeSelectedJob parses serialized related AOI ids", () => {
       jobTitle: "Depth review",
       objectId: null,
       geometryType: "",
+      priority: "",
       relatedAoiIds: ["{AOI-1}", "{AOI-2}"],
     }
   );
@@ -52,6 +55,7 @@ test("createSelectedJobStore stores and clears selected Job state", () => {
     jobTitle: "Navigation warning",
     objectId: 7,
     geometryType: "point",
+    priority: "",
     relatedAoiIds: ["{AOI-3}"],
   });
 

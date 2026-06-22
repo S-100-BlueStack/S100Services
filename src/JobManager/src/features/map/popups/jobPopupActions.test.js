@@ -19,6 +19,7 @@ test("createJobSelectionFromGraphic extracts selected Job values from popup grap
     jobTitle: "Review harbour update",
     objectId: 14,
     geometryType: "polygon",
+    priority: "",
     relatedAoiIds: [],
   });
 });
@@ -39,6 +40,7 @@ test("createJobSelectionFromGraphic extracts related AOI ids from serialized pop
     jobTitle: "Review harbour update",
     objectId: 14,
     geometryType: "polygon",
+    priority: "",
     relatedAoiIds: ["{AOI-1}", "{AOI-2}"],
   });
 });
@@ -60,6 +62,7 @@ test("createJobSelectionFromGraphic falls back to graphic geometry type", () => 
     jobTitle: "Point Job",
     objectId: 2,
     geometryType: "point",
+    priority: "",
     relatedAoiIds: [],
   });
 });
@@ -78,6 +81,7 @@ test("createJobSelectionFromGraphic uses fallback title for missing title", () =
     jobTitle: "Selected Job",
     objectId: 2,
     geometryType: "point",
+    priority: "",
     relatedAoiIds: [],
   });
 });
@@ -94,6 +98,21 @@ test("createJobSelectionFromGraphic returns empty Job id when graphic is missing
     jobTitle: "Selected Job",
     objectId: undefined,
     geometryType: "",
+    priority: "",
     relatedAoiIds: [],
   });
+});
+
+test("createJobSelectionFromGraphic extracts Job priority", () => {
+  const selectedJob = createJobSelectionFromGraphic({
+    attributes: {
+      [JOB_LAYER_FIELD.OBJECT_ID]: 14,
+      [JOB_LAYER_FIELD.JOB_ID]: "job-001",
+      [JOB_LAYER_FIELD.TITLE]: "Review harbour update",
+      [JOB_LAYER_FIELD.GEOMETRY_TYPE]: "point",
+      [JOB_LAYER_FIELD.PRIORITY]: "high",
+    },
+  });
+
+  assert.equal(selectedJob.priority, "high");
 });

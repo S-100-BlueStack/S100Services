@@ -3,30 +3,35 @@ import test from "node:test";
 
 import {
   JOB_CLUSTER_PRESET,
+  JOB_CLUSTER_STYLE,
   createDefaultJobClusterSettings,
   getJobClusterPresetConfig,
   getJobClusterSettingSummary,
   normalizeJobClusterSettings,
 } from "./jobClusterSettings.js";
 
-test("createDefaultJobClusterSettings uses medium clustering", () => {
+test("createDefaultJobClusterSettings uses medium count clustering", () => {
   assert.deepEqual(createDefaultJobClusterSettings(), {
     preset: JOB_CLUSTER_PRESET.MEDIUM,
+    style: JOB_CLUSTER_STYLE.COUNT,
   });
 });
 
-test("normalizeJobClusterSettings rejects invalid presets", () => {
+test("normalizeJobClusterSettings rejects invalid preset and style values", () => {
   assert.deepEqual(
     normalizeJobClusterSettings({
       preset: "very-large",
+      style: "bad-style",
     }),
     {
       preset: JOB_CLUSTER_PRESET.MEDIUM,
+      style: JOB_CLUSTER_STYLE.COUNT,
     }
   );
 
   assert.deepEqual(normalizeJobClusterSettings(null), {
     preset: JOB_CLUSTER_PRESET.MEDIUM,
+    style: JOB_CLUSTER_STYLE.COUNT,
   });
 });
 
@@ -72,11 +77,12 @@ test("getJobClusterPresetConfig returns radius settings for small and large pres
   );
 });
 
-test("getJobClusterSettingSummary describes selected clustering preset", () => {
+test("getJobClusterSettingSummary describes selected clustering settings", () => {
   assert.equal(
     getJobClusterSettingSummary({
       preset: JOB_CLUSTER_PRESET.SMALL,
+      style: JOB_CLUSTER_STYLE.PRIORITY_PIE,
     }),
-    "Radius: Small"
+    "Radius: Small; Style: Priority pie"
   );
 });

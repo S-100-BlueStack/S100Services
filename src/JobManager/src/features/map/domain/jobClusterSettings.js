@@ -5,6 +5,12 @@ export const JOB_CLUSTER_PRESET = Object.freeze({
   LARGE: "large",
 });
 
+export const JOB_CLUSTER_STYLE = Object.freeze({
+  COUNT: "count",
+  PRIORITY_PIE: "priorityPie",
+  PRIORITY_GROUPS: "priorityGroups",
+});
+
 export const JOB_CLUSTER_PRESET_OPTIONS = Object.freeze([
   {
     value: JOB_CLUSTER_PRESET.OFF,
@@ -28,8 +34,29 @@ export const JOB_CLUSTER_PRESET_OPTIONS = Object.freeze([
   },
 ]);
 
+export const JOB_CLUSTER_STYLE_OPTIONS = Object.freeze([
+  {
+    value: JOB_CLUSTER_STYLE.COUNT,
+    label: "Count",
+    description: "Show clusters as simple Job counts.",
+  },
+  {
+    value: JOB_CLUSTER_STYLE.PRIORITY_PIE,
+    label: "Priority pie",
+    description: "Show the priority mix inside each cluster.",
+  },
+  {
+    value: JOB_CLUSTER_STYLE.PRIORITY_GROUPS,
+    label: "Priority groups",
+    description: "Cluster Low, Medium and High priority Jobs separately.",
+  },
+]);
+
 const DEFAULT_JOB_CLUSTER_PRESET = JOB_CLUSTER_PRESET.MEDIUM;
+const DEFAULT_JOB_CLUSTER_STYLE = JOB_CLUSTER_STYLE.COUNT;
+
 const VALID_JOB_CLUSTER_PRESETS = new Set(JOB_CLUSTER_PRESET_OPTIONS.map((option) => option.value));
+const VALID_JOB_CLUSTER_STYLES = new Set(JOB_CLUSTER_STYLE_OPTIONS.map((option) => option.value));
 
 const JOB_CLUSTER_PRESET_CONFIG = Object.freeze({
   [JOB_CLUSTER_PRESET.OFF]: null,
@@ -49,15 +76,18 @@ const JOB_CLUSTER_PRESET_CONFIG = Object.freeze({
 export function createDefaultJobClusterSettings() {
   return {
     preset: DEFAULT_JOB_CLUSTER_PRESET,
+    style: DEFAULT_JOB_CLUSTER_STYLE,
   };
 }
 
 export function normalizeJobClusterSettings(settings = {}) {
   const source = settings && typeof settings === "object" ? settings : {};
   const preset = normalizeOptionalString(source.preset);
+  const style = normalizeOptionalString(source.style);
 
   return {
     preset: VALID_JOB_CLUSTER_PRESETS.has(preset) ? preset : DEFAULT_JOB_CLUSTER_PRESET,
+    style: VALID_JOB_CLUSTER_STYLES.has(style) ? style : DEFAULT_JOB_CLUSTER_STYLE,
   };
 }
 
@@ -70,11 +100,14 @@ export function getJobClusterPresetConfig(settings = createDefaultJobClusterSett
 
 export function getJobClusterSettingSummary(settings = createDefaultJobClusterSettings()) {
   const normalizedSettings = normalizeJobClusterSettings(settings);
-  const option = JOB_CLUSTER_PRESET_OPTIONS.find(
-    (presetOption) => presetOption.value === normalizedSettings.preset
+  const presetOption = JOB_CLUSTER_PRESET_OPTIONS.find(
+    (option) => option.value === normalizedSettings.preset
+  );
+  const styleOption = JOB_CLUSTER_STYLE_OPTIONS.find(
+    (option) => option.value === normalizedSettings.style
   );
 
-  return option ? `Radius: ${option.label}` : "Radius: Medium";
+  return `Radius: ${presetOption?.label ?? "Medium"}; Style: ${styleOption?.label ?? "Count"}`;
 }
 
 function normalizeOptionalString(value) {

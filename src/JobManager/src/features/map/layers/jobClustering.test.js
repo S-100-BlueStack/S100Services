@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { JOB_CLUSTER_PRESET } from "../domain/jobClusterSettings.js";
-import { createJobClusterPopupTemplate, createJobPointFeatureReduction } from "./jobClustering.js";
+import {
+  createCountJobPointFeatureReduction,
+  createJobClusterPopupTemplate,
+} from "./jobClustering.js";
 
-test("createJobPointFeatureReduction creates Esri-style medium point clustering config by default", () => {
-  const featureReduction = createJobPointFeatureReduction();
+test("createCountJobPointFeatureReduction creates Esri-style medium point clustering config by default", () => {
+  const featureReduction = createCountJobPointFeatureReduction();
 
   assert.equal(featureReduction.type, "cluster");
   assert.equal(featureReduction.clusterRadius, undefined);
@@ -15,8 +18,8 @@ test("createJobPointFeatureReduction creates Esri-style medium point clustering 
   assert.equal(featureReduction.popupTemplate.title, "Job cluster");
 });
 
-test("createJobPointFeatureReduction supports small clustering preset", () => {
-  const featureReduction = createJobPointFeatureReduction({
+test("createCountJobPointFeatureReduction supports small clustering preset", () => {
+  const featureReduction = createCountJobPointFeatureReduction({
     preset: JOB_CLUSTER_PRESET.SMALL,
   });
 
@@ -24,8 +27,8 @@ test("createJobPointFeatureReduction supports small clustering preset", () => {
   assert.equal(featureReduction.clusterMinSize, 16.5);
 });
 
-test("createJobPointFeatureReduction supports large clustering preset", () => {
-  const featureReduction = createJobPointFeatureReduction({
+test("createCountJobPointFeatureReduction supports large clustering preset", () => {
+  const featureReduction = createCountJobPointFeatureReduction({
     preset: JOB_CLUSTER_PRESET.LARGE,
   });
 
@@ -33,9 +36,9 @@ test("createJobPointFeatureReduction supports large clustering preset", () => {
   assert.equal(featureReduction.clusterMinSize, 16.5);
 });
 
-test("createJobPointFeatureReduction returns null when clustering is off", () => {
+test("createCountJobPointFeatureReduction returns null when clustering is off", () => {
   assert.equal(
-    createJobPointFeatureReduction({
+    createCountJobPointFeatureReduction({
       preset: JOB_CLUSTER_PRESET.OFF,
     }),
     null

@@ -295,16 +295,23 @@ Navbar popover
 
 Responsibilities:
 
-- `map/domain/jobClusterSettings.js` owns clustering presets and normalization.
-- `map/state/jobClusterSettingsStore.js` owns selected clustering setting.
-- `map/layers/jobClustering.js` translates clustering settings into ArcGIS `featureReduction` config.
-- `map/core/mapController.js` applies clustering settings to the Job point layer.
+- `map/domain/jobClusterSettings.js` owns clustering radius presets, cluster style values and normalization.
+- `map/state/jobClusterSettingsStore.js` owns selected clustering settings.
+- `map/layers/jobClustering.js` translates clustering settings into ArcGIS `featureReduction` configuration and layer visibility.
+- `map/core/mapController.js` applies clustering settings to Job point layers.
 - `src/app/createApp.js` wires navbar UI controls to the clustering settings store.
+
+Cluster styles:
+
+- `Count` uses the main Job point layer with count-based clustering.
+- `Priority pie` uses the main Job point layer with ArcGIS smart mapping pie-chart cluster rendering.
+- `Priority groups` uses separate Low, Medium and High Job point layers so clusters do not mix priority values.
 
 Rules:
 
 - Job point clustering may be enabled directly on the Job point `FeatureLayer`.
 - Job clustering settings are map presentation state, not Job filter state.
+- Priority-separated clustering must use separate point layers unless ArcGIS later supports category-constrained clustering directly.
 - Job polygon clustering must not be enabled casually, because centroid-based clustering can hide the actual polygon footprint.
 - AOI clustering or AOI cluster-like overview must be designed separately from Job point clustering.
 - Cluster configuration belongs in `features/map`, not in Jobs UI or relation services.

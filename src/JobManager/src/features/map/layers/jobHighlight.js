@@ -14,25 +14,24 @@ export function createJobHighlightController({ view, jobLayers } = {}) {
       return;
     }
 
-    const layer = getLayerForSelectedJob(jobLayers, selectedJob);
+    const candidateLayers = getCandidateLayersForSelectedJob(jobLayers, selectedJob);
 
-    if (!layer) {
+    for (const layer of candidateLayers) {
+      const objectId = await queryObjectIdForJob(layer, selectedJob.jobId);
+
+      if (!Number.isInteger(objectId) || highlightToken !== activeHighlightToken) {
+        continue;
+      }
+
+      const layerView = await view.whenLayerView(layer);
+
+      if (highlightToken !== activeHighlightToken) {
+        return;
+      }
+
+      highlightHandle = layerView.highlight(objectId);
       return;
     }
-
-    const objectId = selectedJob.objectId ?? (await queryObjectIdForJob(layer, selectedJob.jobId));
-
-    if (!Number.isInteger(objectId) || highlightToken !== activeHighlightToken) {
-      return;
-    }
-
-    const layerView = await view.whenLayerView(layer);
-
-    if (highlightToken !== activeHighlightToken) {
-      return;
-    }
-
-    highlightHandle = layerView.highlight(objectId);
   }
 
   function clearHighlight() {
@@ -52,21 +51,34 @@ export function createJobHighlightController({ view, jobLayers } = {}) {
   };
 }
 
-function getLayerForSelectedJob(jobLayers, selectedJob) {
+function getCandidateLayersForSelectedJob(jobLayers, selectedJob) {
   if (selectedJob.geometryType === JOB_GEOMETRY_TYPE.POINT) {
-    return jobLayers.pointLayer ?? null;
+    return getPointCandidateLayers(jobLayers, selectedJob);
   }
 
   if (selectedJob.geometryType === JOB_GEOMETRY_TYPE.POLYGON) {
-    return jobLayers.polygonLayer ?? null;
+    return [jobLayers.polygonLayer].filter(Boolean);
   }
 
-  return null;
+  return [];
+}
+
+function getPointCandidateLayers(jobLayers, selectedJob) {
+  const priorityLayer = selectedJob.priority
+    ? jobLayers.priorityPointLayers?.[selectedJob.priority]
+    : null;
+
+  return [
+    priorityLayer?.visible ? priorityLayer : null,
+    ...Object.values(jobLayers.priorityPointLayers ?? {}).filter(
+      (layer) => layer?.visible && layer !== priorityLayer
+    ),
+    jobLayers.pointLayer,
+  ].filter(Boolean);
 }
 
 async function queryObjectIdForJob(layer, jobId) {
   const query = layer.createQuery();
-
   query.where = `${JOB_LAYER_FIELD.JOB_ID} = '${escapeSqlString(jobId)}'`;
   query.outFields = [JOB_LAYER_FIELD.OBJECT_ID];
   query.returnGeometry = false;

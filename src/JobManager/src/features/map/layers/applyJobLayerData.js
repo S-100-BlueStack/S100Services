@@ -32,7 +32,9 @@ export async function applyJobLayerData({ jobLayers, jobs, jobService = defaultJ
   const featureData = createJobLayerFeatureData(jobsResult.data.jobs);
 
   await Promise.all([
-    replaceLayerFeatures(jobLayers.pointLayer, featureData.pointFeatures),
+    ...getPointLayers(jobLayers).map((pointLayer) =>
+      replaceLayerFeatures(pointLayer, featureData.pointFeatures)
+    ),
     replaceLayerFeatures(jobLayers.polygonLayer, featureData.polygonFeatures),
   ]);
 
@@ -44,6 +46,12 @@ export async function applyJobLayerData({ jobLayers, jobs, jobService = defaultJ
     {
       operation: "applyJobLayerData",
     }
+  );
+}
+
+function getPointLayers(jobLayers) {
+  return [jobLayers?.pointLayer, ...Object.values(jobLayers?.priorityPointLayers ?? {})].filter(
+    Boolean
   );
 }
 
@@ -67,7 +75,6 @@ async function replaceLayerFeatures(layer, featureData) {
 
 async function queryExistingFeatures(layer) {
   const query = layer.createQuery();
-
   query.where = "1=1";
   query.outFields = [JOB_LAYER_FIELD.OBJECT_ID];
   query.returnGeometry = false;
