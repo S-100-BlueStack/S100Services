@@ -1000,7 +1000,9 @@ Job geometry is now visible on the map, and users can move directly from map geo
 
 Implementation note:
 
-Job popup feature extraction now searches the popup feature collection for a feature with Job attributes instead of trusting `PopupViewModel.selectedFeature` first. This keeps point Job popups reliable when ArcGIS popup state includes multiple map features at the clicked location.
+AOI popup actions use `PopupViewModel trigger-action` because the selected AOI flow is stable there.
+
+Job details uses a `PopupTemplate` action for action bar placement. A hidden Esri `CustomContent` item captures the feature-scoped Job selection from the rendered popup graphic, because `PopupViewModel` selected feature state can be ambiguous for point Jobs when multiple popup features are present.
 
 ## 9. Backend assumptions
 

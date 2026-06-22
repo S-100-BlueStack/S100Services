@@ -1,3 +1,4 @@
+import CustomContent from "@arcgis/core/popup/content/CustomContent.js";
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 
 import { JOB_LAYER_FIELD } from "../layers/jobLayerFeatureData.js";
@@ -5,6 +6,8 @@ import { JOB_LAYER_FIELD } from "../layers/jobLayerFeatureData.js";
 export const JOB_POPUP_ACTION = Object.freeze({
   SHOW_JOB_DETAILS: "show-job-details",
 });
+
+let latestFeatureScopedJobSelection = null;
 
 export function createJobPopupActions() {
   return [
@@ -14,6 +17,21 @@ export function createJobPopupActions() {
       icon: "information",
     },
   ];
+}
+
+export function createJobPopupContextContent() {
+  return new CustomContent({
+    outFields: ["*"],
+    creator(event) {
+      latestFeatureScopedJobSelection = createJobSelectionFromGraphic(event?.graphic);
+
+      const contextElement = document.createElement("span");
+      contextElement.hidden = true;
+      contextElement.setAttribute("aria-hidden", "true");
+
+      return contextElement;
+    },
+  });
 }
 
 export function registerJobPopupActions({ view, onShowJobDetails } = {}) {
@@ -34,7 +52,7 @@ export function registerJobPopupActions({ view, onShowJobDetails } = {}) {
         return;
       }
 
-      const selectedJob = createJobSelectionFromPopupViewModel(popupViewModel);
+      const selectedJob = getSelectedJobForAction(popupViewModel);
 
       onShowJobDetails(selectedJob);
     });
@@ -62,11 +80,8 @@ export function registerJobPopupActions({ view, onShowJobDetails } = {}) {
     abortController.abort();
     popupActionHandle?.remove();
     popupActionHandle = null;
+    latestFeatureScopedJobSelection = null;
   };
-}
-
-export function createJobSelectionFromPopupViewModel(popupViewModel) {
-  return createJobSelectionFromGraphic(getSelectedJobPopupFeature(popupViewModel));
 }
 
 export function createJobSelectionFromGraphic(graphic) {
@@ -80,6 +95,14 @@ export function createJobSelectionFromGraphic(graphic) {
       attributes[JOB_LAYER_FIELD.GEOMETRY_TYPE] ?? graphic?.geometry?.type
     ),
   };
+}
+
+function getSelectedJobForAction(popupViewModel) {
+  if (latestFeatureScopedJobSelection?.jobId) {
+    return latestFeatureScopedJobSelection;
+  }
+
+  return createJobSelectionFromGraphic(getSelectedJobPopupFeature(popupViewModel));
 }
 
 function getSelectedJobPopupFeature(popupViewModel) {

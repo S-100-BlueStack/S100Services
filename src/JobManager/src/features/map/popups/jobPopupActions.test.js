@@ -2,10 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { JOB_LAYER_FIELD } from "../layers/jobLayerFeatureData.js";
-import {
-  createJobSelectionFromGraphic,
-  createJobSelectionFromPopupViewModel,
-} from "./jobPopupActions.js";
+import { createJobSelectionFromGraphic } from "./jobPopupActions.js";
 
 test("createJobSelectionFromGraphic extracts selected Job values from popup graphic", () => {
   const selectedJob = createJobSelectionFromGraphic({
@@ -62,68 +59,17 @@ test("createJobSelectionFromGraphic uses fallback title for missing title", () =
   });
 });
 
-test("createJobSelectionFromPopupViewModel prefers selected popup feature when it is a Job", () => {
-  const selectedJob = createJobSelectionFromPopupViewModel({
-    selectedFeatureIndex: 1,
-    selectedFeature: {
-      attributes: {
-        PRODUCTNAME: "Underlying AOI",
-      },
-    },
-    features: [
-      {
-        attributes: {
-          PRODUCTNAME: "Underlying AOI",
-        },
-      },
-      {
-        geometry: {
-          type: "point",
-        },
-        attributes: {
-          [JOB_LAYER_FIELD.OBJECT_ID]: 5,
-          [JOB_LAYER_FIELD.JOB_ID]: "job-point",
-          [JOB_LAYER_FIELD.TITLE]: "Point Job",
-          [JOB_LAYER_FIELD.GEOMETRY_TYPE]: "point",
-        },
-      },
-    ],
-  });
-
-  assert.deepEqual(selectedJob, {
-    jobId: "job-point",
-    jobTitle: "Point Job",
-    objectId: 5,
-    geometryType: "point",
-  });
-});
-
-test("createJobSelectionFromPopupViewModel supports ArcGIS collection-like popup features", () => {
-  const selectedJob = createJobSelectionFromPopupViewModel({
-    selectedFeatureIndex: 0,
-    features: {
-      length: 1,
-      at(index) {
-        if (index !== 0) {
-          return null;
-        }
-
-        return {
-          attributes: {
-            [JOB_LAYER_FIELD.OBJECT_ID]: 8,
-            [JOB_LAYER_FIELD.JOB_ID]: "job-polygon",
-            [JOB_LAYER_FIELD.TITLE]: "Polygon Job",
-            [JOB_LAYER_FIELD.GEOMETRY_TYPE]: "polygon",
-          },
-        };
-      },
+test("createJobSelectionFromGraphic returns empty Job id when graphic is missing Job attributes", () => {
+  const selectedJob = createJobSelectionFromGraphic({
+    attributes: {
+      PRODUCTNAME: "Underlying AOI",
     },
   });
 
   assert.deepEqual(selectedJob, {
-    jobId: "job-polygon",
-    jobTitle: "Polygon Job",
-    objectId: 8,
-    geometryType: "polygon",
+    jobId: "",
+    jobTitle: "Selected Job",
+    objectId: undefined,
+    geometryType: "",
   });
 });

@@ -460,8 +460,8 @@ Status: In progress
 Current flow:
 
 ```txt
-Job geometry popup action
-  -> PopupViewModel trigger-action event
+Job geometry popup custom content button
+  -> DOM custom event with feature-scoped Job selection
   -> app-level selected Job callback
   -> selected Job state
   -> Jobs panel opens
@@ -471,7 +471,7 @@ Job geometry popup action
 
 Rules:
 
-- Job popup actions should be defined on the Job geometry popup template.
+- Job details should use feature-scoped custom popup content so the selected Job is derived from the popup content graphic rather than ambiguous popup ViewModel state.
 - Job popup action wiring should wait for `view.popup.viewModel` with `reactiveUtils.whenOnce`.
 - Selected Job state should live outside map layer construction.
 - Map highlight should be owned by map layer/controller code.
@@ -479,7 +479,10 @@ Rules:
 - Selecting a Job from the map clears AOI-scoped list mode.
 - Closing the Jobs panel or returning to the normal Jobs list clears selected Job highlight.
 - Related AOI highlight for selected Job is deferred.
-- Job popup action handlers should select the popup feature with Job attributes from the popup feature collection, because `PopupViewModel.selectedFeature` can be ambiguous when multiple layers participate in a popup.
+
+Implementation note:
+
+Job details uses a `PopupTemplate` action for action bar placement. A hidden Esri `CustomContent` item captures the feature-scoped Job selection from the rendered popup graphic, because `PopupViewModel` selected feature state can be ambiguous for point Jobs when multiple popup features are present.
 
 ### AOI popup action flow
 
