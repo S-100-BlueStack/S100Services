@@ -1247,6 +1247,26 @@ Known limitation:
 
 AOI renderer color updates can lag after filter reset because relation summaries and renderer enrichment are rebuilt asynchronously. Keep this documented as a later optimization unless it becomes disruptive.
 
+## 8.40 Add AOI popup Job summary content
+
+Status: Done
+
+AOI popup content now includes a related Jobs summary.
+
+Current behavior:
+
+- AOI popup shows related Job count.
+- AOI popup shows active Job count.
+- AOI popup shows high-priority active Job count.
+- Counts use relation service snapshots and current Job filters where available.
+- Done Jobs remain hidden by default unless the `Done` filter is active.
+- If an AOI has no matching relation summary, the popup shows a neutral empty summary.
+- The existing `Show related Jobs` action still opens the Jobs panel scoped to the selected AOI.
+
+Rationale:
+
+Users can now inspect an AOI and see the operational Job signal before opening the Jobs panel. The implementation keeps relation source details behind the relation service and does not import mock Job data into popup UI.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -1553,14 +1573,14 @@ Make AOIs inspectable from the map.
 
 Tasks:
 
-| ID      | Task                                  |      Status | Notes                                                                                                                   |
-| ------- | ------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------- |
-| JM-0701 | Add AOI hover feedback                | Not started | Follow Product Manager pattern if current code supports reuse.                                                          |
-| JM-0702 | Add AOI selection feedback            | In progress | Added selected AOI state and AOI popup action flow. Visual map highlight is still deferred.                             |
-| JM-0703 | Add AOI popup shell                   | In progress | Added ArcGIS popup template using current test Feature Service metadata and a Show related Jobs action.                 |
-| JM-0704 | Show related Job summary in popup     | Not started | Requires richer popup content or custom popup UI. Relation summaries currently drive renderer and Jobs panel filtering. |
-| JM-0705 | Add popup action to open related Jobs |        Done | AOI popup action opens the Jobs panel scoped to Jobs related to the selected AOI.                                       |
-| JM-0706 | Document popup flow                   | Not started | Add README under `features/map/popups` when implemented.                                                                |
+| ID      | Task                                  |      Status | Notes                                                                                                                                     |
+| ------- | ------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0701 | Add AOI hover feedback                | Not started | Follow Product Manager pattern if current code supports reuse.                                                                            |
+| JM-0702 | Add AOI selection feedback            | In progress | Added selected AOI state and AOI popup action flow. Visual map highlight is still deferred.                                               |
+| JM-0703 | Add AOI popup shell                   | In progress | Added ArcGIS popup template using current test Feature Service metadata and a Show related Jobs action.                                   |
+| JM-0704 | Show related Job summary in popup     |        Done | AOI popup now shows related, active and high-priority active Job counts using relation summaries and current Job filters where available. |
+| JM-0705 | Add popup action to open related Jobs |        Done | AOI popup action opens the Jobs panel scoped to Jobs related to the selected AOI.                                                         |
+| JM-0706 | Document popup flow                   |        Done | AOI popup relation summary content and `Show related Jobs` action flow are documented in `ARCHITECTURE.md`.                               |
 
 Exit criteria:
 

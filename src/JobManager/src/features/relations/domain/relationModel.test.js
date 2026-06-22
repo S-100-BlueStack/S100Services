@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildAoiJobSummaries,
   buildAoiJobSummaryByAoiId,
+  getAoiJobSummary,
   toAoiModelJobSummary,
 } from "./aoiJobSummary.js";
 import {
@@ -100,5 +101,41 @@ test("buildAoiJobSummaries derives total, active and high priority Job counts", 
     total: 3,
     active: 2,
     highPriority: 2,
+  });
+});
+
+test("getAoiJobSummary supports plain object snapshots returned by relation services", () => {
+  const summary = getAoiJobSummary(
+    {
+      "aoi-001": {
+        aoiId: "aoi-001",
+        total: 3,
+        active: 2,
+        highPriority: 2,
+        activeHighPriority: 1,
+        jobIds: ["job-001", "job-002", "job-002"],
+      },
+    },
+    "aoi-001"
+  );
+
+  assert.deepEqual(summary, {
+    aoiId: "aoi-001",
+    total: 3,
+    active: 2,
+    highPriority: 2,
+    activeHighPriority: 1,
+    jobIds: ["job-001", "job-002"],
+  });
+});
+
+test("getAoiJobSummary returns an empty summary when an AOI has no matching Jobs", () => {
+  assert.deepEqual(getAoiJobSummary({}, "aoi-missing"), {
+    aoiId: "aoi-missing",
+    total: 0,
+    active: 0,
+    highPriority: 0,
+    activeHighPriority: 0,
+    jobIds: [],
   });
 });

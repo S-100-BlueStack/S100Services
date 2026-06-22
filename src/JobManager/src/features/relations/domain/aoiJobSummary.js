@@ -13,6 +13,21 @@ export function createEmptyAoiJobSummary(aoiId = "") {
   };
 }
 
+export function normalizeAoiJobSummary(summary, fallbackAoiId = "") {
+  if (!summary || typeof summary !== "object") {
+    return createEmptyAoiJobSummary(fallbackAoiId);
+  }
+
+  return {
+    aoiId: normalizeOptionalString(summary.aoiId) || normalizeOptionalString(fallbackAoiId),
+    total: normalizeCount(summary.total),
+    active: normalizeCount(summary.active),
+    highPriority: normalizeCount(summary.highPriority),
+    activeHighPriority: normalizeCount(summary.activeHighPriority),
+    jobIds: normalizeStringArray(summary.jobIds),
+  };
+}
+
 export function buildAoiJobSummaryByAoiId({ jobs = [], relations } = {}) {
   const normalizedJobs = normalizeArray(jobs);
   const normalizedRelations = relations
@@ -73,11 +88,17 @@ export function buildAoiJobSummaries({ jobs = [], relations } = {}) {
 }
 
 export function getAoiJobSummary(summaryByAoiId, aoiId) {
-  if (!(summaryByAoiId instanceof Map)) {
-    return createEmptyAoiJobSummary(aoiId);
+  const normalizedAoiId = normalizeOptionalString(aoiId);
+
+  if (summaryByAoiId instanceof Map) {
+    return normalizeAoiJobSummary(summaryByAoiId.get(normalizedAoiId), normalizedAoiId);
   }
 
-  return summaryByAoiId.get(normalizeOptionalString(aoiId)) ?? createEmptyAoiJobSummary(aoiId);
+  if (summaryByAoiId && typeof summaryByAoiId === "object") {
+    return normalizeAoiJobSummary(summaryByAoiId[normalizedAoiId], normalizedAoiId);
+  }
+
+  return createEmptyAoiJobSummary(normalizedAoiId);
 }
 
 export function toAoiModelJobSummary(summary) {
@@ -129,6 +150,16 @@ function normalizeCount(value) {
   }
 
   return Math.trunc(count);
+}
+
+function normalizeStringArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const values = value.map((item) => normalizeOptionalString(item)).filter(Boolean);
+
+  return [...new Set(values)];
 }
 
 function normalizeOptionalString(value) {

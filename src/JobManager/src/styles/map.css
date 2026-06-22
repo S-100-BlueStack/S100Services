@@ -69,6 +69,56 @@
   font-size: 0.85rem;
 }
 
+.job-manager-aoi-popup-summary {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--jm-border);
+}
+
+.job-manager-aoi-popup-summary__title {
+  margin: 0;
+  color: var(--jm-header-bg);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.job-manager-aoi-popup-summary__message,
+.job-manager-aoi-popup-summary__hint {
+  margin: 0;
+  color: var(--jm-text-muted);
+  font-size: 0.82rem;
+}
+
+.job-manager-aoi-popup-summary__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.job-manager-aoi-popup-summary__metric {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.45rem;
+  border: 1px solid var(--jm-border);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.job-manager-aoi-popup-summary__metric-value {
+  color: var(--jm-header-bg);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.job-manager-aoi-popup-summary__metric-label {
+  color: var(--jm-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.15;
+}
+
 @media (max-width: 54rem) {
   .job-manager-map-status {
     top: 0.75rem;

@@ -6,6 +6,7 @@ import { applyJobLayerData } from "../layers/applyJobLayerData.js";
 import { applyJobPointClustering } from "../layers/jobClustering.js";
 import { createJobHighlightController } from "../layers/jobHighlight.js";
 import { registerAoiPopupActions } from "../popups/aoiPopupActions.js";
+import { configureAoiJobSummaryPopupContent } from "../popups/aoiPopupContent.js";
 import { registerJobPopupActions } from "../popups/jobPopupActions.js";
 import { createMapView } from "./createMapView.js";
 
@@ -67,6 +68,7 @@ export function createMapController({
         aoiLayer: mapResult.layers.aoiLayer,
       });
 
+      configureMapPopupContent();
       registerMapInteractionHandlers();
       applyCurrentJobClusterSettingsWithoutBlocking();
       applyCurrentJobFilters();
@@ -194,6 +196,19 @@ export function createMapController({
     }
 
     applyAoiRendererWithoutBlockingMapReady(mapResult.layers.aoiLayer);
+  }
+
+  function configureMapPopupContent() {
+    if (!mapResult?.layers?.aoiLayer) {
+      return;
+    }
+
+    configureAoiJobSummaryPopupContent({
+      aoiLayer: mapResult.layers.aoiLayer,
+      getJobFilters() {
+        return currentJobFilters;
+      },
+    });
   }
 
   function registerMapInteractionHandlers() {

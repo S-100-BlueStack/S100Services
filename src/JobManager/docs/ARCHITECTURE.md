@@ -659,6 +659,37 @@ Accessibility note:
 
 When closing the Jobs panel, focus is moved back to the navbar Jobs control before the panel is hidden. This avoids hiding focused descendants from assistive technology.
 
+### AOI popup Job summary content
+
+Status: In progress
+
+Current flow:
+
+```txt
+AOI PopupTemplate custom content
+  -> selected AOI id from popup graphic attributes
+  -> relation service snapshot using current Job filters
+  -> AOI Job summary lookup
+  -> popup summary metrics
+```
+
+Current popup summary metrics:
+
+- Related Jobs
+- Active Jobs
+- High-priority active Jobs
+
+Rules:
+
+- AOI popup summary content lives under `features/map/popups`.
+- Popup summary content may use relation service snapshots, but must not know whether relations are mocked, geometry-derived or backend-provided.
+- Popup summary content must not import from `features/jobs/mock`.
+- Popup summary counts should reflect current Job filters where available.
+- If the selected AOI id does not match relation summaries, the popup should show a neutral empty summary instead of failing.
+- `Show related Jobs` remains a popup action and continues to open the Jobs panel scoped to the selected AOI.
+
+Known limitation: open AOI popups do not live-refresh summary counts when Job filters change; reopening the popup refreshes the summary.
+
 ## 14. UI composition direction
 
 Expected initial layout:
