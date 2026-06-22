@@ -1043,7 +1043,8 @@ Current behavior:
 - Jobs can be filtered by explicit priority values
 - active filter state is shown in the Jobs panel
 - the navbar filter action shows an indicator when filters are active
-- map Job layers do not yet consume the shared filter state
+- map Job layers hide Done Jobs by default, matching the Jobs panel
+- map Job layers reveal Done Jobs when the user explicitly selects the `Done` status filter
 - Job filter state is owned by `features/jobs` because the filter rules are Job-domain rules. Map-specific application of the same filter state should live under `features/map/filters`.
 
 Implementation note:
@@ -1064,13 +1065,18 @@ Current map behavior:
 
 - shared Job filters are applied to Job point and polygon layers through `definitionExpression`
 - map Job layers use the same filter state as the Jobs panel
-- map Job layers do not inherit the Jobs panel's hidden-Done default unless `Active Jobs` is selected
+- map Job layers hide Done Jobs by default, matching the Jobs panel
+- map Job layers reveal Done Jobs when the user explicitly selects the `Done` status filter
 - selected Job highlight and related AOI highlight remain independent of layer filter state
 
 Deferred:
 
 - reconcile AOI renderer summaries with filtered Jobs
 - clustering
+
+Implementation note:
+
+The map filter expression includes `status <> 'done'` by default so Job point and polygon layers match the Jobs panel's hidden-Done behavior. The default Done exclusion is removed only when the explicit `Done` status filter is active.
 
 ## 9. Backend assumptions
 

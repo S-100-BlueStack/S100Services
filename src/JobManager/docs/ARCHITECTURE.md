@@ -206,7 +206,8 @@ Rules:
 - Job filter state belongs in `features/jobs/state` while the filters only describe Jobs.
 - Map-specific application of Job filters must live under `features/map/filters`.
 - Done Jobs are hidden by default in the Jobs panel, but the explicit `Done` status filter reveals matching Done Jobs.
-- Map Job layers use shared Job filter state, but do not inherit the Jobs panel's hidden-Done default unless `Active Jobs` is selected.
+- Map Job layers use shared Job filter state and hide Done Jobs by default, matching the Jobs panel.
+- Map Job layers reveal Done Jobs when the explicit `Done` status filter is active.
 - Do not introduce a generic top-level `features/filters` folder unless filters become truly cross-domain app state.
 
 ## 6.1 `src/features/relations`

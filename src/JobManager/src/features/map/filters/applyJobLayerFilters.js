@@ -1,9 +1,10 @@
-import { normalizeJobFilters } from "../../jobs/domain/jobFilters.js";
+import {
+  normalizeJobFilters,
+  shouldRevealDoneJobsForFilters,
+} from "../../jobs/domain/jobFilters.js";
 import { JOB_PRIORITY } from "../../jobs/domain/jobPriority.js";
 import { JOB_STATUS } from "../../jobs/domain/jobStatus.js";
 import { JOB_LAYER_FIELD } from "../layers/jobLayerFeatureData.js";
-
-const NO_FILTER_EXPRESSION = "1=1";
 
 export function applyJobLayerFilters({ jobLayers, filters } = {}) {
   const definitionExpression = createJobLayerDefinitionExpression(filters);
@@ -20,6 +21,10 @@ export function applyJobLayerFilters({ jobLayers, filters } = {}) {
 export function createJobLayerDefinitionExpression(filters = {}) {
   const normalizedFilters = normalizeJobFilters(filters);
   const expressionParts = [];
+
+  if (!shouldRevealDoneJobsForFilters(normalizedFilters)) {
+    expressionParts.push(`${JOB_LAYER_FIELD.STATUS} <> '${escapeSqlString(JOB_STATUS.DONE)}'`);
+  }
 
   if (normalizedFilters.activeOnly) {
     expressionParts.push(`${JOB_LAYER_FIELD.STATUS} <> '${escapeSqlString(JOB_STATUS.DONE)}'`);
@@ -45,15 +50,19 @@ export function createJobLayerDefinitionExpression(filters = {}) {
     );
   }
 
-  return expressionParts.length > 0
-    ? expressionParts.map((expressionPart) => `(${expressionPart})`).join(" AND ")
-    : NO_FILTER_EXPRESSION;
+  return dedupeExpressionParts(expressionParts)
+    .map((expressionPart) => `(${expressionPart})`)
+    .join(" AND ");
 }
 
 function createInExpression(fieldName, values) {
   const escapedValues = values.map((value) => `'${escapeSqlString(value)}'`).join(", ");
 
   return `${fieldName} IN (${escapedValues})`;
+}
+
+function dedupeExpressionParts(expressionParts) {
+  return [...new Set(expressionParts)];
 }
 
 function getJobLayers(jobLayers) {
