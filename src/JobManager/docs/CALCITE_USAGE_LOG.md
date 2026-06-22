@@ -17,14 +17,13 @@ Default:
 
 ## Current Calcite usage
 
-| Area                    | Calcite usage     | Notes                                                                   |
-| ----------------------- | ----------------- | ----------------------------------------------------------------------- |
-| Navbar Jobs control     | `calcite-button`  | Used so Jobs behaves as a real button rather than a link.               |
-| Navbar icon actions     | `calcite-action`  | Used for Filters and Test notice.                                       |
-| Filters panel-dropdown  | `calcite-popover` | Used because filter UI needs panel-like content, not a short menu list. |
-| Jobs panel close action | `calcite-action`  | Used instead of a native close button.                                  |
-
-## Active Calcite opt-outs
+| Area                    | Calcite usage                                         | Notes                                                                                                        |
+| ----------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Navbar Jobs control     | `calcite-icon`                                        | Used inside a native `button` because `calcite-button` styling did not fit the Product Manager-style navbar. |
+| Navbar icon actions     | `calcite-action`                                      | Used for Filters and Test notice.                                                                            |
+| Filters panel-dropdown  | `calcite-popover`                                     | Used because filter UI needs panel-like content, not a short menu list.                                      |
+| Filter form controls    | `calcite-checkbox`, `calcite-button`, `calcite-label` | Used for Job filters and Job point clustering settings.                                                      |
+| Jobs panel close action | `calcite-action`                                      | Used instead of a native close button.                                                                       |
 
 ## Active Calcite opt-outs
 

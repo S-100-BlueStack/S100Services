@@ -73,6 +73,38 @@ Avoid:
 - Job-specific business rules
 - ArcGIS layer details
 
+### App shell UI modules
+
+Status: In progress
+
+`src/app` may contain small app-shell UI modules when the UI coordinates multiple features but does not own feature-domain logic.
+
+Current modules:
+
+```txt
+app/ui/createNavbarController.js
+  -> loads the static navbar template
+  -> owns Filters popover UI rendering
+  -> wires Job filter controls to Job filter state
+  -> wires Job point clustering controls to map clustering state
+  -> owns Filters popover open/close behavior
+
+app/ui/createJobsOverlay.js
+  -> creates the app-shell Jobs overlay panel
+  -> hosts `features/jobs/ui/jobList.js`
+
+app/ui/createMapWorkspace.js
+  -> creates the map workspace DOM container and map status region
+```
+
+Rules:
+
+- App-shell UI modules may wire feature stores to controls, but must not own Job, AOI or map business rules.
+- Job filter state remains owned by `features/jobs/state`.
+- Job point clustering settings remain owned by `features/map/state`.
+- ArcGIS-specific layer filtering and clustering application remain owned by `features/map`.
+- `createApp.js` should stay focused on store creation, feature composition, high-level event wiring and lifecycle cleanup.
+
 ## 5. `src/features/aoi`
 
 Owns AOI-specific behavior.
@@ -299,7 +331,7 @@ Responsibilities:
 - `map/state/jobClusterSettingsStore.js` owns selected clustering settings.
 - `map/layers/jobClustering.js` translates clustering settings into ArcGIS `featureReduction` configuration and layer visibility.
 - `map/core/mapController.js` applies clustering settings to Job point layers.
-- `src/app/createApp.js` wires navbar UI controls to the clustering settings store.
+- `src/app/ui/createNavbarController.js` wires navbar UI controls to the clustering settings store.
 
 Cluster styles:
 
@@ -334,7 +366,8 @@ Current responsibilities:
 - `features/map/layers/jobRenderer.js` owns Job geometry renderer configuration.
 - `features/map/layers/applyAoiRenderer.js` applies AOI renderer enrichment from relation summaries without blocking map startup.
 - `features/map/popups/aoiPopupActions.js` owns AOI popup action definitions and selected AOI extraction from popup graphics.
-- `src/app/createApp.js` only creates the DOM container, wires lifecycle and handles app-level callbacks/notices.
+- `src/app/createApp.js` creates app-level stores, composes app-shell UI modules, wires feature callbacks and owns lifecycle cleanup.
+- `src/app/ui/createMapWorkspace.js` creates the map workspace DOM container used by the map controller.
 
 Rules:
 

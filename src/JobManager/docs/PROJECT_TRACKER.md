@@ -1170,7 +1170,50 @@ Deferred:
 
 ## 8.39 Extract app-shell UI wiring from createApp
 
-Status: Proposed
+Status: Done
+
+App-shell UI construction has been extracted from `src/app/createApp.js` into focused modules under `src/app/ui`.
+
+Current structure:
+
+```txt
+src/app/createApp.js
+  -> app composition
+  -> store creation
+  -> high-level map/list/selection wiring
+  -> lifecycle cleanup
+
+src/app/ui/createNavbarController.js
+  -> navbar template loading
+  -> Filters popover creation
+  -> Job filter controls
+  -> Job point clustering controls
+  -> popover open/close behavior
+
+src/app/ui/createJobsOverlay.js
+  -> Jobs overlay shell
+  -> hosts Jobs list UI
+
+src/app/ui/createMapWorkspace.js
+  -> map workspace shell
+  -> map status region
+```
+
+Decision:
+
+- Keep Job filter rules and filter state under `features/jobs`.
+- Keep Job point clustering settings under `features/map`.
+- Keep ArcGIS layer filtering and clustering application under `features/map`.
+- Keep app-shell UI modules under `src/app/ui` when they coordinate multiple features but do not own feature-domain logic.
+- Keep `createApp.js` focused on app composition, store creation, high-level feature wiring and lifecycle cleanup.
+
+Rationale:
+
+`createApp.js` had grown to mix app composition with detailed navbar/filter/clustering DOM construction. Extracting this keeps the next feature work simpler without changing domain ownership or behavior.
+
+Known limitation:
+
+AOI renderer color updates can lag after filter reset because relation summaries and renderer enrichment are rebuilt asynchronously. Keep this documented as a later optimization unless it becomes disruptive.
 
 ## Architecture review update
 
@@ -1360,14 +1403,15 @@ Status: In progress
 
 Tasks:
 
-| ID      | Task                                  |      Status | Notes                                                                                                                                                                                    |
-| ------- | ------------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-0101 | Create root app layout shell          |        Done | Root layout uses Product Manager-style navbar template, GST logo, map-first workspace, native Jobs panel toggle with Calcite icon, closable left Jobs panel and Calcite Filters popover. |
-| JM-0102 | Add shared config helper              |        Done | Runtime config reads safe `VITE_` values from `import.meta.env`.                                                                                                                         |
-| JM-0103 | Add shared API result helper          |        Done | Added success/error result helpers for future services.                                                                                                                                  |
-| JM-0104 | Add shared error normalization        |        Done | Added normalized frontend error shape for mock and future backend errors.                                                                                                                |
-| JM-0105 | Add notice service shell              |        Done | Added notice service and UI container for user-visible messages. Notice UI is currently custom and should be reviewed against Calcite alert/notice options before hardening.             |
-| JM-0106 | Add basic dark/light theme foundation | Not started | Deferred until Product Manager theme pattern is verified.                                                                                                                                |
+| ID      | Task                                             |      Status | Notes                                                                                                                                                                                    |
+| ------- | ------------------------------------------------ | ----------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0101 | Create root app layout shell                     |        Done | Root layout uses Product Manager-style navbar template, GST logo, map-first workspace, native Jobs panel toggle with Calcite icon, closable left Jobs panel and Calcite Filters popover. |
+| JM-0102 | Add shared config helper                         |        Done | Runtime config reads safe `VITE_` values from `import.meta.env`.                                                                                                                         |
+| JM-0103 | Add shared API result helper                     |        Done | Added success/error result helpers for future services.                                                                                                                                  |
+| JM-0104 | Add shared error normalization                   |        Done | Added normalized frontend error shape for mock and future backend errors.                                                                                                                |
+| JM-0105 | Add notice service shell                         |        Done | Added notice service and UI container for user-visible messages. Notice UI is currently custom and should be reviewed against Calcite alert/notice options before hardening.             |
+| JM-0106 | Add basic dark/light theme foundation            | Not started | Deferred until Product Manager theme pattern is verified.                                                                                                                                |
+| JM-0107 | Extract app-shell UI modules from `createApp.js` |        Done | Navbar/filter/clustering UI, Jobs overlay shell and map workspace DOM helpers now live under `src/app/ui`.                                                                               |
 
 Exit criteria:
 
@@ -1788,6 +1832,6 @@ Recommended next tasks:
 | JM-NEXT-006 | Connect AOI Feature Service loading                                    | Not started | Replace AOI service skeleton with real Feature Service query once URL, fields and auth are confirmed. |
 | JM-NEXT-007 | Add AOI/Job relation service                                           | Not started | Use mock `relatedAoiIds` first, while keeping source abstraction ready for backend relations.         |
 | JM-NEXT-008 | Add AOI renderer and popup foundation                                  | Not started | Requires AOI fields and relation summaries.                                                           |
-| JM-NEXT-009 | Extract navbar/filter/clustering UI from `createApp.js`                | Not started | Move app-shell UI construction to `src/app/ui` while preserving feature ownership.                    |
-| JM-NEXT-010 | Extract Jobs overlay and map workspace DOM helpers from `createApp.js` | Not started | Keep `createApp.js` focused on app composition and high-level wiring.                                 |
+| JM-NEXT-009 | Extract navbar/filter/clustering UI from `createApp.js`                |        Done | App-shell navbar UI now lives in `src/app/ui/createNavbarController.js`.                              |
+| JM-NEXT-010 | Extract Jobs overlay and map workspace DOM helpers from `createApp.js` |        Done | Jobs overlay and map workspace DOM helpers now live under `src/app/ui`.                               |
 | JM-NEXT-011 | Clean up tracker/docs status drift after filters and clustering        | Not started | Phase 8/9 statuses lag behind the current implementation.                                             |
