@@ -1168,6 +1168,42 @@ Deferred:
 - AOI clustering or AOI overview aggregation
 - persisting clustering settings across reloads
 
+## 8.39 Extract app-shell UI wiring from createApp
+
+Status: Proposed
+
+## Architecture review update
+
+Status: Proposed
+
+Before adding the next feature, reduce `src/app/createApp.js` responsibility by extracting app-shell UI composition.
+
+Decision:
+
+- Keep Job filter rules and filter state under `features/jobs`.
+- Keep Job point clustering settings under `features/map`.
+- Keep ArcGIS layer filtering and clustering application under `features/map`.
+- Move navbar template loading, filter popover UI, clustering controls and related UI sync into `src/app/ui`.
+- Keep `createApp.js` focused on app composition, store creation, high-level feature wiring and lifecycle cleanup.
+
+Rationale:
+
+`createApp.js` currently mixes app composition with detailed navbar/filter/clustering DOM construction. Extracting this now keeps the next feature work simpler without changing domain ownership or behavior.
+
+Suggested task:
+
+| ID          | Task                                                                      |      Status | Notes                                                                                                     |
+| ----------- | ------------------------------------------------------------------------- | ----------: | --------------------------------------------------------------------------------------------------------- |
+| JM-ARCH-001 | Extract navbar/filter/clustering UI from `createApp.js` into `src/app/ui` | Not started | Preserve current behavior; no feature changes.                                                            |
+| JM-ARCH-002 | Extract Jobs overlay DOM construction from `createApp.js`                 | Not started | Keep Jobs list behavior owned by `features/jobs/ui/jobList.js`.                                           |
+| JM-ARCH-003 | Extract map workspace DOM construction from `createApp.js`                | Not started | Keep ArcGIS lifecycle owned by `features/map/core`.                                                       |
+| JM-ARCH-004 | Update tracker statuses for shared Job filters and Job point clustering   | Not started | Phase 8 and Phase 9 currently lag behind implemented behavior.                                            |
+| JM-ARCH-005 | Clean up Calcite usage log inconsistencies                                | Not started | Remove duplicate heading and verify whether the Jobs navbar control is native button or `calcite-button`. |
+
+Known limitation:
+
+AOI renderer color updates can lag after filter reset because relation summaries and renderer enrichment are rebuilt asynchronously. Keep this documented as a later optimization unless it becomes disruptive.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -1742,13 +1778,16 @@ Do not duplicate content across documents. Link or summarize instead.
 
 Recommended next tasks:
 
-| ID          | Task                                     |      Status | Notes                                                                                                 |
-| ----------- | ---------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------- |
-| JM-NEXT-001 | Add `docs/BACKEND_CONTRACTS.md` skeleton |        Done | Initial backend assumptions and open questions documented.                                            |
-| JM-NEXT-002 | Add `docs/ARCHITECTURE.md` skeleton      |        Done | Initial architecture boundaries and data flow documented.                                             |
-| JM-NEXT-003 | Implement app shell layout               |        Done | Product Manager-style navbar, map-first workspace, Jobs panel and notices are implemented.            |
-| JM-NEXT-004 | Implement notice service foundation      |        Done | Notice service and UI container are implemented.                                                      |
-| JM-NEXT-005 | Implement mock Jobs service              |        Done | Mock Jobs service supports loading, failures, status mutation and cyclic mock Job creation.           |
-| JM-NEXT-006 | Connect AOI Feature Service loading      | Not started | Replace AOI service skeleton with real Feature Service query once URL, fields and auth are confirmed. |
-| JM-NEXT-007 | Add AOI/Job relation service             | Not started | Use mock `relatedAoiIds` first, while keeping source abstraction ready for backend relations.         |
-| JM-NEXT-008 | Add AOI renderer and popup foundation    | Not started | Requires AOI fields and relation summaries.                                                           |
+| ID          | Task                                                                   |      Status | Notes                                                                                                 |
+| ----------- | ---------------------------------------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------- |
+| JM-NEXT-001 | Add `docs/BACKEND_CONTRACTS.md` skeleton                               |        Done | Initial backend assumptions and open questions documented.                                            |
+| JM-NEXT-002 | Add `docs/ARCHITECTURE.md` skeleton                                    |        Done | Initial architecture boundaries and data flow documented.                                             |
+| JM-NEXT-003 | Implement app shell layout                                             |        Done | Product Manager-style navbar, map-first workspace, Jobs panel and notices are implemented.            |
+| JM-NEXT-004 | Implement notice service foundation                                    |        Done | Notice service and UI container are implemented.                                                      |
+| JM-NEXT-005 | Implement mock Jobs service                                            |        Done | Mock Jobs service supports loading, failures, status mutation and cyclic mock Job creation.           |
+| JM-NEXT-006 | Connect AOI Feature Service loading                                    | Not started | Replace AOI service skeleton with real Feature Service query once URL, fields and auth are confirmed. |
+| JM-NEXT-007 | Add AOI/Job relation service                                           | Not started | Use mock `relatedAoiIds` first, while keeping source abstraction ready for backend relations.         |
+| JM-NEXT-008 | Add AOI renderer and popup foundation                                  | Not started | Requires AOI fields and relation summaries.                                                           |
+| JM-NEXT-009 | Extract navbar/filter/clustering UI from `createApp.js`                | Not started | Move app-shell UI construction to `src/app/ui` while preserving feature ownership.                    |
+| JM-NEXT-010 | Extract Jobs overlay and map workspace DOM helpers from `createApp.js` | Not started | Keep `createApp.js` focused on app composition and high-level wiring.                                 |
+| JM-NEXT-011 | Clean up tracker/docs status drift after filters and clustering        | Not started | Phase 8/9 statuses lag behind the current implementation.                                             |
