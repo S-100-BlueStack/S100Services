@@ -75,7 +75,7 @@ Avoid:
 
 ### App shell UI modules
 
-Status: In progress
+Status: Done
 
 `src/app` may contain small app-shell UI modules when the UI coordinates multiple features but does not own feature-domain logic.
 
@@ -158,7 +158,7 @@ Rules:
 
 ### Current selected AOI state
 
-Status: In progress
+Status: Done
 
 Selected AOI state lives under `features/aoi/state`.
 
@@ -351,7 +351,7 @@ Rules:
 
 ### Job cluster picker
 
-Status: In progress
+Status: Done
 
 Current flow:
 
@@ -381,7 +381,7 @@ Rules:
 
 ### Current MapView foundation
 
-Status: In progress
+Status: Done
 
 ArcGIS `Map` and `MapView` creation is isolated under `features/map/core`.
 
@@ -570,7 +570,7 @@ Do not finalize clustering implementation before real AOI geometry or representa
 
 ### Job geometry layer architecture
 
-Status: In progress
+Status: Done
 
 Job geometry is displayed through read-only client-side ArcGIS FeatureLayers.
 
@@ -601,7 +601,7 @@ Rules:
 
 ### Job selection flow
 
-Status: In progress
+Status: Done
 
 Current flow:
 
@@ -656,7 +656,7 @@ Rules:
 
 ### Map hover feedback
 
-Status: In progress
+Status: Done
 
 Current flow:
 
@@ -678,8 +678,9 @@ Rules:
 - Hover highlight must use a separate highlight handle from selected AOI, selected Job and related AOI highlights.
 - Hover hit testing should be limited to registered Job/AOI layers.
 - Hover layer views should be warmed and cached so normal pointer movement does not wait on layer-view resolution.
-- Hover hit testing should be frame-throttled and coalesce pointer moves so highlight does not wait until pointer movement stops.
-- Hover highlight should clear when the pointer leaves the map, when the user drags the map, when a map click begins or when the map controller is destroyed.
+- Hover hit testing should be frame-throttled and coalesce pointer moves.
+- Hover highlight should clear when the pointer leaves the map, when the window loses focus, when the document is hidden, when the user drags the map, when a map click begins or when the map controller is destroyed.
+- Stale asynchronous hit-test results must not re-apply hover highlight after the pointer has left the map.
 - Cursor styling is left to the default map cursor for now because the pointer cursor made hover feedback feel visually delayed.
 
 ### AOI popup action flow
@@ -724,7 +725,7 @@ When closing the Jobs panel, focus is moved back to the navbar Jobs control befo
 
 ### AOI-scoped Job map filtering
 
-Status: In progress
+Status: Done
 
 Current flow:
 
@@ -751,7 +752,7 @@ Rules:
 
 ### AOI popup Job summary content
 
-Status: In progress
+Status: Done
 
 Current flow:
 

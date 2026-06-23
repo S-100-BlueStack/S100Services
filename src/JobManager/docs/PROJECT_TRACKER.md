@@ -23,21 +23,40 @@ Job Manager should follow Product Manager patterns where they fit, but the domai
 
 ## 2. Current project status
 
-Status: Map foundation in progress
-
-The initial Vite project shell has been created and pushed. The app shell now uses a Product Manager-style navbar, map-first workspace, left-side Jobs overlay panel, centralized notices, mock Jobs service and an initial ArcGIS MapView foundation.
+Status: Map/list foundation in progress
 
 Current known baseline:
 
 - `JobManager` project exists under `src`.
 - Vite dev server works.
+- `npm run rdy` is the preferred local readiness command because it formats, lints, tests, builds and then starts the dev server.
 - Calcite stylesheet import uses `@esri/calcite-components/main.css`.
 - ArcGIS Maps SDK stylesheet import uses `@arcgis/core/assets/esri/themes/light/main.css`.
-- Package versions are intentionally aligned with Product Manager major versions.
-- Feature-based folder structure has been created from the start.
+- Package versions are aligned with the current Product Manager major-version baseline.
+- Feature-based folder structure is in place.
 - Jobs are loaded through a mock backend hidden behind services.
 - ArcGIS Map/MapView lifecycle is isolated under `features/map/core`.
-- AOI Feature Service configuration and AOI frontend model skeletons exist, but real AOI field mapping is not confirmed.
+- AOIs are displayed through an ArcGIS FeatureLayer from runtime configuration.
+- Current AOI field mapping uses the test Feature Service and is not final backend contract.
+- Jobs are displayed on the map through read-only client-side point and polygon FeatureLayers.
+- Jobs panel starts closed and can be opened from the navbar, AOI popup flow or Job popup flow.
+- Shared Job filters affect both the Jobs panel and map Job layers.
+- Done Jobs are hidden by default and can be shown with the explicit `Done` status filter.
+- AOI popup content shows related Job summary counts.
+- AOI `Show related Jobs` opens the Jobs panel, highlights the selected AOI and scopes map Job layers to related Jobs.
+- Selecting a Job highlights the Job geometry and related AOIs.
+- Job point clustering is implemented with count, priority pie and priority group modes.
+- Job cluster picker is implemented for point clusters.
+- Hover feedback supports Jobs and AOIs and clears reliably when the pointer leaves the map.
+
+Current known limitations:
+
+- AOI popup summary counts do not live-refresh while the popup is already open. Reopening the AOI popup refreshes counts.
+- AOI renderer color updates can lag briefly after filter changes because relation summaries and renderer enrichment are rebuilt asynchronously.
+- AOI clustering or AOI cluster-like overview is still deferred until real AOI geometry density and shape are confirmed.
+- Job polygon clustering is deferred because centroid-based clustering could hide real polygon footprint.
+- Theme/dark mode foundation is still not implemented.
+- Manual refresh across map layers, Jobs panel and selected state is still not implemented.
 
 ## 3. Product principles
 
@@ -734,9 +753,11 @@ Status: Done
 
 Job Manager should use Calcite and Calcite Components where they fit the UI need. When the project actively chooses not to use Calcite for a UI element where a relevant Calcite component was considered, the decision must be logged in `docs/CALCITE_USAGE_LOG.md` with the reason and any feedback that may be useful to Esri.
 
-ALCITE_USAGE_LOG.md` with the reason and any feedback that may be useful to Esri.
-
 Normal semantic HTML used for layout and document structure is not considered a Calcite opt-out.
+
+Rationale:
+
+This keeps UI decisions explicit, makes Product Manager alignment easier to review and preserves feedback that may be useful when Calcite components do not fit a specific app-shell need.
 
 ## 8.13 Use native navbar panel toggle when Calcite button styling does not fit
 
@@ -1215,38 +1236,6 @@ Known limitation:
 
 AOI renderer color updates can lag after filter reset because relation summaries and renderer enrichment are rebuilt asynchronously. Keep this documented as a later optimization unless it becomes disruptive.
 
-## Architecture review update
-
-Status: Proposed
-
-Before adding the next feature, reduce `src/app/createApp.js` responsibility by extracting app-shell UI composition.
-
-Decision:
-
-- Keep Job filter rules and filter state under `features/jobs`.
-- Keep Job point clustering settings under `features/map`.
-- Keep ArcGIS layer filtering and clustering application under `features/map`.
-- Move navbar template loading, filter popover UI, clustering controls and related UI sync into `src/app/ui`.
-- Keep `createApp.js` focused on app composition, store creation, high-level feature wiring and lifecycle cleanup.
-
-Rationale:
-
-`createApp.js` currently mixes app composition with detailed navbar/filter/clustering DOM construction. Extracting this now keeps the next feature work simpler without changing domain ownership or behavior.
-
-Suggested task:
-
-| ID          | Task                                                                      |      Status | Notes                                                                                                     |
-| ----------- | ------------------------------------------------------------------------- | ----------: | --------------------------------------------------------------------------------------------------------- |
-| JM-ARCH-001 | Extract navbar/filter/clustering UI from `createApp.js` into `src/app/ui` | Not started | Preserve current behavior; no feature changes.                                                            |
-| JM-ARCH-002 | Extract Jobs overlay DOM construction from `createApp.js`                 | Not started | Keep Jobs list behavior owned by `features/jobs/ui/jobList.js`.                                           |
-| JM-ARCH-003 | Extract map workspace DOM construction from `createApp.js`                | Not started | Keep ArcGIS lifecycle owned by `features/map/core`.                                                       |
-| JM-ARCH-004 | Update tracker statuses for shared Job filters and Job point clustering   | Not started | Phase 8 and Phase 9 currently lag behind implemented behavior.                                            |
-| JM-ARCH-005 | Clean up Calcite usage log inconsistencies                                | Not started | Remove duplicate heading and verify whether the Jobs navbar control is native button or `calcite-button`. |
-
-Known limitation:
-
-AOI renderer color updates can lag after filter reset because relation summaries and renderer enrichment are rebuilt asynchronously. Keep this documented as a later optimization unless it becomes disruptive.
-
 ## 8.40 Add AOI popup Job summary content
 
 Status: Done
@@ -1639,21 +1628,21 @@ Make AOI/Job relations available without coupling UI to relation source.
 
 Tasks:
 
-| ID      | Task                                  |      Status | Notes                                                                                                              |
-| ------- | ------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------ |
-| JM-0501 | Define relation model                 |        Done | Added relation model helpers with `jobId`, `aoiIds` and `source`.                                                  |
-| JM-0502 | Implement mock relation lookup        | In progress | Added relation derivation from Jobs using `relatedAoiIds`. Map renderer consumes summaries as best-effort data.    |
-| JM-0503 | Implement AOI summary derivation      |        Done | Added total, active, high-priority and active high-priority Job summary derivation per AOI.                        |
-| JM-0504 | Implement Job related AOI lookup      | In progress | Added helper to resolve AOIs for a Job from relation data. Needs UI/map selection integration later.               |
-| JM-0505 | Implement AOI related Jobs lookup     | In progress | Added helper to resolve Jobs for an AOI from relation data. Needs popup/panel integration later.                   |
-| JM-0506 | Document backend relation assumptions | In progress | Relation implementation uses source markers so mock, frontend geometry and backend relations can be swapped later. |
+| ID      | Task                                  | Status | Notes                                                                                                                      |
+| ------- | ------------------------------------- | -----: | -------------------------------------------------------------------------------------------------------------------------- |
+| JM-0501 | Define relation model                 |   Done | Added relation model helpers with `jobId`, `aoiIds` and `source`.                                                          |
+| JM-0502 | Implement mock relation lookup        |   Done | Relations are derived from normalized Jobs using `relatedAoiIds`.                                                          |
+| JM-0503 | Implement AOI summary derivation      |   Done | Added total, active, high-priority and active high-priority Job summary derivation per AOI.                                |
+| JM-0504 | Implement Job related AOI lookup      |   Done | Relation helpers support Job-to-AOI lookup. Selected Job map highlight currently uses related AOI ids carried on Job data. |
+| JM-0505 | Implement AOI related Jobs lookup     |   Done | Jobs panel and AOI-scoped map filtering can resolve Jobs related to a selected AOI.                                        |
+| JM-0506 | Document backend relation assumptions |   Done | Relation implementation uses source markers so mock, frontend geometry and backend relations can be swapped later.         |
 
 Exit criteria:
 
-- AOIs can show related Job counts
-- Jobs can show related AOIs
-- relation source is abstracted
-- UI does not care whether relations are mocked or backend-provided
+- AOIs can show related Job counts.
+- Jobs can show related AOIs.
+- Relation source is abstracted.
+- UI does not care whether relations are mocked, frontend-derived or backend-provided.
 
 ## Phase 6 - Map foundation
 
@@ -1663,22 +1652,23 @@ Create the ArcGIS map and layer architecture.
 
 Tasks:
 
-| ID      | Task                                    |      Status | Notes                                                                                                                                     |
-| ------- | --------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-0601 | Implement ArcGIS Map/MapView creation   |        Done | Added isolated ArcGIS Map/MapView creation under `features/map/core`.                                                                     |
-| JM-0602 | Add map container to app shell          |        Done | Replaced the map placeholder with a real MapView container while preserving the overlay Jobs panel layout.                                |
-| JM-0603 | Add AOI layer creation                  | In progress | Added AOI `FeatureLayer` creation from configured service URL and connected popup/outFields to centralized AOI field config.              |
-| JM-0604 | Add AOI renderer foundation             | In progress | Added neutral AOI renderer and best-effort Job summary renderer support using relation summaries matched by AOI id.                       |
-| JM-0605 | Add map loading/error state integration | In progress | Added initial loading, warning and error status surface for the map. Renderer and Job layer enrichment failures do not block map loading. |
-| JM-0606 | Add basic view cleanup                  |        Done | Added MapView cleanup through the app lifecycle destroy flow.                                                                             |
-| JM-0607 | Add read-only Job geometry layers       | In progress | Added client-side point and polygon FeatureLayers populated from Job service geometry. Selection/highlight is deferred.                   |
+| ID      | Task                                    | Status | Notes                                                                                                                                |
+| ------- | --------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------------------------------ |
+| JM-0601 | Implement ArcGIS Map/MapView creation   |   Done | Added isolated ArcGIS Map/MapView creation under `features/map/core`.                                                                |
+| JM-0602 | Add map container to app shell          |   Done | Replaced the map placeholder with a real MapView container while preserving the overlay Jobs panel layout.                           |
+| JM-0603 | Add AOI layer creation                  |   Done | Added AOI `FeatureLayer` creation from configured service URL and connected popup/outFields/actions to centralized AOI field config. |
+| JM-0604 | Add AOI renderer foundation             |   Done | Added neutral AOI renderer and best-effort Job summary renderer support using relation summaries matched by AOI id.                  |
+| JM-0605 | Add map loading/error state integration |   Done | Added loading, warning and error status surface for the map. Renderer and Job layer enrichment failures do not block map loading.    |
+| JM-0606 | Add basic view cleanup                  |   Done | Added MapView cleanup through the app lifecycle destroy flow.                                                                        |
+| JM-0607 | Add read-only Job geometry layers       |   Done | Added client-side point and polygon FeatureLayers populated from Job service geometry.                                               |
 
 Exit criteria:
 
 - map loads
-- AOIs are visible
+- AOIs are visible when a service URL is configured
 - map lifecycle is isolated
 - AOI layer creation is not mixed into app bootstrap
+- Job geometry layers are isolated under map/layers
 
 ## Phase 7 - Map selection, hover and popup
 
@@ -1712,24 +1702,27 @@ Create shared filtering used by map and list.
 
 Tasks:
 
-| ID      | Task                            |      Status | Notes                                        |
-| ------- | ------------------------------- | ----------: | -------------------------------------------- |
-| JM-0801 | Define filter state model       | Not started | Shared by map/list where possible.           |
-| JM-0802 | Implement Job filter predicates | Not started | Status, priority, deadline.                  |
-| JM-0803 | Implement AOI filter predicates | Not started | Has Jobs, active Jobs, high-priority Jobs.   |
-| JM-0804 | Add quick filter UI             | Not started | Keep labels English.                         |
-| JM-0805 | Apply filters to Job list       | Not started | Same state as map.                           |
-| JM-0806 | Apply filters to AOI map layer  | Not started | Use layer filters/effects where appropriate. |
-| JM-0807 | Add filter-by-selected-Job flow | Not started | Show only AOIs affected by selected Job.     |
+| ID      | Task                             |      Status | Notes                                                                                                              |
+| ------- | -------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------ |
+| JM-0801 | Define filter state model        |        Done | Job filter state lives in `features/jobs/state/jobFilterStore.js`.                                                 |
+| JM-0802 | Implement Job filter predicates  |        Done | Job filter predicates and summaries live in `features/jobs/domain/jobFilters.js`.                                  |
+| JM-0803 | Implement AOI filter predicates  | In progress | AOI renderer summaries follow Job filters. Dedicated AOI layer filtering/effects are still deferred.               |
+| JM-0804 | Add quick filter UI              |        Done | Navbar Filters popover exposes Job quick filters and explicit status/priority filters.                             |
+| JM-0805 | Apply filters to Job list        |        Done | Jobs panel consumes shared Job filter state.                                                                       |
+| JM-0806 | Apply filters to AOI map layer   | In progress | AOI renderer severity uses filtered relation snapshots. Direct AOI layer filtering is deferred.                    |
+| JM-0807 | Add filter-by-selected-Job flow  | In progress | Selecting a Job highlights related AOIs. Persistent AOI layer filtering for selected Job remains deferred.         |
+| JM-0808 | Apply filters to Job map layers  |        Done | Map Job point, polygon and priority point layers use shared Job filter definition expressions.                     |
+| JM-0809 | Add AOI-scoped Job map filtering |        Done | AOI `Show related Jobs` scopes map Job layers to Jobs related to the selected AOI while preserving active filters. |
 
 Exit criteria:
 
 - quick filters work
-- map and list filtering are consistent
-- selected Job can filter AOIs
+- Job map and list filtering are consistent
+- selected AOI can scope related Jobs in both list and map
 - empty states are clear
+- AOI-specific filtering is documented as a later step where still deferred
 
-## Phase 9 - Clustering or cluster-like AOI overview
+## Phase 9 - Clustering and geographic overview
 
 Goal:
 
@@ -1737,39 +1730,42 @@ Implement geographic overview without misleading AOI geometry.
 
 Tasks:
 
-| ID      | Task                                       |      Status | Notes                                                       |
-| ------- | ------------------------------------------ | ----------: | ----------------------------------------------------------- |
-| JM-0901 | Inspect real AOI geometry characteristics  |     Blocked | Requires actual Feature Service or sample data.             |
-| JM-0902 | Decide cluster strategy                    | Not started | Direct polygon clustering vs derived representative points. |
-| JM-0903 | Implement cluster layer/config             | Not started | Keep isolated in `features/map/layers`.                     |
-| JM-0904 | Add cluster labels                         | Not started | Should communicate meaningful count.                        |
-| JM-0905 | Add cluster popup/summary if useful        | Not started | Avoid overcomplication.                                     |
-| JM-0906 | Disable/change clustering at detailed zoom | Not started | Prevent misleading detailed inspection.                     |
-| JM-0907 | Document clustering decision               | Not started | Explain why chosen approach is correct for AOI data.        |
+| ID      | Task                                       |      Status | Notes                                                                                                     |
+| ------- | ------------------------------------------ | ----------: | --------------------------------------------------------------------------------------------------------- |
+| JM-0901 | Inspect real AOI geometry characteristics  |     Blocked | Requires actual Feature Service or representative sample data.                                            |
+| JM-0902 | Decide AOI cluster strategy                |     Blocked | Direct polygon clustering vs derived representative points depends on real AOI geometry.                  |
+| JM-0903 | Implement Job point cluster layer/config   |        Done | Job point clustering is implemented through ArcGIS FeatureLayer `featureReduction`.                       |
+| JM-0904 | Add Job cluster labels                     |        Done | Job point cluster labels show cluster count.                                                              |
+| JM-0905 | Add Job cluster popup/picker               |        Done | Job point clusters open a compact picker that lists cluster member Jobs and opens the selected Job popup. |
+| JM-0906 | Disable/change clustering at detailed zoom | Not started | Deferred until clustering behavior has been tested with real AOI and Job density.                         |
+| JM-0907 | Document clustering decision               | In progress | Job point clustering is documented. AOI clustering decision remains blocked by real geometry.             |
+| JM-0908 | Add Job cluster UI settings                |        Done | Navbar clustering controls support Off, Low, Medium and High presets.                                     |
+| JM-0909 | Add priority-aware Job clustering modes    |        Done | Count, priority pie and priority group modes are implemented.                                             |
 
 Exit criteria:
 
-- users can identify dense Job/AOI areas
-- clustering does not hide detailed AOI inspection
-- polygon caveats are documented
+- users can identify dense Job areas
+- Job clustering does not hide polygon Job footprints
+- AOI clustering remains explicitly deferred until geometry is understood
 - cluster implementation is isolated
 
 ## Phase 10 - Refresh, resilience and UX hardening
 
 Goal:
 
-Make the app resilient to realistic loading and mutation scenarios.
+Make the app resilient to realistic loading, mutation and refresh scenarios.
 
 Tasks:
 
-| ID      | Task                                       |      Status | Notes                             |
-| ------- | ------------------------------------------ | ----------: | --------------------------------- |
-| JM-1001 | Add manual refresh flow                    | Not started | Preserve filters where practical. |
-| JM-1002 | Add silent refresh plan                    | Not started | Implement only if needed early.   |
-| JM-1003 | Preserve selected AOI/Job across refresh   | Not started | Best effort.                      |
-| JM-1004 | Add mutation conflict handling placeholder | Not started | Backend future.                   |
-| JM-1005 | Add retry-friendly error states            | Not started | User should know what failed.     |
-| JM-1006 | Review loading states across app           | Not started | No unexplained blank states.      |
+| ID      | Task                                         |      Status | Notes                                                                                                    |
+| ------- | -------------------------------------------- | ----------: | -------------------------------------------------------------------------------------------------------- |
+| JM-1001 | Add manual refresh flow                      | Not started | Preserve filters, selected AOI/Job and map layer state where practical.                                  |
+| JM-1002 | Add silent refresh plan                      | Not started | Implement only if needed early.                                                                          |
+| JM-1003 | Preserve selected AOI/Job across refresh     | Not started | Best effort; depends on manual refresh design.                                                           |
+| JM-1004 | Add mutation conflict handling placeholder   | Not started | Backend future.                                                                                          |
+| JM-1005 | Add retry-friendly error states              | Not started | User should know what failed and what can be retried.                                                    |
+| JM-1006 | Review loading states across app             | In progress | Map, Jobs panel, Job mutations and relation-derived UI have initial states. Full refresh review remains. |
+| JM-1007 | Polish hover cleanup and initial panel state |        Done | Hover clears on map exit/stale hit-test, and Jobs panel starts closed on app load.                       |
 
 Exit criteria:
 
@@ -1786,14 +1782,14 @@ Prepare for backend integration and reduce future rework.
 
 Tasks:
 
-| ID      | Task                                          |      Status | Notes                                                |
-| ------- | --------------------------------------------- | ----------: | ---------------------------------------------------- |
-| JM-1101 | Create `docs/BACKEND_CONTRACTS.md`            | Not started | Draft expected endpoints and uncertainty.            |
-| JM-1102 | Create `docs/ARCHITECTURE.md`                 | Not started | Document folder boundaries and data flow.            |
-| JM-1103 | Document mock backend behavior                | Not started | Include failure/cyclic behavior.                     |
-| JM-1104 | Document AOI Feature Service requirements     | Not started | Required fields, geometry type and auth assumptions. |
-| JM-1105 | Document clustering decision                  | Not started | Especially if representative points are used.        |
-| JM-1106 | Review for secrets before backend config work | Not started | Ensure `.env.example` only has placeholders.         |
+| ID      | Task                                          |      Status | Notes                                                                                                     |
+| ------- | --------------------------------------------- | ----------: | --------------------------------------------------------------------------------------------------------- |
+| JM-1101 | Create `docs/BACKEND_CONTRACTS.md`            |        Done | Draft backend assumptions, frontend models, AOI fields and open questions are documented.                 |
+| JM-1102 | Create `docs/ARCHITECTURE.md`                 |        Done | Folder ownership, state rules, service rules and map flows are documented.                                |
+| JM-1103 | Document mock backend behavior                | In progress | Core mock behavior is documented in tracker/backend notes. Dedicated mock section can improve this later. |
+| JM-1104 | Document AOI Feature Service requirements     | In progress | Current test service fields are documented. Final service fields remain open.                             |
+| JM-1105 | Document clustering decision                  | In progress | Job point clustering is documented. AOI clustering remains blocked by real geometry.                      |
+| JM-1106 | Review for secrets before backend config work | Not started | Ensure `.env.example` only has placeholders before backend/auth work.                                     |
 
 Exit criteria:
 
@@ -1833,14 +1829,14 @@ Clustering should not be implemented too early because the correct approach depe
 
 | ID     | Question                                                          |      Status | Notes                                                                                                                                 |
 | ------ | ----------------------------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------------------------- |
-| OQ-001 | What is the actual AOI geometry type?                             |        Open | Test service exposes a geometry field, but final geometry type and density must still be verified against the real service.           |
-| OQ-002 | Are AOIs small/uniform enough for direct polygon clustering?      |        Open | Important for cluster strategy.                                                                                                       |
+| OQ-001 | What is the actual AOI geometry type?                             |        Open | Test service exposes geometry, but final geometry type and density must still be verified against the real service.                   |
+| OQ-002 | Are AOIs small/uniform enough for direct polygon clustering?      |        Open | Important for AOI clustering strategy. Job point clustering is already implemented separately.                                        |
 | OQ-003 | Which AOI fields are stable and user-friendly?                    | In progress | Test service uses `GlobalID` as provisional id and `PRODUCTNAME` as provisional display name. Final service fields are not confirmed. |
 | OQ-004 | Will AOI Feature Service require authentication?                  |        Open | Must avoid committing secrets. Current test integration does not settle final auth requirements.                                      |
 | OQ-005 | Will backend return AOI/Job relations directly?                   |        Open | Frontend should remain flexible.                                                                                                      |
 | OQ-006 | Will backend calculate spatial intersections?                     |        Open | Preferred for authoritative relation logic.                                                                                           |
 | OQ-007 | What counts as “due soon”?                                        |        Open | Suggested default: deadline within 7 days.                                                                                            |
-| OQ-008 | Should `Done` Jobs remain visible by default?                     |        Open | Suggested: visible in list, filtered out by “active Jobs” quick filter.                                                               |
+| OQ-008 | Should `Done` Jobs remain visible by default?                     |    Resolved | Done Jobs are hidden by default. The explicit `Done` status filter reveals them.                                                      |
 | OQ-009 | Should cyclic mock Job creation be deterministic in dev?          |        Open | A seed option may make testing easier.                                                                                                |
 | OQ-010 | Should the app use Product Manager’s server/SSPI setup initially? |        Open | Only if needed for auth or deployment.                                                                                                |
 | OQ-011 | Should users be able to edit Job deadlines in the frontend?       |        Open | Display deadline now, but defer editing until workflow/backend ownership is confirmed.                                                |
@@ -1900,25 +1896,40 @@ Common commands:
 
 ```powershell
 npm install
+npm run format:check
+npm run lint
+npm run test
 npm run build
-npm run dev
 ```
 
-Before suggesting commands, verify `package.json` if scripts may have changed.
+Preferred full local readiness command:
+
+```powershell
+npm run rdy
+```
+
+`npm run rdy` formats, lints, tests, builds and starts the dev server.
+
+Use `npm run check` when the dev server should not be started.
 
 Manual validation flows:
 
 - app loads without console errors
+- Jobs panel starts closed on app load
+- Jobs panel opens from navbar
 - Job list shows loading, data, empty and error states
 - Job status can be changed
 - failed Job update shows notice
 - completing a Job can trigger mock cyclic Job creation
 - AOIs load from configured source
 - AOI popup shows related Job summary
-- opening related Jobs from AOI works
-- selecting a Job can filter/focus related AOIs
-- quick filters affect map/list consistently
-- dark/light mode remains readable
+- opening related Jobs from AOI scopes both Jobs panel and map Job layers
+- selecting a Job opens the Jobs panel and highlights related AOIs
+- quick filters affect Job list and Job map layers consistently
+- Job point clustering works in Count, Priority pie and Priority groups modes
+- Job cluster picker opens normal Job popup for selected Job
+- hover highlight clears when the pointer leaves the map
+- dark/light mode remains readable when theme work is introduced
 - no secrets are present in committed files
 
 ## 17. Definition of done for implementation tasks
@@ -1957,16 +1968,19 @@ Do not duplicate content across documents. Link or summarize instead.
 
 Recommended next tasks:
 
-| ID          | Task                                                                   |      Status | Notes                                                                                                 |
-| ----------- | ---------------------------------------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------- |
-| JM-NEXT-001 | Add `docs/BACKEND_CONTRACTS.md` skeleton                               |        Done | Initial backend assumptions and open questions documented.                                            |
-| JM-NEXT-002 | Add `docs/ARCHITECTURE.md` skeleton                                    |        Done | Initial architecture boundaries and data flow documented.                                             |
-| JM-NEXT-003 | Implement app shell layout                                             |        Done | Product Manager-style navbar, map-first workspace, Jobs panel and notices are implemented.            |
-| JM-NEXT-004 | Implement notice service foundation                                    |        Done | Notice service and UI container are implemented.                                                      |
-| JM-NEXT-005 | Implement mock Jobs service                                            |        Done | Mock Jobs service supports loading, failures, status mutation and cyclic mock Job creation.           |
-| JM-NEXT-006 | Connect AOI Feature Service loading                                    | Not started | Replace AOI service skeleton with real Feature Service query once URL, fields and auth are confirmed. |
-| JM-NEXT-007 | Add AOI/Job relation service                                           | Not started | Use mock `relatedAoiIds` first, while keeping source abstraction ready for backend relations.         |
-| JM-NEXT-008 | Add AOI renderer and popup foundation                                  | Not started | Requires AOI fields and relation summaries.                                                           |
-| JM-NEXT-009 | Extract navbar/filter/clustering UI from `createApp.js`                |        Done | App-shell navbar UI now lives in `src/app/ui/createNavbarController.js`.                              |
-| JM-NEXT-010 | Extract Jobs overlay and map workspace DOM helpers from `createApp.js` |        Done | Jobs overlay and map workspace DOM helpers now live under `src/app/ui`.                               |
-| JM-NEXT-011 | Clean up tracker/docs status drift after filters and clustering        | Not started | Phase 8/9 statuses lag behind the current implementation.                                             |
+| ID          | Task                                                     |      Status | Notes                                                                                                   |
+| ----------- | -------------------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------- |
+| JM-NEXT-001 | Add `docs/BACKEND_CONTRACTS.md` skeleton                 |        Done | Initial backend assumptions and open questions documented.                                              |
+| JM-NEXT-002 | Add `docs/ARCHITECTURE.md` skeleton                      |        Done | Initial architecture boundaries and data flow documented.                                               |
+| JM-NEXT-003 | Implement app shell layout                               |        Done | Product Manager-style navbar, map-first workspace, Jobs panel and notices are implemented.              |
+| JM-NEXT-004 | Implement notice service foundation                      |        Done | Notice service and UI container are implemented.                                                        |
+| JM-NEXT-005 | Implement mock Jobs service                              |        Done | Mock Jobs service supports loading, failures, status mutation and cyclic mock Job creation.             |
+| JM-NEXT-006 | Connect AOI Feature Service loading                      | In progress | AOI FeatureLayer is wired from runtime config. Dedicated AOI service querying remains deferred.         |
+| JM-NEXT-007 | Add AOI/Job relation service                             |        Done | Mock `relatedAoiIds` are exposed through relation helpers and snapshots.                                |
+| JM-NEXT-008 | Add AOI renderer and popup foundation                    |        Done | AOI renderer and popup related Job summary are implemented.                                             |
+| JM-NEXT-009 | Extract navbar/filter/clustering UI from `createApp.js`  |        Done | App-shell navbar UI now lives in `src/app/ui/createNavbarController.js`.                                |
+| JM-NEXT-010 | Extract Jobs overlay and map workspace DOM helpers       |        Done | Jobs overlay and map workspace DOM helpers now live under `src/app/ui`.                                 |
+| JM-NEXT-011 | Clean up tracker/docs status drift                       |        Done | Phase 8/9 and latest map/list interaction statuses have been aligned with implementation.               |
+| JM-NEXT-012 | Add manual refresh flow                                  | Not started | Recommended next feature; preserve filters, AOI scope, selected Job and map layer state where possible. |
+| JM-NEXT-013 | Add theme foundation / dark mode                         | Not started | Follow Product Manager pattern after current implementation is verified.                                |
+| JM-NEXT-014 | Review final AOI Feature Service field/auth requirements | Not started | Needed before hardening AOI service, AOI clustering and backend integration.                            |

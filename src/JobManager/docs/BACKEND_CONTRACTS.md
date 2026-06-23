@@ -109,7 +109,7 @@ High
 
 Status: In progress
 
-The frontend now displays mock Job geometry on the map through read-only client-side FeatureLayers.
+The frontend displays mock Job geometry on the map through read-only client-side FeatureLayers.
 
 Current behavior:
 
@@ -118,13 +118,16 @@ Current behavior:
 - Job map attributes are derived from the normalized frontend Job model
 - Job layer data is loaded through `jobs/services`
 - Job geometry popup shows basic Job metadata
+- Job popup action can open Job details in the Jobs panel
+- selecting a Job can highlight the selected Job geometry and related AOIs
+- Job point clustering is implemented for geographic overview
+- Job cluster picker can open the normal Job feature popup for a cluster member Job
 
 Current limitations:
 
 - Job geometry layers use a separate service snapshot from the Jobs panel
-- selecting a Job on the map is not implemented yet
-- highlighting related AOIs from a selected Job is not implemented yet
 - editing Job geometry is not supported
+- Job polygon clustering is not supported
 - final backend geometry ownership is not confirmed
 
 Backend assumptions remain unchanged:
@@ -336,7 +339,7 @@ No option is final yet.
 
 Status: In progress
 
-The frontend now has a relation foundation under `features/relations`.
+The frontend has a relation foundation under `features/relations`.
 
 Current behavior:
 
@@ -345,8 +348,10 @@ Current behavior:
 - mock relations are derived from normalized Job `relatedAoiIds`
 - AOI summaries can be derived from Jobs and relations
 - relation lookup supports both AOI-to-Jobs and Job-to-AOIs direction
-- map renderer can consume AOI summaries as best-effort data
+- map renderer consumes AOI summaries as best-effort data
 - Jobs panel can show Jobs scoped to a selected AOI using relation helpers
+- map Job layers can be scoped to Jobs related to a selected AOI
+- relation snapshots can apply current Job filters before summaries are built
 
 Current AOI summary fields:
 
