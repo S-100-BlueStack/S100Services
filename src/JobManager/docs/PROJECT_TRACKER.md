@@ -1267,6 +1267,29 @@ Rationale:
 
 Users can now inspect an AOI and see the operational Job signal before opening the Jobs panel. The implementation keeps relation source details behind the relation service and does not import mock Job data into popup UI.
 
+Known limitation:
+
+Open AOI popup summary counts do not live-refresh when Job filters change. Reopening the AOI popup refreshes the summary counts. This is acceptable for now because the map renderer and Jobs panel already update from the shared filters, and live popup refresh can be added later if it becomes important.
+
+## 8.41 Add selected AOI highlight from popup action
+
+Status: Done
+
+Selecting `Show related Jobs` from an AOI popup now highlights the selected AOI on the map.
+
+Current behavior:
+
+- AOI popup action still opens the Jobs panel scoped to the selected AOI.
+- Selected AOI state remains owned by `features/aoi/state`.
+- Visual AOI highlight remains owned by the map controller/layer highlight code.
+- Closing the Jobs panel clears selected AOI highlight.
+- Reopening the normal Jobs list clears selected AOI highlight.
+- Selecting a Job clears selected AOI highlight before applying selected Job and related AOI highlights.
+
+Rationale:
+
+The AOI-to-Jobs workflow now gives immediate geographic feedback, so users can see which AOI the scoped Jobs panel refers to without relying only on popup/list context.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -1576,7 +1599,7 @@ Tasks:
 | ID      | Task                                  |      Status | Notes                                                                                                                                     |
 | ------- | ------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | JM-0701 | Add AOI hover feedback                | Not started | Follow Product Manager pattern if current code supports reuse.                                                                            |
-| JM-0702 | Add AOI selection feedback            | In progress | Added selected AOI state and AOI popup action flow. Visual map highlight is still deferred.                                               |
+| JM-0702 | Add AOI selection feedback            |        Done | `Show related Jobs` now stores selected AOI state, opens the scoped Jobs panel and highlights the selected AOI on the map.                |
 | JM-0703 | Add AOI popup shell                   | In progress | Added ArcGIS popup template using current test Feature Service metadata and a Show related Jobs action.                                   |
 | JM-0704 | Show related Job summary in popup     |        Done | AOI popup now shows related, active and high-priority active Job counts using relation summaries and current Job filters where available. |
 | JM-0705 | Add popup action to open related Jobs |        Done | AOI popup action opens the Jobs panel scoped to Jobs related to the selected AOI.                                                         |

@@ -135,6 +135,18 @@ export function createMapController({
     );
   }
 
+  function highlightAoiById(aoiId) {
+    const normalizedAoiId = normalizeOptionalString(aoiId);
+
+    if (!normalizedAoiId) {
+      clearAoiHighlight();
+
+      return Promise.resolve();
+    }
+
+    return aoiHighlightController?.highlightAoisByIds([normalizedAoiId]) ?? Promise.resolve();
+  }
+
   function clearAoiHighlight() {
     aoiHighlightController?.clearHighlight();
   }
@@ -257,6 +269,14 @@ export function createMapController({
       });
   }
 
+  function normalizeOptionalString(value) {
+    if (value === null || value === undefined) {
+      return "";
+    }
+
+    return String(value).trim();
+  }
+
   function setReadyStatus(hasAoiLayer) {
     if (hasAoiLayer) {
       setStatus({
@@ -303,6 +323,7 @@ export function createMapController({
     highlightJob,
     clearJobHighlight,
     highlightRelatedAoisForJob,
+    highlightAoiById,
     clearAoiHighlight,
     applyJobFilters,
     applyJobClusterSettings,

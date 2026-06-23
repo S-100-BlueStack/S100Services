@@ -63,7 +63,16 @@ export async function createApp(rootElement) {
       selectedJobStore.clearSelection();
       jobsPanel.clearSelectedJob();
       mapController.clearJobHighlight();
-      mapController.clearAoiHighlight();
+
+      void mapController.highlightAoiById(normalizedSelectedAoi.aoiId).catch((error) => {
+        mapController.clearAoiHighlight();
+
+        showErrorNotice({
+          title: "AOI highlight failed",
+          message: error.message,
+        });
+      });
+
       jobsPanel.showJobsForAoi(normalizedSelectedAoi);
       setPanelOpen(jobsPanel.element, navbar.jobsButton, true);
     },

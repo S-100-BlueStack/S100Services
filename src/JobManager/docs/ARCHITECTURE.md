@@ -634,6 +634,7 @@ AOI PopupTemplate action
   -> PopupViewModel trigger-action event
   -> app-level selected AOI callback
   -> selected AOI state
+  -> selected AOI highlight
   -> Jobs panel scoped to selected AOI
 ```
 
@@ -645,6 +646,9 @@ Rules:
 - Popup action handlers should not load mock Jobs directly.
 - Jobs panel filtering should use relation service/domain helpers.
 - App-level composition should wire map events to Jobs UI behavior.
+- Selecting `Show related Jobs` highlights the selected AOI on the map.
+- Selected AOI highlight is visual only; relation filtering remains owned by the Jobs panel/relation flow.
+- Closing the Jobs panel, reopening the normal Jobs list or selecting a Job clears the selected AOI highlight.
 - Temporary popup debug logging should not remain in production-ready code.
 
 Current action:
@@ -653,7 +657,7 @@ Current action:
 Show related Jobs
 ```
 
-The action opens the Jobs panel and scopes it to Jobs related to the selected AOI.
+The action opens the Jobs panel, scopes it to Jobs related to the selected AOI and highlights the selected AOI.
 
 Accessibility note:
 
