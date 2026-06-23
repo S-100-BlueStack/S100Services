@@ -63,6 +63,16 @@ The goal is to improve maintainability, reliability, and structure without chang
 | BE-004 | Timeline | Product history/global timeline data contract     | Blocked by backend | Should remain deferred until API/database contract is known.                                                          |
 | BE-005 | API      | Safe timeout policy for long-running operations   | Blocked by backend | Export and other long-running operations need async job/status semantics before frontend can enforce strict timeouts. |
 
+## Future implementation ideas
+
+## Future implementation ideas
+
+| ID     | Area            | Idea                                        | Status   | Notes                                                                                                                                                                                                                                                                                                                                  |
+| ------ | --------------- | ------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FI-001 | Dashboard       | Add operational activity dashboard          | Deferred | Add a dashboard that summarizes relevant Product Manager activity since yesterday, the last week, or another selected time range. The dashboard should provide a clear action/activity list, highlight important changes, and make it possible to access related reports such as IC-ENC reports directly from the summarized activity. |
+| FI-002 | Product history | Support multiple open history views         | Deferred | Add support for viewing multiple product histories at the same time. This could either extend the floating History panel model with multiple pinned panels, or introduce a dedicated History page similar to Analyze where users can compose, compare, and review several product histories together.                                  |
+| FI-003 | Analyze         | Show internal validation reports in Analyze | Deferred | Add internal validation reports to the Analyze page near the IC-ENC XML/report area. Users should be able to open multiple validation reports at the same time for comparison. The UI could use report tabs, side-by-side panels, or centered modal dialogs depending on the final report size and comparison workflow.                |
+
 ## Commit log
 
 | Date | Commit | Items | Notes |
