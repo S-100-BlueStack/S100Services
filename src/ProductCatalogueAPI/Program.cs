@@ -25,7 +25,7 @@ namespace ProductCatalogueAPI
         public static async Task Main(string[] args) {
             var development = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")?.Equals("Development", StringComparison.OrdinalIgnoreCase) == true;
             var serilogPath = Environment.GetEnvironmentVariable("serilog_path");
-            
+
             // Bootstrap logging
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Information()
@@ -104,7 +104,7 @@ namespace ProductCatalogueAPI
             builder.Services.AddCors(options => {
                 options.AddPolicy("AllowFrontend",
                     policy => {
-                        policy.WithOrigins(["http://localhost:5173", "https://localhost:5173"])
+                        policy.WithOrigins(["http://localhost:5173", "https://localhost:5173", "https://localhost:5174"])
                               .AllowAnyHeader()
                               .AllowCredentials()
                               .AllowAnyMethod();
