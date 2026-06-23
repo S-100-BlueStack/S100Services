@@ -632,9 +632,9 @@ Current flow:
 
 ```txt
 MapView pointer-move
-  -> map hitTest
+  -> frame-throttled hitTest against registered Job/AOI layers
   -> first supported Job or AOI graphic
-  -> matching FeatureLayerView highlight
+  -> cached FeatureLayerView highlight
   -> transient hover highlight
 ```
 
@@ -646,6 +646,9 @@ Rules:
 - Hovering an AOI must not update selected AOI state.
 - Hovering a Job must not update selected Job state.
 - Hover highlight must use a separate highlight handle from selected AOI, selected Job and related AOI highlights.
+- Hover hit testing should be limited to registered Job/AOI layers.
+- Hover layer views should be warmed and cached so normal pointer movement does not wait on layer-view resolution.
+- Hover hit testing should be frame-throttled and coalesce pointer moves so highlight does not wait until pointer movement stops.
 - Hover highlight should clear when the pointer leaves the map, when the user drags the map, when a map click begins or when the map controller is destroyed.
 - Cursor styling is left to the default map cursor for now because the pointer cursor made hover feedback feel visually delayed.
 

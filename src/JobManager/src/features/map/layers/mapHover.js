@@ -8,10 +8,12 @@ const HOVER_TARGET_TYPE = Object.freeze({
 
 export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
   const hoverLayerConfigs = createHoverLayerConfigs({ aoiLayer, jobLayers });
+  const hoverLayers = hoverLayerConfigs.map((layerConfig) => layerConfig.layer);
   const hoverLayerConfigById = new Map(
     hoverLayerConfigs.map((layerConfig) => [layerConfig.layer.id, layerConfig])
   );
-  const layerViewPromiseById = new Map();
+  const layerViews = new Map();
+  const layerViewPromises = new Map();
 
   let pointerMoveHandle = null;
   let dragHandle = null;
@@ -19,11 +21,12 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
   let abortController = null;
   let hoverHandle = null;
   let activeHoverKey = "";
-  let hoverRequestId = 0;
+  let pointerEvent = null;
+  let frameRequested = false;
   let isDestroyed = false;
 
   function start() {
-    if (!view || hoverLayerConfigs.length === 0) {
+    if (!view || hoverLayers.length === 0) {
       return;
     }
 
@@ -42,7 +45,8 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
 
   function destroy() {
     isDestroyed = true;
-    hoverRequestId += 1;
+    pointerEvent = null;
+    frameRequested = false;
 
     pointerMoveHandle?.remove();
     dragHandle?.remove();
@@ -55,34 +59,38 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
     abortController = null;
 
     clearHoverHandle();
+    layerViews.clear();
+    layerViewPromises.clear();
   }
 
   function handlePointerMove(event) {
-    const requestId = hoverRequestId + 1;
-    hoverRequestId = requestId;
+    pointerEvent = event;
 
-    void updateHoverFromPointer({
-      event,
-      requestId,
-    });
+    if (!frameRequested) {
+      frameRequested = true;
+      requestAnimationFrame(runHitTest);
+    }
   }
 
-  async function updateHoverFromPointer({ event, requestId }) {
-    if (isDestroyed || requestId !== hoverRequestId) {
+  async function runHitTest() {
+    frameRequested = false;
+
+    if (isDestroyed || !pointerEvent || hoverLayers.length === 0) {
       return;
     }
 
     try {
-      const hitTestResult = await view.hitTest(event);
-      const hoverTarget = getFirstHoverTarget(hitTestResult);
+      const hitTestResult = await view.hitTest(pointerEvent, {
+        include: hoverLayers,
+      });
+      const hoverTarget = getHoverTarget(hitTestResult);
 
-      if (isDestroyed || requestId !== hoverRequestId) {
+      if (isDestroyed) {
         return;
       }
 
       if (!hoverTarget) {
         clearHoverHandle();
-
         return;
       }
 
@@ -90,9 +98,11 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
         return;
       }
 
-      const layerView = await getLayerView(hoverTarget.layer);
+      const layerView = layerViews.get(hoverTarget.layer);
 
-      if (isDestroyed || requestId !== hoverRequestId) {
+      if (!layerView) {
+        clearHoverHandle();
+        warmLayerView(hoverTarget.layer);
         return;
       }
 
@@ -101,13 +111,23 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
       activeHoverKey = hoverTarget.key;
       hoverHandle = layerView.highlight(hoverTarget.graphic);
     } catch {
-      if (!isDestroyed && requestId === hoverRequestId) {
+      if (!isDestroyed) {
         clearHoverHandle();
       }
     }
   }
 
-  function getFirstHoverTarget(hitTestResult) {
+  function getHoverTarget(hitTestResult) {
+    const jobTarget = getFirstHoverTargetByType(hitTestResult, HOVER_TARGET_TYPE.JOB);
+
+    if (jobTarget) {
+      return jobTarget;
+    }
+
+    return getFirstHoverTargetByType(hitTestResult, HOVER_TARGET_TYPE.AOI);
+  }
+
+  function getFirstHoverTargetByType(hitTestResult, targetType) {
     const results = hitTestResult?.results ?? [];
 
     for (const result of results) {
@@ -120,7 +140,7 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
       const layer = result.layer ?? graphic.layer;
       const layerConfig = hoverLayerConfigById.get(layer?.id);
 
-      if (!layerConfig) {
+      if (!layerConfig || layerConfig.targetType !== targetType) {
         continue;
       }
 
@@ -145,30 +165,36 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
     return null;
   }
 
-  function getLayerView(layer) {
-    const layerId = layer?.id;
-
-    if (!layerId) {
-      return Promise.reject(new Error("Hover layer is missing an id."));
+  function warmLayerViews() {
+    for (const layer of hoverLayers) {
+      warmLayerView(layer);
     }
-
-    if (!layerViewPromiseById.has(layerId)) {
-      layerViewPromiseById.set(layerId, view.whenLayerView(layer));
-    }
-
-    return layerViewPromiseById.get(layerId);
   }
 
-  function warmLayerViews() {
-    for (const layerConfig of hoverLayerConfigs) {
-      void getLayerView(layerConfig.layer).catch(() => {
-        layerViewPromiseById.delete(layerConfig.layer.id);
-      });
+  function warmLayerView(layer) {
+    if (!layer || layerViews.has(layer) || layerViewPromises.has(layer)) {
+      return;
     }
+
+    const layerViewPromise = view
+      .whenLayerView(layer)
+      .then((layerView) => {
+        if (!isDestroyed) {
+          layerViews.set(layer, layerView);
+        }
+
+        return layerView;
+      })
+      .catch((error) => {
+        layerViewPromises.delete(layer);
+        throw error;
+      });
+
+    layerViewPromises.set(layer, layerViewPromise);
   }
 
   function clearHover() {
-    hoverRequestId += 1;
+    pointerEvent = null;
     clearHoverHandle();
   }
 

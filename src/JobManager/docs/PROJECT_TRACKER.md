@@ -1298,10 +1298,12 @@ Map hover feedback now supports both Job geometry and AOI polygons.
 
 Current behavior:
 
-- Pointer movement performs a map hit test and uses the first supported Job or AOI result.
+- Pointer movement performs frame-throttled map hit testing against registered Job/AOI layers.
 - Job geometry has hover priority over AOIs below it.
 - Hovered Jobs get a transient ArcGIS layer-view highlight.
 - Hovered AOIs get a transient ArcGIS layer-view highlight.
+- Hover layer views are warmed and cached to avoid resolving layer views during normal pointer movement.
+- Hover hit testing coalesces pointer movement instead of cancelling every in-flight hit test.
 - Hover highlight clears when the pointer leaves the map.
 - Hover highlight clears when the user drags the map.
 - Hover highlight clears when a map click begins, so selected highlight can take over.
@@ -1312,6 +1314,8 @@ Current behavior:
 Rationale:
 
 The first AOI-only hover implementation worked, but AOI-only hit testing could highlight an AOI underneath a Job geometry. The hover controller now respects map hit-test order and treats Jobs as the top-priority interactive target while keeping hover separate from selection state.
+
+The hover controller follows the Product Manager hover pattern more closely by caching layer views, limiting hit testing to relevant layers and frame-throttling pointer movement. This avoids the delayed feel caused by invalidating each in-flight hit test while the pointer is still moving.
 
 ## 9. Backend assumptions
 
