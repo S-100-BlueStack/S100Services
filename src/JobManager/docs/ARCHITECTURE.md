@@ -349,6 +349,36 @@ Rules:
 - Cluster configuration belongs in `features/map`, not in Jobs UI or relation services.
 - Cluster behavior must continue to respect shared Job layer filters.
 
+### Job cluster picker
+
+Status: In progress
+
+Current flow:
+
+```txt
+Job point cluster popup
+  -> cluster custom popup content
+  -> FeatureLayerView query using aggregateIds
+  -> cluster member Job features
+  -> compact Job picker
+  -> selected picker item opens the normal Job feature popup
+  -> normal Job popup can trigger Show Job details
+```
+
+Rules:
+
+- Job cluster picker is owned by `features/map/popups/jobClusterPopupContent.js`.
+- Cluster configuration remains owned by `features/map/layers/jobClustering.js`.
+- Cluster picker must use ArcGIS cluster aggregate queries, not mock Job data.
+- Cluster picker must open the normal Job feature popup when a Job is selected.
+- Cluster picker must not bypass the normal `Show Job details` popup action.
+- Cluster picker popup content should stay compact and Product Manager-like.
+- Cluster picker should not include internal headers, explanatory text, chart content or duplicated actions.
+- Default popup actions such as `Zoom to` and `Browse features` should stay disabled.
+- Cluster picker applies only to Job point clusters.
+- Job polygon Jobs remain unclustered.
+- Existing Job filters and AOI-scoped Job map filtering must continue to affect cluster membership through layer filtering.
+
 ### Current MapView foundation
 
 Status: In progress

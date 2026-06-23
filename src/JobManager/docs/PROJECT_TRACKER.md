@@ -1340,6 +1340,27 @@ Rationale:
 
 The AOI-to-Jobs workflow should make related Jobs visible on both the list and the map. Filtering the Job layers is clearer than adding another highlight color because clusters and visible counts then represent only the scoped Job set.
 
+## 8.44 Add Job cluster picker
+
+Status: Done
+
+Job point cluster popups now include a compact picker for the Jobs represented by the cluster.
+
+Current behavior:
+
+- Clicking a Job point cluster opens a compact Job picker.
+- The picker queries the clustered layer view for member Jobs using the cluster aggregate id.
+- Picker items show Job title, status, priority, deadline and affected AOI count.
+- Selecting a Job from the picker opens the normal Job feature popup.
+- The normal Job feature popup remains responsible for `Show Job details`.
+- Count, priority pie and priority group clustering modes can use the picker.
+- Existing Job filters and AOI-scoped Job map filtering continue to determine which Jobs are included in clusters.
+- Default popup actions such as `Zoom to` and `Browse features` are disabled for the map popup.
+
+Rationale:
+
+The picker should behave like the Product Manager overlap picker: show the underlying features first, then open the selected feature popup. This keeps cluster interaction compact and avoids sending users directly into the Jobs panel before they have chosen a specific Job from the map.
+
 ## 9. Backend assumptions
 
 Status: Draft

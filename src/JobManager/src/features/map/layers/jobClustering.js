@@ -5,9 +5,10 @@ import {
   getJobClusterPresetConfig,
   normalizeJobClusterSettings,
 } from "../domain/jobClusterSettings.js";
+import { createJobClusterPickerContent } from "../popups/jobClusterPopupContent.js";
 import { createJobPointRenderer, createJobPriorityPointRenderer } from "./jobRenderer.js";
 
-export function createCountJobPointFeatureReduction(settings) {
+export function createCountJobPointFeatureReduction(settings, clusterPopupOptions) {
   const presetConfig = getJobClusterPresetConfig(settings);
 
   if (!presetConfig) {
@@ -20,17 +21,21 @@ export function createCountJobPointFeatureReduction(settings) {
     clusterMinSize: presetConfig.clusterMinSize,
     clusterMaxSize: presetConfig.clusterMaxSize,
     labelingInfo: [createClusterCountLabel()],
-    popupTemplate: createJobClusterPopupTemplate(),
+    popupTemplate: createJobClusterPopupTemplate(clusterPopupOptions),
   });
 }
 
 export async function applyJobPointClustering({
   jobLayers,
   settings,
+  view,
   shouldApply = () => true,
 } = {}) {
   const normalizedSettings = normalizeJobClusterSettings(settings);
   const pointLayer = jobLayers?.pointLayer;
+  const clusterPopupOptions = {
+    view,
+  };
 
   if (!pointLayer) {
     return {
@@ -50,7 +55,7 @@ export async function applyJobPointClustering({
   }
 
   if (normalizedSettings.style === JOB_CLUSTER_STYLE.PRIORITY_GROUPS) {
-    applyPriorityGroupClustering(jobLayers, normalizedSettings);
+    applyPriorityGroupClustering(jobLayers, normalizedSettings, clusterPopupOptions);
     return {
       ok: true,
       applied: true,
@@ -65,6 +70,7 @@ export async function applyJobPointClustering({
     const featureReduction = await createPriorityPieJobPointFeatureReduction({
       layer: pointLayer,
       settings: normalizedSettings,
+      clusterPopupOptions,
     });
 
     if (!shouldApply()) {
@@ -86,7 +92,10 @@ export async function applyJobPointClustering({
   }
 
   pointLayer.renderer = createJobPointRenderer();
-  pointLayer.featureReduction = createCountJobPointFeatureReduction(normalizedSettings);
+  pointLayer.featureReduction = createCountJobPointFeatureReduction(
+    normalizedSettings,
+    clusterPopupOptions
+  );
 
   return {
     ok: true,
@@ -95,10 +104,16 @@ export async function applyJobPointClustering({
   };
 }
 
-export function createJobClusterPopupTemplate() {
+export function createJobClusterPopupTemplate({ view } = {}) {
   return {
-    title: "Job cluster",
-    content: "This cluster contains {cluster_count} Jobs. Zoom in to inspect individual Jobs.",
+    title: `{cluster_count} Jobs in this cluster`,
+    outFields: ["*"],
+    content: [
+      createJobClusterPickerContent({
+        view,
+      }),
+    ],
+    actions: [],
     fieldInfos: [
       {
         fieldName: "cluster_count",
@@ -126,8 +141,8 @@ function applyOffClustering(jobLayers) {
   }
 }
 
-function applyPriorityGroupClustering(jobLayers, settings) {
-  const featureReduction = createCountJobPointFeatureReduction(settings);
+function applyPriorityGroupClustering(jobLayers, settings, clusterPopupOptions) {
+  const featureReduction = createCountJobPointFeatureReduction(settings, clusterPopupOptions);
 
   if (jobLayers?.pointLayer) {
     jobLayers.pointLayer.visible = false;
@@ -141,8 +156,8 @@ function applyPriorityGroupClustering(jobLayers, settings) {
   }
 }
 
-async function createPriorityPieJobPointFeatureReduction({ layer, settings }) {
-  const baseFeatureReduction = createCountJobPointFeatureReduction(settings);
+async function createPriorityPieJobPointFeatureReduction({ layer, settings, clusterPopupOptions }) {
+  const baseFeatureReduction = createCountJobPointFeatureReduction(settings, clusterPopupOptions);
 
   if (!baseFeatureReduction) {
     return null;
@@ -164,46 +179,7 @@ async function createPriorityPieJobPointFeatureReduction({ layer, settings }) {
     ...baseFeatureReduction,
     renderer,
     fields,
-    popupTemplate: createPriorityPieClusterPopupTemplate(fields),
-  };
-}
-
-function createPriorityPieClusterPopupTemplate(fields = []) {
-  const fieldInfos = fields.map((field) => ({
-    fieldName: field.name,
-    label: field.alias,
-    format: {
-      places: 0,
-      digitSeparator: true,
-    },
-  }));
-  const fieldNames = fieldInfos.map((fieldInfo) => fieldInfo.fieldName);
-
-  return {
-    title: "Priority cluster",
-    content: [
-      {
-        type: "text",
-        text: "This cluster contains <b>{cluster_count}</b> Jobs.",
-      },
-      {
-        type: "media",
-        mediaInfos: [
-          {
-            title: "Priority distribution",
-            type: "pie-chart",
-            value: {
-              fields: fieldNames,
-            },
-          },
-        ],
-      },
-      {
-        type: "fields",
-        fieldInfos,
-      },
-    ],
-    fieldInfos,
+    popupTemplate: createJobClusterPopupTemplate(clusterPopupOptions),
   };
 }
 

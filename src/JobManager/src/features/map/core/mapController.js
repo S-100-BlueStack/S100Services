@@ -245,6 +245,8 @@ export function createMapController({
     void applyJobPointClustering({
       jobLayers: mapResult.layers.jobLayers,
       settings: currentJobClusterSettings,
+      view: mapResult.view,
+      onShowJobDetails,
       shouldApply() {
         return !isDestroyed && clusterRequestId === jobClusterRequestId;
       },
@@ -256,6 +258,8 @@ export function createMapController({
             ...currentJobClusterSettings,
             style: "count",
           },
+          view: mapResult.view,
+          onShowJobDetails,
         });
       }
     });

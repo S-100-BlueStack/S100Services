@@ -1,4 +1,5 @@
 import ArcGISMap from "@arcgis/core/Map.js";
+import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 import MapView from "@arcgis/core/views/MapView.js";
 
 import { createDefaultMapConfig, configureArcGisRuntime } from "../config/mapConfig.js";
@@ -27,7 +28,20 @@ export function createMapView({ container, runtimeConfig, mapConfig } = {}) {
     center: resolvedMapConfig.center,
     zoom: resolvedMapConfig.zoom,
     constraints: resolvedMapConfig.constraints,
+    popup: {
+      dockEnabled: false,
+      dockOptions: {
+        buttonEnabled: false,
+      },
+      visibleElements: {
+        collapseButton: false,
+        featureNavigation: false,
+      },
+      actions: [],
+    },
   });
+
+  configurePopupDefaults(view);
 
   return {
     map,
@@ -37,4 +51,15 @@ export function createMapView({ container, runtimeConfig, mapConfig } = {}) {
       jobLayers,
     },
   };
+}
+
+function configurePopupDefaults(view) {
+  reactiveUtils.when(
+    () => view.popup?.viewModel,
+    () => {
+      view.popup.viewModel.includeDefaultActions = false;
+      view.popup.actions = [];
+    },
+    { once: true }
+  );
 }

@@ -119,6 +119,100 @@
   line-height: 1.15;
 }
 
+.job-manager-cluster-picker {
+  display: grid;
+  gap: 6px;
+  min-width: 320px;
+  max-width: 380px;
+  padding: 4px 2px;
+  color: var(--jm-popup-text, var(--jm-text));
+  background: var(--jm-popup-surface, transparent);
+}
+
+.job-manager-cluster-picker__message {
+  margin: 0;
+  color: var(--jm-text-muted);
+  font-size: 0.82rem;
+}
+
+.job-manager-cluster-picker__list {
+  display: grid;
+  gap: 6px;
+}
+
+.job-manager-cluster-picker__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 54px;
+  padding: 9px 10px;
+  color: var(--jm-popup-text, var(--jm-text));
+  background: var(--jm-popup-surface-alt, rgba(255, 255, 255, 0.72));
+  border: 1px solid var(--jm-popup-border, var(--jm-border));
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.job-manager-cluster-picker__item:hover,
+.job-manager-cluster-picker__item:focus-visible {
+  background: var(--jm-button-secondary-bg-hover, rgba(69, 97, 120, 0.12));
+  outline: none;
+}
+
+.job-manager-cluster-picker__content {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.job-manager-cluster-picker__job-title {
+  overflow: hidden;
+  color: var(--jm-popup-text, var(--jm-text));
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-manager-cluster-picker__job-subtitle {
+  overflow: hidden;
+  color: var(--jm-popup-text-muted, var(--jm-text-muted));
+  font-size: 12px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-manager-cluster-picker__priority-marker {
+  flex: 0 0 auto;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-top: 0.2rem;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 999px;
+  background: var(--jm-color-priority-medium-bg);
+}
+
+.job-manager-cluster-picker__priority-marker[data-priority="low"] {
+  background: var(--jm-color-priority-low-bg);
+}
+
+.job-manager-cluster-picker__priority-marker[data-priority="medium"] {
+  background: var(--jm-color-priority-medium-bg);
+}
+
+.job-manager-cluster-picker__priority-marker[data-priority="high"] {
+  background: var(--jm-color-priority-high-bg);
+}
+
+html.calcite-mode-dark .job-manager-cluster-picker__priority-marker {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
 @media (max-width: 54rem) {
   .job-manager-map-status {
     top: 0.75rem;

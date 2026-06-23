@@ -14,10 +14,27 @@ test("createCountJobPointFeatureReduction creates Esri-style medium point cluste
   assert.equal(featureReduction.clusterRadius, undefined);
   assert.equal(featureReduction.clusterMinSize, 16.5);
   assert.equal(featureReduction.clusterMaxSize, undefined);
-  assert.equal(featureReduction.labelingInfo.length, 1);
-  assert.equal(featureReduction.popupTemplate.title, "Job cluster");
+  assert.equal(featureReduction.popupTemplate.title, "{cluster_count} Jobs in this cluster");
+  assert.equal(featureReduction.popupTemplate.actions.length, 0);
+  assert.equal(featureReduction.popupTemplate.content.length, 1);
+  assert.deepEqual(featureReduction.labelingInfo, [
+    {
+      deconflictionStrategy: "none",
+      labelExpressionInfo: {
+        expression: "Text($feature.cluster_count, '#,###')",
+      },
+      labelPlacement: "center-center",
+      symbol: {
+        type: "text",
+        color: "white",
+        font: {
+          family: "Noto Sans",
+          size: "12px",
+        },
+      },
+    },
+  ]);
 });
-
 test("createCountJobPointFeatureReduction supports small clustering preset", () => {
   const featureReduction = createCountJobPointFeatureReduction({
     preset: JOB_CLUSTER_PRESET.SMALL,
@@ -45,13 +62,12 @@ test("createCountJobPointFeatureReduction returns null when clustering is off", 
   );
 });
 
-test("createJobClusterPopupTemplate exposes cluster count field formatting", () => {
+test("createJobClusterPopupTemplate exposes compact picker content and cluster count formatting", () => {
   const popupTemplate = createJobClusterPopupTemplate();
 
-  assert.equal(
-    popupTemplate.content,
-    "This cluster contains {cluster_count} Jobs. Zoom in to inspect individual Jobs."
-  );
+  assert.equal(popupTemplate.title, "{cluster_count} Jobs in this cluster");
+  assert.equal(popupTemplate.actions.length, 0);
+  assert.equal(popupTemplate.content.length, 1);
   assert.deepEqual(popupTemplate.fieldInfos, [
     {
       fieldName: "cluster_count",
