@@ -1317,6 +1317,29 @@ The first AOI-only hover implementation worked, but AOI-only hit testing could h
 
 The hover controller follows the Product Manager hover pattern more closely by caching layer views, limiting hit testing to relevant layers and frame-throttling pointer movement. This avoids the delayed feel caused by invalidating each in-flight hit test while the pointer is still moving.
 
+## 8.43 Add AOI-scoped Job map filtering
+
+Status: Done
+
+Selecting `Show related Jobs` from an AOI popup now scopes both the Jobs panel and map Job layers to Jobs related to the selected AOI.
+
+Current behavior:
+
+- The selected AOI still highlights on the map.
+- The Jobs panel still shows Jobs related to the selected AOI.
+- Map Job point and polygon layers are filtered to the same related Job ids.
+- Existing Job filters are combined with the selected AOI Job scope.
+- Done Jobs remain hidden by default unless the `Done` filter is active.
+- Job point clustering follows the AOI scope because clustering uses the filtered point layer.
+- Clearing the AOI scope in the Jobs panel clears the map Job scope.
+- Opening the normal Jobs list clears the map Job scope.
+- Closing the Jobs panel clears the map Job scope.
+- Selecting a specific Job clears the AOI Job scope before applying selected Job highlight and related AOI highlight.
+
+Rationale:
+
+The AOI-to-Jobs workflow should make related Jobs visible on both the list and the map. Filtering the Job layers is clearer than adding another highlight color because clusters and visible counts then represent only the scoped Job set.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -1532,7 +1555,7 @@ Tasks:
 | JM-0304 | Add per-Job mutation loading state           |        Done | Replaced visible per-Job loading text with a local pending guard to avoid card flashing while still preventing duplicate status updates.                                                                                                                                                         |
 | JM-0305 | Show success/failure notices for Job updates |        Done | Status updates show success and error notices.                                                                                                                                                                                                                                                   |
 | JM-0306 | Show cyclic Job creation notice              |        Done | Mock-created follow-up Jobs show an info notice.                                                                                                                                                                                                                                                 |
-| JM-0307 | Add selected AOI Jobs scope                  |        Done | AOI popup action can open the Jobs panel filtered to Jobs related to the selected AOI.                                                                                                                                                                                                           |
+| JM-0307 | Add selected AOI Jobs scope                  |        Done | AOI popup action opens the Jobs panel and scopes map Job layers to Jobs related to the selected AOI.                                                                                                                                                                                             |
 
 Exit criteria:
 

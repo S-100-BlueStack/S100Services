@@ -31,9 +31,15 @@ export function createJobList({ jobFilterStore } = {}) {
   const pendingMutationJobIds = new Set();
 
   const clearAoiFilter = () => {
+    const hadAoiFilter = Boolean(aoiFilter);
+
     aoiFilter = null;
     expandedJobIds.clear();
     render();
+
+    if (hadAoiFilter) {
+      rootElement.dispatchEvent(createAoiFilterClearedEvent());
+    }
   };
 
   const clearSelectedJob = () => {
@@ -853,6 +859,12 @@ function createEmptyState({ hiddenDoneCount, aoiFilter, jobFilters }) {
       : "No Jobs found.";
 
   return element;
+}
+
+function createAoiFilterClearedEvent() {
+  return new CustomEvent("job-manager:aoi-filter-cleared", {
+    bubbles: true,
+  });
 }
 
 function normalizeAoiFilter(selectedAoi = {}) {

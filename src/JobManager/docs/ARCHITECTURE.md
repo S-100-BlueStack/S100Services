@@ -692,6 +692,33 @@ Accessibility note:
 
 When closing the Jobs panel, focus is moved back to the navbar Jobs control before the panel is hidden. This avoids hiding focused descendants from assistive technology.
 
+### AOI-scoped Job map filtering
+
+Status: In progress
+
+Current flow:
+
+```txt
+AOI PopupTemplate action
+  -> selected AOI state
+  -> Jobs panel scoped to selected AOI
+  -> relation service resolves related Job ids
+  -> map Job layer definition expressions include related Job ids
+  -> Job point clustering follows the scoped visible Job set
+```
+
+Rules:
+
+- AOI-scoped Job map filtering is map presentation state.
+- The selected AOI state remains owned by `features/aoi/state`.
+- AOI-to-Job relation lookup remains owned by `features/relations`.
+- Map Job layer filtering remains owned by `features/map/filters`.
+- Existing Job filters and AOI scope must be combined, not treated as competing filter modes.
+- Done Jobs remain hidden by default inside an AOI scope unless the `Done` filter is explicitly active.
+- Job point clustering should naturally reflect AOI scope through layer `definitionExpression` filtering.
+- AOI scope must be cleared when the user returns to the normal Jobs list, closes the Jobs panel or selects a specific Job.
+- If AOI scope resolution fails, the map must not leave a stale previous AOI Job scope active.
+
 ### AOI popup Job summary content
 
 Status: In progress

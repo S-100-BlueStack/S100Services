@@ -78,6 +78,60 @@ export async function loadAoiJobRelationSnapshot({
   );
 }
 
+export async function loadJobIdsForAoi({
+  aoiId,
+  jobs,
+  jobService = defaultJobService,
+  source = RELATION_SOURCE.MOCK,
+} = {}) {
+  const normalizedAoiId = normalizeOptionalString(aoiId);
+
+  if (!normalizedAoiId) {
+    return createSuccessResult(
+      {
+        jobIds: [],
+      },
+      {
+        operation: "loadJobIdsForAoi",
+        source,
+        aoiId: "",
+        jobCount: 0,
+      }
+    );
+  }
+
+  const relationsResult = await loadAoiJobRelations({
+    jobs,
+    jobService,
+    source,
+  });
+
+  if (!relationsResult.ok) {
+    return createErrorResult(relationsResult.error, {
+      operation: "loadJobIdsForAoi",
+      source,
+      aoiId: normalizedAoiId,
+    });
+  }
+
+  const jobIds = getJobIdsForAoi({
+    relations: relationsResult.data.relations,
+    aoiId: normalizedAoiId,
+  });
+
+  return createSuccessResult(
+    {
+      jobIds,
+    },
+    {
+      operation: "loadJobIdsForAoi",
+      source,
+      aoiId: normalizedAoiId,
+      jobCount: jobIds.length,
+    }
+  );
+}
+
 export function getJobsForAoi({ aoiId, jobs = [], relations = [] } = {}) {
   const jobIds = new Set(getJobIdsForAoi({ relations, aoiId }));
 

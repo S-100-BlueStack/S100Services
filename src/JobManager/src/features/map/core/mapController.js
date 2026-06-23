@@ -1,4 +1,5 @@
 import { normalizeError } from "../../../shared/errors/normalizeError.js";
+import * as defaultRelationService from "../../relations/services/relationService.js";
 import { applyJobLayerFilters } from "../filters/applyJobLayerFilters.js";
 import { applyAoiJobSummaryRenderer } from "../layers/applyAoiRenderer.js";
 import { createAoiHighlightController } from "../layers/aoiHighlight.js";
@@ -26,6 +27,7 @@ export function createMapController({
   onJobLayerError,
   onShowRelatedJobs,
   onShowJobDetails,
+  relationService = defaultRelationService,
 } = {}) {
   let mapResult = null;
   let isDestroyed = false;
@@ -36,8 +38,10 @@ export function createMapController({
   let mapHoverController = null;
   let currentJobFilters = null;
   let currentJobClusterSettings = null;
+  let currentScopedJobIds = null;
   let aoiRendererRequestId = 0;
   let jobClusterRequestId = 0;
+  let aoiJobScopeRequestId = 0;
 
   async function start() {
     setStatus({
@@ -108,6 +112,7 @@ export function createMapController({
     isDestroyed = true;
     aoiRendererRequestId += 1;
     jobClusterRequestId += 1;
+    aoiJobScopeRequestId += 1;
     removeAoiPopupActions();
     removeJobPopupActions();
     removeAoiPopupActions = () => {};
@@ -166,6 +171,63 @@ export function createMapController({
     aoiHighlightController?.clearHighlight();
   }
 
+  async function applyAoiJobScope(selectedAoi = {}) {
+    const normalizedAoiId = normalizeOptionalString(selectedAoi.aoiId ?? selectedAoi.id);
+    const scopeRequestId = aoiJobScopeRequestId + 1;
+    aoiJobScopeRequestId = scopeRequestId;
+
+    if (!normalizedAoiId) {
+      clearAoiJobScope();
+
+      return {
+        ok: true,
+        data: {
+          jobIds: [],
+        },
+      };
+    }
+
+    if (!relationService?.loadJobIdsForAoi) {
+      currentScopedJobIds = [];
+      applyCurrentJobFilters();
+
+      throw new Error("Relation service is not available.");
+    }
+
+    const result = await relationService.loadJobIdsForAoi({
+      aoiId: normalizedAoiId,
+    });
+
+    if (isDestroyed || scopeRequestId !== aoiJobScopeRequestId) {
+      return result;
+    }
+
+    if (!result.ok) {
+      // Avoid leaving a previous AOI scope active when the new scope cannot be resolved.
+      currentScopedJobIds = [];
+      applyCurrentJobFilters();
+
+      return result;
+    }
+
+    currentScopedJobIds = normalizeJobIds(result.data.jobIds);
+    applyCurrentJobFilters();
+
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        jobIds: [...currentScopedJobIds],
+      },
+    };
+  }
+
+  function clearAoiJobScope() {
+    aoiJobScopeRequestId += 1;
+    currentScopedJobIds = null;
+    applyCurrentJobFilters();
+  }
+
   function applyJobClusterSettings(settings) {
     currentJobClusterSettings = settings;
 
@@ -214,6 +276,7 @@ export function createMapController({
     applyJobLayerFilters({
       jobLayers: mapResult.layers.jobLayers,
       filters: currentJobFilters,
+      scopedJobIds: currentScopedJobIds,
     });
   }
 
@@ -284,6 +347,14 @@ export function createMapController({
       });
   }
 
+  function normalizeJobIds(jobIds) {
+    if (!Array.isArray(jobIds)) {
+      return [];
+    }
+
+    return [...new Set(jobIds.map(normalizeOptionalString).filter(Boolean))];
+  }
+
   function normalizeOptionalString(value) {
     if (value === null || value === undefined) {
       return "";
@@ -340,6 +411,8 @@ export function createMapController({
     highlightRelatedAoisForJob,
     highlightAoiById,
     clearAoiHighlight,
+    applyAoiJobScope,
+    clearAoiJobScope,
     applyJobFilters,
     applyJobClusterSettings,
   };

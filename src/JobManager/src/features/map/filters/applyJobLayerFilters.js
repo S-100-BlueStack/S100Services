@@ -6,8 +6,10 @@ import {
 import { JOB_STATUS } from "../../jobs/domain/jobStatus.js";
 import { JOB_LAYER_FIELD } from "../layers/jobLayerFeatureData.js";
 
-export function applyJobLayerFilters({ jobLayers, filters } = {}) {
-  const definitionExpression = createJobLayerDefinitionExpression(filters);
+export function applyJobLayerFilters({ jobLayers, filters, scopedJobIds } = {}) {
+  const definitionExpression = createJobLayerDefinitionExpression(filters, {
+    scopedJobIds,
+  });
 
   for (const layer of getBaseJobLayers(jobLayers)) {
     layer.definitionExpression = definitionExpression;
@@ -25,8 +27,9 @@ export function applyJobLayerFilters({ jobLayers, filters } = {}) {
   };
 }
 
-export function createJobLayerDefinitionExpression(filters = {}) {
+export function createJobLayerDefinitionExpression(filters = {}, { scopedJobIds } = {}) {
   const normalizedFilters = normalizeJobFilters(filters);
+  const normalizedScope = normalizeScopedJobIds(scopedJobIds);
   const expressionParts = [];
 
   if (!shouldRevealDoneJobsForFilters(normalizedFilters)) {
@@ -57,6 +60,14 @@ export function createJobLayerDefinitionExpression(filters = {}) {
     );
   }
 
+  if (normalizedScope.isScoped) {
+    expressionParts.push(
+      normalizedScope.jobIds.length > 0
+        ? createInExpression(JOB_LAYER_FIELD.JOB_ID, normalizedScope.jobIds)
+        : "1 = 0"
+    );
+  }
+
   return dedupeExpressionParts(expressionParts)
     .map((expressionPart) => `(${expressionPart})`)
     .join(" AND ");
@@ -74,6 +85,20 @@ function createInExpression(fieldName, values) {
   const escapedValues = values.map((value) => `'${escapeSqlString(value)}'`).join(", ");
 
   return `${fieldName} IN (${escapedValues})`;
+}
+
+function normalizeScopedJobIds(scopedJobIds) {
+  if (!Array.isArray(scopedJobIds)) {
+    return {
+      isScoped: false,
+      jobIds: [],
+    };
+  }
+
+  return {
+    isScoped: true,
+    jobIds: [...new Set(scopedJobIds.map(normalizeOptionalString).filter(Boolean))],
+  };
 }
 
 function removeOuterParentheses(expression) {
@@ -94,6 +119,14 @@ function getBaseJobLayers(jobLayers) {
 
 function getPriorityPointLayerEntries(jobLayers) {
   return Object.entries(jobLayers?.priorityPointLayers ?? {}).filter(([, layer]) => Boolean(layer));
+}
+
+function normalizeOptionalString(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  return String(value).trim();
 }
 
 function escapeSqlString(value) {

@@ -17,6 +17,7 @@ export async function createApp(rootElement) {
   const jobFilterStore = createJobFilterStore();
   const jobClusterSettingsStore = createJobClusterSettingsStore();
   const noticeRegion = createNoticeRegion();
+  const appEventAbortController = new AbortController();
 
   const navbar = await createNavbarController({
     jobFilterStore,
@@ -64,6 +65,23 @@ export async function createApp(rootElement) {
       jobsPanel.clearSelectedJob();
       mapController.clearJobHighlight();
 
+      void mapController
+        .applyAoiJobScope(normalizedSelectedAoi)
+        .then((result) => {
+          if (!result.ok) {
+            showErrorNotice({
+              title: "Related Jobs could not be shown on the map",
+              message: result.error.message,
+            });
+          }
+        })
+        .catch((error) => {
+          showErrorNotice({
+            title: "Related Jobs could not be shown on the map",
+            message: error.message,
+          });
+        });
+
       void mapController.highlightAoiById(normalizedSelectedAoi.aoiId).catch((error) => {
         mapController.clearAoiHighlight();
 
@@ -89,6 +107,7 @@ export async function createApp(rootElement) {
       }
 
       selectedAoiStore.clearSelection();
+      mapController.clearAoiJobScope();
       jobsPanel.showJobDetails(normalizedSelectedJob);
       setPanelOpen(jobsPanel.element, navbar.jobsButton, true);
 
@@ -130,40 +149,68 @@ export async function createApp(rootElement) {
     mapController.applyJobClusterSettings(snapshot.settings);
   });
 
+  jobsPanel.element.addEventListener(
+    "job-manager:aoi-filter-cleared",
+    () => {
+      selectedAoiStore.clearSelection();
+      mapController.clearAoiHighlight();
+      mapController.clearAoiJobScope();
+    },
+    {
+      signal: appEventAbortController.signal,
+    }
+  );
+
   setPanelOpen(jobsPanel.element, navbar.jobsButton, true);
 
-  navbar.jobsButton.addEventListener("click", () => {
-    const shouldOpen = jobsPanel.element.hidden;
+  navbar.jobsButton.addEventListener(
+    "click",
+    () => {
+      const shouldOpen = jobsPanel.element.hidden;
 
-    selectedJobStore.clearSelection();
-    jobsPanel.clearSelectedJob();
-    mapController.clearJobHighlight();
-    mapController.clearAoiHighlight();
-
-    if (shouldOpen) {
       selectedAoiStore.clearSelection();
-      jobsPanel.clearAoiFilter();
-      jobsPanel.refreshJobs();
-    } else {
-      jobsPanel.hideCompletedJobs();
+      selectedJobStore.clearSelection();
+      jobsPanel.clearSelectedJob();
+      mapController.clearJobHighlight();
+      mapController.clearAoiHighlight();
+      mapController.clearAoiJobScope();
+
+      if (shouldOpen) {
+        jobsPanel.clearAoiFilter();
+        jobsPanel.refreshJobs();
+      } else {
+        jobsPanel.hideCompletedJobs();
+      }
+
+      setPanelOpen(jobsPanel.element, navbar.jobsButton, shouldOpen);
+    },
+    {
+      signal: appEventAbortController.signal,
     }
+  );
 
-    setPanelOpen(jobsPanel.element, navbar.jobsButton, shouldOpen);
-  });
-
-  jobsPanel.closeButton.addEventListener("click", () => {
-    selectedJobStore.clearSelection();
-    jobsPanel.clearSelectedJob();
-    mapController.clearJobHighlight();
-    mapController.clearAoiHighlight();
-    jobsPanel.hideCompletedJobs();
-    setPanelOpen(jobsPanel.element, navbar.jobsButton, false);
-  });
+  jobsPanel.closeButton.addEventListener(
+    "click",
+    () => {
+      selectedAoiStore.clearSelection();
+      selectedJobStore.clearSelection();
+      jobsPanel.clearSelectedJob();
+      mapController.clearJobHighlight();
+      mapController.clearAoiHighlight();
+      mapController.clearAoiJobScope();
+      jobsPanel.hideCompletedJobs();
+      setPanelOpen(jobsPanel.element, navbar.jobsButton, false);
+    },
+    {
+      signal: appEventAbortController.signal,
+    }
+  );
 
   mapController.start();
 
   return {
     destroy() {
+      appEventAbortController.abort();
       unsubscribeMapJobFilters();
       unsubscribeMapJobClusterSettings();
       navbar.destroy();
