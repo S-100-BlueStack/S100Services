@@ -124,3 +124,16 @@
     top: 0.75rem;
   }
 }
+
+/* =========================================================
+   Accessibility / map focus cleanup
+   ========================================================= */
+
+.esri-view-surface:focus::after,
+.esri-view-surface:focus-visible::after,
+.esri-ui:focus::after,
+.esri-ui:focus-visible::after {
+  display: none;
+  opacity: 0;
+  box-shadow: none;
+}

@@ -2,6 +2,7 @@ import { normalizeError } from "../../../shared/errors/normalizeError.js";
 import { applyJobLayerFilters } from "../filters/applyJobLayerFilters.js";
 import { applyAoiJobSummaryRenderer } from "../layers/applyAoiRenderer.js";
 import { createAoiHighlightController } from "../layers/aoiHighlight.js";
+import { createAoiHoverController } from "../layers/aoiHover.js";
 import { applyJobLayerData } from "../layers/applyJobLayerData.js";
 import { applyJobPointClustering } from "../layers/jobClustering.js";
 import { createJobHighlightController } from "../layers/jobHighlight.js";
@@ -32,6 +33,7 @@ export function createMapController({
   let removeJobPopupActions = () => {};
   let jobHighlightController = null;
   let aoiHighlightController = null;
+  let aoiHoverController = null;
   let currentJobFilters = null;
   let currentJobClusterSettings = null;
   let aoiRendererRequestId = 0;
@@ -64,6 +66,10 @@ export function createMapController({
         jobLayers: mapResult.layers.jobLayers,
       });
       aoiHighlightController = createAoiHighlightController({
+        view: mapResult.view,
+        aoiLayer: mapResult.layers.aoiLayer,
+      });
+      aoiHoverController = createAoiHoverController({
         view: mapResult.view,
         aoiLayer: mapResult.layers.aoiLayer,
       });
@@ -105,8 +111,10 @@ export function createMapController({
     removeJobPopupActions();
     removeAoiPopupActions = () => {};
     removeJobPopupActions = () => {};
+    aoiHoverController?.destroy();
     jobHighlightController?.destroy();
     aoiHighlightController?.destroy();
+    aoiHoverController = null;
     jobHighlightController = null;
     aoiHighlightController = null;
     mapResult?.view?.destroy();
