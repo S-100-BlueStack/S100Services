@@ -18,11 +18,13 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
   let pointerMoveHandle = null;
   let dragHandle = null;
   let immediateClickHandle = null;
+  let mouseWheelHandle = null;
   let abortController = null;
   let hoverHandle = null;
   let activeHoverKey = "";
   let pointerEvent = null;
   let frameRequested = false;
+  let hoverRequestId = 0;
   let isDestroyed = false;
 
   function start() {
@@ -37,25 +39,42 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
     pointerMoveHandle = view.on("pointer-move", handlePointerMove);
     dragHandle = view.on("drag", clearHover);
     immediateClickHandle = view.on("immediate-click", clearHover);
+    mouseWheelHandle = view.on("mouse-wheel", clearHover);
 
-    view.container?.addEventListener("pointerleave", clearHover, {
+    view.container?.addEventListener("pointerleave", handlePointerExit, {
+      signal: abortController.signal,
+    });
+    view.container?.addEventListener("pointerout", handlePointerExit, {
+      signal: abortController.signal,
+    });
+    view.container?.addEventListener("mouseleave", handlePointerExit, {
+      signal: abortController.signal,
+    });
+
+    window.addEventListener("blur", clearHover, {
+      signal: abortController.signal,
+    });
+    document.addEventListener("visibilitychange", handleVisibilityChange, {
       signal: abortController.signal,
     });
   }
 
   function destroy() {
     isDestroyed = true;
+    hoverRequestId += 1;
     pointerEvent = null;
     frameRequested = false;
 
     pointerMoveHandle?.remove();
     dragHandle?.remove();
     immediateClickHandle?.remove();
+    mouseWheelHandle?.remove();
     abortController?.abort();
 
     pointerMoveHandle = null;
     dragHandle = null;
     immediateClickHandle = null;
+    mouseWheelHandle = null;
     abortController = null;
 
     clearHoverHandle();
@@ -75,22 +94,28 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
   async function runHitTest() {
     frameRequested = false;
 
-    if (isDestroyed || !pointerEvent || hoverLayers.length === 0) {
+    const hitTestEvent = pointerEvent;
+    const requestId = hoverRequestId + 1;
+    hoverRequestId = requestId;
+
+    if (isDestroyed || !hitTestEvent || hoverLayers.length === 0) {
       return;
     }
 
     try {
-      const hitTestResult = await view.hitTest(pointerEvent, {
+      const hitTestResult = await view.hitTest(hitTestEvent, {
         include: hoverLayers,
       });
-      const hoverTarget = getHoverTarget(hitTestResult);
 
-      if (isDestroyed) {
+      if (isDestroyed || requestId !== hoverRequestId || hitTestEvent !== pointerEvent) {
         return;
       }
 
+      const hoverTarget = getHoverTarget(hitTestResult);
+
       if (!hoverTarget) {
         clearHoverHandle();
+
         return;
       }
 
@@ -103,6 +128,7 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
       if (!layerView) {
         clearHoverHandle();
         warmLayerView(hoverTarget.layer);
+
         return;
       }
 
@@ -111,7 +137,7 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
       activeHoverKey = hoverTarget.key;
       hoverHandle = layerView.highlight(hoverTarget.graphic);
     } catch {
-      if (!isDestroyed) {
+      if (!isDestroyed && requestId === hoverRequestId) {
         clearHoverHandle();
       }
     }
@@ -172,7 +198,7 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
   }
 
   function warmLayerView(layer) {
-    if (!layer || layerViews.has(layer) || layerViewPromises.has(layer)) {
+    if (!layer?.id || layerViews.has(layer) || layerViewPromises.has(layer)) {
       return;
     }
 
@@ -187,14 +213,33 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
       })
       .catch((error) => {
         layerViewPromises.delete(layer);
+
         throw error;
       });
 
     layerViewPromises.set(layer, layerViewPromise);
   }
 
+  function handlePointerExit(event) {
+    const nextTarget = event.relatedTarget;
+
+    if (nextTarget && view.container?.contains(nextTarget)) {
+      return;
+    }
+
+    clearHover();
+  }
+
+  function handleVisibilityChange() {
+    if (document.visibilityState !== "visible") {
+      clearHover();
+    }
+  }
+
   function clearHover() {
+    hoverRequestId += 1;
     pointerEvent = null;
+    frameRequested = false;
     clearHoverHandle();
   }
 
@@ -226,55 +271,50 @@ function createHoverLayerConfigs({ aoiLayer, jobLayers } = {}) {
           },
         ]
       : []),
-  ].filter((layerConfig) => Boolean(layerConfig.layer?.id));
+  ];
 }
 
 function getJobHoverLayers(jobLayers) {
-  return normalizeArray(jobLayers?.layers).filter(Boolean);
+  return [
+    jobLayers?.pointLayer,
+    jobLayers?.polygonLayer,
+    ...Object.values(jobLayers?.priorityPointLayers ?? {}),
+  ].filter(Boolean);
 }
 
 function createHoverKey({ graphic, layer, targetType }) {
+  const attributes = graphic?.attributes ?? {};
+
   if (targetType === HOVER_TARGET_TYPE.JOB) {
     return createTypedHoverKey({
-      type: targetType,
+      targetType,
       layer,
-      id:
-        normalizeOptionalString(graphic?.attributes?.[JOB_LAYER_FIELD.OBJECT_ID]) ||
-        normalizeOptionalString(graphic?.attributes?.[JOB_LAYER_FIELD.JOB_ID]) ||
-        normalizeOptionalString(graphic?.uid),
+      id: attributes[JOB_LAYER_FIELD.JOB_ID],
     });
   }
 
   if (targetType === HOVER_TARGET_TYPE.AOI) {
     return createTypedHoverKey({
-      type: targetType,
+      targetType,
       layer,
       id:
-        normalizeOptionalString(graphic?.attributes?.[AOI_FIELD.OBJECT_ID]) ||
-        normalizeOptionalString(graphic?.attributes?.[AOI_FIELD.GLOBAL_ID]) ||
-        normalizeOptionalString(graphic?.uid),
+        attributes[AOI_FIELD.GLOBAL_ID] ??
+        attributes[AOI_FIELD.PRODUCT_ID] ??
+        attributes[AOI_FIELD.OBJECT_ID],
     });
   }
 
   return "";
 }
 
-function createTypedHoverKey({ type, layer, id }) {
+function createTypedHoverKey({ targetType, layer, id }) {
   const normalizedId = normalizeOptionalString(id);
 
   if (!normalizedId) {
     return "";
   }
 
-  return `${type}:${layer.id}:${normalizedId}`;
-}
-
-function normalizeArray(value) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value;
+  return `${targetType}:${layer.id}:${normalizedId}`;
 }
 
 function normalizeOptionalString(value) {

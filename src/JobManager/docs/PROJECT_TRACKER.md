@@ -1361,6 +1361,27 @@ Rationale:
 
 The picker should behave like the Product Manager overlap picker: show the underlying features first, then open the selected feature popup. This keeps cluster interaction compact and avoids sending users directly into the Jobs panel before they have chosen a specific Job from the map.
 
+## 8.45 Polish hover cleanup and initial Jobs panel state
+
+Status: Done
+
+Small UX polish after Job cluster picker implementation.
+
+Current behavior:
+
+- Map hover highlight clears when the pointer leaves the map container.
+- Map hover highlight clears when the browser window loses focus.
+- Map hover highlight clears when the document is hidden.
+- Stale asynchronous hit-test results cannot re-apply hover highlight after the pointer has left the map.
+- The Jobs panel starts closed when the app loads.
+- The Jobs panel still opens when the user clicks the Jobs navbar button.
+- The Jobs panel still opens from AOI `Show related Jobs`.
+- The Jobs panel still opens from Job `Show Job details`.
+
+Rationale:
+
+Hover highlight should behave as transient pointer feedback and must not remain visible after the pointer leaves the map. Starting with the Jobs panel closed gives the map-first workspace more room on load while preserving all explicit Jobs workflows.
+
 ## 9. Backend assumptions
 
 Status: Draft

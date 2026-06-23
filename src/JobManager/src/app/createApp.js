@@ -161,7 +161,7 @@ export async function createApp(rootElement) {
     }
   );
 
-  setPanelOpen(jobsPanel.element, navbar.jobsButton, true);
+  setPanelOpen(jobsPanel.element, navbar.jobsButton, false);
 
   navbar.jobsButton.addEventListener(
     "click",
