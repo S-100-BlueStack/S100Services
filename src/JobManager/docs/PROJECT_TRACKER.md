@@ -1290,25 +1290,28 @@ Rationale:
 
 The AOI-to-Jobs workflow now gives immediate geographic feedback, so users can see which AOI the scoped Jobs panel refers to without relying only on popup/list context.
 
-## 8.42 Add AOI hover feedback
+## 8.42 Add map hover feedback for Jobs and AOIs
 
 Status: Done
 
-AOI polygons now provide transient hover feedback on the map.
+Map hover feedback now supports both Job geometry and AOI polygons.
 
 Current behavior:
 
-- Pointer movement over the AOI layer performs AOI-only hit testing.
+- Pointer movement performs a map hit test and uses the first supported Job or AOI result.
+- Job geometry has hover priority over AOIs below it.
+- Hovered Jobs get a transient ArcGIS layer-view highlight.
 - Hovered AOIs get a transient ArcGIS layer-view highlight.
-- The map cursor changes to indicate an interactive AOI.
 - Hover highlight clears when the pointer leaves the map.
 - Hover highlight clears when the user drags the map.
+- Hover highlight clears when a map click begins, so selected highlight can take over.
 - Hover cleanup runs through the map controller destroy flow.
-- Selected AOI and selected Job related AOI highlights use a separate highlight controller and are not overwritten by hover cleanup.
+- Cursor styling remains the default map cursor for now.
+- Selected AOI, selected Job and related AOI highlights use separate controllers and are not overwritten by hover cleanup.
 
 Rationale:
 
-AOIs are now easier to inspect from the map without committing to selection state. Keeping hover as separate map presentation state avoids mixing transient pointer feedback with selected AOI state or Jobs panel scope.
+The first AOI-only hover implementation worked, but AOI-only hit testing could highlight an AOI underneath a Job geometry. The hover controller now respects map hit-test order and treats Jobs as the top-priority interactive target while keeping hover separate from selection state.
 
 ## 9. Backend assumptions
 
@@ -1618,7 +1621,7 @@ Tasks:
 
 | ID      | Task                                  |      Status | Notes                                                                                                                                     |
 | ------- | ------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-0701 | Add AOI hover feedback                |        Done | AOI polygons now show transient hover feedback using map-owned pointer hit testing and a separate hover highlight handle.                 |
+| JM-0701 | Add AOI hover feedback                |        Done | Map hover now highlights Jobs or AOIs using hit-test order, with Job geometry taking priority over AOIs underneath.                       |
 | JM-0702 | Add AOI selection feedback            |        Done | `Show related Jobs` now stores selected AOI state, opens the scoped Jobs panel and highlights the selected AOI on the map.                |
 | JM-0703 | Add AOI popup shell                   | In progress | Added ArcGIS popup template using current test Feature Service metadata and a Show related Jobs action.                                   |
 | JM-0704 | Show related Job summary in popup     |        Done | AOI popup now shows related, active and high-priority active Job counts using relation summaries and current Job filters where available. |

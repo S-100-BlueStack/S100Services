@@ -363,7 +363,7 @@ Current responsibilities:
 - `features/map/layers/createJobLayers.js` owns read-only Job geometry layer construction.
 - `features/map/layers/applyJobLayerData.js` loads Job service data into the Job geometry layers.
 - `features/map/layers/aoiRenderer.js` owns AOI renderer configuration.
-- `features/map/layers/aoiHover.js` owns AOI pointer hit testing and transient AOI hover highlight.
+- `features/map/layers/mapHover.js` owns map pointer hit testing and transient Job/AOI hover highlight.
 - `features/map/layers/jobRenderer.js` owns Job geometry renderer configuration.
 - `features/map/layers/applyAoiRenderer.js` applies AOI renderer enrichment from relation summaries without blocking map startup.
 - `features/map/popups/aoiPopupActions.js` owns AOI popup action definitions and selected AOI extraction from popup graphics.
@@ -624,7 +624,7 @@ Rules:
 - Related AOI highlight is visual only; it does not change the AOI layer source or apply a permanent filter.
 - Clustering and de-emphasis effects remain deferred.
 
-### AOI hover feedback
+### Map hover feedback
 
 Status: In progress
 
@@ -632,19 +632,22 @@ Current flow:
 
 ```txt
 MapView pointer-move
-  -> AOI layer hitTest
-  -> AOI FeatureLayerView highlight
+  -> map hitTest
+  -> first supported Job or AOI graphic
+  -> matching FeatureLayerView highlight
   -> transient hover highlight
 ```
 
 Rules:
 
-- AOI hover feedback is owned by `features/map/layers/aoiHover.js`.
+- Map hover feedback is owned by `features/map/layers/mapHover.js`.
+- Job geometry has hover priority over AOIs below it in the hit test result order.
 - Hover state must remain transient map presentation state.
 - Hovering an AOI must not update selected AOI state.
-- Hover highlight must use a separate highlight handle from selected AOI and related AOI highlight.
-- Hover highlight should clear when the pointer leaves the map, when the user drags the map or when the map controller is destroyed.
-- Pointer cursor may change to indicate that AOIs are interactive.
+- Hovering a Job must not update selected Job state.
+- Hover highlight must use a separate highlight handle from selected AOI, selected Job and related AOI highlights.
+- Hover highlight should clear when the pointer leaves the map, when the user drags the map, when a map click begins or when the map controller is destroyed.
+- Cursor styling is left to the default map cursor for now because the pointer cursor made hover feedback feel visually delayed.
 
 ### AOI popup action flow
 
