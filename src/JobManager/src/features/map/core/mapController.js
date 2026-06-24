@@ -240,6 +240,7 @@ export function createMapController({
     }
 
     mapHoverController?.clearHover();
+    closeOpenAggregatePopup();
 
     try {
       const result = await applyJobLayerData({
@@ -274,6 +275,8 @@ export function createMapController({
     if (!mapResult?.layers?.jobLayers) {
       return;
     }
+
+    closeOpenAggregatePopup();
 
     const clusterRequestId = jobClusterRequestId + 1;
     jobClusterRequestId = clusterRequestId;
@@ -312,6 +315,8 @@ export function createMapController({
     if (!mapResult?.layers?.jobLayers) {
       return;
     }
+
+    closeOpenAggregatePopup();
 
     applyJobLayerFilters({
       jobLayers: mapResult.layers.jobLayers,
@@ -385,6 +390,48 @@ export function createMapController({
       .catch((error) => {
         onJobLayerError?.(normalizeError(error, "Job geometry could not be loaded."));
       });
+  }
+
+  function closeOpenAggregatePopup() {
+    const view = mapResult?.view;
+    const popup = view?.popup;
+
+    if (!view || !popup || !hasOpenAggregatePopupFeature(popup)) {
+      return;
+    }
+
+    if (typeof view.closePopup === "function") {
+      view.closePopup();
+      return;
+    }
+
+    popup.close?.();
+  }
+
+  function hasOpenAggregatePopupFeature(popup) {
+    if (popup.selectedFeature?.isAggregate) {
+      return true;
+    }
+
+    return getPopupFeatures(popup).some((feature) => feature?.isAggregate);
+  }
+
+  function getPopupFeatures(popup) {
+    const features = popup.features;
+
+    if (!features) {
+      return [];
+    }
+
+    if (Array.isArray(features)) {
+      return features;
+    }
+
+    if (typeof features.toArray === "function") {
+      return features.toArray();
+    }
+
+    return [];
   }
 
   function normalizeJobIds(jobIds) {
