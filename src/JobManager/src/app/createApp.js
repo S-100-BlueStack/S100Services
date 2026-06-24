@@ -18,6 +18,7 @@ export async function createApp(rootElement) {
   const jobClusterSettingsStore = createJobClusterSettingsStore();
   const noticeRegion = createNoticeRegion();
   const appEventAbortController = new AbortController();
+  let jobsRefreshRequestId = 0;
 
   const navbar = await createNavbarController({
     jobFilterStore,
@@ -161,6 +162,18 @@ export async function createApp(rootElement) {
     }
   );
 
+  jobsPanel.element.addEventListener(
+    "job-manager:jobs-refreshed",
+    (event) => {
+      void refreshMapAfterJobsRefresh({
+        jobs: event.detail?.jobs,
+      });
+    },
+    {
+      signal: appEventAbortController.signal,
+    }
+  );
+
   setPanelOpen(jobsPanel.element, navbar.jobsButton, false);
 
   navbar.jobsButton.addEventListener(
@@ -206,10 +219,123 @@ export async function createApp(rootElement) {
     }
   );
 
+  async function refreshMapAfterJobsRefresh({ jobs } = {}) {
+    const refreshRequestId = jobsRefreshRequestId + 1;
+    jobsRefreshRequestId = refreshRequestId;
+
+    const result = await mapController.refreshJobData({
+      jobs,
+    });
+
+    if (refreshRequestId !== jobsRefreshRequestId) {
+      return;
+    }
+
+    if (!result.ok) {
+      showErrorNotice({
+        title: "Map refresh failed",
+        message: result.error.message,
+      });
+
+      return;
+    }
+
+    const selectedAoi = selectedAoiStore.getSnapshot().selectedAoi;
+    const selectedJob = selectedJobStore.getSnapshot().selectedJob;
+
+    if (selectedAoi?.aoiId) {
+      await refreshSelectedAoiMapState(selectedAoi, refreshRequestId);
+      return;
+    }
+
+    if (selectedJob?.jobId) {
+      await refreshSelectedJobMapState(selectedJob, refreshRequestId);
+    }
+  }
+
+  async function refreshSelectedAoiMapState(selectedAoi, refreshRequestId) {
+    try {
+      const scopeResult = await mapController.applyAoiJobScope(selectedAoi);
+
+      if (refreshRequestId !== jobsRefreshRequestId) {
+        return;
+      }
+
+      if (!scopeResult.ok) {
+        showErrorNotice({
+          title: "Related Jobs could not be refreshed on the map",
+          message: scopeResult.error.message,
+        });
+      }
+    } catch (error) {
+      if (refreshRequestId === jobsRefreshRequestId) {
+        showErrorNotice({
+          title: "Related Jobs could not be refreshed on the map",
+          message: error.message,
+        });
+      }
+    }
+
+    try {
+      await mapController.highlightAoiById(selectedAoi.aoiId);
+    } catch (error) {
+      if (refreshRequestId !== jobsRefreshRequestId) {
+        return;
+      }
+
+      mapController.clearAoiHighlight();
+
+      showErrorNotice({
+        title: "AOI highlight failed",
+        message: error.message,
+      });
+    }
+  }
+
+  async function refreshSelectedJobMapState(selectedJob, refreshRequestId) {
+    try {
+      await mapController.highlightJob(selectedJob);
+    } catch (error) {
+      if (refreshRequestId !== jobsRefreshRequestId) {
+        return;
+      }
+
+      showErrorNotice({
+        title: "Job highlight failed",
+        message: error.message,
+      });
+    }
+
+    if (refreshRequestId !== jobsRefreshRequestId) {
+      return;
+    }
+
+    if (selectedJob.relatedAoiIds.length === 0) {
+      mapController.clearAoiHighlight();
+      return;
+    }
+
+    try {
+      await mapController.highlightRelatedAoisForJob(selectedJob);
+    } catch (error) {
+      if (refreshRequestId !== jobsRefreshRequestId) {
+        return;
+      }
+
+      mapController.clearAoiHighlight();
+
+      showErrorNotice({
+        title: "Related AOIs could not be highlighted",
+        message: error.message,
+      });
+    }
+  }
+
   mapController.start();
 
   return {
     destroy() {
+      jobsRefreshRequestId += 1;
       appEventAbortController.abort();
       unsubscribeMapJobFilters();
       unsubscribeMapJobClusterSettings();

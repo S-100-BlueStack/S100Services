@@ -750,6 +750,40 @@ Rules:
 - AOI scope must be cleared when the user returns to the normal Jobs list, closes the Jobs panel or selects a specific Job.
 - If AOI scope resolution fails, the map must not leave a stale previous AOI Job scope active.
 
+### Manual refresh flow
+
+Status: Done
+
+Current flow:
+
+```txt
+Jobs panel Refresh button or panel reopen
+  -> Jobs store reloads through jobs/services
+  -> Jobs panel rerenders
+  -> job-manager:jobs-refreshed custom event with refreshed Jobs
+  -> app-level refresh coordinator
+  -> mapController.refreshJobData({ jobs })
+  -> Job map layers repopulate from the same refreshed Jobs snapshot
+  -> current Job filters reapplied
+  -> current Job clustering settings reapplied
+  -> AOI renderer summaries rebuilt
+  -> active AOI scope or selected Job highlight reapplied best-effort
+```
+
+Rules:
+
+- Manual refresh starts from explicit user action.
+- Jobs UI owns the Jobs panel refresh button and Jobs store reload.
+- App composition owns coordination between Jobs refresh and map refresh.
+- Map controller owns refreshing ArcGIS Job layer data and reapplying map-specific presentation state.
+- Manual refresh must preserve Job filters where practical.
+- Manual refresh must preserve AOI scope where practical by resolving related Job ids again.
+- Manual refresh must preserve selected Job and related AOI highlights best-effort.
+- The map refresh should use the refreshed Jobs already returned to the Jobs panel instead of loading Jobs a second time.
+- If Jobs refresh fails, map refresh should not run.
+- If map refresh fails, show a user-facing notice.
+- Manual refresh should not perform a full app reload.
+
 ### AOI popup Job summary content
 
 Status: Done

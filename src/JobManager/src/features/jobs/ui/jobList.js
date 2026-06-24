@@ -30,6 +30,37 @@ export function createJobList({ jobFilterStore } = {}) {
   const visibleDoneJobIds = new Set();
   const pendingMutationJobIds = new Set();
 
+  async function runJobsRefresh({ source = "manual", showSuccessNoticeOnSuccess = false } = {}) {
+    const result = await loadJobs(store, visibleDoneJobIds, {
+      showErrorNoticeOnFailure: false,
+    });
+
+    if (!result.ok) {
+      showErrorNotice({
+        title: source === "manual" ? "Refresh failed" : "Jobs could not be loaded",
+        message: result.error.message,
+      });
+
+      return result;
+    }
+
+    if (showSuccessNoticeOnSuccess) {
+      showSuccessNotice({
+        title: "Jobs refreshed",
+        message: "The mock Jobs list has been refreshed.",
+      });
+    }
+
+    rootElement.dispatchEvent(
+      createJobsRefreshedEvent({
+        source,
+        jobs: result.data.jobs,
+      })
+    );
+
+    return result;
+  }
+
   const clearAoiFilter = () => {
     const hadAoiFilter = Boolean(aoiFilter);
 
@@ -68,6 +99,7 @@ export function createJobList({ jobFilterStore } = {}) {
       pendingMutationJobIds,
       clearAoiFilter,
       clearJobFilters,
+      runJobsRefresh,
       render,
     });
   };
@@ -102,7 +134,9 @@ export function createJobList({ jobFilterStore } = {}) {
   return {
     element: rootElement,
     refreshJobs() {
-      return loadJobs(store, visibleDoneJobIds);
+      return runJobsRefresh({
+        source: "panel-open",
+      });
     },
     showJobsForAoi(selectedAoi) {
       selectedJobId = "";
@@ -172,12 +206,12 @@ export function createJobList({ jobFilterStore } = {}) {
   };
 }
 
-async function loadJobs(store, visibleDoneJobIds) {
+async function loadJobs(store, visibleDoneJobIds, { showErrorNoticeOnFailure = true } = {}) {
   visibleDoneJobIds.clear();
 
   const result = await store.loadJobs();
 
-  if (!result.ok) {
+  if (!result.ok && showErrorNoticeOnFailure) {
     showErrorNotice({
       title: "Jobs could not be loaded",
       message: result.error.message,
@@ -199,6 +233,7 @@ function renderJobList({
   pendingMutationJobIds,
   clearAoiFilter,
   clearJobFilters,
+  runJobsRefresh,
   render,
 }) {
   const scopedJobs = getScopedJobs(state.jobs, aoiFilter);
@@ -236,6 +271,7 @@ function renderJobList({
     expandedJobIds,
     visibleDoneJobIds,
     store,
+    runJobsRefresh,
     render,
   });
 
@@ -398,6 +434,7 @@ function createListToolbar({
   expandedJobIds,
   visibleDoneJobIds,
   store,
+  runJobsRefresh,
   render,
 }) {
   const toolbarElement = document.createElement("div");
@@ -428,19 +465,10 @@ function createListToolbar({
   const refreshButton = createToolbarButton(state.isLoading ? "Refreshing..." : "Refresh");
   refreshButton.disabled = state.isLoading;
   refreshButton.addEventListener("click", async () => {
-    const result = await loadJobs(store, visibleDoneJobIds);
-
-    if (result.ok) {
-      showSuccessNotice({
-        title: "Jobs refreshed",
-        message: "The mock Jobs list has been refreshed.",
-      });
-    } else {
-      showErrorNotice({
-        title: "Refresh failed",
-        message: result.error.message,
-      });
-    }
+    await runJobsRefresh({
+      source: "manual",
+      showSuccessNoticeOnSuccess: true,
+    });
   });
 
   refreshActionsElement.appendChild(refreshButton);
@@ -859,6 +887,27 @@ function createEmptyState({ hiddenDoneCount, aoiFilter, jobFilters }) {
       : "No Jobs found.";
 
   return element;
+}
+
+function createJobsRefreshedEvent({ source, jobs } = {}) {
+  return new CustomEvent("job-manager:jobs-refreshed", {
+    bubbles: true,
+    detail: {
+      source: normalizeOptionalString(source) || "manual",
+      jobs: cloneJobsForRefreshEvent(jobs),
+    },
+  });
+}
+
+function cloneJobsForRefreshEvent(jobs = []) {
+  if (!Array.isArray(jobs)) {
+    return [];
+  }
+
+  return jobs.map((job) => ({
+    ...job,
+    relatedAoiIds: Array.isArray(job.relatedAoiIds) ? [...job.relatedAoiIds] : [],
+  }));
 }
 
 function createAoiFilterClearedEvent() {

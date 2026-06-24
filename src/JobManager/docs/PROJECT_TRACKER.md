@@ -1371,6 +1371,30 @@ Rationale:
 
 Hover highlight should behave as transient pointer feedback and must not remain visible after the pointer leaves the map. Starting with the Jobs panel closed gives the map-first workspace more room on load while preserving all explicit Jobs workflows.
 
+## 8.46 Add manual refresh coordination
+
+Status: Done
+
+Manual refresh now coordinates the Jobs panel and map-derived Job data.
+
+Current behavior:
+
+- Clicking `Refresh` in the Jobs panel reloads Jobs through the Jobs service/store.
+- Reopening the Jobs panel from the navbar also refreshes Jobs through the same path.
+- A successful Jobs refresh triggers map Job layer refresh using the refreshed Jobs already returned to the Jobs panel.
+- Map Job point, priority point and polygon layers are repopulated from the refreshed Jobs.
+- Existing Job filters remain active after refresh.
+- Existing Job point clustering settings remain active after refresh.
+- AOI renderer summaries are rebuilt after refresh.
+- If an AOI scope is active, related Job ids are resolved again and map Job layer scope is reapplied.
+- If a Job is selected, selected Job and related AOI highlights are reapplied best-effort.
+- If Jobs refresh fails, map refresh is not attempted.
+- If map refresh fails after Jobs refresh, a user-facing notice is shown.
+
+Rationale:
+
+Manual refresh should not only update the Jobs panel. It should keep the map/list workflow coherent by refreshing map Job layers, derived AOI severity and active scope/highlight state without resetting filters or forcing a full app reload.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -1757,15 +1781,15 @@ Make the app resilient to realistic loading, mutation and refresh scenarios.
 
 Tasks:
 
-| ID      | Task                                         |      Status | Notes                                                                                                    |
-| ------- | -------------------------------------------- | ----------: | -------------------------------------------------------------------------------------------------------- |
-| JM-1001 | Add manual refresh flow                      | Not started | Preserve filters, selected AOI/Job and map layer state where practical.                                  |
-| JM-1002 | Add silent refresh plan                      | Not started | Implement only if needed early.                                                                          |
-| JM-1003 | Preserve selected AOI/Job across refresh     | Not started | Best effort; depends on manual refresh design.                                                           |
-| JM-1004 | Add mutation conflict handling placeholder   | Not started | Backend future.                                                                                          |
-| JM-1005 | Add retry-friendly error states              | Not started | User should know what failed and what can be retried.                                                    |
-| JM-1006 | Review loading states across app             | In progress | Map, Jobs panel, Job mutations and relation-derived UI have initial states. Full refresh review remains. |
-| JM-1007 | Polish hover cleanup and initial panel state |        Done | Hover clears on map exit/stale hit-test, and Jobs panel starts closed on app load.                       |
+| ID      | Task                                         |      Status | Notes                                                                                                                               |
+| ------- | -------------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------- |
+| JM-1001 | Add manual refresh flow                      |        Done | Jobs panel refresh now also refreshes map Job layers, AOI renderer summaries, filters, clustering and active scope/highlight state. |
+| JM-1002 | Add silent refresh plan                      | Not started | Implement only if needed early.                                                                                                     |
+| JM-1003 | Preserve selected AOI/Job across refresh     | Not started | Best effort; depends on manual refresh design.                                                                                      |
+| JM-1004 | Add mutation conflict handling placeholder   | Not started | Backend future.                                                                                                                     |
+| JM-1005 | Add retry-friendly error states              | Not started | User should know what failed and what can be retried.                                                                               |
+| JM-1006 | Review loading states across app             | In progress | Map, Jobs panel, Job mutations and relation-derived UI have initial states. Full refresh review remains.                            |
+| JM-1007 | Polish hover cleanup and initial panel state |        Done | Hover clears on map exit/stale hit-test, and Jobs panel starts closed on app load.                                                  |
 
 Exit criteria:
 

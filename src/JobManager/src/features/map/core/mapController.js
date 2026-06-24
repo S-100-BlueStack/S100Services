@@ -228,6 +228,42 @@ export function createMapController({
     applyCurrentJobFilters();
   }
 
+  async function refreshJobData({ jobs } = {}) {
+    if (!mapResult?.layers?.jobLayers) {
+      return {
+        ok: true,
+        data: {
+          pointCount: 0,
+          polygonCount: 0,
+        },
+      };
+    }
+
+    mapHoverController?.clearHover();
+
+    try {
+      const result = await applyJobLayerData({
+        jobLayers: mapResult.layers.jobLayers,
+        jobs,
+      });
+
+      if (isDestroyed || !result.ok) {
+        return result;
+      }
+
+      applyCurrentJobFilters();
+      applyCurrentJobClusterSettingsWithoutBlocking();
+      applyCurrentAoiRendererWithoutBlockingMapReady();
+
+      return result;
+    } catch (error) {
+      return {
+        ok: false,
+        error: normalizeError(error, "Job map data could not be refreshed."),
+      };
+    }
+  }
+
   function applyJobClusterSettings(settings) {
     currentJobClusterSettings = settings;
 
@@ -417,6 +453,7 @@ export function createMapController({
     clearAoiHighlight,
     applyAoiJobScope,
     clearAoiJobScope,
+    refreshJobData,
     applyJobFilters,
     applyJobClusterSettings,
   };
