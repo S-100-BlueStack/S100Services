@@ -246,6 +246,38 @@ Rules:
 - Cyclic mock Job creation must stay isolated from UI logic.
 - Backend-specific fields must be normalized before UI use.
 
+### Job details view
+
+Status: In progress
+
+Current direction:
+
+The Jobs panel supports two UI modes:
+
+```txt
+Jobs list mode
+  -> scan and filter Jobs
+  -> expand compact card summary
+  -> open dedicated Job details
+
+Job details mode
+  -> inspect one selected Job
+  -> update Job status
+  -> return to Jobs list
+```
+
+Rules:
+
+- Job details remain part of `features/jobs/ui`.
+- Job details use the normalized frontend Job model.
+- Job details must not import mock data directly.
+- Job details may use existing status mutation service/store behavior.
+- Job details must not add deadline editing until that workflow and backend ownership are confirmed.
+- Opening Job details from a map popup is treated as selected Job state and should keep map highlight behavior.
+- Opening Job details from a list card is a local panel navigation and should not force map selection.
+- Returning from map-opened Job details should clear selected Job map highlights.
+- AOI details remain deferred until real AOI fields, auth and geometry are confirmed.
+
 ### Mock backend behavior
 
 Status: Done
@@ -710,13 +742,12 @@ Status: Done
 Current flow:
 
 ```txt
-Job geometry popup custom content button
-  -> DOM custom event with feature-scoped Job selection
+Job geometry popup action
   -> app-level selected Job callback
   -> selected Job state
-  -> Jobs panel opens
-  -> matching Job card expands and receives focus
+  -> Jobs panel opens in Job details mode
   -> selected Job geometry is highlighted on the map
+  -> related AOIs are highlighted on the map
 ```
 
 Rules:
@@ -729,6 +760,7 @@ Rules:
 - Selecting a Job from the map clears AOI-scoped list mode.
 - Closing the Jobs panel or returning to the normal Jobs list clears selected Job highlight.
 - Related AOI highlight for selected Job is handled through selected Job state and map controller highlight flows.
+- Jobs panel details mode is the primary selected Job detail surface; compact card expansion remains a list-scanning aid.
 
 Implementation note:
 

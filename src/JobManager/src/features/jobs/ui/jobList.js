@@ -4,17 +4,24 @@ import {
   hasActiveJobFilters,
   shouldRevealDoneJobsForFilters,
 } from "../domain/jobFilters.js";
+import { getJobGeometryTypeLabel } from "../domain/jobModel.js";
+import { getJobPriorityLabel } from "../domain/jobPriority.js";
+import { JOB_STATUS, JOB_STATUS_OPTIONS, getJobStatusLabel } from "../domain/jobStatus.js";
 import {
   showErrorNotice,
   showInfoNotice,
   showSuccessNotice,
 } from "../../notices/services/noticeService.js";
 import { getJobsForAoiFromJobs } from "../../relations/services/relationService.js";
-import { JOB_STATUS, JOB_STATUS_OPTIONS } from "../domain/jobStatus.js";
 import { createJobStore } from "../state/jobStore.js";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
+});
+
+const JOB_LIST_VIEW_MODE = Object.freeze({
+  LIST: "list",
+  DETAILS: "details",
 });
 
 export function createJobList({ jobFilterStore, store = createJobStore() } = {}) {
@@ -25,6 +32,8 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
   let jobFilters = jobFilterStore?.getSnapshot?.().filters ?? null;
   let aoiFilter = null;
   let selectedJobId = "";
+  let viewMode = JOB_LIST_VIEW_MODE.LIST;
+  let shouldNotifySelectionClearedOnBack = false;
   const expandedJobIds = new Set();
   const visibleDoneJobIds = new Set();
   const pendingMutationJobIds = new Set();
@@ -64,6 +73,9 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
     const hadAoiFilter = Boolean(aoiFilter);
 
     aoiFilter = null;
+    selectedJobId = "";
+    viewMode = JOB_LIST_VIEW_MODE.LIST;
+    shouldNotifySelectionClearedOnBack = false;
     expandedJobIds.clear();
     render();
 
@@ -73,16 +85,46 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
   };
 
   const clearSelectedJob = () => {
-    if (!selectedJobId) {
+    if (!selectedJobId && viewMode === JOB_LIST_VIEW_MODE.LIST) {
       return;
     }
 
     selectedJobId = "";
+    viewMode = JOB_LIST_VIEW_MODE.LIST;
+    shouldNotifySelectionClearedOnBack = false;
     render();
   };
 
   const clearJobFilters = () => {
     jobFilterStore?.clearFilters?.();
+  };
+
+  const showJobListFromDetails = () => {
+    const shouldDispatchSelectionCleared = shouldNotifySelectionClearedOnBack;
+
+    selectedJobId = "";
+    viewMode = JOB_LIST_VIEW_MODE.LIST;
+    shouldNotifySelectionClearedOnBack = false;
+    render();
+
+    if (shouldDispatchSelectionCleared) {
+      rootElement.dispatchEvent(createJobSelectionClearedEvent());
+    }
+  };
+
+  const openJobDetailsFromList = (jobId) => {
+    const normalizedJobId = normalizeOptionalString(jobId);
+
+    if (!normalizedJobId) {
+      return;
+    }
+
+    selectedJobId = normalizedJobId;
+    viewMode = JOB_LIST_VIEW_MODE.DETAILS;
+    shouldNotifySelectionClearedOnBack = false;
+    makeSelectedDoneJobVisible(visibleDoneJobIds, currentState.jobs, selectedJobId);
+    render();
+    focusJobDetails(rootElement, selectedJobId);
   };
 
   const render = () => {
@@ -93,6 +135,7 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
       jobFilters,
       aoiFilter,
       selectedJobId,
+      viewMode,
       expandedJobIds,
       visibleDoneJobIds,
       pendingMutationJobIds,
@@ -100,6 +143,8 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
       clearJobFilters,
       runJobsRefresh,
       render,
+      openJobDetailsFromList,
+      showJobListFromDetails,
     });
   };
 
@@ -137,6 +182,8 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
     },
     showJobsForAoi(selectedAoi) {
       selectedJobId = "";
+      viewMode = JOB_LIST_VIEW_MODE.LIST;
+      shouldNotifySelectionClearedOnBack = false;
       aoiFilter = normalizeAoiFilter(selectedAoi);
       expandedJobIds.clear();
 
@@ -160,6 +207,8 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
       }
 
       selectedJobId = normalizedSelectedJob.jobId;
+      viewMode = JOB_LIST_VIEW_MODE.DETAILS;
+      shouldNotifySelectionClearedOnBack = true;
       aoiFilter = null;
       expandedJobIds.add(selectedJobId);
 
@@ -167,16 +216,15 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
         const result = await loadJobs(store, visibleDoneJobIds);
 
         makeSelectedDoneJobVisible(visibleDoneJobIds, currentState.jobs, selectedJobId);
-        expandedJobIds.add(selectedJobId);
         render();
-        focusJobCard(rootElement, selectedJobId);
+        focusJobDetails(rootElement, selectedJobId);
 
         return result;
       }
 
       makeSelectedDoneJobVisible(visibleDoneJobIds, currentState.jobs, selectedJobId);
       render();
-      focusJobCard(rootElement, selectedJobId);
+      focusJobDetails(rootElement, selectedJobId);
 
       return Promise.resolve({
         ok: true,
@@ -225,6 +273,7 @@ function renderJobList({
   jobFilters,
   aoiFilter,
   selectedJobId,
+  viewMode,
   expandedJobIds,
   visibleDoneJobIds,
   pendingMutationJobIds,
@@ -232,7 +281,25 @@ function renderJobList({
   clearJobFilters,
   runJobsRefresh,
   render,
+  openJobDetailsFromList,
+  showJobListFromDetails,
 }) {
+  if (viewMode === JOB_LIST_VIEW_MODE.DETAILS) {
+    renderJobDetailsView({
+      rootElement,
+      state,
+      store,
+      selectedJobId,
+      visibleDoneJobIds,
+      pendingMutationJobIds,
+      runJobsRefresh,
+      render,
+      showJobListFromDetails,
+    });
+
+    return;
+  }
+
   const scopedJobs = getScopedJobs(state.jobs, aoiFilter);
   const filteredScopedJobs = filterJobs(scopedJobs, jobFilters);
   const visibleJobs = getVisibleJobs(filteredScopedJobs, visibleDoneJobIds, jobFilters);
@@ -269,8 +336,6 @@ function renderJobList({
     hiddenDoneCount,
     jobFilters,
     expandedJobIds,
-    visibleDoneJobIds,
-    store,
     runJobsRefresh,
     render,
   });
@@ -280,7 +345,7 @@ function renderJobList({
   if (state.error) {
     contentElements.push(
       createInlineErrorState({
-        title: "Latest Jobs refresh failed",
+        title: "Latest Jobs operation failed",
         message: state.error.message,
         isLoading: state.isLoading,
         onRetry() {
@@ -312,12 +377,313 @@ function renderJobList({
         visibleDoneJobIds,
         pendingMutationJobIds,
         render,
+        openJobDetailsFromList,
       })
     );
   }
 
   contentElements.push(listElement);
   rootElement.replaceChildren(...contentElements);
+}
+
+function renderJobDetailsView({
+  rootElement,
+  state,
+  store,
+  selectedJobId,
+  visibleDoneJobIds,
+  pendingMutationJobIds,
+  runJobsRefresh,
+  render,
+  showJobListFromDetails,
+}) {
+  const selectedJob = getJobById(state.jobs, selectedJobId);
+  const contentElements = [];
+
+  if (state.isLoading && state.jobs.length === 0) {
+    rootElement.replaceChildren(createLoadingState());
+    return;
+  }
+
+  if (state.error && state.jobs.length === 0) {
+    rootElement.replaceChildren(
+      createErrorState({
+        title: "Jobs are unavailable",
+        message: state.error.message,
+      })
+    );
+    return;
+  }
+
+  if (!selectedJob) {
+    rootElement.replaceChildren(
+      createSelectedJobMissingState({
+        selectedJobId,
+        isLoading: state.isLoading,
+        runJobsRefresh,
+        showJobListFromDetails,
+      })
+    );
+    return;
+  }
+
+  contentElements.push(
+    createJobDetailsHeader({
+      job: selectedJob,
+      isLoading: state.isLoading,
+      runJobsRefresh,
+      showJobListFromDetails,
+    })
+  );
+
+  if (state.error) {
+    contentElements.push(
+      createInlineErrorState({
+        title: "Latest Jobs operation failed",
+        message: state.error.message,
+        isLoading: state.isLoading,
+        onRetry() {
+          void runJobsRefresh({
+            source: "retry",
+            showSuccessNoticeOnSuccess: true,
+          });
+        },
+      })
+    );
+  }
+
+  const detailsElement = document.createElement("article");
+  detailsElement.className = "job-details";
+  detailsElement.dataset.jobDetailsId = selectedJob.id;
+  detailsElement.tabIndex = -1;
+
+  detailsElement.append(
+    createJobDetailsSummary(selectedJob),
+    createJobDetailsFactSection(selectedJob),
+    createJobDetailsStatusSection({
+      job: selectedJob,
+      store,
+      visibleDoneJobIds,
+      pendingMutationJobIds,
+      render,
+    }),
+    createJobDetailsAoiSection(selectedJob)
+  );
+
+  contentElements.push(detailsElement);
+  rootElement.replaceChildren(...contentElements);
+}
+
+function createJobDetailsHeader({ job, isLoading, runJobsRefresh, showJobListFromDetails }) {
+  const headerElement = document.createElement("div");
+  headerElement.className = "job-details__header";
+
+  const titleGroupElement = document.createElement("div");
+  titleGroupElement.className = "job-details__title-group";
+
+  const eyebrowElement = document.createElement("p");
+  eyebrowElement.className = "job-details__eyebrow";
+  eyebrowElement.textContent = "Selected Job";
+
+  const titleElement = document.createElement("h3");
+  titleElement.className = "job-details__title";
+  titleElement.textContent = job.title;
+
+  const metaElement = document.createElement("div");
+  metaElement.className = "job-details__badge-row";
+  metaElement.append(
+    createJobStatusBadge(job),
+    createPriorityBadge(job),
+    createAffectedAoiBadge(job)
+  );
+
+  titleGroupElement.append(eyebrowElement, titleElement, metaElement);
+
+  const actionsElement = document.createElement("div");
+  actionsElement.className = "job-details__header-actions";
+
+  const backButton = createToolbarButton("Back to Jobs");
+  backButton.addEventListener("click", showJobListFromDetails);
+
+  const refreshButton = createToolbarButton(isLoading ? "Refreshing..." : "Refresh");
+  refreshButton.disabled = isLoading;
+  refreshButton.addEventListener("click", () => {
+    void runJobsRefresh({
+      source: "details-refresh",
+      showSuccessNoticeOnSuccess: true,
+    });
+  });
+
+  actionsElement.append(backButton, refreshButton);
+  headerElement.append(titleGroupElement, actionsElement);
+
+  return headerElement;
+}
+
+function createJobDetailsSummary(job) {
+  const sectionElement = createJobDetailsSection("Summary");
+
+  const summaryElement = document.createElement("p");
+  summaryElement.className = "job-details__summary";
+  summaryElement.textContent = job.summary || "No summary provided.";
+
+  sectionElement.append(summaryElement);
+
+  return sectionElement;
+}
+
+function createJobDetailsFactSection(job) {
+  const sectionElement = createJobDetailsSection("Details");
+  const factGridElement = document.createElement("dl");
+  factGridElement.className = "job-details__fact-grid";
+
+  factGridElement.append(
+    createJobDetailFact("Job ID", job.id),
+    createJobDetailFact("Created", formatDate(job.createdAt)),
+    createJobDetailFact("Deadline", formatDate(job.deadline)),
+    createJobDetailFact("Status", getJobStatusLabel(job.status)),
+    createJobDetailFact("Priority", getJobPriorityLabel(job.priority)),
+    createJobDetailFact("Geometry", getJobGeometryTypeLabel(job)),
+    createJobDetailFact("Affected AOIs", String(job.relatedAoiIds.length))
+  );
+
+  sectionElement.append(factGridElement);
+
+  return sectionElement;
+}
+
+function createJobDetailsStatusSection({
+  job,
+  store,
+  visibleDoneJobIds,
+  pendingMutationJobIds,
+  render,
+}) {
+  const sectionElement = createJobDetailsSection("Update status");
+
+  const hintElement = document.createElement("p");
+  hintElement.className = "job-details__hint";
+  hintElement.textContent = "Status changes are saved through the current Jobs service.";
+
+  sectionElement.append(
+    hintElement,
+    createStatusActions({
+      job,
+      visibleDoneJobIds,
+      pendingMutationJobIds,
+      store,
+      render,
+    })
+  );
+
+  return sectionElement;
+}
+
+function createJobDetailsAoiSection(job) {
+  const sectionElement = createJobDetailsSection("Related AOIs");
+
+  if (job.relatedAoiIds.length === 0) {
+    const emptyElement = document.createElement("p");
+    emptyElement.className = "job-details__empty";
+    emptyElement.textContent = "No related AOIs registered for this Job.";
+    sectionElement.append(emptyElement);
+
+    return sectionElement;
+  }
+
+  const listElement = document.createElement("ul");
+  listElement.className = "job-details__aoi-list";
+
+  for (const aoiId of job.relatedAoiIds) {
+    const itemElement = document.createElement("li");
+    itemElement.className = "job-details__aoi-item";
+    itemElement.textContent = aoiId;
+    listElement.appendChild(itemElement);
+  }
+
+  sectionElement.append(listElement);
+
+  return sectionElement;
+}
+
+function createJobDetailsSection(title) {
+  const sectionElement = document.createElement("section");
+  sectionElement.className = "job-details__section";
+
+  const titleElement = document.createElement("h4");
+  titleElement.className = "job-details__section-title";
+  titleElement.textContent = title;
+
+  sectionElement.append(titleElement);
+
+  return sectionElement;
+}
+
+function createJobDetailFact(label, value) {
+  const factElement = document.createElement("div");
+  factElement.className = "job-details__fact";
+
+  const labelElement = document.createElement("dt");
+  labelElement.className = "job-details__fact-label";
+  labelElement.textContent = label;
+
+  const valueElement = document.createElement("dd");
+  valueElement.className = "job-details__fact-value";
+  valueElement.textContent = value || "-";
+
+  factElement.append(labelElement, valueElement);
+
+  return factElement;
+}
+
+function createSelectedJobMissingState({
+  selectedJobId,
+  isLoading,
+  runJobsRefresh,
+  showJobListFromDetails,
+}) {
+  const containerElement = document.createElement("div");
+  containerElement.className = "job-list__state job-list__state--error";
+  containerElement.setAttribute("role", "alert");
+
+  const contentElement = document.createElement("div");
+  contentElement.className = "job-list__state-content";
+  contentElement.append(
+    createStateTitle("Selected Job is unavailable"),
+    createStateMessage(
+      selectedJobId
+        ? "The selected Job is not present in the current Jobs snapshot."
+        : "No Job is selected."
+    )
+  );
+
+  const actionsElement = document.createElement("div");
+  actionsElement.className = "job-list__state-actions";
+
+  const backButton = document.createElement("calcite-button");
+  backButton.scale = "s";
+  backButton.kind = "neutral";
+  backButton.appearance = "outline";
+  backButton.textContent = "Back to Jobs";
+  backButton.addEventListener("click", showJobListFromDetails);
+
+  const refreshButton = document.createElement("calcite-button");
+  refreshButton.scale = "s";
+  refreshButton.kind = "neutral";
+  refreshButton.appearance = "outline";
+  refreshButton.disabled = isLoading;
+  refreshButton.textContent = isLoading ? "Refreshing..." : "Refresh";
+  refreshButton.addEventListener("click", () => {
+    void runJobsRefresh({
+      source: "details-missing-refresh",
+      showSuccessNoticeOnSuccess: true,
+    });
+  });
+
+  actionsElement.append(backButton, refreshButton);
+  containerElement.append(contentElement, actionsElement);
+
+  return containerElement;
 }
 
 function getFilteredScopedJobs(jobs, aoiFilter, jobFilters) {
@@ -354,6 +720,16 @@ function getHiddenDoneCount(jobs, visibleDoneJobIds, jobFilters) {
 
   return jobs.filter((job) => job.status === JOB_STATUS.DONE && !visibleDoneJobIds.has(job.id))
     .length;
+}
+
+function getJobById(jobs, jobId) {
+  const normalizedJobId = normalizeOptionalString(jobId);
+
+  if (!normalizedJobId) {
+    return null;
+  }
+
+  return jobs.find((job) => job.id === normalizedJobId) ?? null;
 }
 
 function makeSelectedDoneJobVisible(visibleDoneJobIds, jobs, selectedJobId) {
@@ -549,6 +925,7 @@ function createJobCard({
   visibleDoneJobIds,
   pendingMutationJobIds,
   render,
+  openJobDetailsFromList,
 }) {
   const isExpanded = expandedJobIds.has(job.id);
   const isSelected = job.id === selectedJobId;
@@ -574,11 +951,12 @@ function createJobCard({
       pendingMutationJobIds,
       store,
       render,
+      openJobDetailsFromList,
     })
   );
 
   if (isExpanded) {
-    cardElement.appendChild(createJobDetails(job));
+    cardElement.appendChild(createJobCardDetails(job));
   }
 
   return cardElement;
@@ -592,6 +970,7 @@ function createJobCardSummary({
   pendingMutationJobIds,
   store,
   render,
+  openJobDetailsFromList,
 }) {
   const summaryElement = document.createElement("div");
   summaryElement.className = "job-card__summary-layout";
@@ -599,7 +978,7 @@ function createJobCardSummary({
   const topRowElement = document.createElement("div");
   topRowElement.className = "job-card__top-row";
   topRowElement.append(
-    createJobTitleRow({ job, isExpanded, expandedJobIds, render }),
+    createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDetailsFromList }),
     createBadgeColumn(job)
   );
 
@@ -621,15 +1000,15 @@ function createJobCardSummary({
   return summaryElement;
 }
 
-function createJobTitleRow({ job, isExpanded, expandedJobIds, render }) {
+function createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDetailsFromList }) {
   const titleRowElement = document.createElement("div");
   titleRowElement.className = "job-card__title-row";
 
   const expandButton = document.createElement("calcite-action");
   expandButton.className = "job-card__expand-action";
   expandButton.icon = isExpanded ? "chevron-up" : "chevron-down";
-  expandButton.text = isExpanded ? "Collapse Job details" : "Expand Job details";
-  expandButton.title = isExpanded ? "Collapse Job details" : "Expand Job details";
+  expandButton.text = isExpanded ? "Collapse Job card" : "Expand Job card";
+  expandButton.title = isExpanded ? "Collapse Job card" : "Expand Job card";
   expandButton.addEventListener("click", () => {
     if (isExpanded) {
       expandedJobIds.delete(job.id);
@@ -640,11 +1019,20 @@ function createJobTitleRow({ job, isExpanded, expandedJobIds, render }) {
     render();
   });
 
+  const detailsButton = document.createElement("calcite-action");
+  detailsButton.className = "job-card__details-action";
+  detailsButton.icon = "information";
+  detailsButton.text = "Open Job details";
+  detailsButton.title = "Open Job details";
+  detailsButton.addEventListener("click", () => {
+    openJobDetailsFromList(job.id);
+  });
+
   const titleElement = document.createElement("h3");
   titleElement.className = "job-card__title";
   titleElement.textContent = job.title;
 
-  titleRowElement.append(expandButton, titleElement);
+  titleRowElement.append(expandButton, detailsButton, titleElement);
 
   return titleRowElement;
 }
@@ -730,6 +1118,14 @@ function createAffectedAoiBadge(job) {
   return badgeElement;
 }
 
+function createJobStatusBadge(job) {
+  const statusElement = document.createElement("span");
+  statusElement.className = `job-details__status job-details__status--${toCssModifier(job.status)}`;
+  statusElement.textContent = getJobStatusLabel(job.status);
+
+  return statusElement;
+}
+
 function getAffectedAoiImpact(aoiCount) {
   if (aoiCount <= 0) {
     return "none";
@@ -766,7 +1162,7 @@ function createStatusActions({ job, visibleDoneJobIds, pendingMutationJobIds, st
   return actionsElement;
 }
 
-function createJobDetails(job) {
+function createJobCardDetails(job) {
   const detailsElement = document.createElement("div");
   detailsElement.className = "job-card__details";
 
@@ -785,14 +1181,17 @@ function createStatusButton({
   visibleDoneJobIds,
   pendingMutationJobIds,
   store,
+  render,
 }) {
   const isActive = job.status === statusOption.value;
+  const isPending = pendingMutationJobIds.has(job.id);
   const buttonElement = document.createElement("calcite-button");
 
   buttonElement.className = "job-status-button";
   buttonElement.scale = "s";
   buttonElement.kind = "brand";
   buttonElement.appearance = isActive ? "solid" : "outline";
+  buttonElement.disabled = isPending;
   buttonElement.textContent = statusOption.label;
 
   if (isActive) {
@@ -814,6 +1213,7 @@ function createStatusButton({
     const result = await store.updateJobStatus(job.id, statusOption.value);
 
     pendingMutationJobIds.delete(job.id);
+    render();
 
     if (!result.ok) {
       visibleDoneJobIds.delete(job.id);
@@ -831,7 +1231,7 @@ function createStatusButton({
       message: `${result.data.job.title} is now ${statusOption.label}.`,
     });
 
-    if (result.data.createdJobs.length > 0) {
+    if (Array.isArray(result.data.createdJobs) && result.data.createdJobs.length > 0) {
       showInfoNotice({
         title: "New Job queued",
         message:
@@ -989,6 +1389,12 @@ function createAoiFilterClearedEvent() {
   });
 }
 
+function createJobSelectionClearedEvent() {
+  return new CustomEvent("job-manager:job-selection-cleared", {
+    bubbles: true,
+  });
+}
+
 function normalizeAoiFilter(selectedAoi = {}) {
   return {
     aoiId: normalizeOptionalString(selectedAoi.aoiId ?? selectedAoi.id),
@@ -1002,24 +1408,28 @@ function normalizeSelectedJob(selectedJob = {}) {
   };
 }
 
-function focusJobCard(rootElement, jobId) {
+function focusJobDetails(rootElement, jobId) {
   window.requestAnimationFrame(() => {
-    const jobCard = [...rootElement.querySelectorAll("[data-job-id]")].find(
-      (element) => element.dataset.jobId === jobId
+    const detailsElement = [...rootElement.querySelectorAll("[data-job-details-id]")].find(
+      (element) => element.dataset.jobDetailsId === jobId
     );
 
-    if (!jobCard) {
+    if (!detailsElement) {
       return;
     }
 
-    jobCard.scrollIntoView({
+    detailsElement.scrollIntoView({
       block: "nearest",
     });
 
-    jobCard.focus({
+    detailsElement.focus({
       preventScroll: true,
     });
   });
+}
+
+function toCssModifier(value) {
+  return normalizeOptionalString(value).replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
 }
 
 function normalizeOptionalString(value) {

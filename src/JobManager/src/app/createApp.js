@@ -197,6 +197,18 @@ export async function createApp(rootElement) {
   );
 
   jobsPanel.element.addEventListener(
+    "job-manager:job-selection-cleared",
+    () => {
+      selectedJobStore.clearSelection();
+      mapController.clearJobHighlight();
+      mapController.clearAoiHighlight();
+    },
+    {
+      signal: appEventAbortController.signal,
+    }
+  );
+
+  jobsPanel.element.addEventListener(
     "job-manager:jobs-refreshed",
     (event) => {
       void refreshMapAfterJobsRefresh({

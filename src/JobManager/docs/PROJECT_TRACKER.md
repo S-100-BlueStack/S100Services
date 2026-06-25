@@ -1954,6 +1954,31 @@ Mock backend behavior review:
 - Mock relations are derived from normalized Job `relatedAoiIds` through the relation service/domain layer.
 - Mock relation behavior can later be replaced by backend-provided relations without changing UI ownership.
 
+## Phase 12 - Job details workflow polish
+
+Goal:
+
+Improve the Job details workflow without introducing heavy editing or final backend assumptions.
+
+Tasks:
+
+| ID      | Task                                          |      Status | Notes                                                                                                   |
+| ------- | --------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------- |
+| JM-1201 | Define Job details panel scope                |        Done | Details view remains read-only except for existing status buttons. Deadline editing remains deferred.   |
+| JM-1202 | Implement dedicated Job details view          | In progress | Jobs panel can switch from list mode to a dedicated selected Job details view.                          |
+| JM-1203 | Wire map/list Job selection to details mode   | In progress | Map popup flow opens details mode; Job list cards can open details mode without changing backend seams. |
+| JM-1204 | Preserve status mutation and notices          | In progress | Details view reuses existing status mutation flow and notices.                                          |
+| JM-1205 | Defer AOI details until real AOI fields exist |        Done | AOI details panel is deferred until final AOI Feature Service fields/auth/geometry are confirmed.       |
+
+Exit criteria:
+
+- Jobs panel supports list mode and details mode
+- selected Job details are readable and focused
+- status changes work from details mode
+- map-selected Jobs still highlight Job geometry and related AOIs
+- backing out of details mode clears map selection only when the details view was opened from the map
+- no new backend contract is introduced
+
 ## 13. Suggested implementation order
 
 Recommended order:
@@ -2144,3 +2169,4 @@ Recommended next tasks:
 | JM-NEXT-016 | Start backend/AOI-service preparation                    |        Done | Phase 11 readiness review completed. Next implementation should focus on docs alignment and confirmed external AOI/backend inputs. |
 | JM-NEXT-017 | Clean Phase 11 docs drift                                |        Done | Mock backend behavior is documented and stale docs placement/status drift has been cleaned.                                        |
 | JM-NEXT-018 | Await final AOI/backend inputs                           |     Blocked | Requires real AOI Feature Service fields, auth requirements, geometry characteristics and backend contract direction.              |
+| JM-NEXT-019 | Start Phase 12 Job details workflow polish               | In progress | Implement a dedicated Job details view in the existing Jobs panel; AOI details remain deferred.                                    |
