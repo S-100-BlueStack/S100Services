@@ -896,9 +896,33 @@ Current flow:
 ```txt
 AOI PopupTemplate custom content
   -> selected AOI id from popup graphic attributes
-  -> relation service snapshot using current Job filters
+  -> current shared Jobs store snapshot, when available
+  -> current Job filters
+  -> relation service snapshot
   -> AOI Job summary lookup
   -> popup summary metrics
+```
+
+Live-refresh flow:
+
+```txt
+Job filters change
+  -> map controller reapplies Job layer filters
+  -> AOI renderer refresh starts
+  -> open AOI popup summary content re-renders
+
+Jobs store changes
+  -> app-level Jobs store subscription
+  -> map controller asks open AOI popup summary content to re-render
+
+Jobs refresh succeeds
+  -> Jobs store changes
+  -> Job map layers refresh
+  -> open AOI popup summary content re-renders
+
+Job status mutation succeeds
+  -> Jobs store changes
+  -> open AOI popup summary content re-renders
 ```
 
 Current popup summary metrics:
@@ -915,8 +939,10 @@ Rules:
 - Popup summary counts should reflect current Job filters where available.
 - If the selected AOI id does not match relation summaries, the popup should show a neutral empty summary instead of failing.
 - `Show related Jobs` remains a popup action and continues to open the Jobs panel scoped to the selected AOI.
-
-Known limitation: open AOI popups do not live-refresh summary counts when Job filters change; reopening the popup refreshes the summary.
+- Open AOI popup summaries should refresh from current shared Jobs state when available.
+- Popup summary live-refresh is best-effort and must not close/reopen the ArcGIS popup.
+- Popup summary refresh must not block Job filter application, AOI renderer updates or manual refresh.
+- Closed popup custom content can be cleaned up lazily on later refresh attempts.
 
 ## 14. UI composition direction
 

@@ -8,13 +8,22 @@ const AOI_JOB_SUMMARY_POPUP_CONTENT_ID = "job-manager-aoi-job-summary";
 export function configureAoiJobSummaryPopupContent({
   aoiLayer,
   getJobFilters,
+  getJobs,
   relationService = defaultRelationService,
 } = {}) {
+  const controller = createAoiJobSummaryPopupContentController({
+    getJobFilters,
+    getJobs,
+    relationService,
+  });
+
   if (!aoiLayer?.popupTemplate) {
     return {
       ok: true,
       applied: false,
       reason: "aoi-popup-template-missing",
+      refresh: controller.refresh,
+      destroy: controller.destroy,
     };
   }
 
@@ -23,71 +32,165 @@ export function configureAoiJobSummaryPopupContent({
     (contentItem) => contentItem?.id !== AOI_JOB_SUMMARY_POPUP_CONTENT_ID
   );
 
-  popupTemplate.content = [
-    ...existingContent,
-    createAoiJobSummaryPopupContent({
-      getJobFilters,
-      relationService,
-    }),
-  ];
+  popupTemplate.content = [...existingContent, controller.content];
 
   return {
     ok: true,
     applied: true,
+    refresh: controller.refresh,
+    destroy: controller.destroy,
   };
 }
 
 export function createAoiJobSummaryPopupContent({
   getJobFilters,
+  getJobs,
   relationService = defaultRelationService,
 } = {}) {
-  return {
+  return createAoiJobSummaryPopupContentController({
+    getJobFilters,
+    getJobs,
+    relationService,
+  }).content;
+}
+
+function createAoiJobSummaryPopupContentController({
+  getJobFilters,
+  getJobs,
+  relationService,
+} = {}) {
+  const targets = new Set();
+
+  const content = {
     id: AOI_JOB_SUMMARY_POPUP_CONTENT_ID,
     type: "custom",
     creator(event) {
       const containerElement = createSummaryContainer();
-
-      renderLoadingState(containerElement);
-
-      void renderAoiJobSummary({
+      const target = {
         containerElement,
         graphic: event?.graphic ?? event,
-        getJobFilters,
-        relationService,
+        requestId: 0,
+      };
+
+      targets.add(target);
+      renderTarget(target, {
+        showLoading: true,
       });
 
       return containerElement;
     },
   };
+
+  function refresh() {
+    cleanupDisconnectedTargets();
+
+    if (targets.size === 0) {
+      return {
+        ok: true,
+        refreshed: false,
+        reason: "aoi-popup-not-open",
+      };
+    }
+
+    for (const target of targets) {
+      renderTarget(target, {
+        showLoading: false,
+      });
+    }
+
+    return {
+      ok: true,
+      refreshed: true,
+      count: targets.size,
+    };
+  }
+
+  function destroy() {
+    targets.clear();
+  }
+
+  function renderTarget(target, { showLoading }) {
+    target.requestId += 1;
+
+    const requestId = target.requestId;
+
+    void renderAoiJobSummary({
+      containerElement: target.containerElement,
+      graphic: target.graphic,
+      getJobFilters,
+      getJobs,
+      relationService,
+      showLoading,
+      shouldApply() {
+        return targets.has(target) && target.requestId === requestId;
+      },
+    });
+  }
+
+  function cleanupDisconnectedTargets() {
+    for (const target of targets) {
+      if (!target.containerElement.isConnected) {
+        targets.delete(target);
+      }
+    }
+  }
+
+  return {
+    content,
+    refresh,
+    destroy,
+  };
 }
 
-async function renderAoiJobSummary({ containerElement, graphic, getJobFilters, relationService }) {
+async function renderAoiJobSummary({
+  containerElement,
+  graphic,
+  getJobFilters,
+  getJobs,
+  relationService,
+  showLoading = false,
+  shouldApply = () => true,
+}) {
+  if (showLoading) {
+    renderLoadingState(containerElement);
+  }
+
   const selectedAoi = createAoiSelectionFromGraphic(graphic);
 
   if (!selectedAoi.aoiId) {
-    renderMessageState({
-      containerElement,
-      message: "Job summary is unavailable because this AOI has no usable identifier.",
-    });
+    if (shouldApply()) {
+      renderMessageState({
+        containerElement,
+        message: "Job summary is unavailable because this AOI has no usable identifier.",
+      });
+    }
 
     return;
   }
 
   if (!relationService?.loadAoiJobRelationSnapshot) {
-    renderMessageState({
-      containerElement,
-      message: "Job summary could not be loaded because the relation service is unavailable.",
-    });
+    if (shouldApply()) {
+      renderMessageState({
+        containerElement,
+        message: "Job summary could not be loaded because the relation service is unavailable.",
+      });
+    }
 
     return;
   }
 
   const jobFilters = resolveJobFilters(getJobFilters);
+  const jobs = resolveJobs(getJobs);
 
   try {
     const relationSnapshotResult = await relationService.loadAoiJobRelationSnapshot({
+      jobs,
       jobFilters,
     });
+
+    if (!shouldApply()) {
+      return;
+    }
 
     if (!relationSnapshotResult.ok) {
       renderMessageState({
@@ -106,6 +209,10 @@ async function renderAoiJobSummary({ containerElement, graphic, getJobFilters, r
       filtersActive: hasActiveJobFilters(jobFilters),
     });
   } catch (error) {
+    if (!shouldApply()) {
+      return;
+    }
+
     renderMessageState({
       containerElement,
       message: error?.message || "Job summary could not be loaded.",
@@ -209,6 +316,16 @@ function resolveJobFilters(getJobFilters) {
   }
 
   return filters;
+}
+
+function resolveJobs(getJobs) {
+  const jobs = getJobs?.();
+
+  if (Array.isArray(jobs)) {
+    return jobs;
+  }
+
+  return undefined;
 }
 
 function normalizePopupContent(content) {

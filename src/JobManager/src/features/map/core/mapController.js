@@ -31,11 +31,13 @@ export function createMapController({
   onShowRelatedJobs,
   onShowJobDetails,
   relationService = defaultRelationService,
+  getJobs,
 } = {}) {
   let mapResult = null;
   let isDestroyed = false;
   let removeAoiPopupActions = () => {};
   let removeJobPopupActions = () => {};
+  let aoiPopupContentController = createNoopAoiPopupContentController();
   let jobHighlightController = null;
   let aoiHighlightController = null;
   let mapHoverController = null;
@@ -203,8 +205,10 @@ export function createMapController({
 
     removeAoiPopupActions();
     removeJobPopupActions();
+    aoiPopupContentController.destroy();
     removeAoiPopupActions = () => {};
     removeJobPopupActions = () => {};
+    aoiPopupContentController = createNoopAoiPopupContentController();
 
     mapHoverController?.destroy();
     jobHighlightController?.destroy();
@@ -345,6 +349,7 @@ export function createMapController({
       applyCurrentJobFilters();
       applyCurrentJobClusterSettingsWithoutBlocking();
       applyCurrentAoiRendererWithoutBlockingMapReady();
+      refreshAoiPopupContentWithoutBlocking();
 
       return result;
     } catch (error) {
@@ -399,6 +404,7 @@ export function createMapController({
 
     applyCurrentJobFilters();
     applyCurrentAoiRendererWithoutBlockingMapReady();
+    refreshAoiPopupContentWithoutBlocking();
   }
 
   function applyCurrentJobFilters() {
@@ -428,12 +434,27 @@ export function createMapController({
       return;
     }
 
-    configureAoiJobSummaryPopupContent({
+    aoiPopupContentController.destroy();
+    aoiPopupContentController = configureAoiJobSummaryPopupContent({
       aoiLayer: mapResult.layers.aoiLayer,
+      relationService,
       getJobFilters() {
         return currentJobFilters;
       },
+      getJobs,
     });
+  }
+
+  function refreshAoiPopupContent() {
+    return aoiPopupContentController.refresh();
+  }
+
+  function refreshAoiPopupContentWithoutBlocking() {
+    try {
+      refreshAoiPopupContent();
+    } catch {
+      // Popup summary refresh is best-effort and must not break map/list state updates.
+    }
   }
 
   function registerMapInteractionHandlers() {
@@ -686,6 +707,19 @@ export function createMapController({
     return warnings[0] || "AOI Feature Service loaded, but its fields should be reviewed.";
   }
 
+  function createNoopAoiPopupContentController() {
+    return {
+      refresh() {
+        return {
+          ok: true,
+          refreshed: false,
+          reason: "aoi-popup-content-not-configured",
+        };
+      },
+      destroy() {},
+    };
+  }
+
   return {
     start,
     destroy,
@@ -699,6 +733,7 @@ export function createMapController({
     applyAoiJobScope,
     clearAoiJobScope,
     refreshJobData,
+    refreshAoiPopupContent,
     applyJobFilters,
     applyJobClusterSettings,
   };

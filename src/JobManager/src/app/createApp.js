@@ -75,6 +75,9 @@ export async function createApp(rootElement) {
         message: error.message,
       });
     },
+    getJobs() {
+      return jobStore.getSnapshot().jobs;
+    },
     onShowRelatedJobs(selectedAoi) {
       const normalizedSelectedAoi = selectedAoiStore.selectAoi(selectedAoi);
 
@@ -175,6 +178,10 @@ export async function createApp(rootElement) {
 
   const unsubscribeMapJobClusterSettings = jobClusterSettingsStore.subscribe((snapshot) => {
     mapController.applyJobClusterSettings(snapshot.settings);
+  });
+
+  const unsubscribeAoiPopupJobState = jobStore.subscribe(() => {
+    mapController.refreshAoiPopupContent();
   });
 
   jobsPanel.element.addEventListener(
@@ -592,6 +599,7 @@ export async function createApp(rootElement) {
       appEventAbortController.abort();
       unsubscribeMapJobFilters();
       unsubscribeMapJobClusterSettings();
+      unsubscribeAoiPopupJobState();
       navbar.destroy();
       themeStore.destroy();
       jobsPanel.destroy();

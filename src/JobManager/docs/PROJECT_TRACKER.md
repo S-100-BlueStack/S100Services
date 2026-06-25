@@ -51,7 +51,6 @@ Current known baseline:
 
 Current known limitations:
 
-- AOI popup summary counts do not live-refresh while the popup is already open. Reopening the AOI popup refreshes counts.
 - AOI renderer color updates can lag briefly after filter changes because relation summaries and renderer enrichment are rebuilt asynchronously.
 - AOI clustering or AOI cluster-like overview is still deferred until real AOI geometry density and shape are confirmed.
 - Job polygon clustering is deferred because centroid-based clustering could hide real polygon footprint.
@@ -1249,14 +1248,16 @@ Current behavior:
 - Done Jobs remain hidden by default unless the `Done` filter is active.
 - If an AOI has no matching relation summary, the popup shows a neutral empty summary.
 - The existing `Show related Jobs` action still opens the Jobs panel scoped to the selected AOI.
+- Open AOI popup summary counts live-refresh after Job filter changes, successful Jobs refresh and Job status changes.
+- Popup summary refresh uses the current shared Jobs store snapshot when available, instead of loading a separate Jobs snapshot from the relation service.
 
 Rationale:
 
 Users can now inspect an AOI and see the operational Job signal before opening the Jobs panel. The implementation keeps relation source details behind the relation service and does not import mock Job data into popup UI.
 
-Known limitation:
+Implementation note:
 
-Open AOI popup summary counts do not live-refresh when Job filters change. Reopening the AOI popup refreshes the summary counts. This is acceptable for now because the map renderer and Jobs panel already update from the shared filters, and live popup refresh can be added later if it becomes important.
+AOI popup summary content keeps track of active custom content containers and re-renders them best-effort when Job-derived state changes. Closed popup content is cleaned up on later refresh attempts.
 
 ## 8.41 Add selected AOI highlight from popup action
 
@@ -1885,12 +1886,13 @@ Tasks:
 | ID      | Task                                         |      Status | Notes                                                                                                                                     |
 | ------- | -------------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | JM-1001 | Add manual refresh flow                      |        Done | Jobs panel refresh now also refreshes map Job layers, AOI renderer summaries, filters, clustering and active scope/highlight state.       |
-| JM-1002 | Add silent refresh plan                      | Not started | Implement only if needed early.                                                                                                           |
+| JM-1002 | Add silent refresh plan                      |    Deferred | Manual refresh and startup retry cover current needs. Revisit when backend behavior and auto-refresh requirements are clearer.            |
 | JM-1003 | Preserve selected AOI/Job across refresh     | In progress | Manual refresh reapplies active AOI scope or selected Job highlight best-effort. Full edge-case review remains.                           |
 | JM-1004 | Add mutation conflict handling placeholder   | Not started | Backend future.                                                                                                                           |
 | JM-1005 | Add startup loader and automatic retry gate  |        Done | Initial startup now blocks app access until Jobs, AOI readiness and Job map layer data are available. Automatic retry runs in the loader. |
-| JM-1006 | Review loading states across app             | In progress | Startup loading is gated. Post-startup manual refresh and relation-derived popup states remain non-blocking states to review later.       |
+| JM-1006 | Review loading states across app             | In progress | Startup loading is gated. Post-startup manual refresh is non-blocking. Remaining review focuses on edge cases and backend-driven states.  |
 | JM-1007 | Polish hover cleanup and initial panel state |        Done | Hover clears on map exit/stale hit-test, and Jobs panel starts closed on app load.                                                        |
+| JM-1008 | Add AOI popup live-refresh for Job summaries |        Done | Open AOI popup summary counts refresh after Job filter changes, successful Jobs refresh and Job status changes.                           |
 
 Exit criteria:
 
