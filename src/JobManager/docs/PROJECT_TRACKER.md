@@ -1883,16 +1883,17 @@ Make the app resilient to realistic loading, mutation and refresh scenarios.
 
 Tasks:
 
-| ID      | Task                                         |      Status | Notes                                                                                                                                     |
-| ------- | -------------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-1001 | Add manual refresh flow                      |        Done | Jobs panel refresh now also refreshes map Job layers, AOI renderer summaries, filters, clustering and active scope/highlight state.       |
-| JM-1002 | Add silent refresh plan                      |    Deferred | Manual refresh and startup retry cover current needs. Revisit when backend behavior and auto-refresh requirements are clearer.            |
-| JM-1003 | Preserve selected AOI/Job across refresh     | In progress | Manual refresh reapplies active AOI scope or selected Job highlight best-effort. Full edge-case review remains.                           |
-| JM-1004 | Add mutation conflict handling placeholder   | Not started | Backend future.                                                                                                                           |
-| JM-1005 | Add startup loader and automatic retry gate  |        Done | Initial startup now blocks app access until Jobs, AOI readiness and Job map layer data are available. Automatic retry runs in the loader. |
-| JM-1006 | Review loading states across app             | In progress | Startup loading is gated. Post-startup manual refresh is non-blocking. Remaining review focuses on edge cases and backend-driven states.  |
-| JM-1007 | Polish hover cleanup and initial panel state |        Done | Hover clears on map exit/stale hit-test, and Jobs panel starts closed on app load.                                                        |
-| JM-1008 | Add AOI popup live-refresh for Job summaries |        Done | Open AOI popup summary counts refresh after Job filter changes, successful Jobs refresh and Job status changes.                           |
+| ID      | Task                                         |      Status | Notes                                                                                                                                        |
+| ------- | -------------------------------------------- | ----------: | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-1001 | Add manual refresh flow                      |        Done | Jobs panel refresh also refreshes map Job layers, AOI renderer summaries, filters, clustering and active scope/highlight state best-effort.  |
+| JM-1002 | Add silent refresh plan                      |    Deferred | Manual refresh and startup retry cover current needs. Revisit when backend behavior and auto-refresh requirements are clearer.               |
+| JM-1003 | Preserve selected AOI/Job across refresh     |        Done | Manual refresh reapplies active AOI scope or selected Job highlight best-effort. Stale/deleted selection policy is deferred to backend work. |
+| JM-1004 | Add mutation conflict handling placeholder   | Not started | Backend future.                                                                                                                              |
+| JM-1005 | Add startup loader and automatic retry gate  |        Done | Initial startup blocks app access until Jobs, AOI readiness and Job map layer data are available. Retry runs per startup stage in loader.    |
+| JM-1006 | Review loading states across app             |        Done | Startup loading is gated. Post-startup manual refresh and AOI popup summary refresh are non-blocking. Backend-driven states are deferred.    |
+| JM-1007 | Polish hover cleanup and initial panel state |        Done | Hover clears on map exit/stale hit-test, and Jobs panel starts closed on app load.                                                           |
+| JM-1008 | Add AOI popup live-refresh for Job summaries |        Done | Open AOI popup summary counts refresh after Job filter changes, successful Jobs refresh and Job status changes.                              |
+| JM-1009 | Sync map presentation after Job mutation     |    Deferred | Jobs panel and AOI popup summary update immediately after status mutation. Map Job layers and AOI renderer can be synced later if needed.    |
 
 Exit criteria:
 
@@ -1900,6 +1901,10 @@ Exit criteria:
 - failures are visible
 - loading states are consistent
 - mock failure scenarios are handled
+
+Current known limitations:
+
+- Map Job layers and AOI renderer state are refreshed after manual Jobs refresh. After an individual Job status mutation, Jobs panel and open AOI popup summaries update immediately, while map layer presentation can remain unchanged until refresh. This is deferred unless immediate map mutation sync becomes required.
 
 ## Phase 11 - Documentation and backend preparation
 
@@ -1909,14 +1914,15 @@ Prepare for backend integration and reduce future rework.
 
 Tasks:
 
-| ID      | Task                                          |      Status | Notes                                                                                                     |
-| ------- | --------------------------------------------- | ----------: | --------------------------------------------------------------------------------------------------------- |
-| JM-1101 | Create `docs/BACKEND_CONTRACTS.md`            |        Done | Draft backend assumptions, frontend models, AOI fields and open questions are documented.                 |
-| JM-1102 | Create `docs/ARCHITECTURE.md`                 |        Done | Folder ownership, state rules, service rules and map flows are documented.                                |
-| JM-1103 | Document mock backend behavior                | In progress | Core mock behavior is documented in tracker/backend notes. Dedicated mock section can improve this later. |
-| JM-1104 | Document AOI Feature Service requirements     | In progress | Current test service fields are documented. Final service fields remain open.                             |
-| JM-1105 | Document clustering decision                  | In progress | Job point clustering is documented. AOI clustering remains blocked by real geometry.                      |
-| JM-1106 | Review for secrets before backend config work | Not started | Ensure `.env.example` only has placeholders before backend/auth work.                                     |
+| ID      | Task                                                    |      Status | Notes                                                                                                                 |
+| ------- | ------------------------------------------------------- | ----------: | --------------------------------------------------------------------------------------------------------------------- |
+| JM-1101 | Create `docs/BACKEND_CONTRACTS.md`                      |        Done | Draft backend assumptions, frontend models, AOI fields and open questions are documented.                             |
+| JM-1102 | Create `docs/ARCHITECTURE.md`                           |        Done | Folder ownership, state rules, service rules and map flows are documented.                                            |
+| JM-1103 | Document mock backend behavior                          | In progress | Core mock behavior is documented in tracker/backend notes. Dedicated mock section can improve this later.             |
+| JM-1104 | Document AOI Feature Service requirements               | In progress | Current test service fields are documented. Final service fields remain open.                                         |
+| JM-1105 | Document clustering decision                            | In progress | Job point clustering is documented. AOI clustering remains blocked by real geometry.                                  |
+| JM-1106 | Review for secrets before backend config work           | Not started | Ensure `.env.example` only has placeholders before backend/auth work.                                                 |
+| JM-1107 | Review AOI service and backend readiness after Phase 10 | Not started | Confirm AOI fields/auth assumptions, backend integration seams and whether mock service behavior still matches needs. |
 
 Exit criteria:
 
@@ -2111,3 +2117,5 @@ Recommended next tasks:
 | JM-NEXT-012 | Add manual refresh flow                                  |        Done | Jobs panel refresh now refreshes map Job layers, derived AOI renderer state and active scope/highlight state best-effort. |
 | JM-NEXT-013 | Add theme foundation / dark mode                         |        Done | Theme foundation, persisted preference and navbar toggle are implemented.                                                 |
 | JM-NEXT-014 | Review final AOI Feature Service field/auth requirements | Not started | Needed before hardening AOI service, AOI clustering and backend integration.                                              |
+| JM-NEXT-015 | Phase 10 wrap-up and backend preparation review          |        Done | Refresh, retry, loading and popup consistency are wrapped. Remaining mutation-to-map sync is deferred unless needed.      |
+| JM-NEXT-016 | Start backend/AOI-service preparation                    | Not started | Review AOI Feature Service fields/auth, `.env.example`, backend contract notes and service seams.                         |

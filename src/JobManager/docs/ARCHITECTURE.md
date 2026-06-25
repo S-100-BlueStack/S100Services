@@ -804,6 +804,18 @@ Jobs panel Refresh button or panel reopen
   -> active AOI scope or selected Job highlight reapplied best-effort
 ```
 
+Mutation consistency note:
+
+```txt
+Job status mutation
+  -> Jobs store updates
+  -> Jobs panel rerenders
+  -> open AOI popup summary re-renders from shared Jobs state
+  -> map Job layer data remains unchanged until manual refresh
+```
+
+This is acceptable for now because individual mutation sync to ArcGIS client-side layers is not required yet. If immediate map presentation sync becomes required, add an app-level mutation event or store subscription that refreshes map Job layers and AOI renderer state without waiting for manual refresh.
+
 Rules:
 
 - Manual refresh starts from explicit user action.
@@ -943,6 +955,10 @@ Rules:
 - Popup summary live-refresh is best-effort and must not close/reopen the ArcGIS popup.
 - Popup summary refresh must not block Job filter application, AOI renderer updates or manual refresh.
 - Closed popup custom content can be cleaned up lazily on later refresh attempts.
+
+Implementation note:
+
+AOI popup live-refresh intentionally uses the shared Jobs store snapshot when available. This means popup summaries can reflect individual Job status mutations before the map Job layers are refreshed.
 
 ## 14. UI composition direction
 
