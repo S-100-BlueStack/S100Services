@@ -45,8 +45,21 @@ export function createMapController({
   let aoiRendererRequestId = 0;
   let jobClusterRequestId = 0;
   let aoiJobScopeRequestId = 0;
+  let mapStartRequestId = 0;
 
   async function start() {
+    if (isDestroyed) {
+      return {
+        ok: false,
+        error: null,
+      };
+    }
+
+    const startRequestId = mapStartRequestId + 1;
+    mapStartRequestId = startRequestId;
+
+    resetMapRuntimeState();
+
     setStatus({
       status: MAP_STATUS.LOADING,
       title: "Loading map...",
@@ -61,9 +74,16 @@ export function createMapController({
 
       await mapResult.view.when();
 
+      if (isDestroyed || startRequestId !== mapStartRequestId) {
+        return {
+          ok: false,
+          error: null,
+        };
+      }
+
       const aoiReadinessResult = await validateCurrentAoiLayer();
 
-      if (isDestroyed) {
+      if (isDestroyed || startRequestId !== mapStartRequestId) {
         return {
           ok: false,
           error: null,
@@ -104,12 +124,23 @@ export function createMapController({
         data: mapResult,
       };
     } catch (error) {
+      if (isDestroyed || startRequestId !== mapStartRequestId) {
+        return {
+          ok: false,
+          error: null,
+        };
+      }
+
       const normalizedError = normalizeError(error, "Map could not be loaded.");
 
       setStatus({
         status: MAP_STATUS.ERROR,
         title: "Map could not be loaded",
         message: normalizedError.message,
+        actionLabel: "Retry map",
+        onAction() {
+          void start();
+        },
       });
       onError?.(normalizedError);
 
@@ -122,19 +153,28 @@ export function createMapController({
 
   function destroy() {
     isDestroyed = true;
+    mapStartRequestId += 1;
+    resetMapRuntimeState();
+  }
+
+  function resetMapRuntimeState() {
     aoiRendererRequestId += 1;
     jobClusterRequestId += 1;
     aoiJobScopeRequestId += 1;
+
     removeAoiPopupActions();
     removeJobPopupActions();
     removeAoiPopupActions = () => {};
     removeJobPopupActions = () => {};
+
     mapHoverController?.destroy();
     jobHighlightController?.destroy();
     aoiHighlightController?.destroy();
+
     mapHoverController = null;
     jobHighlightController = null;
     aoiHighlightController = null;
+
     mapResult?.view?.destroy();
     mapResult = null;
   }
@@ -505,6 +545,10 @@ export function createMapController({
         status: MAP_STATUS.WARNING,
         title: "Map ready without AOIs",
         message: aoiReadinessResult?.error?.message || "AOIs could not be loaded.",
+        actionLabel: "Retry AOIs",
+        onAction() {
+          void start();
+        },
       });
 
       return;
@@ -540,13 +584,7 @@ export function createMapController({
     });
   }
 
-  function createAoiReadinessWarningMessage(readiness) {
-    const warnings = Array.isArray(readiness?.warnings) ? readiness.warnings.filter(Boolean) : [];
-
-    return warnings[0] || "AOI Feature Service loaded, but its fields should be reviewed.";
-  }
-
-  function setStatus({ status, title, message, hidden = false }) {
+  function setStatus({ status, title, message, hidden = false, actionLabel = "", onAction } = {}) {
     if (!statusElement) {
       return;
     }
@@ -562,7 +600,35 @@ export function createMapController({
     messageElement.className = "job-manager-map-status__message";
     messageElement.textContent = message;
 
-    statusElement.replaceChildren(titleElement, messageElement);
+    const statusContent = [titleElement, messageElement];
+
+    if (actionLabel && typeof onAction === "function") {
+      statusContent.push(createMapStatusActions({ actionLabel, onAction }));
+    }
+
+    statusElement.replaceChildren(...statusContent);
+  }
+
+  function createMapStatusActions({ actionLabel, onAction }) {
+    const actionsElement = document.createElement("div");
+    actionsElement.className = "job-manager-map-status__actions";
+
+    const actionButton = document.createElement("calcite-button");
+    actionButton.appearance = "outline";
+    actionButton.kind = "neutral";
+    actionButton.scale = "s";
+    actionButton.textContent = actionLabel;
+    actionButton.addEventListener("click", onAction);
+
+    actionsElement.append(actionButton);
+
+    return actionsElement;
+  }
+
+  function createAoiReadinessWarningMessage(readiness) {
+    const warnings = Array.isArray(readiness?.warnings) ? readiness.warnings.filter(Boolean) : [];
+
+    return warnings[0] || "AOI Feature Service loaded, but its fields should be reviewed.";
   }
 
   return {

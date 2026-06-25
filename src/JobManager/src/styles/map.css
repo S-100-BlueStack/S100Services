@@ -69,6 +69,16 @@
   font-size: 0.85rem;
 }
 
+.job-manager-map-status__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.65rem;
+}
+
+.job-manager-map-status__actions calcite-button::part(button) {
+  border-radius: 0;
+}
+
 .job-manager-aoi-popup-summary {
   display: grid;
   gap: 0.5rem;

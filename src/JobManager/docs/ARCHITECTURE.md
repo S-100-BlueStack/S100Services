@@ -818,6 +818,36 @@ Rules:
 - If map refresh fails, show a user-facing notice.
 - Manual refresh should not perform a full app reload.
 
+### Retry-friendly error states
+
+Status: Done
+
+Current flow:
+
+```txt
+Jobs load/refresh failure
+  -> Job store error state
+  -> Jobs panel inline error state
+  -> Retry action
+  -> normal Jobs refresh path
+  -> refreshed-Jobs event on success
+  -> map Job layers refresh from the same Jobs snapshot
+
+Map or AOI load failure
+  -> map controller status surface
+  -> retry action when retry is meaningful
+  -> map controller restarts map/AOI setup
+```
+
+Rules:
+
+- Retryable failures should appear in the UI surface where the user can act on them.
+- Notices should still be used for important outcomes, but they should not be the only retry path.
+- Jobs retry must use the same refresh path as the normal Jobs panel refresh.
+- Map retry may recreate the MapView and map-owned controllers.
+- Missing configuration should be shown as a warning, not as a retryable runtime error.
+- Retry UI must not introduce backend-specific assumptions.
+
 ### AOI popup Job summary content
 
 Status: Done

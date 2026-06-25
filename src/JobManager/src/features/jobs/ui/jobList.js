@@ -258,7 +258,16 @@ function renderJobList({
   if (state.error && state.jobs.length === 0) {
     rootElement.replaceChildren(
       ...contentElements,
-      createErrorState(state.error, store, visibleDoneJobIds)
+      createErrorState({
+        title: "Jobs could not be loaded",
+        message: state.error.message,
+        isLoading: state.isLoading,
+        onRetry() {
+          void runJobsRefresh({
+            source: "retry",
+          });
+        },
+      })
     );
     return;
   }
@@ -276,6 +285,22 @@ function renderJobList({
   });
 
   contentElements.push(toolbarElement);
+
+  if (state.error) {
+    contentElements.push(
+      createInlineErrorState({
+        title: "Latest Jobs refresh failed",
+        message: state.error.message,
+        isLoading: state.isLoading,
+        onRetry() {
+          void runJobsRefresh({
+            source: "retry",
+            showSuccessNoticeOnSuccess: true,
+          });
+        },
+      })
+    );
+  }
 
   if (visibleJobs.length === 0) {
     contentElements.push(createEmptyState({ hiddenDoneCount, aoiFilter, jobFilters }));
@@ -830,31 +855,84 @@ function createStatusButton({
 }
 
 function createLoadingState() {
-  const element = document.createElement("p");
-  element.className = "job-list__state";
-  element.textContent = "Loading Jobs...";
+  const containerElement = document.createElement("div");
+  containerElement.className = "job-list__state job-list__state--loading";
+  containerElement.setAttribute("role", "status");
 
-  return element;
+  const titleElement = createStateTitle("Loading Jobs...");
+  const messageElement = createStateMessage("The mock backend is loading the current Jobs list.");
+
+  containerElement.append(titleElement, messageElement);
+
+  return containerElement;
 }
 
-function createErrorState(error, store, visibleDoneJobIds) {
+function createErrorState({ title, message, isLoading, onRetry }) {
   const containerElement = document.createElement("div");
   containerElement.className = "job-list__state job-list__state--error";
+  containerElement.setAttribute("role", "alert");
 
-  const messageElement = document.createElement("p");
-  messageElement.textContent = error.message;
+  const contentElement = document.createElement("div");
+  contentElement.className = "job-list__state-content";
+  contentElement.append(createStateTitle(title), createStateMessage(message));
+
+  const actionsElement = document.createElement("div");
+  actionsElement.className = "job-list__state-actions";
 
   const retryButton = document.createElement("calcite-button");
   retryButton.scale = "s";
   retryButton.kind = "neutral";
-  retryButton.textContent = "Retry";
+  retryButton.appearance = "outline";
+  retryButton.disabled = isLoading;
+  retryButton.textContent = isLoading ? "Retrying..." : "Retry";
   retryButton.addEventListener("click", () => {
-    loadJobs(store, visibleDoneJobIds);
+    onRetry?.();
   });
 
-  containerElement.append(messageElement, retryButton);
+  actionsElement.append(retryButton);
+  containerElement.append(contentElement, actionsElement);
 
   return containerElement;
+}
+
+function createInlineErrorState({ title, message, isLoading, onRetry }) {
+  const containerElement = document.createElement("div");
+  containerElement.className = "job-list__inline-error";
+  containerElement.setAttribute("role", "status");
+
+  const contentElement = document.createElement("div");
+  contentElement.className = "job-list__state-content";
+  contentElement.append(createStateTitle(title), createStateMessage(message));
+
+  const retryButton = document.createElement("calcite-button");
+  retryButton.scale = "s";
+  retryButton.kind = "neutral";
+  retryButton.appearance = "outline";
+  retryButton.disabled = isLoading;
+  retryButton.textContent = isLoading ? "Retrying..." : "Retry";
+  retryButton.addEventListener("click", () => {
+    onRetry?.();
+  });
+
+  containerElement.append(contentElement, retryButton);
+
+  return containerElement;
+}
+
+function createStateTitle(text) {
+  const titleElement = document.createElement("p");
+  titleElement.className = "job-list__state-title";
+  titleElement.textContent = text;
+
+  return titleElement;
+}
+
+function createStateMessage(text) {
+  const messageElement = document.createElement("p");
+  messageElement.className = "job-list__state-message";
+  messageElement.textContent = text;
+
+  return messageElement;
 }
 
 function createEmptyState({ hiddenDoneCount, aoiFilter, jobFilters }) {
