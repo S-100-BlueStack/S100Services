@@ -55,7 +55,6 @@ Current known limitations:
 - AOI renderer color updates can lag briefly after filter changes because relation summaries and renderer enrichment are rebuilt asynchronously.
 - AOI clustering or AOI cluster-like overview is still deferred until real AOI geometry density and shape are confirmed.
 - Job polygon clustering is deferred because centroid-based clustering could hide real polygon footprint.
-- Hover highlight currently has a noticeable delay while the pointer is moving and should be investigated after AOI Feature Service hardening.
 
 ## 3. Product principles
 
@@ -1439,6 +1438,26 @@ Current behavior:
 Rationale:
 
 The current AOI service is still provisional, but the map should fail gracefully when configuration, service loading or field assumptions do not match expectations. Validation belongs in the AOI feature boundary, while ArcGIS layer lifecycle and map status remain owned by the map controller.
+
+## 8.49 Fix hover coalescing and click highlight transition
+
+Status: Done
+
+Map hover feedback now avoids the delayed feel introduced by stale hit-test cancellation.
+
+Current behavior:
+
+- Hover hit testing runs at most one ArcGIS hit test at a time.
+- Pointer moves are coalesced while a hit test is in flight.
+- Completed hit-test results can update hover state even if the pointer moved during the async hit test.
+- A queued pointer move triggers the next hit test after the current one finishes.
+- Clicking a hovered AOI or Job no longer clears hover immediately.
+- Hover highlight is cleared after selected highlight has taken over, reducing visible blink between hover and selected state.
+- Drag, wheel, pointer exit, window blur, document hidden and controller destroy still clear hover immediately.
+
+Rationale:
+
+Discarding every hit-test result when `pointerEvent` changed made hover appear only after the pointer stopped moving. Clearing hover on click before selected highlight was ready caused a visual blink. The hover controller should coalesce pointer work without making pointer feedback feel delayed.
 
 ## 9. Backend assumptions
 

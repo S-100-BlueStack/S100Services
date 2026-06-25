@@ -148,9 +148,9 @@ export function createMapController({
   }
 
   function highlightJob(selectedJob) {
-    mapHoverController?.clearHover();
-
-    return jobHighlightController?.highlightJob(selectedJob) ?? Promise.resolve();
+    return clearHoverAfterSelection(
+      jobHighlightController?.highlightJob(selectedJob) ?? Promise.resolve()
+    );
   }
 
   function clearJobHighlight() {
@@ -158,8 +158,6 @@ export function createMapController({
   }
 
   function highlightRelatedAoisForJob(selectedJob = {}) {
-    mapHoverController?.clearHover();
-
     return (
       aoiHighlightController?.highlightAoisByIds(selectedJob.relatedAoiIds) ?? Promise.resolve()
     );
@@ -168,15 +166,16 @@ export function createMapController({
   function highlightAoiById(aoiId) {
     const normalizedAoiId = normalizeOptionalString(aoiId);
 
-    mapHoverController?.clearHover();
-
     if (!normalizedAoiId) {
+      mapHoverController?.clearHover();
       clearAoiHighlight();
 
       return Promise.resolve();
     }
 
-    return aoiHighlightController?.highlightAoisByIds([normalizedAoiId]) ?? Promise.resolve();
+    return clearHoverAfterSelection(
+      aoiHighlightController?.highlightAoisByIds([normalizedAoiId]) ?? Promise.resolve()
+    );
   }
 
   function clearAoiHighlight() {
@@ -431,6 +430,14 @@ export function createMapController({
     refreshAoiLayerPopupTemplate({
       aoiLayer: mapResult?.layers?.aoiLayer,
       availableFieldNames,
+    });
+  }
+
+  function clearHoverAfterSelection(selectionPromise) {
+    return Promise.resolve(selectionPromise).finally(() => {
+      if (!isDestroyed) {
+        mapHoverController?.clearHover();
+      }
     });
   }
 

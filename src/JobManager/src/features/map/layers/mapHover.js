@@ -24,6 +24,8 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
   let activeHoverKey = "";
   let pointerEvent = null;
   let frameRequested = false;
+  let hitTestInFlight = false;
+  let hasQueuedPointerMove = false;
   let hoverRequestId = 0;
   let isDestroyed = false;
 
@@ -38,7 +40,7 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
 
     pointerMoveHandle = view.on("pointer-move", handlePointerMove);
     dragHandle = view.on("drag", clearHover);
-    immediateClickHandle = view.on("immediate-click", clearHover);
+    immediateClickHandle = view.on("immediate-click", handleImmediateClick);
     mouseWheelHandle = view.on("mouse-wheel", clearHover);
 
     view.container?.addEventListener("pointerleave", handlePointerExit, {
@@ -64,6 +66,8 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
     hoverRequestId += 1;
     pointerEvent = null;
     frameRequested = false;
+    hitTestInFlight = false;
+    hasQueuedPointerMove = false;
 
     pointerMoveHandle?.remove();
     dragHandle?.remove();
@@ -85,62 +89,87 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
   function handlePointerMove(event) {
     pointerEvent = event;
 
-    if (!frameRequested) {
-      frameRequested = true;
-      requestAnimationFrame(runHitTest);
+    if (hitTestInFlight) {
+      hasQueuedPointerMove = true;
+      return;
     }
+
+    requestHitTestFrame();
+  }
+
+  function requestHitTestFrame() {
+    if (frameRequested) {
+      return;
+    }
+
+    frameRequested = true;
+    requestAnimationFrame(runHitTest);
   }
 
   async function runHitTest() {
     frameRequested = false;
 
+    if (hitTestInFlight) {
+      hasQueuedPointerMove = true;
+      return;
+    }
+
     const hitTestEvent = pointerEvent;
-    const requestId = hoverRequestId + 1;
-    hoverRequestId = requestId;
+    const requestId = hoverRequestId;
 
     if (isDestroyed || !hitTestEvent || hoverLayers.length === 0) {
       return;
     }
+
+    hitTestInFlight = true;
 
     try {
       const hitTestResult = await view.hitTest(hitTestEvent, {
         include: hoverLayers,
       });
 
-      if (isDestroyed || requestId !== hoverRequestId || hitTestEvent !== pointerEvent) {
+      if (isDestroyed || requestId !== hoverRequestId || !pointerEvent) {
         return;
       }
 
-      const hoverTarget = getHoverTarget(hitTestResult);
-
-      if (!hoverTarget) {
-        clearHoverHandle();
-
-        return;
-      }
-
-      if (hoverTarget.key === activeHoverKey) {
-        return;
-      }
-
-      const layerView = layerViews.get(hoverTarget.layer);
-
-      if (!layerView) {
-        clearHoverHandle();
-        warmLayerView(hoverTarget.layer);
-
-        return;
-      }
-
-      clearHoverHandle();
-
-      activeHoverKey = hoverTarget.key;
-      hoverHandle = layerView.highlight(hoverTarget.graphic);
+      applyHitTestResult(hitTestResult);
     } catch {
       if (!isDestroyed && requestId === hoverRequestId) {
         clearHoverHandle();
       }
+    } finally {
+      hitTestInFlight = false;
+
+      if (!isDestroyed && pointerEvent && hasQueuedPointerMove) {
+        hasQueuedPointerMove = false;
+        requestHitTestFrame();
+      }
     }
+  }
+
+  function applyHitTestResult(hitTestResult) {
+    const hoverTarget = getHoverTarget(hitTestResult);
+
+    if (!hoverTarget) {
+      clearHoverHandle();
+      return;
+    }
+
+    if (hoverTarget.key === activeHoverKey) {
+      return;
+    }
+
+    const layerView = layerViews.get(hoverTarget.layer);
+
+    if (!layerView) {
+      warmLayerView(hoverTarget.layer);
+      return;
+    }
+
+    clearHoverHandle();
+
+    activeHoverKey = hoverTarget.key;
+    hoverHandle = layerView.highlight(hoverTarget.graphic);
   }
 
   function getHoverTarget(hitTestResult) {
@@ -220,6 +249,13 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
     layerViewPromises.set(layer, layerViewPromise);
   }
 
+  function handleImmediateClick() {
+    hoverRequestId += 1;
+    pointerEvent = null;
+    frameRequested = false;
+    hasQueuedPointerMove = false;
+  }
+
   function handlePointerExit(event) {
     const nextTarget = event.relatedTarget;
 
@@ -240,6 +276,7 @@ export function createMapHoverController({ view, aoiLayer, jobLayers } = {}) {
     hoverRequestId += 1;
     pointerEvent = null;
     frameRequested = false;
+    hasQueuedPointerMove = false;
     clearHoverHandle();
   }
 
