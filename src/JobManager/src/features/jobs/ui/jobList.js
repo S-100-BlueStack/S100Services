@@ -256,14 +256,8 @@ function renderJobList({
     rootElement.replaceChildren(
       ...contentElements,
       createErrorState({
-        title: "Jobs could not be loaded",
+        title: "Jobs are unavailable",
         message: state.error.message,
-        isLoading: state.isLoading,
-        onRetry() {
-          void runJobsRefresh({
-            source: "retry",
-          });
-        },
       })
     );
     return;
@@ -454,8 +448,6 @@ function createListToolbar({
   hiddenDoneCount,
   jobFilters,
   expandedJobIds,
-  visibleDoneJobIds,
-  store,
   runJobsRefresh,
   render,
 }) {
@@ -864,7 +856,7 @@ function createLoadingState() {
   return containerElement;
 }
 
-function createErrorState({ title, message, isLoading, onRetry }) {
+function createErrorState({ title, message, isLoading = false, onRetry = null }) {
   const containerElement = document.createElement("div");
   containerElement.className = "job-list__state job-list__state--error";
   containerElement.setAttribute("role", "alert");
@@ -872,6 +864,12 @@ function createErrorState({ title, message, isLoading, onRetry }) {
   const contentElement = document.createElement("div");
   contentElement.className = "job-list__state-content";
   contentElement.append(createStateTitle(title), createStateMessage(message));
+
+  containerElement.append(contentElement);
+
+  if (typeof onRetry !== "function") {
+    return containerElement;
+  }
 
   const actionsElement = document.createElement("div");
   actionsElement.className = "job-list__state-actions";
@@ -883,11 +881,11 @@ function createErrorState({ title, message, isLoading, onRetry }) {
   retryButton.disabled = isLoading;
   retryButton.textContent = isLoading ? "Retrying..." : "Retry";
   retryButton.addEventListener("click", () => {
-    onRetry?.();
+    onRetry();
   });
 
   actionsElement.append(retryButton);
-  containerElement.append(contentElement, actionsElement);
+  containerElement.append(actionsElement);
 
   return containerElement;
 }

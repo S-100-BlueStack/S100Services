@@ -1484,6 +1484,12 @@ Current behavior:
 - Startup order now matches the Product Manager pattern more closely: the map workspace starts behind the transparent loader before required Jobs are loaded and rendered.
 - Map status UI is suppressed during startup so the loader remains the only startup status surface.
 
+Cleanup:
+
+- Removed the old map status retry action path from startup-related map errors.
+- Kept Jobs inline retry only for post-startup refresh failures where stale Jobs are still available.
+- Defensive empty Jobs error state no longer exposes an alternate initial retry path because initial Jobs loading is owned by the startup gate.
+
 Rationale:
 
 Job Manager cannot be used meaningfully without both AOIs and Jobs. Initial load failures should therefore be handled before the user enters the app, instead of exposing a partial map/list workspace. Non-blocking inline refresh errors still make sense after a successful startup because the app already has a valid previous data snapshot.

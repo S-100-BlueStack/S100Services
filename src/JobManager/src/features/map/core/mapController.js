@@ -661,7 +661,7 @@ export function createMapController({
     statusElement.replaceChildren();
   }
 
-  function setStatus({ status, title, message, hidden = false, actionLabel = "", onAction } = {}) {
+  function setStatus({ status, title, message, hidden = false } = {}) {
     if (!statusElement) {
       return;
     }
@@ -677,29 +677,7 @@ export function createMapController({
     messageElement.className = "job-manager-map-status__message";
     messageElement.textContent = message;
 
-    const statusContent = [titleElement, messageElement];
-
-    if (actionLabel && typeof onAction === "function") {
-      statusContent.push(createMapStatusActions({ actionLabel, onAction }));
-    }
-
-    statusElement.replaceChildren(...statusContent);
-  }
-
-  function createMapStatusActions({ actionLabel, onAction }) {
-    const actionsElement = document.createElement("div");
-    actionsElement.className = "job-manager-map-status__actions";
-
-    const actionButton = document.createElement("calcite-button");
-    actionButton.appearance = "outline";
-    actionButton.kind = "neutral";
-    actionButton.scale = "s";
-    actionButton.textContent = actionLabel;
-    actionButton.addEventListener("click", onAction);
-
-    actionsElement.append(actionButton);
-
-    return actionsElement;
+    statusElement.replaceChildren(titleElement, messageElement);
   }
 
   function createAoiReadinessWarningMessage(readiness) {

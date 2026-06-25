@@ -10,7 +10,7 @@ import {
 const DEFAULT_MOCK_CONFIG = Object.freeze({
   latencyMinMs: 250,
   latencyMaxMs: 1000,
-  loadFailureRate: 0.05,
+  loadFailureRate: 0.9,
   mutationFailureRate: 0.15,
   cyclicJobCreationRate: 0.85,
 });

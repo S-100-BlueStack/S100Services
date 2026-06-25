@@ -866,6 +866,13 @@ Rules:
 - The startup loader is the only visible startup status surface.
 - Map status messages must be suppressed during startup.
 
+Cleanup notes:
+
+- Startup retry is owned by the startup loader, not by map status or Jobs panel UI.
+- Map status can still show post-startup map warnings, but it should not be used as the initial app retry surface.
+- Jobs panel inline retry is reserved for post-startup refresh failures with stale Jobs still available.
+- Initial Jobs loading must remain owned by app startup.
+
 ### AOI popup Job summary content
 
 Status: Done
