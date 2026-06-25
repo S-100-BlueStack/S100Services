@@ -48,6 +48,47 @@ export const AOI_NAME_FIELD_CANDIDATES = Object.freeze([
   "aoi_name",
 ]);
 
+export const AOI_REQUIRED_FIELD_INFOS = Object.freeze([
+  Object.freeze({
+    fieldName: AOI_FIELD.GLOBAL_ID,
+    label: "Global ID",
+    reason: "AOI-to-Job relations currently use GlobalID as the provisional AOI id.",
+  }),
+  Object.freeze({
+    fieldName: AOI_FIELD.DISPLAY_NAME,
+    label: "Product name",
+    reason: "AOI popup and selected AOI UI need a readable display name.",
+  }),
+]);
+
+export const AOI_RECOMMENDED_FIELD_INFOS = Object.freeze([
+  Object.freeze({
+    fieldName: AOI_FIELD.OBJECT_ID,
+    label: "Object ID",
+    reason: "ArcGIS popup, highlight and diagnostics are easier to verify with OBJECTID available.",
+  }),
+  Object.freeze({
+    fieldName: AOI_FIELD.PRODUCT_ID,
+    label: "Product ID",
+    reason: "Product ID may become relevant for backend/domain matching later.",
+  }),
+  Object.freeze({
+    fieldName: AOI_FIELD.SERIES,
+    label: "Series",
+    reason: "Series helps users distinguish AOIs with similar product names.",
+  }),
+  Object.freeze({
+    fieldName: AOI_FIELD.EDITION,
+    label: "Edition",
+    reason: "Edition helps users distinguish AOIs with similar product names.",
+  }),
+  Object.freeze({
+    fieldName: AOI_FIELD.ISSUE_DATE,
+    label: "Issue date",
+    reason: "Issue date is useful AOI metadata in the popup.",
+  }),
+]);
+
 const AOI_POPUP_FIELD_INFOS = Object.freeze([
   Object.freeze({
     fieldName: AOI_FIELD.DISPLAY_NAME,
@@ -92,33 +133,137 @@ const AOI_POPUP_FIELD_INFOS = Object.freeze([
 ]);
 
 export function createAoiOutFields() {
-  return [
-    AOI_FIELD.OBJECT_ID,
-    AOI_FIELD.DISPLAY_NAME,
-    AOI_FIELD.SERIES,
-    AOI_FIELD.EDITION,
-    AOI_FIELD.LOCKED,
-    AOI_FIELD.ISSUE_DATE,
-    AOI_FIELD.IS_TECHNICAL,
-    AOI_FIELD.UPDATE_TYPE,
-    AOI_FIELD.PRODUCT_ID,
-    AOI_FIELD.GLOBAL_ID,
-  ];
+  // The AOI service contract is still provisional, so request all fields and
+  // use validation/popup filtering to avoid breaking on optional field changes.
+  return ["*"];
 }
 
-export function createAoiPopupTemplate() {
+export function createAoiPopupTemplate({ availableFieldNames } = {}) {
+  const fieldInfos = createAoiPopupFieldInfos({ availableFieldNames });
+
   return {
-    title: `{${AOI_FIELD.DISPLAY_NAME}}`,
-    content: [
-      {
-        type: "fields",
-        fieldInfos: createAoiPopupFieldInfos(),
-      },
-    ],
+    title: createAoiPopupTitle({ availableFieldNames }),
+    content:
+      fieldInfos.length > 0
+        ? [
+            {
+              type: "fields",
+              fieldInfos,
+            },
+          ]
+        : [
+            {
+              type: "text",
+              text: "AOI metadata is unavailable.",
+            },
+          ],
   };
 }
 
-export function createAoiPopupFieldInfos() {
-  // Return new objects so ArcGIS can safely enrich popup metadata without mutating shared config.
-  return AOI_POPUP_FIELD_INFOS.map((fieldInfo) => ({ ...fieldInfo }));
+export function createAoiPopupFieldInfos({ availableFieldNames } = {}) {
+  const availableFieldNameSet = createAvailableFieldNameSet(availableFieldNames);
+
+  return AOI_POPUP_FIELD_INFOS.filter((fieldInfo) =>
+    isFieldAvailable(fieldInfo.fieldName, availableFieldNameSet)
+  ).map((fieldInfo) => ({ ...fieldInfo }));
+}
+
+export function createAoiFieldValidationReport(
+  fields,
+  { objectIdField = "", geometryType = "" } = {}
+) {
+  const availableFieldNames = getAoiFieldNames(fields);
+  const availableFieldNameSet = createAvailableFieldNameSet(availableFieldNames);
+  const missingRequiredFields = getMissingFields(AOI_REQUIRED_FIELD_INFOS, availableFieldNameSet);
+  const missingRecommendedFields = getMissingFields(
+    AOI_RECOMMENDED_FIELD_INFOS,
+    availableFieldNameSet
+  );
+  const warnings = [
+    ...createMissingFieldWarnings("required", missingRequiredFields),
+    ...createMissingFieldWarnings("recommended", missingRecommendedFields),
+  ];
+
+  return {
+    availableFieldNames,
+    missingRequiredFields,
+    missingRecommendedFields,
+    hasRequiredFields: missingRequiredFields.length === 0,
+    objectIdField: normalizeOptionalString(objectIdField),
+    geometryType: normalizeOptionalString(geometryType),
+    warnings,
+  };
+}
+
+export function getAoiFieldNames(fields) {
+  if (!Array.isArray(fields)) {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      fields.map((field) => normalizeOptionalString(field?.name ?? field)).filter(Boolean)
+    ),
+  ];
+}
+
+function createAoiPopupTitle({ availableFieldNames } = {}) {
+  const availableFieldNameSet = createAvailableFieldNameSet(availableFieldNames);
+
+  if (isFieldAvailable(AOI_FIELD.DISPLAY_NAME, availableFieldNameSet)) {
+    return `{${AOI_FIELD.DISPLAY_NAME}}`;
+  }
+
+  if (isFieldAvailable(AOI_FIELD.GLOBAL_ID, availableFieldNameSet)) {
+    return `{${AOI_FIELD.GLOBAL_ID}}`;
+  }
+
+  if (isFieldAvailable(AOI_FIELD.PRODUCT_ID, availableFieldNameSet)) {
+    return `{${AOI_FIELD.PRODUCT_ID}}`;
+  }
+
+  if (isFieldAvailable(AOI_FIELD.OBJECT_ID, availableFieldNameSet)) {
+    return `AOI {${AOI_FIELD.OBJECT_ID}}`;
+  }
+
+  return "Area of Interest";
+}
+
+function getMissingFields(fieldInfos, availableFieldNameSet) {
+  return fieldInfos.filter(
+    (fieldInfo) => !isFieldAvailable(fieldInfo.fieldName, availableFieldNameSet)
+  );
+}
+
+function createMissingFieldWarnings(fieldType, missingFields) {
+  return missingFields.map(
+    (fieldInfo) =>
+      `Missing ${fieldType} AOI field: ${fieldInfo.label} (${fieldInfo.fieldName}). ${fieldInfo.reason}`
+  );
+}
+
+function createAvailableFieldNameSet(fieldNames) {
+  if (!Array.isArray(fieldNames) || fieldNames.length === 0) {
+    return null;
+  }
+
+  return new Set(
+    fieldNames.map((fieldName) => normalizeOptionalString(fieldName).toLowerCase()).filter(Boolean)
+  );
+}
+
+function isFieldAvailable(fieldName, availableFieldNameSet) {
+  if (!availableFieldNameSet) {
+    return true;
+  }
+
+  return availableFieldNameSet.has(normalizeOptionalString(fieldName).toLowerCase());
+}
+
+function normalizeOptionalString(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  return String(value).trim();
 }

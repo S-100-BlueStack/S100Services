@@ -23,9 +23,30 @@ export function createAoiLayer({ runtimeConfig } = {}) {
   });
 }
 
-function createAoiLayerPopupTemplate() {
+export function refreshAoiLayerPopupTemplate({ aoiLayer, availableFieldNames } = {}) {
+  if (!aoiLayer) {
+    return {
+      ok: true,
+      applied: false,
+      reason: "aoi-layer-missing",
+    };
+  }
+
+  aoiLayer.popupTemplate = createAoiLayerPopupTemplate({
+    availableFieldNames,
+  });
+
   return {
-    ...createAoiPopupTemplate(),
+    ok: true,
+    applied: true,
+  };
+}
+
+function createAoiLayerPopupTemplate({ availableFieldNames } = {}) {
+  return {
+    ...createAoiPopupTemplate({
+      availableFieldNames,
+    }),
     actions: createAoiPopupActions(),
   };
 }

@@ -149,11 +149,25 @@ Current provisional field decisions:
 - `PRODUCTID`, `SERIES`, `EDITION`, `ISSUEDATE`, `LOCKED`, `IS_TECHNICAL` and `UPDT` are treated as metadata.
 - `OBJECTID` is preserved for ArcGIS/service mechanics, but should not be treated as the long-term AOI/Job relation id.
 
+Current validation behavior:
+
+- AOI FeatureLayer readiness is validated through `features/aoi/services/aoiService.js`.
+- Missing configuration returns a stable missing-config result and is shown as a map warning.
+- AOI layer load failure is surfaced as an AOI-specific notice while keeping the map usable.
+- Required provisional fields are validated after the FeatureLayer loads.
+- Recommended metadata fields are reported as warnings, not hard failures.
+- AOI feature count is checked best-effort.
+- Empty AOI sources are shown as warnings.
+- AOI popup field rows are filtered to fields available in the loaded Feature Service.
+- AOI `outFields` uses `*` while the service contract is provisional.
+
 Rules:
 
 - Keep test-service field names centralized.
 - Do not spread raw field names across UI components.
 - Do not treat the test-service field mapping as final backend contract.
+- Keep AOI readiness validation in the AOI feature boundary.
+- Keep ArcGIS layer lifecycle and map status in the map feature boundary.
 - Update this section when the real AOI Feature Service is created.
 
 ### Current selected AOI state

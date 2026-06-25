@@ -55,7 +55,7 @@ Current known limitations:
 - AOI renderer color updates can lag briefly after filter changes because relation summaries and renderer enrichment are rebuilt asynchronously.
 - AOI clustering or AOI cluster-like overview is still deferred until real AOI geometry density and shape are confirmed.
 - Job polygon clustering is deferred because centroid-based clustering could hide real polygon footprint.
-- Manual refresh across map layers, Jobs panel and selected state is still not implemented.
+- Hover highlight currently has a noticeable delay while the pointer is moving and should be investigated after AOI Feature Service hardening.
 
 ## 3. Product principles
 
@@ -1416,6 +1416,30 @@ Rationale:
 
 Theme behavior is cross-cutting UI state and should be centralized before more panels and backend-driven states are added. Using Calcite mode classes keeps Job Manager aligned with the Product Manager theme token pattern while allowing Job Manager-specific colors and surfaces.
 
+## 8.48 Harden AOI Feature Service readiness checks
+
+Status: Done
+
+AOI Feature Service integration now performs a lightweight readiness check when the map starts.
+
+Current behavior:
+
+- AOI FeatureLayer still owns map display of AOIs.
+- AOI service exposes a readiness validation helper for the configured FeatureLayer.
+- Missing AOI Feature Service configuration shows a map warning.
+- AOI layer load failure keeps the map usable and shows a user-facing notice.
+- AOI field metadata is validated after the FeatureLayer loads.
+- Required provisional AOI fields are `GlobalID` and `PRODUCTNAME`.
+- Recommended test-service metadata fields are checked and reported as warnings.
+- AOI feature count is checked best-effort.
+- Empty AOI sources show a map warning.
+- AOI popup field rows are filtered to fields that actually exist in the loaded service.
+- AOI `outFields` uses `*` while the AOI service contract remains provisional.
+
+Rationale:
+
+The current AOI service is still provisional, but the map should fail gracefully when configuration, service loading or field assumptions do not match expectations. Validation belongs in the AOI feature boundary, while ArcGIS layer lifecycle and map status remain owned by the map controller.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -1649,13 +1673,13 @@ Load AOIs through a service layer and prepare them for map display and relation 
 
 Tasks:
 
-| ID      | Task                                |      Status | Notes                                                                                                                                                |
-| ------- | ----------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-0401 | Add AOI Feature Service config      |        Done | Added AOI Feature Service config helper using safe runtime config from `VITE_AOI_FEATURE_SERVICE_URL`. No private URL or credential is stored.       |
-| JM-0402 | Implement AOI service facade        | In progress | Added service facade skeleton returning a stable API result shape. Real Feature Service querying is deferred until source fields and auth are final. |
-| JM-0403 | Implement AOI normalization helpers | In progress | Added frontend AOI normalization helper and centralized field config for the current test Feature Service fields.                                    |
-| JM-0404 | Add AOI loading state               | In progress | Added initial map-level status for missing AOI service configuration and map load failures. Full AOI loading/empty/error states are deferred.        |
-| JM-0405 | Document required AOI fields        | In progress | Documented current test Feature Service fields in `BACKEND_CONTRACTS.md`. Final AOI fields remain open until the real service is created.            |
+| ID      | Task                                |      Status | Notes                                                                                                                                          |
+| ------- | ----------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0401 | Add AOI Feature Service config      |        Done | Added AOI Feature Service config helper using safe runtime config from `VITE_AOI_FEATURE_SERVICE_URL`. No private URL or credential is stored. |
+| JM-0402 | Implement AOI service facade        | In progress | AOI service now exposes FeatureLayer readiness validation. Real queried AOI state remains deferred while FeatureLayer owns map display.        |
+| JM-0403 | Implement AOI normalization helpers |        Done | AOI normalization helpers and centralized field validation metadata are implemented for the current test Feature Service.                      |
+| JM-0404 | Add AOI loading state               |        Done | Map status handles missing AOI config, AOI layer load failure, field validation warnings and empty source count.                               |
+| JM-0405 | Document required AOI fields        |        Done | Required and recommended provisional AOI fields are centralized and documented. Final service fields remain open.                              |
 
 Exit criteria:
 

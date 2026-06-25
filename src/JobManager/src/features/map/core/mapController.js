@@ -1,4 +1,5 @@
 import { normalizeError } from "../../../shared/errors/normalizeError.js";
+import { validateAoiFeatureLayer } from "../../aoi/services/aoiService.js";
 import * as defaultRelationService from "../../relations/services/relationService.js";
 import { applyJobLayerFilters } from "../filters/applyJobLayerFilters.js";
 import { applyAoiJobSummaryRenderer } from "../layers/applyAoiRenderer.js";
@@ -11,6 +12,7 @@ import { registerAoiPopupActions } from "../popups/aoiPopupActions.js";
 import { configureAoiJobSummaryPopupContent } from "../popups/aoiPopupContent.js";
 import { registerJobPopupActions } from "../popups/jobPopupActions.js";
 import { createMapView } from "./createMapView.js";
+import { refreshAoiLayerPopupTemplate } from "../layers/createAoiLayer.js";
 
 const MAP_STATUS = Object.freeze({
   LOADING: "loading",
@@ -24,6 +26,7 @@ export function createMapController({
   statusElement,
   runtimeConfig,
   onError,
+  onAoiLayerError,
   onJobLayerError,
   onShowRelatedJobs,
   onShowJobDetails,
@@ -58,11 +61,20 @@ export function createMapController({
 
       await mapResult.view.when();
 
+      const aoiReadinessResult = await validateCurrentAoiLayer();
+
       if (isDestroyed) {
         return {
           ok: false,
           error: null,
         };
+      }
+
+      if (!aoiReadinessResult.ok) {
+        disableAoiLayerAfterLoadFailure();
+        onAoiLayerError?.(aoiReadinessResult.error);
+      } else {
+        refreshLoadedAoiPopupTemplate(aoiReadinessResult);
       }
 
       jobHighlightController = createJobHighlightController({
@@ -85,7 +97,7 @@ export function createMapController({
       applyCurrentJobFilters();
       applyCurrentAoiRendererWithoutBlockingMapReady();
       applyJobGeometryWithoutBlockingMapReady(mapResult.layers.jobLayers);
-      setReadyStatus(Boolean(mapResult.layers.aoiLayer));
+      setReadyStatus(aoiReadinessResult);
 
       return {
         ok: true,
@@ -392,6 +404,36 @@ export function createMapController({
       });
   }
 
+  async function validateCurrentAoiLayer() {
+    return validateAoiFeatureLayer({
+      aoiLayer: mapResult?.layers?.aoiLayer,
+    });
+  }
+
+  function disableAoiLayerAfterLoadFailure() {
+    const aoiLayer = mapResult?.layers?.aoiLayer;
+
+    if (!aoiLayer) {
+      return;
+    }
+
+    mapResult.map?.remove?.(aoiLayer);
+    mapResult.layers.aoiLayer = null;
+  }
+
+  function refreshLoadedAoiPopupTemplate(aoiReadinessResult) {
+    const availableFieldNames = aoiReadinessResult.data?.fieldReport?.availableFieldNames;
+
+    if (!availableFieldNames) {
+      return;
+    }
+
+    refreshAoiLayerPopupTemplate({
+      aoiLayer: mapResult?.layers?.aoiLayer,
+      availableFieldNames,
+    });
+  }
+
   function closeOpenAggregatePopup() {
     const view = mapResult?.view;
     const popup = view?.popup;
@@ -450,23 +492,51 @@ export function createMapController({
     return String(value).trim();
   }
 
-  function setReadyStatus(hasAoiLayer) {
-    if (hasAoiLayer) {
+  function setReadyStatus(aoiReadinessResult) {
+    if (!aoiReadinessResult?.ok) {
       setStatus({
-        status: MAP_STATUS.READY,
+        status: MAP_STATUS.WARNING,
+        title: "Map ready without AOIs",
+        message: aoiReadinessResult?.error?.message || "AOIs could not be loaded.",
+      });
+
+      return;
+    }
+
+    const readiness = aoiReadinessResult.data;
+
+    if (readiness.status === "missing-config") {
+      setStatus({
+        status: MAP_STATUS.WARNING,
         title: "Map ready",
-        message: "",
-        hidden: true,
+        message: "AOI Feature Service URL is not configured yet.",
+      });
+
+      return;
+    }
+
+    if (readiness.status === "warning") {
+      setStatus({
+        status: MAP_STATUS.WARNING,
+        title: "Map ready with AOI warnings",
+        message: createAoiReadinessWarningMessage(readiness),
       });
 
       return;
     }
 
     setStatus({
-      status: MAP_STATUS.WARNING,
+      status: MAP_STATUS.READY,
       title: "Map ready",
-      message: "AOI Feature Service URL is not configured yet.",
+      message: "",
+      hidden: true,
     });
+  }
+
+  function createAoiReadinessWarningMessage(readiness) {
+    const warnings = Array.isArray(readiness?.warnings) ? readiness.warnings.filter(Boolean) : [];
+
+    return warnings[0] || "AOI Feature Service loaded, but its fields should be reviewed.";
   }
 
   function setStatus({ status, title, message, hidden = false }) {

@@ -53,6 +53,12 @@ export async function createApp(rootElement) {
         message: error.message,
       });
     },
+    onAoiLayerError(error) {
+      showErrorNotice({
+        title: "AOIs could not be loaded",
+        message: error.message,
+      });
+    },
     onShowRelatedJobs(selectedAoi) {
       const normalizedSelectedAoi = selectedAoiStore.selectAoi(selectedAoi);
 

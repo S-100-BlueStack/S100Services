@@ -170,65 +170,37 @@ Current frontend implementation:
 - can create an ArcGIS `FeatureLayer` from the configured AOI Feature Service URL
 - centralizes current test-service field names in `features/aoi/config/aoiFieldConfig.js`
 - exposes an AOI service facade with a stable API result shape
+- validates AOI FeatureLayer readiness after the layer loads
+- validates required and recommended provisional AOI fields
+- checks AOI feature count best-effort
+- shows map warnings for missing config, field mismatch and empty AOI sources
+- shows a user-facing notice when the AOI layer cannot be loaded
+- filters AOI popup field rows to fields available in the loaded Feature Service
 - includes AOI normalization helpers for current test-service field names and legacy/provisional fallbacks
-- configures an initial AOI popup template using test-service metadata
+- configures an AOI popup template using available test-service metadata
 
 Current limitations:
 
-- real AOI querying is not implemented in the AOI service yet
-- AOI renderer is not connected to Job summaries yet
-- AOI load/empty/error states are only partially represented through map status
+- real AOI querying into AOI state is not implemented in the AOI service yet
+- AOI FeatureLayer remains the owner of map AOI display
 - AOI clustering is deferred until real geometry characteristics are known
 - current field mapping is based on a temporary test Feature Service and must not be treated as the final backend contract
 
-Current test AOI Feature Service fields:
+Current required provisional AOI fields:
 
 ```txt
-OBJECTID
-Shape
-PRODUCTNAME
-SERIES
-EDITION
-LOCKED
-FILELINK
-JSON
-ISSUEDATE
-IS_TECHNICAL
-UPDT
-PRODUCTID
 GlobalID
-created_user
-created_date
-last_edited_user
-last_edited_date
-Shape.STArea()
-Shape.STLength()
+PRODUCTNAME
 ```
 
-Current provisional frontend field decisions:
+Current recommended provisional AOI fields:
 
 ```txt
-Stable test AOI id:
-GlobalID
-
-ArcGIS object id:
 OBJECTID
-
-Display name:
-PRODUCTNAME
-
-Optional product id metadata:
 PRODUCTID
-
-Secondary display metadata:
 SERIES
 EDITION
-
-Other useful metadata:
 ISSUEDATE
-LOCKED
-IS_TECHNICAL
-UPDT
 ```
 
 Decision:
