@@ -28,6 +28,26 @@ Rules:
 - Backend-specific field names must not leak into UI components.
 - The app must not commit private endpoints, tokens or credentials.
 
+## 2.1 Phase 11 readiness review
+
+Status: Reviewed after Phase 10
+
+Current findings:
+
+- `.env.example` contains placeholder URLs only.
+- Runtime config only reads safe browser-exposed `VITE_` values.
+- No private backend endpoint, token, credential or portal-specific secret is committed.
+- Jobs are accessed through `features/jobs/services/jobService.js`.
+- Mock Jobs remain isolated under `features/jobs/mock`.
+- AOI Feature Service assumptions are centralized in `features/aoi/config/aoiFieldConfig.js`.
+- AOI FeatureLayer readiness validation is isolated in `features/aoi/services/aoiService.js`.
+- AOI map display is still owned by the ArcGIS FeatureLayer.
+- AOI/Job relation source values already allow `mock`, `frontendGeometry` and `backend`.
+
+Decision:
+
+Do not add a backend API base URL or backend auth config until the backend exists. Keep browser-exposed runtime config limited to values that are safe to expose.
+
 ## 3. Expected backend responsibilities
 
 Likely future backend responsibilities:
@@ -107,7 +127,7 @@ High
 
 ### Current frontend Job geometry map implementation
 
-Status: In progress
+Status: Done for current mock/frontend phase
 
 The frontend displays mock Job geometry on the map through read-only client-side FeatureLayers.
 
@@ -125,16 +145,22 @@ Current behavior:
 
 Current limitations:
 
-- Job geometry layers use a separate service snapshot from the Jobs panel
 - editing Job geometry is not supported
 - Job polygon clustering is not supported
 - final backend geometry ownership is not confirmed
+- map Job layers are refreshed from the shared startup/manual-refresh Jobs snapshot
+- individual Job status mutations update the Jobs panel and AOI popup summaries immediately, while map Job layer presentation remains unchanged until refresh
+- normalized canonical AOI state is intentionally deferred until real AOI field, auth, geometry and service-size requirements are confirmed
 
 Backend assumptions remain unchanged:
 
 - backend may later provide Jobs and Job geometry directly
 - backend may later own authoritative Job/AOI relation calculation
 - frontend should continue normalizing incoming Job geometry before UI or map use
+
+Decision:
+
+- Keep AOI FeatureLayer ownership for map display until the real AOI Feature Service is confirmed. The AOI service should provide validation and normalization helpers, but should not eagerly query all AOIs into frontend state without a concrete UI/backend requirement.
 
 ## 5. Draft frontend AOI model
 

@@ -170,6 +170,30 @@ Rules:
 - Keep ArcGIS layer lifecycle and map status in the map feature boundary.
 - Update this section when the real AOI Feature Service is created.
 
+### AOI service direction after Phase 10
+
+Status: Reviewed
+
+Decision:
+
+Keep the ArcGIS `FeatureLayer` as the owner of AOI map display for now.
+
+The AOI service should continue to own readiness validation and future AOI normalization helpers, but it should not eagerly query all AOIs into canonical frontend state until the real AOI service is confirmed.
+
+Rationale:
+
+- The map already needs the FeatureLayer for display, popup, hover and highlight.
+- Real AOI geometry type, density, service size and auth are still open.
+- Eager AOI querying could introduce unnecessary startup cost before the backend/AOI contract is known.
+- Current UI workflows use stable selected AOI values from popup graphics and relation lookups, not a canonical AOI list.
+
+Rules:
+
+- Keep test-service field names centralized.
+- Keep AOI readiness validation in `features/aoi/services`.
+- Keep ArcGIS layer lifecycle in `features/map`.
+- Introduce canonical AOI state only when a concrete UI/backend need appears.
+
 ### Current selected AOI state
 
 Status: Done
@@ -658,7 +682,7 @@ Rules:
 - Jobs panel focus/expanded state should be owned by Jobs UI code.
 - Selecting a Job from the map clears AOI-scoped list mode.
 - Closing the Jobs panel or returning to the normal Jobs list clears selected Job highlight.
-- Related AOI highlight for selected Job is deferred.
+- Related AOI highlight for selected Job is handled through selected Job state and map controller highlight flows.
 
 Implementation note:
 
@@ -666,7 +690,7 @@ Job details uses a `PopupTemplate` action for action bar placement. A hidden Esr
 
 ### Selected Job related AOI highlight
 
-Status: In progress
+Status: Done
 
 Current flow:
 
@@ -686,7 +710,7 @@ Rules:
 - AOI matching currently uses `GlobalID`, matching the provisional frontend AOI id strategy.
 - Clearing selected Job should clear related AOI highlight.
 - Related AOI highlight is visual only; it does not change the AOI layer source or apply a permanent filter.
-- Clustering and de-emphasis effects remain deferred.
+- Clustering and de-emphasis effects remain separate future map presentation decisions.
 
 ### Map hover feedback
 
@@ -719,7 +743,7 @@ Rules:
 
 ### AOI popup action flow
 
-Status: In progress
+Status: Done
 
 Current flow:
 
