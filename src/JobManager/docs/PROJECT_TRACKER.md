@@ -1489,7 +1489,7 @@ Cleanup:
 - Removed the old map status retry action path from startup-related map errors.
 - Kept Jobs inline retry only for post-startup refresh failures where stale Jobs are still available.
 - Defensive empty Jobs error state no longer exposes an alternate initial retry path because initial Jobs loading is owned by the startup gate.
-- Startup retry now resumes from the failed startup stage where possible. A Jobs load retry no longer recreates the map/AOI workspace after the map step has already completed successfully.
+- Startup retry now runs per startup stage. Once the map/AOI workspace is ready, later Jobs load retries no longer recreate the map. Once Jobs are loaded, later Job map rendering retries reuse the loaded Jobs snapshot.
 
 Rationale:
 

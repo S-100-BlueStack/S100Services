@@ -33,6 +33,7 @@ export async function createApp(rootElement) {
   let startupRequestId = 0;
   let isDestroyed = false;
   let isStartupComplete = false;
+  const startupState = createStartupState();
 
   const navbar = await createNavbarController({
     jobFilterStore,
@@ -256,34 +257,37 @@ export async function createApp(rootElement) {
     shellElement.inert = true;
     shellElement.setAttribute("aria-hidden", "true");
 
-    startupLoader.startLoading("Starting Job Manager...");
+    startupLoader.startLoading(createStartupLoadingText(startupState));
 
     try {
-      await runWithRetry(
-        () =>
-          loadRequiredStartupState({
+      await runStartupStage({
+        label: "map workspace",
+        startupRequestId: currentStartupRequestId,
+        task: () =>
+          ensureStartupMapReady({
             startupRequestId: currentStartupRequestId,
           }),
-        {
-          maxRetries: STARTUP_MAX_ATTEMPTS,
-          baseDelay: 1000,
-          maxDelay: 30000,
-          backoffFactor: 2,
-          signal: startupAbortController.signal,
-          onRetry({ attempt, delay, error }) {
-            startupLoader.startRetryCountdown({
-              attempt,
-              totalAttempts: STARTUP_MAX_ATTEMPTS,
-              delayMs: delay,
-              error,
-            });
-          },
-        }
-      );
+      });
 
-      if (isDestroyed || currentStartupRequestId !== startupRequestId) {
-        return;
-      }
+      await runStartupStage({
+        label: "Jobs load",
+        startupRequestId: currentStartupRequestId,
+        task: () =>
+          ensureStartupJobsReady({
+            startupRequestId: currentStartupRequestId,
+          }),
+      });
+
+      await runStartupStage({
+        label: "Job map rendering",
+        startupRequestId: currentStartupRequestId,
+        task: () =>
+          ensureStartupJobMapReady({
+            startupRequestId: currentStartupRequestId,
+          }),
+      });
+
+      throwIfStaleStartup(currentStartupRequestId);
 
       isStartupComplete = true;
       shellElement.classList.remove("job-manager-app--startup-blocked");
@@ -308,8 +312,38 @@ export async function createApp(rootElement) {
     }
   }
 
-  async function loadRequiredStartupState({ startupRequestId: expectedStartupRequestId }) {
+  async function runStartupStage({ label, startupRequestId: expectedStartupRequestId, task }) {
     throwIfStaleStartup(expectedStartupRequestId);
+
+    return runWithRetry(task, {
+      maxRetries: STARTUP_MAX_ATTEMPTS,
+      baseDelay: 1000,
+      maxDelay: 30000,
+      backoffFactor: 2,
+      signal: startupAbortController.signal,
+      onRetry({ attempt, delay, error }) {
+        startupLoader.startRetryCountdown({
+          attempt,
+          totalAttempts: STARTUP_MAX_ATTEMPTS,
+          delayMs: delay,
+          error,
+          label,
+        });
+      },
+    });
+  }
+
+  async function ensureStartupMapReady({ startupRequestId: expectedStartupRequestId }) {
+    throwIfStaleStartup(expectedStartupRequestId);
+
+    if (startupState.mapReady) {
+      startupLoader.markDataReceived({
+        text: "Map workspace already loaded.",
+        progress: 0.32,
+      });
+
+      return startupState.mapResult;
+    }
 
     startupLoader.setText("Preparing map workspace...");
     startupLoader.setDetail("The map and AOI source are loading.");
@@ -327,10 +361,28 @@ export async function createApp(rootElement) {
       throw mapStartupResult.error || new Error("Map startup failed.");
     }
 
+    startupState.mapReady = true;
+    startupState.mapResult = mapStartupResult.data;
+
     startupLoader.markDataReceived({
       text: "Map workspace loaded.",
       progress: 0.32,
     });
+
+    return startupState.mapResult;
+  }
+
+  async function ensureStartupJobsReady({ startupRequestId: expectedStartupRequestId }) {
+    throwIfStaleStartup(expectedStartupRequestId);
+
+    if (startupState.jobsReady) {
+      startupLoader.markDataReceived({
+        text: "Jobs already loaded.",
+        progress: 0.58,
+      });
+
+      return startupState.jobs;
+    }
 
     startupLoader.setText("Loading Jobs...");
     startupLoader.setDetail("The required Jobs list is loading from the mock backend.");
@@ -346,10 +398,31 @@ export async function createApp(rootElement) {
 
     const jobs = normalizeStartupJobs(jobsResult.data?.jobs);
 
+    startupState.jobsReady = true;
+    startupState.jobs = jobs;
+    startupState.jobMapReady = false;
+
     startupLoader.markDataReceived({
       text: "Jobs loaded.",
       progress: 0.58,
     });
+
+    return startupState.jobs;
+  }
+
+  async function ensureStartupJobMapReady({ startupRequestId: expectedStartupRequestId }) {
+    throwIfStaleStartup(expectedStartupRequestId);
+
+    if (startupState.jobMapReady) {
+      startupLoader.setText("Job map layers already rendered.");
+      startupLoader.setDetail("");
+      startupLoader.setProgress(0.94);
+
+      return {
+        jobs: startupState.jobs,
+        map: startupState.mapResult,
+      };
+    }
 
     startupLoader.startRendering({
       text: "Rendering Jobs on the map...",
@@ -357,7 +430,7 @@ export async function createApp(rootElement) {
     });
 
     const jobMapResult = await mapController.refreshJobData({
-      jobs,
+      jobs: startupState.jobs,
     });
 
     throwIfStaleStartup(expectedStartupRequestId);
@@ -366,6 +439,8 @@ export async function createApp(rootElement) {
       throw jobMapResult.error || new Error("Job map layers could not be loaded.");
     }
 
+    startupState.jobMapReady = true;
+
     startupLoader.setText("Finalizing map workspace...");
     startupLoader.setDetail("");
     startupLoader.setProgress(0.94);
@@ -373,8 +448,8 @@ export async function createApp(rootElement) {
     await waitForNextPaint();
 
     return {
-      jobs,
-      map: mapStartupResult.data,
+      jobs: startupState.jobs,
+      map: startupState.mapResult,
     };
   }
 
@@ -534,6 +609,32 @@ function normalizeStartupJobs(jobs) {
   }
 
   return jobs;
+}
+
+function createStartupState() {
+  return {
+    mapReady: false,
+    mapResult: null,
+    jobsReady: false,
+    jobs: [],
+    jobMapReady: false,
+  };
+}
+
+function createStartupLoadingText(startupState) {
+  if (!startupState.mapReady) {
+    return "Preparing map workspace...";
+  }
+
+  if (!startupState.jobsReady) {
+    return "Loading Jobs...";
+  }
+
+  if (!startupState.jobMapReady) {
+    return "Rendering Jobs on the map...";
+  }
+
+  return "Starting Job Manager...";
 }
 
 function waitForNextPaint() {

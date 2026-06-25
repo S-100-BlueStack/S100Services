@@ -840,13 +840,23 @@ createApp
 
 Retry behavior:
 
+Retry behavior:
+
 ```txt
-Startup task fails
-  -> startup loader shows retry countdown
-  -> retry runner waits with exponential backoff
-  -> startup task runs again
-  -> map-owned runtime state is recreated for the new attempt
-  -> after exhausted attempts, loader stays visible with Retry now
+Map/AOI startup fails
+  -> startup loader shows map workspace retry countdown
+  -> retry only map/AOI startup
+
+Jobs load fails
+  -> keep the ready map/AOI workspace
+  -> startup loader shows Jobs load retry countdown
+  -> retry only Jobs load
+
+Job map rendering fails
+  -> keep the ready map/AOI workspace
+  -> keep the loaded Jobs snapshot
+  -> startup loader shows Job map rendering retry countdown
+  -> retry only Job layer population
 ```
 
 Rules:
@@ -865,6 +875,9 @@ Rules:
 - The map workspace should start behind the loader, matching the Product Manager startup pattern.
 - The startup loader is the only visible startup status surface.
 - Map status messages must be suppressed during startup.
+- Startup retry should resume from the failed stage where possible.
+- A completed map/AOI startup stage must not be repeated just because Jobs loading failed.
+- A completed Jobs load stage must not be repeated just because Job map layer rendering failed.
 
 Cleanup notes:
 

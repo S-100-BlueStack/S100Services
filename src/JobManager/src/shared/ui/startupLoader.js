@@ -78,7 +78,7 @@ export function createStartupLoader() {
     });
   }
 
-  function startRetryCountdown({ attempt, totalAttempts, delayMs, error } = {}) {
+  function startRetryCountdown({ attempt, totalAttempts, delayMs, error, label = "startup" } = {}) {
     cleanupTimers();
     actionButton.hidden = true;
     element.hidden = false;
@@ -91,11 +91,10 @@ export function createStartupLoader() {
       const elapsedMs = Date.now() - startedAt;
       const remainingMs = Math.max(0, delayMs - elapsedMs);
       const remainingSeconds = Math.ceil(remainingMs / 1000);
+      const errorMessage = error?.message ? ` - ${error.message}` : "";
 
-      setText(`Retrying startup (${attempt}/${totalAttempts})...`);
-      setDetail(
-        `Next attempt in ${remainingSeconds}s${error?.message ? ` — ${error.message}` : ""}`
-      );
+      setText(`Retrying ${label} (${attempt}/${totalAttempts})...`);
+      setDetail(`Next attempt in ${remainingSeconds}s${errorMessage}`);
     }
 
     updateCountdownText();
