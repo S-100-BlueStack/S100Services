@@ -1914,15 +1914,15 @@ Prepare for backend integration and reduce future rework.
 
 Tasks:
 
-| ID      | Task                                                    |      Status | Notes                                                                                                                  |
-| ------- | ------------------------------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------- |
-| JM-1101 | Create `docs/BACKEND_CONTRACTS.md`                      |        Done | Draft backend assumptions, frontend models, AOI fields and open questions are documented.                              |
-| JM-1102 | Create `docs/ARCHITECTURE.md`                           |        Done | Folder ownership, state rules, service rules and map flows are documented.                                             |
-| JM-1103 | Document mock backend behavior                          | In progress | Core mock behavior is documented in tracker/backend notes. Dedicated mock behavior section can still improve this.     |
-| JM-1104 | Document AOI Feature Service requirements               | In progress | Current test service fields are documented. Final service fields, auth and geometry characteristics remain open.       |
-| JM-1105 | Document clustering decision                            | In progress | Job point clustering is documented. AOI clustering remains blocked by real geometry.                                   |
-| JM-1106 | Review for secrets before backend config work           |        Done | `.env.example` uses placeholders, and runtime config only exposes safe `VITE_` browser values.                         |
-| JM-1107 | Review AOI service and backend readiness after Phase 10 |        Done | Current service seams are ready for later adapter work. AOI FeatureLayer ownership remains the right current approach. |
+| ID      | Task                                                    |      Status | Notes                                                                                                                    |
+| ------- | ------------------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------------ |
+| JM-1101 | Create `docs/BACKEND_CONTRACTS.md`                      |        Done | Draft backend assumptions, frontend models, AOI fields and open questions are documented.                                |
+| JM-1102 | Create `docs/ARCHITECTURE.md`                           |        Done | Folder ownership, state rules, service rules and map flows are documented.                                               |
+| JM-1103 | Document mock backend behavior                          |        Done | Mock loading, latency, failures, status mutation, cyclic Job creation and generated Job visibility rules are documented. |
+| JM-1104 | Document AOI Feature Service requirements               | In progress | Current test service fields are documented. Final service fields, auth and geometry characteristics remain open.         |
+| JM-1105 | Document clustering decision                            | In progress | Job point clustering is documented. AOI clustering remains blocked by real geometry.                                     |
+| JM-1106 | Review for secrets before backend config work           |        Done | `.env.example` uses placeholders, and runtime config only exposes safe `VITE_` browser values.                           |
+| JM-1107 | Review AOI service and backend readiness after Phase 10 |        Done | Current service seams are ready for later adapter work. AOI FeatureLayer ownership remains the right current approach.   |
 
 Exit criteria:
 
@@ -1939,6 +1939,20 @@ Phase 11 readiness review:
 - Keep mock Jobs behind `features/jobs/services/jobService.js` until a real backend adapter exists.
 - Keep relation source flexibility through `mock`, `frontendGeometry` and `backend`.
 - Do not add backend API environment variables until a real backend endpoint is known.
+
+Mock backend behavior review:
+
+- Mock Jobs are accessed through `features/jobs/services/jobService.js`.
+- UI code must not import from `features/jobs/mock`.
+- Mock Jobs are normalized before they reach store/UI consumers.
+- Mock loading simulates latency and load failures.
+- Mock status mutation simulates latency and mutation failures.
+- Completing a Job can create a generated Job.
+- Generated Jobs are stored in the mock backend immediately and returned as `createdJobs`.
+- The current Jobs store updates the mutated Job in the visible state but does not immediately insert generated Jobs.
+- Generated Jobs become visible after refresh or panel reopen, matching the intended slower backend-like workflow.
+- Mock relations are derived from normalized Job `relatedAoiIds` through the relation service/domain layer.
+- Mock relation behavior can later be replaced by backend-provided relations without changing UI ownership.
 
 ## 13. Suggested implementation order
 
@@ -2128,4 +2142,5 @@ Recommended next tasks:
 | JM-NEXT-014 | Review final AOI Feature Service field/auth requirements |     Blocked | Requires confirmation of real AOI Feature Service fields, auth requirements, geometry type, spatial reference and data volume.     |
 | JM-NEXT-015 | Phase 10 wrap-up and backend preparation review          |        Done | Refresh, retry, loading and popup consistency are wrapped. Remaining mutation-to-map sync is deferred unless needed.               |
 | JM-NEXT-016 | Start backend/AOI-service preparation                    |        Done | Phase 11 readiness review completed. Next implementation should focus on docs alignment and confirmed external AOI/backend inputs. |
-| JM-NEXT-017 | Clean Phase 11 docs drift                                | Not started | Align backend/AOI docs with current service seams and remove stale In progress wording from implemented map/popup flows.           |
+| JM-NEXT-017 | Clean Phase 11 docs drift                                |        Done | Mock backend behavior is documented and stale docs placement/status drift has been cleaned.                                        |
+| JM-NEXT-018 | Await final AOI/backend inputs                           |     Blocked | Requires real AOI Feature Service fields, auth requirements, geometry characteristics and backend contract direction.              |

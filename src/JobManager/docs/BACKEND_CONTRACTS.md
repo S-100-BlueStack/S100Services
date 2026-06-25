@@ -48,6 +48,56 @@ Decision:
 
 Do not add a backend API base URL or backend auth config until the backend exists. Keep browser-exposed runtime config limited to values that are safe to expose.
 
+## 2.2 Current mock backend behavior
+
+Status: Done for current mock/frontend phase
+
+The mock backend exists to exercise frontend UX and service boundaries before the real backend exists.
+
+Current behavior:
+
+- Jobs are loaded through `features/jobs/services/jobService.js`.
+- Mock implementation lives under `features/jobs/mock`.
+- UI components must not import mock backend modules directly.
+- Mock Jobs are normalized into the stable frontend Job model.
+- Mock Jobs include point and polygon geometry.
+- Mock Jobs include `relatedAoiIds` for relation testing.
+- Mock load operations simulate latency.
+- Mock load operations can fail.
+- Mock status mutations simulate latency.
+- Mock status mutations can fail.
+- Completing a Job can create a generated Job.
+- Generated Jobs are stored in the mock backend immediately.
+- Generated Jobs are returned from the mutation result as `createdJobs`.
+- Generated Jobs are not inserted into the current visible Jobs store immediately.
+- Generated Jobs become visible after refresh or panel reopen.
+
+Default mock configuration:
+
+```txt
+latencyMinMs: 250
+latencyMaxMs: 1000
+loadFailureRate: 0.05
+mutationFailureRate: 0.15
+cyclicJobCreationRate: 0.85
+```
+
+Generated Job behavior:
+
+```txt
+Job marked Done
+  -> mock backend updates the completed Job
+  -> mock backend may create a generated Job
+  -> generated Job is stored in mock backend
+  -> mutation result returns updated Job and createdJobs
+  -> Jobs store updates the completed Job only
+  -> created Job becomes visible after refresh or panel reopen
+```
+
+Backend implication:
+
+The future backend may choose whether status mutation responses can include newly created follow-up Jobs. The current frontend supports a `createdJobs` mutation result shape for notices and future compatibility, but the current visible Jobs list intentionally waits for refresh before showing generated Jobs.
+
 ## 3. Expected backend responsibilities
 
 Likely future backend responsibilities:
@@ -150,7 +200,6 @@ Current limitations:
 - final backend geometry ownership is not confirmed
 - map Job layers are refreshed from the shared startup/manual-refresh Jobs snapshot
 - individual Job status mutations update the Jobs panel and AOI popup summaries immediately, while map Job layer presentation remains unchanged until refresh
-- normalized canonical AOI state is intentionally deferred until real AOI field, auth, geometry and service-size requirements are confirmed
 
 Backend assumptions remain unchanged:
 
@@ -211,6 +260,7 @@ Current limitations:
 - AOI FeatureLayer remains the owner of map AOI display
 - AOI clustering is deferred until real geometry characteristics are known
 - current field mapping is based on a temporary test Feature Service and must not be treated as the final backend contract
+- normalized canonical AOI state is intentionally deferred until real AOI field, auth, geometry and service-size requirements are confirmed
 
 Current required provisional AOI fields:
 
@@ -232,6 +282,7 @@ ISSUEDATE
 Decision:
 
 Use `GlobalID` as the provisional frontend AOI identifier for the test Feature Service. Use `PRODUCTNAME` as the provisional display name. Use `OBJECTID` for ArcGIS/service mechanics only. Do not treat this as the final backend contract until the real AOI Feature Service is created.
+Keep AOI FeatureLayer ownership for map display until the real AOI Feature Service is confirmed. The AOI service should provide validation and normalization helpers, but should not eagerly query all AOIs into frontend state without a concrete UI/backend requirement.
 
 ## 6. Draft relation model
 
@@ -335,7 +386,7 @@ No option is final yet.
 
 ### Current frontend relation implementation
 
-Status: In progress
+Status: Done for current mock/frontend phase
 
 The frontend has a relation foundation under `features/relations`.
 

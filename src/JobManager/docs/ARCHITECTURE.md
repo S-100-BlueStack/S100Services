@@ -246,6 +246,52 @@ Rules:
 - Cyclic mock Job creation must stay isolated from UI logic.
 - Backend-specific fields must be normalized before UI use.
 
+### Mock backend behavior
+
+Status: Done
+
+Current flow:
+
+```txt
+Jobs UI / startup / refresh
+  -> jobs/state/jobStore.js
+  -> jobs/services/jobService.js
+  -> jobs/mock/mockJobBackend.js
+  -> normalized frontend Job models
+```
+
+Current mock behavior:
+
+- `loadJobs()` simulates latency before returning Jobs.
+- `loadJobs()` can fail with a mock backend error.
+- `updateJobStatus(jobId, status)` simulates latency before applying the mutation.
+- `updateJobStatus(jobId, status)` can fail with a mock backend error.
+- Completing a Job can create a generated Job.
+- Generated Jobs can be follow-up Jobs based on the completed Job or separate Jobs from rotating templates.
+- Generated Jobs are written to the mock backend's internal Job list immediately.
+- Generated Jobs are returned in the mutation result as `createdJobs`.
+- The Jobs store only updates the mutated Job in the visible current state.
+- Generated Jobs become visible after a later Jobs load, such as manual refresh or panel reopen.
+
+Current default mock configuration:
+
+```txt
+latencyMinMs: 250
+latencyMaxMs: 1000
+loadFailureRate: 0.05
+mutationFailureRate: 0.15
+cyclicJobCreationRate: 0.85
+```
+
+Rules:
+
+- UI code must use `jobs/services/jobService.js`, not `jobs/mock`.
+- Mock-only cyclic behavior must stay isolated in `jobs/mock`.
+- Mock errors should continue to use the shared API result/error normalization path.
+- Generated Jobs should not be inserted directly into the visible Jobs list unless the product decision changes.
+- Mock data should remain realistic enough to exercise map, clustering, filters, popup summaries and relation flows.
+- Mock behavior must remain easy to remove when a real backend adapter is introduced.
+
 ### Jobs filter ownership
 
 Job filter rules and filter state are owned by `src/features/jobs`.
