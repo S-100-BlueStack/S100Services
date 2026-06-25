@@ -278,6 +278,14 @@ Rules:
 - Returning from map-opened Job details should clear selected Job map highlights.
 - AOI details remain deferred until real AOI fields, auth and geometry are confirmed.
 
+Phase 12 polish:
+
+- Details navigation is owned by the Jobs panel shell. `Back to Jobs` is shown as a sticky header action beside the close action while details mode is active.
+- The dedicated details view uses one main details surface with section dividers instead of separate nested cards.
+- Status mutation controls are placed near the top of details mode, directly after the selected Job header.
+- Details refresh currently uses the shared Jobs refresh flow. A single-Job refresh should wait for a real backend endpoint.
+- Programmatic focus should not create large click outlines. Keyboard focus should still be visible through `:focus-visible`.
+
 ### Mock backend behavior
 
 Status: Done

@@ -27,14 +27,36 @@ export function createJobsOverlay({ jobFilterStore, jobStore } = {}) {
 
   titleGroupElement.append(titleElement, subtitleElement);
 
+  const headerActionsElement = document.createElement("div");
+  headerActionsElement.className = "job-manager-overlay-panel__header-actions";
+
+  const backButton = document.createElement("calcite-action");
+  backButton.className = "job-manager-overlay-panel__back";
+  backButton.icon = "arrow-left";
+  backButton.text = "Back to Jobs";
+  backButton.title = "Back to Jobs";
+  backButton.hidden = true;
+  backButton.setAttribute("aria-hidden", "true");
+  backButton.addEventListener("click", () => {
+    jobList.showJobListFromDetails();
+  });
+
   const closeButton = document.createElement("calcite-action");
   closeButton.className = "job-manager-overlay-panel__close";
   closeButton.icon = "x";
   closeButton.text = "Close Jobs panel";
   closeButton.title = "Close Jobs panel";
 
-  headerElement.append(titleGroupElement, closeButton);
+  headerActionsElement.append(backButton, closeButton);
+  headerElement.append(titleGroupElement, headerActionsElement);
   panelElement.append(headerElement, jobList.element);
+
+  jobList.element.addEventListener("job-manager:job-details-mode-changed", (event) => {
+    const isDetailsMode = Boolean(event.detail?.isDetailsMode);
+
+    backButton.hidden = !isDetailsMode;
+    backButton.setAttribute("aria-hidden", String(!isDetailsMode));
+  });
 
   return {
     element: panelElement,

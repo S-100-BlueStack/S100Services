@@ -31,6 +31,27 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: -0.85rem -0.85rem 0.85rem;
+  padding: 0.85rem;
+  border-bottom: 1px solid var(--jm-border);
+  background: var(--jm-overlay);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.job-manager-overlay-panel__header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex: 0 0 auto;
+}
+
+.job-manager-overlay-panel__back,
+.job-manager-overlay-panel__close {
+  --calcite-color-foreground-1: transparent;
 }
 
 .job-manager-overlay-panel__title-group {

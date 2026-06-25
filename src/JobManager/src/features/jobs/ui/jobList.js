@@ -128,6 +128,8 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
   };
 
   const render = () => {
+    rootElement.classList.toggle("job-list--details", viewMode === JOB_LIST_VIEW_MODE.DETAILS);
+
     renderJobList({
       rootElement,
       state: currentState,
@@ -146,6 +148,13 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
       openJobDetailsFromList,
       showJobListFromDetails,
     });
+
+    rootElement.dispatchEvent(
+      createJobDetailsModeChangedEvent({
+        isDetailsMode: viewMode === JOB_LIST_VIEW_MODE.DETAILS,
+        selectedJobId,
+      })
+    );
   };
 
   const unsubscribeJobs = store.subscribe((state) => {
@@ -230,6 +239,7 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
         ok: true,
       });
     },
+    showJobListFromDetails,
     clearAoiFilter,
     clearSelectedJob,
     hideCompletedJobs() {
@@ -432,7 +442,6 @@ function renderJobDetailsView({
       job: selectedJob,
       isLoading: state.isLoading,
       runJobsRefresh,
-      showJobListFromDetails,
     })
   );
 
@@ -458,8 +467,6 @@ function renderJobDetailsView({
   detailsElement.tabIndex = -1;
 
   detailsElement.append(
-    createJobDetailsSummary(selectedJob),
-    createJobDetailsFactSection(selectedJob),
     createJobDetailsStatusSection({
       job: selectedJob,
       store,
@@ -467,14 +474,15 @@ function renderJobDetailsView({
       pendingMutationJobIds,
       render,
     }),
+    createJobDetailsSummary(selectedJob),
+    createJobDetailsFactSection(selectedJob),
     createJobDetailsAoiSection(selectedJob)
   );
-
   contentElements.push(detailsElement);
   rootElement.replaceChildren(...contentElements);
 }
 
-function createJobDetailsHeader({ job, isLoading, runJobsRefresh, showJobListFromDetails }) {
+function createJobDetailsHeader({ job, isLoading, runJobsRefresh }) {
   const headerElement = document.createElement("div");
   headerElement.className = "job-details__header";
 
@@ -502,11 +510,9 @@ function createJobDetailsHeader({ job, isLoading, runJobsRefresh, showJobListFro
   const actionsElement = document.createElement("div");
   actionsElement.className = "job-details__header-actions";
 
-  const backButton = createToolbarButton("Back to Jobs");
-  backButton.addEventListener("click", showJobListFromDetails);
-
   const refreshButton = createToolbarButton(isLoading ? "Refreshing..." : "Refresh");
   refreshButton.disabled = isLoading;
+  refreshButton.title = "Refresh all Jobs";
   refreshButton.addEventListener("click", () => {
     void runJobsRefresh({
       source: "details-refresh",
@@ -514,7 +520,7 @@ function createJobDetailsHeader({ job, isLoading, runJobsRefresh, showJobListFro
     });
   });
 
-  actionsElement.append(backButton, refreshButton);
+  actionsElement.append(refreshButton);
   headerElement.append(titleGroupElement, actionsElement);
 
   return headerElement;
@@ -1392,6 +1398,16 @@ function createAoiFilterClearedEvent() {
 function createJobSelectionClearedEvent() {
   return new CustomEvent("job-manager:job-selection-cleared", {
     bubbles: true,
+  });
+}
+
+function createJobDetailsModeChangedEvent({ isDetailsMode, selectedJobId } = {}) {
+  return new CustomEvent("job-manager:job-details-mode-changed", {
+    bubbles: true,
+    detail: {
+      isDetailsMode: Boolean(isDetailsMode),
+      selectedJobId: normalizeOptionalString(selectedJobId),
+    },
   });
 }
 

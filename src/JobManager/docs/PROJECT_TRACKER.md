@@ -1696,6 +1696,13 @@ Exit criteria:
 - completing a Job can sometimes create a new Job
 - UI has no direct mock imports
 
+Phase 12 polish notes:
+
+- In Job details mode, Back to Jobs belongs in the sticky Jobs panel header as an icon action next to Close.
+- Details mode should avoid nested box-in-box styling. Use one main details surface with section headers and thin separators.
+- `Refresh` in details mode intentionally refreshes all Jobs for now because no single-Job backend endpoint exists yet.
+- Mouse/programmatic focus should not show a large blue outline around Job cards or details surfaces. Keyboard focus should still use `:focus-visible`.
+
 ## Phase 3 - Job list UI
 
 Goal:
@@ -1962,13 +1969,13 @@ Improve the Job details workflow without introducing heavy editing or final back
 
 Tasks:
 
-| ID      | Task                                          |      Status | Notes                                                                                                   |
-| ------- | --------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------- |
-| JM-1201 | Define Job details panel scope                |        Done | Details view remains read-only except for existing status buttons. Deadline editing remains deferred.   |
-| JM-1202 | Implement dedicated Job details view          | In progress | Jobs panel can switch from list mode to a dedicated selected Job details view.                          |
-| JM-1203 | Wire map/list Job selection to details mode   | In progress | Map popup flow opens details mode; Job list cards can open details mode without changing backend seams. |
-| JM-1204 | Preserve status mutation and notices          | In progress | Details view reuses existing status mutation flow and notices.                                          |
-| JM-1205 | Defer AOI details until real AOI fields exist |        Done | AOI details panel is deferred until final AOI Feature Service fields/auth/geometry are confirmed.       |
+| ID      | Task                                          |      Status | Notes                                                                                                                                     |
+| ------- | --------------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-1201 | Define Job details panel scope                |        Done | Details view remains read-only except for existing status buttons. Deadline editing remains deferred.                                     |
+| JM-1202 | Implement dedicated Job details view          | In progress | Jobs panel has details mode. Current polish moves details navigation into the sticky panel header and reduces nested-card styling.        |
+| JM-1203 | Wire map/list Job selection to details mode   | In progress | Map popup flow opens details mode; Job list cards can open details mode without changing backend seams.                                   |
+| JM-1204 | Preserve status mutation and notices          | In progress | Details view reuses existing status mutation flow and notices. Details refresh still reloads all Jobs until a single-Job endpoint exists. |
+| JM-1205 | Defer AOI details until real AOI fields exist |        Done | AOI details panel is deferred until final AOI Feature Service fields/auth/geometry are confirmed.                                         |
 
 Exit criteria:
 
