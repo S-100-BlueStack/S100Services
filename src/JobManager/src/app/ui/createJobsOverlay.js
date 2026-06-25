@@ -1,7 +1,10 @@
 import { createJobList } from "../../features/jobs/ui/jobList.js";
 
-export function createJobsOverlay({ jobFilterStore } = {}) {
-  const jobList = createJobList({ jobFilterStore });
+export function createJobsOverlay({ jobFilterStore, jobStore } = {}) {
+  const jobList = createJobList({
+    jobFilterStore,
+    store: jobStore,
+  });
   const panelElement = document.createElement("aside");
   panelElement.id = "job-manager-jobs-panel";
   panelElement.className = "job-manager-overlay-panel job-manager-jobs-overlay";

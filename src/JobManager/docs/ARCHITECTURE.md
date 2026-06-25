@@ -818,35 +818,53 @@ Rules:
 - If map refresh fails, show a user-facing notice.
 - Manual refresh should not perform a full app reload.
 
-### Retry-friendly error states
+### Startup loader and required data gate
 
 Status: Done
 
-Current flow:
+Current startup flow:
 
 ```txt
-Jobs load/refresh failure
-  -> Job store error state
-  -> Jobs panel inline error state
-  -> Retry action
-  -> normal Jobs refresh path
-  -> refreshed-Jobs event on success
-  -> map Job layers refresh from the same Jobs snapshot
+createApp
+  -> render app shell behind startup loader
+  -> make app shell inert
+  -> show transparent startup loader
+  -> start map workspace behind loader
+  -> validate AOI FeatureLayer readiness
+  -> load Jobs through shared Jobs store
+  -> populate Job map layers from loaded Jobs snapshot
+  -> initialize map popup, hover, highlight, filters and clustering
+  -> hide loader
+  -> release app shell
+```
 
-Map or AOI load failure
-  -> map controller status surface
-  -> retry action when retry is meaningful
-  -> map controller restarts map/AOI setup
+Retry behavior:
+
+```txt
+Startup task fails
+  -> startup loader shows retry countdown
+  -> retry runner waits with exponential backoff
+  -> startup task runs again
+  -> map-owned runtime state is recreated for the new attempt
+  -> after exhausted attempts, loader stays visible with Retry now
 ```
 
 Rules:
 
-- Retryable failures should appear in the UI surface where the user can act on them.
-- Notices should still be used for important outcomes, but they should not be the only retry path.
-- Jobs retry must use the same refresh path as the normal Jobs panel refresh.
-- Map retry may recreate the MapView and map-owned controllers.
-- Missing configuration should be shown as a warning, not as a retryable runtime error.
-- Retry UI must not introduce backend-specific assumptions.
+- Initial app access requires both AOIs and Jobs.
+- Startup must not expose a partially usable app when AOIs or Jobs cannot load.
+- Jobs initial load belongs to app startup, not to the Jobs panel.
+- The Jobs panel should consume the shared startup-loaded Jobs store.
+- Startup map layer population should use the Jobs snapshot already loaded by startup.
+- AOI missing configuration is a startup blocker.
+- AOI load failure is a startup blocker.
+- AOI readiness states that indicate unusable AOI data are startup blockers.
+- Post-startup manual refresh remains non-blocking when stale Jobs are still available.
+- Notices are appropriate for post-startup outcomes, but startup failures should primarily be visible in the loader.
+- Startup retry UI must not introduce backend-specific assumptions.
+- The map workspace should start behind the loader, matching the Product Manager startup pattern.
+- The startup loader is the only visible startup status surface.
+- Map status messages must be suppressed during startup.
 
 ### AOI popup Job summary content
 

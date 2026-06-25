@@ -1,26 +1,38 @@
 import { createSelectedAoiStore } from "../features/aoi/state/selectedAoiStore.js";
 import { createJobFilterStore } from "../features/jobs/state/jobFilterStore.js";
+import { createJobStore } from "../features/jobs/state/jobStore.js";
 import { createSelectedJobStore } from "../features/jobs/state/selectedJobStore.js";
 import { createMapController } from "../features/map/core/mapController.js";
 import { createJobClusterSettingsStore } from "../features/map/state/jobClusterSettingsStore.js";
 import { showErrorNotice, showSuccessNotice } from "../features/notices/services/noticeService.js";
 import { createNoticeRegion } from "../features/notices/ui/noticeContainer.js";
+import { createThemeStore } from "../features/theme/state/themeStore.js";
 import { getRuntimeConfig } from "../shared/config/runtimeConfig.js";
+import { runWithRetry } from "../shared/utils/retryRunner.js";
+import { createStartupLoader } from "../shared/ui/startupLoader.js";
 import { createJobsOverlay } from "./ui/createJobsOverlay.js";
 import { createMapWorkspace } from "./ui/createMapWorkspace.js";
 import { createNavbarController } from "./ui/createNavbarController.js";
-import { createThemeStore } from "../features/theme/state/themeStore.js";
+
+const STARTUP_MAX_ATTEMPTS = 10;
 
 export async function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
   const selectedAoiStore = createSelectedAoiStore();
   const selectedJobStore = createSelectedJobStore();
   const jobFilterStore = createJobFilterStore();
+  const jobStore = createJobStore();
   const jobClusterSettingsStore = createJobClusterSettingsStore();
   const themeStore = createThemeStore();
   const noticeRegion = createNoticeRegion();
+  const startupLoader = createStartupLoader();
   const appEventAbortController = new AbortController();
+  const startupAbortController = new AbortController();
+
   let jobsRefreshRequestId = 0;
+  let startupRequestId = 0;
+  let isDestroyed = false;
+  let isStartupComplete = false;
 
   const navbar = await createNavbarController({
     jobFilterStore,
@@ -34,7 +46,10 @@ export async function createApp(rootElement) {
     },
   });
 
-  const jobsPanel = createJobsOverlay({ jobFilterStore });
+  const jobsPanel = createJobsOverlay({
+    jobFilterStore,
+    jobStore,
+  });
   const workspace = createMapWorkspace();
 
   const mapController = createMapController({
@@ -42,19 +57,19 @@ export async function createApp(rootElement) {
     statusElement: workspace.mapStatusElement,
     runtimeConfig,
     onError(error) {
-      showErrorNotice({
+      showErrorNoticeAfterStartup({
         title: "Map could not be loaded",
         message: error.message,
       });
     },
     onJobLayerError(error) {
-      showErrorNotice({
+      showErrorNoticeAfterStartup({
         title: "Job geometry could not be loaded",
         message: error.message,
       });
     },
     onAoiLayerError(error) {
-      showErrorNotice({
+      showErrorNoticeAfterStartup({
         title: "AOIs could not be loaded",
         message: error.message,
       });
@@ -146,10 +161,12 @@ export async function createApp(rootElement) {
   workspace.element.appendChild(jobsPanel.element);
 
   const shellElement = document.createElement("div");
-  shellElement.className = "job-manager-app";
+  shellElement.className = "job-manager-app job-manager-app--startup-blocked";
+  shellElement.inert = true;
+  shellElement.setAttribute("aria-hidden", "true");
   shellElement.append(navbar.element, workspace.element, noticeRegion);
 
-  rootElement.replaceChildren(shellElement);
+  rootElement.replaceChildren(shellElement, startupLoader.element);
 
   const unsubscribeMapJobFilters = jobFilterStore.subscribe((snapshot) => {
     mapController.applyJobFilters(snapshot.filters);
@@ -227,6 +244,139 @@ export async function createApp(rootElement) {
       signal: appEventAbortController.signal,
     }
   );
+
+  void runStartup();
+
+  async function runStartup() {
+    const currentStartupRequestId = startupRequestId + 1;
+    startupRequestId = currentStartupRequestId;
+    isStartupComplete = false;
+
+    shellElement.classList.add("job-manager-app--startup-blocked");
+    shellElement.inert = true;
+    shellElement.setAttribute("aria-hidden", "true");
+
+    startupLoader.startLoading("Starting Job Manager...");
+
+    try {
+      await runWithRetry(
+        () =>
+          loadRequiredStartupState({
+            startupRequestId: currentStartupRequestId,
+          }),
+        {
+          maxRetries: STARTUP_MAX_ATTEMPTS,
+          baseDelay: 1000,
+          maxDelay: 30000,
+          backoffFactor: 2,
+          signal: startupAbortController.signal,
+          onRetry({ attempt, delay, error }) {
+            startupLoader.startRetryCountdown({
+              attempt,
+              totalAttempts: STARTUP_MAX_ATTEMPTS,
+              delayMs: delay,
+              error,
+            });
+          },
+        }
+      );
+
+      if (isDestroyed || currentStartupRequestId !== startupRequestId) {
+        return;
+      }
+
+      isStartupComplete = true;
+      shellElement.classList.remove("job-manager-app--startup-blocked");
+      shellElement.inert = false;
+      shellElement.setAttribute("aria-hidden", "false");
+
+      startupLoader.complete({
+        text: "Job Manager ready.",
+      });
+    } catch (error) {
+      if (isDestroyed || startupAbortController.signal.aborted) {
+        return;
+      }
+
+      startupLoader.fail({
+        text: "Job Manager could not be loaded.",
+        message: error?.message || "Required startup data could not be loaded.",
+        onRetry() {
+          void runStartup();
+        },
+      });
+    }
+  }
+
+  async function loadRequiredStartupState({ startupRequestId: expectedStartupRequestId }) {
+    throwIfStaleStartup(expectedStartupRequestId);
+
+    startupLoader.setText("Preparing map workspace...");
+    startupLoader.setDetail("The map and AOI source are loading.");
+    startupLoader.setProgress(0.1);
+
+    const mapStartupResult = await mapController.start({
+      requireAois: true,
+      deferJobGeometry: true,
+      suppressStatus: true,
+    });
+
+    throwIfStaleStartup(expectedStartupRequestId);
+
+    if (!mapStartupResult.ok) {
+      throw mapStartupResult.error || new Error("Map startup failed.");
+    }
+
+    startupLoader.markDataReceived({
+      text: "Map workspace loaded.",
+      progress: 0.32,
+    });
+
+    startupLoader.setText("Loading Jobs...");
+    startupLoader.setDetail("The required Jobs list is loading from the mock backend.");
+    startupLoader.setProgress(0.42);
+
+    const jobsResult = await jobStore.loadJobs();
+
+    throwIfStaleStartup(expectedStartupRequestId);
+
+    if (!jobsResult.ok) {
+      throw jobsResult.error;
+    }
+
+    const jobs = normalizeStartupJobs(jobsResult.data?.jobs);
+
+    startupLoader.markDataReceived({
+      text: "Jobs loaded.",
+      progress: 0.58,
+    });
+
+    startupLoader.startRendering({
+      text: "Rendering Jobs on the map...",
+      progress: 0.68,
+    });
+
+    const jobMapResult = await mapController.refreshJobData({
+      jobs,
+    });
+
+    throwIfStaleStartup(expectedStartupRequestId);
+
+    if (!jobMapResult.ok) {
+      throw jobMapResult.error || new Error("Job map layers could not be loaded.");
+    }
+
+    startupLoader.setText("Finalizing map workspace...");
+    startupLoader.setDetail("");
+    startupLoader.setProgress(0.94);
+
+    await waitForNextPaint();
+
+    return {
+      jobs,
+      map: mapStartupResult.data,
+    };
+  }
 
   async function refreshMapAfterJobsRefresh({ jobs } = {}) {
     const refreshRequestId = jobsRefreshRequestId + 1;
@@ -340,11 +490,30 @@ export async function createApp(rootElement) {
     }
   }
 
-  mapController.start();
+  function showErrorNoticeAfterStartup(options) {
+    if (!isStartupComplete) {
+      return;
+    }
+
+    showErrorNotice(options);
+  }
+
+  function throwIfStaleStartup(expectedStartupRequestId) {
+    if (isDestroyed || startupAbortController.signal.aborted) {
+      throw new Error("Operation aborted");
+    }
+
+    if (expectedStartupRequestId !== startupRequestId) {
+      throw new Error("Startup attempt was replaced.");
+    }
+  }
 
   return {
     destroy() {
+      isDestroyed = true;
+      startupRequestId += 1;
       jobsRefreshRequestId += 1;
+      startupAbortController.abort();
       appEventAbortController.abort();
       unsubscribeMapJobFilters();
       unsubscribeMapJobClusterSettings();
@@ -353,9 +522,26 @@ export async function createApp(rootElement) {
       jobsPanel.destroy();
       mapController.destroy();
       noticeRegion.destroy?.();
+      startupLoader.destroy();
       rootElement.replaceChildren();
     },
   };
+}
+
+function normalizeStartupJobs(jobs) {
+  if (!Array.isArray(jobs)) {
+    throw new Error("Jobs loader returned an invalid result.");
+  }
+
+  return jobs;
+}
+
+function waitForNextPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve);
+    });
+  });
 }
 
 function setPanelOpen(panelElement, triggerButton, isOpen) {

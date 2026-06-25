@@ -17,8 +17,7 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
 });
 
-export function createJobList({ jobFilterStore } = {}) {
-  const store = createJobStore();
+export function createJobList({ jobFilterStore, store = createJobStore() } = {}) {
   const rootElement = document.createElement("div");
   rootElement.className = "job-list";
 
@@ -128,8 +127,6 @@ export function createJobList({ jobFilterStore } = {}) {
       );
       render();
     }) ?? (() => {});
-
-  loadJobs(store, visibleDoneJobIds);
 
   return {
     element: rootElement,

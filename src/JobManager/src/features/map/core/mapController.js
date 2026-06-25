@@ -47,7 +47,13 @@ export function createMapController({
   let aoiJobScopeRequestId = 0;
   let mapStartRequestId = 0;
 
-  async function start() {
+  async function start({
+    jobs,
+    requireAois = false,
+    requireJobGeometry = false,
+    deferJobGeometry = false,
+    suppressStatus = false,
+  } = {}) {
     if (isDestroyed) {
       return {
         ok: false,
@@ -60,11 +66,15 @@ export function createMapController({
 
     resetMapRuntimeState();
 
-    setStatus({
-      status: MAP_STATUS.LOADING,
-      title: "Loading map...",
-      message: "Preparing the ArcGIS workspace.",
-    });
+    if (suppressStatus) {
+      hideStatus();
+    } else {
+      setStatus({
+        status: MAP_STATUS.LOADING,
+        title: "Loading map...",
+        message: "Preparing the ArcGIS workspace.",
+      });
+    }
 
     try {
       mapResult = createMapView({
@@ -93,8 +103,29 @@ export function createMapController({
       if (!aoiReadinessResult.ok) {
         disableAoiLayerAfterLoadFailure();
         onAoiLayerError?.(aoiReadinessResult.error);
+
+        if (requireAois) {
+          throw aoiReadinessResult.error;
+        }
       } else {
         refreshLoadedAoiPopupTemplate(aoiReadinessResult);
+
+        if (requireAois) {
+          assertRequiredAoiReadiness(aoiReadinessResult);
+        }
+      }
+
+      if (requireJobGeometry) {
+        await applyRequiredJobGeometry({
+          jobs,
+        });
+      }
+
+      if (isDestroyed || startRequestId !== mapStartRequestId) {
+        return {
+          ok: false,
+          error: null,
+        };
       }
 
       jobHighlightController = createJobHighlightController({
@@ -116,8 +147,16 @@ export function createMapController({
       applyCurrentJobClusterSettingsWithoutBlocking();
       applyCurrentJobFilters();
       applyCurrentAoiRendererWithoutBlockingMapReady();
-      applyJobGeometryWithoutBlockingMapReady(mapResult.layers.jobLayers);
-      setReadyStatus(aoiReadinessResult);
+
+      if (!requireJobGeometry && !deferJobGeometry) {
+        applyJobGeometryWithoutBlockingMapReady(mapResult.layers.jobLayers);
+      }
+
+      if (suppressStatus) {
+        hideStatus();
+      } else {
+        setReadyStatus(aoiReadinessResult);
+      }
 
       return {
         ok: true,
@@ -133,15 +172,15 @@ export function createMapController({
 
       const normalizedError = normalizeError(error, "Map could not be loaded.");
 
-      setStatus({
-        status: MAP_STATUS.ERROR,
-        title: "Map could not be loaded",
-        message: normalizedError.message,
-        actionLabel: "Retry map",
-        onAction() {
-          void start();
-        },
-      });
+      if (suppressStatus) {
+        hideStatus();
+      } else {
+        setStatus({
+          status: MAP_STATUS.ERROR,
+          title: "Map could not be loaded",
+          message: normalizedError.message,
+        });
+      }
       onError?.(normalizedError);
 
       return {
@@ -473,6 +512,39 @@ export function createMapController({
     });
   }
 
+  function assertRequiredAoiReadiness(aoiReadinessResult) {
+    const readiness = aoiReadinessResult.data;
+
+    if (readiness?.status === "ready") {
+      return;
+    }
+
+    throw new Error(createRequiredAoiReadinessErrorMessage(readiness));
+  }
+
+  function createRequiredAoiReadinessErrorMessage(readiness) {
+    if (readiness?.status === "missing-config") {
+      return "AOI Feature Service URL is not configured.";
+    }
+
+    return createAoiReadinessWarningMessage(readiness);
+  }
+
+  async function applyRequiredJobGeometry({ jobs } = {}) {
+    const result = await applyJobLayerData({
+      jobLayers: mapResult?.layers?.jobLayers,
+      jobs,
+    });
+
+    if (result.ok) {
+      return result;
+    }
+
+    onJobLayerError?.(result.error);
+
+    throw result.error;
+  }
+
   function clearHoverAfterSelection(selectionPromise) {
     return Promise.resolve(selectionPromise).finally(() => {
       if (!isDestroyed) {
@@ -545,10 +617,6 @@ export function createMapController({
         status: MAP_STATUS.WARNING,
         title: "Map ready without AOIs",
         message: aoiReadinessResult?.error?.message || "AOIs could not be loaded.",
-        actionLabel: "Retry AOIs",
-        onAction() {
-          void start();
-        },
       });
 
       return;
@@ -582,6 +650,15 @@ export function createMapController({
       message: "",
       hidden: true,
     });
+  }
+
+  function hideStatus() {
+    if (!statusElement) {
+      return;
+    }
+
+    statusElement.hidden = true;
+    statusElement.replaceChildren();
   }
 
   function setStatus({ status, title, message, hidden = false, actionLabel = "", onAction } = {}) {

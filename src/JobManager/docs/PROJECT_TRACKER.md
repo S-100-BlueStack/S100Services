@@ -1459,25 +1459,38 @@ Rationale:
 
 Discarding every hit-test result when `pointerEvent` changed made hover appear only after the pointer stopped moving. Clearing hover on click before selected highlight was ready caused a visual blink. The hover controller should coalesce pointer work without making pointer feedback feel delayed.
 
-## 8.50 Add retry-friendly error states
+## 8.50 Add startup loader and required data gate
 
 Status: Done
 
-Job Manager now has clearer retry behavior for the most common recoverable frontend failures.
+Job Manager now blocks initial app access until required startup data is available.
 
 Current behavior:
 
-- Jobs initial load failure shows an inline error state with a Retry action.
-- Jobs refresh failure with stale Jobs still visible shows an inline warning/error banner instead of relying only on a toast notice.
-- Retrying a Jobs load reuses the normal Jobs refresh path and dispatches the existing refreshed-Jobs event when successful.
-- Map load failure shows a map status action to retry map startup.
-- AOI layer load failure keeps the map usable and exposes a Retry AOIs action in the map status surface.
-- Missing AOI Feature Service configuration remains a warning without a retry button, because changing the URL requires configuration changes rather than an in-app retry.
-- Existing notices remain for important outcomes, but retryable states are now visible where the user is already working.
+- Startup is coordinated from app composition instead of being split between map startup and Jobs UI startup.
+- The app shell is rendered behind a full-screen startup loader, but remains inert until startup succeeds.
+- Jobs are loaded once through a shared Jobs store during startup.
+- The Jobs panel consumes the shared startup-loaded Jobs store instead of triggering its own initial load.
+- AOI Feature Service readiness is required during startup.
+- Missing AOI Feature Service configuration blocks startup.
+- AOI layer load failure blocks startup.
+- AOI readiness warning states that mean the AOI source is not usable block startup.
+- Job map layer population is required during startup and uses the Jobs snapshot already loaded by the startup flow.
+- Startup failures retry automatically with exponential backoff and countdown text in the loader.
+- After retries are exhausted, the loader remains visible and offers `Retry now`.
+- User-facing app controls are unavailable until startup succeeds.
+- Post-startup manual Jobs refresh remains non-blocking and can still show an inline refresh failure while stale Jobs are available.
+- Startup loader styling now follows the Product Manager glass-overlay pattern so the app/map can be seen loading behind the required startup gate.
+- Startup order now matches the Product Manager pattern more closely: the map workspace starts behind the transparent loader before required Jobs are loaded and rendered.
+- Map status UI is suppressed during startup so the loader remains the only startup status surface.
 
 Rationale:
 
-Notices are useful for transient feedback, but retryable failures should also appear in the relevant UI surface. This keeps Jobs and map workflows recoverable without a full app reload and without introducing new backend assumptions.
+Job Manager cannot be used meaningfully without both AOIs and Jobs. Initial load failures should therefore be handled before the user enters the app, instead of exposing a partial map/list workspace. Non-blocking inline refresh errors still make sense after a successful startup because the app already has a valid previous data snapshot.
+
+Current known limitations:
+
+- Startup loader is now the required initial data gate. Inline retry states should only be used for post-startup recoverable refresh failures where stale data is still available.
 
 ## 9. Backend assumptions
 
@@ -1865,15 +1878,15 @@ Make the app resilient to realistic loading, mutation and refresh scenarios.
 
 Tasks:
 
-| ID      | Task                                         |      Status | Notes                                                                                                                                    |
-| ------- | -------------------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-1001 | Add manual refresh flow                      |        Done | Jobs panel refresh now also refreshes map Job layers, AOI renderer summaries, filters, clustering and active scope/highlight state.      |
-| JM-1002 | Add silent refresh plan                      | Not started | Implement only if needed early.                                                                                                          |
-| JM-1003 | Preserve selected AOI/Job across refresh     | Not started | Best effort; depends on manual refresh design.                                                                                           |
-| JM-1004 | Add mutation conflict handling placeholder   | Not started | Backend future.                                                                                                                          |
-| JM-1005 | Add retry-friendly error states              |        Done | Jobs initial load/refresh and map/AOI load failures now expose contextual retry actions where retry is meaningful.                       |
-| JM-1006 | Review loading states across app             | In progress | Jobs and map loading/error states have been hardened. Relation-derived popup states and future backend conflict states remain to review. |
-| JM-1007 | Polish hover cleanup and initial panel state |        Done | Hover clears on map exit/stale hit-test, and Jobs panel starts closed on app load.                                                       |
+| ID      | Task                                         |      Status | Notes                                                                                                                                     |
+| ------- | -------------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-1001 | Add manual refresh flow                      |        Done | Jobs panel refresh now also refreshes map Job layers, AOI renderer summaries, filters, clustering and active scope/highlight state.       |
+| JM-1002 | Add silent refresh plan                      | Not started | Implement only if needed early.                                                                                                           |
+| JM-1003 | Preserve selected AOI/Job across refresh     | Not started | Best effort; depends on manual refresh design.                                                                                            |
+| JM-1004 | Add mutation conflict handling placeholder   | Not started | Backend future.                                                                                                                           |
+| JM-1005 | Add startup loader and automatic retry gate  |        Done | Initial startup now blocks app access until Jobs, AOI readiness and Job map layer data are available. Automatic retry runs in the loader. |
+| JM-1006 | Review loading states across app             | In progress | Startup loading is gated. Post-startup manual refresh and relation-derived popup states remain non-blocking states to review later.       |
+| JM-1007 | Polish hover cleanup and initial panel state |        Done | Hover clears on map exit/stale hit-test, and Jobs panel starts closed on app load.                                                        |
 
 Exit criteria:
 

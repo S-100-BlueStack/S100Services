@@ -48,6 +48,10 @@
   display: none;
 }
 
+.job-manager-app--startup-blocked .job-manager-map-status {
+  display: none;
+}
+
 .job-manager-map-status[data-status="error"] {
   border-color: rgba(155, 28, 49, 0.42);
 }
