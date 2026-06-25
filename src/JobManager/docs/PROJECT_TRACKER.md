@@ -31,7 +31,7 @@ Current known baseline:
 - Vite dev server works.
 - `npm run rdy` is the preferred local readiness command because it formats, lints, tests, builds and then starts the dev server.
 - Calcite stylesheet import uses `@esri/calcite-components/main.css`.
-- ArcGIS Maps SDK stylesheet import uses `@arcgis/core/assets/esri/themes/light/main.css`.
+- ArcGIS Maps SDK theme CSS is switched at runtime between light and dark mode.
 - Package versions are aligned with the current Product Manager major-version baseline.
 - Feature-based folder structure is in place.
 - Jobs are loaded through a mock backend hidden behind services.
@@ -1490,14 +1490,11 @@ Cleanup:
 - Kept Jobs inline retry only for post-startup refresh failures where stale Jobs are still available.
 - Defensive empty Jobs error state no longer exposes an alternate initial retry path because initial Jobs loading is owned by the startup gate.
 - Startup retry now runs per startup stage. Once the map/AOI workspace is ready, later Jobs load retries no longer recreate the map. Once Jobs are loaded, later Job map rendering retries reuse the loaded Jobs snapshot.
+- Removed stale startup/map-status action styling and unused loader destroy cleanup code after the startup retry surface moved fully into the loader.
 
 Rationale:
 
 Job Manager cannot be used meaningfully without both AOIs and Jobs. Initial load failures should therefore be handled before the user enters the app, instead of exposing a partial map/list workspace. Non-blocking inline refresh errors still make sense after a successful startup because the app already has a valid previous data snapshot.
-
-Current known limitations:
-
-- Startup loader is now the required initial data gate. Inline retry states should only be used for post-startup recoverable refresh failures where stale data is still available.
 
 ## 9. Backend assumptions
 
@@ -1889,7 +1886,7 @@ Tasks:
 | ------- | -------------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | JM-1001 | Add manual refresh flow                      |        Done | Jobs panel refresh now also refreshes map Job layers, AOI renderer summaries, filters, clustering and active scope/highlight state.       |
 | JM-1002 | Add silent refresh plan                      | Not started | Implement only if needed early.                                                                                                           |
-| JM-1003 | Preserve selected AOI/Job across refresh     | Not started | Best effort; depends on manual refresh design.                                                                                            |
+| JM-1003 | Preserve selected AOI/Job across refresh     | In progress | Manual refresh reapplies active AOI scope or selected Job highlight best-effort. Full edge-case review remains.                           |
 | JM-1004 | Add mutation conflict handling placeholder   | Not started | Backend future.                                                                                                                           |
 | JM-1005 | Add startup loader and automatic retry gate  |        Done | Initial startup now blocks app access until Jobs, AOI readiness and Job map layer data are available. Automatic retry runs in the loader. |
 | JM-1006 | Review loading states across app             | In progress | Startup loading is gated. Post-startup manual refresh and relation-derived popup states remain non-blocking states to review later.       |
@@ -2096,19 +2093,19 @@ Do not duplicate content across documents. Link or summarize instead.
 
 Recommended next tasks:
 
-| ID          | Task                                                     |      Status | Notes                                                                                                   |
-| ----------- | -------------------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------- |
-| JM-NEXT-001 | Add `docs/BACKEND_CONTRACTS.md` skeleton                 |        Done | Initial backend assumptions and open questions documented.                                              |
-| JM-NEXT-002 | Add `docs/ARCHITECTURE.md` skeleton                      |        Done | Initial architecture boundaries and data flow documented.                                               |
-| JM-NEXT-003 | Implement app shell layout                               |        Done | Product Manager-style navbar, map-first workspace, Jobs panel and notices are implemented.              |
-| JM-NEXT-004 | Implement notice service foundation                      |        Done | Notice service and UI container are implemented.                                                        |
-| JM-NEXT-005 | Implement mock Jobs service                              |        Done | Mock Jobs service supports loading, failures, status mutation and cyclic mock Job creation.             |
-| JM-NEXT-006 | Connect AOI Feature Service loading                      | In progress | AOI FeatureLayer is wired from runtime config. Dedicated AOI service querying remains deferred.         |
-| JM-NEXT-007 | Add AOI/Job relation service                             |        Done | Mock `relatedAoiIds` are exposed through relation helpers and snapshots.                                |
-| JM-NEXT-008 | Add AOI renderer and popup foundation                    |        Done | AOI renderer and popup related Job summary are implemented.                                             |
-| JM-NEXT-009 | Extract navbar/filter/clustering UI from `createApp.js`  |        Done | App-shell navbar UI now lives in `src/app/ui/createNavbarController.js`.                                |
-| JM-NEXT-010 | Extract Jobs overlay and map workspace DOM helpers       |        Done | Jobs overlay and map workspace DOM helpers now live under `src/app/ui`.                                 |
-| JM-NEXT-011 | Clean up tracker/docs status drift                       |        Done | Phase 8/9 and latest map/list interaction statuses have been aligned with implementation.               |
-| JM-NEXT-012 | Add manual refresh flow                                  | Not started | Recommended next feature; preserve filters, AOI scope, selected Job and map layer state where possible. |
-| JM-NEXT-013 | Add theme foundation / dark mode                         |        Done | Theme foundation, persisted preference and navbar toggle are implemented.                               |
-| JM-NEXT-014 | Review final AOI Feature Service field/auth requirements | Not started | Needed before hardening AOI service, AOI clustering and backend integration.                            |
+| ID          | Task                                                     |      Status | Notes                                                                                                                     |
+| ----------- | -------------------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------------- |
+| JM-NEXT-001 | Add `docs/BACKEND_CONTRACTS.md` skeleton                 |        Done | Initial backend assumptions and open questions documented.                                                                |
+| JM-NEXT-002 | Add `docs/ARCHITECTURE.md` skeleton                      |        Done | Initial architecture boundaries and data flow documented.                                                                 |
+| JM-NEXT-003 | Implement app shell layout                               |        Done | Product Manager-style navbar, map-first workspace, Jobs panel and notices are implemented.                                |
+| JM-NEXT-004 | Implement notice service foundation                      |        Done | Notice service and UI container are implemented.                                                                          |
+| JM-NEXT-005 | Implement mock Jobs service                              |        Done | Mock Jobs service supports loading, failures, status mutation and cyclic mock Job creation.                               |
+| JM-NEXT-006 | Connect AOI Feature Service loading                      | In progress | AOI FeatureLayer is wired from runtime config. Dedicated AOI service querying remains deferred.                           |
+| JM-NEXT-007 | Add AOI/Job relation service                             |        Done | Mock `relatedAoiIds` are exposed through relation helpers and snapshots.                                                  |
+| JM-NEXT-008 | Add AOI renderer and popup foundation                    |        Done | AOI renderer and popup related Job summary are implemented.                                                               |
+| JM-NEXT-009 | Extract navbar/filter/clustering UI from `createApp.js`  |        Done | App-shell navbar UI now lives in `src/app/ui/createNavbarController.js`.                                                  |
+| JM-NEXT-010 | Extract Jobs overlay and map workspace DOM helpers       |        Done | Jobs overlay and map workspace DOM helpers now live under `src/app/ui`.                                                   |
+| JM-NEXT-011 | Clean up tracker/docs status drift                       |        Done | Phase 8/9 and latest map/list interaction statuses have been aligned with implementation.                                 |
+| JM-NEXT-012 | Add manual refresh flow                                  |        Done | Jobs panel refresh now refreshes map Job layers, derived AOI renderer state and active scope/highlight state best-effort. |
+| JM-NEXT-013 | Add theme foundation / dark mode                         |        Done | Theme foundation, persisted preference and navbar toggle are implemented.                                                 |
+| JM-NEXT-014 | Review final AOI Feature Service field/auth requirements | Not started | Needed before hardening AOI service, AOI clustering and backend integration.                                              |

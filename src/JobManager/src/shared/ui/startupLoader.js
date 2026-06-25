@@ -184,7 +184,6 @@ export function createStartupLoader() {
 
   function destroy() {
     cleanupTimers();
-    actionButton.replaceWith(actionButton.cloneNode(true));
     element.remove();
   }
 

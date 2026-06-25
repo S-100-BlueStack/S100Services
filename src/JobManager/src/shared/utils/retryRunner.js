@@ -39,18 +39,30 @@ export async function runWithRetry(taskFn, options = {}) {
 
 function waitForDelay(delayMs, signal) {
   return new Promise((resolve, reject) => {
-    const timeoutId = window.setTimeout(resolve, delayMs);
+    let timeoutId = null;
+
+    const cleanup = () => {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+
+      signal?.removeEventListener?.("abort", handleAbort);
+    };
 
     const handleAbort = () => {
-      window.clearTimeout(timeoutId);
+      cleanup();
       reject(new Error("Operation aborted"));
     };
 
-    if (signal) {
-      signal.addEventListener("abort", handleAbort, {
-        once: true,
-      });
-    }
+    timeoutId = window.setTimeout(() => {
+      cleanup();
+      resolve();
+    }, delayMs);
+
+    signal?.addEventListener?.("abort", handleAbort, {
+      once: true,
+    });
   });
 }
 

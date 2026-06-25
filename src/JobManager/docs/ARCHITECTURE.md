@@ -625,7 +625,7 @@ Current behavior:
 - Job layer source data is not loaded directly from `jobs/mock`.
 - Job geometry renderer distinguishes active priority and Done status.
 - Job geometry popup shows basic Job metadata.
-- Job geometry selection and highlight are deferred.
+- Job geometry selection and highlight are implemented through map controller highlight flows and app-level selected Job wiring.
 
 Rules:
 
@@ -840,8 +840,6 @@ createApp
 
 Retry behavior:
 
-Retry behavior:
-
 ```txt
 Map/AOI startup fails
   -> startup loader shows map workspace retry countdown
@@ -885,6 +883,9 @@ Cleanup notes:
 - Map status can still show post-startup map warnings, but it should not be used as the initial app retry surface.
 - Jobs panel inline retry is reserved for post-startup refresh failures with stale Jobs still available.
 - Initial Jobs loading must remain owned by app startup.
+- Stale map status retry styling was removed after startup retry became loader-owned.
+- Startup loader destroy cleanup now removes the loader element directly.
+- Retry delay cleanup removes abort listeners after both abort and normal timeout.
 
 ### AOI popup Job summary content
 
