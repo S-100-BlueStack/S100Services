@@ -9,6 +9,7 @@ import { getRuntimeConfig } from "../shared/config/runtimeConfig.js";
 import { createJobsOverlay } from "./ui/createJobsOverlay.js";
 import { createMapWorkspace } from "./ui/createMapWorkspace.js";
 import { createNavbarController } from "./ui/createNavbarController.js";
+import { createThemeStore } from "../features/theme/state/themeStore.js";
 
 export async function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
@@ -16,6 +17,7 @@ export async function createApp(rootElement) {
   const selectedJobStore = createSelectedJobStore();
   const jobFilterStore = createJobFilterStore();
   const jobClusterSettingsStore = createJobClusterSettingsStore();
+  const themeStore = createThemeStore();
   const noticeRegion = createNoticeRegion();
   const appEventAbortController = new AbortController();
   let jobsRefreshRequestId = 0;
@@ -23,6 +25,7 @@ export async function createApp(rootElement) {
   const navbar = await createNavbarController({
     jobFilterStore,
     jobClusterSettingsStore,
+    themeStore,
     onTestNotice() {
       showSuccessNotice({
         title: "Notice pipeline ready",
@@ -340,6 +343,7 @@ export async function createApp(rootElement) {
       unsubscribeMapJobFilters();
       unsubscribeMapJobClusterSettings();
       navbar.destroy();
+      themeStore.destroy();
       jobsPanel.destroy();
       mapController.destroy();
       noticeRegion.destroy?.();

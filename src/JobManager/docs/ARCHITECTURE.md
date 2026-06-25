@@ -436,18 +436,38 @@ Rules:
 
 Owns dark/light mode behavior.
 
+Current flow:
+
+```txt
+createApp
+  -> createThemeStore()
+  -> apply theme mode to html element
+  -> createNavbarController({ themeStore })
+  -> navbar theme toggle
+  -> themeStore.toggleThemeMode()
+  -> persisted theme preference
+  -> html.calcite-mode-light / html.calcite-mode-dark
+  -> Calcite components and Job Manager CSS tokens
+```
+
 Responsibilities:
 
 - theme state
-- theme preference
-- Calcite theme integration
+- theme preference persistence
+- system color-scheme fallback
+- Calcite mode integration
 - app CSS theme hooks
-- theme toggle UI, if needed
+- navbar theme toggle UI
 
 Rules:
 
-- Theme behavior should follow Product Manager patterns after current code is verified.
-- Map and custom UI must remain readable in both modes.
+- Theme behavior is frontend UI state.
+- Theme state must stay under `features/theme`.
+- Theme code must not depend on Jobs, AOIs, relations or map data.
+- The root `html` element is the source of truth for active Calcite mode.
+- Custom CSS should use semantic `--jm-*` tokens instead of hardcoded light-mode colors.
+- Theme preference persistence must not block app startup if browser storage is unavailable.
+- Map and custom popup content should remain readable in both modes.
 
 ## 10. `src/shared`
 

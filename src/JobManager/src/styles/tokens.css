@@ -1,15 +1,30 @@
-:root {
+:root,
+html.calcite-mode-light {
   color-scheme: light;
 
   --jm-navbar-height: 50px;
   --jm-header-bg: #456178;
 
-  --jm-surface: var(--calcite-color-foreground-1, #ffffff);
+  --jm-surface: var(--calcite-color-surface-1, #ffffff);
+  --jm-surface-alt: var(--calcite-color-surface-2, #f8f9fa);
   --jm-border: var(--calcite-color-border-1, rgba(33, 37, 41, 0.16));
   --jm-text: var(--calcite-color-text-1, #212529);
   --jm-text-muted: var(--calcite-color-text-3, #6c757d);
   --jm-overlay: rgba(255, 255, 255, 0.94);
   --jm-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+
+  --jm-popup-surface: var(--calcite-color-surface-1, #ffffff);
+  --jm-popup-surface-alt: var(--calcite-color-surface-2, #f8f9fa);
+  --jm-popup-border: var(--calcite-color-border-1, rgba(33, 37, 41, 0.16));
+  --jm-popup-text: var(--calcite-color-text-1, #212529);
+  --jm-popup-text-muted: var(--calcite-color-text-3, #6c757d);
+
+  --jm-button-secondary-bg-hover: rgba(69, 97, 120, 0.12);
+
+  --jm-notice-success-bg: #f4fbf7;
+  --jm-notice-error-bg: #fff5f5;
+  --jm-notice-warning-bg: #fffaf2;
+  --jm-notice-info-bg: #f3f8ff;
 
   --jm-color-brand: #456178;
 
@@ -35,4 +50,45 @@
   --jm-color-aoi-medium-text: #664d03;
   --jm-color-aoi-high-bg: #f8d7da;
   --jm-color-aoi-high-text: #842029;
+}
+
+html.calcite-mode-dark {
+  color-scheme: dark;
+
+  --jm-surface: var(--calcite-color-surface-1, #1f2428);
+  --jm-surface-alt: var(--calcite-color-surface-2, #2b3137);
+  --jm-border: var(--calcite-color-border-1, rgba(255, 255, 255, 0.18));
+  --jm-text: var(--calcite-color-text-1, #f8f9fa);
+  --jm-text-muted: var(--calcite-color-text-3, #c8ced3);
+  --jm-overlay: rgba(18, 22, 26, 0.9);
+  --jm-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+
+  --jm-popup-surface: var(--calcite-color-surface-1, #1f2428);
+  --jm-popup-surface-alt: var(--calcite-color-surface-2, #2b3137);
+  --jm-popup-border: var(--calcite-color-border-1, rgba(255, 255, 255, 0.18));
+  --jm-popup-text: var(--calcite-color-text-1, #f8f9fa);
+  --jm-popup-text-muted: var(--calcite-color-text-3, #c8ced3);
+
+  --jm-button-secondary-bg-hover: rgba(255, 255, 255, 0.12);
+
+  --jm-notice-success-bg: #142b20;
+  --jm-notice-error-bg: #32171d;
+  --jm-notice-warning-bg: #302613;
+  --jm-notice-info-bg: #14243a;
+
+  --jm-color-status-todo-bg: rgba(13, 110, 253, 0.22);
+  --jm-color-status-todo-text: #9ec5fe;
+  --jm-color-status-in-progress-bg: rgba(255, 193, 7, 0.22);
+  --jm-color-status-in-progress-text: #ffda6a;
+  --jm-color-status-done-bg: rgba(25, 135, 84, 0.22);
+  --jm-color-status-done-text: #75b798;
+
+  --jm-color-aoi-none-bg: rgba(173, 181, 189, 0.16);
+  --jm-color-aoi-none-text: #ced4da;
+  --jm-color-aoi-low-bg: rgba(25, 135, 84, 0.22);
+  --jm-color-aoi-low-text: #75b798;
+  --jm-color-aoi-medium-bg: rgba(255, 193, 7, 0.22);
+  --jm-color-aoi-medium-text: #ffda6a;
+  --jm-color-aoi-high-bg: rgba(220, 53, 69, 0.22);
+  --jm-color-aoi-high-text: #ea868f;
 }

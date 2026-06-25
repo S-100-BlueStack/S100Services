@@ -21,6 +21,7 @@ Default:
 | ----------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | Navbar Jobs control     | `calcite-icon`                                        | Used inside a native `button` because `calcite-button` styling did not fit the Product Manager-style navbar. |
 | Navbar icon actions     | `calcite-action`                                      | Used for Filters and Test notice.                                                                            |
+| Navbar theme toggle     | `calcite-action`                                      | Used for light/dark mode toggle, matching Product Manager navbar action pattern.                             |
 | Filters panel-dropdown  | `calcite-popover`                                     | Used because filter UI needs panel-like content, not a short menu list.                                      |
 | Filter form controls    | `calcite-checkbox`, `calcite-button`, `calcite-label` | Used for Job filters and Job point clustering settings.                                                      |
 | Jobs panel close action | `calcite-action`                                      | Used instead of a native close button.                                                                       |

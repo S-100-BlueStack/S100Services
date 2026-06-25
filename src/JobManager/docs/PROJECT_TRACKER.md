@@ -55,7 +55,6 @@ Current known limitations:
 - AOI renderer color updates can lag briefly after filter changes because relation summaries and renderer enrichment are rebuilt asynchronously.
 - AOI clustering or AOI cluster-like overview is still deferred until real AOI geometry density and shape are confirmed.
 - Job polygon clustering is deferred because centroid-based clustering could hide real polygon footprint.
-- Theme/dark mode foundation is still not implemented.
 - Manual refresh across map layers, Jobs panel and selected state is still not implemented.
 
 ## 3. Product principles
@@ -1395,6 +1394,28 @@ Rationale:
 
 Manual refresh should not only update the Jobs panel. It should keep the map/list workflow coherent by refreshing map Job layers, derived AOI severity and active scope/highlight state without resetting filters or forcing a full app reload.
 
+## 8.47 Add theme foundation and dark mode
+
+Status: Done
+
+Job Manager now has a basic light/dark theme foundation.
+
+Current behavior:
+
+- Theme state lives under `features/theme`.
+- The app applies `calcite-mode-light` or `calcite-mode-dark` to the root `html` element.
+- The selected theme is persisted in browser storage.
+- If no persisted theme exists, the app follows the system color-scheme preference.
+- The navbar includes a theme toggle action.
+- Calcite components follow the active Calcite mode.
+- Custom UI surfaces use semantic Job Manager CSS tokens.
+- Jobs panel, Filters popover, notices, map status, popup custom content and cluster picker use theme-aware tokens.
+- ArcGIS Maps SDK theme CSS is switched at runtime between light and dark mode instead of statically importing only the light ArcGIS theme.
+
+Rationale:
+
+Theme behavior is cross-cutting UI state and should be centralized before more panels and backend-driven states are added. Using Calcite mode classes keeps Job Manager aligned with the Product Manager theme token pattern while allowing Job Manager-specific colors and surfaces.
+
 ## 9. Backend assumptions
 
 Status: Draft
@@ -1551,15 +1572,15 @@ Status: In progress
 
 Tasks:
 
-| ID      | Task                                             |      Status | Notes                                                                                                                                                                                    |
-| ------- | ------------------------------------------------ | ----------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-0101 | Create root app layout shell                     |        Done | Root layout uses Product Manager-style navbar template, GST logo, map-first workspace, native Jobs panel toggle with Calcite icon, closable left Jobs panel and Calcite Filters popover. |
-| JM-0102 | Add shared config helper                         |        Done | Runtime config reads safe `VITE_` values from `import.meta.env`.                                                                                                                         |
-| JM-0103 | Add shared API result helper                     |        Done | Added success/error result helpers for future services.                                                                                                                                  |
-| JM-0104 | Add shared error normalization                   |        Done | Added normalized frontend error shape for mock and future backend errors.                                                                                                                |
-| JM-0105 | Add notice service shell                         |        Done | Added notice service and UI container for user-visible messages. Notice UI is currently custom and should be reviewed against Calcite alert/notice options before hardening.             |
-| JM-0106 | Add basic dark/light theme foundation            | Not started | Deferred until Product Manager theme pattern is verified.                                                                                                                                |
-| JM-0107 | Extract app-shell UI modules from `createApp.js` |        Done | Navbar/filter/clustering UI, Jobs overlay shell and map workspace DOM helpers now live under `src/app/ui`.                                                                               |
+| ID      | Task                                             | Status | Notes                                                                                                                                                                                    |
+| ------- | ------------------------------------------------ | -----: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0101 | Create root app layout shell                     |   Done | Root layout uses Product Manager-style navbar template, GST logo, map-first workspace, native Jobs panel toggle with Calcite icon, closable left Jobs panel and Calcite Filters popover. |
+| JM-0102 | Add shared config helper                         |   Done | Runtime config reads safe `VITE_` values from `import.meta.env`.                                                                                                                         |
+| JM-0103 | Add shared API result helper                     |   Done | Added success/error result helpers for future services.                                                                                                                                  |
+| JM-0104 | Add shared error normalization                   |   Done | Added normalized frontend error shape for mock and future backend errors.                                                                                                                |
+| JM-0105 | Add notice service shell                         |   Done | Added notice service and UI container for user-visible messages. Notice UI is currently custom and should be reviewed against Calcite alert/notice options before hardening.             |
+| JM-0106 | Add basic dark/light theme foundation            |   Done | Theme state, persisted preference, Calcite mode classes and navbar theme toggle are implemented.                                                                                         |
+| JM-0107 | Extract app-shell UI modules from `createApp.js` |   Done | Navbar/filter/clustering UI, Jobs overlay shell and map workspace DOM helpers now live under `src/app/ui`.                                                                               |
 
 Exit criteria:
 
@@ -2006,5 +2027,5 @@ Recommended next tasks:
 | JM-NEXT-010 | Extract Jobs overlay and map workspace DOM helpers       |        Done | Jobs overlay and map workspace DOM helpers now live under `src/app/ui`.                                 |
 | JM-NEXT-011 | Clean up tracker/docs status drift                       |        Done | Phase 8/9 and latest map/list interaction statuses have been aligned with implementation.               |
 | JM-NEXT-012 | Add manual refresh flow                                  | Not started | Recommended next feature; preserve filters, AOI scope, selected Job and map layer state where possible. |
-| JM-NEXT-013 | Add theme foundation / dark mode                         | Not started | Follow Product Manager pattern after current implementation is verified.                                |
+| JM-NEXT-013 | Add theme foundation / dark mode                         |        Done | Theme foundation, persisted preference and navbar toggle are implemented.                               |
 | JM-NEXT-014 | Review final AOI Feature Service field/auth requirements | Not started | Needed before hardening AOI service, AOI clustering and backend integration.                            |

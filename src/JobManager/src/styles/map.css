@@ -209,16 +209,119 @@
   background: var(--jm-color-priority-high-bg);
 }
 
-html.calcite-mode-dark .job-manager-cluster-picker__priority-marker {
-  border-color: rgba(255, 255, 255, 0.35);
-}
-
 @media (max-width: 54rem) {
   .job-manager-map-status {
     top: 0.75rem;
   }
 }
+/* =========================================================
+   ArcGIS popup theme integration
+   Feed popup-related Calcite tokens into ArcGIS popup surfaces so
+   the SDK UI follows the same theme as the rest of the app.
+   ========================================================= */
 
+.esri-popup {
+  --calcite-color-background: var(--jm-popup-surface);
+  --calcite-color-foreground-1: var(--jm-popup-surface);
+  --calcite-color-foreground-2: var(--jm-popup-surface-alt);
+  --calcite-color-foreground-3: var(--jm-popup-surface-alt);
+
+  --calcite-color-surface-1: var(--jm-popup-surface);
+  --calcite-color-surface-2: var(--jm-popup-surface-alt);
+  --calcite-color-surface-3: var(--jm-popup-surface-alt);
+
+  --calcite-color-border-1: var(--jm-popup-border);
+  --calcite-color-border-2: var(--jm-popup-border);
+  --calcite-color-border-3: var(--jm-popup-border);
+
+  --calcite-color-text-1: var(--jm-popup-text);
+  --calcite-color-text-2: var(--jm-popup-text);
+  --calcite-color-text-3: var(--jm-popup-text-muted);
+
+  --calcite-ui-background: var(--jm-popup-surface);
+  --calcite-ui-foreground-1: var(--jm-popup-surface);
+  --calcite-ui-foreground-2: var(--jm-popup-surface-alt);
+  --calcite-ui-foreground-3: var(--jm-popup-surface-alt);
+  --calcite-ui-border-1: var(--jm-popup-border);
+  --calcite-ui-border-2: var(--jm-popup-border);
+  --calcite-ui-border-3: var(--jm-popup-border);
+  --calcite-ui-text-1: var(--jm-popup-text);
+  --calcite-ui-text-2: var(--jm-popup-text);
+  --calcite-ui-text-3: var(--jm-popup-text-muted);
+
+  --calcite-action-bar-background-color: var(--jm-popup-surface);
+  --calcite-action-background-color: transparent;
+  --calcite-action-background-color-hover: var(--jm-popup-surface-alt);
+  --calcite-action-background-color-press: var(--jm-popup-surface-alt);
+  --calcite-action-text-color: var(--jm-popup-text);
+  --calcite-action-text-color-press: var(--jm-popup-text);
+}
+
+.esri-popup__main-container {
+  background: var(--jm-popup-surface);
+  color: var(--jm-popup-text);
+}
+
+.esri-popup__content {
+  margin: 0;
+  background: var(--jm-popup-surface);
+  color: var(--jm-popup-text);
+}
+
+.esri-popup__content p {
+  margin: 0;
+}
+
+.esri-popup__header-title {
+  color: var(--jm-popup-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.esri-popup__footer,
+.esri-popup__button-container,
+.esri-popup__action-menu {
+  background: var(--jm-popup-surface);
+  color: var(--jm-popup-text);
+  border-color: var(--jm-popup-border);
+}
+
+.esri-popup__action.is-disabled,
+.esri-popup__action[disabled] {
+  color: var(--jm-popup-text-muted);
+  opacity: 0.65;
+}
+
+html.calcite-mode-dark .job-manager-map {
+  background: #1f2933;
+}
+
+.job-manager-aoi-popup-summary,
+.job-manager-cluster-picker {
+  color: var(--jm-popup-text);
+  background: var(--jm-popup-surface);
+}
+
+.job-manager-aoi-popup-summary__metric,
+.job-manager-cluster-picker__item {
+  color: var(--jm-popup-text);
+  background: var(--jm-popup-surface-alt);
+  border-color: var(--jm-popup-border);
+}
+
+.job-manager-aoi-popup-summary__title,
+.job-manager-aoi-popup-summary__metric-value,
+.job-manager-cluster-picker__job-title {
+  color: var(--jm-popup-text);
+}
+
+.job-manager-aoi-popup-summary__message,
+.job-manager-aoi-popup-summary__hint,
+.job-manager-aoi-popup-summary__metric-label,
+.job-manager-cluster-picker__message,
+.job-manager-cluster-picker__job-subtitle {
+  color: var(--jm-popup-text-muted);
+}
 /* =========================================================
    Accessibility / map focus cleanup
    ========================================================= */
