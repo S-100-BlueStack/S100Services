@@ -1,4 +1,5 @@
-﻿using S100FC.S128.FeatureTypes;
+﻿using S100FC.S128.ComplexAttributes;
+using S100FC.S128.FeatureTypes;
 
 namespace S100FC.ProductCatalogue
 {
@@ -8,7 +9,7 @@ namespace S100FC.ProductCatalogue
 
     public interface IElectronicProductManager : IEnumerable<string>
     {
-        Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, /*S100FC.S128.SimpleAttributes.specificUsage specificUsage,*/ string boundary, int? optimumDisplayScale = null);
+        Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, /*S100FC.S128.SimpleAttributes.specificUsage specificUsage,*/ string boundary, string? ProductMapping, int? optimumDisplayScale = null);
 
         Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, /*S100FC.S128.SimpleAttributes.specificUsage specificUsage,*/ string boundary, int edition, int update, byte[] zipfile);
 
@@ -30,6 +31,7 @@ namespace S100FC.ProductCatalogue
         Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition);
         Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign);
         Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml);
+        //Task CreateElectronicProductAsync(string name, productSpecification productSpecification, string boundary, int? optimumDisplayScale, string ProductMapping);
 
         string OutputFolder { get; }
     }

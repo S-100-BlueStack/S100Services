@@ -99,7 +99,7 @@ namespace ProductCatalogueAPI.Jobs
                             await _repository.AppendAsync(productName, Data.Models.ProductState.Frozen, "S-101", (int)dataset.Edition!, (int)dataset.Update!, "system");
 
                             _logger.LogInformation("Rolling back export creation.. ");
-                            _exportService.DeleteExport(productName, output, electronicProduct.editionNumber!.Value, electronicProduct.updateNumber);
+                            _exportService.DeleteExport(productName, output, electronicProduct.editionNumber!.Value, electronicProduct.updateNumber.GetValueOrDefault());
                         }
                     }
                     catch (Exception ex) {
@@ -161,7 +161,7 @@ namespace ProductCatalogueAPI.Jobs
                             await _repository.AppendAsync(productName, Data.Models.ProductState.Frozen, "S-101", (int)dataset.Edition!, (int)dataset.Update!, "system");
 
                             _logger.LogInformation("Rolling back export creation.. ");
-                            _exportService.DeleteExport(productName, output, electronicProduct.editionNumber!.Value, electronicProduct.updateNumber);
+                            _exportService.DeleteExport(productName, output, electronicProduct.editionNumber!.Value, electronicProduct.updateNumber.GetValueOrDefault());
                         }
                     }
                     catch (Exception ex) {

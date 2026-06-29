@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
 using System.Security.Cryptography;
+using static ProductCatalogueAPI.Models.ResponseTypes;
 
 namespace ProductCatalogueAPI.Controllers
 {
@@ -66,6 +67,12 @@ namespace ProductCatalogueAPI.Controllers
         public async Task<IActionResult> FreezeProduct(string datasetName) {
             _logger.LogInformation("{method}({jobType}. User: {user})", nameof(FreezeProduct), datasetName, User?.Identity?.Name ?? string.Empty);
 
+            return StatusCode(StatusCodes.Status501NotImplemented, new ApiResponse {
+                Success = false,
+                Message = "Manual freeze is not implemented yet.",
+                //DurationMs = sw.ElapsedMilliseconds
+            });
+
             var product = await _productRepository.GetCurrentByNameAsync(datasetName);
 
             if (product == null)
@@ -107,58 +114,31 @@ namespace ProductCatalogueAPI.Controllers
             return Ok();
         }
 
-        /// <summary>
-        /// Registers the recurring task to upload all eligble products to IC-ENC. If the JobId already exists, it will update the cron trigger for that job instead
-        /// </summary>
-        /// <returns>The job id</returns>
-        [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "application/json")]
-        [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError, "application/json")]
-        [HttpPost("full", Name = "upload-all")]
-        public IActionResult AddRecurringJob([FromQuery] string jobId, CancellationToken cancellationToken, [FromQuery] string cron = "*/5 * * * *") {
-            _logger.LogInformation("{method}({jobId}. Cron: {cron} User: {user})", nameof(AddRecurringJob), jobId, cron, User?.Identity?.Name ?? string.Empty);
+        ///// <summary>
+        ///// Registers the recurring task to upload all eligble products to IC-ENC. If the JobId already exists, it will update the cron trigger for that job instead
+        ///// </summary>
+        ///// <returns>The job id</returns>
+        //[ProducesResponseType(typeof(string), StatusCodes.Status200OK, "application/json")]
+        //[ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError, "application/json")]
+        //[HttpPost("full", Name = "upload-all")]
+        //public IActionResult AddRecurringJob([FromQuery] string jobId, CancellationToken cancellationToken, [FromQuery] string cron = "*/5 * * * *") {
+        //    _logger.LogInformation("{method}({jobId}. Cron: {cron} User: {user})", nameof(AddRecurringJob), jobId, cron, User?.Identity?.Name ?? string.Empty);
 
-            _recurringJobManager.AddOrUpdate<UploadAllProductsJob>(jobId, j => j.RunAsync(cancellationToken), cron);
+        //    _recurringJobManager.AddOrUpdate<UploadAllProductsJob>(jobId, j => j.RunAsync(cancellationToken), cron);
 
-            return Ok($"Recurring job {jobId} added/updated with schedule {cron}");
-        }
-
-
-        /// <summary>
-        /// Removes a recurring job given a jobId if it exist.
-        /// </summary>
-        /// <returns>Note: It will always return Ok regardless of the job existing in the first place.</returns>
-        [HttpDelete("recurring/{jobId}")]
-        public IActionResult RemoveRecurringJob(string jobId) {
-            _logger.LogInformation("{method}({jobId}. User: {user})", nameof(RemoveRecurringJob), jobId, User?.Identity?.Name ?? string.Empty);
-            _recurringJobManager.RemoveIfExists(jobId);
-            return Ok($"Recurring job {jobId} removed");
-        }
-
-        /// <summary>
-        /// Enqueues a singular product to send to IC-ENC with a delay specified in seconds.
-        /// </summary>
-        /// <returns>The job id</returns>
-        [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "application/json")]
-        [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError, "application/json")]
-        [HttpPut("{datasetName}/delayed", Name = "uploadWithDelay")]
-        public async Task<IActionResult> UploadSingularProductWithDelay(string datasetName, [FromQuery] int seconds, CancellationToken cancellationToken) {
-            _logger.LogInformation("{method}({jobType}. User: {user})", nameof(UploadSingularProduct), datasetName, User?.Identity?.Name ?? string.Empty);
-
-            var product = await _productRepository.GetCurrentByNameAsync(datasetName);
-
-            if (product == null)
-                return NotFound();
-
-            if (product.State == Data.Models.ProductState.Frozen)
-                return BadRequest($"Product {datasetName} is frozen and cannot be uploaded.");
-
-            if(product.State == Data.Models.ProductState.InTransit)
-                return BadRequest($"Product {datasetName} is currently in transit and cannot be uploaded.");
-
-            var id = _backgroundJobClient.Schedule<UploadSingularProductJob>(j => j.RunAsync(datasetName, cancellationToken), TimeSpan.FromSeconds(seconds));
+        //    return Ok($"Recurring job {jobId} added/updated with schedule {cron}");
+        //}
 
 
-            return this.Ok(id);
-        }
+        ///// <summary>
+        ///// Removes a recurring job given a jobId if it exist.
+        ///// </summary>
+        ///// <returns>Note: It will always return Ok regardless of the job existing in the first place.</returns>
+        //[HttpDelete("recurring/{jobId}")]
+        //public IActionResult RemoveRecurringJob(string jobId) {
+        //    _logger.LogInformation("{method}({jobId}. User: {user})", nameof(RemoveRecurringJob), jobId, User?.Identity?.Name ?? string.Empty);
+        //    _recurringJobManager.RemoveIfExists(jobId);
+        //    return Ok($"Recurring job {jobId} removed");
+        //}
     }
 }

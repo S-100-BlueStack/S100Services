@@ -7,6 +7,7 @@ using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.Graph;
+using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.MailImport;
 using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.S128;
@@ -211,7 +212,9 @@ namespace ProductCatalogueAPI
             builder.Services.AddScoped<IProductRepository, ProductRepository>();
             Log.Information("SystemDB configured");
 
-            // var productFilesPath = builder.Configuration["ProductFilesPath"]!;
+
+            // Locking service
+            builder.Services.AddSingleton<IDatasetLockService, DatasetLockService>();
 
             // ExportService
             builder.Services.AddSingleton<IExportService>(sp =>

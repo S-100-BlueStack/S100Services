@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using ProductCatalogueAPI.Services.Locking;
 
 namespace ProductCatalogueAPI
 {
@@ -11,6 +12,7 @@ namespace ProductCatalogueAPI
             var statusCode = exception switch {
                 BadHttpRequestException => StatusCodes.Status400BadRequest,
                 UnauthorizedAccessException => StatusCodes.Status401Unauthorized,
+                DatasetLockedException => StatusCodes.Status409Conflict,
 
                 _ => StatusCodes.Status500InternalServerError
             };

@@ -100,7 +100,7 @@ namespace ProductCatalogue
             var json = System.Text.Json.JsonSerializer.Serialize(new S100FC.ProductCatalogue.Dataset {
                 DatasetName = electronicProduct.datasetName!,
                 Edition = electronicProduct.editionNumber!.Value,
-                Update = electronicProduct.updateNumber,
+                Update = electronicProduct.updateNumber.GetValueOrDefault(),
                 ExportTypes = exportType,
                 TimestampUTC = timestamp,
                 ProductSpecification = electronicProduct.productSpecification!.name!
@@ -865,6 +865,10 @@ namespace ProductCatalogue
         }
 
         public Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml) {
+            throw new NotImplementedException();
+        }
+
+        public Task CreateElectronicProductAsync(string name, productSpecification productSpecification, string boundary, string? ProductMapping, int? optimumDisplayScale = null) {
             throw new NotImplementedException();
         }
     }

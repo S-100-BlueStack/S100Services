@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Services.Export;
+using ProductCatalogueAPI.Services.Locking;
 using S100FC.ProductCatalogue;
 using S100FC.YAML;
 using System.Diagnostics;
@@ -15,12 +16,13 @@ namespace ProductCatalogueAPI.Controllers
     [Authorize("productmanager:manage")]
     [ApiController]
     [Route("[controller]")]
-    public class ExportController(ILogger<ExportController> logger, IMemoryCache cache, IExportService exportService, IProductManager productManager, IProductRepository productRepository) : ControllerBase
+    public class ExportController(ILogger<ExportController> logger, IMemoryCache cache, IExportService exportService, IProductManager productManager, IProductRepository productRepository, IDatasetLockService datasetLockService) : ControllerBase
     {
         private readonly ILogger<ExportController> _logger = logger;
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
         private readonly IExportService _exportService = exportService;
         private readonly IProductRepository _productRepository = productRepository;
+        private readonly IDatasetLockService _datasetLockService = datasetLockService;
         private readonly IMemoryCache _cache = cache;
 
 
@@ -33,7 +35,7 @@ namespace ProductCatalogueAPI.Controllers
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpPost("{name}/newedition", Name = "NewEdition")]
-        public async Task<IActionResult> NewEdition(string name, Models.RequestTypes.ExportFormat exportTarget = Models.RequestTypes.ExportFormat.Both) {
+        public async Task<IActionResult> NewEdition(string name, Models.RequestTypes.ExportFormat exportTarget = Models.RequestTypes.ExportFormat.S100) {
             var user = User?.Identity?.Name;
             _logger.LogInformation("{NewEdition} called with name: {name} by user: {user}", nameof(NewEdition), name, user);
 
@@ -50,7 +52,11 @@ namespace ProductCatalogueAPI.Controllers
                 return StatusCode(StatusCodes.Status404NotFound, response);
             }
 
-            // TODO: Check if product is already in process
+            // Check if product is being
+            await using var datasetLock = await _datasetLockService.AcquireAsync(name);
+
+
+            // long-running work here
 
             // Create YAML Dataset
             var dataset = await _electronicProductManager.CreateNewEditionAsync(name);
@@ -66,12 +72,15 @@ namespace ProductCatalogueAPI.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, response);
             }
 
+            // avoid null
+            int update = dataset.Update.HasValue ? (int)(dataset.Update.Value) : 0;
+
 
             // Create export(s)
 
             // S-100
             if (exportTarget is Models.RequestTypes.ExportFormat.Both or Models.RequestTypes.ExportFormat.S100) {
-                var result = _exportService.CreateS100Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
+                var result = _exportService.CreateS100Export(name, (int)dataset.Edition!, update, _electronicProductManager.OutputFolder, yaml);
 
                 var exportResult = (result.Index, result.Sign);
 
@@ -79,25 +88,25 @@ namespace ProductCatalogueAPI.Controllers
                 await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewEdition, yaml, exportResult.Index, exportResult.Sign);
 
                 // Store in system job table.
-                await _productRepository.AppendAsync(name, Data.Models.ProductState.Exported, "S-101", (int)dataset.Edition, (int)dataset.Update, user);
+                await _productRepository.AppendAsync(name, Data.Models.ProductState.Exported, "S-101", (int)dataset.Edition, update, user);
             }
 
 
-            // S-57
-            if (exportTarget is Models.RequestTypes.ExportFormat.Both or Models.RequestTypes.ExportFormat.S57) {
-                var S57Name = product.datasetName;
-                var S57Edition = product.editionNumber.Value;
-                var S57Update = product.updateNumber.Value;
+            //// S-57
+            //if (exportTarget is Models.RequestTypes.ExportFormat.Both or Models.RequestTypes.ExportFormat.S57) {
+            //    var S57Name = product.datasetName;
+            //    var S57Edition = product.editionNumber.Value;
+            //    var S57Update = product.updateNumber.Value;
 
-                // TODO: Fix S-57 Exporter. For now assume it works
-                // _exportService.CreateS57Export(S57Name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
+            //    // TODO: Fix S-57 Exporter. For now assume it works
+            //    // _exportService.CreateS57Export(S57Name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
 
-                // Store in s128 attachment table. TODO: Add necessary files if needed
-                await _electronicProductManager.CreateS57AttachmentAsync(S57Name, ExportTypes.NewEdition, yaml);
+            //    // Store in s128 attachment table. TODO: Add necessary files if needed
+            //    await _electronicProductManager.CreateS57AttachmentAsync(S57Name, ExportTypes.NewEdition, yaml);
 
-                // Store in system job table.
-                await _productRepository.AppendAsync(S57Name, Data.Models.ProductState.Exported, "S-57", S57Edition, S57Update, user);
-            }
+            //    // Store in system job table.
+            //    await _productRepository.AppendAsync(S57Name, Data.Models.ProductState.Exported, "S-57", S57Edition, S57Update, user);
+            //}
 
 
             response.DurationMs = sw.ElapsedMilliseconds;
@@ -115,7 +124,7 @@ namespace ProductCatalogueAPI.Controllers
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpPost("{name}/newupdate", Name = "NewUpdate")]
-        public async Task<IActionResult> NewUpdate(string name = "101DK0040349E", Models.RequestTypes.ExportFormat exportTarget = Models.RequestTypes.ExportFormat.Both) {
+        public async Task<IActionResult> NewUpdate(string name = "101DK0040349E", Models.RequestTypes.ExportFormat exportTarget = Models.RequestTypes.ExportFormat.S100) {
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse();
 
@@ -267,27 +276,31 @@ namespace ProductCatalogueAPI.Controllers
         /// Begins a rollback process on the specified dataset.
         /// </summary>
         /// <param name="name">The name of the dataset.</param>
+        ///         /// <param name="exportTarget">The target format(s) for the export.</param>
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpPost("{name}/rollback", Name = "RollBack")]
-        public async Task<IActionResult> RollBack(string name) {
+        public async Task<IActionResult> RollBack(string name, Models.RequestTypes.ExportFormat exportTarget = Models.RequestTypes.ExportFormat.S100) {
             var user = User?.Identity?.Name;
             _logger.LogInformation("{method} called with name: {name} by user: {user}", nameof(RollBack), name, user);
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse();
-
-
-            return StatusCode(StatusCodes.Status501NotImplemented, new ApiResponse {
-                Success = false,
-                Message = "Rollback is not implemented yet.",
-                DurationMs = sw.ElapsedMilliseconds
-            });
-
-
-
-
             var product = _electronicProductManager.ElectronicProduct(name);
+
+
+            if (product == null) {
+                response.Success = false;
+                response.Message = $"No electronic product with name '{name}' was found.";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return StatusCode(StatusCodes.Status404NotFound, response);
+            }
+
+            await using var datasetLock = await _datasetLockService.AcquireAsync(name);
+
+            int oldEdition = product.editionNumber!.Value;
+            int oldUpdate = product.updateNumber.GetValueOrDefault();
+
 
             if (product == null) {
                 response.Success = false;
@@ -299,14 +312,17 @@ namespace ProductCatalogueAPI.Controllers
 
             var res = await _electronicProductManager.RollBackAsync(name);
 
-            if (!res) {
-                response.Success = false;
-                response.Message = $"An error occured attempting to rollback dataset '{name}'.";
-                response.DurationMs = sw.ElapsedMilliseconds;
-                return StatusCode(StatusCodes.Status500InternalServerError, response);
-            }
+            //if (!res) {
+            //    response.Success = false;
+            //    response.Message = $"An error occured attempting to rollback dataset '{name}'.";
+            //    response.DurationMs = sw.ElapsedMilliseconds;
+            //    return StatusCode(StatusCodes.Status500InternalServerError, response);
+            //}
 
-            _exportService.DeleteExport(name, _electronicProductManager.OutputFolder, product.editionNumber!.Value, product.updateNumber);
+            _exportService.DeleteExport(name, _electronicProductManager.OutputFolder, oldEdition, oldUpdate);
+
+            // Rollback in JobState
+            await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, "S-128", product.editionNumber.Value, product.updateNumber.GetValueOrDefault());
 
 
 
@@ -314,66 +330,91 @@ namespace ProductCatalogueAPI.Controllers
             return Ok();
         }
 
-
         /// <summary>
-        /// Only used for testing.
+        /// Returns an analysis of the export from SevenCs analyzer.
         /// </summary>
-        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
+        /// <param name="name">The name of the dataset.</param>
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
-        [HttpPost("alldatasets", Name = "NewDatasets")]
-        public async Task<IActionResult> CreateAllDatasets() {
+        [HttpPost("{name}/analysis", Name = "GetAnalysis")]
+        public async Task<IActionResult> GetExportAnalysis(string name) {
+            var user = User?.Identity?.Name;
+            _logger.LogInformation("{method} called with name: {name} by user: {user}", nameof(GetExportAnalysis), name, user);
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse();
 
-            var products = _electronicProductManager.ToArray();
-            int i = 0;
-            int total = products.Length;
 
-            foreach (var name in products) {
-                try {
-                    i++;
-                    _logger.LogInformation("creating dataset {i}/{total}: {name}", i, total, name);
-                    var product = _electronicProductManager.ElectronicProduct(name)!;
-                    if (product.editionNumber.HasValue && product.editionNumber.Value > 0) {
-                        _logger.LogInformation("Product {name} already has edition {edition}. skipping", name, product.editionNumber.Value);
-                        continue;
-                        //throw new InvalidOperationException();
-                    }
-                    // Create exchange set
-                    var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
+            return StatusCode(StatusCodes.Status501NotImplemented, new ApiResponse {
+                Success = false,
+                Message = "Rollback is not implemented yet.",
+                DurationMs = sw.ElapsedMilliseconds
+            });
 
-                    var yaml = dataset.Serialize();
-
-                    var result = _exportService.CreateS100Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
-
-                    // _exportService.CreateS57Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
-
-                    await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
-                    _logger.LogInformation("Exchangeset created successfully");
-
-                    await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, "S-101", (int)dataset.Edition!, (int)dataset.Update!);
-                }
-                catch (InvalidOperationException) {
-                    _logger.LogWarning("Dataset already has update. skipping");
-                }
-                catch (IndexOutOfRangeException) {
-                    _logger.LogWarning("Topology IndexOutOfRangeException! skipping");
-                }
-                catch (AggregateException) {
-                    _logger.LogWarning("Topology AggregateException! skipping");
-                }
-                catch (ArgumentException) {
-                    _logger.LogWarning("s100compiler exception for exchangeset. Probably missing minimumScale on DataCoverage skipping");
-                }
-                catch (Exception ex) {
-                    _logger.LogError("Unexpected exception: {ex}", ex);
-                }
-
-            }
-            response.DurationMs = sw.ElapsedMilliseconds;
-            response.Message = $"Datasets created: {products.Length}";
-            return Ok(response);
+            // AOI, vld, ed, upd, etc from SevenCs analysis report
         }
+
+
+
+        ///// <summary>
+        ///// Only used for testing.
+        ///// </summary>
+        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
+        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
+        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
+        //[HttpPost("alldatasets", Name = "NewDatasets")]
+        //public async Task<IActionResult> CreateAllDatasets() {
+        //    var sw = Stopwatch.StartNew();
+        //    var response = new ApiResponse();
+
+        //    var products = _electronicProductManager.ToArray();
+        //    int i = 0;
+        //    int total = products.Length;
+
+        //    foreach (var name in products) {
+        //        try {
+        //            i++;
+        //            _logger.LogInformation("creating dataset {i}/{total}: {name}", i, total, name);
+        //            var product = _electronicProductManager.ElectronicProduct(name)!;
+        //            if (product.editionNumber.HasValue && product.editionNumber.Value > 0) {
+        //                _logger.LogInformation("Product {name} already has edition {edition}. skipping", name, product.editionNumber.Value);
+        //                continue;
+        //                //throw new InvalidOperationException();
+        //            }
+        //            // Create exchange set
+        //            var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
+
+        //            var yaml = dataset.Serialize();
+
+        //            var result = _exportService.CreateS100Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
+
+        //            // _exportService.CreateS57Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
+
+        //            await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
+        //            _logger.LogInformation("Exchangeset created successfully");
+
+        //            await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, "S-101", (int)dataset.Edition!, (int)dataset.Update!);
+        //        }
+        //        catch (InvalidOperationException) {
+        //            _logger.LogWarning("Dataset already has update. skipping");
+        //        }
+        //        catch (IndexOutOfRangeException) {
+        //            _logger.LogWarning("Topology IndexOutOfRangeException! skipping");
+        //        }
+        //        catch (AggregateException) {
+        //            _logger.LogWarning("Topology AggregateException! skipping");
+        //        }
+        //        catch (ArgumentException) {
+        //            _logger.LogWarning("s100compiler exception for exchangeset. Probably missing minimumScale on DataCoverage skipping");
+        //        }
+        //        catch (Exception ex) {
+        //            _logger.LogError("Unexpected exception: {ex}", ex);
+        //        }
+
+        //    }
+        //    response.DurationMs = sw.ElapsedMilliseconds;
+        //    response.Message = $"Datasets created: {products.Length}";
+        //    return Ok(response);
+        //}
     }
 }

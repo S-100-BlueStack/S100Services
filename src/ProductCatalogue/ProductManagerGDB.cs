@@ -1,6 +1,8 @@
 ﻿using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
 using ArcGIS.Core.Internal.Geometry;
+using S100FC.S128.ComplexAttributes;
+using S100FC.S128.FeatureAssociation;
 using S100FC.S128.FeatureTypes;
 using S100FC.YAML;
 using S100Horizon.Settings;
@@ -155,7 +157,7 @@ namespace S100FC.ProductCatalogue
 
         #region IElectronicProductManager
 
-        async Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, /*S100FC.S128.SimpleAttributes.specificUsage specificUsage,*/ string boundary, int? optimumDisplayScale) {
+        async Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, /*S100FC.S128.SimpleAttributes.specificUsage specificUsage,*/ string boundary, string? productMapping, int? optimumDisplayScale) {
             if (string.IsNullOrEmpty(name))
                 throw new System.ArgumentNullException(nameof(name));
 
@@ -183,8 +185,27 @@ namespace S100FC.ProductCatalogue
                             // specificUsage = specificUsage.value,
                             productSpecification = productSpecification,
                             optimumDisplayScale = optimumDisplayScale,
+
+
                         };
 
+                        if (!string.IsNullOrEmpty(productMapping)) {
+
+
+                            featureBinding[] bindings = [
+                                new featureBinding<ProductMapping>
+                                {
+                                    roleType = "association",
+                                    role = "theReference",
+                                    association = new() {
+                                       // ProductMapping
+                                    }
+                                }
+                            ];
+
+                            buffer["featurebindings"] = bindings;
+
+                        }
 
                         var flattened = electronicProduct.Flatten();
                         buffer["attributebindings"] = flattened;
@@ -1030,7 +1051,7 @@ namespace S100FC.ProductCatalogue
                     buffer["json"] = System.Text.Json.JsonSerializer.Serialize(new Dataset {
                         DatasetName = electronicProduct.datasetName!,
                         Edition = electronicProduct.editionNumber!.Value,
-                        Update = electronicProduct.updateNumber,
+                        Update = electronicProduct.updateNumber.GetValueOrDefault(),
                         ExportTypes = exportType,
                         TimestampUTC = timestamp,
                         ProductSpecification = electronicProduct.productSpecification!.name!
@@ -1062,7 +1083,7 @@ namespace S100FC.ProductCatalogue
                     buffer["json"] = System.Text.Json.JsonSerializer.Serialize(new Dataset {
                         DatasetName = electronicProduct.datasetName!,
                         Edition = electronicProduct.editionNumber!.Value,
-                        Update = electronicProduct.updateNumber,
+                        Update = electronicProduct.updateNumber.GetValueOrDefault(),
                         ExportTypes = exportType,
                         TimestampUTC = timestamp,
                         ProductSpecification = "S-57" //electronicProduct.productSpecification!.name!
@@ -1292,8 +1313,9 @@ namespace S100FC.ProductCatalogue
 
                     while (cursor.MoveNext()) {
                         using var row = cursor.Current;
+                        var jason = row["json"].ToString()!;
 
-                        var dataset = JsonSerializer.Deserialize<Dataset>(row["json"].ToString()!, this.jsonSerializerOptions);
+                        var dataset = JsonSerializer.Deserialize<Dataset>(jason);   //, this.jsonSerializerOptions);
 
                         if (dataset?.Edition == editionNo && dataset.Update == updateNo) {
                             row.Delete();
@@ -1331,13 +1353,14 @@ namespace S100FC.ProductCatalogue
                     row128.Dispose();
 
                     this._electronicProducts[electronicProduct.datasetName!.ToUpperInvariant()] = electronicProduct;
-
-
                 });
-                return true;
             });
 
-            return false;
+            return true;
+        }
+
+        public Task CreateElectronicProductAsync(string name, productSpecification productSpecification, string boundary, int? optimumDisplayScale = null) {
+            throw new NotImplementedException();
         }
     }
 

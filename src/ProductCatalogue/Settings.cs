@@ -35,10 +35,10 @@ namespace S100FC.ProductCatalogue
         public required DateTime TimestampUTC { get; set; } = DateTime.UtcNow;
 
         public required int Edition { get; set; }
-        public required int? Update { get; set; }
+        public required int Update { get; set; } = 0;
 
         public required ExportTypes ExportTypes { get; set; }
-        public required string ProductSpecification { get; set; }
+        public string? ProductSpecification { get; set; }
     }
 
     public class ArchiveRow

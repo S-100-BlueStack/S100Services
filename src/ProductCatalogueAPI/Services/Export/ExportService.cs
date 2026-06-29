@@ -64,7 +64,7 @@ namespace ProductCatalogueAPI.Services.Export
 
             _logger.LogInformation("S100 compiler run succesfully! Starting cleanup for temp index and yaml files for product: {product}", datasetName);
             var index = IO.File.ReadAllText(indexFile);
-            var sign = IO.File.ReadAllText(Path.Combine(Export.FullName, "S100_ROOT", "CATA_logger.LogSIGN"));
+            var sign = IO.File.ReadAllText(Path.Combine(Export.FullName, "S100_ROOT", "CATALOG.SIGN"));
 
 
             // Cleanup temp yaml
@@ -73,6 +73,11 @@ namespace ProductCatalogueAPI.Services.Export
             // Cleanup temp index
             IO.File.Delete(indexFile);
             IO.File.Delete(prevIndexPath);
+
+            // TODO: Check if .000 is 0 bytes
+            var file = new FileInfo(Path.Combine(output, "S100_ROOT", "S-101", "DATASET_FILES", $"{datasetName}.{update}"));
+            if (file.Length == 0)
+                throw new InvalidOperationException($"S100 compiler created an empty .000 file");
 
             return new(index, sign);
         }
@@ -139,17 +144,17 @@ namespace ProductCatalogueAPI.Services.Export
             throw new NotImplementedException();
         }
 
-        public bool DeleteExport(string datasetName, string outputFolder, int editionNo, int? updateNo = null) {
+        public bool DeleteExport(string datasetName, string outputFolder, int editionNo, int updateNo = 0) {
             try {
                 var editionFolder = Path.Combine(outputFolder, datasetName, editionNo.ToString());
 
                 // If no update number is provided, delete the entire edition folder. Otherwise, just delete the specific update file.
-                if (updateNo is null) {
+                if (updateNo == 0) {
                     Directory.Delete(editionFolder, recursive: true);
                     return true;
                 }
 
-                var updateFileName = $"{datasetName}.{updateNo.Value:000}";
+                var updateFileName = $"{datasetName}.{updateNo:000}";
                 var updateFilePath = Path.Combine(
                     editionFolder,
                     "S100_ROOT",
