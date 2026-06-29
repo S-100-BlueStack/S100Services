@@ -41,7 +41,7 @@ namespace ProductCatalogueAPI
         }
 
         private static byte[] GetKey() {
-            var key = Environment.GetEnvironmentVariable("productcatalogue_encryption_key");
+            var key = Environment.GetEnvironmentVariable("productmanager_encryption_key");
             if (key == null)
                 throw new ArgumentNullException(nameof(key));
 
