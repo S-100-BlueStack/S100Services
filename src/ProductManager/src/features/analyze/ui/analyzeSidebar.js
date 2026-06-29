@@ -1,4 +1,9 @@
 import { getStatusName } from "../../data/stores/statusStore.js";
+import {
+  createProductHistoryEventList,
+  createProductHistoryStateMessage,
+  createProductHistorySummary,
+} from "../../timeline/ui/productHistoryRenderers.js";
 
 export function renderAnalyzeSidebar({ datasetNames, products, loading }) {
   const panel = getOrCreateAnalyzePanel();
@@ -295,17 +300,46 @@ function createHistoryBlock(product) {
   const content = document.createElement("div");
   content.className = "analyze-history__content";
 
-  const title = document.createElement("h4");
-  title.className = "analyze-history__title";
-  title.textContent = "Historical changes are not available yet";
+  if (product.historyError) {
+    content.append(
+      createProductHistoryStateMessage({
+        title: "History could not be loaded",
+        message: product.historyError,
+      })
+    );
 
-  const message = document.createElement("p");
-  message.className = "analyze-history__message";
-  message.textContent = `History for ${product.datasetName} will be shown here when the backend endpoint is available.`;
+    details.append(summary, content);
+    return details;
+  }
 
-  content.append(title, message);
+  if (!product.history) {
+    content.append(
+      createProductHistoryStateMessage({
+        title: "History unavailable",
+        message: `History for ${product.datasetName} was not loaded.`,
+      })
+    );
+
+    details.append(summary, content);
+    return details;
+  }
+
+  if (product.history.events.length === 0) {
+    content.append(
+      createProductHistoryStateMessage({
+        title: "No historical changes found",
+        message: "No history events were returned for this product.",
+      })
+    );
+
+    details.append(summary, content);
+    return details;
+  }
+
+  content.appendChild(createProductHistorySummary(product.history));
+  content.appendChild(createProductHistoryEventList(product.history.events));
+
   details.append(summary, content);
-
   return details;
 }
 

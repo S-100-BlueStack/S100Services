@@ -3,7 +3,12 @@ import { watch } from "@arcgis/core/core/reactiveUtils.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { fetchProductHistory } from "../api/productHistoryApi.js";
 import { onProductHistoryOpen } from "../events/productHistoryEvents.js";
-import { getProductHistoryEventTypeLabel } from "../model/productHistoryTypes.js";
+import {
+  createProductHistoryBanner,
+  createProductHistoryEventList,
+  createProductHistoryStateMessage,
+  createProductHistorySummary,
+} from "./productHistoryRenderers.js";
 
 export function initProductHistoryPanel({ view } = {}) {
   const panel = createPanel();
@@ -250,7 +255,7 @@ function syncPinnedButton(panel) {
 function renderLoading(panel, datasetName) {
   panel.title.textContent = datasetName;
   panel.content.replaceChildren(
-    createStateMessage({
+    createProductHistoryStateMessage({
       title: "Loading history...",
       message: "Checking whether historical changes are available for this product.",
     })
@@ -262,7 +267,7 @@ function renderHistory(panel, history) {
 
   if (!history.events.length) {
     panel.content.replaceChildren(
-      createStateMessage({
+      createProductHistoryStateMessage({
         title: history.endpointAvailable
           ? "No historical changes found"
           : "Historical changes are not available yet",
@@ -278,7 +283,7 @@ function renderHistory(panel, history) {
 
   if (history.isDemo) {
     fragment.appendChild(
-      createBanner({
+      createProductHistoryBanner({
         title: "Demo history",
         message:
           "This product history is generated in the frontend until the backend endpoint is available.",
@@ -288,15 +293,15 @@ function renderHistory(panel, history) {
 
   for (const warning of history.warnings) {
     fragment.appendChild(
-      createBanner({
+      createProductHistoryBanner({
         title: "History note",
         message: warning,
       })
     );
   }
 
-  fragment.appendChild(createHistorySummary(history));
-  fragment.appendChild(createHistoryEventList(history.events));
+  fragment.appendChild(createProductHistorySummary(history));
+  fragment.appendChild(createProductHistoryEventList(history.events));
 
   panel.content.replaceChildren(fragment);
 }
@@ -304,227 +309,11 @@ function renderHistory(panel, history) {
 function renderError(panel, datasetName, error) {
   panel.title.textContent = datasetName;
   panel.content.replaceChildren(
-    createStateMessage({
+    createProductHistoryStateMessage({
       title: "History could not be loaded",
       message: getErrorMessage(error),
     })
   );
-}
-
-function createHistorySummary(history) {
-  const container = document.createElement("section");
-  container.className = "pm-product-history-summary";
-  container.setAttribute("aria-label", "History summary");
-
-  container.appendChild(
-    createSummaryItem({
-      label: "Events",
-      value: history.events.length,
-    })
-  );
-
-  container.appendChild(
-    createSummaryItem({
-      label: "Source",
-      value: history.isDemo ? "Demo" : "Backend",
-    })
-  );
-
-  container.appendChild(
-    createSummaryItem({
-      label: "Latest",
-      value: formatHistoryTimestamp(history.events[0]?.timestamp),
-    })
-  );
-
-  return container;
-}
-
-function createSummaryItem({ label, value }) {
-  const item = document.createElement("div");
-  item.className = "pm-product-history-summary__item";
-
-  const labelElement = document.createElement("span");
-  labelElement.className = "pm-product-history-summary__label";
-  labelElement.textContent = label;
-
-  const valueElement = document.createElement("span");
-  valueElement.className = "pm-product-history-summary__value";
-  valueElement.textContent = value ?? "-";
-
-  item.append(labelElement, valueElement);
-
-  return item;
-}
-
-function createHistoryEventList(events) {
-  const list = document.createElement("ol");
-  list.className = "pm-product-history-list";
-
-  for (const event of events) {
-    list.appendChild(createHistoryEventItem(event));
-  }
-
-  return list;
-}
-
-function createHistoryEventItem(event) {
-  const item = document.createElement("li");
-  item.className = `pm-product-history-list__item pm-product-history-list__item--${event.type}`;
-
-  const marker = document.createElement("span");
-  marker.className = "pm-product-history-list__marker";
-  marker.appendChild(createEventIcon(event.type));
-
-  const body = document.createElement("div");
-  body.className = "pm-product-history-list__body";
-
-  const header = document.createElement("div");
-  header.className = "pm-product-history-list__header";
-
-  const title = document.createElement("div");
-  title.className = "pm-product-history-list__title";
-  title.textContent = event.title ?? "History event";
-
-  const type = document.createElement("span");
-  type.className = "pm-product-history-list__type";
-  type.textContent = getProductHistoryEventTypeLabel(event.type);
-
-  header.append(title, type);
-
-  const meta = document.createElement("div");
-  meta.className = "pm-product-history-list__meta";
-  meta.textContent = createEventMetaText(event);
-
-  body.append(header, meta);
-
-  if (event.description) {
-    const description = document.createElement("p");
-    description.className = "pm-product-history-list__description";
-    description.textContent = event.description;
-    body.appendChild(description);
-  }
-
-  if (event.details.length > 0) {
-    body.appendChild(createEventDetails(event.details));
-  }
-
-  item.append(marker, body);
-
-  return item;
-}
-
-function createEventIcon(type) {
-  const icon = document.createElement("calcite-icon");
-  icon.scale = "s";
-  icon.icon = getEventIcon(type);
-  icon.setAttribute("aria-hidden", "true");
-
-  return icon;
-}
-
-function createEventDetails(details) {
-  const list = document.createElement("dl");
-  list.className = "pm-product-history-list__details";
-
-  for (const detail of details) {
-    const term = document.createElement("dt");
-    term.textContent = detail.label;
-
-    const description = document.createElement("dd");
-    description.textContent = detail.value;
-
-    list.append(term, description);
-  }
-
-  return list;
-}
-
-function createBanner({ title, message }) {
-  const container = document.createElement("div");
-  container.className = "pm-product-history-banner";
-
-  const heading = document.createElement("h3");
-  heading.className = "pm-product-history-banner__title";
-  heading.textContent = title;
-
-  const body = document.createElement("p");
-  body.className = "pm-product-history-banner__message";
-  body.textContent = message;
-
-  container.append(heading, body);
-
-  return container;
-}
-
-function createStateMessage({ title, message }) {
-  const container = document.createElement("div");
-  container.className = "pm-product-history-state";
-
-  const heading = document.createElement("h3");
-  heading.className = "pm-product-history-state__title";
-  heading.textContent = title;
-
-  const body = document.createElement("p");
-  body.className = "pm-product-history-state__message";
-  body.textContent = message;
-
-  container.append(heading, body);
-
-  return container;
-}
-
-function createEventMetaText(event) {
-  const parts = [formatHistoryTimestamp(event.timestamp), event.actor, event.source].filter(
-    Boolean
-  );
-
-  return parts.join(" • ");
-}
-
-function getEventIcon(type) {
-  switch (type) {
-    case "freeze":
-      return "snow";
-
-    case "unfreeze":
-      return "brightness";
-
-    case "export":
-      return "upload";
-
-    case "send":
-      return "send";
-
-    case "rollback":
-      return "undo";
-
-    case "analysis":
-      return "magnifying-glass";
-
-    case "status":
-      return "information";
-
-    default:
-      return "clock";
-  }
-}
-
-function formatHistoryTimestamp(timestamp) {
-  if (!timestamp) {
-    return "Unknown time";
-  }
-
-  const date = new Date(timestamp);
-
-  if (Number.isNaN(date.getTime())) {
-    return String(timestamp);
-  }
-
-  return date.toLocaleString([], {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
 }
 
 function getErrorMessage(error) {

@@ -20,6 +20,7 @@ const GENERIC_POPUP_EXCLUDED_FIELDS = new Set([
   "loadError",
   "raw",
   "xml",
+  "exportMetadata",
 ]);
 
 export function createPopup() {
@@ -147,12 +148,10 @@ function renderPopupContent(container, attributes, { refreshAndRender }) {
 }
 
 function renderProductRows(section, attributes) {
-  section.appendChild(createRow("Edition", attributes.edition));
-  section.appendChild(createRow("Update", attributes.update));
-  section.appendChild(createStatusRow(attributes.status));
+  const table = createProductMetadataTable(attributes);
 
-  if (hasDisplayableValue(attributes.errorMessage)) {
-    section.appendChild(createRow("Error Message", attributes.errorMessage));
+  if (table) {
+    section.appendChild(table);
   }
 }
 
@@ -198,24 +197,6 @@ function createRow(label, value, withCopy = false) {
     copy.dataset.copy = value;
     row.appendChild(copy);
   }
-
-  return row;
-}
-
-function createStatusRow(status) {
-  const row = document.createElement("div");
-  row.className = "popup-row";
-
-  const label = document.createElement("span");
-  label.className = "popup-label";
-  label.textContent = "Status";
-
-  const value = document.createElement("span");
-  value.className = "popup-value";
-  value.textContent = getStatusName(status);
-
-  row.appendChild(label);
-  row.appendChild(value);
 
   return row;
 }
@@ -320,4 +301,167 @@ function normalizeDatasetName(value) {
   return String(value ?? "")
     .trim()
     .toUpperCase();
+}
+
+function createProductMetadataTable(attributes) {
+  const columns = createProductMetadataColumns(attributes);
+
+  if (columns.length === 0) {
+    return null;
+  }
+
+  const rows = createProductMetadataRows(columns);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const container = document.createElement("div");
+  container.className = "popup-product-table-wrapper";
+
+  const table = document.createElement("table");
+  table.className = "popup-product-table";
+
+  table.appendChild(createProductTableHead(columns));
+  table.appendChild(createProductTableBody(columns, rows));
+
+  container.appendChild(table);
+
+  return container;
+}
+
+function createProductMetadataColumns(attributes) {
+  const columns = [
+    {
+      key: "main",
+      label: "S100",
+      item: createMainProductMetadataItem(attributes),
+    },
+  ];
+
+  const exportMetadata = attributes?.exportMetadata;
+
+  for (const standard of exportMetadata?.standards ?? []) {
+    const item = exportMetadata.byStandard?.[standard];
+
+    if (!item) {
+      continue;
+    }
+
+    columns.push({
+      key: `export:${standard}`,
+      label: createExportColumnLabel(standard, columns),
+      item,
+    });
+  }
+
+  return columns;
+}
+
+function createMainProductMetadataItem(attributes) {
+  return {
+    edition: attributes?.edition,
+    update: attributes?.update,
+    status: attributes?.status,
+    date: attributes?.issueDate,
+    errorMessage: attributes?.errorMessage,
+  };
+}
+
+function createExportColumnLabel(standard, existingColumns) {
+  const label = String(standard ?? "").trim() || "Export";
+  const labelExists = existingColumns.some((column) => column.label === label);
+
+  return labelExists ? `${label} export` : label;
+}
+
+function createProductMetadataRows(columns) {
+  const rows = [
+    {
+      label: "Edition",
+      getValue: (item) => formatProductTableValue(item?.edition),
+    },
+    {
+      label: "Update",
+      getValue: (item) => formatProductTableValue(item?.update),
+    },
+    {
+      label: "Status",
+      getValue: (item) => formatProductStatus(item?.status),
+    },
+    {
+      label: "Error message",
+      getValue: (item) => formatProductTableValue(item?.errorMessage),
+      shouldShow: () => columns.some((column) => hasDisplayableValue(column.item?.errorMessage)),
+    },
+  ];
+
+  return rows.filter((row) => {
+    return typeof row.shouldShow === "function" ? row.shouldShow() : true;
+  });
+}
+
+function createProductTableHead(columns) {
+  const head = document.createElement("thead");
+  const row = document.createElement("tr");
+
+  const attributeHeader = createProductTableHeaderCell("");
+  attributeHeader.setAttribute("aria-label", "Attribute");
+  row.appendChild(attributeHeader);
+
+  for (const column of columns) {
+    row.appendChild(createProductTableHeaderCell(column.label));
+  }
+
+  head.appendChild(row);
+
+  return head;
+}
+
+function createProductTableBody(columns, rows) {
+  const body = document.createElement("tbody");
+
+  for (const config of rows) {
+    body.appendChild(createProductTableRow(config, columns));
+  }
+
+  return body;
+}
+
+function createProductTableRow({ label, getValue }, columns) {
+  const row = document.createElement("tr");
+
+  const labelCell = document.createElement("th");
+  labelCell.scope = "row";
+  labelCell.className = "popup-product-table__attribute";
+  labelCell.textContent = label;
+  row.appendChild(labelCell);
+
+  for (const column of columns) {
+    const cell = document.createElement("td");
+    cell.textContent = getValue(column.item);
+    row.appendChild(cell);
+  }
+
+  return row;
+}
+
+function createProductTableHeaderCell(label) {
+  const cell = document.createElement("th");
+  cell.scope = "col";
+  cell.textContent = label;
+
+  return cell;
+}
+
+function formatProductStatus(status) {
+  if (!hasDisplayableValue(status)) {
+    return "";
+  }
+
+  return getStatusName(status);
+}
+
+function formatProductTableValue(value) {
+  return hasDisplayableValue(value) ? String(value) : "";
 }

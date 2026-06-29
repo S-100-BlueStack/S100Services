@@ -13,6 +13,7 @@ import {
 import { renderAnalyzeSidebar } from "../ui/analyzeSidebar.js";
 import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
 import { hideLoader } from "../../../shared/ui/loader.js";
+import { fetchProductHistory } from "../../timeline/api/productHistoryApi.js";
 
 export async function initAnalyzePage({ datasetNames }) {
   let currentLayers = [];
@@ -78,12 +79,19 @@ export async function initAnalyzePage({ datasetNames }) {
         return;
       }
 
+      const productsWithHistory = await loadProductHistories(products);
+
+      if (requestId !== loadRequestId) {
+        return;
+      }
       loaderProgress.markDataReceived();
       loaderProgress.startRendering({
-        text: `Rendering ${products.length} analyze product${products.length === 1 ? "" : "s"}...`,
+        text: `Rendering ${productsWithHistory.length} analyze product${
+          productsWithHistory.length === 1 ? "" : "s"
+        }...`,
       });
 
-      const layers = await createAnalyzeLayers(map, products, {
+      const layers = await createAnalyzeLayers(map, productsWithHistory, {
         onProgress: loaderProgress.handleRenderProgress,
       });
 
@@ -91,16 +99,16 @@ export async function initAnalyzePage({ datasetNames }) {
         return;
       }
 
-      currentProducts = products;
+      currentProducts = productsWithHistory;
       currentLayers = layers;
 
       renderAnalyzeSidebar({
         datasetNames: normalizedNextDatasetNames,
-        products,
+        products: productsWithHistory,
         loading: false,
       });
 
-      showMockWarningIfNeeded(products);
+      showMockWarningIfNeeded(productsWithHistory);
 
       if (layers.length > 0) {
         await waitForLayerViews(view, layers);
@@ -117,7 +125,7 @@ export async function initAnalyzePage({ datasetNames }) {
             "The product metadata was loaded, but no AOI geometry could be rendered on the map."
           );
         }
-      } else if (products.length > 0) {
+      } else if (productsWithHistory.length > 0) {
         noticeWarning(
           "Analyze geometry unavailable",
           "The product metadata was loaded, but the backend response did not include AOI geometry."
@@ -320,4 +328,33 @@ function showMockWarningIfNeeded(products) {
       .map((product) => product.datasetName)
       .join(", ")}.`
   );
+}
+
+async function loadProductHistories(products) {
+  const results = await Promise.allSettled(
+    products.map(async (product) => {
+      const history = await fetchProductHistory(product.datasetName);
+
+      return {
+        ...product,
+        history,
+        historyError: null,
+      };
+    })
+  );
+
+  return results.map((result, index) => {
+    const product = products[index];
+
+    if (result.status === "fulfilled") {
+      return result.value;
+    }
+
+    return {
+      ...product,
+      history: null,
+      historyError:
+        result.reason instanceof Error ? result.reason.message : "Unknown history error.",
+    };
+  });
 }

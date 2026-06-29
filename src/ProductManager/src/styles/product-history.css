@@ -211,9 +211,15 @@ html.calcite-mode-dark .pm-product-history-panel__pin[active] {
 
 .pm-product-history-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(110px, 0.75fr) minmax(0, 1.6fr);
   gap: 8px;
   margin: 10px 0;
+}
+
+.pm-product-history-summary__item--wide .pm-product-history-summary__value {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .pm-product-history-summary__item {
@@ -380,4 +386,3 @@ html.calcite-mode-dark .pm-product-history-panel__pin[active] {
     max-height: calc(100dvh - 76px);
   }
 }
-

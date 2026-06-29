@@ -275,11 +275,11 @@
 
 .analyze-history__content {
   display: grid;
-  gap: 6px;
-  padding: 10px;
+  gap: 10px;
+  padding: 0;
   color: var(--pm-text);
-  background: var(--pm-surface-alt);
-  border: 1px solid var(--pm-border);
+  background: transparent;
+  border: 0;
   border-radius: 0;
 }
 
@@ -320,4 +320,3 @@
     gap: 2px;
   }
 }
-
