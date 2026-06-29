@@ -3,15 +3,15 @@
     <Platform Name="Any CPU" />
     <Platform Name="x64" />
   </Configurations>
-  <Project Path="src/ProductCatalogue/ProductCatalogue.csproj">
+  <Project Path="src/ProductManagerCore/ProductManagerCore.csproj">
     <BuildType Project="Debug" />
     <Platform Project="x64" />
   </Project>
-  <Project Path="src/ProductCatalogueAPI/ProductCatalogueAPI.csproj">
+  <Project Path="src/ProductManagerAPI/ProductManagerAPI.csproj">
     <Platform Solution="*|x64" Project="x64" />
     <Platform Solution="Debug|Any CPU" Project="x64" />
   </Project>
-  <Project Path="tests/TestProductCatalogue/TestProductCatalogue.csproj" Id="5bde7ff2-f8e1-4872-98df-6d7434bb9fcd">
+  <Project Path="tests/TestProductManager/TestProductManager.csproj" Id="5bde7ff2-f8e1-4872-98df-6d7434bb9fcd">
     <Platform Solution="*|x64" Project="x64" />
     <Platform Solution="Debug|Any CPU" Project="x64" />
   </Project>

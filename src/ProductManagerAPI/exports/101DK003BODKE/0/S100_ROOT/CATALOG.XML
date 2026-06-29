@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.2" xmlns:gex="http://standards.iso.org/iso/19115/-3/gex/1.0" xmlns:S100SE="http://www.iho.int/s100/se/5.2" xmlns:cit="http://standards.iso.org/iso/19115/-3/cit/2.0" xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:gco="http://standards.iso.org/iso/19115/-3/gco/1.0" xmlns:ns7="http://standards.iso.org/iso/19115/-3/mcc/1.0" xmlns:ns8="http://standards.iso.org/iso/19115/-3/lan/1.0" xmlns:ns9="http://standards.iso.org/iso/19115/-3/cit/1.0" xmlns:ns10="http://www.w3.org/1999/xlink" xmlns:ns11="http://www.isotc211.org/2005/gco" xmlns:ns12="http://www.isotc211.org/2005/gmd" xmlns:ns13="http://standards.iso.org/iso/19115/-3/mco/1.0" xmlns:ns14="http://standards.iso.org/iso/19115/-3/mri/1.0" xmlns:ns15="http://standards.iso.org/iso/19115/-3/mmi/1.0" xmlns:ns16="http://www.isotc211.org/2005/gts">
+    <S100XC:identifier>
+        <S100XC:identifier>C:\source\S-100-BlueStack\S100Services\src\ProductCatalogueAPI\exports\101DK003BODKE\0</S100XC:identifier>
+        <S100XC:dateTime>2026-04-23T10:46:59.714+02:00</S100XC:dateTime>
+    </S100XC:identifier>
+    <S100XC:exchangeCatalogueComment>
+        <gco:CharacterString>C:\source\S-100-BlueStack\S100Services\src\ProductCatalogueAPI\exports\101DK003BODKE\0</gco:CharacterString>
+    </S100XC:exchangeCatalogueComment>
+    <S100XC:datasetDiscoveryMetadata/>
+    <S100XC:supportFileDiscoveryMetadata/>
+    <S100XC:catalogueDiscoveryMetadata/>
+</S100XC:S100_ExchangeCatalogue>

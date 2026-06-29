@@ -1,0 +1,84 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0-windows10.0.20348</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<NoWarn>$(NoWarn);1591</NoWarn>
+		<Platforms>AnyCPU;x64</Platforms>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Compile Remove="exports\**" />
+		<Compile Remove="logs\**" />
+		<Compile Remove="s100ed9.gdb\**" />
+		<Content Remove="exports\**" />
+		<Content Remove="logs\**" />
+		<Content Remove="s100ed9.gdb\**" />
+		<EmbeddedResource Remove="exports\**" />
+		<EmbeddedResource Remove="logs\**" />
+		<EmbeddedResource Remove="s100ed9.gdb\**" />
+		<None Remove="exports\**" />
+		<None Remove="logs\**" />
+		<None Remove="s100ed9.gdb\**" />
+		<Page Remove="logs\**" />
+		<PRIResource Remove="logs\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Remove="101_Feature_Catalogue_2.0.0.xml" />
+		<None Remove="bootstrap.log" />
+		<None Remove="ProductCatalogueAPI.log" />
+		<None Remove="products.geojson" />
+		<None Remove="s100edX.gdb.zip" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Include="101_Feature_Catalogue_2.0.0.xml">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+		<Content Include="mock\products.geojson">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Include="Properties\PublishProfiles\ModelOffice.pubxml.user" />
+	</ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.72" />
+    <PackageReference Include="FluentFTP" Version="54.1.2" />
+    <PackageReference Include="Hangfire" Version="1.8.23" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="10.0.5" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Versioning" Version="5.1.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
+    <PackageReference Include="Microsoft.Graph" Version="5.103.0" />
+    <PackageReference Include="MsgReader" Version="6.0.9" />
+    <PackageReference Include="S100Framework.Catalogues" Version="3.1.8" />
+    <PackageReference Include="S100Framework.YAML" Version="3.7.1772.11" />
+    <PackageReference Include="SharpZipLib" Version="1.4.2" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="8.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ProductManagerCore\ProductManagerCore.csproj" />
+  </ItemGroup>
+
+	<ItemGroup>
+	  <Reference Include="ArcGIS.Core">
+	    <HintPath>..\..\..\..\..\..\..\..\Program Files\ArcGIS\Pro\bin\ArcGIS.Core.dll</HintPath>
+	  </Reference>
+	  <Reference Include="ArcGIS.CoreHost">
+	    <HintPath>..\..\..\..\..\..\..\..\Program Files\ArcGIS\Pro\bin\ArcGIS.CoreHost.dll</HintPath>
+	  </Reference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="s100ed9.gdb.zip">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+</Project>
