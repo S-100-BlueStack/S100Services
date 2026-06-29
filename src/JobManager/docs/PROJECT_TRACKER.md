@@ -1702,6 +1702,9 @@ Phase 12 polish notes:
 - Details mode should avoid nested box-in-box styling. Use one main details surface with section headers and thin separators.
 - `Refresh` in details mode intentionally refreshes all Jobs for now because no single-Job backend endpoint exists yet.
 - Mouse/programmatic focus should not show a large blue outline around Job cards or details surfaces. Keyboard focus should still use `:focus-visible`.
+- Jobs panel header remains sticky and flush to the top of the scroll area.
+- In details mode, the Selected Job summary header remains sticky under the panel header so key Job context stays visible while scrolling.
+- Status buttons suppress mouse/click outlines while preserving keyboard `:focus-visible` behavior.
 
 ## Phase 3 - Job list UI
 

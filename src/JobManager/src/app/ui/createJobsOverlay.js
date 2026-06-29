@@ -51,6 +51,17 @@ export function createJobsOverlay({ jobFilterStore, jobStore } = {}) {
   headerElement.append(titleGroupElement, headerActionsElement);
   panelElement.append(headerElement, jobList.element);
 
+  updateStickyHeaderHeight(panelElement, headerElement);
+
+  const headerResizeObserver =
+    typeof ResizeObserver === "function"
+      ? new ResizeObserver(() => {
+          updateStickyHeaderHeight(panelElement, headerElement);
+        })
+      : null;
+
+  headerResizeObserver?.observe(headerElement);
+
   jobList.element.addEventListener("job-manager:job-details-mode-changed", (event) => {
     const isDetailsMode = Boolean(event.detail?.isDetailsMode);
 
@@ -80,7 +91,18 @@ export function createJobsOverlay({ jobFilterStore, jobStore } = {}) {
       jobList.hideCompletedJobs();
     },
     destroy() {
+      headerResizeObserver?.disconnect();
       jobList.destroy();
     },
   };
+}
+
+function updateStickyHeaderHeight(panelElement, headerElement) {
+  const headerHeight = headerElement?.offsetHeight;
+
+  if (!Number.isFinite(headerHeight) || headerHeight <= 0) {
+    return;
+  }
+
+  panelElement.style.setProperty("--jm-jobs-panel-header-height", `${headerHeight}px`);
 }

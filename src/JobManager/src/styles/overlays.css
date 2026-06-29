@@ -23,19 +23,16 @@
 }
 
 .job-manager-jobs-overlay {
-  left: 0;
+  --jm-jobs-panel-padding: 0.85rem;
 }
 
 .job-manager-overlay-panel__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
   position: sticky;
-  top: 0;
-  z-index: 5;
-  margin: -0.85rem -0.85rem 0.85rem;
-  padding: 0.85rem;
+  top: calc(-1 * var(--jm-jobs-panel-padding));
+  z-index: 6;
+  margin: calc(-1 * var(--jm-jobs-panel-padding)) calc(-1 * var(--jm-jobs-panel-padding))
+    var(--jm-jobs-panel-padding);
+  padding: var(--jm-jobs-panel-padding);
   border-bottom: 1px solid var(--jm-border);
   background: var(--jm-overlay);
   backdrop-filter: blur(14px);
