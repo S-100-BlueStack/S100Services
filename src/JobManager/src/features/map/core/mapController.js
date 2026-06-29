@@ -322,6 +322,34 @@ export function createMapController({
     applyCurrentJobFilters();
   }
 
+  async function applySelectedJobMapScope(selectedJob = {}) {
+    const normalizedJobId = normalizeOptionalString(selectedJob.jobId ?? selectedJob.id);
+
+    aoiJobScopeRequestId += 1;
+
+    if (!normalizedJobId) {
+      currentScopedJobIds = [];
+      applyCurrentJobFilters();
+
+      return {
+        ok: true,
+        data: {
+          jobIds: [],
+        },
+      };
+    }
+
+    currentScopedJobIds = [normalizedJobId];
+    applyCurrentJobFilters();
+
+    return {
+      ok: true,
+      data: {
+        jobIds: [normalizedJobId],
+      },
+    };
+  }
+
   async function refreshJobData({ jobs } = {}) {
     if (!mapResult?.layers?.jobLayers) {
       return {
@@ -731,6 +759,7 @@ export function createMapController({
     highlightAoiById,
     clearAoiHighlight,
     applyAoiJobScope,
+    applySelectedJobMapScope,
     clearAoiJobScope,
     refreshJobData,
     refreshAoiPopupContent,

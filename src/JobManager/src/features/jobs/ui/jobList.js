@@ -99,6 +99,16 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
     jobFilterStore?.clearFilters?.();
   };
 
+  const requestJobMapFocus = (job) => {
+    shouldNotifySelectionClearedOnBack = true;
+    rootElement.dispatchEvent(createJobMapFocusRequestedEvent(job));
+  };
+
+  const clearJobMapFocus = () => {
+    shouldNotifySelectionClearedOnBack = false;
+    rootElement.dispatchEvent(createJobMapFocusClearedEvent());
+  };
+
   const showJobListFromDetails = () => {
     const shouldDispatchSelectionCleared = shouldNotifySelectionClearedOnBack;
 
@@ -147,6 +157,8 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
       render,
       openJobDetailsFromList,
       showJobListFromDetails,
+      requestJobMapFocus,
+      clearJobMapFocus,
     });
 
     rootElement.dispatchEvent(
@@ -293,6 +305,8 @@ function renderJobList({
   render,
   openJobDetailsFromList,
   showJobListFromDetails,
+  requestJobMapFocus,
+  clearJobMapFocus,
 }) {
   if (viewMode === JOB_LIST_VIEW_MODE.DETAILS) {
     renderJobDetailsView({
@@ -305,6 +319,8 @@ function renderJobList({
       runJobsRefresh,
       render,
       showJobListFromDetails,
+      requestJobMapFocus,
+      clearJobMapFocus,
     });
 
     return;
@@ -406,6 +422,8 @@ function renderJobDetailsView({
   runJobsRefresh,
   render,
   showJobListFromDetails,
+  requestJobMapFocus,
+  clearJobMapFocus,
 }) {
   const selectedJob = getJobById(state.jobs, selectedJobId);
   const contentElements = [];
@@ -442,6 +460,8 @@ function renderJobDetailsView({
       job: selectedJob,
       isLoading: state.isLoading,
       runJobsRefresh,
+      requestJobMapFocus,
+      clearJobMapFocus,
     })
   );
 
@@ -482,7 +502,13 @@ function renderJobDetailsView({
   rootElement.replaceChildren(...contentElements);
 }
 
-function createJobDetailsHeader({ job, isLoading, runJobsRefresh }) {
+function createJobDetailsHeader({
+  job,
+  isLoading,
+  runJobsRefresh,
+  requestJobMapFocus,
+  clearJobMapFocus,
+}) {
   const headerElement = document.createElement("div");
   headerElement.className = "job-details__header";
 
@@ -510,6 +536,18 @@ function createJobDetailsHeader({ job, isLoading, runJobsRefresh }) {
   const actionsElement = document.createElement("div");
   actionsElement.className = "job-details__header-actions";
 
+  const focusMapButton = createToolbarButton("Focus map");
+  focusMapButton.title = "Filter the map to this Job and highlight related AOIs";
+  focusMapButton.addEventListener("click", () => {
+    requestJobMapFocus?.(job);
+  });
+
+  const clearMapFocusButton = createToolbarButton("Clear map focus");
+  clearMapFocusButton.title = "Return the map to the normal Job context";
+  clearMapFocusButton.addEventListener("click", () => {
+    clearJobMapFocus?.();
+  });
+
   const refreshButton = createToolbarButton(isLoading ? "Refreshing..." : "Refresh");
   refreshButton.disabled = isLoading;
   refreshButton.title = "Refresh all Jobs";
@@ -520,7 +558,7 @@ function createJobDetailsHeader({ job, isLoading, runJobsRefresh }) {
     });
   });
 
-  actionsElement.append(refreshButton);
+  actionsElement.append(focusMapButton, clearMapFocusButton, refreshButton);
   headerElement.append(titleGroupElement, actionsElement);
 
   return headerElement;
@@ -1401,6 +1439,39 @@ function createJobSelectionClearedEvent() {
   return new CustomEvent("job-manager:job-selection-cleared", {
     bubbles: true,
   });
+}
+
+function createJobMapFocusRequestedEvent(job) {
+  return new CustomEvent("job-manager:job-map-focus-requested", {
+    bubbles: true,
+    detail: {
+      job: createJobMapFocusPayload(job),
+    },
+  });
+}
+
+function createJobMapFocusClearedEvent() {
+  return new CustomEvent("job-manager:job-map-focus-cleared", {
+    bubbles: true,
+  });
+}
+
+function createJobMapFocusPayload(job = {}) {
+  return {
+    jobId: normalizeOptionalString(job.jobId ?? job.id),
+    jobTitle: normalizeOptionalString(job.jobTitle ?? job.title) || "Selected Job",
+    geometryType: normalizeOptionalString(job.geometryType ?? job.geometry?.type),
+    priority: normalizeOptionalString(job.priority),
+    relatedAoiIds: normalizeRelatedAoiIdsForEvent(job.relatedAoiIds),
+  };
+}
+
+function normalizeRelatedAoiIdsForEvent(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [...new Set(value.map(normalizeOptionalString).filter(Boolean))];
 }
 
 function createJobDetailsModeChangedEvent({ isDetailsMode, selectedJobId } = {}) {

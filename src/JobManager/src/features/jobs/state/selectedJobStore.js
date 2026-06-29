@@ -67,7 +67,7 @@ export function normalizeSelectedJob(job = {}) {
     jobId: normalizeOptionalString(job.jobId ?? job.id),
     jobTitle: normalizeOptionalString(job.jobTitle ?? job.title) || "Selected Job",
     objectId: normalizeObjectId(job.objectId),
-    geometryType: normalizeOptionalString(job.geometryType),
+    geometryType: normalizeOptionalString(job.geometryType ?? job.geometry?.type),
     priority: normalizeOptionalString(job.priority),
     relatedAoiIds: normalizeRelatedAoiIds(job.relatedAoiIds),
   };

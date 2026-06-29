@@ -33,6 +33,7 @@ export async function createApp(rootElement) {
   let startupRequestId = 0;
   let isDestroyed = false;
   let isStartupComplete = false;
+  let isSelectedJobMapScopeActive = false;
   const startupState = createStartupState();
 
   const navbar = await createNavbarController({
@@ -80,6 +81,8 @@ export async function createApp(rootElement) {
     },
     onShowRelatedJobs(selectedAoi) {
       const normalizedSelectedAoi = selectedAoiStore.selectAoi(selectedAoi);
+
+      isSelectedJobMapScopeActive = false;
 
       if (!normalizedSelectedAoi.aoiId) {
         showErrorNotice({
@@ -135,30 +138,12 @@ export async function createApp(rootElement) {
         return;
       }
 
+      isSelectedJobMapScopeActive = false;
       selectedAoiStore.clearSelection();
       mapController.clearAoiJobScope();
       jobsPanel.showJobDetails(normalizedSelectedJob);
       setPanelOpen(jobsPanel.element, navbar.jobsButton, true);
-
-      void mapController.highlightJob(normalizedSelectedJob).catch((error) => {
-        showErrorNotice({
-          title: "Job highlight failed",
-          message: error.message,
-        });
-      });
-
-      if (normalizedSelectedJob.relatedAoiIds.length > 0) {
-        void mapController.highlightRelatedAoisForJob(normalizedSelectedJob).catch((error) => {
-          mapController.clearAoiHighlight();
-
-          showErrorNotice({
-            title: "Related AOIs could not be highlighted",
-            message: error.message,
-          });
-        });
-      } else {
-        mapController.clearAoiHighlight();
-      }
+      applySelectedJobMapHighlights(normalizedSelectedJob);
     },
   });
 
@@ -187,6 +172,7 @@ export async function createApp(rootElement) {
   jobsPanel.element.addEventListener(
     "job-manager:aoi-filter-cleared",
     () => {
+      isSelectedJobMapScopeActive = false;
       selectedAoiStore.clearSelection();
       mapController.clearAoiHighlight();
       mapController.clearAoiJobScope();
@@ -199,9 +185,67 @@ export async function createApp(rootElement) {
   jobsPanel.element.addEventListener(
     "job-manager:job-selection-cleared",
     () => {
+      isSelectedJobMapScopeActive = false;
       selectedJobStore.clearSelection();
       mapController.clearJobHighlight();
       mapController.clearAoiHighlight();
+      mapController.clearAoiJobScope();
+    },
+    {
+      signal: appEventAbortController.signal,
+    }
+  );
+
+  jobsPanel.element.addEventListener(
+    "job-manager:job-map-focus-requested",
+    (event) => {
+      const normalizedSelectedJob = selectedJobStore.selectJob(event.detail?.job);
+
+      if (!normalizedSelectedJob.jobId) {
+        showErrorNotice({
+          title: "Job map focus failed",
+          message: "The selected Job does not expose a usable identifier.",
+        });
+
+        return;
+      }
+
+      isSelectedJobMapScopeActive = true;
+      selectedAoiStore.clearSelection();
+
+      void mapController
+        .applySelectedJobMapScope(normalizedSelectedJob)
+        .then((result) => {
+          if (!result.ok) {
+            showErrorNotice({
+              title: "Job map focus failed",
+              message: result.error.message,
+            });
+          }
+        })
+        .catch((error) => {
+          showErrorNotice({
+            title: "Job map focus failed",
+            message: error.message,
+          });
+        });
+
+      applySelectedJobMapHighlights(normalizedSelectedJob);
+    },
+    {
+      signal: appEventAbortController.signal,
+    }
+  );
+
+  jobsPanel.element.addEventListener(
+    "job-manager:job-map-focus-cleared",
+    () => {
+      isSelectedJobMapScopeActive = false;
+      selectedAoiStore.clearSelection();
+      selectedJobStore.clearSelection();
+      mapController.clearJobHighlight();
+      mapController.clearAoiHighlight();
+      mapController.clearAoiJobScope();
     },
     {
       signal: appEventAbortController.signal,
@@ -227,6 +271,7 @@ export async function createApp(rootElement) {
     () => {
       const shouldOpen = jobsPanel.element.hidden;
 
+      isSelectedJobMapScopeActive = false;
       selectedAoiStore.clearSelection();
       selectedJobStore.clearSelection();
       jobsPanel.clearSelectedJob();
@@ -251,6 +296,7 @@ export async function createApp(rootElement) {
   jobsPanel.closeButton.addEventListener(
     "click",
     () => {
+      isSelectedJobMapScopeActive = false;
       selectedAoiStore.clearSelection();
       selectedJobStore.clearSelection();
       jobsPanel.clearSelectedJob();
@@ -546,6 +592,30 @@ export async function createApp(rootElement) {
   }
 
   async function refreshSelectedJobMapState(selectedJob, refreshRequestId) {
+    if (isSelectedJobMapScopeActive) {
+      try {
+        const scopeResult = await mapController.applySelectedJobMapScope(selectedJob);
+
+        if (refreshRequestId !== jobsRefreshRequestId) {
+          return;
+        }
+
+        if (!scopeResult.ok) {
+          showErrorNotice({
+            title: "Job map focus could not be refreshed",
+            message: scopeResult.error.message,
+          });
+        }
+      } catch (error) {
+        if (refreshRequestId === jobsRefreshRequestId) {
+          showErrorNotice({
+            title: "Job map focus could not be refreshed",
+            message: error.message,
+          });
+        }
+      }
+    }
+
     try {
       await mapController.highlightJob(selectedJob);
     } catch (error) {
@@ -582,6 +652,30 @@ export async function createApp(rootElement) {
         message: error.message,
       });
     }
+  }
+
+  function applySelectedJobMapHighlights(selectedJob) {
+    void mapController.highlightJob(selectedJob).catch((error) => {
+      showErrorNotice({
+        title: "Job highlight failed",
+        message: error.message,
+      });
+    });
+
+    if (selectedJob.relatedAoiIds.length > 0) {
+      void mapController.highlightRelatedAoisForJob(selectedJob).catch((error) => {
+        mapController.clearAoiHighlight();
+
+        showErrorNotice({
+          title: "Related AOIs could not be highlighted",
+          message: error.message,
+        });
+      });
+
+      return;
+    }
+
+    mapController.clearAoiHighlight();
   }
 
   function showErrorNoticeAfterStartup(options) {

@@ -802,6 +802,31 @@ Rules:
 - Related AOI highlight is visual only; it does not change the AOI layer source or apply a permanent filter.
 - Clustering and de-emphasis effects remain separate future map presentation decisions.
 
+### Selected Job map focus
+
+Status: Done
+
+Current flow:
+
+```txt
+Job details
+  -> Focus map
+  -> app-level selected Job event
+  -> selected Job state
+  -> Job layer scope filtered to selected Job id
+  -> selected Job geometry highlight
+  -> related AOI highlight
+```
+
+Rules:
+
+- Selected Job map focus is initiated from Job details UI but coordinated by app composition.
+- Job details UI must not import map code or relation backend details directly.
+- Map focus uses the existing Job layer filtering path so shared Job filters and clustering continue to work.
+- Related AOIs are highlighted, not permanently filtered, until real AOI identifiers, geometry behavior and UX expectations are confirmed.
+- Clearing selected Job map focus restores the normal map context without closing Job details.
+- This flow must not introduce a final backend/AOI relation contract.
+
 ### Map hover feedback
 
 Status: Done

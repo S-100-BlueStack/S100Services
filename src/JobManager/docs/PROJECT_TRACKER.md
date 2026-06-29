@@ -2011,7 +2011,34 @@ Phase 12 implementation notes:
 - Details refresh intentionally uses the shared all-Jobs refresh flow for now because no single-Job backend endpoint exists yet.
 - AOI details remain deferred until real AOI fields, auth and geometry are confirmed.
 
-## 13. Suggested implementation order
+## Phase 13 - Selected Job map focus / filtering
+
+Goal:
+
+Improve the Job details map workflow without introducing AOI details or a final backend/AOI relation contract.
+
+Tasks:
+
+| ID      | Task                                       | Status | Notes                                                                                                 |
+| ------- | ------------------------------------------ | -----: | ----------------------------------------------------------------------------------------------------- |
+| JM-1301 | Define selected Job map focus scope        |   Done | Initial scope filters Job layers to the selected Job and highlights related AOIs.                     |
+| JM-1302 | Add Job details map focus controls         |   Done | Job details includes `Focus map` and `Clear map focus` actions.                                       |
+| JM-1303 | Reuse existing Job layer filtering         |   Done | Selected Job focus reuses the existing Job layer `definitionExpression` scope path.                   |
+| JM-1304 | Preserve focus state across manual refresh |   Done | If selected Job map focus is active, Jobs refresh reapplies the selected Job layer scope best-effort. |
+| JM-1305 | Keep AOI details deferred                  |   Done | Related AOIs are highlighted only; AOI details and permanent AOI filtering remain deferred.           |
+
+Exit criteria:
+
+- Job details can request selected Job map focus
+- related AOIs remain highlighted for selected Job context
+- Job layers can be scoped to the selected Job
+- clearing map focus restores normal Job layer filtering
+- existing shared Job filters still combine with selected Job map scope
+- no new backend or AOI details contract is introduced
+- `Back to Jobs` clears selected Job map focus after `Focus map` has been used from Job details, so returning to the Jobs list restores the normal map context.
+- `Clear map focus` remains available as an explicit demo-friendly action while staying in Job details.
+
+## 14. Suggested implementation order
 
 Recommended order:
 
@@ -2038,7 +2065,7 @@ The initial MapView foundation is now in place before full AOI loading so future
 
 Clustering should not be implemented too early because the correct approach depends on real AOI geometry.
 
-## 14. Open questions
+## 15. Open questions
 
 | ID     | Question                                                          |      Status | Notes                                                                                                                                 |
 | ------ | ----------------------------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2054,9 +2081,9 @@ Clustering should not be implemented too early because the correct approach depe
 | OQ-010 | Should the app use Product Manager’s server/SSPI setup initially? |        Open | Only if needed for auth or deployment.                                                                                                |
 | OQ-011 | Should users be able to edit Job deadlines in the frontend?       |        Open | Display deadline now, but defer editing until workflow/backend ownership is confirmed.                                                |
 
-## 15. Risks and mitigations
+## 16. Risks and mitigations
 
-## 15.1 Risk: folder structure becomes unclear
+## 16.1 Risk: folder structure becomes unclear
 
 Mitigation:
 
@@ -2065,7 +2092,7 @@ Mitigation:
 - avoid generic dumping grounds
 - add feature README files for non-trivial flows
 
-## 15.2 Risk: mock backend leaks into UI
+## 16.2 Risk: mock backend leaks into UI
 
 Mitigation:
 
@@ -2073,7 +2100,7 @@ Mitigation:
 - forbid UI imports from `features/jobs/mock`
 - keep mock-only behavior documented
 
-## 15.3 Risk: clustering misrepresents AOIs
+## 16.3 Risk: clustering misrepresents AOIs
 
 Mitigation:
 
@@ -2083,7 +2110,7 @@ Mitigation:
 - disable clusters at detailed zoom levels
 - document cluster decision
 
-## 15.4 Risk: future backend contract forces UI refactor
+## 16.4 Risk: future backend contract forces UI refactor
 
 Mitigation:
 
@@ -2092,7 +2119,7 @@ Mitigation:
 - use stable frontend models
 - document backend assumptions
 
-## 15.5 Risk: app becomes too complex
+## 16.5 Risk: app becomes too complex
 
 Mitigation:
 
@@ -2101,7 +2128,7 @@ Mitigation:
 - prioritize map/list/filter/status basics
 - require explicit decision before adding large new features
 
-## 16. Validation checklist
+## 17. Validation checklist
 
 Use relevant steps depending on the change.
 
@@ -2145,7 +2172,7 @@ Manual validation flows:
 - dark/light mode remains readable when theme work is introduced
 - no secrets are present in committed files
 
-## 17. Definition of done for implementation tasks
+## 18. Definition of done for implementation tasks
 
 A task is only `Done` when:
 
@@ -2158,7 +2185,7 @@ A task is only `Done` when:
 - manual validation steps are described or completed
 - tracker is updated if the task changes requirements, architecture or status
 
-## 18. Future documentation split
+## 19. Future documentation split
 
 This document is the primary source of truth for now.
 
@@ -2177,7 +2204,7 @@ docs/ARCHITECTURE.md
 
 Do not duplicate content across documents. Link or summarize instead.
 
-## 19. Next immediate tasks
+## 20. Next immediate tasks
 
 Recommended next tasks:
 
@@ -2202,4 +2229,5 @@ Recommended next tasks:
 | JM-NEXT-017 | Clean Phase 11 docs drift                                |        Done | Mock backend behavior is documented and stale docs placement/status drift has been cleaned.                                        |
 | JM-NEXT-018 | Await final AOI/backend inputs                           |     Blocked | Requires real AOI Feature Service fields, auth requirements, geometry characteristics and backend contract direction.              |
 | JM-NEXT-019 | Start Phase 12 Job details workflow polish               |        Done | Dedicated Job details mode is implemented and polished.                                                                            |
-| JM-NEXT-020 | Choose next feature phase                                | Not started | Candidate directions: Job details refinement, AOI/backend inputs, selected Job map filtering, or small docs/status cleanup.        |
+| JM-NEXT-020 | Start Phase 13 selected Job map focus                    |        Done | Job details now provides explicit map focus controls that scope Job layers to the selected Job and highlight related AOIs.         |
+| JM-NEXT-021 | Review selected Job AOI filtering after real AOI inputs  |     Blocked | Requires confirmed AOI Feature Service identifiers, geometry characteristics and UX decision on hiding vs highlighting AOIs.       |
