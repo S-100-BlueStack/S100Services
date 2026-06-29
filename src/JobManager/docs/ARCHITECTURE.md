@@ -248,9 +248,7 @@ Rules:
 
 ### Job details view
 
-Status: In progress
-
-Current direction:
+Status: Done
 
 The Jobs panel supports two UI modes:
 
@@ -266,25 +264,30 @@ Job details mode
   -> return to Jobs list
 ```
 
+Current behavior:
+
+- Job details mode is part of `features/jobs/ui`.
+- Job details mode uses the normalized frontend Job model.
+- Job details mode does not import mock data directly.
+- Job details mode reuses existing status mutation service/store behavior.
+- Job details mode is read-only except for existing status buttons.
+- Deadline editing is not implemented.
+- Opening Job details from a map popup opens details mode and keeps selected Job map highlight behavior.
+- Opening Job details from a list card is local panel navigation and does not force map selection.
+- Returning from map-opened Job details clears selected Job map highlights through app-level selection cleanup.
+- Details mode keeps `Back to Jobs` and `Close` available in the sticky Jobs panel header.
+- Details mode keeps selected Job context sticky below the panel header.
+- Details content uses one main details surface with section dividers instead of nested card boxes.
+- Status mutation controls are placed near the top of details mode.
+- Details refresh currently uses the shared all-Jobs refresh flow.
+
 Rules:
 
-- Job details remain part of `features/jobs/ui`.
-- Job details use the normalized frontend Job model.
-- Job details must not import mock data directly.
-- Job details may use existing status mutation service/store behavior.
-- Job details must not add deadline editing until that workflow and backend ownership are confirmed.
-- Opening Job details from a map popup is treated as selected Job state and should keep map highlight behavior.
-- Opening Job details from a list card is a local panel navigation and should not force map selection.
-- Returning from map-opened Job details should clear selected Job map highlights.
+- Job details must not add deadline editing until workflow and backend ownership are confirmed.
+- Job details must not introduce a single-Job refresh contract before a real backend endpoint exists.
+- Job details should keep status mutation behavior aligned with the Jobs list.
+- Job details should suppress pointer/click focus outlines on non-interactive surfaces while preserving keyboard focus on controls.
 - AOI details remain deferred until real AOI fields, auth and geometry are confirmed.
-
-Phase 12 polish:
-
-- Details navigation is owned by the Jobs panel shell. `Back to Jobs` is shown as a sticky header action beside the close action while details mode is active.
-- The dedicated details view uses one main details surface with section dividers instead of separate nested cards.
-- Status mutation controls are placed near the top of details mode, directly after the selected Job header.
-- Details refresh currently uses the shared Jobs refresh flow. A single-Job refresh should wait for a real backend endpoint.
-- Programmatic focus should not create large click outlines. Keyboard focus should still be visible through `:focus-visible`.
 
 ### Mock backend behavior
 
@@ -736,6 +739,7 @@ Current behavior:
 - Job geometry renderer distinguishes active priority and Done status.
 - Job geometry popup shows basic Job metadata.
 - Job geometry selection and highlight are implemented through map controller highlight flows and app-level selected Job wiring.
+- Job geometry popup actions open the dedicated Jobs panel details mode.
 
 Rules:
 

@@ -48,6 +48,8 @@ Current known baseline:
 - Job point clustering is implemented with count, priority pie and priority group modes.
 - Job cluster picker is implemented for point clusters.
 - Hover feedback supports Jobs and AOIs and clears reliably when the pointer leaves the map.
+- Jobs panel supports a dedicated Job details mode in addition to list mode.
+- Job details mode has sticky panel navigation, sticky selected Job context, status mutation controls and read-only Job metadata.
 
 Current known limitations:
 
@@ -1720,15 +1722,15 @@ Provide list-based work access before complex map interaction.
 
 Tasks:
 
-| ID      | Task                                         |      Status | Notes                                                                                                                                                                                                                                                                                            |
-| ------- | -------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| JM-0301 | Create Job list component                    |        Done | Jobs panel now renders active mock Jobs with compact collapsible cards using separate title/badge and date/action rows, fixed-width date chips, fixed-width priority/AOI badges and Calcite brand status actions. Done Jobs remain visible until refresh or panel close after being marked Done. |
-| JM-0302 | Create Job detail/selection component        | In progress | Collapsible Job cards provide the first detail surface. Jobs panel can also show Jobs scoped to a selected AOI from the map. Dedicated full Job details flow is deferred until map selection and Job geometry workflows mature.                                                                  |
-| JM-0303 | Add Job status buttons                       |        Done | Added To do, In Progress and Done buttons per Job.                                                                                                                                                                                                                                               |
-| JM-0304 | Add per-Job mutation loading state           |        Done | Replaced visible per-Job loading text with a local pending guard to avoid card flashing while still preventing duplicate status updates.                                                                                                                                                         |
-| JM-0305 | Show success/failure notices for Job updates |        Done | Status updates show success and error notices.                                                                                                                                                                                                                                                   |
-| JM-0306 | Show cyclic Job creation notice              |        Done | Mock-created follow-up Jobs show an info notice.                                                                                                                                                                                                                                                 |
-| JM-0307 | Add selected AOI Jobs scope                  |        Done | AOI popup action opens the Jobs panel and scopes map Job layers to Jobs related to the selected AOI.                                                                                                                                                                                             |
+| ID      | Task                                         | Status | Notes                                                                                                                                                                                                                                                                                            |
+| ------- | -------------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| JM-0301 | Create Job list component                    |   Done | Jobs panel now renders active mock Jobs with compact collapsible cards using separate title/badge and date/action rows, fixed-width date chips, fixed-width priority/AOI badges and Calcite brand status actions. Done Jobs remain visible until refresh or panel close after being marked Done. |
+| JM-0302 | Create Job detail/selection component        |   Done | Dedicated Job details mode is implemented in the Jobs panel. Compact card expansion remains available for list scanning.                                                                                                                                                                         |
+| JM-0303 | Add Job status buttons                       |   Done | Added To do, In Progress and Done buttons per Job.                                                                                                                                                                                                                                               |
+| JM-0304 | Add per-Job mutation loading state           |   Done | Replaced visible per-Job loading text with a local pending guard to avoid card flashing while still preventing duplicate status updates.                                                                                                                                                         |
+| JM-0305 | Show success/failure notices for Job updates |   Done | Status updates show success and error notices.                                                                                                                                                                                                                                                   |
+| JM-0306 | Show cyclic Job creation notice              |   Done | Mock-created follow-up Jobs show an info notice.                                                                                                                                                                                                                                                 |
+| JM-0307 | Add selected AOI Jobs scope                  |   Done | AOI popup action opens the Jobs panel and scopes map Job layers to Jobs related to the selected AOI.                                                                                                                                                                                             |
 
 Exit criteria:
 
@@ -1978,13 +1980,13 @@ Improve the Job details workflow without introducing heavy editing or final back
 
 Tasks:
 
-| ID      | Task                                          |      Status | Notes                                                                                                                                     |
-| ------- | --------------------------------------------- | ----------: | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-1201 | Define Job details panel scope                |        Done | Details view remains read-only except for existing status buttons. Deadline editing remains deferred.                                     |
-| JM-1202 | Implement dedicated Job details view          | In progress | Jobs panel has details mode. Current polish moves details navigation into the sticky panel header and reduces nested-card styling.        |
-| JM-1203 | Wire map/list Job selection to details mode   | In progress | Map popup flow opens details mode; Job list cards can open details mode without changing backend seams.                                   |
-| JM-1204 | Preserve status mutation and notices          | In progress | Details view reuses existing status mutation flow and notices. Details refresh still reloads all Jobs until a single-Job endpoint exists. |
-| JM-1205 | Defer AOI details until real AOI fields exist |        Done | AOI details panel is deferred until final AOI Feature Service fields/auth/geometry are confirmed.                                         |
+| ID      | Task                                          | Status | Notes                                                                                                                          |
+| ------- | --------------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------------------------ |
+| JM-1201 | Define Job details panel scope                |   Done | Details view remains read-only except for existing status buttons. Deadline editing remains deferred.                          |
+| JM-1202 | Implement dedicated Job details view          |   Done | Jobs panel supports list mode and a dedicated selected Job details mode.                                                       |
+| JM-1203 | Wire map/list Job selection to details mode   |   Done | Map popup flow opens details mode with Job/related AOI highlights. Job list cards can open details mode without map selection. |
+| JM-1204 | Preserve status mutation and notices          |   Done | Details view reuses existing status mutation flow, notices and mock-created Job queue notice behavior.                         |
+| JM-1205 | Defer AOI details until real AOI fields exist |   Done | AOI details panel is deferred until final AOI Feature Service fields/auth/geometry are confirmed.                              |
 
 Exit criteria:
 
@@ -1994,6 +1996,20 @@ Exit criteria:
 - map-selected Jobs still highlight Job geometry and related AOIs
 - backing out of details mode clears map selection only when the details view was opened from the map
 - no new backend contract is introduced
+
+Phase 12 implementation notes:
+
+- Job details mode uses the existing normalized frontend Job model.
+- Job details mode is read-only except for existing Job status mutation buttons.
+- Deadline editing remains deferred until workflow and backend ownership are confirmed.
+- The Jobs panel header remains sticky and flush to the top of the panel scroll area.
+- In details mode, `Back to Jobs` is shown as a header icon action beside `Close`.
+- In details mode, selected Job context remains sticky under the panel header.
+- Details content uses one main surface with section dividers instead of nested card boxes.
+- Status mutation controls are placed near the top of details mode, directly under selected Job context.
+- Pointer/click focus outlines are suppressed on non-interactive details surfaces and status buttons, while keyboard focus remains visible through `:focus-visible`.
+- Details refresh intentionally uses the shared all-Jobs refresh flow for now because no single-Job backend endpoint exists yet.
+- AOI details remain deferred until real AOI fields, auth and geometry are confirmed.
 
 ## 13. Suggested implementation order
 
@@ -2185,4 +2201,5 @@ Recommended next tasks:
 | JM-NEXT-016 | Start backend/AOI-service preparation                    |        Done | Phase 11 readiness review completed. Next implementation should focus on docs alignment and confirmed external AOI/backend inputs. |
 | JM-NEXT-017 | Clean Phase 11 docs drift                                |        Done | Mock backend behavior is documented and stale docs placement/status drift has been cleaned.                                        |
 | JM-NEXT-018 | Await final AOI/backend inputs                           |     Blocked | Requires real AOI Feature Service fields, auth requirements, geometry characteristics and backend contract direction.              |
-| JM-NEXT-019 | Start Phase 12 Job details workflow polish               | In progress | Implement a dedicated Job details view in the existing Jobs panel; AOI details remain deferred.                                    |
+| JM-NEXT-019 | Start Phase 12 Job details workflow polish               |        Done | Dedicated Job details mode is implemented and polished.                                                                            |
+| JM-NEXT-020 | Choose next feature phase                                | Not started | Candidate directions: Job details refinement, AOI/backend inputs, selected Job map filtering, or small docs/status cleanup.        |
