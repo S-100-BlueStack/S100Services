@@ -353,28 +353,23 @@
   outline-offset: 2px;
 }
 
+.job-status-button--pointer-focus,
+.job-status-button--pointer-focus:focus,
+.job-status-button--pointer-focus:focus-visible {
+  outline: none;
+  box-shadow: none;
+  --calcite-color-focus: transparent;
+}
+
 .job-status-button::part(button) {
   border-radius: 0;
   font-weight: 600;
 }
 
-.job-status-button::part(button):focus {
-  outline: none;
-  box-shadow: none;
-}
-
-.job-status-button::part(button):focus:not(:focus-visible) {
-  outline: none;
-  box-shadow: none;
-}
-
+.job-status-button::part(button):focus,
 .job-status-button::part(button):focus-visible {
-  outline: 2px solid var(--calcite-color-brand);
-  outline-offset: 2px;
-}
-
-.job-status-button--active::part(button) {
-  font-weight: 800;
+  outline: none;
+  box-shadow: none;
 }
 
 .job-status-button--active::part(button) {
@@ -395,8 +390,8 @@
 
 .job-details__header {
   position: sticky;
-  top: calc(var(--jm-jobs-panel-header-height, 5.25rem) - var(--jm-jobs-panel-padding, 0.85rem));
-  z-index: 5;
+  top: var(--jm-jobs-panel-header-height, 5.25rem);
+  z-index: 6;
   display: grid;
   grid-template-columns: minmax(0, 1fr) max-content;
   align-items: start;

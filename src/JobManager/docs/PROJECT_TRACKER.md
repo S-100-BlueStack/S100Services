@@ -1705,6 +1705,10 @@ Phase 12 polish notes:
 - Jobs panel header remains sticky and flush to the top of the scroll area.
 - In details mode, the Selected Job summary header remains sticky under the panel header so key Job context stays visible while scrolling.
 - Status buttons suppress mouse/click outlines while preserving keyboard `:focus-visible` behavior.
+- Jobs panel header is sticky and flush to the top of the panel scroll area.
+- Jobs panel header actions stay right-aligned in both list mode and details mode.
+- Selected Job header remains sticky below the panel header in details mode.
+- Status button click focus is suppressed for pointer interactions while keyboard focus remains visible.
 
 ## Phase 3 - Job list UI
 

@@ -1200,6 +1200,8 @@ function createStatusButton({
   buttonElement.disabled = isPending;
   buttonElement.textContent = statusOption.label;
 
+  installPointerFocusSuppression(buttonElement);
+
   if (isActive) {
     buttonElement.classList.add("job-status-button--active");
     buttonElement.setAttribute("aria-current", "true");
@@ -1446,6 +1448,36 @@ function focusJobDetails(rootElement, jobId) {
 
 function toCssModifier(value) {
   return normalizeOptionalString(value).replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+}
+
+function installPointerFocusSuppression(buttonElement) {
+  buttonElement.addEventListener(
+    "pointerdown",
+    () => {
+      buttonElement.classList.add("job-status-button--pointer-focus");
+    },
+    {
+      passive: true,
+    }
+  );
+
+  buttonElement.addEventListener("keydown", () => {
+    buttonElement.classList.remove("job-status-button--pointer-focus");
+  });
+
+  buttonElement.addEventListener("click", () => {
+    if (!buttonElement.classList.contains("job-status-button--pointer-focus")) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      buttonElement.blur?.();
+    });
+  });
+
+  buttonElement.addEventListener("blur", () => {
+    buttonElement.classList.remove("job-status-button--pointer-focus");
+  });
 }
 
 function normalizeOptionalString(value) {

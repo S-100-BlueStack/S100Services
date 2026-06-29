@@ -67,6 +67,7 @@ export function createJobsOverlay({ jobFilterStore, jobStore } = {}) {
 
     backButton.hidden = !isDetailsMode;
     backButton.setAttribute("aria-hidden", String(!isDetailsMode));
+    updateStickyHeaderHeight(panelElement, headerElement);
   });
 
   return {
