@@ -1709,6 +1709,8 @@ Phase 12 polish notes:
 - Jobs panel header actions stay right-aligned in both list mode and details mode.
 - Selected Job header remains sticky below the panel header in details mode.
 - Status button click focus is suppressed for pointer interactions while keyboard focus remains visible.
+- Selected Job sticky header spacing has been tightened so the details view keeps context visible without taking excessive vertical space.
+- Jobs overlay overrides the generic panel flex layout because the shared panel gap creates unwanted spacing below the sticky Jobs header.
 
 ## Phase 3 - Job list UI
 

@@ -24,7 +24,12 @@
 
 .job-manager-jobs-overlay {
   --jm-jobs-panel-padding: 0.85rem;
+  display: block;
+  gap: 0;
+  height: calc(100% - 1.7rem);
+  max-height: calc(100% - 1.7rem);
   padding-top: 0;
+  overflow-y: auto;
 }
 
 .job-manager-jobs-overlay .job-manager-overlay-panel__header {
@@ -35,7 +40,7 @@
   grid-template-columns: minmax(0, 1fr) max-content;
   align-items: start;
   gap: 0.75rem;
-  margin: 0 calc(-1 * var(--jm-jobs-panel-padding)) var(--jm-jobs-panel-padding);
+  margin: 0 calc(-1 * var(--jm-jobs-panel-padding)) 0;
   padding: var(--jm-jobs-panel-padding);
   border-bottom: 1px solid var(--jm-border);
   background: var(--jm-overlay);
