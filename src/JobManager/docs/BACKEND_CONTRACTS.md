@@ -429,6 +429,28 @@ Backend assumptions remain unchanged:
 - frontend relation source can change from `mock` to `frontendGeometry` or `backend`
 - UI should not need to change when the relation source changes
 
+### Current AOI overview filtering implication
+
+Status: Done for current frontend phase
+
+AOI overview filters currently use relation service snapshots to derive which AOIs should remain visible on the map.
+
+Current frontend behavior:
+
+- AOI overview filtering is controlled by frontend map state.
+- Relation membership is derived behind `features/relations`.
+- Current Job filters are applied before AOI membership is calculated.
+- AOI FeatureLayer filtering uses provisional `GlobalID` matching.
+- If relation AOI ids do not look compatible with `GlobalID`, the frontend falls back to showing all AOIs.
+- The frontend does not call ArcGIS `queryFeatures` to validate generated AOI filter expressions.
+
+Backend implications:
+
+- A future backend relation contract should provide AOI identifiers that match the configured AOI Feature Service identifier field.
+- If the backend provides AOI/Job relations directly, those relation ids should be stable and documented.
+- If the backend calculates spatial intersections, the returned AOI ids should be compatible with the frontend AOI id field.
+- Final AOI identifier ownership remains open until the real AOI Feature Service and backend relation direction are confirmed.
+
 ## 9. Error handling assumptions
 
 Backend errors should eventually be normalized into user-safe frontend errors.

@@ -440,7 +440,7 @@ Rules:
 
 ### AOI map overview filters
 
-Status: Done for initial wiring
+Status: Done for initial implementation
 
 AOI map overview filtering is map presentation state.
 
@@ -452,6 +452,7 @@ Filters popover
   -> app-level store subscription
   -> map/core/mapController.js
   -> map/filters/applyAoiLayerFilters.js
+  -> relation service snapshot
   -> AOI FeatureLayer definitionExpression
 ```
 
@@ -475,6 +476,9 @@ Current behavior:
 - Manual Jobs refresh reapplies active AOI map filters.
 - Changing Job filters reapplies active AOI map filters.
 - AOI filtering uses the AOI FeatureLayer `definitionExpression`.
+- AOI filtering applies a `definitionExpression` only when relation AOI ids look compatible with the provisional AOI `GlobalID` field.
+- Incompatible relation ids fall back to showing all AOIs instead of hiding the AOI layer.
+- AOI overview filtering does not validate generated expressions through ArcGIS `queryFeatures`.
 
 Rules:
 
@@ -482,6 +486,7 @@ Rules:
 - AOI map filters must not import mock Jobs directly.
 - AOI membership must be derived through relation service snapshots.
 - Filtering currently uses provisional AOI `GlobalID` matching. This must remain documented as provisional until real AOI fields and backend relation ownership are confirmed.
+- AOI overview filtering must be non-destructive: uncertain relation matching should not hide all AOIs.
 - AOI details panel remains deferred.
 - AOI clustering remains deferred until real AOI geometry density and shape are confirmed.
 
