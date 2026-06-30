@@ -2015,17 +2015,18 @@ Phase 12 implementation notes:
 
 Goal:
 
-Improve the Job details map workflow without introducing AOI details or a final backend/AOI relation contract.
+Improve the Job details map workflow by making it possible to focus the map on the selected Job and its related AOIs without introducing AOI details or a final backend/AOI relation contract.
 
 Tasks:
 
-| ID      | Task                                       | Status | Notes                                                                                                 |
-| ------- | ------------------------------------------ | -----: | ----------------------------------------------------------------------------------------------------- |
-| JM-1301 | Define selected Job map focus scope        |   Done | Initial scope filters Job layers to the selected Job and highlights related AOIs.                     |
-| JM-1302 | Add Job details map focus controls         |   Done | Job details includes `Focus map` and `Clear map focus` actions.                                       |
-| JM-1303 | Reuse existing Job layer filtering         |   Done | Selected Job focus reuses the existing Job layer `definitionExpression` scope path.                   |
-| JM-1304 | Preserve focus state across manual refresh |   Done | If selected Job map focus is active, Jobs refresh reapplies the selected Job layer scope best-effort. |
-| JM-1305 | Keep AOI details deferred                  |   Done | Related AOIs are highlighted only; AOI details and permanent AOI filtering remain deferred.           |
+| ID      | Task                                       | Status | Notes                                                                                          |
+| ------- | ------------------------------------------ | -----: | ---------------------------------------------------------------------------------------------- |
+| JM-1301 | Define selected Job map focus scope        |   Done | Initial focus scope filters Job layers to the selected Job and highlights related AOIs.        |
+| JM-1302 | Add Job details map focus controls         |   Done | Job details includes explicit `Focus map` and `Clear map focus` controls.                      |
+| JM-1303 | Reuse existing Job layer filtering         |   Done | Selected Job focus reuses the existing Job layer definition-expression scope path.             |
+| JM-1304 | Preserve focus state across manual refresh |   Done | Manual refresh reapplies selected Job map focus when it is active.                             |
+| JM-1305 | Clear focus when backing out of details    |   Done | `Back to Jobs` clears selected Job map focus after `Focus map` has been used from Job details. |
+| JM-1306 | Keep AOI details deferred                  |   Done | Related AOIs are highlighted only; AOI details and permanent AOI filtering remain deferred.    |
 
 Exit criteria:
 
@@ -2033,10 +2034,20 @@ Exit criteria:
 - related AOIs remain highlighted for selected Job context
 - Job layers can be scoped to the selected Job
 - clearing map focus restores normal Job layer filtering
+- backing out of details mode clears selected Job map focus when focus was active
 - existing shared Job filters still combine with selected Job map scope
+- manual refresh preserves active selected Job map focus
+- existing AOI `Show related Jobs` and Job `Show Job details` flows continue to work
 - no new backend or AOI details contract is introduced
-- `Back to Jobs` clears selected Job map focus after `Focus map` has been used from Job details, so returning to the Jobs list restores the normal map context.
-- `Clear map focus` remains available as an explicit demo-friendly action while staying in Job details.
+
+Phase 13 implementation notes:
+
+- `Focus map` is intentionally explicit for now instead of automatic when Job details opens. This makes the behavior easier to demo and avoids surprising map context changes from list-opened details.
+- `Clear map focus` restores normal Job layer filtering while keeping Job details open.
+- `Back to Jobs` clears selected Job map focus after `Focus map` has been used, because the user is leaving the focused details context.
+- Selected Job map focus is coordinated by app composition. Job details UI only raises events and does not import map controller logic.
+- Selected Job map focus uses the same map filtering path as AOI-scoped Job filtering, so filters and clustering continue to operate on the scoped visible Job set.
+- Related AOIs are highlighted, not hidden/filtered, until real AOI Feature Service identifiers, geometry behavior and UX expectations are confirmed.
 
 ## 14. Suggested implementation order
 
@@ -2231,3 +2242,4 @@ Recommended next tasks:
 | JM-NEXT-019 | Start Phase 12 Job details workflow polish               |        Done | Dedicated Job details mode is implemented and polished.                                                                            |
 | JM-NEXT-020 | Start Phase 13 selected Job map focus                    |        Done | Job details now provides explicit map focus controls that scope Job layers to the selected Job and highlight related AOIs.         |
 | JM-NEXT-021 | Review selected Job AOI filtering after real AOI inputs  |     Blocked | Requires confirmed AOI Feature Service identifiers, geometry characteristics and UX decision on hiding vs highlighting AOIs.       |
+| JM-NEXT-022 | Choose next feature phase after Phase 13                 | Not started | Candidate directions: AOI overview/filtering, Job details polish, backend adapter preparation or small UX cleanup.                 |

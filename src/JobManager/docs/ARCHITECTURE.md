@@ -806,6 +806,8 @@ Rules:
 
 Status: Done
 
+Selected Job map focus is an explicit Job details workflow.
+
 Current flow:
 
 ```txt
@@ -818,14 +820,41 @@ Job details
   -> related AOI highlight
 ```
 
+Clear flow:
+
+```txt
+Job details
+  -> Clear map focus
+  -> clear selected Job map scope
+  -> clear selected Job highlight
+  -> clear related AOI highlight
+  -> restore normal Job layer filtering
+```
+
+Back flow:
+
+```txt
+Focused Job details
+  -> Back to Jobs
+  -> clear selected Job map scope
+  -> clear selected Job highlight
+  -> clear related AOI highlight
+  -> show normal Jobs list
+```
+
 Rules:
 
 - Selected Job map focus is initiated from Job details UI but coordinated by app composition.
-- Job details UI must not import map code or relation backend details directly.
-- Map focus uses the existing Job layer filtering path so shared Job filters and clustering continue to work.
+- Job details UI must not import map controller code or relation backend details directly.
+- Map focus uses the existing Job layer filtering path so shared Job filters and point clustering continue to work.
 - Related AOIs are highlighted, not permanently filtered, until real AOI identifiers, geometry behavior and UX expectations are confirmed.
 - Clearing selected Job map focus restores the normal map context without closing Job details.
+- Backing out of focused Job details clears the selected Job map context because the user is leaving that focused details workflow.
 - This flow must not introduce a final backend/AOI relation contract.
+
+Implementation note:
+
+`Focus map` is explicit rather than automatic. This avoids surprising map context changes when Job details is opened from the list, while still supporting a clear demo flow from Job details to focused map context.
 
 ### Map hover feedback
 
