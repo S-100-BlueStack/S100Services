@@ -440,32 +440,50 @@ Rules:
 
 ### AOI map overview filters
 
-Status: In progress
+Status: Done for initial wiring
 
 AOI map overview filtering is map presentation state.
 
-Current foundation:
+Current flow:
 
 ```txt
-map/domain/aoiMapFilters.js
-  -> AOI map filter modes and normalization
-
-map/state/aoiMapFilterStore.js
-  -> current AOI map filter state
-
-map/filters/applyAoiLayerFilters.js
-  -> translates AOI filter state into AOI FeatureLayer definitionExpression
+Filters popover
+  -> map/state/aoiMapFilterStore.js
+  -> app-level store subscription
+  -> map/core/mapController.js
+  -> map/filters/applyAoiLayerFilters.js
+  -> AOI FeatureLayer definitionExpression
 ```
+
+Current modes:
+
+```txt
+All AOIs
+AOIs with visible Jobs
+AOIs with active Jobs
+AOIs with high-priority Jobs
+```
+
+Current behavior:
+
+- The default mode shows all AOIs.
+- The Filters popover exposes AOI overview modes as explicit buttons.
+- The Filters action indicator is active when either Job filters or AOI map filters are active.
+- `Clear filters` clears both Job filters and AOI map filters.
+- AOI membership is derived from relation service snapshots.
+- Current Job filters are applied before AOI filter membership is calculated, so AOI overview follows the same visible Job set as the map/list workflow.
+- Manual Jobs refresh reapplies active AOI map filters.
+- Changing Job filters reapplies active AOI map filters.
+- AOI filtering uses the AOI FeatureLayer `definitionExpression`.
 
 Rules:
 
 - AOI map filters must not introduce canonical queried AOI state.
 - AOI map filters must not import mock Jobs directly.
 - AOI membership must be derived through relation service snapshots.
-- Current Job filters should be applied before AOI filter membership is calculated, so AOI overview follows the same visible Job set as the map/list workflow.
 - Filtering currently uses provisional AOI `GlobalID` matching. This must remain documented as provisional until real AOI fields and backend relation ownership are confirmed.
-- The default mode must show all AOIs.
 - AOI details panel remains deferred.
+- AOI clustering remains deferred until real AOI geometry density and shape are confirmed.
 
 ### Job point clustering
 

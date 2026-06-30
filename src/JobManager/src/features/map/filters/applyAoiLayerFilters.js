@@ -12,6 +12,7 @@ export async function applyAoiLayerFilters({
   aoiLayer,
   filters,
   jobFilters,
+  jobs,
   relationService = defaultRelationService,
   shouldApply = () => true,
 } = {}) {
@@ -53,10 +54,12 @@ export async function applyAoiLayerFilters({
       ok: false,
       applied: false,
       reason: "relation-service-missing",
+      error: new Error("Relation service is not available."),
     };
   }
 
   const relationSnapshotResult = await relationService.loadAoiJobRelationSnapshot({
+    jobs,
     jobFilters: jobFilters ?? createDefaultJobFilters(),
   });
 

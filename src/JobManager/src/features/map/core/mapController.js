@@ -1,6 +1,7 @@
 import { normalizeError } from "../../../shared/errors/normalizeError.js";
 import { validateAoiFeatureLayer } from "../../aoi/services/aoiService.js";
 import * as defaultRelationService from "../../relations/services/relationService.js";
+import { applyAoiLayerFilters } from "../filters/applyAoiLayerFilters.js";
 import { applyJobLayerFilters } from "../filters/applyJobLayerFilters.js";
 import { applyAoiJobSummaryRenderer } from "../layers/applyAoiRenderer.js";
 import { createAoiHighlightController } from "../layers/aoiHighlight.js";
@@ -42,9 +43,11 @@ export function createMapController({
   let aoiHighlightController = null;
   let mapHoverController = null;
   let currentJobFilters = null;
+  let currentAoiMapFilters = null;
   let currentJobClusterSettings = null;
   let currentScopedJobIds = null;
   let aoiRendererRequestId = 0;
+  let aoiMapFilterRequestId = 0;
   let jobClusterRequestId = 0;
   let aoiJobScopeRequestId = 0;
   let mapStartRequestId = 0;
@@ -148,6 +151,7 @@ export function createMapController({
       registerMapInteractionHandlers();
       applyCurrentJobClusterSettingsWithoutBlocking();
       applyCurrentJobFilters();
+      applyCurrentAoiMapFiltersWithoutBlocking();
       applyCurrentAoiRendererWithoutBlockingMapReady();
 
       if (!requireJobGeometry && !deferJobGeometry) {
@@ -200,6 +204,7 @@ export function createMapController({
 
   function resetMapRuntimeState() {
     aoiRendererRequestId += 1;
+    aoiMapFilterRequestId += 1;
     jobClusterRequestId += 1;
     aoiJobScopeRequestId += 1;
 
@@ -376,6 +381,7 @@ export function createMapController({
 
       applyCurrentJobFilters();
       applyCurrentJobClusterSettingsWithoutBlocking();
+      applyCurrentAoiMapFiltersWithoutBlocking();
       applyCurrentAoiRendererWithoutBlockingMapReady();
       refreshAoiPopupContentWithoutBlocking();
 
@@ -431,8 +437,15 @@ export function createMapController({
     currentJobFilters = filters;
 
     applyCurrentJobFilters();
+    applyCurrentAoiMapFiltersWithoutBlocking();
     applyCurrentAoiRendererWithoutBlockingMapReady();
     refreshAoiPopupContentWithoutBlocking();
+  }
+
+  function applyAoiMapFilters(filters) {
+    currentAoiMapFilters = filters;
+
+    applyCurrentAoiMapFiltersWithoutBlocking();
   }
 
   function applyCurrentJobFilters() {
@@ -447,6 +460,38 @@ export function createMapController({
       filters: currentJobFilters,
       scopedJobIds: currentScopedJobIds,
     });
+  }
+
+  function applyCurrentAoiMapFiltersWithoutBlocking() {
+    const aoiLayer = mapResult?.layers?.aoiLayer;
+
+    if (!aoiLayer) {
+      return;
+    }
+
+    const filterRequestId = aoiMapFilterRequestId + 1;
+    aoiMapFilterRequestId = filterRequestId;
+
+    void applyAoiLayerFilters({
+      aoiLayer,
+      filters: currentAoiMapFilters,
+      jobFilters: currentJobFilters,
+      relationService,
+      jobs: getJobs?.(),
+      shouldApply() {
+        return !isDestroyed && filterRequestId === aoiMapFilterRequestId;
+      },
+    })
+      .then((result) => {
+        if (!result.ok && !isDestroyed && filterRequestId === aoiMapFilterRequestId) {
+          onAoiLayerError?.(normalizeError(result.error, "AOI filters could not be applied."));
+        }
+      })
+      .catch((error) => {
+        if (!isDestroyed && filterRequestId === aoiMapFilterRequestId) {
+          onAoiLayerError?.(normalizeError(error, "AOI filters could not be applied."));
+        }
+      });
   }
 
   function applyCurrentAoiRendererWithoutBlockingMapReady() {
@@ -764,6 +809,7 @@ export function createMapController({
     refreshJobData,
     refreshAoiPopupContent,
     applyJobFilters,
+    applyAoiMapFilters,
     applyJobClusterSettings,
   };
 }

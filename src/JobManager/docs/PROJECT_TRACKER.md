@@ -2057,14 +2057,15 @@ Add a controlled AOI map overview/filtering foundation without introducing AOI d
 
 Tasks:
 
-| ID      | Task                                     | Status      | Notes                                                                                            |
-| ------- | ---------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------ |
-| JM-1401 | Define AOI map filter modes              | Done        | Added AOI map filter modes for all AOIs, visible Jobs, active Jobs and high-priority Jobs.       |
-| JM-1402 | Add AOI map filter state                 | Done        | AOI map filter state is map presentation state under `features/map/state`.                       |
-| JM-1403 | Add AOI FeatureLayer filter translation  | Done        | Added utility to translate AOI map filter state into AOI FeatureLayer `definitionExpression`.    |
-| JM-1404 | Wire AOI map filters into navbar and map | Not started | Next package should connect the store to app composition, Filters popover and map controller.    |
-| JM-1405 | Keep AOI details deferred                | Done        | Phase 14 does not add AOI details panel or canonical queried AOI state.                          |
-| JM-1406 | Keep backend/AOI contract provisional    | Done        | AOI filtering still uses provisional `GlobalID` matching and relation summaries behind services. |
+| ID      | Task                                     | Status      | Notes                                                                                               |
+| ------- | ---------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------- |
+| JM-1401 | Define AOI map filter modes              | Done        | Added AOI map filter modes for all AOIs, visible Jobs, active Jobs and high-priority Jobs.          |
+| JM-1402 | Add AOI map filter state                 | Done        | AOI map filter state is map presentation state under `features/map/state`.                          |
+| JM-1403 | Add AOI FeatureLayer filter translation  | Done        | Added utility to translate AOI map filter state into AOI FeatureLayer `definitionExpression`.       |
+| JM-1404 | Wire AOI map filters into navbar and map | Done        | Filters popover now controls AOI map overview filtering through app composition and map controller. |
+| JM-1405 | Keep AOI details deferred                | Done        | Phase 14 does not add AOI details panel or canonical queried AOI state.                             |
+| JM-1406 | Keep backend/AOI contract provisional    | Done        | AOI filtering still uses provisional `GlobalID` matching and relation summaries behind services.    |
+| JM-1407 | Validate AOI filter UX with real data    | Not started | Needs manual review with real AOI density and relation coverage before further AOI overview work.   |
 
 Exit criteria:
 
@@ -2268,4 +2269,5 @@ Recommended next tasks:
 | JM-NEXT-019 | Start Phase 12 Job details workflow polish               |        Done | Dedicated Job details mode is implemented and polished.                                                                            |
 | JM-NEXT-020 | Start Phase 13 selected Job map focus                    |        Done | Job details now provides explicit map focus controls that scope Job layers to the selected Job and highlight related AOIs.         |
 | JM-NEXT-021 | Review selected Job AOI filtering after real AOI inputs  |     Blocked | Requires confirmed AOI Feature Service identifiers, geometry characteristics and UX decision on hiding vs highlighting AOIs.       |
-| JM-NEXT-022 | Choose next feature phase after Phase 13                 | Not started | Candidate directions: AOI overview/filtering, Job details polish, backend adapter preparation or small UX cleanup.                 |
+| JM-NEXT-022 | Wire Phase 14 AOI map filters into UI and map            |        Done | Filters popover now exposes AOI overview modes and applies them to the AOI FeatureLayer.                                           |
+| JM-NEXT-023 | Validate Phase 14 AOI filter UX                          | Not started | Test AOI visibility, relation matching, active Job filters and empty AOI states with current service/mock data.                    |

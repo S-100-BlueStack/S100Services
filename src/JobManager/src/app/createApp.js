@@ -3,6 +3,7 @@ import { createJobFilterStore } from "../features/jobs/state/jobFilterStore.js";
 import { createJobStore } from "../features/jobs/state/jobStore.js";
 import { createSelectedJobStore } from "../features/jobs/state/selectedJobStore.js";
 import { createMapController } from "../features/map/core/mapController.js";
+import { createAoiMapFilterStore } from "../features/map/state/aoiMapFilterStore.js";
 import { createJobClusterSettingsStore } from "../features/map/state/jobClusterSettingsStore.js";
 import { showErrorNotice, showSuccessNotice } from "../features/notices/services/noticeService.js";
 import { createNoticeRegion } from "../features/notices/ui/noticeContainer.js";
@@ -22,6 +23,7 @@ export async function createApp(rootElement) {
   const selectedJobStore = createSelectedJobStore();
   const jobFilterStore = createJobFilterStore();
   const jobStore = createJobStore();
+  const aoiMapFilterStore = createAoiMapFilterStore();
   const jobClusterSettingsStore = createJobClusterSettingsStore();
   const themeStore = createThemeStore();
   const noticeRegion = createNoticeRegion();
@@ -38,6 +40,7 @@ export async function createApp(rootElement) {
 
   const navbar = await createNavbarController({
     jobFilterStore,
+    aoiMapFilterStore,
     jobClusterSettingsStore,
     themeStore,
     onTestNotice() {
@@ -163,6 +166,10 @@ export async function createApp(rootElement) {
 
   const unsubscribeMapJobClusterSettings = jobClusterSettingsStore.subscribe((snapshot) => {
     mapController.applyJobClusterSettings(snapshot.settings);
+  });
+
+  const unsubscribeMapAoiFilters = aoiMapFilterStore.subscribe((snapshot) => {
+    mapController.applyAoiMapFilters(snapshot.filters);
   });
 
   const unsubscribeAoiPopupJobState = jobStore.subscribe(() => {
@@ -705,6 +712,7 @@ export async function createApp(rootElement) {
       appEventAbortController.abort();
       unsubscribeMapJobFilters();
       unsubscribeMapJobClusterSettings();
+      unsubscribeMapAoiFilters();
       unsubscribeAoiPopupJobState();
       navbar.destroy();
       themeStore.destroy();
