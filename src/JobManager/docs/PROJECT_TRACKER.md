@@ -2057,15 +2057,15 @@ Add a controlled AOI map overview/filtering foundation without introducing AOI d
 
 Tasks:
 
-| ID      | Task                                     | Status      | Notes                                                                                               |
-| ------- | ---------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------- |
-| JM-1401 | Define AOI map filter modes              | Done        | Added AOI map filter modes for all AOIs, visible Jobs, active Jobs and high-priority Jobs.          |
-| JM-1402 | Add AOI map filter state                 | Done        | AOI map filter state is map presentation state under `features/map/state`.                          |
-| JM-1403 | Add AOI FeatureLayer filter translation  | Done        | Added utility to translate AOI map filter state into AOI FeatureLayer `definitionExpression`.       |
-| JM-1404 | Wire AOI map filters into navbar and map | Done        | Filters popover now controls AOI map overview filtering through app composition and map controller. |
-| JM-1405 | Keep AOI details deferred                | Done        | Phase 14 does not add AOI details panel or canonical queried AOI state.                             |
-| JM-1406 | Keep backend/AOI contract provisional    | Done        | AOI filtering still uses provisional `GlobalID` matching and relation summaries behind services.    |
-| JM-1407 | Validate AOI filter UX with real data    | Not started | Needs manual review with real AOI density and relation coverage before further AOI overview work.   |
+| ID      | Task                                     | Status      | Notes                                                                                                                       |
+| ------- | ---------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------- |
+| JM-1401 | Define AOI map filter modes              | Done        | Added AOI map filter modes for all AOIs, visible Jobs, active Jobs and high-priority Jobs.                                  |
+| JM-1402 | Add AOI map filter state                 | Done        | AOI map filter state is map presentation state under `features/map/state`.                                                  |
+| JM-1403 | Add AOI FeatureLayer filter translation  | Done        | Added utility to translate AOI map filter state into AOI FeatureLayer `definitionExpression`.                               |
+| JM-1404 | Wire AOI map filters into navbar and map | Done        | Filters popover now controls AOI map overview filtering through app composition and map controller.                         |
+| JM-1405 | Keep AOI details deferred                | Done        | Phase 14 does not add AOI details panel or canonical queried AOI state.                                                     |
+| JM-1406 | Keep backend/AOI contract provisional    | Done        | AOI filtering still uses provisional `GlobalID` matching and relation summaries behind services.                            |
+| JM-1407 | Validate AOI filter UX with real data    | In progress | Initial UI wiring works, but current relation AOI ids must still be validated against real AOI Feature Service identifiers. |
 
 Exit criteria:
 
@@ -2075,6 +2075,16 @@ Exit criteria:
 - default AOI display remains unchanged
 - AOI details remain deferred
 - no final backend/AOI contract is introduced
+
+Implementation notes:
+
+- AOI overview filters validate the generated AOI FeatureLayer expression before applying it. If relation AOI ids do not match the current AOI service id values, the filter falls back to showing all AOIs instead of hiding the entire AOI layer.
+- AOI overview section hint text is descriptive, while the active AOI mode is shown in the main Filters summary and on the active mode button.
+- AOI overview filtering now validates matchability through the AOI `FeatureLayerView`, matching the selected/related AOI highlight pattern. It no longer queries the AOI `FeatureLayer` service directly before applying filters.
+- If active AOI overview filters cannot be matched safely against the current AOI layer, the map falls back to showing all AOIs instead of showing an error notice or hiding the AOI layer.
+- AOI overview filtering no longer validates active filters through ArcGIS `queryFeatures`, because the current AOI Feature Service can fail tile/query operations for generated relation expressions.
+- Active AOI overview filters only apply an AOI FeatureLayer `definitionExpression` when relation AOI ids look compatible with the provisional `GlobalID` AOI id field. Mock ids such as `aoi-001` fall back to showing all AOIs.
+- The current Phase 14 UI therefore exposes the AOI overview filter state, but real AOI hiding depends on confirmed AOI/Job relation identifiers.
 
 ## 13. Suggested implementation order
 

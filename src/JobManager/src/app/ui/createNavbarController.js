@@ -206,7 +206,7 @@ function createJobFilterPopoverContent({
 
   const aoiMapFilterSummaryElement = document.createElement("p");
   aoiMapFilterSummaryElement.className = "job-manager-filters__section-hint";
-  aoiMapFilterSummaryElement.textContent = "All AOIs";
+  aoiMapFilterSummaryElement.textContent = "Controls which AOIs are visible on the map.";
   aoiOverviewSection.element.insertBefore(aoiMapFilterSummaryElement, aoiOverviewSection.body);
 
   const aoiMapFilterButtons = AOI_MAP_FILTER_MODE_OPTIONS.map((modeOption) =>
@@ -240,7 +240,6 @@ function createJobFilterPopoverContent({
     },
   });
   const withRelatedAoisOnlyCheckbox = createFilterCheckbox({
-    label: "Jobs with AOIs",
     onChange(checked) {
       jobFilterStore.setFilters({
         withRelatedAoisOnly: checked,
@@ -469,10 +468,7 @@ function syncJobFilterControls({ filtersButton, filterControlRefs, filters }) {
 
   filterControlRefs.hasActiveJobFilters = hasActiveFilters;
   filterControlRefs.latestJobFilterSummary = getActiveJobFilterSummary(filters);
-  filterControlRefs.summaryElement.textContent = getCombinedFilterSummary({
-    jobFilters: filterControlRefs.latestJobFilterSummary,
-    aoiMapFilters: filterControlRefs.aoiMapFilterSummaryElement.textContent,
-  });
+  syncCombinedSummaryFromRefs(filterControlRefs);
   syncFilterClearAndIndicator({ filtersButton, filterControlRefs });
 }
 
@@ -480,7 +476,7 @@ function syncAoiMapFilterControls({ filtersButton, filterControlRefs, filters })
   const hasActiveFilters = hasActiveAoiMapFilters(filters);
 
   filterControlRefs.hasActiveAoiMapFilters = hasActiveFilters;
-  filterControlRefs.aoiMapFilterSummaryElement.textContent = getAoiMapFilterSummary(filters);
+  filterControlRefs.latestAoiMapFilterSummary = getAoiMapFilterSummary(filters);
 
   syncPresetButtons({
     buttons: filterControlRefs.aoiMapFilterButtons,
@@ -535,7 +531,7 @@ function syncValueCheckboxes(checkboxRefs, activeValues) {
 function syncCombinedSummaryFromRefs(filterControlRefs) {
   filterControlRefs.summaryElement.textContent = getCombinedFilterSummary({
     jobFilters: filterControlRefs.latestJobFilterSummary ?? "No filters active",
-    aoiMapFilters: filterControlRefs.aoiMapFilterSummaryElement.textContent,
+    aoiMapFilters: filterControlRefs.latestAoiMapFilterSummary ?? "All AOIs",
   });
 }
 

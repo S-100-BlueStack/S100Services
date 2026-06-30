@@ -1,7 +1,7 @@
 import { createDefaultJobFilters } from "../../jobs/domain/jobFilters.js";
 import { getAoiJobSummary } from "../../relations/domain/aoiJobSummary.js";
 import * as defaultRelationService from "../../relations/services/relationService.js";
-import { AOI_FIELD } from "../../aoi/config/aoiFieldConfig.js";
+import { AOI_FIELD, AOI_TEST_FIELD_CONFIG } from "../../aoi/config/aoiFieldConfig.js";
 import {
   AOI_MAP_FILTER_MODE,
   hasActiveAoiMapFilters,
@@ -43,18 +43,23 @@ export async function applyAoiLayerFilters({
       data: {
         definitionExpression: "",
         aoiIds: [],
+        didFallbackToAllAois: false,
       },
     };
   }
 
   if (!relationService?.loadAoiJobRelationSnapshot) {
-    aoiLayer.definitionExpression = "1 = 0";
+    aoiLayer.definitionExpression = "";
 
     return {
-      ok: false,
-      applied: false,
+      ok: true,
+      applied: true,
       reason: "relation-service-missing",
-      error: new Error("Relation service is not available."),
+      data: {
+        definitionExpression: "",
+        aoiIds: [],
+        didFallbackToAllAois: true,
+      },
     };
   }
 
@@ -64,12 +69,17 @@ export async function applyAoiLayerFilters({
   });
 
   if (!relationSnapshotResult.ok) {
-    aoiLayer.definitionExpression = "1 = 0";
+    aoiLayer.definitionExpression = "";
 
     return {
-      ok: false,
-      applied: false,
-      error: relationSnapshotResult.error,
+      ok: true,
+      applied: true,
+      reason: "relation-snapshot-failed",
+      data: {
+        definitionExpression: "",
+        aoiIds: [],
+        didFallbackToAllAois: true,
+      },
     };
   }
 
@@ -85,15 +95,18 @@ export async function applyAoiLayerFilters({
     filters: normalizedFilters,
     summaryByAoiId: relationSnapshotResult.data.summaryByAoiId,
   });
-  const definitionExpression = createAoiDefinitionExpression(aoiIds);
+  const expressionResult = createSafeAoiDefinitionExpression({
+    aoiLayer,
+    aoiIds,
+  });
 
-  aoiLayer.definitionExpression = definitionExpression;
+  aoiLayer.definitionExpression = expressionResult.definitionExpression;
 
   return {
     ok: true,
     applied: true,
     data: {
-      definitionExpression,
+      ...expressionResult,
       aoiIds,
     },
   };
@@ -123,16 +136,73 @@ function matchesAoiMapFilter(summary, filters) {
   }
 }
 
-function createAoiDefinitionExpression(aoiIds) {
+function createSafeAoiDefinitionExpression({ aoiLayer, aoiIds } = {}) {
   const normalizedAoiIds = normalizeAoiIds(aoiIds);
 
   if (normalizedAoiIds.length === 0) {
-    return "1 = 0";
+    return {
+      definitionExpression: "1 = 0",
+      matchedAoiIds: [],
+      didFallbackToAllAois: false,
+      reason: "no-aoi-ids-for-active-filter",
+    };
   }
 
-  const values = normalizedAoiIds.map((aoiId) => `'${escapeSqlString(aoiId)}'`).join(", ");
+  const globalIdCompatibleAoiIds = normalizedAoiIds.filter(isLikelyGlobalId);
 
-  return `${AOI_FIELD.GLOBAL_ID} IN (${values})`;
+  if (globalIdCompatibleAoiIds.length === 0) {
+    return {
+      definitionExpression: "",
+      matchedAoiIds: [],
+      didFallbackToAllAois: true,
+      reason: "relation-aoi-ids-are-not-globalids",
+    };
+  }
+
+  return {
+    definitionExpression: createAoiDefinitionExpression({
+      aoiLayer,
+      aoiIds: globalIdCompatibleAoiIds,
+    }),
+    matchedAoiIds: globalIdCompatibleAoiIds,
+    didFallbackToAllAois: false,
+    reason: "",
+  };
+}
+
+function createAoiDefinitionExpression({ aoiLayer, aoiIds } = {}) {
+  const fieldName = resolveAoiIdFieldName(aoiLayer);
+  const values = normalizeAoiIds(aoiIds)
+    .flatMap(createGlobalIdExpressionValues)
+    .map((aoiId) => `'${escapeSqlString(aoiId)}'`)
+    .join(", ");
+
+  return `${fieldName} IN (${values})`;
+}
+
+function resolveAoiIdFieldName(aoiLayer) {
+  const configuredFieldName = normalizeOptionalString(
+    AOI_TEST_FIELD_CONFIG.idField || AOI_FIELD.GLOBAL_ID
+  );
+  const configuredFieldNameLower = configuredFieldName.toLowerCase();
+  const matchingLayerField = normalizeArray(aoiLayer?.fields).find(
+    (field) => normalizeOptionalString(field?.name).toLowerCase() === configuredFieldNameLower
+  );
+
+  return normalizeOptionalString(matchingLayerField?.name) || configuredFieldName;
+}
+
+function createGlobalIdExpressionValues(value) {
+  const normalizedValue = normalizeOptionalString(value);
+  const withoutBraces = normalizedValue.replace(/^\{/, "").replace(/\}$/, "");
+
+  return [...new Set([normalizedValue, withoutBraces, `{${withoutBraces}}`].filter(Boolean))];
+}
+
+function isLikelyGlobalId(value) {
+  const normalizedValue = normalizeOptionalString(value).replace(/^\{/, "").replace(/\}$/, "");
+
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalizedValue);
 }
 
 function normalizeAoiIds(aoiIds) {
@@ -141,6 +211,14 @@ function normalizeAoiIds(aoiIds) {
   }
 
   return [...new Set(aoiIds.map(normalizeOptionalString).filter(Boolean))];
+}
+
+function normalizeArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value;
 }
 
 function normalizeOptionalString(value) {
