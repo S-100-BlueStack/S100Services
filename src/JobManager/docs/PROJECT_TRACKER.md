@@ -2049,7 +2049,33 @@ Phase 13 implementation notes:
 - Selected Job map focus uses the same map filtering path as AOI-scoped Job filtering, so filters and clustering continue to operate on the scoped visible Job set.
 - Related AOIs are highlighted, not hidden/filtered, until real AOI Feature Service identifiers, geometry behavior and UX expectations are confirmed.
 
-## 14. Suggested implementation order
+## Phase 14 - AOI overview/filtering foundation
+
+Goal:
+
+Add a controlled AOI map overview/filtering foundation without introducing AOI details, AOI clustering or a final backend/AOI relation contract.
+
+Tasks:
+
+| ID      | Task                                     | Status      | Notes                                                                                            |
+| ------- | ---------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------ |
+| JM-1401 | Define AOI map filter modes              | Done        | Added AOI map filter modes for all AOIs, visible Jobs, active Jobs and high-priority Jobs.       |
+| JM-1402 | Add AOI map filter state                 | Done        | AOI map filter state is map presentation state under `features/map/state`.                       |
+| JM-1403 | Add AOI FeatureLayer filter translation  | Done        | Added utility to translate AOI map filter state into AOI FeatureLayer `definitionExpression`.    |
+| JM-1404 | Wire AOI map filters into navbar and map | Not started | Next package should connect the store to app composition, Filters popover and map controller.    |
+| JM-1405 | Keep AOI details deferred                | Done        | Phase 14 does not add AOI details panel or canonical queried AOI state.                          |
+| JM-1406 | Keep backend/AOI contract provisional    | Done        | AOI filtering still uses provisional `GlobalID` matching and relation summaries behind services. |
+
+Exit criteria:
+
+- AOI map filter modes are represented as explicit frontend state
+- AOI filtering can be applied to the AOI FeatureLayer without UI knowing relation source
+- current Job filters can be reused when deriving AOI filter membership
+- default AOI display remains unchanged
+- AOI details remain deferred
+- no final backend/AOI contract is introduced
+
+## 13. Suggested implementation order
 
 Recommended order:
 
@@ -2076,7 +2102,7 @@ The initial MapView foundation is now in place before full AOI loading so future
 
 Clustering should not be implemented too early because the correct approach depends on real AOI geometry.
 
-## 15. Open questions
+## 14. Open questions
 
 | ID     | Question                                                          |      Status | Notes                                                                                                                                 |
 | ------ | ----------------------------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2092,9 +2118,9 @@ Clustering should not be implemented too early because the correct approach depe
 | OQ-010 | Should the app use Product Manager’s server/SSPI setup initially? |        Open | Only if needed for auth or deployment.                                                                                                |
 | OQ-011 | Should users be able to edit Job deadlines in the frontend?       |        Open | Display deadline now, but defer editing until workflow/backend ownership is confirmed.                                                |
 
-## 16. Risks and mitigations
+## 15. Risks and mitigations
 
-## 16.1 Risk: folder structure becomes unclear
+## 15.1 Risk: folder structure becomes unclear
 
 Mitigation:
 
@@ -2103,7 +2129,7 @@ Mitigation:
 - avoid generic dumping grounds
 - add feature README files for non-trivial flows
 
-## 16.2 Risk: mock backend leaks into UI
+## 15.2 Risk: mock backend leaks into UI
 
 Mitigation:
 
@@ -2111,7 +2137,7 @@ Mitigation:
 - forbid UI imports from `features/jobs/mock`
 - keep mock-only behavior documented
 
-## 16.3 Risk: clustering misrepresents AOIs
+## 15.3 Risk: clustering misrepresents AOIs
 
 Mitigation:
 
@@ -2121,7 +2147,7 @@ Mitigation:
 - disable clusters at detailed zoom levels
 - document cluster decision
 
-## 16.4 Risk: future backend contract forces UI refactor
+## 15.4 Risk: future backend contract forces UI refactor
 
 Mitigation:
 
@@ -2130,7 +2156,7 @@ Mitigation:
 - use stable frontend models
 - document backend assumptions
 
-## 16.5 Risk: app becomes too complex
+## 15.5 Risk: app becomes too complex
 
 Mitigation:
 
@@ -2139,7 +2165,7 @@ Mitigation:
 - prioritize map/list/filter/status basics
 - require explicit decision before adding large new features
 
-## 17. Validation checklist
+## 16. Validation checklist
 
 Use relevant steps depending on the change.
 
@@ -2183,7 +2209,7 @@ Manual validation flows:
 - dark/light mode remains readable when theme work is introduced
 - no secrets are present in committed files
 
-## 18. Definition of done for implementation tasks
+## 17. Definition of done for implementation tasks
 
 A task is only `Done` when:
 
@@ -2196,7 +2222,7 @@ A task is only `Done` when:
 - manual validation steps are described or completed
 - tracker is updated if the task changes requirements, architecture or status
 
-## 19. Future documentation split
+## 18. Future documentation split
 
 This document is the primary source of truth for now.
 
@@ -2215,7 +2241,7 @@ docs/ARCHITECTURE.md
 
 Do not duplicate content across documents. Link or summarize instead.
 
-## 20. Next immediate tasks
+## 19. Next immediate tasks
 
 Recommended next tasks:
 

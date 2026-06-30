@@ -438,6 +438,35 @@ Rules:
 - Popup action flows should be documented when they become non-trivial.
 - Clustering decisions must be documented because AOI polygons can be misleading if clustered incorrectly.
 
+### AOI map overview filters
+
+Status: In progress
+
+AOI map overview filtering is map presentation state.
+
+Current foundation:
+
+```txt
+map/domain/aoiMapFilters.js
+  -> AOI map filter modes and normalization
+
+map/state/aoiMapFilterStore.js
+  -> current AOI map filter state
+
+map/filters/applyAoiLayerFilters.js
+  -> translates AOI filter state into AOI FeatureLayer definitionExpression
+```
+
+Rules:
+
+- AOI map filters must not introduce canonical queried AOI state.
+- AOI map filters must not import mock Jobs directly.
+- AOI membership must be derived through relation service snapshots.
+- Current Job filters should be applied before AOI filter membership is calculated, so AOI overview follows the same visible Job set as the map/list workflow.
+- Filtering currently uses provisional AOI `GlobalID` matching. This must remain documented as provisional until real AOI fields and backend relation ownership are confirmed.
+- The default mode must show all AOIs.
+- AOI details panel remains deferred.
+
 ### Job point clustering
 
 Job point clustering is owned by `src/features/map`.
