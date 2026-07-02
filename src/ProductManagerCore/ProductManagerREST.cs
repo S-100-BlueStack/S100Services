@@ -28,7 +28,7 @@ namespace ProductCatalogue
         private readonly string[] _tableNames = ["point", "pointset", "curve", "surface"];
 
         private ConnectionREST[] _connections { get; set; } = [];
-        private FeatureServiceClient Connection(string productSpecification, int compilationScale) => _connections.FirstOrDefault(e => e.ProductSpecification == productSpecification && e.MinimumScale <= compilationScale && e.MaximumScale >= compilationScale).Client;
+        private FeatureServiceClient? Connection(string productSpecification) => _connections.FirstOrDefault(e => e.ProductSpecification == productSpecification)?.Client;
 
         private readonly ConcurrentDictionary<string, S100FC.S128.FeatureTypes.ElectronicProduct> _electronicProducts = new ConcurrentDictionary<string, S100FC.S128.FeatureTypes.ElectronicProduct>();
 
@@ -62,7 +62,7 @@ namespace ProductCatalogue
                 if (settings != null) {
                     var cl = new HttpClient();
 
-                    this._connections = [.. settings.Connections.Select(e => new ConnectionREST(e.ProductSpecification, e.MinimumScale, e.MaximumScale, new FeatureServiceClient(cl, new() { ServiceUri = e.ConnectionFile })))];
+                    this._connections = [.. settings.Connections.Select(e => new ConnectionREST(e.ProductSpecification, new FeatureServiceClient(cl, new() { ServiceUri = e.ConnectionFile })))];
 
                     // Add output folder
                     this.OutputFolder = settings.OutputFolder;
@@ -285,7 +285,7 @@ namespace ProductCatalogue
 
             var dict = new Dictionary<string, ArchiveRow>();
 
-            var client = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
+            var client = this.Connection(electronicProduct.productSpecification!.name!)!;
 
             var extent = await this.BuildSpatialQueryFilter(name);
 
@@ -348,7 +348,7 @@ namespace ProductCatalogue
             if (dataset == default)
                 return false;
 
-            var client = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
+            var client = this.Connection(electronicProduct.productSpecification!.name!)!;
             string[] tableNames = ["point", "pointset", "curve", "surface"];
             foreach (var baseTableName in tableNames) {
                 var layerClient = client.GetLayerClientAsync(baseTableName);
@@ -527,7 +527,7 @@ namespace ProductCatalogue
             var regFileReference = new Regex("fileReference\":\"(?<filename>[^\"]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace);
             var regPictorialRepresentation = new Regex("pictorialRepresentation\":\"(?<filename>[^\"]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace);
 
-            var uri = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
+            var uri = this.Connection(electronicProduct.productSpecification!.name!)!;
 
 
 
