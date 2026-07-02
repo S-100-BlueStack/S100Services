@@ -1,10 +1,20 @@
 import * as jobService from "../services/jobService.js";
 
+export const JOB_STORE_CHANGE_TYPE = Object.freeze({
+  INITIAL: "initial",
+  JOBS_LOADED: "jobsLoaded",
+  JOBS_LOAD_FAILED: "jobsLoadFailed",
+  JOB_STATUS_UPDATED: "jobStatusUpdated",
+  JOB_STATUS_UPDATE_FAILED: "jobStatusUpdateFailed",
+});
+
 export function createJobStore({ service = jobService } = {}) {
+  let changeSequence = 0;
   let state = {
     jobs: [],
     isLoading: false,
     error: null,
+    lastChange: createInitialJobStoreChange(),
   };
 
   const listeners = new Set();
@@ -20,12 +30,12 @@ export function createJobStore({ service = jobService } = {}) {
 
   function getSnapshot() {
     return {
-      jobs: state.jobs.map((job) => ({
-        ...job,
-        relatedAoiIds: [...job.relatedAoiIds],
-      })),
+      jobs: state.jobs.map(cloneJob),
       isLoading: state.isLoading,
       error: state.error,
+      lastChange: {
+        ...state.lastChange,
+      },
     };
   }
 
@@ -42,6 +52,9 @@ export function createJobStore({ service = jobService } = {}) {
         jobs: result.data.jobs,
         isLoading: false,
         error: null,
+        lastChange: createJobStoreChange(JOB_STORE_CHANGE_TYPE.JOBS_LOADED, {
+          jobCount: result.data.jobs.length,
+        }),
       });
 
       return result;
@@ -50,6 +63,7 @@ export function createJobStore({ service = jobService } = {}) {
     setState({
       isLoading: false,
       error: result.error,
+      lastChange: createJobStoreChange(JOB_STORE_CHANGE_TYPE.JOBS_LOAD_FAILED),
     });
 
     return result;
@@ -62,14 +76,35 @@ export function createJobStore({ service = jobService } = {}) {
       setState({
         jobs: applyJobMutationResult(state.jobs, result.data),
         error: null,
+        lastChange: createJobStoreChange(JOB_STORE_CHANGE_TYPE.JOB_STATUS_UPDATED, {
+          jobId: result.data.job.id,
+          status: result.data.job.status,
+          createdJobCount: Array.isArray(result.data.createdJobs)
+            ? result.data.createdJobs.length
+            : 0,
+        }),
       });
     } else {
       setState({
         error: result.error,
+        lastChange: createJobStoreChange(JOB_STORE_CHANGE_TYPE.JOB_STATUS_UPDATE_FAILED, {
+          jobId,
+          status,
+        }),
       });
     }
 
     return result;
+  }
+
+  function createJobStoreChange(type, data = {}) {
+    changeSequence += 1;
+
+    return {
+      type,
+      sequence: changeSequence,
+      ...data,
+    };
   }
 
   function setState(partialState) {
@@ -94,6 +129,20 @@ export function createJobStore({ service = jobService } = {}) {
     loadJobs,
     updateJobStatus,
     getSnapshot,
+  };
+}
+
+function createInitialJobStoreChange() {
+  return {
+    type: JOB_STORE_CHANGE_TYPE.INITIAL,
+    sequence: 0,
+  };
+}
+
+function cloneJob(job) {
+  return {
+    ...job,
+    relatedAoiIds: Array.isArray(job.relatedAoiIds) ? [...job.relatedAoiIds] : [],
   };
 }
 

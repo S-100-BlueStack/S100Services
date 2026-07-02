@@ -51,6 +51,7 @@ Current known baseline:
 - Jobs panel supports a dedicated Job details mode in addition to list mode.
 - Job details mode has sticky panel navigation, sticky selected Job context, status mutation controls and read-only Job metadata.
 - AOI overview filters are available from the Filters popover and can filter AOIs by visible Jobs, active Jobs and high-priority Jobs.
+- Job status mutations now sync map Job layers, AOI renderer summaries and active map scope/highlight state without requiring manual refresh.
 
 Current known limitations:
 
@@ -1902,17 +1903,17 @@ Make the app resilient to realistic loading, mutation and refresh scenarios.
 
 Tasks:
 
-| ID      | Task                                         |      Status | Notes                                                                                                                                        |
-| ------- | -------------------------------------------- | ----------: | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-1001 | Add manual refresh flow                      |        Done | Jobs panel refresh also refreshes map Job layers, AOI renderer summaries, filters, clustering and active scope/highlight state best-effort.  |
-| JM-1002 | Add silent refresh plan                      |    Deferred | Manual refresh and startup retry cover current needs. Revisit when backend behavior and auto-refresh requirements are clearer.               |
-| JM-1003 | Preserve selected AOI/Job across refresh     |        Done | Manual refresh reapplies active AOI scope or selected Job highlight best-effort. Stale/deleted selection policy is deferred to backend work. |
-| JM-1004 | Add mutation conflict handling placeholder   | Not started | Backend future.                                                                                                                              |
-| JM-1005 | Add startup loader and automatic retry gate  |        Done | Initial startup blocks app access until Jobs, AOI readiness and Job map layer data are available. Retry runs per startup stage in loader.    |
-| JM-1006 | Review loading states across app             |        Done | Startup loading is gated. Post-startup manual refresh and AOI popup summary refresh are non-blocking. Backend-driven states are deferred.    |
-| JM-1007 | Polish hover cleanup and initial panel state |        Done | Hover clears on map exit/stale hit-test, and Jobs panel starts closed on app load.                                                           |
-| JM-1008 | Add AOI popup live-refresh for Job summaries |        Done | Open AOI popup summary counts refresh after Job filter changes, successful Jobs refresh and Job status changes.                              |
-| JM-1009 | Sync map presentation after Job mutation     |    Deferred | Jobs panel and AOI popup summary update immediately after status mutation. Map Job layers and AOI renderer can be synced later if needed.    |
+| ID      | Task                                         |      Status | Notes                                                                                                                                                                |
+| ------- | -------------------------------------------- | ----------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-1001 | Add manual refresh flow                      |        Done | Jobs panel refresh also refreshes map Job layers, AOI renderer summaries, filters, clustering and active scope/highlight state best-effort.                          |
+| JM-1002 | Add silent refresh plan                      |    Deferred | Manual refresh and startup retry cover current needs. Revisit when backend behavior and auto-refresh requirements are clearer.                                       |
+| JM-1003 | Preserve selected AOI/Job across refresh     |        Done | Manual refresh reapplies active AOI scope or selected Job highlight best-effort. Stale/deleted selection policy is deferred to backend work.                         |
+| JM-1004 | Add mutation conflict handling placeholder   | Not started | Backend future.                                                                                                                                                      |
+| JM-1005 | Add startup loader and automatic retry gate  |        Done | Initial startup blocks app access until Jobs, AOI readiness and Job map layer data are available. Retry runs per startup stage in loader.                            |
+| JM-1006 | Review loading states across app             |        Done | Startup loading is gated. Post-startup manual refresh and AOI popup summary refresh are non-blocking. Backend-driven states are deferred.                            |
+| JM-1007 | Polish hover cleanup and initial panel state |        Done | Hover clears on map exit/stale hit-test, and Jobs panel starts closed on app load.                                                                                   |
+| JM-1008 | Add AOI popup live-refresh for Job summaries |        Done | Open AOI popup summary counts refresh after Job filter changes, successful Jobs refresh and Job status changes.                                                      |
+| JM-1009 | Sync map presentation after Job mutation     |        Done | Successful Job status mutations now refresh map Job layers, AOI renderer summaries, AOI popup summaries and active scope/highlight state from the shared Jobs store. |
 
 Exit criteria:
 
@@ -1923,7 +1924,8 @@ Exit criteria:
 
 Current known limitations:
 
-- Map Job layers and AOI renderer state are refreshed after manual Jobs refresh. After an individual Job status mutation, Jobs panel and open AOI popup summaries update immediately, while map layer presentation can remain unchanged until refresh. This is deferred unless immediate map mutation sync becomes required.
+- Map Job layers, AOI renderer state and AOI popup summaries are refreshed after manual Jobs refresh and after successful individual Job status mutations.
+- Generated mock Jobs are still queued in the mock backend and intentionally become visible only after refresh or panel reopen.
 
 ## Phase 11 - Documentation and backend preparation
 
@@ -2089,6 +2091,42 @@ Implementation notes:
 - AOI overview filtering does not validate active filters through ArcGIS `queryFeatures`, because the current AOI Feature Service can fail tile/query operations for generated relation expressions.
 - AOI overview filtering worked in manual validation after the non-destructive matching change, with no observed regression in existing AOI, Job details, Job filter or map focus flows.
 - AOI details, canonical queried AOI state, AOI clustering and final backend/AOI relation ownership remain deferred.
+
+## Phase 15 - Mutation-to-map sync
+
+Goal:
+
+Keep map-derived Job presentation in sync after successful Job status mutations without introducing a new backend contract or moving map responsibility into Jobs UI.
+
+Tasks:
+
+| ID      | Task                                          | Status | Notes                                                                                                  |
+| ------- | --------------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------ |
+| JM-1501 | Track Job store mutation changes              |   Done | Job store snapshots expose a `lastChange` marker for successful and failed status mutation results.    |
+| JM-1502 | Sync map after successful Job status mutation |   Done | App composition refreshes map Job layers from the shared Jobs store after successful status mutations. |
+| JM-1503 | Preserve active map context after mutation    |   Done | Active AOI scope, selected Job focus and selected/related AOI highlights are reapplied best-effort.    |
+| JM-1504 | Keep generated mock Jobs queued               |   Done | Generated mock Jobs remain backend-queued and become visible after refresh or panel reopen.            |
+| JM-1505 | Keep Job UI free of map controller dependency |   Done | Status buttons still call the Jobs store only; map sync is coordinated by app composition.             |
+
+Exit criteria:
+
+- successful status mutations update visible Job map layers
+- AOI renderer summaries update after mutation
+- AOI popup summaries continue to update from shared Jobs state
+- active AOI scope is reapplied after mutation
+- active selected Job map focus is reapplied after mutation
+- generated mock Jobs remain queued until refresh or panel reopen
+- Job UI does not import map controller code
+- no new backend contract is introduced
+
+Implementation notes:
+
+- `jobStore` exposes `lastChange` metadata so app composition can distinguish status mutations from startup/manual refresh loads.
+- App composition only syncs map presentation for `jobStatusUpdated` changes.
+- Startup `loadJobs()` and manual refresh still use their existing map refresh paths and do not trigger duplicate mutation sync.
+- Map sync after mutation uses the current shared Jobs store snapshot, so the map receives the same Job data as the Jobs panel.
+- If map sync fails after a successful mutation, a non-blocking `Map sync failed` notice is shown.
+- Generated mock Jobs remain intentionally excluded from the visible Jobs store until refresh or panel reopen.
 
 ## 13. Suggested implementation order
 
@@ -2285,4 +2323,5 @@ Recommended next tasks:
 | JM-NEXT-021 | Review selected Job AOI filtering after real AOI inputs  |     Blocked | Requires confirmed AOI Feature Service identifiers, geometry characteristics and UX decision on hiding vs highlighting AOIs.       |
 | JM-NEXT-022 | Wire Phase 14 AOI map filters into UI and map            |        Done | Filters popover now exposes AOI overview modes and applies them to the AOI FeatureLayer.                                           |
 | JM-NEXT-023 | Validate Phase 14 AOI filter UX                          |        Done | AOI overview filters work with current service/mock data and no regression was observed in existing map/list flows.                |
-| JM-NEXT-024 | Choose next feature phase after Phase 14                 | Not started | Candidate directions: AOI overview polish, backend adapter preparation, mutation-to-map sync or small UX cleanup.                  |
+| JM-NEXT-024 | Implement mutation-to-map sync                           |        Done | Successful Job status mutations now refresh map Job layers, AOI renderer summaries and active map context.                         |
+| JM-NEXT-025 | Choose next feature phase after mutation-to-map sync     | Not started | Candidate directions: AOI overview polish, backend adapter preparation, AOI service readiness or UX cleanup.                       |

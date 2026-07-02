@@ -1024,31 +1024,32 @@ Jobs panel Refresh button or panel reopen
   -> active AOI scope or selected Job highlight reapplied best-effort
 ```
 
-Mutation consistency note:
+Mutation consistency flow:
 
 ```txt
 Job status mutation
-  -> Jobs store updates
+  -> Jobs store updates shared Jobs state
   -> Jobs panel rerenders
   -> open AOI popup summary re-renders from shared Jobs state
-  -> map Job layer data remains unchanged until manual refresh
+  -> app-level Jobs store subscription sees successful mutation change
+  -> mapController.refreshJobData({ jobs })
+  -> Job map layers repopulate from the shared Jobs store snapshot
+  -> current Job filters reapplied
+  -> current Job clustering settings reapplied
+  -> active AOI map filters reapplied
+  -> AOI renderer summaries rebuilt
+  -> active AOI scope or selected Job focus/highlight reapplied best-effort
 ```
-
-This is acceptable for now because individual mutation sync to ArcGIS client-side layers is not required yet. If immediate map presentation sync becomes required, add an app-level mutation event or store subscription that refreshes map Job layers and AOI renderer state without waiting for manual refresh.
 
 Rules:
 
-- Manual refresh starts from explicit user action.
-- Jobs UI owns the Jobs panel refresh button and Jobs store reload.
-- App composition owns coordination between Jobs refresh and map refresh.
+- Job UI owns status button clicks and calls the Jobs store.
+- Job UI must not import map controller code.
+- The Jobs store may expose change metadata, but it does not own map behavior.
+- App composition owns mutation-to-map synchronization because it coordinates Jobs state, map controller, selected AOI state and selected Job state.
 - Map controller owns refreshing ArcGIS Job layer data and reapplying map-specific presentation state.
-- Manual refresh must preserve Job filters where practical.
-- Manual refresh must preserve AOI scope where practical by resolving related Job ids again.
-- Manual refresh must preserve selected Job and related AOI highlights best-effort.
-- The map refresh should use the refreshed Jobs already returned to the Jobs panel instead of loading Jobs a second time.
-- If Jobs refresh fails, map refresh should not run.
-- If map refresh fails, show a user-facing notice.
-- Manual refresh should not perform a full app reload.
+- Generated mock Jobs remain queued in the mock backend and should not appear on the map until they become part of the visible Jobs store after refresh or panel reopen.
+- If map sync fails after a successful Job mutation, the mutation remains successful and a non-blocking map sync notice can be shown.
 
 ### Startup loader and required data gate
 

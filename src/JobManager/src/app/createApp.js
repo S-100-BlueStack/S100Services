@@ -1,6 +1,6 @@
 import { createSelectedAoiStore } from "../features/aoi/state/selectedAoiStore.js";
 import { createJobFilterStore } from "../features/jobs/state/jobFilterStore.js";
-import { createJobStore } from "../features/jobs/state/jobStore.js";
+import { JOB_STORE_CHANGE_TYPE, createJobStore } from "../features/jobs/state/jobStore.js";
 import { createSelectedJobStore } from "../features/jobs/state/selectedJobStore.js";
 import { createMapController } from "../features/map/core/mapController.js";
 import { createAoiMapFilterStore } from "../features/map/state/aoiMapFilterStore.js";
@@ -32,6 +32,7 @@ export async function createApp(rootElement) {
   const startupAbortController = new AbortController();
 
   let jobsRefreshRequestId = 0;
+  let handledJobChangeSequence = 0;
   let startupRequestId = 0;
   let isDestroyed = false;
   let isStartupComplete = false;
@@ -172,8 +173,9 @@ export async function createApp(rootElement) {
     mapController.applyAoiMapFilters(snapshot.filters);
   });
 
-  const unsubscribeAoiPopupJobState = jobStore.subscribe(() => {
+  const unsubscribeJobStoreSync = jobStore.subscribe((snapshot) => {
     mapController.refreshAoiPopupContent();
+    void syncMapAfterJobStoreChange(snapshot);
   });
 
   jobsPanel.element.addEventListener(
@@ -526,6 +528,40 @@ export async function createApp(rootElement) {
   }
 
   async function refreshMapAfterJobsRefresh({ jobs } = {}) {
+    await syncMapAfterJobsSnapshot({
+      jobs,
+      failureTitle: "Map refresh failed",
+    });
+  }
+
+  async function syncMapAfterJobStoreChange(snapshot) {
+    const lastChange = snapshot?.lastChange;
+
+    if (!shouldSyncMapAfterJobStoreChange(lastChange)) {
+      return;
+    }
+
+    handledJobChangeSequence = lastChange.sequence;
+
+    if (!isStartupComplete) {
+      return;
+    }
+
+    await syncMapAfterJobsSnapshot({
+      jobs: snapshot.jobs,
+      failureTitle: "Map sync failed",
+    });
+  }
+
+  function shouldSyncMapAfterJobStoreChange(lastChange) {
+    return (
+      lastChange?.type === JOB_STORE_CHANGE_TYPE.JOB_STATUS_UPDATED &&
+      Number.isInteger(lastChange.sequence) &&
+      lastChange.sequence > handledJobChangeSequence
+    );
+  }
+
+  async function syncMapAfterJobsSnapshot({ jobs, failureTitle }) {
     const refreshRequestId = jobsRefreshRequestId + 1;
     jobsRefreshRequestId = refreshRequestId;
 
@@ -539,7 +575,7 @@ export async function createApp(rootElement) {
 
     if (!result.ok) {
       showErrorNotice({
-        title: "Map refresh failed",
+        title: failureTitle,
         message: result.error.message,
       });
 
@@ -547,7 +583,7 @@ export async function createApp(rootElement) {
     }
 
     const selectedAoi = selectedAoiStore.getSnapshot().selectedAoi;
-    const selectedJob = selectedJobStore.getSnapshot().selectedJob;
+    const selectedJob = getCurrentSelectedJobForMapSync(jobs);
 
     if (selectedAoi?.aoiId) {
       await refreshSelectedAoiMapState(selectedAoi, refreshRequestId);
@@ -661,6 +697,22 @@ export async function createApp(rootElement) {
     }
   }
 
+  function getCurrentSelectedJobForMapSync(jobs) {
+    const selectedJob = selectedJobStore.getSnapshot().selectedJob;
+
+    if (!selectedJob?.jobId) {
+      return null;
+    }
+
+    const currentJob = findJobById(jobs, selectedJob.jobId);
+
+    if (!currentJob) {
+      return selectedJob;
+    }
+
+    return selectedJobStore.selectJob(currentJob);
+  }
+
   function applySelectedJobMapHighlights(selectedJob) {
     void mapController.highlightJob(selectedJob).catch((error) => {
       showErrorNotice({
@@ -713,7 +765,7 @@ export async function createApp(rootElement) {
       unsubscribeMapJobFilters();
       unsubscribeMapJobClusterSettings();
       unsubscribeMapAoiFilters();
-      unsubscribeAoiPopupJobState();
+      unsubscribeJobStoreSync();
       navbar.destroy();
       themeStore.destroy();
       jobsPanel.destroy();
@@ -731,6 +783,26 @@ function normalizeStartupJobs(jobs) {
   }
 
   return jobs;
+}
+
+function findJobById(jobs, jobId) {
+  const normalizedJobId = normalizeOptionalString(jobId);
+
+  if (!normalizedJobId || !Array.isArray(jobs)) {
+    return null;
+  }
+
+  return (
+    jobs.find((job) => normalizeOptionalString(job?.id ?? job?.jobId) === normalizedJobId) ?? null
+  );
+}
+
+function normalizeOptionalString(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  return String(value).trim();
 }
 
 function createStartupState() {
