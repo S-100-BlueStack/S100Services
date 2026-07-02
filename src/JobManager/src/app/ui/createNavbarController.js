@@ -135,9 +135,7 @@ async function ensureNavbarComponentsDefined() {
   await Promise.all([
     customElements.whenDefined("calcite-action"),
     customElements.whenDefined("calcite-button"),
-    customElements.whenDefined("calcite-checkbox"),
     customElements.whenDefined("calcite-icon"),
-    customElements.whenDefined("calcite-label"),
     customElements.whenDefined("calcite-popover"),
   ]);
 }
@@ -192,6 +190,7 @@ function createJobFilterPopoverContent({
   const closeButton = document.createElement("calcite-action");
   closeButton.id = "filters-close-button";
   closeButton.icon = "x";
+  closeButton.scale = "s";
   closeButton.text = "Close filters";
   closeButton.title = "Close filters";
 
@@ -200,24 +199,13 @@ function createJobFilterPopoverContent({
   const summaryElement = document.createElement("p");
   summaryElement.className = "job-manager-filters__summary";
   summaryElement.textContent = "No filters active";
+  summaryElement.hidden = true;
 
   const scrollElement = document.createElement("div");
   scrollElement.className = "job-manager-filters__scroll";
 
   const aoiOverviewSection = createFilterSection("AOI overview");
   aoiOverviewSection.body.classList.add("job-manager-filters__button-grid");
-
-  const aoiMapFilterStatusElement = document.createElement("p");
-  aoiMapFilterStatusElement.className = "job-manager-filters__section-status";
-  aoiMapFilterStatusElement.textContent = "AOI overview: All AOIs";
-
-  const aoiMapFilterSummaryElement = document.createElement("p");
-  aoiMapFilterSummaryElement.className = "job-manager-filters__section-hint";
-  aoiMapFilterSummaryElement.textContent =
-    "Controls which AOIs are visible on the map. Current Job filters are applied first.";
-
-  aoiOverviewSection.element.insertBefore(aoiMapFilterSummaryElement, aoiOverviewSection.body);
-  aoiOverviewSection.element.insertBefore(aoiMapFilterStatusElement, aoiMapFilterSummaryElement);
 
   const aoiMapFilterButtons = AOI_MAP_FILTER_MODE_OPTIONS.map((modeOption) =>
     createPresetButton({
@@ -248,7 +236,9 @@ function createJobFilterPopoverContent({
   aoiOverviewSection.element.append(aoiOverviewActionsElement);
 
   const quickFilterSection = createFilterSection("Quick filters");
-  const activeOnlyCheckbox = createFilterCheckbox({
+  quickFilterSection.body.classList.add("job-manager-filters__button-grid--three");
+
+  const activeOnlyButton = createToggleButton({
     label: "Active Jobs",
     onChange(checked) {
       jobFilterStore.setFilters({
@@ -256,7 +246,7 @@ function createJobFilterPopoverContent({
       });
     },
   });
-  const highPriorityOnlyCheckbox = createFilterCheckbox({
+  const highPriorityOnlyButton = createToggleButton({
     label: "High Priority",
     onChange(checked) {
       jobFilterStore.setFilters({
@@ -264,7 +254,7 @@ function createJobFilterPopoverContent({
       });
     },
   });
-  const withRelatedAoisOnlyCheckbox = createFilterCheckbox({
+  const withRelatedAoisOnlyButton = createToggleButton({
     label: "Jobs with AOIs",
     onChange(checked) {
       jobFilterStore.setFilters({
@@ -274,14 +264,16 @@ function createJobFilterPopoverContent({
   });
 
   quickFilterSection.body.append(
-    activeOnlyCheckbox.labelElement,
-    highPriorityOnlyCheckbox.labelElement,
-    withRelatedAoisOnlyCheckbox.labelElement
+    activeOnlyButton.buttonElement,
+    highPriorityOnlyButton.buttonElement,
+    withRelatedAoisOnlyButton.buttonElement
   );
 
   const statusSection = createFilterSection("Job status");
-  const statusCheckboxes = JOB_STATUS_OPTIONS.map((statusOption) =>
-    createMultiValueFilterCheckbox({
+  statusSection.body.classList.add("job-manager-filters__button-grid--three");
+
+  const statusButtons = JOB_STATUS_OPTIONS.map((statusOption) =>
+    createMultiValueFilterButton({
       label: statusOption.label,
       value: statusOption.value,
       getCurrentValues() {
@@ -295,11 +287,13 @@ function createJobFilterPopoverContent({
     })
   );
 
-  statusSection.body.append(...statusCheckboxes.map((checkbox) => checkbox.labelElement));
+  statusSection.body.append(...statusButtons.map((button) => button.buttonElement));
 
   const prioritySection = createFilterSection("Job priority");
-  const priorityCheckboxes = JOB_PRIORITY_OPTIONS.map((priorityOption) =>
-    createMultiValueFilterCheckbox({
+  prioritySection.body.classList.add("job-manager-filters__button-grid--three");
+
+  const priorityButtons = JOB_PRIORITY_OPTIONS.map((priorityOption) =>
+    createMultiValueFilterButton({
       label: priorityOption.label,
       value: priorityOption.value,
       getCurrentValues() {
@@ -313,10 +307,10 @@ function createJobFilterPopoverContent({
     })
   );
 
-  prioritySection.body.append(...priorityCheckboxes.map((checkbox) => checkbox.labelElement));
+  prioritySection.body.append(...priorityButtons.map((button) => button.buttonElement));
 
   const clusteringSection = createFilterSection("Job point clustering radius");
-  clusteringSection.body.classList.add("job-manager-filters__button-grid");
+  clusteringSection.body.classList.add("job-manager-filters__button-grid--four");
 
   const clusteringSummaryElement = document.createElement("p");
   clusteringSummaryElement.className = "job-manager-filters__section-hint";
@@ -337,7 +331,7 @@ function createJobFilterPopoverContent({
   clusteringSection.body.append(...clusterPresetButtons.map((button) => button.buttonElement));
 
   const clusterStyleSection = createFilterSection("Job point cluster style");
-  clusterStyleSection.body.classList.add("job-manager-filters__button-grid");
+  clusterStyleSection.body.classList.add("job-manager-filters__button-grid--three");
 
   const clusterStyleButtons = JOB_CLUSTER_STYLE_OPTIONS.map((styleOption) =>
     createPresetButton({
@@ -384,13 +378,11 @@ function createJobFilterPopoverContent({
     closeButton,
     summaryElement,
     clearButton,
-    activeOnlyCheckbox: activeOnlyCheckbox.checkboxElement,
-    highPriorityOnlyCheckbox: highPriorityOnlyCheckbox.checkboxElement,
-    withRelatedAoisOnlyCheckbox: withRelatedAoisOnlyCheckbox.checkboxElement,
-    statusCheckboxes,
-    priorityCheckboxes,
-    aoiMapFilterStatusElement,
-    aoiMapFilterSummaryElement,
+    activeOnlyButton: activeOnlyButton.buttonElement,
+    highPriorityOnlyButton: highPriorityOnlyButton.buttonElement,
+    withRelatedAoisOnlyButton: withRelatedAoisOnlyButton.buttonElement,
+    statusButtons,
+    priorityButtons,
     aoiMapFilterButtons,
     clearAoiOverviewButton,
     clusteringSummaryElement,
@@ -410,7 +402,7 @@ function createFilterSection(title) {
   titleElement.textContent = title;
 
   const body = document.createElement("div");
-  body.className = "job-manager-filters__checkbox-grid";
+  body.className = "job-manager-filters__button-grid";
 
   element.append(titleElement, body);
 
@@ -420,8 +412,8 @@ function createFilterSection(title) {
   };
 }
 
-function createMultiValueFilterCheckbox({ label, value, getCurrentValues, setCurrentValues }) {
-  return createFilterCheckbox({
+function createMultiValueFilterButton({ label, value, getCurrentValues, setCurrentValues }) {
+  return createToggleButton({
     label,
     value,
     onChange(checked) {
@@ -456,30 +448,26 @@ function createPresetButton({ option, onSelect }) {
   };
 }
 
-function createFilterCheckbox({ label, value = "", onChange }) {
-  const labelElement = document.createElement("calcite-label");
-  labelElement.className = "job-manager-filters__checkbox-label";
-  labelElement.layout = "inline";
+function createToggleButton({ label, value = "", onChange }) {
+  const buttonElement = document.createElement("calcite-button");
 
-  const checkboxElement = document.createElement("calcite-checkbox");
-  checkboxElement.scale = "s";
+  buttonElement.className = "job-manager-filters__toggle-button";
+  buttonElement.appearance = "outline";
+  buttonElement.kind = "neutral";
+  buttonElement.scale = "s";
+  buttonElement.textContent = label;
+  buttonElement.setAttribute("aria-pressed", "false");
 
   if (value) {
-    checkboxElement.value = value;
+    buttonElement.value = value;
   }
 
-  checkboxElement.addEventListener("calciteCheckboxChange", () => {
-    onChange(Boolean(checkboxElement.checked));
+  buttonElement.addEventListener("click", () => {
+    onChange(buttonElement.getAttribute("aria-pressed") !== "true");
   });
 
-  const textElement = document.createElement("span");
-  textElement.textContent = label;
-
-  labelElement.append(checkboxElement, textElement);
-
   return {
-    labelElement,
-    checkboxElement,
+    buttonElement,
     value,
   };
 }
@@ -487,12 +475,12 @@ function createFilterCheckbox({ label, value = "", onChange }) {
 function syncJobFilterControls({ filtersButton, filterControlRefs, filters }) {
   const hasActiveFilters = hasActiveJobFilters(filters);
 
-  filterControlRefs.activeOnlyCheckbox.checked = filters.activeOnly;
-  filterControlRefs.highPriorityOnlyCheckbox.checked = filters.highPriorityOnly;
-  filterControlRefs.withRelatedAoisOnlyCheckbox.checked = filters.withRelatedAoisOnly;
+  syncToggleButton(filterControlRefs.activeOnlyButton, filters.activeOnly);
+  syncToggleButton(filterControlRefs.highPriorityOnlyButton, filters.highPriorityOnly);
+  syncToggleButton(filterControlRefs.withRelatedAoisOnlyButton, filters.withRelatedAoisOnly);
 
-  syncValueCheckboxes(filterControlRefs.statusCheckboxes, filters.statusValues);
-  syncValueCheckboxes(filterControlRefs.priorityCheckboxes, filters.priorityValues);
+  syncValueButtons(filterControlRefs.statusButtons, filters.statusValues);
+  syncValueButtons(filterControlRefs.priorityButtons, filters.priorityValues);
 
   filterControlRefs.hasActiveJobFilters = hasActiveFilters;
   filterControlRefs.latestJobFilterSummary = getActiveJobFilterSummary(filters);
@@ -506,12 +494,6 @@ function syncAoiMapFilterControls({ filtersButton, filterControlRefs, filters })
 
   filterControlRefs.hasActiveAoiMapFilters = hasActiveFilters;
   filterControlRefs.latestAoiMapFilterSummary = aoiMapFilterSummary;
-  filterControlRefs.aoiMapFilterStatusElement.textContent = `AOI overview: ${aoiMapFilterSummary}`;
-  filterControlRefs.aoiMapFilterSummaryElement.textContent = getPresetButtonDescription({
-    buttons: filterControlRefs.aoiMapFilterButtons,
-    activeValue: filters.mode,
-    fallback: "Controls which AOIs are visible on the map. Current Job filters are applied first.",
-  });
   filterControlRefs.clearAoiOverviewButton.disabled = !hasActiveFilters;
 
   syncPresetButtons({
@@ -556,19 +538,28 @@ function syncPresetButtons({ buttons, activeValue }) {
   }
 }
 
-function syncValueCheckboxes(checkboxRefs, activeValues) {
+function syncToggleButton(buttonElement, isActive) {
+  buttonElement.appearance = isActive ? "solid" : "outline";
+  buttonElement.kind = isActive ? "brand" : "neutral";
+  buttonElement.setAttribute("aria-pressed", String(isActive));
+}
+
+function syncValueButtons(buttonRefs, activeValues) {
   const activeValueSet = new Set(activeValues);
 
-  for (const checkboxRef of checkboxRefs) {
-    checkboxRef.checkboxElement.checked = activeValueSet.has(checkboxRef.value);
+  for (const buttonRef of buttonRefs) {
+    syncToggleButton(buttonRef.buttonElement, activeValueSet.has(buttonRef.value));
   }
 }
 
 function syncCombinedSummaryFromRefs(filterControlRefs) {
-  filterControlRefs.summaryElement.textContent = getCombinedFilterSummary({
+  const summary = getCombinedFilterSummary({
     jobFilters: filterControlRefs.latestJobFilterSummary ?? "No filters active",
     aoiMapFilters: filterControlRefs.latestAoiMapFilterSummary ?? "All AOIs",
   });
+
+  filterControlRefs.summaryElement.textContent = summary;
+  filterControlRefs.summaryElement.hidden = summary === "No filters active";
 }
 
 function syncFilterClearAndIndicator({ filtersButton, filterControlRefs }) {
@@ -593,13 +584,6 @@ function getCombinedFilterSummary({ jobFilters, aoiMapFilters }) {
   }
 
   return parts.length > 0 ? parts.join(", ") : "No filters active";
-}
-
-function getPresetButtonDescription({ buttons, activeValue, fallback }) {
-  const activeButton = buttons.find((button) => button.value === activeValue);
-  const description = normalizeOptionalString(activeButton?.description);
-
-  return description || fallback;
 }
 
 function getRequiredElement(rootElement, selector) {

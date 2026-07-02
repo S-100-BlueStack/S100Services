@@ -512,6 +512,9 @@ Phase 17 polish behavior:
 - Filters popover uses a fixed header and footer with a scrollable body so global filter actions remain available in smaller viewports.
 - The scrollable body contains the AOI overview, Job filters and Job point clustering controls.
 - The layout fix does not move filter ownership into app-shell UI; `createNavbarController` still only composes controls and forwards changes to feature stores.
+- Filter popover controls use compact button groups for short known option sets.
+- Quick filters, Job status and Job priority are still multi-select filter state even though they are rendered as toggle buttons instead of checkboxes.
+- AOI overview mode descriptions remain available as button titles, but duplicate visible status/hint text is intentionally avoided to keep the popover lightweight.
 
 ### Job point clustering
 

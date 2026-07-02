@@ -2171,14 +2171,15 @@ Make the existing AOI overview filtering easier to understand and safer to opera
 
 Tasks:
 
-| ID      | Task                                              | Status | Notes                                                                                                                      |
-| ------- | ------------------------------------------------- | -----: | -------------------------------------------------------------------------------------------------------------------------- |
-| JM-1701 | Clarify AOI overview controls                     |   Done | Filters popover now shows an AOI-specific state line, contextual mode descriptions and a dedicated clear action.           |
-| JM-1702 | Separate Job and AOI filter summaries             |   Done | Combined filter summary now prefixes Job filters and AOI overview state so active filters are easier to read.              |
-| JM-1703 | Add AOI overview no-match map feedback            |   Done | Map status warns when active AOI overview filters produce no matching AOIs.                                                |
-| JM-1704 | Add AOI relation-id fallback map feedback         |   Done | Map status warns when relation AOI ids cannot safely filter the current AOI FeatureLayer and all AOIs are shown.           |
-| JM-1705 | Keep deferred AOI work explicit                   |   Done | Phase 17 does not add AOI details, canonical queried AOI state, AOI clustering or final backend relation assumptions.      |
-| JM-1706 | Keep filter actions accessible in small viewports |   Done | Filters popover now uses a fixed header/footer with a scrollable filter body, so global `Clear filters` remains reachable. |
+| ID      | Task                                              | Status | Notes                                                                                                                                        |
+| ------- | ------------------------------------------------- | -----: | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-1701 | Clarify AOI overview controls                     |   Done | Filters popover now shows an AOI-specific state line, contextual mode descriptions and a dedicated clear action.                             |
+| JM-1702 | Separate Job and AOI filter summaries             |   Done | Combined filter summary now prefixes Job filters and AOI overview state so active filters are easier to read.                                |
+| JM-1703 | Add AOI overview no-match map feedback            |   Done | Map status warns when active AOI overview filters produce no matching AOIs.                                                                  |
+| JM-1704 | Add AOI relation-id fallback map feedback         |   Done | Map status warns when relation AOI ids cannot safely filter the current AOI FeatureLayer and all AOIs are shown.                             |
+| JM-1705 | Keep deferred AOI work explicit                   |   Done | Phase 17 does not add AOI details, canonical queried AOI state, AOI clustering or final backend relation assumptions.                        |
+| JM-1706 | Keep filter actions accessible in small viewports |   Done | Filters popover now uses a fixed header/footer with a scrollable filter body, so global `Clear filters` remains reachable.                   |
+| JM-1707 | Compact filter popover controls                   |   Done | Filter popover controls now use compact button groups for AOI overview, quick filters, Job status, Job priority and Job point cluster style. |
 
 Exit criteria:
 
@@ -2203,6 +2204,10 @@ Implementation notes:
 - Filters popover layout keeps the header, current filter summary and global action bar outside the scrollable filter body.
 - The global `Clear filters` action remains visible even when the filter content is taller than the viewport.
 - The filter layout change is UI-only and does not change Job filter, AOI overview filter or clustering state behavior.
+- Filter popover sections use compact toggle button groups instead of checkbox rows where the choices are short and known.
+- Quick filters, Job status and Job priority remain multi-select filters even though they are rendered as button groups.
+- AOI overview duplicate status/hint text was removed because the active state is already shown in the popover summary.
+- The compact layout reduces popover width, padding and repeated explanatory text without changing filter state ownership.
 
 ## 13. Suggested implementation order
 
