@@ -52,10 +52,13 @@ Current known baseline:
 - Job details mode has sticky panel navigation, sticky selected Job context, status mutation controls and read-only Job metadata.
 - AOI overview filters are available from the Filters popover and can filter AOIs by visible Jobs, active Jobs and high-priority Jobs.
 - Job status mutations now sync map Job layers, AOI renderer summaries and active map scope/highlight state without requiring manual refresh.
+- AOI overview polish is implemented in the Filters popover with clearer AOI-specific status text, contextual mode descriptions and a dedicated `Clear AOI overview` action.
+- AOI overview map filtering now surfaces a map warning when the active overview produces no matching AOIs or when relation ids are incompatible with the current AOI service identifier field.
 
 Current known limitations:
 
 - AOI renderer enrichment is still asynchronous after filter changes, but mutation-driven AOI renderer flashing has been fixed.
+- AOI overview filtering can only apply destructive AOI layer filtering when relation AOI ids are compatible with the current provisional AOI `GlobalID` field.
 - AOI clustering or AOI cluster-like overview is still deferred until real AOI geometry density and shape are confirmed.
 - Job polygon clustering is deferred because centroid-based clustering could hide real polygon footprint.
 - Final AOI Feature Service fields, auth requirements, geometry characteristics and backend relation ownership remain unconfirmed.
@@ -2160,6 +2163,43 @@ Exit criteria:
 - architecture notes remain aligned with implemented app composition and map ownership
 - no code behavior changes are introduced
 
+## Phase 17 - AOI overview polish
+
+Goal:
+
+Make the existing AOI overview filtering easier to understand and safer to operate without introducing AOI details, AOI clustering or a final AOI/backend relation contract.
+
+Tasks:
+
+| ID      | Task                                      | Status | Notes                                                                                                                 |
+| ------- | ----------------------------------------- | -----: | --------------------------------------------------------------------------------------------------------------------- |
+| JM-1701 | Clarify AOI overview controls             |   Done | Filters popover now shows an AOI-specific state line, contextual mode descriptions and a dedicated clear action.      |
+| JM-1702 | Separate Job and AOI filter summaries     |   Done | Combined filter summary now prefixes Job filters and AOI overview state so active filters are easier to read.         |
+| JM-1703 | Add AOI overview no-match map feedback    |   Done | Map status warns when active AOI overview filters produce no matching AOIs.                                           |
+| JM-1704 | Add AOI relation-id fallback map feedback |   Done | Map status warns when relation AOI ids cannot safely filter the current AOI FeatureLayer and all AOIs are shown.      |
+| JM-1705 | Keep deferred AOI work explicit           |   Done | Phase 17 does not add AOI details, canonical queried AOI state, AOI clustering or final backend relation assumptions. |
+
+Exit criteria:
+
+- AOI overview controls are understandable without opening docs
+- active AOI overview state is visibly separate from Job filters
+- `Clear AOI overview` resets only AOI overview filtering
+- global `Clear filters` still clears both Job filters and AOI overview filtering
+- no-match AOI overview states are communicated on the map
+- incompatible relation-id fallback is communicated on the map
+- AOI details remain deferred
+- AOI clustering remains deferred
+- no final backend/AOI relation contract is introduced
+
+Implementation notes:
+
+- `createNavbarController` still owns Filters popover composition and does not own AOI filter rules.
+- AOI overview mode state remains owned by `features/map/state/aoiMapFilterStore.js`.
+- AOI overview filtering still uses `features/map/filters/applyAoiLayerFilters.js`.
+- Map controller restores the normal AOI readiness status after AOI overview filters are cleared or successfully applied.
+- The map warning for incompatible AOI relation ids is informational and preserves the non-destructive fallback to all AOIs.
+- The map warning for no matching AOIs is shown only when the active filter safely produced an empty AOI set.
+
 ## 13. Suggested implementation order
 
 Recommended order:
@@ -2357,4 +2397,5 @@ Recommended next tasks:
 | JM-NEXT-023 | Validate Phase 14 AOI filter UX                          |        Done | AOI overview filters work with current service/mock data and no regression was observed in existing map/list flows.                |
 | JM-NEXT-024 | Implement mutation-to-map sync                           |        Done | Successful Job status mutations now refresh map Job layers, AOI renderer summaries and active map context.                         |
 | JM-NEXT-025 | Clean final docs/status drift after Phase 15             |        Done | Tracker, architecture and backend-contract status drift has been cleaned after mutation-to-map sync.                               |
-| JM-NEXT-026 | Choose next feature phase from clean baseline            | Not started | Candidate directions: AOI overview polish, backend adapter preparation, AOI service readiness or UX cleanup.                       |
+| JM-NEXT-026 | Polish AOI overview filters from clean baseline          |        Done | AOI overview controls and map feedback have been clarified without adding AOI details or AOI clustering.                           |
+| JM-NEXT-027 | Choose next feature phase after AOI overview polish      | Not started | Candidate directions: backend adapter preparation, AOI service readiness, UX cleanup or final AOI/backend input review.            |

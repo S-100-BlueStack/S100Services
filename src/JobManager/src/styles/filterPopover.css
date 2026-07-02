@@ -46,6 +46,19 @@
   color: var(--jm-text-muted);
 }
 
+.job-manager-filters__section-status {
+  margin: 0;
+  color: var(--jm-text);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.job-manager-filters__section-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
 .job-manager-filter-popover__quick-filters {
   display: flex;
   flex-wrap: wrap;

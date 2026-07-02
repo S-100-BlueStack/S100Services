@@ -204,10 +204,17 @@ function createJobFilterPopoverContent({
   const aoiOverviewSection = createFilterSection("AOI overview");
   aoiOverviewSection.body.classList.add("job-manager-filters__button-grid");
 
+  const aoiMapFilterStatusElement = document.createElement("p");
+  aoiMapFilterStatusElement.className = "job-manager-filters__section-status";
+  aoiMapFilterStatusElement.textContent = "AOI overview: All AOIs";
+
   const aoiMapFilterSummaryElement = document.createElement("p");
   aoiMapFilterSummaryElement.className = "job-manager-filters__section-hint";
-  aoiMapFilterSummaryElement.textContent = "Controls which AOIs are visible on the map.";
+  aoiMapFilterSummaryElement.textContent =
+    "Controls which AOIs are visible on the map. Current Job filters are applied first.";
+
   aoiOverviewSection.element.insertBefore(aoiMapFilterSummaryElement, aoiOverviewSection.body);
+  aoiOverviewSection.element.insertBefore(aoiMapFilterStatusElement, aoiMapFilterSummaryElement);
 
   const aoiMapFilterButtons = AOI_MAP_FILTER_MODE_OPTIONS.map((modeOption) =>
     createPresetButton({
@@ -221,6 +228,21 @@ function createJobFilterPopoverContent({
   );
 
   aoiOverviewSection.body.append(...aoiMapFilterButtons.map((button) => button.buttonElement));
+
+  const aoiOverviewActionsElement = document.createElement("div");
+  aoiOverviewActionsElement.className = "job-manager-filters__section-actions";
+
+  const clearAoiOverviewButton = document.createElement("calcite-button");
+  clearAoiOverviewButton.appearance = "outline";
+  clearAoiOverviewButton.kind = "neutral";
+  clearAoiOverviewButton.scale = "s";
+  clearAoiOverviewButton.textContent = "Clear AOI overview";
+  clearAoiOverviewButton.addEventListener("click", () => {
+    aoiMapFilterStore?.clearFilters?.();
+  });
+
+  aoiOverviewActionsElement.append(clearAoiOverviewButton);
+  aoiOverviewSection.element.append(aoiOverviewActionsElement);
 
   const quickFilterSection = createFilterSection("Quick filters");
   const activeOnlyCheckbox = createFilterCheckbox({
@@ -240,6 +262,7 @@ function createJobFilterPopoverContent({
     },
   });
   const withRelatedAoisOnlyCheckbox = createFilterCheckbox({
+    label: "Jobs with AOIs",
     onChange(checked) {
       jobFilterStore.setFilters({
         withRelatedAoisOnly: checked,
@@ -364,8 +387,10 @@ function createJobFilterPopoverContent({
     withRelatedAoisOnlyCheckbox: withRelatedAoisOnlyCheckbox.checkboxElement,
     statusCheckboxes,
     priorityCheckboxes,
+    aoiMapFilterStatusElement,
     aoiMapFilterSummaryElement,
     aoiMapFilterButtons,
+    clearAoiOverviewButton,
     clusteringSummaryElement,
     clusterPresetButtons,
     clusterStyleButtons,
@@ -425,6 +450,7 @@ function createPresetButton({ option, onSelect }) {
   return {
     buttonElement,
     value: option.value,
+    description: option.description,
   };
 }
 
@@ -474,9 +500,17 @@ function syncJobFilterControls({ filtersButton, filterControlRefs, filters }) {
 
 function syncAoiMapFilterControls({ filtersButton, filterControlRefs, filters }) {
   const hasActiveFilters = hasActiveAoiMapFilters(filters);
+  const aoiMapFilterSummary = getAoiMapFilterSummary(filters);
 
   filterControlRefs.hasActiveAoiMapFilters = hasActiveFilters;
-  filterControlRefs.latestAoiMapFilterSummary = getAoiMapFilterSummary(filters);
+  filterControlRefs.latestAoiMapFilterSummary = aoiMapFilterSummary;
+  filterControlRefs.aoiMapFilterStatusElement.textContent = `AOI overview: ${aoiMapFilterSummary}`;
+  filterControlRefs.aoiMapFilterSummaryElement.textContent = getPresetButtonDescription({
+    buttons: filterControlRefs.aoiMapFilterButtons,
+    activeValue: filters.mode,
+    fallback: "Controls which AOIs are visible on the map. Current Job filters are applied first.",
+  });
+  filterControlRefs.clearAoiOverviewButton.disabled = !hasActiveFilters;
 
   syncPresetButtons({
     buttons: filterControlRefs.aoiMapFilterButtons,
@@ -549,14 +583,21 @@ function getCombinedFilterSummary({ jobFilters, aoiMapFilters }) {
   const parts = [];
 
   if (normalizedJobFilters && normalizedJobFilters !== "No filters active") {
-    parts.push(normalizedJobFilters);
+    parts.push(`Jobs: ${normalizedJobFilters}`);
   }
 
   if (normalizedAoiMapFilters && normalizedAoiMapFilters !== "All AOIs") {
-    parts.push(normalizedAoiMapFilters);
+    parts.push(`AOI overview: ${normalizedAoiMapFilters}`);
   }
 
   return parts.length > 0 ? parts.join(", ") : "No filters active";
+}
+
+function getPresetButtonDescription({ buttons, activeValue, fallback }) {
+  const activeButton = buttons.find((button) => button.value === activeValue);
+  const description = normalizeOptionalString(activeButton?.description);
+
+  return description || fallback;
 }
 
 function getRequiredElement(rootElement, selector) {
