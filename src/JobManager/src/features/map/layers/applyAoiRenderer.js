@@ -1,10 +1,11 @@
 import { createDefaultJobFilters } from "../../jobs/domain/jobFilters.js";
 import * as defaultRelationService from "../../relations/services/relationService.js";
-import { createAoiJobSummaryRenderer, createDefaultAoiRenderer } from "./aoiRenderer.js";
+import { createAoiJobSummaryRenderer } from "./aoiRenderer.js";
 
 export async function applyAoiJobSummaryRenderer({
   aoiLayer,
   relationService = defaultRelationService,
+  jobs,
   jobFilters,
   shouldApply = () => true,
 } = {}) {
@@ -26,8 +27,6 @@ export async function applyAoiJobSummaryRenderer({
 
   const resolvedJobFilters = jobFilters ?? createDefaultJobFilters();
 
-  aoiLayer.renderer = createDefaultAoiRenderer();
-
   if (!relationService?.loadAoiJobRelationSnapshot) {
     return {
       ok: false,
@@ -37,6 +36,7 @@ export async function applyAoiJobSummaryRenderer({
   }
 
   const relationSnapshotResult = await relationService.loadAoiJobRelationSnapshot({
+    jobs,
     jobFilters: resolvedJobFilters,
   });
 

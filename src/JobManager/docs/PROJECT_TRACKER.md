@@ -2127,6 +2127,8 @@ Implementation notes:
 - Map sync after mutation uses the current shared Jobs store snapshot, so the map receives the same Job data as the Jobs panel.
 - If map sync fails after a successful mutation, a non-blocking `Map sync failed` notice is shown.
 - Generated mock Jobs remain intentionally excluded from the visible Jobs store until refresh or panel reopen.
+- AOI renderer refresh after Job status mutation keeps the existing AOI renderer visible while new relation summaries are calculated. This avoids a brief neutral-color flash on AOIs with related Jobs.
+- AOI renderer refresh now uses the shared Jobs store snapshot when available, matching the Jobs panel and mutation-to-map sync behavior.
 
 ## 13. Suggested implementation order
 

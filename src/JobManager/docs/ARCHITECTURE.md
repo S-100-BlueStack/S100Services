@@ -1050,6 +1050,8 @@ Rules:
 - Map controller owns refreshing ArcGIS Job layer data and reapplying map-specific presentation state.
 - Generated mock Jobs remain queued in the mock backend and should not appear on the map until they become part of the visible Jobs store after refresh or panel reopen.
 - If map sync fails after a successful Job mutation, the mutation remains successful and a non-blocking map sync notice can be shown.
+- AOI renderer refresh should not reset the AOI layer to the neutral default renderer before relation summaries are ready. Keep the previous renderer visible until the replacement renderer can be applied.
+- AOI renderer summaries should use the shared Jobs store snapshot when available, so generated mock Jobs do not affect map-derived summaries before refresh or panel reopen.
 
 ### Startup loader and required data gate
 

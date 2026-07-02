@@ -552,13 +552,14 @@ export function createMapController({
 
     void applyAoiJobSummaryRenderer({
       aoiLayer,
+      jobs: getJobs?.(),
       jobFilters: currentJobFilters,
       shouldApply() {
         return !isDestroyed && rendererRequestId === aoiRendererRequestId;
       },
     }).catch(() => {
       if (!isDestroyed && rendererRequestId === aoiRendererRequestId) {
-        // Keep the map usable if the mock relation source fails while the renderer is being enriched.
+        // Keep the existing renderer if summary enrichment fails, so AOIs do not flash to neutral.
         aoiLayer?.set?.("renderer", aoiLayer.renderer);
       }
     });
