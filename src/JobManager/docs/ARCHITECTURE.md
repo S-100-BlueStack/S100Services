@@ -1053,6 +1053,14 @@ Rules:
 - AOI renderer refresh should not reset the AOI layer to the neutral default renderer before relation summaries are ready. Keep the previous renderer visible until the replacement renderer can be applied.
 - AOI renderer summaries should use the shared Jobs store snapshot when available, so generated mock Jobs do not affect map-derived summaries before refresh or panel reopen.
 
+Implementation note:
+
+Mutation-to-map sync uses the same `mapController.refreshJobData({ jobs })` path as manual refresh, but it is triggered from app composition when `jobStore` reports a successful `jobStatusUpdated` change.
+
+The Jobs UI remains unaware of the map. Status buttons call the Jobs store only. App composition coordinates the map update because it owns access to the Jobs store snapshot, selected AOI state, selected Job state and map controller.
+
+The AOI renderer keeps the previous renderer active while relation summaries are rebuilt. This avoids a short neutral-color flash on AOIs that are colored because they have related Jobs.
+
 ### Startup loader and required data gate
 
 Status: Done

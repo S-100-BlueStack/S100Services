@@ -94,6 +94,31 @@ Job marked Done
   -> created Job becomes visible after refresh or panel reopen
 ```
 
+Current frontend mutation-to-map sync behavior:
+
+```txt
+Visible Job status updated
+  -> Jobs store updates the visible Job snapshot
+  -> app composition detects a successful jobStatusUpdated change
+  -> map Job layers are refreshed from the shared Jobs store snapshot
+  -> AOI renderer summaries are rebuilt from the same visible Jobs snapshot
+  -> active map scope/highlight state is reapplied best-effort
+```
+
+Generated Job behavior remains intentionally different:
+
+```txt
+Generated mock Job created
+  -> generated Job is stored in mock backend
+  -> generated Job is returned for notice/future compatibility
+  -> generated Job is not inserted into the visible Jobs store
+  -> generated Job is not rendered on the map until refresh or panel reopen
+```
+
+Backend implication:
+
+The future backend can still return `createdJobs` from a status mutation response, but the current frontend treats those as queued work for user notice purposes. New Jobs should not appear in the current visible map/list snapshot until the frontend receives them through the normal load/refresh path, unless that product decision changes later.
+
 Backend implication:
 
 The future backend may choose whether status mutation responses can include newly created follow-up Jobs. The current frontend supports a `createdJobs` mutation result shape for notices and future compatibility, but the current visible Jobs list intentionally waits for refresh before showing generated Jobs.
@@ -198,8 +223,8 @@ Current limitations:
 - editing Job geometry is not supported
 - Job polygon clustering is not supported
 - final backend geometry ownership is not confirmed
-- map Job layers are refreshed from the shared startup/manual-refresh Jobs snapshot
-- individual Job status mutations update the Jobs panel and AOI popup summaries immediately, while map Job layer presentation remains unchanged until refresh
+- map Job layers are refreshed from the shared startup/manual-refresh Jobs snapshot and from successful visible Job status mutations
+- generated mock Jobs are intentionally not inserted into map Job layers until they become part of the visible Jobs store after refresh or panel reopen
 
 Backend assumptions remain unchanged:
 
