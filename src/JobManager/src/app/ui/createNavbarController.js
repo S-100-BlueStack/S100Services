@@ -199,12 +199,15 @@ function createJobFilterPopoverContent({
   const summaryElement = document.createElement("p");
   summaryElement.className = "job-manager-filters__summary";
   summaryElement.textContent = "No filters active";
-  summaryElement.hidden = true;
 
   const scrollElement = document.createElement("div");
   scrollElement.className = "job-manager-filters__scroll";
 
-  const aoiOverviewSection = createFilterSection("AOI overview");
+  const aoiOverviewSection = createFilterSection({
+    title: "AOI overview",
+    description:
+      "Controls which AOIs are visible on the map. Current Job filters are applied first.",
+  });
   aoiOverviewSection.body.classList.add("job-manager-filters__button-grid");
 
   const aoiMapFilterButtons = AOI_MAP_FILTER_MODE_OPTIONS.map((modeOption) =>
@@ -235,7 +238,11 @@ function createJobFilterPopoverContent({
   aoiOverviewActionsElement.append(clearAoiOverviewButton);
   aoiOverviewSection.element.append(aoiOverviewActionsElement);
 
-  const quickFilterSection = createFilterSection("Quick filters");
+  const quickFilterSection = createFilterSection({
+    title: "Quick filters",
+    description:
+      "Toggle common Job filters. Multiple quick filters can be active at the same time.",
+  });
   quickFilterSection.body.classList.add("job-manager-filters__button-grid--three");
 
   const activeOnlyButton = createToggleButton({
@@ -269,7 +276,11 @@ function createJobFilterPopoverContent({
     withRelatedAoisOnlyButton.buttonElement
   );
 
-  const statusSection = createFilterSection("Job status");
+  const statusSection = createFilterSection({
+    title: "Job status",
+    description:
+      "Show Jobs matching one or more selected statuses. Done Jobs are hidden by default unless Done is selected.",
+  });
   statusSection.body.classList.add("job-manager-filters__button-grid--three");
 
   const statusButtons = JOB_STATUS_OPTIONS.map((statusOption) =>
@@ -289,7 +300,10 @@ function createJobFilterPopoverContent({
 
   statusSection.body.append(...statusButtons.map((button) => button.buttonElement));
 
-  const prioritySection = createFilterSection("Job priority");
+  const prioritySection = createFilterSection({
+    title: "Job priority",
+    description: "Show Jobs matching one or more selected priorities.",
+  });
   prioritySection.body.classList.add("job-manager-filters__button-grid--three");
 
   const priorityButtons = JOB_PRIORITY_OPTIONS.map((priorityOption) =>
@@ -309,7 +323,10 @@ function createJobFilterPopoverContent({
 
   prioritySection.body.append(...priorityButtons.map((button) => button.buttonElement));
 
-  const clusteringSection = createFilterSection("Job point clustering radius");
+  const clusteringSection = createFilterSection({
+    title: "Job point clustering radius",
+    description: "Controls how close Job points must be before they cluster on the map.",
+  });
   clusteringSection.body.classList.add("job-manager-filters__button-grid--four");
 
   const clusteringSummaryElement = document.createElement("p");
@@ -330,7 +347,10 @@ function createJobFilterPopoverContent({
 
   clusteringSection.body.append(...clusterPresetButtons.map((button) => button.buttonElement));
 
-  const clusterStyleSection = createFilterSection("Job point cluster style");
+  const clusterStyleSection = createFilterSection({
+    title: "Job point cluster style",
+    description: "Controls how Job point clusters are visualized on the map.",
+  });
   clusterStyleSection.body.classList.add("job-manager-filters__button-grid--three");
 
   const clusterStyleButtons = JOB_CLUSTER_STYLE_OPTIONS.map((styleOption) =>
@@ -393,13 +413,21 @@ function createJobFilterPopoverContent({
   };
 }
 
-function createFilterSection(title) {
+function createFilterSection({ title, description = "" }) {
   const element = document.createElement("section");
   element.className = "job-manager-filters__section";
 
   const titleElement = document.createElement("h3");
   titleElement.className = "job-manager-filters__section-title";
   titleElement.textContent = title;
+
+  const normalizedDescription = normalizeOptionalString(description);
+
+  if (normalizedDescription) {
+    titleElement.title = normalizedDescription;
+    titleElement.setAttribute("aria-label", `${title}. ${normalizedDescription}`);
+    titleElement.classList.add("job-manager-filters__section-title--hinted");
+  }
 
   const body = document.createElement("div");
   body.className = "job-manager-filters__button-grid";
@@ -559,7 +587,6 @@ function syncCombinedSummaryFromRefs(filterControlRefs) {
   });
 
   filterControlRefs.summaryElement.textContent = summary;
-  filterControlRefs.summaryElement.hidden = summary === "No filters active";
 }
 
 function syncFilterClearAndIndicator({ filtersButton, filterControlRefs }) {

@@ -2180,6 +2180,7 @@ Tasks:
 | JM-1705 | Keep deferred AOI work explicit                   |   Done | Phase 17 does not add AOI details, canonical queried AOI state, AOI clustering or final backend relation assumptions.                        |
 | JM-1706 | Keep filter actions accessible in small viewports |   Done | Filters popover now uses a fixed header/footer with a scrollable filter body, so global `Clear filters` remains reachable.                   |
 | JM-1707 | Compact filter popover controls                   |   Done | Filter popover controls now use compact button groups for AOI overview, quick filters, Job status, Job priority and Job point cluster style. |
+| JM-1708 | Stabilize filter summary and add section hints    |   Done | Filter summary remains visible with `No filters active`, and compact section headers expose hover hints without adding visible text blocks.  |
 
 Exit criteria:
 
@@ -2208,6 +2209,9 @@ Implementation notes:
 - Quick filters, Job status and Job priority remain multi-select filters even though they are rendered as button groups.
 - AOI overview duplicate status/hint text was removed because the active state is already shown in the popover summary.
 - The compact layout reduces popover width, padding and repeated explanatory text without changing filter state ownership.
+- Filter summary space is always rendered so the popover layout does not jump when filters are toggled.
+- Section descriptions are available through hover hints on section headers instead of visible helper text blocks.
+- Header hints keep the compact layout while preserving lightweight explanation for short filter groups.
 
 ## 13. Suggested implementation order
 

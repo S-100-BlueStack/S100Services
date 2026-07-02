@@ -45,10 +45,6 @@
   background: var(--jm-surface-alt);
 }
 
-.job-manager-filters__summary[hidden] {
-  display: none;
-}
-
 .job-manager-filters__scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -71,6 +67,10 @@
   color: var(--jm-text);
   font-size: 0.92rem;
   font-weight: 700;
+}
+
+.job-manager-filters__section-title--hinted {
+  cursor: help;
 }
 
 .job-manager-filters__section-hint {

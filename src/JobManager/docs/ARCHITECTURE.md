@@ -515,6 +515,8 @@ Phase 17 polish behavior:
 - Filter popover controls use compact button groups for short known option sets.
 - Quick filters, Job status and Job priority are still multi-select filter state even though they are rendered as toggle buttons instead of checkboxes.
 - AOI overview mode descriptions remain available as button titles, but duplicate visible status/hint text is intentionally avoided to keep the popover lightweight.
+- Filter summary remains visible even when no filters are active, using `No filters active` to avoid layout pop-in when filters are toggled.
+- Compact filter sections expose explanations through header hover hints instead of visible helper text, keeping the popover lightweight.
 
 ### Job point clustering
 
