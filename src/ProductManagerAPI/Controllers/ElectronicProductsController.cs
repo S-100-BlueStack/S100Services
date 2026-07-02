@@ -94,23 +94,9 @@ namespace ProductManagerAPI.Controllers
         public async Task<IActionResult> GetElectronicProduct(string name) {
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse<ResponseTypes.ProductResponse>();
+
             var electronicProduct = this._electronicProductManager.ElectronicProduct(name);
-            var news = CatalogueElement.featureBindingsDefinitions;
-            var fbds = electronicProduct.GetFeatureBindingsDefinitions();
-            if (electronicProduct is CatalogueElement catalogueElement) {
-      
-                var fbd = catalogueElement.GetFeatureBindingsDefinitions();
-            
-                var ibd = catalogueElement.GetInformationBindingsDefinitions();
-            }
 
-            if(electronicProduct is NavigationalProduct navProd) {
-                var value = navProd.originalProductNumber;
-                var fbd = navProd.GetFeatureBindingsDefinitions();
-                var ibd = navProd.GetInformationBindingsDefinitions();
-            }
-
-            // var s57product = _electronicProductManager.ElectronicProduct(name);
 
             if (electronicProduct == null) {
                 response.Success = false;

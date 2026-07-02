@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ProductManagerAPI.Data.Repositories;
 using ProductManagerAPI.Jobs;
+using ProductManagerAPI.Services.Locking;
 using System.Security.Cryptography;
 using static ProductManagerAPI.Models.ResponseTypes;
 
@@ -11,49 +12,49 @@ namespace ProductManagerAPI.Controllers
     [Authorize("productmanager:distribute")]
     [ApiController]
     [Route("[controller]")]
-    public class UploadController(ILogger<UploadController> logger, IBackgroundJobClient backgroundJobClient, IRecurringJobManager recurringJobManager, IProductRepository productRepository) : ControllerBase
+    public class UploadController(ILogger<UploadController> logger, IBackgroundJobClient backgroundJobClient, IRecurringJobManager recurringJobManager, IProductRepository productRepository, IDatasetLockService datasetLockService) : ControllerBase
     {
         private readonly IBackgroundJobClient _backgroundJobClient = backgroundJobClient;
         private readonly IRecurringJobManager _recurringJobManager = recurringJobManager;
         private readonly ILogger<UploadController> _logger = logger;
         private readonly IProductRepository _productRepository = productRepository;
+        private readonly IDatasetLockService _datasetLockService = datasetLockService;
 
 
         /// <summary>
         /// Enqueues a singular product to send to IC-ENC immedietly.
         /// </summary>
         /// <returns>The job id</returns>
-        [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status404NotFound, "application/json")]
+        [ProducesResponseType(typeof(string), StatusCodes.Status409Conflict, "application/json")]
         [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpPut("{datasetName}", Name = "upload")]
         public async Task<IActionResult> UploadSingularProduct(string datasetName, CancellationToken cancellationToken) {
             _logger.LogInformation("{method}({jobType}. User: {user})", nameof(UploadSingularProduct), datasetName, User?.Identity?.Name ?? string.Empty);
 
+            // Check if product is locked
+            await using var datasetLock = await _datasetLockService.TryAcquireAsync(datasetName, cancellationToken);
+
+            if (datasetLock == null)
+                return Conflict($"Dataset {datasetName} is already being processed.");
+
             var product = await _productRepository.GetCurrentByNameAsync(datasetName);
 
             if (product == null)
-                return NotFound();
+                return NotFound($"Could not find dataset with {datasetName}");
 
-            if (product.State == Data.Models.ProductState.Frozen)
-                return BadRequest($"Product {datasetName} is frozen and cannot be uploaded.");
-
-            if (product.State == Data.Models.ProductState.InTransit)
-                return BadRequest($"Product {datasetName} is currently in transit and cannot be uploaded.");
+            if (product.State != Data.Models.ProductState.Exported) {
+                _logger.LogWarning("Product is not in expected state. Expected: {e}. Actual {a}", Data.Models.ProductState.Exported, product.State);
+                return BadRequest($"Product is in the wrong state for uploading: {product.State}");
+            }
 
 
             var id = _backgroundJobClient.Enqueue<UploadSingularProductJob>(j => j.RunAsync(datasetName, cancellationToken));
-#if DEBUG
-            var rng = new Random();
-            var ranNum = rng.NextInt64(1, 4);
-            if (ranNum == 1) {
-                return this.UnprocessableEntity();
-            }
-            else if (ranNum == 2) {
-                return this.Forbid();
-            }
-#endif
 
-            return this.Ok(id);
+            _logger.LogInformation("{UploadSingularProductJob} with jobId enqueued {id}", nameof(UploadSingularProductJob), id);
+
+            return Ok($"UploadSingularProductJob enqueued with id: {id}");
         }
 
 

@@ -5,6 +5,7 @@ using ProductManagerAPI.Data.Repositories;
 using ProductManagerAPI.Services.Export;
 using ProductManagerAPI.Services.Locking;
 using S100FC.ProductCatalogue;
+using S100FC.S128.SimpleAttributes;
 using S100FC.YAML;
 using System.Diagnostics;
 using static ProductManagerAPI.Models.RequestTypes;
@@ -33,9 +34,10 @@ namespace ProductManagerAPI.Controllers
         /// <param name="exportTarget">The target format for the export(s).</param>
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpPost("{name}/newedition", Name = "NewEdition")]
-        public async Task<IActionResult> NewEdition(string name, Models.RequestTypes.ExportFormat exportTarget = Models.RequestTypes.ExportFormat.S100) {
+        public async Task<IActionResult> NewEdition(string name, CancellationToken cancellationToken, Models.RequestTypes.ExportFormat exportTarget = Models.RequestTypes.ExportFormat.S100) {
             var user = User?.Identity?.Name;
             _logger.LogInformation("{NewEdition} called with name: {name} by user: {user}", nameof(NewEdition), name, user);
 
@@ -52,11 +54,17 @@ namespace ProductManagerAPI.Controllers
                 return StatusCode(StatusCodes.Status404NotFound, response);
             }
 
-            // Check if product is being
-            await using var datasetLock = await _datasetLockService.AcquireAsync(name);
+            // Check if product is locked
+            await using var datasetLock = await _datasetLockService.TryAcquireAsync(name, cancellationToken);
+
+            if (datasetLock == null) {
+                response.Success = false;
+                response.Message = ($"Dataset {name} is already being processed.");
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return StatusCode(StatusCodes.Status409Conflict, response);
+            }
 
 
-            // long-running work here
 
             // Create YAML Dataset
             var dataset = await _electronicProductManager.CreateNewEditionAsync(name);
@@ -124,7 +132,7 @@ namespace ProductManagerAPI.Controllers
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpPost("{name}/newupdate", Name = "NewUpdate")]
-        public async Task<IActionResult> NewUpdate(string name = "101DK0040349E", Models.RequestTypes.ExportFormat exportTarget = Models.RequestTypes.ExportFormat.S100) {
+        public async Task<IActionResult> NewUpdate(string name, CancellationToken cancellationToken, Models.RequestTypes.ExportFormat exportTarget = Models.RequestTypes.ExportFormat.S100) {
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse();
 
@@ -281,7 +289,7 @@ namespace ProductManagerAPI.Controllers
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpPost("{name}/rollback", Name = "RollBack")]
-        public async Task<IActionResult> RollBack(string name, Models.RequestTypes.ExportFormat exportTarget = Models.RequestTypes.ExportFormat.S100) {
+        public async Task<IActionResult> RollBack(string name, CancellationToken cancellationToken, Models.RequestTypes.ExportFormat exportTarget = Models.RequestTypes.ExportFormat.S100) {
             var user = User?.Identity?.Name;
             _logger.LogInformation("{method} called with name: {name} by user: {user}", nameof(RollBack), name, user);
             var sw = Stopwatch.StartNew();
@@ -296,7 +304,15 @@ namespace ProductManagerAPI.Controllers
                 return StatusCode(StatusCodes.Status404NotFound, response);
             }
 
-            await using var datasetLock = await _datasetLockService.AcquireAsync(name);
+            await using var datasetLock = await _datasetLockService.TryAcquireAsync(name, cancellationToken);
+
+
+            if (datasetLock == null) {
+                response.Success = false;
+                response.Message = ($"Dataset {name} is already being processed.");
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return StatusCode(StatusCodes.Status409Conflict, response);
+            }
 
             int oldEdition = product.editionNumber!.Value;
             int oldUpdate = product.updateNumber.GetValueOrDefault();

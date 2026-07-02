@@ -5,8 +5,8 @@
         Task RunAsync(CancellationToken token);
     }
 
-    public interface IBackgroundJob<TArg>
+    public interface IBackgroundJob<in TArgs>
     {
-        Task RunAsync(TArg arg, CancellationToken token);
+        Task RunAsync(TArgs args, CancellationToken token);
     }
 }

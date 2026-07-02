@@ -2,7 +2,7 @@
 {
     public interface IDatasetLockService
     {
-        Task<IAsyncDisposable> AcquireAsync(string datasetName, CancellationToken cancellationToken = default);
+        Task<IAsyncDisposable> TryAcquireAsync(string datasetName, CancellationToken cancellationToken = default);
     }
 
     public sealed class DatasetLockService : IDatasetLockService
@@ -14,17 +14,15 @@
             Directory.CreateDirectory(_lockDirectory);
         }
 
-        public async Task<IAsyncDisposable> AcquireAsync(string datasetName, CancellationToken cancellationToken = default) {
+        public async Task<IAsyncDisposable?> TryAcquireAsync(string datasetName, CancellationToken cancellationToken = default) {
             var safeName = string.Join("_", datasetName.Split(Path.GetInvalidFileNameChars()));
             var lockPath = Path.Combine(_lockDirectory, $"{safeName}.lock");
 
-            // Ensure no leftover files from application crashes. 30 minutes arbitrary
             if (File.Exists(lockPath)) {
                 var age = DateTime.UtcNow - File.GetCreationTimeUtc(lockPath);
 
-                if (age > TimeSpan.FromMinutes(30)) {
+                if (age > TimeSpan.FromMinutes(30))
                     File.Delete(lockPath);
-                }
             }
 
             try {
@@ -37,7 +35,7 @@
                 return new FileLockHandle(lockPath, stream);
             }
             catch (IOException) {
-                throw new DatasetLockedException($"Dataset {datasetName} is already being processed.");
+                return null;
             }
         }
 
