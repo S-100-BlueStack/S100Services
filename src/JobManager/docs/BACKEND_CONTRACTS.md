@@ -473,6 +473,23 @@ Backend implications:
 - If the backend calculates spatial intersections, the returned AOI ids should be compatible with the frontend AOI id field.
 - Final AOI identifier ownership remains open until the real AOI Feature Service and backend relation direction are confirmed.
 
+Phase 17 frontend UX implication:
+
+The frontend now distinguishes between two AOI overview edge cases:
+
+```txt
+Active AOI overview filter has compatible AOI ids but no matches
+  -> AOI FeatureLayer can be filtered to no AOIs
+  -> map status explains that no AOIs match the active AOI overview and Job filters
+
+Active AOI overview filter has relation AOI ids that are incompatible with the current AOI service id field
+  -> AOI FeatureLayer is not destructively filtered
+  -> all AOIs remain visible
+  -> map status explains that the AOI overview filter could not be safely applied
+```
+
+Backend implication remains unchanged: future relation ids should match the configured AOI Feature Service identifier field if backend-provided AOI/Job relations are expected to drive AOI map filtering.
+
 ## 9. Error handling assumptions
 
 Backend errors should eventually be normalized into user-safe frontend errors.

@@ -1,6 +1,7 @@
 import { normalizeError } from "../../../shared/errors/normalizeError.js";
 import { validateAoiFeatureLayer } from "../../aoi/services/aoiService.js";
 import * as defaultRelationService from "../../relations/services/relationService.js";
+import { hasActiveAoiMapFilters } from "../domain/aoiMapFilters.js";
 import { applyAoiLayerFilters } from "../filters/applyAoiLayerFilters.js";
 import { applyJobLayerFilters } from "../filters/applyJobLayerFilters.js";
 import { applyAoiJobSummaryRenderer } from "../layers/applyAoiRenderer.js";
@@ -46,6 +47,7 @@ export function createMapController({
   let currentAoiMapFilters = null;
   let currentJobClusterSettings = null;
   let currentScopedJobIds = null;
+  let lastAoiReadinessResult = null;
   let aoiRendererRequestId = 0;
   let aoiMapFilterRequestId = 0;
   let jobClusterRequestId = 0;
@@ -104,6 +106,8 @@ export function createMapController({
           error: null,
         };
       }
+
+      lastAoiReadinessResult = aoiReadinessResult;
 
       if (!aoiReadinessResult.ok) {
         disableAoiLayerAfterLoadFailure();
@@ -222,6 +226,7 @@ export function createMapController({
     mapHoverController = null;
     jobHighlightController = null;
     aoiHighlightController = null;
+    lastAoiReadinessResult = null;
 
     mapResult?.view?.destroy();
     mapResult = null;
@@ -483,9 +488,19 @@ export function createMapController({
       },
     })
       .then((result) => {
-        if (!result.ok && !isDestroyed && filterRequestId === aoiMapFilterRequestId) {
-          onAoiLayerError?.(normalizeError(result.error, "AOI filters could not be applied."));
+        if (isDestroyed || filterRequestId !== aoiMapFilterRequestId) {
+          return;
         }
+
+        if (!result.ok) {
+          onAoiLayerError?.(normalizeError(result.error, "AOI filters could not be applied."));
+          return;
+        }
+
+        syncAoiMapFilterStatus({
+          filters: currentAoiMapFilters,
+          result,
+        });
       })
       .catch((error) => {
         if (!isDestroyed && filterRequestId === aoiMapFilterRequestId) {
@@ -704,6 +719,62 @@ export function createMapController({
     }
 
     return String(value).trim();
+  }
+
+  function syncAoiMapFilterStatus({ filters, result } = {}) {
+    if (!hasActiveAoiMapFilters(filters)) {
+      restoreAoiReadinessStatus();
+      return;
+    }
+
+    const data = result?.data ?? {};
+
+    if (data.didFallbackToAllAois) {
+      setStatus({
+        status: MAP_STATUS.WARNING,
+        title: "AOI overview could not be filtered",
+        message:
+          "The current AOI relation ids do not match the AOI service identifier field. Showing all AOIs.",
+      });
+
+      return;
+    }
+
+    if (getMatchedAoiIdsFromFilterResult(result).length === 0) {
+      setStatus({
+        status: MAP_STATUS.WARNING,
+        title: "No AOIs match the overview filter",
+        message:
+          "The active AOI overview and Job filters do not match any AOIs. Clear filters to show all AOIs.",
+      });
+
+      return;
+    }
+
+    restoreAoiReadinessStatus();
+  }
+
+  function restoreAoiReadinessStatus() {
+    if (lastAoiReadinessResult) {
+      setReadyStatus(lastAoiReadinessResult);
+      return;
+    }
+
+    hideStatus();
+  }
+
+  function getMatchedAoiIdsFromFilterResult(result) {
+    const data = result?.data ?? {};
+
+    if (Array.isArray(data.matchedAoiIds)) {
+      return data.matchedAoiIds;
+    }
+
+    if (Array.isArray(data.aoiIds)) {
+      return data.aoiIds;
+    }
+
+    return [];
   }
 
   function setReadyStatus(aoiReadinessResult) {

@@ -496,6 +496,19 @@ Rules:
 - AOI overview filtering must be non-destructive: uncertain relation matching should not hide all AOIs.
 - AOI details panel remains deferred.
 - AOI clustering remains deferred until real AOI geometry density and shape are confirmed.
+- AOI overview UI may explain map filter behavior, but the filtering rules must remain in map/domain and map/filter modules.
+- AOI overview warnings should be non-blocking map status messages, not startup failures.
+- AOI overview no-match states are allowed to hide all AOIs only when relation ids are compatible with the AOI FeatureLayer identifier field.
+- AOI overview fallback states must show all AOIs when relation ids cannot be matched safely.
+
+Phase 17 polish behavior:
+
+- Filters popover shows AOI overview state separately from Job filter state.
+- `Clear AOI overview` clears only AOI overview mode and leaves Job filters unchanged.
+- Combined filter summary prefixes Job filters and AOI overview filters separately.
+- If an active AOI overview mode produces no matching AOIs, the map status explains that the active AOI overview and Job filters match no AOIs.
+- If relation AOI ids are incompatible with the current AOI FeatureLayer identifier field, the map status explains that the filter could not be safely applied and all AOIs are shown.
+- Clearing or successfully applying AOI overview filters restores the normal AOI readiness status.
 
 ### Job point clustering
 
