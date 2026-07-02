@@ -25,7 +25,7 @@ namespace ProductManagerAPI
 
         public static async Task Main(string[] args) {
             var development = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")?.Equals("Development", StringComparison.OrdinalIgnoreCase) == true;
-            var serilogPath = Environment.GetEnvironmentVariable("serilog_path");
+            var central_logpath = Environment.GetEnvironmentVariable("log_path");
 
             // Bootstrap logging
             Log.Logger = new LoggerConfiguration()
@@ -60,11 +60,11 @@ namespace ProductManagerAPI
                         shared: true,
                         outputTemplate: outputTemplate);
 
-                if (!string.IsNullOrWhiteSpace(serilogPath)) {
-                    if (!Path.Exists(serilogPath))
-                        Log.Warning("The specified serilog_path '{serilogPath}' does not exist or the system cannot access the folder.", serilogPath);
+                if (!string.IsNullOrWhiteSpace(central_logpath)) {
+                    if (!Path.Exists(central_logpath))
+                        Log.Warning("The specified log_path '{log_path}' does not exist or the system cannot access the folder.", central_logpath);
 
-                    var centralLogPath = Path.Combine(serilogPath, "Applications", "ProductManager", $"{Environment.MachineName}", "ProductManagerAPI.log");
+                    var centralLogPath = Path.Combine(central_logpath, "productmanager.dev", "Logging", $"{Environment.MachineName}", "ProductManagerAPI.log");
 
                     loggerConfiguration.WriteTo.File(
                         path: centralLogPath,
