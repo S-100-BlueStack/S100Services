@@ -64,7 +64,7 @@ namespace ProductManagerAPI
                     if (!Path.Exists(central_logpath))
                         Log.Warning("The specified log_path '{log_path}' does not exist or the system cannot access the folder.", central_logpath);
 
-                    var centralLogPath = Path.Combine(central_logpath, "producrmanager.dev", "Logging", $"{Environment.MachineName}", "ProductManagerAPI.log");
+                    var centralLogPath = Path.Combine(central_logpath, "productmanager.dev", "Logging", $"{Environment.MachineName}", "ProductManagerAPI.log");
 
                     loggerConfiguration.WriteTo.File(
                         path: centralLogPath,
