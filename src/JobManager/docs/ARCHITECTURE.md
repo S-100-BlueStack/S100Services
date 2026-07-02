@@ -16,27 +16,34 @@ Job Manager should be:
 
 ## 2. High-level data flow
 
-Expected initial flow:
+Current frontend flow:
 
 ```txt
 AOI Feature Service
-  -> AOI service
-  -> AOI normalization
-  -> AOI state
-  -> Map/UI
+  -> ArcGIS FeatureLayer
+  -> AOI readiness validation
+  -> map AOI display, popup, hover and highlight
 
 Mock Job backend
   -> Job service
   -> Job normalization
-  -> Job state
-  -> Job list/UI
+  -> Jobs store
+  -> Jobs panel and app composition
 
-AOI state + Job state
-  -> Relation service/domain helpers
-  -> AOI summaries, Job details, filters, popups
+Jobs store + Job filter state
+  -> Job map FeatureLayers
+  -> AOI popup summaries
+  -> AOI renderer summaries
+  -> AOI overview filters
+
+Jobs + AOI identifiers
+  -> relation service/domain helpers
+  -> AOI summaries, scoped Jobs, related AOI highlights and map filters
 ```
 
 Future backend flow should replace the mock backend behind the Job service without requiring UI components to change significantly.
+
+AOI FeatureLayer ownership should remain in place until real AOI fields, auth requirements, geometry characteristics and service size are confirmed.
 
 ## 3. Folder ownership
 
@@ -684,19 +691,30 @@ If a helper starts depending on AOI, Job or map concepts, it belongs in that fea
 
 ## 11. State principles
 
-Initial state can be lightweight JavaScript state.
+State is lightweight JavaScript state and should be introduced only where it solves coordination between UI, map, services and filters.
 
-State should be introduced only where it solves coordination between UI, map, services and filters.
+Current state ownership:
 
-State rules:
+- Jobs store owns the visible frontend Jobs snapshot and Job mutation change metadata.
+- Job filter store owns shared Job-domain filter state.
+- AOI map filter store owns AOI overview map presentation state.
+- Job cluster settings store owns Job point clustering presentation state.
+- Selected AOI store owns selected AOI frontend values.
+- Selected Job store owns selected Job frontend values.
+- Theme store owns light/dark mode state.
 
-- keep canonical Jobs state in Jobs feature/state
-- keep canonical AOI state in AOI feature/state
-- keep Job filter rules and Job filter state in `features/jobs` while they only describe Jobs
-- keep map-specific application of filters in `features/map/filters`
-- introduce a broader app-level filter state only if filters become truly cross-domain
-- avoid hidden global mutable state unless documented
-- preserve selected AOI/Job across refresh where practical
+Rules:
+
+- Keep canonical Jobs state in `features/jobs/state`.
+- Keep selected AOI state in `features/aoi/state`.
+- Keep selected Job state in `features/jobs/state`.
+- Keep Job filter rules and Job filter state in `features/jobs` while they only describe Jobs.
+- Keep map-specific application of filters in `features/map/filters`.
+- Keep AOI overview filtering state in `features/map/state` because it is map presentation state.
+- Introduce a broader app-level filter state only if filters become truly cross-domain.
+- Avoid hidden global mutable state unless documented.
+- Preserve selected AOI/Job across refresh where practical.
+- App composition may coordinate stores, but should not become the owner of feature-domain rules.
 
 ## 12. Service principles
 
