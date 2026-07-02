@@ -201,6 +201,9 @@ function createJobFilterPopoverContent({
   summaryElement.className = "job-manager-filters__summary";
   summaryElement.textContent = "No filters active";
 
+  const scrollElement = document.createElement("div");
+  scrollElement.className = "job-manager-filters__scroll";
+
   const aoiOverviewSection = createFilterSection("AOI overview");
   aoiOverviewSection.body.classList.add("job-manager-filters__button-grid");
 
@@ -364,17 +367,16 @@ function createJobFilterPopoverContent({
 
   actionsElement.append(clearButton);
 
-  contentElement.append(
-    headerElement,
-    summaryElement,
+  scrollElement.append(
     aoiOverviewSection.element,
     quickFilterSection.element,
     statusSection.element,
     prioritySection.element,
     clusteringSection.element,
-    clusterStyleSection.element,
-    actionsElement
+    clusterStyleSection.element
   );
+
+  contentElement.append(headerElement, summaryElement, scrollElement, actionsElement);
 
   filtersPopover.replaceChildren(contentElement);
 

@@ -509,6 +509,9 @@ Phase 17 polish behavior:
 - If an active AOI overview mode produces no matching AOIs, the map status explains that the active AOI overview and Job filters match no AOIs.
 - If relation AOI ids are incompatible with the current AOI FeatureLayer identifier field, the map status explains that the filter could not be safely applied and all AOIs are shown.
 - Clearing or successfully applying AOI overview filters restores the normal AOI readiness status.
+- Filters popover uses a fixed header and footer with a scrollable body so global filter actions remain available in smaller viewports.
+- The scrollable body contains the AOI overview, Job filters and Job point clustering controls.
+- The layout fix does not move filter ownership into app-shell UI; `createNavbarController` still only composes controls and forwards changes to feature stores.
 
 ### Job point clustering
 
