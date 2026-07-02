@@ -460,3 +460,4 @@ dist-ssr
 /src/ProductManager/fh006-file-list.txt
 /src/JobManager/.env.development
 job-manager-review-context.md
+/src/ProductManagerAPI/appsettings.Development.json

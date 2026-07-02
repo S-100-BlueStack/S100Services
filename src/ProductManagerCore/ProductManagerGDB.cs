@@ -45,7 +45,8 @@ namespace S100FC.ProductCatalogue
 
         public string OutputFolder { get; internal set; }
         private Connection[] _connections { get; set; } = [];
-        private Uri? Connection(string productSpecification, int compilationScale) => _connections.FirstOrDefault(e => e.ProductSpecification == productSpecification && e.MinimumScale <= compilationScale && e.MaximumScale >= compilationScale)?.ConnectionFile;
+        //private Uri? Connection(string productSpecification, int compilationScale) => _connections.FirstOrDefault(e => e.ProductSpecification == productSpecification && e.MinimumScale <= compilationScale && e.MaximumScale >= compilationScale)?.ConnectionFile;
+        private Uri? Connection(string productSpecification) => _connections.FirstOrDefault(e => e.ProductSpecification == productSpecification)?.ConnectionFile;
 
 
         record ElectronicProductKey(string ps, string name)
@@ -94,16 +95,16 @@ namespace S100FC.ProductCatalogue
 
                         if (settings != null) {
                             var connections = settings.Connections.Select(e => {
-                                // var uri = e.ConnectionFile;
-                                var path = $"config/{e.ConnectionFile.OriginalString}";
+                                 var uri = e.ConnectionFile;
+                                //var path = $"config/{e.ConnectionFile.OriginalString}";
 
-                                var exist = IO.Path.Exists(path);
+                                //var exist = IO.Path.Exists(path);
 
-                                Log.Information("Adding connection for {productSpecification} with scale range {min}-{max} with connection file: {path}. Path exists: {exist}", e.ProductSpecification, e.MinimumScale, e.MaximumScale, path, exist);
+                                Log.Information("Adding connection for {productSpecification}  with connection file: {path}.", e.ProductSpecification, uri?.LocalPath);
 
-                                var uri = new Uri(System.IO.Path.GetFullPath(path));
+                              //  var uri = new Uri(System.IO.Path.GetFullPath(path));
 
-                                return new Connection(e.ProductSpecification, e.MinimumScale, e.MaximumScale, uri);
+                                return new Connection(e.ProductSpecification, uri);
                             });
 
                             this._connections = [.. connections];
@@ -300,9 +301,9 @@ namespace S100FC.ProductCatalogue
             if (!this._electronicProducts.TryGetValue(name, out var electronicProduct))
                 throw new ArgumentException(null, nameof(name));
 
-            //  var uri = this._connections[this._electronicProducts[name].productSpecification!.name]!;
-            // TODO: Handle null
-            var uri = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
+            //var uri = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
+            var uri = this.Connection(electronicProduct.productSpecification!.name!)!;
+
             using var connection = this.OpenGeodatabase(uri);
 
             var dataset = await this.GetLatestDataset(name);
@@ -374,8 +375,9 @@ namespace S100FC.ProductCatalogue
                 var displayScale = electronicProduct.optimumDisplayScale
                     ?? throw new NullReferenceException(nameof(electronicProduct.optimumDisplayScale));
 
-                var uri = this.Connection(productName, displayScale)
-                    ?? throw new NullReferenceException("uri");
+                //var uri = this.Connection(productName, displayScale) ?? throw new NullReferenceException("uri");
+
+                var uri = this.Connection(electronicProduct.productSpecification!.name!)!;
 
                 using var connection = this.OpenGeodatabase(uri);
 
@@ -453,19 +455,18 @@ namespace S100FC.ProductCatalogue
 
                 foreach (var c in this._connections.Where(e => e.ProductSpecification.Equals("S-101", StringComparison.OrdinalIgnoreCase))) {
                     var uri = c.ConnectionFile!;
-                    var dbScale = $"Database: {c.MinimumScale}-{c.MaximumScale}";
+                    //  var dbScale = $"Database: {c.MinimumScale}-{c.MaximumScale}";
+                    var connectionName = c.ProductSpecification;
                     using var connection = this.OpenGeodatabase(uri);
 
                     var productsForConnection = products
-                        .Where(p => this.Connection(
-                            p.Product.productSpecification!.name!,
-                            p.DisplayScale) == uri)
+                        .Where(p => this.Connection(p.Product.productSpecification!.name!) == uri)
                         .ToList();
 
                     if (productsForConnection.Count == 0)
                         continue;
 
-                    ScanConnectionForPendingEdits(connection, dbScale, productsForConnection, sinceUtc, result);
+                    ScanConnectionForPendingEdits(connection, connectionName, productsForConnection, sinceUtc, result);
                 }
             });
 
@@ -663,8 +664,8 @@ namespace S100FC.ProductCatalogue
             var regFileReference = new Regex("fileReference\":\"(?<filename>[^\"]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace);
             var regPictorialRepresentation = new Regex("pictorialRepresentation\":\"(?<filename>[^\"]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace);
 
-            var uri = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
-
+            //var uri = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
+            var uri = this.Connection(electronicProduct.productSpecification!.name!)!;
 
 
             electronicProduct.issueDate = DateOnly.FromDateTime(timestamp);
