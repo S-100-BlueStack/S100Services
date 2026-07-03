@@ -23,7 +23,7 @@ Job Manager should follow Product Manager patterns where they fit, but the domai
 
 ## 2. Current project status
 
-Status: AOI overview polish complete; ready for next feature phase
+Status: Backend adapter preparation started
 
 Current known baseline:
 
@@ -55,6 +55,7 @@ Current known baseline:
 - Global `Clear filters` is available from the Filters popover header and clears both Job filters and AOI overview filtering.
 - AOI overview map filtering surfaces a map warning when the active overview produces no matching AOIs or when relation ids are incompatible with the current AOI service identifier field.
 - Job status mutations now sync map Job layers, AOI renderer summaries and active map scope/highlight state without requiring manual refresh.
+- Job service now uses an explicit adapter boundary. The mock backend remains the default adapter, and a future HTTP adapter seam exists without introducing endpoint or auth assumptions.
 
 Current known limitations:
 
@@ -2216,6 +2217,41 @@ Implementation notes:
 - Keyboard focus remains available through `:focus-visible`.
 - The Phase 17 changes are UI/map-status polish only and do not change Job filter, AOI overview filter or clustering state ownership.
 
+## Phase 18 - Backend adapter preparation
+
+Goal:
+
+Prepare the Job service layer for a future backend adapter without introducing a final backend contract, endpoint configuration or authentication assumptions.
+
+Tasks:
+
+| ID      | Task                                  | Status | Notes                                                                                                      |
+| ------- | ------------------------------------- | -----: | ---------------------------------------------------------------------------------------------------------- |
+| JM-1801 | Define Job service adapter source ids |   Done | Job service adapter sources are centralized as `mock` and `http`.                                          |
+| JM-1802 | Move mock backend behind adapter      |   Done | `jobService.js` now depends on a Job service adapter instead of importing mock backend functions directly. |
+| JM-1803 | Preserve existing Job service API     |   Done | Existing `loadJobs()` and `updateJobStatus(jobId, status)` exports remain available for current callers.   |
+| JM-1804 | Add future HTTP adapter seam          |   Done | An unavailable HTTP adapter placeholder exists but is not wired to runtime config or endpoints.            |
+| JM-1805 | Avoid premature backend contract      |   Done | No backend URL, auth config, endpoint path or response contract beyond the existing draft is introduced.   |
+
+Exit criteria:
+
+- current app behavior remains mock-backed by default
+- UI and Jobs store continue using the same Job service methods
+- mock backend is explicitly one adapter implementation
+- future backend adapter work has a clear file seam
+- no private endpoints, credentials or auth assumptions are introduced
+- no final backend response contract is implied
+
+Implementation notes:
+
+- `features/jobs/services/jobService.js` owns API result wrapping and the service-facing methods consumed by stores/UI.
+- `features/jobs/services/mockJobServiceAdapter.js` owns the current mock adapter implementation.
+- `features/jobs/services/unavailableHttpJobServiceAdapter.js` is a deliberate placeholder for future backend work and should not be wired into runtime until a real backend exists.
+- `features/jobs/services/jobServiceAdapter.js` chooses adapter implementations by source id.
+- The default adapter remains `mock`.
+- The HTTP adapter placeholder returns normalized service errors through the existing `toApiResult` path if used accidentally.
+- Phase 18 does not introduce `VITE_JOB_API_BASE_URL`, endpoint paths, auth behavior or backend response normalization rules.
+
 ## 13. Suggested implementation order
 
 Recommended order:
@@ -2415,4 +2451,5 @@ Recommended next tasks:
 | JM-NEXT-025 | Clean final docs/status drift after Phase 15             |        Done | Tracker, architecture and backend-contract status drift has been cleaned after mutation-to-map sync.                               |
 | JM-NEXT-026 | Polish AOI overview filters from clean baseline          |        Done | AOI overview controls and map feedback have been clarified without adding AOI details or AOI clustering.                           |
 | JM-NEXT-027 | Choose next feature phase after AOI overview polish      |        Done | Backend adapter preparation was selected as the next recommended feature direction.                                                |
-| JM-NEXT-028 | Start backend adapter preparation                        | Not started | Prepare Job service adapter boundaries and future HTTP adapter seams without introducing a final backend contract.                 |
+| JM-NEXT-028 | Start backend adapter preparation                        |        Done | Job service now has an explicit adapter boundary with mock as the default adapter and an unavailable HTTP seam for future work.    |
+| JM-NEXT-029 | Define future Job HTTP adapter contract                  | Not started | Blocked until real backend endpoint shape, auth behavior and guaranteed Job fields are known.                                      |

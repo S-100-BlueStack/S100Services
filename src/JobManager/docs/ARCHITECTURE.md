@@ -25,6 +25,7 @@ AOI Feature Service
   -> map AOI display, popup, hover and highlight
 
 Mock Job backend
+  -> mock Job service adapter
   -> Job service
   -> Job normalization
   -> Jobs store
@@ -252,6 +253,48 @@ Rules:
 - Mock behavior must be accessed through services.
 - Cyclic mock Job creation must stay isolated from UI logic.
 - Backend-specific fields must be normalized before UI use.
+
+### Job service adapter boundary
+
+Status: Started
+
+Current flow:
+
+```txt
+Jobs store / UI callers
+  -> jobs/services/jobService.js
+  -> selected Job service adapter
+  -> mock backend for current development
+```
+
+Current adapter files:
+
+```txt
+jobs/services/jobService.js
+  -> wraps adapter calls in API result objects
+  -> preserves current service-facing methods
+
+jobs/services/jobServiceAdapter.js
+  -> selects adapter implementations by source id
+
+jobs/services/jobServiceAdapterSource.js
+  -> centralizes supported source ids
+
+jobs/services/mockJobServiceAdapter.js
+  -> adapts the current mock backend to the service adapter shape
+
+jobs/services/unavailableHttpJobServiceAdapter.js
+  -> placeholder seam for future backend work
+```
+
+Rules:
+
+- `jobService.js` should not import mock backend functions directly.
+- The mock backend remains isolated under `features/jobs/mock`.
+- The default Job service adapter is still `mock`.
+- Future HTTP adapter work should use the same service-facing methods before changing UI or store code.
+- Do not add backend endpoint paths, API base URLs or auth behavior until the real backend exists.
+- UI components and Jobs store should continue consuming service functions and must not choose adapter implementations directly.
 
 ### Job details view
 

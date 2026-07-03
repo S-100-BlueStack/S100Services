@@ -48,7 +48,42 @@ Decision:
 
 Do not add a backend API base URL or backend auth config until the backend exists. Keep browser-exposed runtime config limited to values that are safe to expose.
 
-## 2.2 Current mock backend behavior
+## 2.2 Phase 18 Job service adapter preparation
+
+Status: Started
+
+Current decision:
+
+Job service now has an explicit adapter boundary.
+
+Current behavior:
+
+- Mock remains the default Job data source.
+- `features/jobs/services/jobService.js` exposes the current service-facing methods.
+- `features/jobs/services/mockJobServiceAdapter.js` adapts the existing mock backend.
+- `features/jobs/services/unavailableHttpJobServiceAdapter.js` exists only as a future seam.
+- No backend API base URL is introduced.
+- No endpoint path is introduced.
+- No authentication behavior is introduced.
+- No final backend response contract is introduced.
+
+Adapter expectation:
+
+```txt
+loadJobs()
+  -> { jobs }
+
+updateJobStatus(jobId, status)
+  -> { job, createdJobs }
+```
+
+The adapter expectation mirrors the existing frontend service need and mock behavior. It should not be treated as a final backend contract until a real backend exists.
+
+Backend implication:
+
+Future backend work can implement an HTTP adapter behind the existing Job service without changing Jobs UI or map/list coordination first.
+
+## 2.3 Current mock backend behavior
 
 Status: Done for current mock/frontend phase
 
