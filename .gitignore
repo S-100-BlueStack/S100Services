@@ -461,3 +461,6 @@ dist-ssr
 /src/JobManager/.env.development
 job-manager-review-context.md
 /src/ProductManagerAPI/appsettings.Development.json
+src/ProductManagerAPI/config/policies.json
+src/ProductManagerAPI/config/system.connection
+src/ProductManagerAPI/config/hangfire.connection
