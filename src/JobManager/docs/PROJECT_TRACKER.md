@@ -23,7 +23,7 @@ Job Manager should follow Product Manager patterns where they fit, but the domai
 
 ## 2. Current project status
 
-Status: AOI service readiness reviewed; waiting for final AOI/backend inputs
+Status: Test and resilience hardening started
 
 Current known baseline:
 
@@ -57,6 +57,7 @@ Current known baseline:
 - Job status mutations now sync map Job layers, AOI renderer summaries and active map scope/highlight state without requiring manual refresh.
 - Job service now uses an explicit adapter boundary. The mock backend remains the default adapter, and a future HTTP adapter seam exists without introducing endpoint or auth assumptions.
 - AOI service readiness has been reviewed after the Job service adapter work. AOI FeatureLayer ownership remains the right current approach, and canonical queried AOI state remains deferred until final AOI service inputs are known.
+- Phase 20 adds regression tests for Job service adapter boundaries, Job store mutation metadata, AOI readiness validation and AOI overview fallback/no-match behavior without changing runtime behavior.
 
   Current known limitations:
 
@@ -2289,6 +2290,41 @@ Implementation notes:
 - AOI relation ids still depend on provisional `GlobalID` compatibility for destructive AOI layer filtering.
 - The next AOI implementation step is blocked until final AOI Feature Service fields, auth requirements, geometry characteristics, spatial reference, service size and backend relation ownership are confirmed.
 
+## Phase 20 - Test and resilience hardening
+
+Goal:
+
+Harden regression coverage around service boundaries, store mutation metadata and AOI/map filter resilience without adding new UI, backend contracts, AOI details or clustering behavior.
+
+Tasks:
+
+| ID      | Task                                      | Status | Notes                                                                                                          |
+| ------- | ----------------------------------------- | -----: | -------------------------------------------------------------------------------------------------------------- |
+| JM-2001 | Test Job service adapter boundary         |   Done | `createJobService()` is covered with injected adapters and unavailable HTTP adapter behavior.                  |
+| JM-2002 | Test Job service adapter source selection |   Done | Mock default, HTTP seam and unsupported source behavior are covered.                                           |
+| JM-2003 | Test Job store mutation metadata          |   Done | Load, successful status update and failed status update paths are covered, including queued `createdJobs`.     |
+| JM-2004 | Test AOI readiness validation edge cases  |   Done | Missing layer, load failure, ready layer, missing required fields and feature count warning paths are covered. |
+| JM-2005 | Test AOI overview filter resilience       |   Done | AOI layer fallback, compatible no-match and incompatible relation-id behavior are covered.                     |
+
+Exit criteria:
+
+- service adapter seams are covered by tests
+- unavailable HTTP adapter behavior is covered without adding backend config
+- Job store mutation metadata is covered
+- generated/created Jobs remain queued in visible state tests
+- AOI readiness validation edge cases are covered
+- AOI overview fallback and no-match behavior are covered
+- runtime app behavior is unchanged
+
+Implementation notes:
+
+- Phase 20 adds tests only.
+- No production source files are changed.
+- Tests use injected services/adapters where possible to avoid coupling to mock internals.
+- The HTTP adapter remains unavailable and unconfigured.
+- AOI readiness tests use lightweight FeatureLayer stubs instead of ArcGIS runtime objects.
+- AOI overview filter tests exercise definition-expression behavior through simple layer/relation stubs.
+
 ## 13. Suggested implementation order
 
 Recommended order:
@@ -2459,35 +2495,36 @@ Do not duplicate content across documents. Link or summarize instead.
 
 Recommended next tasks:
 
-| ID          | Task                                                     |      Status | Notes                                                                                                                                          |
-| ----------- | -------------------------------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-NEXT-001 | Add `docs/BACKEND_CONTRACTS.md` skeleton                 |        Done | Initial backend assumptions and open questions documented.                                                                                     |
-| JM-NEXT-002 | Add `docs/ARCHITECTURE.md` skeleton                      |        Done | Initial architecture boundaries and data flow documented.                                                                                      |
-| JM-NEXT-003 | Implement app shell layout                               |        Done | Product Manager-style navbar, map-first workspace, Jobs panel and notices are implemented.                                                     |
-| JM-NEXT-004 | Implement notice service foundation                      |        Done | Notice service and UI container are implemented.                                                                                               |
-| JM-NEXT-005 | Implement mock Jobs service                              |        Done | Mock Jobs service supports loading, failures, status mutation and cyclic mock Job creation.                                                    |
-| JM-NEXT-006 | Connect AOI Feature Service loading                      | In progress | AOI FeatureLayer is wired from runtime config. Dedicated AOI service querying remains deferred.                                                |
-| JM-NEXT-007 | Add AOI/Job relation service                             |        Done | Mock `relatedAoiIds` are exposed through relation helpers and snapshots.                                                                       |
-| JM-NEXT-008 | Add AOI renderer and popup foundation                    |        Done | AOI renderer and popup related Job summary are implemented.                                                                                    |
-| JM-NEXT-009 | Extract navbar/filter/clustering UI from `createApp.js`  |        Done | App-shell navbar UI now lives in `src/app/ui/createNavbarController.js`.                                                                       |
-| JM-NEXT-010 | Extract Jobs overlay and map workspace DOM helpers       |        Done | Jobs overlay and map workspace DOM helpers now live under `src/app/ui`.                                                                        |
-| JM-NEXT-011 | Clean up tracker/docs status drift                       |        Done | Phase 8/9 and latest map/list interaction statuses have been aligned with implementation.                                                      |
-| JM-NEXT-012 | Add manual refresh flow                                  |        Done | Jobs panel refresh now refreshes map Job layers, derived AOI renderer state and active scope/highlight state best-effort.                      |
-| JM-NEXT-013 | Add theme foundation / dark mode                         |        Done | Theme foundation, persisted preference and navbar toggle are implemented.                                                                      |
-| JM-NEXT-014 | Review final AOI Feature Service field/auth requirements |     Blocked | Requires confirmation of real AOI Feature Service fields, auth requirements, geometry type, spatial reference and data volume.                 |
-| JM-NEXT-015 | Phase 10 wrap-up and backend preparation review          |        Done | Refresh, retry, loading and popup consistency are wrapped. Remaining mutation-to-map sync is deferred unless needed.                           |
-| JM-NEXT-016 | Start backend/AOI-service preparation                    |        Done | Phase 11 readiness review completed. Next implementation should focus on docs alignment and confirmed external AOI/backend inputs.             |
-| JM-NEXT-017 | Clean Phase 11 docs drift                                |        Done | Mock backend behavior is documented and stale docs placement/status drift has been cleaned.                                                    |
-| JM-NEXT-018 | Await final AOI/backend inputs                           |     Blocked | Requires real AOI Feature Service fields, auth requirements, geometry characteristics and backend contract direction.                          |
-| JM-NEXT-019 | Start Phase 12 Job details workflow polish               |        Done | Dedicated Job details mode is implemented and polished.                                                                                        |
-| JM-NEXT-020 | Start Phase 13 selected Job map focus                    |        Done | Job details now provides explicit map focus controls that scope Job layers to the selected Job and highlight related AOIs.                     |
-| JM-NEXT-021 | Review selected Job AOI filtering after real AOI inputs  |     Blocked | Requires confirmed AOI Feature Service identifiers, geometry characteristics and UX decision on hiding vs highlighting AOIs.                   |
-| JM-NEXT-022 | Wire Phase 14 AOI map filters into UI and map            |        Done | Filters popover now exposes AOI overview modes and applies them to the AOI FeatureLayer.                                                       |
-| JM-NEXT-023 | Validate Phase 14 AOI filter UX                          |        Done | AOI overview filters work with current service/mock data and no regression was observed in existing map/list flows.                            |
-| JM-NEXT-024 | Implement mutation-to-map sync                           |        Done | Successful Job status mutations now refresh map Job layers, AOI renderer summaries and active map context.                                     |
-| JM-NEXT-025 | Clean final docs/status drift after Phase 15             |        Done | Tracker, architecture and backend-contract status drift has been cleaned after mutation-to-map sync.                                           |
-| JM-NEXT-026 | Polish AOI overview filters from clean baseline          |        Done | AOI overview controls and map feedback have been clarified without adding AOI details or AOI clustering.                                       |
-| JM-NEXT-027 | Choose next feature phase after AOI overview polish      |        Done | Backend adapter preparation was selected as the next recommended feature direction.                                                            |
-| JM-NEXT-028 | Start backend adapter preparation                        |        Done | Job service now has an explicit adapter boundary with mock as the default adapter and an unavailable HTTP seam for future work.                |
-| JM-NEXT-029 | Define future Job HTTP adapter contract                  |     Blocked | Blocked until real backend endpoint shape, auth behavior and guaranteed Job fields are known.                                                  |
-| JM-NEXT-030 | Confirm final AOI Feature Service inputs                 |     Blocked | Requires final AOI fields, identifier/display fields, auth requirements, geometry type, spatial reference, data volume and relation ownership. |
+| ID          | Task                                                     |      Status | Notes                                                                                                                                                  |
+| ----------- | -------------------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| JM-NEXT-001 | Add `docs/BACKEND_CONTRACTS.md` skeleton                 |        Done | Initial backend assumptions and open questions documented.                                                                                             |
+| JM-NEXT-002 | Add `docs/ARCHITECTURE.md` skeleton                      |        Done | Initial architecture boundaries and data flow documented.                                                                                              |
+| JM-NEXT-003 | Implement app shell layout                               |        Done | Product Manager-style navbar, map-first workspace, Jobs panel and notices are implemented.                                                             |
+| JM-NEXT-004 | Implement notice service foundation                      |        Done | Notice service and UI container are implemented.                                                                                                       |
+| JM-NEXT-005 | Implement mock Jobs service                              |        Done | Mock Jobs service supports loading, failures, status mutation and cyclic mock Job creation.                                                            |
+| JM-NEXT-006 | Connect AOI Feature Service loading                      | In progress | AOI FeatureLayer is wired from runtime config. Dedicated AOI service querying remains deferred.                                                        |
+| JM-NEXT-007 | Add AOI/Job relation service                             |        Done | Mock `relatedAoiIds` are exposed through relation helpers and snapshots.                                                                               |
+| JM-NEXT-008 | Add AOI renderer and popup foundation                    |        Done | AOI renderer and popup related Job summary are implemented.                                                                                            |
+| JM-NEXT-009 | Extract navbar/filter/clustering UI from `createApp.js`  |        Done | App-shell navbar UI now lives in `src/app/ui/createNavbarController.js`.                                                                               |
+| JM-NEXT-010 | Extract Jobs overlay and map workspace DOM helpers       |        Done | Jobs overlay and map workspace DOM helpers now live under `src/app/ui`.                                                                                |
+| JM-NEXT-011 | Clean up tracker/docs status drift                       |        Done | Phase 8/9 and latest map/list interaction statuses have been aligned with implementation.                                                              |
+| JM-NEXT-012 | Add manual refresh flow                                  |        Done | Jobs panel refresh now refreshes map Job layers, derived AOI renderer state and active scope/highlight state best-effort.                              |
+| JM-NEXT-013 | Add theme foundation / dark mode                         |        Done | Theme foundation, persisted preference and navbar toggle are implemented.                                                                              |
+| JM-NEXT-014 | Review final AOI Feature Service field/auth requirements |     Blocked | Requires confirmation of real AOI Feature Service fields, auth requirements, geometry type, spatial reference and data volume.                         |
+| JM-NEXT-015 | Phase 10 wrap-up and backend preparation review          |        Done | Refresh, retry, loading and popup consistency are wrapped. Remaining mutation-to-map sync is deferred unless needed.                                   |
+| JM-NEXT-016 | Start backend/AOI-service preparation                    |        Done | Phase 11 readiness review completed. Next implementation should focus on docs alignment and confirmed external AOI/backend inputs.                     |
+| JM-NEXT-017 | Clean Phase 11 docs drift                                |        Done | Mock backend behavior is documented and stale docs placement/status drift has been cleaned.                                                            |
+| JM-NEXT-018 | Await final AOI/backend inputs                           |     Blocked | Requires real AOI Feature Service fields, auth requirements, geometry characteristics and backend contract direction.                                  |
+| JM-NEXT-019 | Start Phase 12 Job details workflow polish               |        Done | Dedicated Job details mode is implemented and polished.                                                                                                |
+| JM-NEXT-020 | Start Phase 13 selected Job map focus                    |        Done | Job details now provides explicit map focus controls that scope Job layers to the selected Job and highlight related AOIs.                             |
+| JM-NEXT-021 | Review selected Job AOI filtering after real AOI inputs  |     Blocked | Requires confirmed AOI Feature Service identifiers, geometry characteristics and UX decision on hiding vs highlighting AOIs.                           |
+| JM-NEXT-022 | Wire Phase 14 AOI map filters into UI and map            |        Done | Filters popover now exposes AOI overview modes and applies them to the AOI FeatureLayer.                                                               |
+| JM-NEXT-023 | Validate Phase 14 AOI filter UX                          |        Done | AOI overview filters work with current service/mock data and no regression was observed in existing map/list flows.                                    |
+| JM-NEXT-024 | Implement mutation-to-map sync                           |        Done | Successful Job status mutations now refresh map Job layers, AOI renderer summaries and active map context.                                             |
+| JM-NEXT-025 | Clean final docs/status drift after Phase 15             |        Done | Tracker, architecture and backend-contract status drift has been cleaned after mutation-to-map sync.                                                   |
+| JM-NEXT-026 | Polish AOI overview filters from clean baseline          |        Done | AOI overview controls and map feedback have been clarified without adding AOI details or AOI clustering.                                               |
+| JM-NEXT-027 | Choose next feature phase after AOI overview polish      |        Done | Backend adapter preparation was selected as the next recommended feature direction.                                                                    |
+| JM-NEXT-028 | Start backend adapter preparation                        |        Done | Job service now has an explicit adapter boundary with mock as the default adapter and an unavailable HTTP seam for future work.                        |
+| JM-NEXT-029 | Define future Job HTTP adapter contract                  |     Blocked | Blocked until real backend endpoint shape, auth behavior and guaranteed Job fields are known.                                                          |
+| JM-NEXT-030 | Confirm final AOI Feature Service inputs                 |     Blocked | Requires final AOI fields, identifier/display fields, auth requirements, geometry type, spatial reference, data volume and relation ownership.         |
+| JM-NEXT-031 | Continue test hardening for startup/map coordination     | Not started | Consider targeted tests for startup retry stages and map refresh coordination if those modules can be isolated without ArcGIS-heavy integration tests. |

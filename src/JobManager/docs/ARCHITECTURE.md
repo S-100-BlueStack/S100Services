@@ -1352,6 +1352,14 @@ For implementation changes, validate relevant flows:
 - user-facing text is English
 - no secrets are committed
 
+Phase 20 test hardening:
+
+- Service boundary tests should prefer injected adapters/services instead of reaching into mock internals.
+- Store tests should verify externally visible state snapshots and change metadata.
+- AOI readiness tests should use lightweight FeatureLayer-compatible stubs instead of ArcGIS runtime objects.
+- AOI overview filter tests should cover both safe no-match filtering and non-destructive fallback when relation ids are incompatible with the AOI identifier field.
+- Tests should not introduce backend endpoint, auth or environment assumptions.
+
 ## 17. Documentation rules
 
 Update documentation when:
