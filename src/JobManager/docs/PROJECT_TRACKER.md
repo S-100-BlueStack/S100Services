@@ -23,7 +23,7 @@ Job Manager should follow Product Manager patterns where they fit, but the domai
 
 ## 2. Current project status
 
-Status: Map/list foundation ready for next feature phase
+Status: AOI overview polish complete; ready for next feature phase
 
 Current known baseline:
 
@@ -51,9 +51,10 @@ Current known baseline:
 - Jobs panel supports a dedicated Job details mode in addition to list mode.
 - Job details mode has sticky panel navigation, sticky selected Job context, status mutation controls and read-only Job metadata.
 - AOI overview filters are available from the Filters popover and can filter AOIs by visible Jobs, active Jobs and high-priority Jobs.
+- AOI overview controls use compact button groups, a stable active-filter summary, section header hover hints and a dedicated `Clear AOI overview` action.
+- Global `Clear filters` is available from the Filters popover header and clears both Job filters and AOI overview filtering.
+- AOI overview map filtering surfaces a map warning when the active overview produces no matching AOIs or when relation ids are incompatible with the current AOI service identifier field.
 - Job status mutations now sync map Job layers, AOI renderer summaries and active map scope/highlight state without requiring manual refresh.
-- AOI overview polish is implemented in the Filters popover with clearer AOI-specific status text, contextual mode descriptions and a dedicated `Clear AOI overview` action.
-- AOI overview map filtering now surfaces a map warning when the active overview produces no matching AOIs or when relation ids are incompatible with the current AOI service identifier field.
 
 Current known limitations:
 
@@ -2173,14 +2174,14 @@ Tasks:
 
 | ID      | Task                                              | Status | Notes                                                                                                                                        |
 | ------- | ------------------------------------------------- | -----: | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| JM-1701 | Clarify AOI overview controls                     |   Done | Filters popover now shows an AOI-specific state line, contextual mode descriptions and a dedicated clear action.                             |
-| JM-1702 | Separate Job and AOI filter summaries             |   Done | Combined filter summary now prefixes Job filters and AOI overview state so active filters are easier to read.                                |
+| JM-1701 | Clarify AOI overview controls                     |   Done | Filters popover now exposes AOI overview as compact button controls with a dedicated clear action.                                           |
+| JM-1702 | Separate Job and AOI filter summaries             |   Done | Combined filter summary prefixes Job filters and AOI overview state so active filters are easier to read.                                    |
 | JM-1703 | Add AOI overview no-match map feedback            |   Done | Map status warns when active AOI overview filters produce no matching AOIs.                                                                  |
 | JM-1704 | Add AOI relation-id fallback map feedback         |   Done | Map status warns when relation AOI ids cannot safely filter the current AOI FeatureLayer and all AOIs are shown.                             |
 | JM-1705 | Keep deferred AOI work explicit                   |   Done | Phase 17 does not add AOI details, canonical queried AOI state, AOI clustering or final backend relation assumptions.                        |
-| JM-1706 | Keep filter actions accessible in small viewports |   Done | Filters popover now uses a fixed header/footer with a scrollable filter body, so global `Clear filters` remains reachable.                   |
+| JM-1706 | Keep filter actions accessible in small viewports |   Done | Filters popover uses a fixed header, stable summary and scrollable filter body so actions remain reachable.                                  |
 | JM-1707 | Compact filter popover controls                   |   Done | Filter popover controls now use compact button groups for AOI overview, quick filters, Job status, Job priority and Job point cluster style. |
-| JM-1708 | Stabilize filter summary and add section hints    |   Done | Filter summary remains visible with `No filters active`, and compact section headers expose hover hints without adding visible text blocks.  |
+| JM-1708 | Stabilize filter summary and add section hints    |   Done | Filter summary remains visible with `No filters active`, and compact section headers expose hover hints without adding visible text.         |
 | JM-1709 | Polish filter popover actions and focus behavior  |   Done | `Clear filters` moved to the header and pointer-activated filter buttons no longer keep persistent focus highlight.                          |
 
 Exit criteria:
@@ -2203,20 +2204,17 @@ Implementation notes:
 - Map controller restores the normal AOI readiness status after AOI overview filters are cleared or successfully applied.
 - The map warning for incompatible AOI relation ids is informational and preserves the non-destructive fallback to all AOIs.
 - The map warning for no matching AOIs is shown only when the active filter safely produced an empty AOI set.
-- Filters popover layout keeps the header, current filter summary and global action bar outside the scrollable filter body.
-- The global `Clear filters` action remains visible even when the filter content is taller than the viewport.
-- The filter layout change is UI-only and does not change Job filter, AOI overview filter or clustering state behavior.
+- Filters popover layout keeps the header and current filter summary outside the scrollable filter body.
+- `Clear filters` lives in the filter popover header next to the close action and remains reachable without using the scroll body.
+- `Clear AOI overview` remains inside the AOI overview section and only resets AOI overview filtering.
 - Filter popover sections use compact toggle button groups instead of checkbox rows where the choices are short and known.
 - Quick filters, Job status and Job priority remain multi-select filters even though they are rendered as button groups.
 - AOI overview duplicate status/hint text was removed because the active state is already shown in the popover summary.
-- The compact layout reduces popover width, padding and repeated explanatory text without changing filter state ownership.
 - Filter summary space is always rendered so the popover layout does not jump when filters are toggled.
 - Section descriptions are available through hover hints on section headers instead of visible helper text blocks.
-- Header hints keep the compact layout while preserving lightweight explanation for short filter groups.
-- `Clear filters` now lives in the filter popover header next to the close action, so the bottom of the popover remains visually lighter.
 - Pointer-activated filter buttons blur after click to avoid persistent focus highlight.
 - Keyboard focus remains available through `:focus-visible`.
-- The change is UI-only and does not change Job filter, AOI overview filter or clustering state behavior.
+- The Phase 17 changes are UI/map-status polish only and do not change Job filter, AOI overview filter or clustering state ownership.
 
 ## 13. Suggested implementation order
 
@@ -2416,4 +2414,5 @@ Recommended next tasks:
 | JM-NEXT-024 | Implement mutation-to-map sync                           |        Done | Successful Job status mutations now refresh map Job layers, AOI renderer summaries and active map context.                         |
 | JM-NEXT-025 | Clean final docs/status drift after Phase 15             |        Done | Tracker, architecture and backend-contract status drift has been cleaned after mutation-to-map sync.                               |
 | JM-NEXT-026 | Polish AOI overview filters from clean baseline          |        Done | AOI overview controls and map feedback have been clarified without adding AOI details or AOI clustering.                           |
-| JM-NEXT-027 | Choose next feature phase after AOI overview polish      | Not started | Candidate directions: backend adapter preparation, AOI service readiness, UX cleanup or final AOI/backend input review.            |
+| JM-NEXT-027 | Choose next feature phase after AOI overview polish      |        Done | Backend adapter preparation was selected as the next recommended feature direction.                                                |
+| JM-NEXT-028 | Start backend adapter preparation                        | Not started | Prepare Job service adapter boundaries and future HTTP adapter seams without introducing a final backend contract.                 |

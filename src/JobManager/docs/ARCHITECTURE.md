@@ -503,22 +503,23 @@ Rules:
 
 Phase 17 polish behavior:
 
-- Filters popover shows AOI overview state separately from Job filter state.
+- Filters popover shows AOI overview state separately from Job filter state in the combined summary.
 - `Clear AOI overview` clears only AOI overview mode and leaves Job filters unchanged.
+- Global `Clear filters` clears both Job filters and AOI overview filters.
+- `Clear filters` is available from the filter popover header instead of a sticky bottom footer.
 - Combined filter summary prefixes Job filters and AOI overview filters separately.
+- Filter summary remains visible even when no filters are active, using `No filters active` to avoid layout pop-in when filters are toggled.
+- Filter popover uses a fixed header and stable summary with a scrollable body so global actions remain available in smaller viewports.
+- The scrollable body contains AOI overview controls, Job filters and Job point clustering controls.
+- Filter popover controls use compact button groups for short known option sets.
+- Quick filters, Job status and Job priority are still multi-select filter state even though they are rendered as toggle buttons instead of checkboxes.
+- Compact filter sections expose explanations through header hover hints instead of visible helper text, keeping the popover lightweight.
+- AOI overview mode descriptions remain available as button titles/header hints, but duplicate visible status/hint text is intentionally avoided.
+- Pointer activation should not leave persistent focus highlight on filter buttons, while keyboard focus remains visible through `:focus-visible`.
 - If an active AOI overview mode produces no matching AOIs, the map status explains that the active AOI overview and Job filters match no AOIs.
 - If relation AOI ids are incompatible with the current AOI FeatureLayer identifier field, the map status explains that the filter could not be safely applied and all AOIs are shown.
 - Clearing or successfully applying AOI overview filters restores the normal AOI readiness status.
-- Filters popover uses a fixed header and footer with a scrollable body so global filter actions remain available in smaller viewports.
-- The scrollable body contains the AOI overview, Job filters and Job point clustering controls.
-- The layout fix does not move filter ownership into app-shell UI; `createNavbarController` still only composes controls and forwards changes to feature stores.
-- Filter popover controls use compact button groups for short known option sets.
-- Quick filters, Job status and Job priority are still multi-select filter state even though they are rendered as toggle buttons instead of checkboxes.
-- AOI overview mode descriptions remain available as button titles, but duplicate visible status/hint text is intentionally avoided to keep the popover lightweight.
-- Filter summary remains visible even when no filters are active, using `No filters active` to avoid layout pop-in when filters are toggled.
-- Compact filter sections expose explanations through header hover hints instead of visible helper text, keeping the popover lightweight.
-- Global `Clear filters` is available from the filter popover header instead of a sticky bottom footer.
-- Pointer activation should not leave persistent focus highlight on filter buttons, while keyboard focus remains visible through `:focus-visible`.
+- The layout and interaction polish does not move filter ownership into app-shell UI; `createNavbarController` still only composes controls and forwards changes to feature stores.
 
 ### Job point clustering
 
