@@ -2181,6 +2181,7 @@ Tasks:
 | JM-1706 | Keep filter actions accessible in small viewports |   Done | Filters popover now uses a fixed header/footer with a scrollable filter body, so global `Clear filters` remains reachable.                   |
 | JM-1707 | Compact filter popover controls                   |   Done | Filter popover controls now use compact button groups for AOI overview, quick filters, Job status, Job priority and Job point cluster style. |
 | JM-1708 | Stabilize filter summary and add section hints    |   Done | Filter summary remains visible with `No filters active`, and compact section headers expose hover hints without adding visible text blocks.  |
+| JM-1709 | Polish filter popover actions and focus behavior  |   Done | `Clear filters` moved to the header and pointer-activated filter buttons no longer keep persistent focus highlight.                          |
 
 Exit criteria:
 
@@ -2212,6 +2213,10 @@ Implementation notes:
 - Filter summary space is always rendered so the popover layout does not jump when filters are toggled.
 - Section descriptions are available through hover hints on section headers instead of visible helper text blocks.
 - Header hints keep the compact layout while preserving lightweight explanation for short filter groups.
+- `Clear filters` now lives in the filter popover header next to the close action, so the bottom of the popover remains visually lighter.
+- Pointer-activated filter buttons blur after click to avoid persistent focus highlight.
+- Keyboard focus remains available through `:focus-visible`.
+- The change is UI-only and does not change Job filter, AOI overview filter or clustering state behavior.
 
 ## 13. Suggested implementation order
 

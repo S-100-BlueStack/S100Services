@@ -18,13 +18,24 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.55rem 0.75rem 0.45rem;
+  padding: 0.45rem 0.65rem 0.4rem 0.75rem;
   border-bottom: 1px solid var(--jm-border);
   background: var(--jm-surface);
 }
 
+.job-manager-filters__header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
 .job-manager-filters__header calcite-action {
   --calcite-color-foreground-1: transparent;
+}
+
+.job-manager-filters__clear-button {
+  min-width: 6.1rem;
 }
 
 .job-manager-filters__title {
@@ -50,7 +61,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0.55rem 0.75rem;
+  padding: 0.55rem 0.75rem 0.8rem;
 }
 
 .job-manager-filters__section {
@@ -105,15 +116,17 @@
   width: 100%;
 }
 
-.job-manager-filters__actions {
-  display: flex;
-  flex: 0 0 auto;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  padding: 0.45rem 0.75rem 0.5rem;
-  border-top: 1px solid var(--jm-border);
-  background: var(--jm-surface);
-  box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.05);
+.job-manager-filters__preset-button:focus:not(:focus-visible),
+.job-manager-filters__toggle-button:focus:not(:focus-visible),
+.job-manager-filters__clear-button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.job-manager-filters__preset-button:focus-visible,
+.job-manager-filters__toggle-button:focus-visible,
+.job-manager-filters__clear-button:focus-visible {
+  outline: 2px solid var(--calcite-color-brand, #007ac2);
+  outline-offset: 2px;
 }
 
 @media (max-width: 420px) {
@@ -129,13 +142,12 @@
   }
 
   .job-manager-filters__header {
-    padding-top: 0.45rem;
-    padding-bottom: 0.35rem;
+    padding-top: 0.35rem;
+    padding-bottom: 0.3rem;
   }
 
   .job-manager-filters__summary,
-  .job-manager-filters__scroll,
-  .job-manager-filters__actions {
+  .job-manager-filters__scroll {
     padding-right: 0.65rem;
     padding-left: 0.65rem;
   }

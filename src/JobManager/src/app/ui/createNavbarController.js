@@ -187,6 +187,22 @@ function createJobFilterPopoverContent({
   titleElement.className = "job-manager-filters__title";
   titleElement.textContent = "Filters";
 
+  const headerActionsElement = document.createElement("div");
+  headerActionsElement.className = "job-manager-filters__header-actions";
+
+  const clearButton = document.createElement("calcite-button");
+  clearButton.className = "job-manager-filters__clear-button";
+  clearButton.appearance = "outline";
+  clearButton.kind = "neutral";
+  clearButton.scale = "s";
+  clearButton.textContent = "Clear filters";
+  clearButton.addEventListener("pointerdown", markPointerActivation, { passive: true });
+  clearButton.addEventListener("click", () => {
+    jobFilterStore.clearFilters();
+    aoiMapFilterStore?.clearFilters?.();
+    blurAfterPointerActivation(clearButton);
+  });
+
   const closeButton = document.createElement("calcite-action");
   closeButton.id = "filters-close-button";
   closeButton.icon = "x";
@@ -194,7 +210,8 @@ function createJobFilterPopoverContent({
   closeButton.text = "Close filters";
   closeButton.title = "Close filters";
 
-  headerElement.append(titleElement, closeButton);
+  headerActionsElement.append(clearButton, closeButton);
+  headerElement.append(titleElement, headerActionsElement);
 
   const summaryElement = document.createElement("p");
   summaryElement.className = "job-manager-filters__summary";
@@ -231,8 +248,10 @@ function createJobFilterPopoverContent({
   clearAoiOverviewButton.kind = "neutral";
   clearAoiOverviewButton.scale = "s";
   clearAoiOverviewButton.textContent = "Clear AOI overview";
+  clearAoiOverviewButton.addEventListener("pointerdown", markPointerActivation, { passive: true });
   clearAoiOverviewButton.addEventListener("click", () => {
     aoiMapFilterStore?.clearFilters?.();
+    blurAfterPointerActivation(clearAoiOverviewButton);
   });
 
   aoiOverviewActionsElement.append(clearAoiOverviewButton);
@@ -366,21 +385,6 @@ function createJobFilterPopoverContent({
 
   clusterStyleSection.body.append(...clusterStyleButtons.map((button) => button.buttonElement));
 
-  const actionsElement = document.createElement("div");
-  actionsElement.className = "job-manager-filters__actions";
-
-  const clearButton = document.createElement("calcite-button");
-  clearButton.appearance = "outline";
-  clearButton.kind = "neutral";
-  clearButton.scale = "s";
-  clearButton.textContent = "Clear filters";
-  clearButton.addEventListener("click", () => {
-    jobFilterStore.clearFilters();
-    aoiMapFilterStore?.clearFilters?.();
-  });
-
-  actionsElement.append(clearButton);
-
   scrollElement.append(
     aoiOverviewSection.element,
     quickFilterSection.element,
@@ -390,7 +394,7 @@ function createJobFilterPopoverContent({
     clusterStyleSection.element
   );
 
-  contentElement.append(headerElement, summaryElement, scrollElement, actionsElement);
+  contentElement.append(headerElement, summaryElement, scrollElement);
 
   filtersPopover.replaceChildren(contentElement);
 
@@ -467,7 +471,11 @@ function createPresetButton({ option, onSelect }) {
   buttonElement.scale = "s";
   buttonElement.title = option.description;
   buttonElement.textContent = option.label;
-  buttonElement.addEventListener("click", onSelect);
+  buttonElement.addEventListener("pointerdown", markPointerActivation, { passive: true });
+  buttonElement.addEventListener("click", () => {
+    onSelect();
+    blurAfterPointerActivation(buttonElement);
+  });
 
   return {
     buttonElement,
@@ -490,8 +498,10 @@ function createToggleButton({ label, value = "", onChange }) {
     buttonElement.value = value;
   }
 
+  buttonElement.addEventListener("pointerdown", markPointerActivation, { passive: true });
   buttonElement.addEventListener("click", () => {
     onChange(buttonElement.getAttribute("aria-pressed") !== "true");
+    blurAfterPointerActivation(buttonElement);
   });
 
   return {
@@ -611,6 +621,19 @@ function getCombinedFilterSummary({ jobFilters, aoiMapFilters }) {
   }
 
   return parts.length > 0 ? parts.join(", ") : "No filters active";
+}
+
+function markPointerActivation(event) {
+  event.currentTarget.dataset.pointerActivation = "true";
+}
+
+function blurAfterPointerActivation(element) {
+  if (element.dataset.pointerActivation !== "true") {
+    return;
+  }
+
+  delete element.dataset.pointerActivation;
+  element.blur?.();
 }
 
 function getRequiredElement(rootElement, selector) {

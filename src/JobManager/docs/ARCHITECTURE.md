@@ -517,6 +517,8 @@ Phase 17 polish behavior:
 - AOI overview mode descriptions remain available as button titles, but duplicate visible status/hint text is intentionally avoided to keep the popover lightweight.
 - Filter summary remains visible even when no filters are active, using `No filters active` to avoid layout pop-in when filters are toggled.
 - Compact filter sections expose explanations through header hover hints instead of visible helper text, keeping the popover lightweight.
+- Global `Clear filters` is available from the filter popover header instead of a sticky bottom footer.
+- Pointer activation should not leave persistent focus highlight on filter buttons, while keyboard focus remains visible through `:focus-visible`.
 
 ### Job point clustering
 
