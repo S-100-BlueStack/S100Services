@@ -202,6 +202,16 @@ Rules:
 - Keep ArcGIS layer lifecycle in `features/map`.
 - Introduce canonical AOI state only when a concrete UI/backend need appears.
 
+Phase 19 review:
+
+- Keep the ArcGIS `FeatureLayer` as the owner of AOI map display.
+- Keep AOI readiness validation in `features/aoi/services/aoiService.js`.
+- Keep AOI FeatureLayer construction in `features/map/layers/createAoiLayer.js`.
+- Keep `loadAois()` as a stable service facade skeleton until a concrete UI/backend need requires queried canonical AOI state.
+- Do not introduce canonical queried AOI state before final AOI fields, auth requirements, geometry characteristics and service size are known.
+- Do not introduce AOI details, AOI clustering or final relation-id ownership from the current test Feature Service.
+- Continue treating `GlobalID` and `PRODUCTNAME` as provisional test-service assumptions only.
+
 ### Current selected AOI state
 
 Status: Done
@@ -819,6 +829,21 @@ Current relation service behavior:
 - returns relation source metadata
 - supports AOI summary derivation for future map renderer and popup use
 - supports lookup from AOI to Jobs and from Job to AOIs
+
+Current AOI service behavior:
+
+- `features/aoi/services/aoiService.js` exposes AOI readiness validation for the configured ArcGIS FeatureLayer.
+- `loadAois()` is intentionally still a facade skeleton while FeatureLayer owns current AOI display.
+- AOI service does not own canonical AOI state yet.
+- AOI service does not query all AOIs eagerly.
+- AOI service should not become a backend contract layer before the real AOI Feature Service is confirmed.
+
+Rules:
+
+- Keep AOI readiness validation in the AOI feature boundary.
+- Keep ArcGIS FeatureLayer lifecycle and display in the map feature boundary.
+- Introduce canonical AOI state only when there is a confirmed UI/backend requirement.
+- Keep test-service field mapping provisional until final AOI Feature Service inputs are known.
 
 ## 13. Map and clustering architecture
 

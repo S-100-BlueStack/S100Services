@@ -50,7 +50,7 @@ Do not add a backend API base URL or backend auth config until the backend exist
 
 ## 2.2 Phase 18 Job service adapter preparation
 
-Status: Started
+Status: Done
 
 Current decision:
 
@@ -340,6 +340,38 @@ Decision:
 Use `GlobalID` as the provisional frontend AOI identifier for the test Feature Service. Use `PRODUCTNAME` as the provisional display name. Use `OBJECTID` for ArcGIS/service mechanics only. Do not treat this as the final backend contract until the real AOI Feature Service is created.
 
 Keep AOI FeatureLayer ownership for map display until the real AOI Feature Service is confirmed. The AOI service should provide validation and normalization helpers, but should not eagerly query all AOIs into frontend state without a concrete UI/backend requirement.
+
+### Phase 19 AOI service readiness review
+
+Status: Reviewed
+
+Current decision:
+
+AOI FeatureLayer ownership remains the right current approach.
+
+Current behavior to preserve:
+
+- AOI FeatureLayer owns current map AOI display.
+- AOI service owns readiness validation for the configured FeatureLayer.
+- AOI service exposes a stable `loadAois()` facade but does not query all AOIs into canonical frontend state.
+- AOI field mapping remains based on the current test service only.
+- `GlobalID` remains the provisional AOI identifier.
+- `PRODUCTNAME` remains the provisional AOI display field.
+- `OBJECTID` remains ArcGIS/service mechanics only.
+- AOI overview filtering can only safely filter AOIs when relation ids are compatible with the configured AOI identifier field.
+
+Deferred until real AOI/backend inputs exist:
+
+- canonical queried AOI state
+- AOI details
+- AOI clustering or representative-point overview layer
+- selected-Job permanent AOI layer filtering
+- AOI auth handling
+- final AOI relation identifier ownership
+
+Backend implication:
+
+A future backend or relation service should return AOI identifiers compatible with the configured AOI Feature Service identifier field if those relations are expected to drive AOI map filtering.
 
 ## 6. Draft relation model
 
