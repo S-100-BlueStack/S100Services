@@ -1,5 +1,4 @@
-
-```
+````
 # Job Manager Architecture
 
 This document describes the frontend architecture for Job Manager.
@@ -42,7 +41,7 @@ Jobs store + Job filter state
 Jobs + AOI identifiers
   -> relation service/domain helpers
   -> AOI summaries, scoped Jobs, related AOI highlights and map filters
-```
+````
 
 Future backend flow should replace the mock backend behind the Job service without requiring UI components to change significantly.
 
@@ -188,7 +187,6 @@ Rules:
 - Selected AOI restore takes precedence over selected Job restore when both states exist.
 - Stale refresh results must not restore old selected AOI or selected Job map state.
 - Map sync coordination must not introduce backend endpoint, auth or AOI contract assumptions.
-
 
 ## 5. `src/features/aoi`
 
@@ -1493,4 +1491,7 @@ Avoid duplicating large sections between docs. Keep:
 - roadmap and status in `PROJECT_TRACKER.md`
 - backend contract notes in `BACKEND_CONTRACTS.md`
 - architecture and folder ownership in `ARCHITECTURE.md`
+
+```
+
 ```

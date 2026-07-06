@@ -1,5 +1,4 @@
-
-```
+````
 # Job Manager Backend Contracts
 
 This document tracks backend assumptions, draft contracts, open questions and integration decisions for Job Manager.
@@ -77,7 +76,7 @@ loadJobs()
 
 updateJobStatus(jobId, status)
   -> { job, createdJobs }
-```
+````
 
 The adapter expectation mirrors the existing frontend service need and mock behavior. It should not be treated as a final backend contract until a real backend exists.
 
@@ -620,4 +619,7 @@ When backend work begins, update this document with:
 - authentication assumptions
 - relation calculation ownership
 - known limitations
+
+```
+
 ```
