@@ -23,7 +23,7 @@ Job Manager should follow Product Manager patterns where they fit, but the domai
 
 ## 2. Current project status
 
-Status: Phase 27 map/list state transition polish complete; next polish target selection ready
+Status: Phase 28 baseline review complete; frontend work is gated by backend/AOI inputs or concrete manual findings
 
 Current known baseline:
 
@@ -65,6 +65,8 @@ Current known baseline:
 - Jobs overlay layout now fills the map workspace height without leaving a bottom gap in list or details mode.
 - Filters popover layout, low-height scrolling and Escape close behavior have been polished for laptop/desktop use without changing filter state ownership or map/list filtering behavior.
 - User-driven map/list transitions cancel pending async map refresh restore work so stale AOI/Job scope or highlight state cannot be reapplied after the user changes context.
+- The current UI-polish baseline is considered stable. Do not start additional UI polish unless manual testing finds a concrete reproducible issue.
+- Backend/AOI-dependent implementation remains gated until real endpoint, auth, field, geometry and relation-ownership inputs are available.
 
 Current known limitations:
 
@@ -2572,6 +2574,37 @@ Implementation notes:
 - Manual validation found no issues in the tested map/list state transition flows.
 - Phase 27 does not change filter rules, relation lookup, backend assumptions or AOI service assumptions.
 
+## Phase 28 - Baseline review and backend/AOI readiness gate
+
+Goal:
+
+Review the stable Phase 27 baseline, close the current open-ended UI-polish track, and make the next work gate explicit: either confirmed backend/AOI inputs or a concrete reproducible manual issue.
+
+Tasks:
+
+| ID      | Task                                   | Status | Notes                                                                                                       |
+| ------- | -------------------------------------- | -----: | ----------------------------------------------------------------------------------------------------------- |
+| JM-2801 | Review current frontend baseline       |   Done | Current map/list, popup, panel, filter, startup and refresh polish is documented through Phase 27.          |
+| JM-2802 | Confirm backend/AOI readiness blockers |   Done | Real Job endpoint/auth/fields and final AOI service fields/auth/geometry/relation ownership remain open.    |
+| JM-2803 | Decide next work gate                  |   Done | Further UI polish should wait for a concrete reproducible manual finding; backend/AOI work waits on inputs. |
+| JM-2804 | Keep Phase 28 docs-only                |   Done | No runtime behavior, Calcite usage, backend contract or feature implementation is introduced.               |
+
+Exit criteria:
+
+- current frontend baseline is documented as stable after Phase 27
+- no new UI-polish target is selected without a reproducible issue
+- backend/AOI-dependent work remains explicitly blocked by missing external inputs
+- tracker next-task status reflects the readiness gate
+- no runtime behavior, backend contract, AOI contract or Calcite usage is changed
+
+Implementation notes:
+
+- Phase 28 is a docs/status review only.
+- Current laptop/desktop UI polish is considered sufficient unless manual testing finds a concrete issue.
+- Backend implementation remains blocked until real Job endpoint shape, authentication behavior, guaranteed Job fields and mutation semantics are known.
+- Final AOI work remains blocked until real AOI Feature Service fields, auth requirements, geometry characteristics, spatial reference, service size and relation identifier ownership are confirmed.
+- Additional frontend work should be selected from one of two inputs: confirmed backend/AOI information or a reproducible problem from manual testing.
+
 ## 13. Suggested implementation order
 
 Recommended order:
@@ -2781,8 +2814,5 @@ Recommended next tasks:
 | JM-NEXT-036 | Choose next polish target from manual testing            |        Done | Phase 25 validation found a Jobs panel bottom gap, which was fixed as a small CSS-only follow-up.                                  |
 | JM-NEXT-037 | Choose next polish target from current UI baseline       |        Done | Filters popover small viewport and close/focus behavior was selected as the next polish target.                                    |
 | JM-NEXT-038 | Choose next polish target after Phase 26 validation      |        Done | Map/list state transition polish was selected after Phase 26 validation.                                                           |
-| JM-NEXT-039 | Choose next polish target after Phase 27 validation      | Not started | Pick the next reproducible map/list, filter popover or panel interaction issue, or pause for backend/AOI inputs.                   |
-
-```
-
-```
+| JM-NEXT-039 | Choose next polish target after Phase 27 validation      |        Done | Phase 28 baseline review selected pause/readiness gate instead of another open-ended UI-polish task.                               |
+| JM-NEXT-040 | Await backend/AOI inputs or concrete manual issue        |     Blocked | Continue only when real backend/AOI inputs are available or manual testing finds a concrete reproducible frontend issue.           |

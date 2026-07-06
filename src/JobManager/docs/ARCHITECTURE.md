@@ -1480,6 +1480,25 @@ Current responsive scope:
 
 The exact responsive behavior can be refined later if the usage target changes.
 
+### Current implementation gate
+
+Status: Reviewed after Phase 28
+
+Current decision:
+
+The frontend UI-polish baseline is stable enough to pause open-ended polish work. New frontend implementation should be driven by one of these inputs:
+
+- real backend information for Job loading, mutation, errors, authentication and guaranteed fields
+- real AOI Feature Service information for fields, auth, geometry, spatial reference, service size and relation identifier ownership
+- a concrete reproducible manual frontend issue found during testing
+
+Rules:
+
+- Do not add new backend endpoint paths, API base URLs or auth behavior without confirmed backend inputs.
+- Do not add canonical queried AOI state, AOI details or AOI clustering without confirmed AOI inputs.
+- Do not continue UI polish just to look for possible issues; use manual findings as the trigger.
+- Keep docs/status reviews docs-only unless a specific runtime issue is identified.
+
 ## 15. Calcite-first UI principle
 
 Job Manager should use Calcite and Calcite Components where they fit the UI need.
@@ -1571,6 +1590,14 @@ Phase 27 map/list transition validation:
 - Validate manual refresh while changing AOI/Job context where practical.
 - Verify that stale AOI/Job scope or highlights do not come back after context changes.
 
+Phase 28 baseline readiness review:
+
+- Docs/status reviews should not introduce runtime behavior changes.
+- Do not start additional UI-polish work without a concrete reproducible manual issue.
+- Do not start backend adapter implementation before real endpoint shape, authentication behavior and guaranteed Job fields are known.
+- Do not start final AOI implementation before real AOI fields, auth requirements, geometry characteristics, spatial reference, service size and relation identifier ownership are confirmed.
+- Use `npm run format:check` for docs-only packages; use `npm run check` or `npm run rdy` for runtime implementation packages.
+
 ## 17. Documentation rules
 
 Update documentation when:
@@ -1587,7 +1614,3 @@ Avoid duplicating large sections between docs. Keep:
 - roadmap and status in `PROJECT_TRACKER.md`
 - backend contract notes in `BACKEND_CONTRACTS.md`
 - architecture and folder ownership in `ARCHITECTURE.md`
-
-```
-
-```

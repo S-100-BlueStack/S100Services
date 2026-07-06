@@ -230,6 +230,46 @@ Backend implication:
 
 Future backend/AOI work remains blocked by the same real endpoint, auth, field and relation-ownership inputs as before Phase 27.
 
+## 2.8 Phase 28 baseline readiness gate
+
+Status: Reviewed
+
+Current decision:
+
+No backend contract changes are introduced by the Phase 28 baseline review.
+
+The current frontend baseline should pause backend-dependent implementation until real backend inputs are available.
+
+Backend work remains blocked by:
+
+- real Job endpoint shape
+- authentication behavior
+- guaranteed Job fields
+- status mutation request/response shape
+- error and conflict response behavior
+- whether status mutations can return created follow-up Jobs
+
+AOI-related backend/service work remains blocked by:
+
+- final AOI Feature Service fields
+- AOI authentication requirements
+- AOI geometry type and spatial reference
+- AOI service size and density
+- stable AOI identifier ownership
+- whether AOI/Job relations are returned by backend or calculated elsewhere
+
+Current behavior remains unchanged:
+
+- mock remains the default Job adapter
+- the HTTP adapter remains an unavailable future seam
+- AOIs still flow through the configured ArcGIS FeatureLayer
+- AOI/Job relations remain service/domain-derived and source-flexible
+- no Job endpoint paths, auth behavior, response shapes or AOI relation ownership assumptions are introduced
+
+Backend implication:
+
+The next backend/AOI implementation package should start only after the missing real backend or AOI inputs are available.
+
 ## 3. Expected backend responsibilities
 
 Likely future backend responsibilities:
@@ -676,7 +716,3 @@ When backend work begins, update this document with:
 - authentication assumptions
 - relation calculation ownership
 - known limitations
-
-```
-
-```
