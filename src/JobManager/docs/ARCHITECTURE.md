@@ -675,9 +675,9 @@ Phase 26 small viewport polish:
 - Filters popover sizing uses dynamic viewport height with a viewport fallback.
 - The header and active-filter summary remain outside the scroll body.
 - The scroll body owns filter-section scrolling and uses contained overscroll behavior.
-- Button grids collapse earlier on narrow viewports so short filter labels remain readable.
+- Button grids collapse earlier on narrow viewports so short filter labels remain readable on laptop/desktop widths.
 - Escape closes the Filters popover.
-- Explicit close actions restore focus to the Filters navbar action.
+- Very narrow/mobile layout is not a primary target for the current app because the expected runtime is laptop/desktop.
 - The polish does not change Job filter state, AOI overview state, Job point clustering state or map filter application.
 
 ### Job point clustering
@@ -1463,7 +1463,14 @@ The layout should support both:
 - map-first workflow
 - list-first workflow
 
-The exact responsive behavior can be refined later.
+Current responsive scope:
+
+- Job Manager is currently optimized for laptop/desktop browser use.
+- Low-height desktop viewports should remain usable through internal panel/popover scrolling.
+- Very narrow/mobile layouts are not a primary target unless this becomes an explicit product requirement.
+- Panel and popover minimum widths may define the practical lower bound for supported browser width.
+
+The exact responsive behavior can be refined later if the usage target changes.
 
 ## 15. Calcite-first UI principle
 
@@ -1540,10 +1547,11 @@ Phase 25 Job popup/panel tests:
 
 Phase 26 Filters popover validation:
 
-- Validate the Filters popover on normal, narrow and low-height viewports.
-- Verify that the header and active-filter summary remain visible while filter sections scroll.
-- Verify that Escape closes the popover and returns focus to the Filters action.
-- Verify that Job filters, AOI overview filters and Job point clustering controls still update the map/list behavior as before.
+- Validate the Filters popover on normal laptop/desktop viewports.
+- Validate low-height behavior so the header and active-filter summary remain visible while filter sections scroll.
+- Verify that Escape closes the popover.
+- Verify that Job filters, AOI overview filters and Job point clustering controls still update map/list behavior as before.
+- Very narrow/mobile layouts do not need pixel-perfect validation unless the app target changes.
 
 ## 17. Documentation rules
 

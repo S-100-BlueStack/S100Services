@@ -23,7 +23,7 @@ Job Manager should follow Product Manager patterns where they fit, but the domai
 
 ## 2. Current project status
 
-Status: Phase 26 Filters popover small viewport polish started
+Status: Phase 26 Filters popover polish complete; next polish target selection ready
 
 Current known baseline:
 
@@ -63,7 +63,7 @@ Current known baseline:
 - Cluster picker popup state detection is more robust when Job filters, AOI-scoped Job map filters, cluster settings or refreshed Job data change while a cluster popup is open.
 - Job popup lifecycle is now coordinated with selected-Job panel context so normal Job popups can stay open while details are used, but close when the selected-Job context is left.
 - Jobs overlay layout now fills the map workspace height without leaving a bottom gap in list or details mode.
-- Filters popover small-viewport layout and close behavior has been polished without changing filter state ownership, AOI overview rules or Job clustering behavior.
+- Filters popover layout, low-height scrolling and Escape close behavior have been polished for laptop/desktop use without changing filter state ownership or map/list filtering behavior.
 
 Current known limitations:
 
@@ -2507,27 +2507,35 @@ Implementation notes:
 
 Goal:
 
-Polish the existing Filters popover layout, scroll behavior and close/focus behavior on smaller viewports without changing filter state ownership, AOI overview rules, Job clustering behavior or backend/AOI contracts.
+Polish the existing Filters popover layout, scroll behavior and close/focus behavior for laptop/desktop browser use without changing filter state ownership, AOI overview rules, Job clustering behavior or backend/AOI contracts.
 
 Tasks:
 
 | ID      | Task                                        | Status | Notes                                                                                                       |
 | ------- | ------------------------------------------- | -----: | ----------------------------------------------------------------------------------------------------------- |
-| JM-2601 | Harden Filters popover viewport sizing      |   Done | Popover sizing now uses dynamic viewport height with fallback and tighter viewport margins.                 |
-| JM-2602 | Improve small-width filter control wrapping |   Done | Three- and four-option button grids collapse earlier, with a one-column fallback on very narrow viewports.  |
-| JM-2603 | Improve low-height scroll behavior          |   Done | Spacing is tightened for low-height viewports while keeping the header and summary outside the scroll body. |
+| JM-2601 | Harden Filters popover viewport sizing      |   Done | Popover sizing uses dynamic viewport height with a fallback and tighter viewport margins.                   |
+| JM-2602 | Improve small-width filter control wrapping |   Done | Button grids collapse earlier, with a one-column fallback on very narrow viewports.                         |
+| JM-2603 | Improve low-height scroll behavior          |   Done | Low-height viewport behavior was manually validated and behaves as expected.                                |
 | JM-2604 | Add keyboard close behavior                 |   Done | Escape closes the Filters popover.                                                                          |
-| JM-2605 | Restore focus after explicit popover close  |   Done | Closing through the close action or Escape returns focus to the Filters navbar action.                      |
+| JM-2605 | Preserve laptop/desktop scope               |   Done | Very narrow/mobile layout is not a primary target because the app is expected to be used on laptop/desktop. |
 
 Exit criteria:
 
-- Filters popover remains usable on narrow and low-height viewports
-- filter header and active-filter summary remain visible
-- filter body scrolls without page-level scroll fighting
+- Filters popover remains usable on laptop/desktop viewports
+- filter header and active-filter summary remain visible while the body scrolls on low-height viewports
 - Escape closes the popover
-- focus is restored after explicit close
 - Job filters, AOI overview filters and Job point clustering settings still behave as before
+- very narrow/mobile behavior is documented as accepted non-primary scope
 - no backend, AOI contract or new filter-domain behavior is introduced
+
+Implementation notes:
+
+- The Filters popover continues to use `calcite-popover`.
+- `createNavbarController.js` owns popover close/focus behavior and forwards state changes to feature stores.
+- `filterPopover.css` owns viewport sizing, scroll containment and filter control wrapping.
+- The header and active-filter summary remain outside the scroll body.
+- Manual validation confirmed that filters work, low-height behavior works and Escape closes the popover.
+- Manual validation confirmed that very narrow browser widths are constrained by the practical popover minimum width; this is acceptable for the current laptop/desktop target.
 
 ## 13. Suggested implementation order
 
@@ -2737,4 +2745,4 @@ Recommended next tasks:
 | JM-NEXT-035 | Continue small UI polish from hardened baseline          |        Done | Job popup and Jobs panel selected-context cleanup was polished without adding backend, AOI details or new contract assumptions.    |
 | JM-NEXT-036 | Choose next polish target from manual testing            |        Done | Phase 25 validation found a Jobs panel bottom gap, which was fixed as a small CSS-only follow-up.                                  |
 | JM-NEXT-037 | Choose next polish target from current UI baseline       |        Done | Filters popover small viewport and close/focus behavior was selected as the next polish target.                                    |
-| JM-NEXT-038 | Choose next polish target after Phase 26 validation      | Not started | Pick the next reproducible map/list, filter popover or panel interaction issue after validating Phase 26.                          |
+| JM-NEXT-038 | Choose next polish target after Phase 26 validation      | Not started | Pick the next reproducible map/list, filter popover or panel interaction issue, or pause for backend/AOI inputs.                   |

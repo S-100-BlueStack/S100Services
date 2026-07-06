@@ -191,6 +191,25 @@ Backend implication:
 
 The next safe frontend work should continue to avoid endpoint paths, auth assumptions and final AOI relation assumptions unless real backend/AOI inputs are available.
 
+## 2.6 Phase 26 Filters popover polish review
+
+Status: Reviewed
+
+Current decision:
+
+No backend contract changes are introduced by the Filters popover layout, scrolling or close/focus polish.
+
+Current behavior remains unchanged:
+
+- Job filters still use the existing frontend Job filter state.
+- AOI overview filters still use the existing map presentation state and relation-service snapshots.
+- Job point clustering settings still use the existing map clustering state.
+- No Job endpoint paths, auth behavior, response shapes or AOI relation ownership assumptions are introduced.
+
+Backend implication:
+
+Future backend/AOI work remains blocked by the same real endpoint, auth, field and relation-ownership inputs as before Phase 26.
+
 ## 3. Expected backend responsibilities
 
 Likely future backend responsibilities:
