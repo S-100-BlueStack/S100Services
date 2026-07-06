@@ -1,3 +1,5 @@
+
+```
 # Job Manager Backend Contracts
 
 This document tracks backend assumptions, draft contracts, open questions and integration decisions for Job Manager.
@@ -153,6 +155,24 @@ Generated mock Job created
 Backend implication:
 
 The future backend may choose whether status mutation responses can include newly created follow-up Jobs. The current frontend supports a `createdJobs` mutation result shape for notices and future compatibility, but treats returned generated Jobs as queued work for the current visible session. New Jobs should not appear in the current visible map/list snapshot until the frontend receives them through the normal load/refresh path, unless that product decision changes later.
+
+## 2.4 Phase 23 hardened baseline review
+
+Status: Reviewed
+
+Current decision:
+
+No backend contract changes are introduced by the hardened baseline review.
+
+Current blockers remain unchanged:
+
+- Job HTTP adapter implementation is blocked until a real endpoint shape, authentication behavior and guaranteed Job fields are known.
+- Final AOI integration work is blocked until real AOI Feature Service fields, auth requirements, geometry type, spatial reference, service size and relation identifier ownership are confirmed.
+- AOI details, canonical queried AOI state, selected-Job permanent AOI filtering and AOI clustering remain deferred until those inputs exist.
+
+Backend implication:
+
+The next safe frontend work should avoid adding endpoint paths, auth assumptions or final AOI relation assumptions.
 
 ## 3. Expected backend responsibilities
 
@@ -600,3 +620,4 @@ When backend work begins, update this document with:
 - authentication assumptions
 - relation calculation ownership
 - known limitations
+```

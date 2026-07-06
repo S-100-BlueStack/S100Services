@@ -1,3 +1,5 @@
+
+```
 # Job Manager Project Tracker
 
 This document is the source of truth for Job Manager project goals, requirements, architecture decisions, folder structure, implementation order, open questions and progress.
@@ -23,7 +25,7 @@ Job Manager should follow Product Manager patterns where they fit, but the domai
 
 ## 2. Current project status
 
-Status: Map refresh and selection coordination hardening started
+Status: Hardened baseline reviewed; next feature selection ready
 
 Current known baseline:
 
@@ -61,7 +63,7 @@ Current known baseline:
 - Startup stage coordination is now isolated behind a startup controller with regression tests for stage order, retry reuse and invalid Jobs load results.
 - Map refresh and selection restore coordination is now isolated behind a map sync coordinator with regression tests for manual refresh, mutation sync, selected AOI restore, selected Job restore and stale refresh guards.
 
-  Current known limitations:
+Current known limitations:
 
 - AOI renderer enrichment is still asynchronous after filter changes, but mutation-driven AOI renderer flashing has been fixed.
 - AOI overview filtering can only apply destructive AOI layer filtering when relation AOI ids are compatible with the current provisional AOI `GlobalID` field.
@@ -2401,6 +2403,39 @@ Implementation notes:
 - The coordinator keeps the existing behavior where a startup-time mutation sequence is recorded even when map sync is skipped before startup completion.
 - Phase 22 does not add endpoint assumptions, auth behavior, AOI details, AOI clustering or new map presentation behavior.
 
+## Phase 23 - Hardened baseline review and next feature selection
+
+Goal:
+
+Review the hardened baseline after service, startup and map refresh coordination test hardening, clean documentation drift and identify the next safe feature direction without adding backend, AOI contract or ArcGIS-heavy assumptions.
+
+Tasks:
+
+| ID      | Task                                      | Status | Notes                                                                                                         |
+| ------- | ----------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------- |
+| JM-2301 | Review tracker status after Phase 20-22   |   Done | Current status and next-task rows are aligned with the committed test-hardening phases.                       |
+| JM-2302 | Review architecture status drift          |   Done | Duplicate map refresh coordination text is removed and Job service adapter status is aligned as `Done`.       |
+| JM-2303 | Confirm backend/AOI blockers              |   Done | Job HTTP adapter contract and final AOI inputs remain blocked by real backend/AOI decisions.                  |
+| JM-2304 | Select next safe work direction           |   Done | Next recommended work is small UI/UX polish that does not depend on backend or final AOI Feature Service data. |
+| JM-2305 | Keep Phase 23 docs-only                   |   Done | No runtime behavior, backend contract or feature implementation is introduced.                                |
+
+Exit criteria:
+
+- tracker status reflects the hardened baseline
+- Phase 20, Phase 21 and Phase 22 remain documented as completed
+- architecture duplication introduced during Phase 22 docs update is removed
+- backend and final AOI blockers remain explicit
+- next feature direction is selected without requiring unavailable backend/AOI inputs
+- no runtime code behavior changes are introduced
+
+Implementation notes:
+
+- Phase 23 is a docs/status cleanup and next-feature selection pass.
+- The current internal technical risk is lower after targeted tests for service boundaries, startup coordination and map refresh/selection restore coordination.
+- Backend adapter implementation remains blocked until real endpoint shape, authentication behavior and guaranteed Job fields are known.
+- AOI details, canonical queried AOI state, selected-Job permanent AOI filtering and AOI clustering remain blocked until final AOI Feature Service inputs are known.
+- The next recommended implementation direction is UI/UX polish around existing map/list behavior, because it can be validated without locking backend or AOI contracts.
+
 ## 13. Suggested implementation order
 
 Recommended order:
@@ -2604,4 +2639,6 @@ Recommended next tasks:
 | JM-NEXT-029 | Define future Job HTTP adapter contract                  |     Blocked | Blocked until real backend endpoint shape, auth behavior and guaranteed Job fields are known.                                      |
 | JM-NEXT-031 | Continue test hardening for startup/map coordination     |        Done | Startup coordination was extracted and covered with targeted stage-order and retry-reuse tests.                                    |
 | JM-NEXT-032 | Review map refresh and selection coordination tests      |        Done | Map refresh and selected AOI/Job restore coordination was extracted and covered with targeted tests.                               |
-| JM-NEXT-033 | Choose next feature phase from hardened baseline         | Not started | Review remaining blocked backend/AOI inputs and decide whether next work should be docs cleanup, UI polish or a new feature.       |
+| JM-NEXT-033 | Choose next feature phase from hardened baseline         |        Done | Backend/AOI-dependent work remains blocked; next safe direction is UI/UX polish against existing map/list behavior.                |
+| JM-NEXT-034 | Start small UI polish from hardened baseline             | Not started | Recommended next target: fix or polish existing map/list edge cases without adding backend, AOI details or new contract assumptions. |
+```

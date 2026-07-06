@@ -1,3 +1,5 @@
+
+```
 # Job Manager Architecture
 
 This document describes the frontend architecture for Job Manager.
@@ -185,42 +187,8 @@ Rules:
 - Map sync coordinator should use injected dependencies in tests instead of ArcGIS runtime objects.
 - Selected AOI restore takes precedence over selected Job restore when both states exist.
 - Stale refresh results must not restore old selected AOI or selected Job map state.
-- Map sync coordination must not introduce backend endpoint, auth or AOI contract assumptions.### Map refresh coordination
-
-Status: Done
-
-Map refresh and selection restore orchestration lives under `src/app/coordination`.
-
-Current module:
-
-```txt
-app/coordination/createMapSyncCoordinator.js
-  -> coordinates manual Jobs refresh to map refresh
-  -> coordinates successful Job mutation to map sync
-  -> restores selected AOI map scope and highlight after refresh
-  -> restores selected Job focus and related AOI highlight after refresh
-  -> guards stale refresh results from restoring old selection state
-  -> exposes injected dependencies for focused tests
-```
-
-Current refresh inputs:
-
-```txt
-Jobs panel refresh event
-  -> createMapSyncCoordinator.refreshMapAfterJobsRefresh({ jobs })
-
-Jobs store mutation change
-  -> createMapSyncCoordinator.syncMapAfterJobStoreChange(snapshot)
-```
-
-Rules:
-
-- `createApp.js` owns feature event wiring and panel/map state transitions.
-- Map sync coordinator owns refresh/restore orchestration, not app DOM composition.
-- Map sync coordinator should use injected dependencies in tests instead of ArcGIS runtime objects.
-- Selected AOI restore takes precedence over selected Job restore when both states exist.
-- Stale refresh results must not restore old selected AOI or selected Job map state.
 - Map sync coordination must not introduce backend endpoint, auth or AOI contract assumptions.
+
 
 ## 5. `src/features/aoi`
 
@@ -375,7 +343,7 @@ Rules:
 
 ### Job service adapter boundary
 
-Status: Started
+Status: Done
 
 Current flow:
 
@@ -1502,6 +1470,13 @@ Phase 22 map refresh coordination tests:
 - Tests should cover selected AOI restore, selected Job restore, mutation sync gating, stale refresh guards and refresh failure notices.
 - Tests must not introduce backend endpoint, auth or AOI contract assumptions.
 
+Phase 23 baseline review:
+
+- Docs/status cleanup should not introduce runtime behavior changes.
+- Backend and final AOI blockers should remain explicit when selecting the next work item.
+- Next feature work should prefer existing UI/UX polish unless real backend or AOI Feature Service inputs are available.
+- Documentation should avoid duplicating identical architecture sections during wrap-up updates.
+
 ## 17. Documentation rules
 
 Update documentation when:
@@ -1518,3 +1493,4 @@ Avoid duplicating large sections between docs. Keep:
 - roadmap and status in `PROJECT_TRACKER.md`
 - backend contract notes in `BACKEND_CONTRACTS.md`
 - architecture and folder ownership in `ARCHITECTURE.md`
+```
