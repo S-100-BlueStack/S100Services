@@ -113,6 +113,43 @@ Rules:
 - ArcGIS-specific layer filtering and clustering application remain owned by `features/map`.
 - `createApp.js` should stay focused on store creation, feature composition, high-level event wiring and lifecycle cleanup.
 
+### Startup coordination
+
+Status: Done
+
+Startup stage orchestration lives under `src/app/startup`.
+
+Current module:
+
+```txt
+app/startup/createStartupController.js
+  -> coordinates required startup stages
+  -> keeps startup stage state across retry attempts
+  -> updates startup loader text/progress for startup stages
+  -> exposes injected dependencies for focused tests
+```
+
+Current startup stages:
+
+```txt
+map workspace
+  -> mapController.start({ requireAois: true, deferJobGeometry: true, suppressStatus: true })
+
+Jobs load
+  -> jobStore.loadJobs()
+
+Job map rendering
+  -> mapController.refreshJobData({ jobs })
+```
+
+Rules:
+
+- `createApp.js` owns app shell composition and shell blocking/unblocking.
+- Startup controller owns startup stage orchestration, not app DOM composition.
+- Startup controller should use injected dependencies in tests instead of ArcGIS runtime objects.
+- Completed startup stages should be reused on later retry attempts where possible.
+- Startup controller must not introduce backend endpoint, auth or AOI contract assumptions.
+
 ## 5. `src/features/aoi`
 
 Owns AOI-specific behavior.
@@ -1240,6 +1277,15 @@ Cleanup notes:
 - Startup loader destroy cleanup now removes the loader element directly.
 - Retry delay cleanup removes abort listeners after both abort and normal timeout.
 
+Phase 21 test hardening:
+
+- Startup stage orchestration is isolated in `app/startup/createStartupController.js`.
+- The startup controller keeps stage readiness state across retry attempts.
+- Retry after Jobs load failure should not recreate the map workspace.
+- Retry after Job map rendering failure should not reload the map workspace or Jobs.
+- Invalid Jobs load results fail startup before Job map rendering starts.
+- Tests use injected stubs for map controller, job store and startup loader to avoid ArcGIS-heavy integration tests.
+
 ### AOI popup Job summary content
 
 Status: Done
@@ -1359,6 +1405,13 @@ Phase 20 test hardening:
 - AOI readiness tests should use lightweight FeatureLayer-compatible stubs instead of ArcGIS runtime objects.
 - AOI overview filter tests should cover both safe no-match filtering and non-destructive fallback when relation ids are incompatible with the AOI identifier field.
 - Tests should not introduce backend endpoint, auth or environment assumptions.
+
+Phase 21 startup coordination tests:
+
+- Startup coordination tests should use injected map/job/loader dependencies.
+- Tests should verify stage order and retry reuse through externally visible calls.
+- Tests should avoid ArcGIS runtime objects unless a later integration-test setup is explicitly introduced.
+- Startup tests must not introduce backend endpoint, auth or AOI contract assumptions.
 
 ## 17. Documentation rules
 

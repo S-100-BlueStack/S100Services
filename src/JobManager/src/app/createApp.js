@@ -9,13 +9,11 @@ import { showErrorNotice, showSuccessNotice } from "../features/notices/services
 import { createNoticeRegion } from "../features/notices/ui/noticeContainer.js";
 import { createThemeStore } from "../features/theme/state/themeStore.js";
 import { getRuntimeConfig } from "../shared/config/runtimeConfig.js";
-import { runWithRetry } from "../shared/utils/retryRunner.js";
+import { createStartupController } from "./startup/createStartupController.js";
 import { createStartupLoader } from "../shared/ui/startupLoader.js";
 import { createJobsOverlay } from "./ui/createJobsOverlay.js";
 import { createMapWorkspace } from "./ui/createMapWorkspace.js";
 import { createNavbarController } from "./ui/createNavbarController.js";
-
-const STARTUP_MAX_ATTEMPTS = 10;
 
 export async function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
@@ -29,15 +27,12 @@ export async function createApp(rootElement) {
   const noticeRegion = createNoticeRegion();
   const startupLoader = createStartupLoader();
   const appEventAbortController = new AbortController();
-  const startupAbortController = new AbortController();
 
   let jobsRefreshRequestId = 0;
   let handledJobChangeSequence = 0;
-  let startupRequestId = 0;
   let isDestroyed = false;
   let isStartupComplete = false;
   let isSelectedJobMapScopeActive = false;
-  const startupState = createStartupState();
 
   const navbar = await createNavbarController({
     jobFilterStore,
@@ -160,6 +155,12 @@ export async function createApp(rootElement) {
   shellElement.append(navbar.element, workspace.element, noticeRegion);
 
   rootElement.replaceChildren(shellElement, startupLoader.element);
+
+  const startupController = createStartupController({
+    startupLoader,
+    mapController,
+    jobStore,
+  });
 
   const unsubscribeMapJobFilters = jobFilterStore.subscribe((snapshot) => {
     mapController.applyJobFilters(snapshot.filters);
@@ -320,212 +321,16 @@ export async function createApp(rootElement) {
     }
   );
 
-  void runStartup();
-
-  async function runStartup() {
-    const currentStartupRequestId = startupRequestId + 1;
-    startupRequestId = currentStartupRequestId;
-    isStartupComplete = false;
-
-    shellElement.classList.add("job-manager-app--startup-blocked");
-    shellElement.inert = true;
-    shellElement.setAttribute("aria-hidden", "true");
-
-    startupLoader.startLoading(createStartupLoadingText(startupState));
-
-    try {
-      await runStartupStage({
-        label: "map workspace",
-        startupRequestId: currentStartupRequestId,
-        task: () =>
-          ensureStartupMapReady({
-            startupRequestId: currentStartupRequestId,
-          }),
-      });
-
-      await runStartupStage({
-        label: "Jobs load",
-        startupRequestId: currentStartupRequestId,
-        task: () =>
-          ensureStartupJobsReady({
-            startupRequestId: currentStartupRequestId,
-          }),
-      });
-
-      await runStartupStage({
-        label: "Job map rendering",
-        startupRequestId: currentStartupRequestId,
-        task: () =>
-          ensureStartupJobMapReady({
-            startupRequestId: currentStartupRequestId,
-          }),
-      });
-
-      throwIfStaleStartup(currentStartupRequestId);
-
+  void startupController.runStartup({
+    onStartupBlocked() {
+      isStartupComplete = false;
+      blockShellForStartup(shellElement);
+    },
+    onStartupComplete() {
       isStartupComplete = true;
-      shellElement.classList.remove("job-manager-app--startup-blocked");
-      shellElement.inert = false;
-      shellElement.setAttribute("aria-hidden", "false");
-
-      startupLoader.complete({
-        text: "Job Manager ready.",
-      });
-    } catch (error) {
-      if (isDestroyed || startupAbortController.signal.aborted) {
-        return;
-      }
-
-      startupLoader.fail({
-        text: "Job Manager could not be loaded.",
-        message: error?.message || "Required startup data could not be loaded.",
-        onRetry() {
-          void runStartup();
-        },
-      });
-    }
-  }
-
-  async function runStartupStage({ label, startupRequestId: expectedStartupRequestId, task }) {
-    throwIfStaleStartup(expectedStartupRequestId);
-
-    return runWithRetry(task, {
-      maxRetries: STARTUP_MAX_ATTEMPTS,
-      baseDelay: 1000,
-      maxDelay: 30000,
-      backoffFactor: 2,
-      signal: startupAbortController.signal,
-      onRetry({ attempt, delay, error }) {
-        startupLoader.startRetryCountdown({
-          attempt,
-          totalAttempts: STARTUP_MAX_ATTEMPTS,
-          delayMs: delay,
-          error,
-          label,
-        });
-      },
-    });
-  }
-
-  async function ensureStartupMapReady({ startupRequestId: expectedStartupRequestId }) {
-    throwIfStaleStartup(expectedStartupRequestId);
-
-    if (startupState.mapReady) {
-      startupLoader.markDataReceived({
-        text: "Map workspace already loaded.",
-        progress: 0.32,
-      });
-
-      return startupState.mapResult;
-    }
-
-    startupLoader.setText("Preparing map workspace...");
-    startupLoader.setDetail("The map and AOI source are loading.");
-    startupLoader.setProgress(0.1);
-
-    const mapStartupResult = await mapController.start({
-      requireAois: true,
-      deferJobGeometry: true,
-      suppressStatus: true,
-    });
-
-    throwIfStaleStartup(expectedStartupRequestId);
-
-    if (!mapStartupResult.ok) {
-      throw mapStartupResult.error || new Error("Map startup failed.");
-    }
-
-    startupState.mapReady = true;
-    startupState.mapResult = mapStartupResult.data;
-
-    startupLoader.markDataReceived({
-      text: "Map workspace loaded.",
-      progress: 0.32,
-    });
-
-    return startupState.mapResult;
-  }
-
-  async function ensureStartupJobsReady({ startupRequestId: expectedStartupRequestId }) {
-    throwIfStaleStartup(expectedStartupRequestId);
-
-    if (startupState.jobsReady) {
-      startupLoader.markDataReceived({
-        text: "Jobs already loaded.",
-        progress: 0.58,
-      });
-
-      return startupState.jobs;
-    }
-
-    startupLoader.setText("Loading Jobs...");
-    startupLoader.setDetail("The required Jobs list is loading from the mock backend.");
-    startupLoader.setProgress(0.42);
-
-    const jobsResult = await jobStore.loadJobs();
-
-    throwIfStaleStartup(expectedStartupRequestId);
-
-    if (!jobsResult.ok) {
-      throw jobsResult.error;
-    }
-
-    const jobs = normalizeStartupJobs(jobsResult.data?.jobs);
-
-    startupState.jobsReady = true;
-    startupState.jobs = jobs;
-    startupState.jobMapReady = false;
-
-    startupLoader.markDataReceived({
-      text: "Jobs loaded.",
-      progress: 0.58,
-    });
-
-    return startupState.jobs;
-  }
-
-  async function ensureStartupJobMapReady({ startupRequestId: expectedStartupRequestId }) {
-    throwIfStaleStartup(expectedStartupRequestId);
-
-    if (startupState.jobMapReady) {
-      startupLoader.setText("Job map layers already rendered.");
-      startupLoader.setDetail("");
-      startupLoader.setProgress(0.94);
-
-      return {
-        jobs: startupState.jobs,
-        map: startupState.mapResult,
-      };
-    }
-
-    startupLoader.startRendering({
-      text: "Rendering Jobs on the map...",
-      progress: 0.68,
-    });
-
-    const jobMapResult = await mapController.refreshJobData({
-      jobs: startupState.jobs,
-    });
-
-    throwIfStaleStartup(expectedStartupRequestId);
-
-    if (!jobMapResult.ok) {
-      throw jobMapResult.error || new Error("Job map layers could not be loaded.");
-    }
-
-    startupState.jobMapReady = true;
-
-    startupLoader.setText("Finalizing map workspace...");
-    startupLoader.setDetail("");
-    startupLoader.setProgress(0.94);
-
-    await waitForNextPaint();
-
-    return {
-      jobs: startupState.jobs,
-      map: startupState.mapResult,
-    };
-  }
+      releaseShellAfterStartup(shellElement);
+    },
+  });
 
   async function refreshMapAfterJobsRefresh({ jobs } = {}) {
     await syncMapAfterJobsSnapshot({
@@ -745,22 +550,11 @@ export async function createApp(rootElement) {
     showErrorNotice(options);
   }
 
-  function throwIfStaleStartup(expectedStartupRequestId) {
-    if (isDestroyed || startupAbortController.signal.aborted) {
-      throw new Error("Operation aborted");
-    }
-
-    if (expectedStartupRequestId !== startupRequestId) {
-      throw new Error("Startup attempt was replaced.");
-    }
-  }
-
   return {
     destroy() {
       isDestroyed = true;
-      startupRequestId += 1;
       jobsRefreshRequestId += 1;
-      startupAbortController.abort();
+      startupController.destroy();
       appEventAbortController.abort();
       unsubscribeMapJobFilters();
       unsubscribeMapJobClusterSettings();
@@ -775,14 +569,6 @@ export async function createApp(rootElement) {
       rootElement.replaceChildren();
     },
   };
-}
-
-function normalizeStartupJobs(jobs) {
-  if (!Array.isArray(jobs)) {
-    throw new Error("Jobs loader returned an invalid result.");
-  }
-
-  return jobs;
 }
 
 function findJobById(jobs, jobId) {
@@ -805,38 +591,16 @@ function normalizeOptionalString(value) {
   return String(value).trim();
 }
 
-function createStartupState() {
-  return {
-    mapReady: false,
-    mapResult: null,
-    jobsReady: false,
-    jobs: [],
-    jobMapReady: false,
-  };
+function blockShellForStartup(shellElement) {
+  shellElement.classList.add("job-manager-app--startup-blocked");
+  shellElement.inert = true;
+  shellElement.setAttribute("aria-hidden", "true");
 }
 
-function createStartupLoadingText(startupState) {
-  if (!startupState.mapReady) {
-    return "Preparing map workspace...";
-  }
-
-  if (!startupState.jobsReady) {
-    return "Loading Jobs...";
-  }
-
-  if (!startupState.jobMapReady) {
-    return "Rendering Jobs on the map...";
-  }
-
-  return "Starting Job Manager...";
-}
-
-function waitForNextPaint() {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(resolve);
-    });
-  });
+function releaseShellAfterStartup(shellElement) {
+  shellElement.classList.remove("job-manager-app--startup-blocked");
+  shellElement.inert = false;
+  shellElement.setAttribute("aria-hidden", "false");
 }
 
 function setPanelOpen(panelElement, triggerButton, isOpen) {
