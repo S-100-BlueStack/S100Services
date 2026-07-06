@@ -24,11 +24,14 @@
 
 .job-manager-jobs-overlay {
   --jm-jobs-panel-padding: 0.85rem;
+  top: 0;
+  bottom: 0;
+  box-sizing: border-box;
   display: block;
   gap: 0;
-  height: calc(100% - 1.7rem);
-  max-height: calc(100% - 1.7rem);
-  padding-top: 0;
+  height: auto;
+  max-height: none;
+  padding: 0 var(--jm-jobs-panel-padding) var(--jm-jobs-panel-padding);
   overflow-y: auto;
 }
 
