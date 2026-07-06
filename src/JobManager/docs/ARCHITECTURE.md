@@ -209,6 +209,14 @@ Rules:
 - Stale refresh results must not restore old selected AOI or selected Job map state.
 - Map sync coordination must not introduce backend endpoint, auth or AOI contract assumptions.
 
+Phase 27 transition polish:
+
+- User-driven map/list transitions cancel pending async map refresh restore work.
+- This prevents older refresh or mutation-sync continuations from reapplying stale AOI scope, selected Job scope or highlights after the user has already changed context.
+- The app composition still owns when context changes happen.
+- The map sync coordinator still owns refresh/restore orchestration.
+- The polish does not change Job filters, AOI overview filters, relation lookup, backend assumptions or AOI service assumptions.
+
 ## 5. `src/features/aoi`
 
 Owns AOI-specific behavior.
@@ -1552,6 +1560,15 @@ Phase 26 Filters popover validation:
 - Verify that Escape closes the popover.
 - Verify that Job filters, AOI overview filters and Job point clustering controls still update map/list behavior as before.
 - Very narrow/mobile layouts do not need pixel-perfect validation unless the app target changes.
+
+Phase 27 map/list transition validation:
+
+- Validate AOI popup -> Show related Jobs -> Clear AOI filter.
+- Validate AOI popup -> Show related Jobs -> change Job filters -> Clear filters.
+- Validate Job popup -> Show Job details -> Back to Jobs.
+- Validate Job details -> Focus map -> Clear map focus.
+- Validate Job details -> Focus map -> panel close.
+- Validate manual refresh while changing AOI/Job context where practical.
 
 ## 17. Documentation rules
 

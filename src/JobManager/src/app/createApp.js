@@ -31,6 +31,7 @@ export async function createApp(rootElement) {
 
   let isStartupComplete = false;
   let isSelectedJobMapScopeActive = false;
+  let mapSyncCoordinator = null;
 
   const navbar = await createNavbarController({
     jobFilterStore,
@@ -79,8 +80,6 @@ export async function createApp(rootElement) {
     onShowRelatedJobs(selectedAoi) {
       const normalizedSelectedAoi = selectedAoiStore.selectAoi(selectedAoi);
 
-      isSelectedJobMapScopeActive = false;
-
       if (!normalizedSelectedAoi.aoiId) {
         showErrorNotice({
           title: "AOI selection failed",
@@ -90,6 +89,8 @@ export async function createApp(rootElement) {
         return;
       }
 
+      cancelPendingMapRestores();
+      isSelectedJobMapScopeActive = false;
       selectedJobStore.clearSelection();
       jobsPanel.clearSelectedJob();
       mapController.clearJobHighlight();
@@ -135,6 +136,7 @@ export async function createApp(rootElement) {
         return;
       }
 
+      cancelPendingMapRestores();
       isSelectedJobMapScopeActive = false;
       selectedAoiStore.clearSelection();
       mapController.clearAoiJobScope();
@@ -159,7 +161,7 @@ export async function createApp(rootElement) {
     mapController,
     jobStore,
   });
-  const mapSyncCoordinator = createMapSyncCoordinator({
+  mapSyncCoordinator = createMapSyncCoordinator({
     mapController,
     selectedAoiStore,
     selectedJobStore,
@@ -192,6 +194,7 @@ export async function createApp(rootElement) {
   jobsPanel.element.addEventListener(
     "job-manager:aoi-filter-cleared",
     () => {
+      cancelPendingMapRestores();
       isSelectedJobMapScopeActive = false;
       selectedAoiStore.clearSelection();
       mapController.clearAoiHighlight();
@@ -205,6 +208,7 @@ export async function createApp(rootElement) {
   jobsPanel.element.addEventListener(
     "job-manager:job-selection-cleared",
     () => {
+      cancelPendingMapRestores();
       isSelectedJobMapScopeActive = false;
       selectedJobStore.clearSelection();
       mapController.closeJobPopup();
@@ -231,6 +235,7 @@ export async function createApp(rootElement) {
         return;
       }
 
+      cancelPendingMapRestores();
       isSelectedJobMapScopeActive = true;
       selectedAoiStore.clearSelection();
 
@@ -261,6 +266,7 @@ export async function createApp(rootElement) {
   jobsPanel.element.addEventListener(
     "job-manager:job-map-focus-cleared",
     () => {
+      cancelPendingMapRestores();
       isSelectedJobMapScopeActive = false;
       selectedAoiStore.clearSelection();
       selectedJobStore.clearSelection();
@@ -293,6 +299,7 @@ export async function createApp(rootElement) {
     () => {
       const shouldOpen = jobsPanel.element.hidden;
 
+      cancelPendingMapRestores();
       isSelectedJobMapScopeActive = false;
       selectedAoiStore.clearSelection();
       selectedJobStore.clearSelection();
@@ -318,6 +325,7 @@ export async function createApp(rootElement) {
   jobsPanel.closeButton.addEventListener(
     "click",
     () => {
+      cancelPendingMapRestores();
       isSelectedJobMapScopeActive = false;
       selectedAoiStore.clearSelection();
       selectedJobStore.clearSelection();
@@ -369,6 +377,11 @@ export async function createApp(rootElement) {
     mapController.clearAoiHighlight();
   }
 
+  function cancelPendingMapRestores() {
+    // User-driven context transitions should win over async refresh restore work.
+    mapSyncCoordinator?.cancelPendingRefreshes?.();
+  }
+
   function showErrorNoticeAfterStartup(options) {
     if (!isStartupComplete) {
       return;
@@ -380,7 +393,7 @@ export async function createApp(rootElement) {
   return {
     destroy() {
       startupController.destroy();
-      mapSyncCoordinator.destroy();
+      mapSyncCoordinator?.destroy?.();
       appEventAbortController.abort();
       unsubscribeMapJobFilters();
       unsubscribeMapJobClusterSettings();

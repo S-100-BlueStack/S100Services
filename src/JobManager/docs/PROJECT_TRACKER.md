@@ -23,7 +23,7 @@ Job Manager should follow Product Manager patterns where they fit, but the domai
 
 ## 2. Current project status
 
-Status: Phase 26 Filters popover polish complete; next polish target selection ready
+Status: Phase 27 map/list state transition polish started
 
 Current known baseline:
 
@@ -64,6 +64,7 @@ Current known baseline:
 - Job popup lifecycle is now coordinated with selected-Job panel context so normal Job popups can stay open while details are used, but close when the selected-Job context is left.
 - Jobs overlay layout now fills the map workspace height without leaving a bottom gap in list or details mode.
 - Filters popover layout, low-height scrolling and Escape close behavior have been polished for laptop/desktop use without changing filter state ownership or map/list filtering behavior.
+- User-driven map/list transitions now cancel pending async map refresh restore work so stale AOI/Job scope or highlight state cannot be reapplied after the user changes context.
 
 Current known limitations:
 
@@ -2537,6 +2538,29 @@ Implementation notes:
 - Manual validation confirmed that filters work, low-height behavior works and Escape closes the popover.
 - Manual validation confirmed that very narrow browser widths are constrained by the practical popover minimum width; this is acceptable for the current laptop/desktop target.
 
+## Phase 27 - Map/list state transition polish
+
+Goal:
+
+Polish existing state transitions between AOI popup scope, Jobs panel, filters, Job details and map focus without changing backend contracts, AOI contracts, filter ownership or relation ownership.
+
+Tasks:
+
+| ID      | Task                                             | Status | Notes                                                                                                        |
+| ------- | ------------------------------------------------ | -----: | ------------------------------------------------------------------------------------------------------------ |
+| JM-2701 | Cancel stale map refresh restores on transitions |   Done | User-driven map/list transitions now invalidate pending async refresh restore work.                          |
+| JM-2702 | Preserve current AOI/Job transition behavior     |   Done | Existing AOI scoped Jobs, Job details, Focus map, Clear map focus, Back and panel close flows are preserved. |
+| JM-2703 | Add targeted stale-restore regression tests      |   Done | Tests cover cancellation before selected AOI restore and before selected AOI highlight restore.              |
+
+Exit criteria:
+
+- AOI popup to scoped Jobs still opens the Jobs panel and scopes map Jobs
+- clearing AOI scope cannot be undone by a stale refresh restore
+- Job details and map focus transitions still work
+- Back, Clear map focus and panel close still clear selected map context
+- pending refresh/mutation sync cannot reapply stale AOI/Job scope or highlights after user context changes
+- no backend, AOI contract, filter-domain or relation-source behavior is introduced
+
 ## 13. Suggested implementation order
 
 Recommended order:
@@ -2745,4 +2769,5 @@ Recommended next tasks:
 | JM-NEXT-035 | Continue small UI polish from hardened baseline          |        Done | Job popup and Jobs panel selected-context cleanup was polished without adding backend, AOI details or new contract assumptions.    |
 | JM-NEXT-036 | Choose next polish target from manual testing            |        Done | Phase 25 validation found a Jobs panel bottom gap, which was fixed as a small CSS-only follow-up.                                  |
 | JM-NEXT-037 | Choose next polish target from current UI baseline       |        Done | Filters popover small viewport and close/focus behavior was selected as the next polish target.                                    |
-| JM-NEXT-038 | Choose next polish target after Phase 26 validation      | Not started | Pick the next reproducible map/list, filter popover or panel interaction issue, or pause for backend/AOI inputs.                   |
+| JM-NEXT-038 | Choose next polish target after Phase 26 validation      |        Done | Map/list state transition polish was selected after Phase 26 validation.                                                           |
+| JM-NEXT-039 | Choose next polish target after Phase 27 validation      | Not started | Pick the next reproducible map/list, filter popover or panel interaction issue, or pause for backend/AOI inputs.                   |
