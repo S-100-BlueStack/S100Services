@@ -14,7 +14,7 @@ import { registerAoiPopupActions } from "../popups/aoiPopupActions.js";
 import { configureAoiJobSummaryPopupContent } from "../popups/aoiPopupContent.js";
 import { registerJobPopupActions } from "../popups/jobPopupActions.js";
 import { createMapView } from "./createMapView.js";
-import { closePopupIfAggregate } from "./mapPopupState.js";
+import { closePopupIfAggregate, closePopupIfJob } from "./mapPopupState.js";
 import { refreshAoiLayerPopupTemplate } from "../layers/createAoiLayer.js";
 
 const MAP_STATUS = Object.freeze({
@@ -670,6 +670,13 @@ export function createMapController({
     });
   }
 
+  function closeJobPopup(selectedJob) {
+    closePopupIfJob({
+      view: mapResult?.view,
+      jobId: selectedJob?.jobId ?? selectedJob?.id,
+    });
+  }
+
   function normalizeJobIds(jobIds) {
     if (!Array.isArray(jobIds)) {
       return [];
@@ -837,6 +844,7 @@ export function createMapController({
     getMap,
     highlightJob,
     clearJobHighlight,
+    closeJobPopup,
     highlightRelatedAoisForJob,
     highlightAoiById,
     clearAoiHighlight,

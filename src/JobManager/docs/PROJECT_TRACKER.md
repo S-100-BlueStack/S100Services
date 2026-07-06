@@ -24,7 +24,7 @@ Job Manager should follow Product Manager patterns where they fit, but the domai
 
 ## 2. Current project status
 
-Status: Cluster picker popup state polish started
+Status: Job popup and Jobs panel interaction polish started
 
 Current known baseline:
 
@@ -62,6 +62,7 @@ Current known baseline:
 - Startup stage coordination is now isolated behind a startup controller with regression tests for stage order, retry reuse and invalid Jobs load results.
 - Map refresh and selection restore coordination is now isolated behind a map sync coordinator with regression tests for manual refresh, mutation sync, selected AOI restore, selected Job restore and stale refresh guards.
 - Cluster picker popup state detection is more robust when Job filters, AOI-scoped Job map filters, cluster settings or refreshed Job data change while a cluster popup is open.
+- Job popup lifecycle is now coordinated with selected-Job panel context so normal Job popups can stay open while details are used, but close when the selected-Job context is left.
 
 Current known limitations:
 
@@ -2466,6 +2467,37 @@ Implementation notes:
 - Detection checks popup selected feature, popup view model selected feature and popup feature collections.
 - The implementation avoids relying only on `selectedFeature.isAggregate`, because ArcGIS popup state can expose aggregate graphics through different popup/view model properties.
 
+## Phase 25 - Job popup and Jobs panel interaction polish
+
+Goal:
+
+Polish the interaction between normal Job popups and the Jobs panel without changing backend contracts, AOI contracts, clustering behavior or the core map/list workflow.
+
+Tasks:
+
+| ID      | Task                                      | Status | Notes                                                                                                        |
+| ------- | ----------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------ |
+| JM-2501 | Add Job popup state detection             |   Done | Job popup detection now lives in `features/map/core/mapPopupState.js` beside aggregate popup detection.      |
+| JM-2502 | Preserve popup while Job details is used  |   Done | Normal Job popup can remain open while the selected Job details panel is active.                             |
+| JM-2503 | Close popup when selected context is left |   Done | Job popup closes when Back to Jobs, Clear map focus or Jobs panel close leaves the selected-Job context.     |
+| JM-2504 | Keep cluster popup cleanup unchanged      |   Done | Existing aggregate/cluster popup cleanup remains intact.                                                     |
+| JM-2505 | Add targeted popup-state tests            |   Done | Tests cover Job popup detection, specific Job id matching and close behavior without ArcGIS runtime objects. |
+
+Exit criteria:
+
+- normal Job popup can stay open while Job details panel is used
+- leaving selected-Job context closes stale Job popup state
+- aggregate/cluster popup cleanup still works
+- tests cover popup-state helper behavior without ArcGIS-heavy tests
+- no backend, AOI contract, clustering mode or new feature scope is introduced
+
+Implementation notes:
+
+- `mapController.js` exposes a focused `closeJobPopup` method for app-level selected-Job lifecycle wiring.
+- `createApp.js` decides when selected-Job panel context is left.
+- `mapPopupState.js` keeps popup detection pure and testable.
+- Job popup detection checks popup selected feature, popup view model selected feature and popup feature collections.
+
 ## 13. Suggested implementation order
 
 Recommended order:
@@ -2671,7 +2703,8 @@ Recommended next tasks:
 | JM-NEXT-032 | Review map refresh and selection coordination tests      |        Done | Map refresh and selected AOI/Job restore coordination was extracted and covered with targeted tests.                               |
 | JM-NEXT-033 | Choose next feature phase from hardened baseline         |        Done | Backend/AOI-dependent work remains blocked; next safe direction is UI/UX polish against existing map/list behavior.                |
 | JM-NEXT-034 | Start small UI polish from hardened baseline             |        Done | Cluster picker popup state cleanup was hardened without adding backend, AOI details or new contract assumptions.                   |
-| JM-NEXT-035 | Continue small UI polish from hardened baseline          | Not started | Pick the next reproducible map/list polish issue after validating cluster picker popup cleanup.                                    |
+| JM-NEXT-035 | Continue small UI polish from hardened baseline          |        Done | Job popup and Jobs panel selected-context cleanup was polished without adding backend, AOI details or new contract assumptions.    |
+| JM-NEXT-036 | Choose next polish target from manual testing            | Not started | Pick the next reproducible map/list or panel interaction issue after validating Phase 25.                                          |
 
 ```
 

@@ -207,6 +207,7 @@ export async function createApp(rootElement) {
     () => {
       isSelectedJobMapScopeActive = false;
       selectedJobStore.clearSelection();
+      mapController.closeJobPopup();
       mapController.clearJobHighlight();
       mapController.clearAoiHighlight();
       mapController.clearAoiJobScope();
@@ -263,6 +264,7 @@ export async function createApp(rootElement) {
       isSelectedJobMapScopeActive = false;
       selectedAoiStore.clearSelection();
       selectedJobStore.clearSelection();
+      mapController.closeJobPopup();
       mapController.clearJobHighlight();
       mapController.clearAoiHighlight();
       mapController.clearAoiJobScope();
@@ -320,6 +322,7 @@ export async function createApp(rootElement) {
       selectedAoiStore.clearSelection();
       selectedJobStore.clearSelection();
       jobsPanel.clearSelectedJob();
+      mapController.closeJobPopup();
       mapController.clearJobHighlight();
       mapController.clearAoiHighlight();
       mapController.clearAoiJobScope();

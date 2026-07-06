@@ -3,8 +3,11 @@ import test from "node:test";
 
 import {
   closePopupIfAggregate,
+  closePopupIfJob,
   isAggregatePopupFeature,
   isAggregatePopupOpen,
+  isJobPopupFeature,
+  isJobPopupOpen,
 } from "./mapPopupState.js";
 
 test("isAggregatePopupFeature detects ArcGIS aggregate graphics", () => {
@@ -141,6 +144,134 @@ test("closePopupIfAggregate keeps normal Job popups open", () => {
         },
       },
     },
+  });
+
+  assert.equal(result, false);
+  assert.equal(closeCount, 0);
+});
+
+test("isJobPopupFeature detects normal Job popup graphics", () => {
+  assert.equal(
+    isJobPopupFeature({
+      attributes: {
+        jobId: "job-001",
+      },
+    }),
+    true
+  );
+});
+
+test("isJobPopupFeature can match a specific Job id", () => {
+  assert.equal(
+    isJobPopupFeature(
+      {
+        attributes: {
+          jobId: "job-001",
+        },
+      },
+      {
+        jobId: "job-001",
+      }
+    ),
+    true
+  );
+
+  assert.equal(
+    isJobPopupFeature(
+      {
+        attributes: {
+          jobId: "job-001",
+        },
+      },
+      {
+        jobId: "job-002",
+      }
+    ),
+    false
+  );
+});
+
+test("isJobPopupFeature ignores aggregate popup graphics", () => {
+  assert.equal(
+    isJobPopupFeature({
+      isAggregate: true,
+      attributes: {
+        cluster_count: 4,
+      },
+    }),
+    false
+  );
+});
+
+test("isJobPopupOpen checks popup selectedFeature, viewModel selectedFeature and feature collections", () => {
+  assert.equal(
+    isJobPopupOpen(
+      {
+        selectedFeature: null,
+        viewModel: {
+          selectedFeature: null,
+        },
+        features: [
+          {
+            attributes: {
+              PRODUCTNAME: "Underlying AOI",
+            },
+          },
+          {
+            attributes: {
+              jobId: "job-001",
+            },
+          },
+        ],
+      },
+      {
+        jobId: "job-001",
+      }
+    ),
+    true
+  );
+});
+
+test("closePopupIfJob closes matching Job popups", () => {
+  let closeCount = 0;
+
+  const result = closePopupIfJob({
+    view: {
+      popup: {
+        selectedFeature: {
+          attributes: {
+            jobId: "job-001",
+          },
+        },
+      },
+      closePopup() {
+        closeCount += 1;
+      },
+    },
+    jobId: "job-001",
+  });
+
+  assert.equal(result, true);
+  assert.equal(closeCount, 1);
+});
+
+test("closePopupIfJob keeps other Job popups open when a specific Job id is requested", () => {
+  let closeCount = 0;
+
+  const result = closePopupIfJob({
+    view: {
+      popup: {
+        selectedFeature: {
+          attributes: {
+            jobId: "job-002",
+          },
+        },
+        close() {
+          closeCount += 1;
+        },
+      },
+    },
+    jobId: "job-001",
   });
 
   assert.equal(result, false);

@@ -1024,6 +1024,15 @@ Implementation note:
 
 Job details uses a `PopupTemplate` action for action bar placement. A hidden Esri `CustomContent` item captures the feature-scoped Job selection from the rendered popup graphic, because `PopupViewModel` selected feature state can be ambiguous for point Jobs when multiple popup features are present.
 
+Phase 25 popup/panel polish:
+
+- Normal Job popups may remain open while the selected Job details panel is active.
+- Leaving selected-Job context from the Jobs panel closes stale Job popup state.
+- `createApp.js` owns the decision about when selected-Job context is left.
+- `mapController.js` exposes a focused `closeJobPopup` method instead of making app composition inspect ArcGIS popup state.
+- `mapPopupState.js` owns pure Job popup detection and close fallback behavior.
+- Job popup detection should not close aggregate/cluster popups, because cluster cleanup is handled separately.
+
 ### Selected Job related AOI highlight
 
 Status: Done
@@ -1489,6 +1498,12 @@ Phase 24 cluster picker popup-state tests:
 - Popup-state tests should stay pure and avoid ArcGIS runtime objects.
 - Tests should cover aggregate popup detection through selected feature, view model selected feature and popup feature collections.
 - Tests should verify that normal Job popups are not closed by aggregate popup cleanup.
+
+Phase 25 Job popup/panel tests:
+
+- Popup-state tests should stay pure and avoid ArcGIS runtime objects.
+- Tests should cover normal Job popup detection, specific Job id matching and close behavior.
+- Tests should verify that aggregate/cluster popup detection remains separate from normal Job popup detection.
 
 ## 17. Documentation rules
 
