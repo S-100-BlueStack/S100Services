@@ -14,6 +14,7 @@ import { registerAoiPopupActions } from "../popups/aoiPopupActions.js";
 import { configureAoiJobSummaryPopupContent } from "../popups/aoiPopupContent.js";
 import { registerJobPopupActions } from "../popups/jobPopupActions.js";
 import { createMapView } from "./createMapView.js";
+import { closePopupIfAggregate } from "./mapPopupState.js";
 import { refreshAoiLayerPopupTemplate } from "../layers/createAoiLayer.js";
 
 const MAP_STATUS = Object.freeze({
@@ -664,45 +665,9 @@ export function createMapController({
   }
 
   function closeOpenAggregatePopup() {
-    const view = mapResult?.view;
-    const popup = view?.popup;
-
-    if (!view || !popup || !hasOpenAggregatePopupFeature(popup)) {
-      return;
-    }
-
-    if (typeof view.closePopup === "function") {
-      view.closePopup();
-      return;
-    }
-
-    popup.close?.();
-  }
-
-  function hasOpenAggregatePopupFeature(popup) {
-    if (popup.selectedFeature?.isAggregate) {
-      return true;
-    }
-
-    return getPopupFeatures(popup).some((feature) => feature?.isAggregate);
-  }
-
-  function getPopupFeatures(popup) {
-    const features = popup.features;
-
-    if (!features) {
-      return [];
-    }
-
-    if (Array.isArray(features)) {
-      return features;
-    }
-
-    if (typeof features.toArray === "function") {
-      return features.toArray();
-    }
-
-    return [];
+    closePopupIfAggregate({
+      view: mapResult?.view,
+    });
   }
 
   function normalizeJobIds(jobIds) {

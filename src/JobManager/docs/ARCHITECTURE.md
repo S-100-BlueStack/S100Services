@@ -717,6 +717,15 @@ Rules:
 - Job polygon Jobs remain unclustered.
 - Existing Job filters and AOI-scoped Job map filtering must continue to affect cluster membership through layer filtering.
 
+Phase 24 popup-state polish:
+
+- Aggregate popup detection is isolated in `features/map/core/mapPopupState.js`.
+- Map controller still decides when popup cleanup happens.
+- Open cluster picker popups are closed before Job filters, AOI-scoped Job map filters, cluster settings or refreshed Job data can make the picker stale.
+- Aggregate detection checks popup selected feature, popup view model selected feature and popup feature collections.
+- Detection supports ArcGIS aggregate graphics through `isAggregate`, `cluster_count` attributes and cluster popup template titles.
+- Normal Job popups should remain open when they are not aggregate/cluster popups.
+
 ### Current MapView foundation
 
 Status: Done
@@ -1474,6 +1483,12 @@ Phase 23 baseline review:
 - Backend and final AOI blockers should remain explicit when selecting the next work item.
 - Next feature work should prefer existing UI/UX polish unless real backend or AOI Feature Service inputs are available.
 - Documentation should avoid duplicating identical architecture sections during wrap-up updates.
+
+Phase 24 cluster picker popup-state tests:
+
+- Popup-state tests should stay pure and avoid ArcGIS runtime objects.
+- Tests should cover aggregate popup detection through selected feature, view model selected feature and popup feature collections.
+- Tests should verify that normal Job popups are not closed by aggregate popup cleanup.
 
 ## 17. Documentation rules
 
