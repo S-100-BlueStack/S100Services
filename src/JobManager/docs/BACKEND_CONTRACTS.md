@@ -210,6 +210,26 @@ Backend implication:
 
 Future backend/AOI work remains blocked by the same real endpoint, auth, field and relation-ownership inputs as before Phase 26.
 
+## 2.7 Phase 27 map/list state transition polish review
+
+Status: Reviewed
+
+Current decision:
+
+No backend contract changes are introduced by the map/list state transition polish.
+
+Current behavior remains unchanged:
+
+- Job data still flows through the Job service adapter boundary.
+- AOIs still flow through the configured ArcGIS FeatureLayer.
+- AOI/Job relations remain service/domain-derived and source-flexible.
+- Map/list transition cleanup is frontend orchestration only.
+- No Job endpoint paths, auth behavior, response shapes or AOI relation ownership assumptions are introduced.
+
+Backend implication:
+
+Future backend/AOI work remains blocked by the same real endpoint, auth, field and relation-ownership inputs as before Phase 27.
+
 ## 3. Expected backend responsibilities
 
 Likely future backend responsibilities:
@@ -656,3 +676,7 @@ When backend work begins, update this document with:
 - authentication assumptions
 - relation calculation ownership
 - known limitations
+
+```
+
+```

@@ -1569,6 +1569,7 @@ Phase 27 map/list transition validation:
 - Validate Job details -> Focus map -> Clear map focus.
 - Validate Job details -> Focus map -> panel close.
 - Validate manual refresh while changing AOI/Job context where practical.
+- Verify that stale AOI/Job scope or highlights do not come back after context changes.
 
 ## 17. Documentation rules
 
@@ -1586,3 +1587,7 @@ Avoid duplicating large sections between docs. Keep:
 - roadmap and status in `PROJECT_TRACKER.md`
 - backend contract notes in `BACKEND_CONTRACTS.md`
 - architecture and folder ownership in `ARCHITECTURE.md`
+
+```
+
+```

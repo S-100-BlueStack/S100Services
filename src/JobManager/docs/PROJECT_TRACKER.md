@@ -23,7 +23,7 @@ Job Manager should follow Product Manager patterns where they fit, but the domai
 
 ## 2. Current project status
 
-Status: Phase 27 map/list state transition polish started
+Status: Phase 27 map/list state transition polish complete; next polish target selection ready
 
 Current known baseline:
 
@@ -64,7 +64,7 @@ Current known baseline:
 - Job popup lifecycle is now coordinated with selected-Job panel context so normal Job popups can stay open while details are used, but close when the selected-Job context is left.
 - Jobs overlay layout now fills the map workspace height without leaving a bottom gap in list or details mode.
 - Filters popover layout, low-height scrolling and Escape close behavior have been polished for laptop/desktop use without changing filter state ownership or map/list filtering behavior.
-- User-driven map/list transitions now cancel pending async map refresh restore work so stale AOI/Job scope or highlight state cannot be reapplied after the user changes context.
+- User-driven map/list transitions cancel pending async map refresh restore work so stale AOI/Job scope or highlight state cannot be reapplied after the user changes context.
 
 Current known limitations:
 
@@ -2551,6 +2551,7 @@ Tasks:
 | JM-2701 | Cancel stale map refresh restores on transitions |   Done | User-driven map/list transitions now invalidate pending async refresh restore work.                          |
 | JM-2702 | Preserve current AOI/Job transition behavior     |   Done | Existing AOI scoped Jobs, Job details, Focus map, Clear map focus, Back and panel close flows are preserved. |
 | JM-2703 | Add targeted stale-restore regression tests      |   Done | Tests cover cancellation before selected AOI restore and before selected AOI highlight restore.              |
+| JM-2704 | Validate map/list transition behavior            |   Done | Manual validation found no issues in the tested AOI scope, filter, Job details and map focus flows.          |
 
 Exit criteria:
 
@@ -2560,6 +2561,16 @@ Exit criteria:
 - Back, Clear map focus and panel close still clear selected map context
 - pending refresh/mutation sync cannot reapply stale AOI/Job scope or highlights after user context changes
 - no backend, AOI contract, filter-domain or relation-source behavior is introduced
+
+Implementation notes:
+
+- App composition calls `mapSyncCoordinator.cancelPendingRefreshes()` before user-driven context transitions that replace AOI scope, selected Job context, map focus or panel state.
+- The map sync coordinator remains responsible for async refresh/restore orchestration.
+- The app composition remains responsible for deciding when the user has changed context.
+- Pending refresh work is invalidated before it can reapply selected AOI scope, selected Job scope or related highlights.
+- Targeted tests cover cancellation before selected AOI scope restore and before selected AOI highlight restore.
+- Manual validation found no issues in the tested map/list state transition flows.
+- Phase 27 does not change filter rules, relation lookup, backend assumptions or AOI service assumptions.
 
 ## 13. Suggested implementation order
 
@@ -2771,3 +2782,7 @@ Recommended next tasks:
 | JM-NEXT-037 | Choose next polish target from current UI baseline       |        Done | Filters popover small viewport and close/focus behavior was selected as the next polish target.                                    |
 | JM-NEXT-038 | Choose next polish target after Phase 26 validation      |        Done | Map/list state transition polish was selected after Phase 26 validation.                                                           |
 | JM-NEXT-039 | Choose next polish target after Phase 27 validation      | Not started | Pick the next reproducible map/list, filter popover or panel interaction issue, or pause for backend/AOI inputs.                   |
+
+```
+
+```
