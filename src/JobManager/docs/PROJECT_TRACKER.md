@@ -1,4 +1,3 @@
-````
 # Job Manager Project Tracker
 
 This document is the source of truth for Job Manager project goals, requirements, architecture decisions, folder structure, implementation order, open questions and progress.
@@ -18,13 +17,13 @@ S100Services/
   src/
     ProductManager/
     JobManager/
-````
+```
 
 Job Manager should follow Product Manager patterns where they fit, but the domain model must be Jobs and Areas of Interest.
 
 ## 2. Current project status
 
-Status: Job popup and Jobs panel interaction polish started
+Status: Phase 25 UI polish complete; next polish target selection ready
 
 Current known baseline:
 
@@ -63,6 +62,7 @@ Current known baseline:
 - Map refresh and selection restore coordination is now isolated behind a map sync coordinator with regression tests for manual refresh, mutation sync, selected AOI restore, selected Job restore and stale refresh guards.
 - Cluster picker popup state detection is more robust when Job filters, AOI-scoped Job map filters, cluster settings or refreshed Job data change while a cluster popup is open.
 - Job popup lifecycle is now coordinated with selected-Job panel context so normal Job popups can stay open while details are used, but close when the selected-Job context is left.
+- Jobs overlay layout now fills the map workspace height without leaving a bottom gap in list or details mode.
 
 Current known limitations:
 
@@ -2482,12 +2482,14 @@ Tasks:
 | JM-2503 | Close popup when selected context is left |   Done | Job popup closes when Back to Jobs, Clear map focus or Jobs panel close leaves the selected-Job context.     |
 | JM-2504 | Keep cluster popup cleanup unchanged      |   Done | Existing aggregate/cluster popup cleanup remains intact.                                                     |
 | JM-2505 | Add targeted popup-state tests            |   Done | Tests cover Job popup detection, specific Job id matching and close behavior without ArcGIS runtime objects. |
+| JM-2506 | Remove Jobs panel bottom gap              |   Done | Jobs overlay CSS now fills the workspace height without reserving bottom space.                              |
 
 Exit criteria:
 
 - normal Job popup can stay open while Job details panel is used
 - leaving selected-Job context closes stale Job popup state
 - aggregate/cluster popup cleanup still works
+- Jobs panel fills the available map workspace height in list and details mode
 - tests cover popup-state helper behavior without ArcGIS-heavy tests
 - no backend, AOI contract, clustering mode or new feature scope is introduced
 
@@ -2497,6 +2499,8 @@ Implementation notes:
 - `createApp.js` decides when selected-Job panel context is left.
 - `mapPopupState.js` keeps popup detection pure and testable.
 - Job popup detection checks popup selected feature, popup view model selected feature and popup feature collections.
+- The Jobs overlay uses top/bottom insets and border-box sizing so panel padding does not create a bottom gap.
+- Manual validation confirmed that the Jobs panel can be used while a normal Job popup is open, selected-context cleanup works, cluster modes still work and the panel bottom gap is removed.
 
 ## 13. Suggested implementation order
 
@@ -2704,8 +2708,5 @@ Recommended next tasks:
 | JM-NEXT-033 | Choose next feature phase from hardened baseline         |        Done | Backend/AOI-dependent work remains blocked; next safe direction is UI/UX polish against existing map/list behavior.                |
 | JM-NEXT-034 | Start small UI polish from hardened baseline             |        Done | Cluster picker popup state cleanup was hardened without adding backend, AOI details or new contract assumptions.                   |
 | JM-NEXT-035 | Continue small UI polish from hardened baseline          |        Done | Job popup and Jobs panel selected-context cleanup was polished without adding backend, AOI details or new contract assumptions.    |
-| JM-NEXT-036 | Choose next polish target from manual testing            | Not started | Pick the next reproducible map/list or panel interaction issue after validating Phase 25.                                          |
-
-```
-
-```
+| JM-NEXT-036 | Choose next polish target from manual testing            |        Done | Phase 25 validation found a Jobs panel bottom gap, which was fixed as a small CSS-only follow-up.                                  |
+| JM-NEXT-037 | Choose next polish target from current UI baseline       | Not started | Continue with the next reproducible map/list, filter popover or panel interaction issue, or pause for backend/AOI inputs.          |

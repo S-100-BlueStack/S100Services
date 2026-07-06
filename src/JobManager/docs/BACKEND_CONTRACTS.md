@@ -1,4 +1,3 @@
-````
 # Job Manager Backend Contracts
 
 This document tracks backend assumptions, draft contracts, open questions and integration decisions for Job Manager.
@@ -76,7 +75,7 @@ loadJobs()
 
 updateJobStatus(jobId, status)
   -> { job, createdJobs }
-````
+```
 
 The adapter expectation mirrors the existing frontend service need and mock behavior. It should not be treated as a final backend contract until a real backend exists.
 
@@ -172,6 +171,25 @@ Current blockers remain unchanged:
 Backend implication:
 
 The next safe frontend work should avoid adding endpoint paths, auth assumptions or final AOI relation assumptions.
+
+## 2.5 Phase 25 UI polish review
+
+Status: Reviewed
+
+Current decision:
+
+No backend contract changes are introduced by the Job popup, Jobs panel or panel layout polish.
+
+Current behavior remains unchanged:
+
+- Job data still flows through the Job service adapter boundary.
+- AOIs still flow through the configured ArcGIS FeatureLayer.
+- AOI/Job relations remain service/domain-derived and source-flexible.
+- No Job endpoint paths, auth behavior, response shapes or AOI relation ownership assumptions are introduced.
+
+Backend implication:
+
+The next safe frontend work should continue to avoid endpoint paths, auth assumptions and final AOI relation assumptions unless real backend/AOI inputs are available.
 
 ## 3. Expected backend responsibilities
 
@@ -619,7 +637,3 @@ When backend work begins, update this document with:
 - authentication assumptions
 - relation calculation ownership
 - known limitations
-
-```
-
-```

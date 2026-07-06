@@ -1,4 +1,3 @@
-````
 # Job Manager Architecture
 
 This document describes the frontend architecture for Job Manager.
@@ -41,7 +40,7 @@ Jobs store + Job filter state
 Jobs + AOI identifiers
   -> relation service/domain helpers
   -> AOI summaries, scoped Jobs, related AOI highlights and map filters
-````
+```
 
 Future backend flow should replace the mock backend behind the Job service without requiring UI components to change significantly.
 
@@ -100,6 +99,7 @@ app/ui/createNavbarController.js
 
 app/ui/createJobsOverlay.js
   -> creates the app-shell Jobs overlay panel
+  -> owns sticky Jobs panel header sizing and full-height overlay shell behavior
   -> hosts `features/jobs/ui/jobList.js`
 
 app/ui/createMapWorkspace.js
@@ -113,6 +113,27 @@ Rules:
 - Job point clustering settings remain owned by `features/map/state`.
 - ArcGIS-specific layer filtering and clustering application remain owned by `features/map`.
 - `createApp.js` should stay focused on store creation, feature composition, high-level event wiring and lifecycle cleanup.
+
+### Jobs overlay layout
+
+Status: Done
+
+The Jobs overlay is an app-shell panel hosted above the map workspace.
+
+Current behavior:
+
+- The Jobs panel starts closed and opens from the navbar, AOI popup flow or Job popup flow.
+- The Jobs overlay fills the map workspace from top to bottom.
+- The Jobs overlay uses `box-sizing: border-box` so panel padding does not reserve extra bottom space.
+- The Jobs overlay keeps the panel header sticky while the list/details body scrolls.
+- The generic overlay panel uses flex/gap layout, but the Jobs overlay opts out because sticky details/list modes need full-height layout control.
+
+Rules:
+
+- Keep Jobs overlay shell layout under `src/app/ui` and `src/styles/overlays.css`.
+- Keep Jobs list and details rendering under `features/jobs/ui`.
+- Layout fixes for the app-shell overlay should not change Job domain state, map state or backend assumptions.
+- Verify list mode and details mode when changing panel sizing, padding or sticky header behavior.
 
 ### Startup coordination
 
@@ -1032,6 +1053,7 @@ Phase 25 popup/panel polish:
 - `mapController.js` exposes a focused `closeJobPopup` method instead of making app composition inspect ArcGIS popup state.
 - `mapPopupState.js` owns pure Job popup detection and close fallback behavior.
 - Job popup detection should not close aggregate/cluster popups, because cluster cleanup is handled separately.
+- The Phase 25 layout follow-up keeps the Jobs overlay pinned from top to bottom so list/details mode does not leave a bottom gap.
 
 ### Selected Job related AOI highlight
 
@@ -1504,6 +1526,7 @@ Phase 25 Job popup/panel tests:
 - Popup-state tests should stay pure and avoid ArcGIS runtime objects.
 - Tests should cover normal Job popup detection, specific Job id matching and close behavior.
 - Tests should verify that aggregate/cluster popup detection remains separate from normal Job popup detection.
+- Manual layout validation should include Jobs panel list mode, details mode, sticky header behavior and full-height bottom alignment.
 
 ## 17. Documentation rules
 
@@ -1521,7 +1544,3 @@ Avoid duplicating large sections between docs. Keep:
 - roadmap and status in `PROJECT_TRACKER.md`
 - backend contract notes in `BACKEND_CONTRACTS.md`
 - architecture and folder ownership in `ARCHITECTURE.md`
-
-```
-
-```
