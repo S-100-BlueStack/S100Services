@@ -670,6 +670,16 @@ Phase 17 polish behavior:
 - Clearing or successfully applying AOI overview filters restores the normal AOI readiness status.
 - The layout and interaction polish does not move filter ownership into app-shell UI; `createNavbarController` still only composes controls and forwards changes to feature stores.
 
+Phase 26 small viewport polish:
+
+- Filters popover sizing uses dynamic viewport height with a viewport fallback.
+- The header and active-filter summary remain outside the scroll body.
+- The scroll body owns filter-section scrolling and uses contained overscroll behavior.
+- Button grids collapse earlier on narrow viewports so short filter labels remain readable.
+- Escape closes the Filters popover.
+- Explicit close actions restore focus to the Filters navbar action.
+- The polish does not change Job filter state, AOI overview state, Job point clustering state or map filter application.
+
 ### Job point clustering
 
 Job point clustering is owned by `src/features/map`.
@@ -1527,6 +1537,13 @@ Phase 25 Job popup/panel tests:
 - Tests should cover normal Job popup detection, specific Job id matching and close behavior.
 - Tests should verify that aggregate/cluster popup detection remains separate from normal Job popup detection.
 - Manual layout validation should include Jobs panel list mode, details mode, sticky header behavior and full-height bottom alignment.
+
+Phase 26 Filters popover validation:
+
+- Validate the Filters popover on normal, narrow and low-height viewports.
+- Verify that the header and active-filter summary remain visible while filter sections scroll.
+- Verify that Escape closes the popover and returns focus to the Filters action.
+- Verify that Job filters, AOI overview filters and Job point clustering controls still update the map/list behavior as before.
 
 ## 17. Documentation rules
 

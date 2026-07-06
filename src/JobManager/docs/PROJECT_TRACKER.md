@@ -23,7 +23,7 @@ Job Manager should follow Product Manager patterns where they fit, but the domai
 
 ## 2. Current project status
 
-Status: Phase 25 UI polish complete; next polish target selection ready
+Status: Phase 26 Filters popover small viewport polish started
 
 Current known baseline:
 
@@ -63,6 +63,7 @@ Current known baseline:
 - Cluster picker popup state detection is more robust when Job filters, AOI-scoped Job map filters, cluster settings or refreshed Job data change while a cluster popup is open.
 - Job popup lifecycle is now coordinated with selected-Job panel context so normal Job popups can stay open while details are used, but close when the selected-Job context is left.
 - Jobs overlay layout now fills the map workspace height without leaving a bottom gap in list or details mode.
+- Filters popover small-viewport layout and close behavior has been polished without changing filter state ownership, AOI overview rules or Job clustering behavior.
 
 Current known limitations:
 
@@ -2502,6 +2503,32 @@ Implementation notes:
 - The Jobs overlay uses top/bottom insets and border-box sizing so panel padding does not create a bottom gap.
 - Manual validation confirmed that the Jobs panel can be used while a normal Job popup is open, selected-context cleanup works, cluster modes still work and the panel bottom gap is removed.
 
+## Phase 26 - Filters popover small viewport polish
+
+Goal:
+
+Polish the existing Filters popover layout, scroll behavior and close/focus behavior on smaller viewports without changing filter state ownership, AOI overview rules, Job clustering behavior or backend/AOI contracts.
+
+Tasks:
+
+| ID      | Task                                        | Status | Notes                                                                                                       |
+| ------- | ------------------------------------------- | -----: | ----------------------------------------------------------------------------------------------------------- |
+| JM-2601 | Harden Filters popover viewport sizing      |   Done | Popover sizing now uses dynamic viewport height with fallback and tighter viewport margins.                 |
+| JM-2602 | Improve small-width filter control wrapping |   Done | Three- and four-option button grids collapse earlier, with a one-column fallback on very narrow viewports.  |
+| JM-2603 | Improve low-height scroll behavior          |   Done | Spacing is tightened for low-height viewports while keeping the header and summary outside the scroll body. |
+| JM-2604 | Add keyboard close behavior                 |   Done | Escape closes the Filters popover.                                                                          |
+| JM-2605 | Restore focus after explicit popover close  |   Done | Closing through the close action or Escape returns focus to the Filters navbar action.                      |
+
+Exit criteria:
+
+- Filters popover remains usable on narrow and low-height viewports
+- filter header and active-filter summary remain visible
+- filter body scrolls without page-level scroll fighting
+- Escape closes the popover
+- focus is restored after explicit close
+- Job filters, AOI overview filters and Job point clustering settings still behave as before
+- no backend, AOI contract or new filter-domain behavior is introduced
+
 ## 13. Suggested implementation order
 
 Recommended order:
@@ -2709,4 +2736,5 @@ Recommended next tasks:
 | JM-NEXT-034 | Start small UI polish from hardened baseline             |        Done | Cluster picker popup state cleanup was hardened without adding backend, AOI details or new contract assumptions.                   |
 | JM-NEXT-035 | Continue small UI polish from hardened baseline          |        Done | Job popup and Jobs panel selected-context cleanup was polished without adding backend, AOI details or new contract assumptions.    |
 | JM-NEXT-036 | Choose next polish target from manual testing            |        Done | Phase 25 validation found a Jobs panel bottom gap, which was fixed as a small CSS-only follow-up.                                  |
-| JM-NEXT-037 | Choose next polish target from current UI baseline       | Not started | Continue with the next reproducible map/list, filter popover or panel interaction issue, or pause for backend/AOI inputs.          |
+| JM-NEXT-037 | Choose next polish target from current UI baseline       |        Done | Filters popover small viewport and close/focus behavior was selected as the next polish target.                                    |
+| JM-NEXT-038 | Choose next polish target after Phase 26 validation      | Not started | Pick the next reproducible map/list, filter popover or panel interaction issue after validating Phase 26.                          |
