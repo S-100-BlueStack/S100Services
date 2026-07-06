@@ -23,7 +23,7 @@ Job Manager should follow Product Manager patterns where they fit, but the domai
 
 ## 2. Current project status
 
-Status: Startup coordination test hardening started
+Status: Map refresh and selection coordination hardening started
 
 Current known baseline:
 
@@ -59,6 +59,7 @@ Current known baseline:
 - AOI service readiness has been reviewed after the Job service adapter work. AOI FeatureLayer ownership remains the right current approach, and canonical queried AOI state remains deferred until final AOI service inputs are known.
 - Phase 20 adds regression tests for Job service adapter boundaries, Job store mutation metadata, AOI readiness validation and AOI overview fallback/no-match behavior without changing runtime behavior.
 - Startup stage coordination is now isolated behind a startup controller with regression tests for stage order, retry reuse and invalid Jobs load results.
+- Map refresh and selection restore coordination is now isolated behind a map sync coordinator with regression tests for manual refresh, mutation sync, selected AOI restore, selected Job restore and stale refresh guards.
 
   Current known limitations:
 
@@ -2361,6 +2362,45 @@ Implementation notes:
 - The refactor keeps the existing required startup sequence: map/AOI readiness, Jobs load, Job map rendering.
 - Phase 21 does not add endpoint assumptions, auth behavior, AOI details, AOI clustering or new map presentation behavior.
 
+## Phase 22 - Map refresh and selection coordination hardening
+
+Goal:
+
+Harden map refresh and selection restore coordination coverage without adding new UI, backend contracts, AOI details, AOI clustering or ArcGIS-heavy integration tests.
+
+Tasks:
+
+| ID      | Task                                    | Status | Notes                                                                                                             |
+| ------- | --------------------------------------- | -----: | ----------------------------------------------------------------------------------------------------------------- |
+| JM-2201 | Extract map sync coordination           |   Done | Manual refresh and mutation-to-map sync coordination now lives in `app/coordination/createMapSyncCoordinator.js`. |
+| JM-2202 | Preserve app composition ownership      |   Done | `createApp.js` still owns app composition, feature event wiring and panel/map state transitions.                  |
+| JM-2203 | Test selected AOI restore after refresh |   Done | Tests cover selected AOI map scope and highlight restore after Jobs refresh.                                      |
+| JM-2204 | Test selected Job restore after refresh |   Done | Tests cover selected Job map focus and related AOI highlight restore from refreshed Jobs snapshots.               |
+| JM-2205 | Test mutation-to-map sync gating        |   Done | Tests cover startup-time mutation sequence handling and post-startup mutation sync behavior.                      |
+| JM-2206 | Test stale refresh guard                |   Done | Tests cover that stale map refresh results cannot restore old selection state.                                    |
+| JM-2207 | Test map refresh failure handling       |   Done | Tests cover user-facing notice behavior and skipped selection restore after map refresh failure.                  |
+| JM-2208 | Avoid ArcGIS-heavy coordination tests   |   Done | Tests use injected map/store/notice stubs instead of ArcGIS runtime objects.                                      |
+
+Exit criteria:
+
+- map refresh coordination is testable outside `createApp.js`
+- manual Jobs refresh still refreshes map Job layers
+- selected AOI scope/highlight is restored after refresh
+- selected Job focus/highlight is restored after refresh
+- mutation-to-map sync remains gated by startup completion and change sequence
+- stale refresh results cannot overwrite newer map selection state
+- refresh failure shows a user-facing notice and does not restore stale selection state
+- no UI, backend, AOI or ArcGIS runtime behavior is intentionally changed
+
+Implementation notes:
+
+- `createMapSyncCoordinator` owns map refresh and restore orchestration.
+- `createApp.js` still owns user events, selected AOI/Job transitions, Jobs panel visibility and feature wiring.
+- The coordinator uses injected `mapController`, selected AOI/Job stores and notice function so tests can avoid ArcGIS runtime objects.
+- The coordinator keeps the existing restore precedence: selected AOI scope first, then selected Job context.
+- The coordinator keeps the existing behavior where a startup-time mutation sequence is recorded even when map sync is skipped before startup completion.
+- Phase 22 does not add endpoint assumptions, auth behavior, AOI details, AOI clustering or new map presentation behavior.
+
 ## 13. Suggested implementation order
 
 Recommended order:
@@ -2563,4 +2603,5 @@ Recommended next tasks:
 | JM-NEXT-028 | Start backend adapter preparation                        |        Done | Job service now has an explicit adapter boundary with mock as the default adapter and an unavailable HTTP seam for future work.    |
 | JM-NEXT-029 | Define future Job HTTP adapter contract                  |     Blocked | Blocked until real backend endpoint shape, auth behavior and guaranteed Job fields are known.                                      |
 | JM-NEXT-031 | Continue test hardening for startup/map coordination     |        Done | Startup coordination was extracted and covered with targeted stage-order and retry-reuse tests.                                    |
-| JM-NEXT-032 | Review map refresh and selection coordination tests      | Not started | Consider extracting targeted helpers for manual refresh, mutation-to-map sync and selected AOI/Job restore behavior if needed.     |
+| JM-NEXT-032 | Review map refresh and selection coordination tests      |        Done | Map refresh and selected AOI/Job restore coordination was extracted and covered with targeted tests.                               |
+| JM-NEXT-033 | Choose next feature phase from hardened baseline         | Not started | Review remaining blocked backend/AOI inputs and decide whether next work should be docs cleanup, UI polish or a new feature.       |

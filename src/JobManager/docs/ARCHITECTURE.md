@@ -150,6 +150,78 @@ Rules:
 - Completed startup stages should be reused on later retry attempts where possible.
 - Startup controller must not introduce backend endpoint, auth or AOI contract assumptions.
 
+### Map refresh coordination
+
+Status: Done
+
+Map refresh and selection restore orchestration lives under `src/app/coordination`.
+
+Current module:
+
+```txt
+app/coordination/createMapSyncCoordinator.js
+  -> coordinates manual Jobs refresh to map refresh
+  -> coordinates successful Job mutation to map sync
+  -> restores selected AOI map scope and highlight after refresh
+  -> restores selected Job focus and related AOI highlight after refresh
+  -> guards stale refresh results from restoring old selection state
+  -> exposes injected dependencies for focused tests
+```
+
+Current refresh inputs:
+
+```txt
+Jobs panel refresh event
+  -> createMapSyncCoordinator.refreshMapAfterJobsRefresh({ jobs })
+
+Jobs store mutation change
+  -> createMapSyncCoordinator.syncMapAfterJobStoreChange(snapshot)
+```
+
+Rules:
+
+- `createApp.js` owns feature event wiring and panel/map state transitions.
+- Map sync coordinator owns refresh/restore orchestration, not app DOM composition.
+- Map sync coordinator should use injected dependencies in tests instead of ArcGIS runtime objects.
+- Selected AOI restore takes precedence over selected Job restore when both states exist.
+- Stale refresh results must not restore old selected AOI or selected Job map state.
+- Map sync coordination must not introduce backend endpoint, auth or AOI contract assumptions.### Map refresh coordination
+
+Status: Done
+
+Map refresh and selection restore orchestration lives under `src/app/coordination`.
+
+Current module:
+
+```txt
+app/coordination/createMapSyncCoordinator.js
+  -> coordinates manual Jobs refresh to map refresh
+  -> coordinates successful Job mutation to map sync
+  -> restores selected AOI map scope and highlight after refresh
+  -> restores selected Job focus and related AOI highlight after refresh
+  -> guards stale refresh results from restoring old selection state
+  -> exposes injected dependencies for focused tests
+```
+
+Current refresh inputs:
+
+```txt
+Jobs panel refresh event
+  -> createMapSyncCoordinator.refreshMapAfterJobsRefresh({ jobs })
+
+Jobs store mutation change
+  -> createMapSyncCoordinator.syncMapAfterJobStoreChange(snapshot)
+```
+
+Rules:
+
+- `createApp.js` owns feature event wiring and panel/map state transitions.
+- Map sync coordinator owns refresh/restore orchestration, not app DOM composition.
+- Map sync coordinator should use injected dependencies in tests instead of ArcGIS runtime objects.
+- Selected AOI restore takes precedence over selected Job restore when both states exist.
+- Stale refresh results must not restore old selected AOI or selected Job map state.
+- Map sync coordination must not introduce backend endpoint, auth or AOI contract assumptions.
+
 ## 5. `src/features/aoi`
 
 Owns AOI-specific behavior.
@@ -1208,6 +1280,16 @@ The Jobs UI remains unaware of the map. Status buttons call the Jobs store only.
 
 The AOI renderer keeps the previous renderer active while relation summaries are rebuilt. This avoids a short neutral-color flash on AOIs that are colored because they have related Jobs.
 
+Phase 22 test hardening:
+
+- Manual refresh and mutation-to-map sync orchestration is isolated in `app/coordination/createMapSyncCoordinator.js`.
+- The coordinator refreshes Job map data before attempting to restore selected AOI or selected Job map context.
+- Selected AOI restore reapplies AOI Job scope and selected AOI highlight.
+- Selected Job restore can reselect the refreshed Job model before reapplying map focus and related AOI highlight.
+- Startup-time mutation changes remain recorded even when map sync is skipped before startup completion.
+- Stale refresh results are ignored so older async refreshes cannot restore old selection state.
+- Tests use injected map controller, selected-state stores and notice stubs to avoid ArcGIS-heavy integration tests.
+
 ### Startup loader and required data gate
 
 Status: Done
@@ -1412,6 +1494,13 @@ Phase 21 startup coordination tests:
 - Tests should verify stage order and retry reuse through externally visible calls.
 - Tests should avoid ArcGIS runtime objects unless a later integration-test setup is explicitly introduced.
 - Startup tests must not introduce backend endpoint, auth or AOI contract assumptions.
+
+Phase 22 map refresh coordination tests:
+
+- Map refresh coordination tests should use injected map controller and selected-state stores.
+- Tests should verify externally visible map controller calls instead of ArcGIS runtime objects.
+- Tests should cover selected AOI restore, selected Job restore, mutation sync gating, stale refresh guards and refresh failure notices.
+- Tests must not introduce backend endpoint, auth or AOI contract assumptions.
 
 ## 17. Documentation rules
 
