@@ -270,6 +270,26 @@ Backend implication:
 
 The next backend/AOI implementation package should start only after the missing real backend or AOI inputs are available.
 
+## 2.8 Phase 29 backend/AOI input checklist review
+
+Status: Reviewed
+
+Current decision:
+
+No backend contract changes are introduced by the backend/AOI input checklist.
+
+Current behavior remains unchanged:
+
+- Job data still flows through the mock Job service adapter by default.
+- The future HTTP adapter remains an unavailable seam.
+- AOIs still flow through the configured ArcGIS FeatureLayer.
+- AOI/Job relations remain service/domain-derived and source-flexible.
+- No Job endpoint paths, auth behavior, response shapes or AOI relation ownership assumptions are introduced.
+
+Backend implication:
+
+The checklist defines what must be confirmed before backend/AOI-dependent implementation can continue. It is not a final contract.
+
 ## 3. Expected backend responsibilities
 
 Likely future backend responsibilities:
@@ -706,7 +726,124 @@ User-facing error messages must be English.
 | BE-011 | How large and dense is the AOI Feature Service?         |        Open | Required before deciding whether to query all AOIs eagerly or page/filter.                                               |
 | BE-012 | Should `PRODUCTID` participate in AOI/Job relations?    |        Open | It may be domain-relevant, but current test field is nullable, so it should not replace `GlobalID` without confirmation. |
 
-## 11. Notes for future updates
+
+## 11. Backend/AOI input checklist
+
+This checklist is the handoff surface for backend/AOI-dependent work. It lists required inputs, not final answers.
+
+### 11.1 Job backend inputs required
+
+Before implementing a real Job HTTP adapter, confirm:
+
+- backend base URL or hosting path
+- whether the frontend calls the backend through the same origin or a separate origin
+- authentication behavior
+- whether browser requests must use credentials
+- CORS expectations, if the backend is not same-origin
+- load Jobs endpoint path and method
+- whether Job loading is paged, filtered server-side or returned as a complete list
+- guaranteed Job identifier field
+- guaranteed Job title or display field
+- guaranteed created date field and date format
+- optional/required deadline field and date format
+- status enum values accepted by the backend
+- priority enum values returned by the backend
+- whether priority is stored or computed by backend rules
+- Job geometry format
+- Job geometry spatial reference
+- whether Jobs can have point, polygon or additional geometry types
+- whether Jobs can exist without geometry
+- whether related AOI ids are returned with Jobs
+- whether relation ids match the AOI Feature Service identifier field
+- status mutation endpoint path and method
+- status mutation request shape
+- status mutation response shape
+- whether status mutation can return generated follow-up Jobs
+- whether status mutation supports conflict detection
+- expected error response shape
+- user-safe error message policy
+- refresh/freshness expectations
+- whether silent/auto refresh is required later
+
+### 11.2 AOI Feature Service inputs required
+
+Before implementing AOI details, canonical queried AOI state or AOI clustering decisions, confirm:
+
+- final AOI Feature Service URL
+- target layer id, if the service has multiple layers
+- authentication behavior
+- whether browser requests require ArcGIS identity, same-origin auth or another mechanism
+- stable AOI identifier field
+- stable AOI display field
+- fields that should be shown to users in AOI popup/details
+- fields that should not be shown to users
+- geometry type
+- spatial reference
+- approximate feature count
+- expected geometry density and scale distribution
+- whether features are small/uniform enough for direct visual overview
+- whether representative-point or centroid logic is acceptable for overview/clustering
+- supported query operations
+- supported `definitionExpression` behavior
+- expected performance for querying all AOIs or filtered AOI subsets
+- whether AOI data can be cached client-side
+- whether `OBJECTID` is stable only for ArcGIS mechanics or can be used in business logic
+- whether `PRODUCTID` or another product field participates in AOI/Job relations
+
+### 11.3 AOI/Job relation inputs required
+
+Before replacing mock relation behavior, confirm:
+
+- whether relations are returned with Jobs
+- whether relations are returned from a dedicated endpoint
+- whether backend calculates spatial intersections
+- whether frontend ever needs to calculate temporary spatial intersections
+- relation identifier field used for AOIs
+- whether relation AOI ids match the AOI Feature Service stable identifier field
+- whether relation source should be visible in diagnostics
+- expected behavior when a Job relates to zero AOIs
+- expected behavior when an AOI has no Jobs
+- expected behavior when relation data is stale compared with the AOI Feature Service
+
+### 11.4 Minimum unblock criteria
+
+Job HTTP adapter work can start when these are confirmed:
+
+- backend URL/path strategy
+- auth and credentials behavior
+- load Jobs endpoint
+- status mutation endpoint
+- guaranteed Job fields
+- status and priority enum mapping
+- geometry format and spatial reference
+- error response shape
+
+AOI details work can start when these are confirmed:
+
+- final AOI Feature Service URL/layer
+- auth behavior
+- stable AOI id field
+- user-facing display/metadata fields
+- query support and expected service size
+
+AOI clustering or cluster-like overview work can start when these are confirmed:
+
+- AOI geometry type
+- AOI spatial reference
+- feature count and density
+- whether representative points are acceptable
+- whether direct polygon overview would be misleading
+
+Relation replacement work can start when these are confirmed:
+
+- relation ownership
+- relation source shape
+- AOI identifier compatibility
+- behavior for missing, stale or empty relations
+
+Until those inputs exist, keep the mock adapter, FeatureLayer ownership and relation-service abstraction unchanged.
+
+## 12. Notes for future updates
 
 When backend work begins, update this document with:
 

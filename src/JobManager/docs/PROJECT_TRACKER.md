@@ -23,7 +23,7 @@ Job Manager should follow Product Manager patterns where they fit, but the domai
 
 ## 2. Current project status
 
-Status: Phase 28 baseline review complete; frontend work is gated by backend/AOI inputs or concrete manual findings
+Status: Phase 29 backend/AOI input checklist ready; implementation remains gated by backend/AOI inputs or concrete manual findings
 
 Current known baseline:
 
@@ -67,6 +67,7 @@ Current known baseline:
 - User-driven map/list transitions cancel pending async map refresh restore work so stale AOI/Job scope or highlight state cannot be reapplied after the user changes context.
 - The current UI-polish baseline is considered stable. Do not start additional UI polish unless manual testing finds a concrete reproducible issue.
 - Backend/AOI-dependent implementation remains gated until real endpoint, auth, field, geometry and relation-ownership inputs are available.
+- Backend/AOI readiness gate has been converted into a concrete input checklist for future Job HTTP adapter, AOI Feature Service and relation-ownership work.
 
 Current known limitations:
 
@@ -75,6 +76,7 @@ Current known limitations:
 - AOI clustering or AOI cluster-like overview is still deferred until real AOI geometry density and shape are confirmed.
 - Job polygon clustering is deferred because centroid-based clustering could hide real polygon footprint.
 - Final AOI Feature Service fields, auth requirements, geometry characteristics and backend relation ownership remain unconfirmed.
+- Backend/AOI input checklist is documented, but the required endpoint, auth, field, geometry and relation-ownership answers remain unavailable.
 
 ## 3. Product principles
 
@@ -2582,12 +2584,12 @@ Review the stable Phase 27 baseline, close the current open-ended UI-polish trac
 
 Tasks:
 
-| ID      | Task                                   | Status | Notes                                                                                                       |
-| ------- | -------------------------------------- | -----: | ----------------------------------------------------------------------------------------------------------- |
-| JM-2801 | Review current frontend baseline       |   Done | Current map/list, popup, panel, filter, startup and refresh polish is documented through Phase 27.          |
-| JM-2802 | Confirm backend/AOI readiness blockers |   Done | Real Job endpoint/auth/fields and final AOI service fields/auth/geometry/relation ownership remain open.    |
-| JM-2803 | Decide next work gate                  |   Done | Further UI polish should wait for a concrete reproducible manual finding; backend/AOI work waits on inputs. |
-| JM-2804 | Keep Phase 28 docs-only                |   Done | No runtime behavior, Calcite usage, backend contract or feature implementation is introduced.               |
+| ID      | Task                                      | Status | Notes                                                                                                      |
+| ------- | ----------------------------------------- | -----: | ---------------------------------------------------------------------------------------------------------- |
+| JM-2801 | Review current frontend baseline          |   Done | Current map/list, popup, panel, filter, startup and refresh polish is documented through Phase 27.         |
+| JM-2802 | Confirm backend/AOI readiness blockers    |   Done | Real Job endpoint/auth/fields and final AOI service fields/auth/geometry/relation ownership remain open.  |
+| JM-2803 | Decide next work gate                     |   Done | Further UI polish should wait for a concrete reproducible manual finding; backend/AOI work waits on inputs. |
+| JM-2804 | Keep Phase 28 docs-only                   |   Done | No runtime behavior, Calcite usage, backend contract or feature implementation is introduced.              |
 
 Exit criteria:
 
@@ -2604,6 +2606,37 @@ Implementation notes:
 - Backend implementation remains blocked until real Job endpoint shape, authentication behavior, guaranteed Job fields and mutation semantics are known.
 - Final AOI work remains blocked until real AOI Feature Service fields, auth requirements, geometry characteristics, spatial reference, service size and relation identifier ownership are confirmed.
 - Additional frontend work should be selected from one of two inputs: confirmed backend/AOI information or a reproducible problem from manual testing.
+
+## Phase 29 - Backend/AOI input checklist
+
+Goal:
+
+Convert the Phase 28 readiness gate into a concrete checklist that can be used when backend and final AOI inputs become available, without introducing runtime behavior, endpoint assumptions, auth assumptions or final AOI contract assumptions.
+
+Tasks:
+
+| ID      | Task                                      | Status | Notes                                                                                                           |
+| ------- | ----------------------------------------- | -----: | --------------------------------------------------------------------------------------------------------------- |
+| JM-2901 | Define Job backend input checklist        |   Done | Required Job API, auth, model, geometry, mutation and error-shape inputs are documented.                        |
+| JM-2902 | Define AOI Feature Service input checklist |   Done | Required AOI service URL, auth, field, geometry, query, scale and relation-id compatibility inputs are documented. |
+| JM-2903 | Define unblock criteria                   |   Done | Minimum inputs for Job HTTP adapter work, AOI details work and AOI clustering decisions are listed explicitly.   |
+| JM-2904 | Keep Phase 29 docs-only                   |   Done | No runtime behavior, endpoint path, auth behavior, Calcite usage or final backend/AOI contract is introduced.   |
+
+Exit criteria:
+
+- backend/AOI input needs are concrete enough to send to backend/AOI stakeholders
+- future Job HTTP adapter work has clear minimum input requirements
+- future AOI details, AOI clustering and relation-id work have clear minimum input requirements
+- open backend/AOI blockers remain visible
+- no runtime behavior or final backend/AOI contract is introduced
+
+Implementation notes:
+
+- Phase 29 is a docs/status preparation pass only.
+- The checklist is intentionally written as required inputs, not as final answers.
+- The future Job HTTP adapter remains blocked until real endpoint shape, authentication behavior, guaranteed Job fields, geometry format, mutation semantics and error shapes are confirmed.
+- AOI details, canonical queried AOI state and AOI clustering remain blocked until final AOI Feature Service fields, auth behavior, geometry type, spatial reference, service size and relation-id ownership are confirmed.
+- If manual testing finds a concrete reproducible frontend issue before backend/AOI inputs arrive, that issue can still become the next focused implementation phase.
 
 ## 13. Suggested implementation order
 
@@ -2814,5 +2847,6 @@ Recommended next tasks:
 | JM-NEXT-036 | Choose next polish target from manual testing            |        Done | Phase 25 validation found a Jobs panel bottom gap, which was fixed as a small CSS-only follow-up.                                  |
 | JM-NEXT-037 | Choose next polish target from current UI baseline       |        Done | Filters popover small viewport and close/focus behavior was selected as the next polish target.                                    |
 | JM-NEXT-038 | Choose next polish target after Phase 26 validation      |        Done | Map/list state transition polish was selected after Phase 26 validation.                                                           |
-| JM-NEXT-039 | Choose next polish target after Phase 27 validation      |        Done | Phase 28 baseline review selected pause/readiness gate instead of another open-ended UI-polish task.                               |
-| JM-NEXT-040 | Await backend/AOI inputs or concrete manual issue        |     Blocked | Continue only when real backend/AOI inputs are available or manual testing finds a concrete reproducible frontend issue.           |
+| JM-NEXT-039 | Choose next polish target after Phase 27 validation      |        Done | Phase 28 baseline review selected pause/readiness gate instead of another open-ended UI-polish task.                              |
+| JM-NEXT-040 | Prepare backend/AOI input checklist                     |        Done | Phase 29 converted the readiness gate into a concrete checklist for Job backend, AOI service and relation-ownership inputs.        |
+| JM-NEXT-041 | Await backend/AOI inputs or concrete manual issue        |     Blocked | Continue only when real backend/AOI inputs are available or manual testing finds a concrete reproducible frontend issue.           |

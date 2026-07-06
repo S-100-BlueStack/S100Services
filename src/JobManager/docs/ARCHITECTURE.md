@@ -968,6 +968,32 @@ Rules:
 - Introduce canonical AOI state only when there is a confirmed UI/backend requirement.
 - Keep test-service field mapping provisional until final AOI Feature Service inputs are known.
 
+### Backend/AOI readiness input gate
+
+Status: Documented
+
+Backend/AOI-dependent implementation remains gated until the required external inputs are available.
+
+Current readiness checklist ownership:
+
+```txt
+docs/BACKEND_CONTRACTS.md
+  -> Job backend input checklist
+  -> AOI Feature Service input checklist
+  -> AOI/Job relation ownership inputs
+  -> unblock criteria for backend/AOI implementation
+```
+
+Rules:
+
+- Do not wire a Job HTTP adapter to runtime config before endpoint shape and auth behavior are confirmed.
+- Do not add endpoint paths or backend API environment variables before they are confirmed.
+- Do not introduce canonical queried AOI state before final AOI fields, auth behavior, geometry characteristics and service size are known.
+- Do not implement AOI details before stable display fields and user-relevant AOI metadata are confirmed.
+- Do not implement AOI clustering or representative-point layers before AOI geometry density, spatial reference and scale behavior are known.
+- Do not treat provisional `GlobalID` relation matching as final until relation identifier ownership is confirmed.
+- If a concrete frontend issue is found during manual testing, it can still be handled as a focused UI/UX phase without changing the backend/AOI gate.
+
 ## 13. Map and clustering architecture
 
 Clustering must be treated as an explicit design decision.
