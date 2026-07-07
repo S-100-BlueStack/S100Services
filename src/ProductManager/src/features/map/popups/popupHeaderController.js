@@ -3,6 +3,7 @@ import { getStatusColor } from "../../data/stores/statusStore.js";
 import {
   addAnalyzeCollectionProduct,
   hasAnalyzeCollectionProduct,
+  removeAnalyzeCollectionProduct,
   subscribeAnalyzeCollection,
 } from "../../analyze/state/analyzeCollectionStore.js";
 
@@ -98,15 +99,20 @@ function waitForDefaultHeader(view, remainingFrames = 20) {
 
 function getPopupHeader(view) {
   const popupContainer =
-    view.popup.container ?? view.container?.querySelector(".esri-popup") ?? document.querySelector(".esri-popup");
+    view.popup.container ??
+    view.container?.querySelector(".esri-popup") ??
+    document.querySelector(".esri-popup");
 
   if (!popupContainer) {
     return null;
   }
 
   const heading = popupContainer.querySelector(".esri-features__heading");
-  const flowItem = heading?.closest("calcite-flow-item") ?? popupContainer.querySelector("calcite-flow-item");
-  const panel = flowItem?.shadowRoot?.querySelector("calcite-panel") ?? popupContainer.querySelector("calcite-panel");
+  const flowItem =
+    heading?.closest("calcite-flow-item") ?? popupContainer.querySelector("calcite-flow-item");
+  const panel =
+    flowItem?.shadowRoot?.querySelector("calcite-panel") ??
+    popupContainer.querySelector("calcite-panel");
 
   return panel?.shadowRoot?.querySelector(".header") ?? null;
 }
@@ -217,6 +223,22 @@ function ensureAnalyzeCollectionButton(header, attributes) {
 
     btn.addEventListener("click", () => {
       const datasetName = btn.dataset.datasetName;
+      const isSelected = hasAnalyzeCollectionProduct(datasetName);
+
+      if (isSelected) {
+        removeAnalyzeCollectionProduct(datasetName);
+
+        addNotice({
+          type: "info",
+          message: `${datasetName} removed from Analyze collection`,
+          duration: 2200,
+          storeInCenter: false,
+        });
+
+        syncAnalyzeCollectionButtonState(btn);
+        return;
+      }
+
       const result = addAnalyzeCollectionProduct({ datasetName });
 
       if (result.added) {
@@ -257,12 +279,11 @@ function ensureAnalyzeCollectionButton(header, attributes) {
 function syncAnalyzeCollectionButtonState(btn) {
   const datasetName = btn.dataset.datasetName;
   const isSelected = hasAnalyzeCollectionProduct(datasetName);
-  const title = isSelected ? "Added to Analyze collection" : "Add to Analyze collection";
+  const title = isSelected ? "Remove from Analyze collection" : "Add to Analyze collection";
 
-  btn.icon = isSelected ? "check" : "plus-square";
+  btn.icon = isSelected ? "check" : "chart-magnifying-glass";
   btn.title = title;
   btn.text = title;
-  btn.active = isSelected;
-  btn.toggleAttribute("active", isSelected);
+  btn.toggleAttribute("data-added", isSelected);
   btn.setAttribute("aria-label", title);
 }

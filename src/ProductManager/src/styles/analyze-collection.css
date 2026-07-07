@@ -15,7 +15,7 @@
   color: var(--pm-text);
   background: var(--pm-surface);
   border: 1px solid var(--pm-border);
-  border-radius: 10px;
+  border-radius: 0;
   box-shadow: var(--pm-shadow);
 }
 
@@ -63,7 +63,7 @@
   color: var(--pm-button-secondary-text);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: 0;
   font: inherit;
   font-size: 16px;
   font-weight: 700;
@@ -107,7 +107,7 @@
   padding: 6px 8px;
   background: var(--pm-surface-alt);
   border: 1px solid var(--pm-border);
-  border-radius: 6px;
+  border-radius: 0;
 }
 
 .pm-analyze-collection-tray__item-name {
@@ -130,7 +130,7 @@
   color: #ffffff;
   background: #0079c1;
   border: 1px solid #0079c1;
-  border-radius: 4px;
+  border-radius: 0;
   font: inherit;
   font-size: 13px;
   font-weight: 700;
@@ -143,11 +143,12 @@
   border-color: #00619b;
 }
 
-.popup-analyze-collection-btn[active] {
-  --calcite-ui-icon-color: #ffffff;
-  --calcite-action-icon-color: #ffffff;
-  --calcite-action-background-color: rgba(255, 255, 255, 0.2);
-  --calcite-action-background-color-hover: rgba(255, 255, 255, 0.28);
+.popup-analyze-collection-btn {
+  --calcite-ui-icon-color: currentColor;
+}
+
+.popup-analyze-collection-btn[data-added] {
+  --calcite-ui-icon-color: currentColor;
 }
 
 @media (max-width: 700px) {
