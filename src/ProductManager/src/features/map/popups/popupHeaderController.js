@@ -1,5 +1,10 @@
-import { getStatusColor } from "../../data/stores/statusStore.js";
 import { addNotice } from "../../notices/state/noticeStore.js";
+import { getStatusColor } from "../../data/stores/statusStore.js";
+import {
+  addAnalyzeCollectionProduct,
+  hasAnalyzeCollectionProduct,
+  subscribeAnalyzeCollection,
+} from "../../analyze/state/analyzeCollectionStore.js";
 
 let currentFeatureId = null;
 let headerMode = "default";
@@ -28,7 +33,6 @@ export function applyHeaderColor(view) {
 export function resetHeaderColor(view) {
   headerMode = "default";
   currentFeatureId = null;
-
   waitForDefaultHeader(view);
 }
 
@@ -63,6 +67,7 @@ function waitForFeatureHeader(view, featureId, remainingFrames = 20) {
     header.dataset.statusColor = color;
   }
 
+  ensureAnalyzeCollectionButton(header, attr);
   ensureCopyButton(header, attr.datasetName);
 }
 
@@ -81,32 +86,27 @@ function waitForDefaultHeader(view, remainingFrames = 20) {
     return;
   }
 
-  // Feature popups set inline styles inside Calcite Shadow DOM.
-  // The picker must remove those inline values so theme tokens can apply again.
+  // Feature popups set inline styles inside Calcite Shadow DOM. The picker must
+  // remove those inline values so theme tokens can apply again.
   header.style.removeProperty("background-color");
   header.style.removeProperty("color");
   delete header.dataset.statusColor;
 
   removeCopyButton(header);
+  removeAnalyzeCollectionButton(header);
 }
 
 function getPopupHeader(view) {
   const popupContainer =
-    view.popup.container ??
-    view.container?.querySelector(".esri-popup") ??
-    document.querySelector(".esri-popup");
+    view.popup.container ?? view.container?.querySelector(".esri-popup") ?? document.querySelector(".esri-popup");
 
   if (!popupContainer) {
     return null;
   }
 
   const heading = popupContainer.querySelector(".esri-features__heading");
-  const flowItem =
-    heading?.closest("calcite-flow-item") ?? popupContainer.querySelector("calcite-flow-item");
-
-  const panel =
-    flowItem?.shadowRoot?.querySelector("calcite-panel") ??
-    popupContainer.querySelector("calcite-panel");
+  const flowItem = heading?.closest("calcite-flow-item") ?? popupContainer.querySelector("calcite-flow-item");
+  const panel = flowItem?.shadowRoot?.querySelector("calcite-panel") ?? popupContainer.querySelector("calcite-panel");
 
   return panel?.shadowRoot?.querySelector(".header") ?? null;
 }
@@ -117,29 +117,58 @@ function isOverlapPickerPopup(view) {
   return content instanceof Element && content.classList.contains("overlap-picker");
 }
 
-function removeCopyButton(header) {
-  const btn = header.querySelector(".popup-copy-btn");
+function getHeaderActions(header) {
+  const actions = header.querySelector(".header-actions--end");
 
-  if (btn) {
-    btn.remove();
+  if (!actions) {
+    return null;
   }
+
+  // Calcite hides the end-actions container when it has no slotted/default
+  // actions. Header buttons are inserted into this internal container, so it
+  // must be explicitly unhidden when we add our custom actions.
+  actions.hidden = false;
+  actions.removeAttribute("hidden");
+
+  return actions;
+}
+
+function removeCopyButton(header) {
+  removeHeaderButton(header, ".popup-copy-btn");
+}
+
+function removeAnalyzeCollectionButton(header) {
+  removeHeaderButton(header, ".popup-analyze-collection-btn");
+}
+
+function removeHeaderButton(header, selector) {
+  const btn = header.querySelector(selector);
+
+  if (!btn) {
+    return;
+  }
+
+  btn.cleanup?.();
+  btn.remove();
 }
 
 function ensureCopyButton(header, datasetName) {
-  const actions = header.querySelector(".header-actions--end");
+  const actions = getHeaderActions(header);
 
-  if (!actions) return;
+  if (!actions) {
+    return;
+  }
 
   let btn = actions.querySelector(".popup-copy-btn");
 
   if (!btn) {
     btn = document.createElement("calcite-action");
-
     btn.className = "popup-copy-btn";
     btn.icon = "copy-to-clipboard";
     btn.scale = "m";
     btn.title = "Copy dataset name";
     btn.appearance = "transparent";
+
     actions.prepend(btn);
 
     btn.addEventListener("click", async () => {
@@ -147,7 +176,6 @@ function ensureCopyButton(header, datasetName) {
 
       try {
         await navigator.clipboard.writeText(datasetName);
-
         addNotice({
           type: "success",
           message: "Dataset name copied",
@@ -167,4 +195,74 @@ function ensureCopyButton(header, datasetName) {
 
   // Keep the copy action aligned with the currently selected feature.
   btn.dataset.datasetName = datasetName;
+}
+
+function ensureAnalyzeCollectionButton(header, attributes) {
+  const datasetName = attributes?.datasetName;
+  const actions = getHeaderActions(header);
+
+  if (!actions || !datasetName) {
+    return;
+  }
+
+  let btn = actions.querySelector(".popup-analyze-collection-btn");
+
+  if (!btn) {
+    btn = document.createElement("calcite-action");
+    btn.className = "popup-analyze-collection-btn";
+    btn.scale = "m";
+    btn.appearance = "transparent";
+
+    actions.prepend(btn);
+
+    btn.addEventListener("click", () => {
+      const datasetName = btn.dataset.datasetName;
+      const result = addAnalyzeCollectionProduct({ datasetName });
+
+      if (result.added) {
+        addNotice({
+          type: "success",
+          message: `${datasetName} added to Analyze collection`,
+          duration: 2200,
+          storeInCenter: false,
+        });
+      } else if (result.reason === "already-added") {
+        addNotice({
+          type: "info",
+          message: `${datasetName} is already in the Analyze collection`,
+          duration: 2200,
+          storeInCenter: false,
+        });
+      } else {
+        addNotice({
+          type: "danger",
+          message: "Selected product could not be added to Analyze collection",
+          duration: 3000,
+          storeInCenter: false,
+        });
+      }
+
+      syncAnalyzeCollectionButtonState(btn);
+    });
+
+    btn.cleanup = subscribeAnalyzeCollection(() => {
+      syncAnalyzeCollectionButtonState(btn);
+    });
+  }
+
+  btn.dataset.datasetName = datasetName;
+  syncAnalyzeCollectionButtonState(btn);
+}
+
+function syncAnalyzeCollectionButtonState(btn) {
+  const datasetName = btn.dataset.datasetName;
+  const isSelected = hasAnalyzeCollectionProduct(datasetName);
+  const title = isSelected ? "Added to Analyze collection" : "Add to Analyze collection";
+
+  btn.icon = isSelected ? "check" : "plus-square";
+  btn.title = title;
+  btn.text = title;
+  btn.active = isSelected;
+  btn.toggleAttribute("active", isSelected);
+  btn.setAttribute("aria-label", title);
 }
