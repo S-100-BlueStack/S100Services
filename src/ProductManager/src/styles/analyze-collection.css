@@ -19,6 +19,7 @@
   box-shadow: var(--pm-shadow);
 }
 
+.pm-analyze-route .pm-analyze-collection-tray,
 .pm-analyze-collection-tray[hidden] {
   display: none;
 }

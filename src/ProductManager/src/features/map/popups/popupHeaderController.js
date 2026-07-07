@@ -68,7 +68,12 @@ function waitForFeatureHeader(view, featureId, remainingFrames = 20) {
     header.dataset.statusColor = color;
   }
 
-  ensureAnalyzeCollectionButton(header, attr);
+  if (isAnalyzeCollectionPopupActionEnabled()) {
+    ensureAnalyzeCollectionButton(header, attr);
+  } else {
+    removeAnalyzeCollectionButton(header);
+  }
+
   ensureCopyButton(header, attr.datasetName);
 }
 
@@ -121,6 +126,10 @@ function isOverlapPickerPopup(view) {
   const content = view.popup.content;
 
   return content instanceof Element && content.classList.contains("overlap-picker");
+}
+
+function isAnalyzeCollectionPopupActionEnabled() {
+  return !document.body.classList.contains("pm-analyze-route");
 }
 
 function getHeaderActions(header) {
@@ -204,6 +213,11 @@ function ensureCopyButton(header, datasetName) {
 }
 
 function ensureAnalyzeCollectionButton(header, attributes) {
+  if (!isAnalyzeCollectionPopupActionEnabled()) {
+    removeAnalyzeCollectionButton(header);
+    return;
+  }
+
   const datasetName = attributes?.datasetName;
   const actions = getHeaderActions(header);
 
