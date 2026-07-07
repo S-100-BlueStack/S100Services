@@ -1,6 +1,8 @@
+using Azure;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.IdentityModel.Tokens;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 using ProductManagerAPI.Data.Repositories;
@@ -14,7 +16,7 @@ using static ProductManagerAPI.Models.ResponseTypes;
 
 namespace ProductManagerAPI.Controllers
 {
-    //[AllowAnonymous] 
+    //[AllowAnonymous]
     [Authorize("productmanager:access")]
     [ApiController]
     [Route("[controller]")]
@@ -131,6 +133,47 @@ namespace ProductManagerAPI.Controllers
 
 
             response.Data = product;
+            response.TotalHits = 1;
+            response.DurationMs = sw.ElapsedMilliseconds;
+
+            return this.Ok(response);
+        }
+
+        /// <summary>
+        /// Get a specific electronic product's AOI
+        /// </summary>
+        /// <param name="name">The name of the dataset.</param>
+        /// <returns>The product's AOI</returns>
+        [ProducesResponseType(typeof(ApiResponse<ResponseTypes.AOIResponse>), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
+        [HttpGet("{name}/aoi", Name = "GetElectronicProductAoi")]
+        public async Task<IActionResult> GetElectronicProductAoi(string name) {
+            var sw = Stopwatch.StartNew();
+            var response = new ApiResponse<ResponseTypes.AOIResponse>();
+
+            var electronicProduct = this._electronicProductManager.ElectronicProduct(name);
+
+            if (electronicProduct == null) {
+                response.Success = false;
+                response.Message = $"No electronic product with name '{name}' was found.";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return NotFound(response);
+            }
+
+            var boundary = await _electronicProductManager.GetDatasetBoundary(name);
+
+            if (boundary.IsNullOrEmpty()) {
+                response.Success = false;
+                response.Message = $"No AOI could be found for electronic product with name '{name}'";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return NotFound(response);
+            }
+
+            var aoiResponse = new AOIResponse {
+                Geometry = boundary
+            };
+
+            response.Data = aoiResponse;
             response.TotalHits = 1;
             response.DurationMs = sw.ElapsedMilliseconds;
 

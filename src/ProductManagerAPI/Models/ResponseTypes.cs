@@ -19,7 +19,7 @@
         public class AOIResponse
         {
             public required string Geometry { get; set; }
-            public required Attributes Attributes { get; set; }
+            public required Attributes? Attributes { get; set; }
         }
 
         public class Attributes
