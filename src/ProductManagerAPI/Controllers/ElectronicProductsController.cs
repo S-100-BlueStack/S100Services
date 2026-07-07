@@ -170,7 +170,8 @@ namespace ProductManagerAPI.Controllers
             }
 
             var aoiResponse = new AOIResponse {
-                Geometry = boundary
+                Geometry = boundary,
+                Attributes = null
             };
 
             response.Data = aoiResponse;
