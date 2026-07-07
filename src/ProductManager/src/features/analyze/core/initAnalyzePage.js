@@ -14,6 +14,8 @@ import { renderAnalyzeSidebar } from "../ui/analyzeSidebar.js";
 import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
 import { hideLoader } from "../../../shared/ui/loader.js";
 import { fetchProductHistory } from "../../timeline/api/productHistoryApi.js";
+import { createHoverManager } from "../../map/interactions/hoverManager.js";
+import { registerPopupHoverSync } from "../../map/interactions/registerPopupHoverSync.js";
 
 export async function initAnalyzePage({ datasetNames }) {
   let currentLayers = [];
@@ -30,6 +32,8 @@ export async function initAnalyzePage({ datasetNames }) {
 
   const map = createMap();
   const view = createView(map);
+  const hoverManager = createHoverManager(view);
+  const cleanupPopupHoverSync = registerPopupHoverSync(view, hoverManager);
 
   const loadAnalyzeDatasetNames = async (nextDatasetNames, { updateUrl = true } = {}) => {
     const requestId = ++loadRequestId;
@@ -50,6 +54,7 @@ export async function initAnalyzePage({ datasetNames }) {
       loading: normalizedNextDatasetNames.length > 0,
     });
 
+    hoverManager.clear();
     removeLayers(map, currentLayers);
     currentLayers = [];
     currentProducts = [];
@@ -96,6 +101,16 @@ export async function initAnalyzePage({ datasetNames }) {
       });
 
       if (requestId !== loadRequestId) {
+        hoverManager.clear();
+        removeLayers(map, layers);
+        return;
+      }
+
+      await registerHoverLayers(hoverManager, layers);
+
+      if (requestId !== loadRequestId) {
+        hoverManager.clear();
+        removeLayers(map, layers);
         return;
       }
 
@@ -204,10 +219,12 @@ export async function initAnalyzePage({ datasetNames }) {
       loadRequestId += 1;
       document.removeEventListener("pm-analyze-dataset-submit", handleAnalyzeDatasetSubmit);
       window.removeEventListener("popstate", handlePopState);
+      cleanupPopupHoverSync?.();
       activeLoaderProgress?.cleanup();
       activeLoaderProgress = null;
       cleanupViewPadding?.();
       cleanupViewPadding = null;
+      hoverManager.clear();
       removeLayers(map, currentLayers);
       currentLayers = [];
       currentProducts = [];
@@ -357,4 +374,8 @@ async function loadProductHistories(products) {
         result.reason instanceof Error ? result.reason.message : "Unknown history error.",
     };
   });
+}
+
+async function registerHoverLayers(hoverManager, layers) {
+  await Promise.all(layers.map((layer) => hoverManager.registerLayer(layer)));
 }
