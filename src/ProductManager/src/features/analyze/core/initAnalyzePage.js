@@ -1,7 +1,12 @@
 import { loadStatuses } from "../../data/stores/statusStore.js";
 import { createMap } from "../../map/core/createMap.js";
 import { createView } from "../../map/core/createView.js";
+import { createHoverManager } from "../../map/interactions/hoverManager.js";
+import { registerPopupHoverSync } from "../../map/interactions/registerPopupHoverSync.js";
 import { noticeError, noticeWarning } from "../../notices/services/noticeService.js";
+import { fetchProductHistory } from "../../timeline/api/productHistoryApi.js";
+import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
+import { hideLoader } from "../../../shared/ui/loader.js";
 import { fetchAnalyzeProducts } from "../api/analyzeApi.js";
 import { createAnalyzeLayers } from "../map/createAnalyzeLayers.js";
 import { zoomToGraphicsExtent } from "../map/zoomToGraphics.js";
@@ -11,11 +16,6 @@ import {
   setAnalyzeRouteUrl,
 } from "../routing/analyzeRoute.js";
 import { renderAnalyzeSidebar } from "../ui/analyzeSidebar.js";
-import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
-import { hideLoader } from "../../../shared/ui/loader.js";
-import { fetchProductHistory } from "../../timeline/api/productHistoryApi.js";
-import { createHoverManager } from "../../map/interactions/hoverManager.js";
-import { registerPopupHoverSync } from "../../map/interactions/registerPopupHoverSync.js";
 
 export async function initAnalyzePage({ datasetNames }) {
   let currentLayers = [];
@@ -39,6 +39,11 @@ export async function initAnalyzePage({ datasetNames }) {
     const requestId = ++loadRequestId;
     const normalizedNextDatasetNames = normalizeDatasetNames(nextDatasetNames);
 
+    // Close stale popups before replacing analyze layers. ArcGIS popups can otherwise
+    // keep rendering details for a graphic that is no longer present in the map.
+    closePopup(view);
+    hoverManager.clear();
+
     activeLoaderProgress?.cleanup();
     activeLoaderProgress = null;
 
@@ -54,7 +59,6 @@ export async function initAnalyzePage({ datasetNames }) {
       loading: normalizedNextDatasetNames.length > 0,
     });
 
-    hoverManager.clear();
     removeLayers(map, currentLayers);
     currentLayers = [];
     currentProducts = [];
@@ -89,6 +93,7 @@ export async function initAnalyzePage({ datasetNames }) {
       if (requestId !== loadRequestId) {
         return;
       }
+
       loaderProgress.markDataReceived();
       loaderProgress.startRendering({
         text: `Rendering ${productsWithHistory.length} analyze product${
@@ -219,6 +224,7 @@ export async function initAnalyzePage({ datasetNames }) {
       loadRequestId += 1;
       document.removeEventListener("pm-analyze-dataset-submit", handleAnalyzeDatasetSubmit);
       window.removeEventListener("popstate", handlePopState);
+      closePopup(view);
       cleanupPopupHoverSync?.();
       activeLoaderProgress?.cleanup();
       activeLoaderProgress = null;
@@ -378,4 +384,8 @@ async function loadProductHistories(products) {
 
 async function registerHoverLayers(hoverManager, layers) {
   await Promise.all(layers.map((layer) => hoverManager.registerLayer(layer)));
+}
+
+function closePopup(view) {
+  view.popup?.close?.();
 }
