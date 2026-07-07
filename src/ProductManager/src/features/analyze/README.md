@@ -16,8 +16,9 @@ Analyze owns:
 - Analyze map layer creation
 - Analyze sidebar product cards
 - XML/report display
+- Internal validation report display
 - Analyze-specific loading progress
-- Analyze history placeholder content
+- Analyze history content
 
 Analyze does not own:
 
@@ -74,11 +75,42 @@ It can show:
 - selected products
 - product summary
 - XML/report content
+- internal validation reports
 - load warnings
-- history placeholder content
+- history content
 
 It should not show product mutation actions. Product actions belong in the popup
 action bar so the action model stays consistent across the app.
+
+## Internal validation reports
+
+Internal validation reports are normalized into the UI-facing
+`internalValidationReports` product field.
+
+The UI supports multiple open validation reports at the same time by rendering one
+nested details element per report. This keeps the current sidebar workflow simple
+while leaving room for a later side-by-side or dedicated comparison view if the
+report size requires it.
+
+The current frontend-ready report shape is:
+
+```js
+{
+  id,
+  title,
+  status,
+  source,
+  generatedAt,
+  summary,
+  format,
+  content,
+  raw,
+}
+```
+
+Supported backend aliases are normalized in `api/analyzeApi.js` and
+`domain/internalValidationReports.js`. When the endpoint contract is finalized,
+keep this UI-facing shape stable and map backend-specific fields into it.
 
 ## Backend integration
 
@@ -92,6 +124,7 @@ The expected integration path is:
 3. Keep map graphics minimal.
 4. Keep product actions out of the Analyze sidebar.
 5. Replace demo warnings with backend-specific error/loading states.
+6. Map internal validation report payloads into `internalValidationReports`.
 
 Do not make Analyze depend directly on popup operation state unless there is a
 specific product action UX requirement.

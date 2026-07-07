@@ -1,5 +1,6 @@
 import { apiGet } from "../../../shared/api/apiClient.js";
 import { normalizeProductExportMetadata } from "../../data/normalizers/productExportMetadata.js";
+import { normalizeInternalValidationReports } from "../domain/internalValidationReports.js";
 
 const ANALYZE_PRODUCT_ENDPOINT = "electronicproducts";
 const USE_MOCK_ANALYZE_API = import.meta.env.DEV && false;
@@ -75,6 +76,19 @@ function normalizeAnalyzeProduct(
       ]) ?? null,
 
     xml: readFirstDefined(product, ["xml", "Xml", "XML", "reportXml", "ReportXml"]) ?? null,
+
+    internalValidationReports: normalizeInternalValidationReports(
+      readFirstDefined(product, [
+        "internalValidationReports",
+        "InternalValidationReports",
+        "internalValidation",
+        "InternalValidation",
+        "validationReports",
+        "ValidationReports",
+        "validation",
+        "Validation",
+      ])
+    ),
 
     raw: payload,
     isMock,
@@ -156,6 +170,7 @@ function createMockAnalyzeProduct(datasetName) {
         "Demo IC-ENC rejection message. Replace this when the backend report payload is ready.",
       Aoi: JSON.stringify(geometry),
       Xml: createMockXml(datasetName),
+      InternalValidationReports: [],
       Exports: [
         {
           Type: "S-57",

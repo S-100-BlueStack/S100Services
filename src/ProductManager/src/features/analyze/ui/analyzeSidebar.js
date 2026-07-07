@@ -350,6 +350,7 @@ function createProductCard(product) {
 
   content.appendChild(rows);
   content.appendChild(createXmlBlock(product.xml));
+  content.appendChild(createInternalValidationReportsBlock(product.internalValidationReports));
   content.appendChild(createHistoryBlock(product));
 
   card.appendChild(summary);
@@ -395,6 +396,150 @@ function createXmlBlock(xml) {
   details.appendChild(pre);
 
   return details;
+}
+
+function createInternalValidationReportsBlock(reports = []) {
+  const details = document.createElement("details");
+  details.className = "analyze-internal-validation";
+
+  const validReports = Array.isArray(reports) ? reports : [];
+  const hasReports = validReports.length > 0;
+  details.open = hasReports;
+
+  const summary = document.createElement("summary");
+  summary.textContent = hasReports
+    ? `Internal validation reports (${validReports.length})`
+    : "Internal validation reports unavailable";
+
+  const content = document.createElement("div");
+  content.className = "analyze-internal-validation__content";
+
+  if (!hasReports) {
+    content.appendChild(
+      createInternalValidationStateMessage({
+        title: "Internal validation not available",
+        message:
+          "The Analyze UI is ready for internal validation reports, but no report payload was returned for this product.",
+      })
+    );
+
+    details.append(summary, content);
+    return details;
+  }
+
+  for (const [index, report] of validReports.entries()) {
+    content.appendChild(createInternalValidationReport(report, index));
+  }
+
+  details.append(summary, content);
+  return details;
+}
+
+function createInternalValidationReport(report, index) {
+  const details = document.createElement("details");
+  details.className = "analyze-internal-validation__report";
+  details.open = true;
+
+  const summary = document.createElement("summary");
+  summary.className = "analyze-internal-validation__report-summary";
+
+  const title = document.createElement("span");
+  title.className = "analyze-internal-validation__report-title";
+  title.textContent = report.title || `Internal validation report ${index + 1}`;
+
+  const status = document.createElement("span");
+  status.className = "analyze-internal-validation__report-status";
+  status.textContent = report.status || "available";
+
+  summary.append(title, status);
+
+  const content = document.createElement("div");
+  content.className = "analyze-internal-validation__report-content";
+
+  const metadataRows = createInternalValidationReportMetadata(report);
+
+  if (metadataRows.length > 0) {
+    const metadata = document.createElement("div");
+    metadata.className = "analyze-internal-validation__metadata";
+    metadata.append(...metadataRows);
+    content.appendChild(metadata);
+  }
+
+  if (hasText(report.summary)) {
+    const summaryText = document.createElement("p");
+    summaryText.className = "analyze-internal-validation__summary-text";
+    summaryText.textContent = report.summary;
+    content.appendChild(summaryText);
+  }
+
+  if (hasReportContent(report.content)) {
+    const pre = document.createElement("pre");
+    const code = document.createElement("code");
+    code.textContent = formatInternalValidationReportContent(report);
+
+    pre.appendChild(code);
+    content.appendChild(pre);
+  } else if (!hasText(report.summary)) {
+    content.appendChild(
+      createInternalValidationStateMessage({
+        title: "Report content unavailable",
+        message: "The report metadata was returned, but no report content was included.",
+      })
+    );
+  }
+
+  details.append(summary, content);
+  return details;
+}
+
+function createInternalValidationReportMetadata(report) {
+  const rows = [];
+
+  if (hasText(report.source)) {
+    rows.push(createInternalValidationMetadataItem("Source", report.source));
+  }
+
+  if (hasText(report.generatedAt)) {
+    rows.push(createInternalValidationMetadataItem("Generated", report.generatedAt));
+  }
+
+  if (hasText(report.format)) {
+    rows.push(createInternalValidationMetadataItem("Format", report.format.toUpperCase()));
+  }
+
+  return rows;
+}
+
+function createInternalValidationMetadataItem(label, value) {
+  const item = document.createElement("div");
+  item.className = "analyze-internal-validation__metadata-item";
+
+  const labelElement = document.createElement("span");
+  labelElement.className = "analyze-internal-validation__metadata-label";
+  labelElement.textContent = label;
+
+  const valueElement = document.createElement("span");
+  valueElement.className = "analyze-internal-validation__metadata-value";
+  valueElement.textContent = value;
+
+  item.append(labelElement, valueElement);
+  return item;
+}
+
+function createInternalValidationStateMessage({ title, message }) {
+  const container = document.createElement("div");
+  container.className = "analyze-internal-validation__state";
+
+  const titleElement = document.createElement("p");
+  titleElement.className = "analyze-internal-validation__state-title";
+  titleElement.textContent = title;
+
+  const messageElement = document.createElement("p");
+  messageElement.className = "analyze-internal-validation__state-message";
+  messageElement.textContent = message;
+
+  container.append(titleElement, messageElement);
+  return container;
 }
 
 function createHistoryBlock(product) {
@@ -495,6 +640,26 @@ function dispatchAnalyzeDatasetRemove(target, id) {
   );
 }
 
+function formatInternalValidationReportContent(report) {
+  if (report.format === "json" || isJsonLike(report.content)) {
+    try {
+      return JSON.stringify(
+        typeof report.content === "string" ? JSON.parse(report.content) : report.content,
+        null,
+        2
+      );
+    } catch {
+      return String(report.content ?? "").trim();
+    }
+  }
+
+  if (report.format === "xml") {
+    return formatXml(report.content);
+  }
+
+  return String(report.content ?? "").trim();
+}
+
 function formatXml(xml) {
   const text = String(xml ?? "").trim();
 
@@ -510,6 +675,18 @@ function formatXml(xml) {
   } catch {
     return text;
   }
+}
+
+function hasReportContent(content) {
+  if (isJsonLike(content)) {
+    return true;
+  }
+
+  return hasText(content);
+}
+
+function isJsonLike(value) {
+  return value !== null && typeof value === "object";
 }
 
 function hasText(value) {
