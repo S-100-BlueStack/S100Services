@@ -9,6 +9,7 @@ using ProductManagerAPI.Data.Repositories;
 using ProductManagerAPI.Models;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
+using S100FC.S128.SimpleAttributes;
 using System.Diagnostics;
 using System.Text.Json;
 using static ProductManagerAPI.Models.RequestTypes;
@@ -168,10 +169,19 @@ namespace ProductManagerAPI.Controllers
                 response.DurationMs = sw.ElapsedMilliseconds;
                 return NotFound(response);
             }
+            var current = await _repository.GetCurrentByNameAsync(name);
 
             var aoiResponse = new AOIResponse {
                 Geometry = boundary,
-                Attributes = null
+                Attributes = new Attributes {
+                    DatasetName = electronicProduct.datasetName,
+                    Status = Enum.Parse<ProductStatus>((current?.State ?? Data.Models.ProductState.Idle).ToString()),    // If no explicit state defined in JobTable, default to Idle,
+                    DisplayScale = electronicProduct.optimumDisplayScale,
+                    UsageBand = electronicProduct.specificUsage,
+                    Edition = electronicProduct.editionNumber,
+                    Update = electronicProduct.updateNumber,
+                    IssueDate = electronicProduct.issueDate,
+                }
             };
 
             response.Data = aoiResponse;

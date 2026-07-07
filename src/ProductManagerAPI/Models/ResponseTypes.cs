@@ -27,6 +27,9 @@
             public string? DatasetName { get; set; }
             public int? DisplayScale { get; set; }
             public int? UsageBand { get; set; }
+            public int? Edition { get; set; }
+            public int? Update { get; set; }
+            public DateOnly? IssueDate { get; set; }
             public ProductStatus? Status { get; set; }
         }
 
