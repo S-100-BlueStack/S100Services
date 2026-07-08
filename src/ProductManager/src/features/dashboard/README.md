@@ -9,7 +9,7 @@ FI-001 introduces a separate read-only Dashboard route at `/dashboard`. The Dash
 - Range presets for `Since yesterday` and `Last 7 days`.
 - Disabled `Custom range` control until date/time inputs are enabled.
 - Summary cards for operational activity counts.
-- Compact activity list with product links.
+- Compact searchable activity list with product links.
 - Important changes panel.
 - Status and operation breakdowns.
 - API-first loader with visible demo-data fallback when the endpoint is unavailable.
@@ -20,10 +20,10 @@ The frontend calls:
 
 ```http
 GET electronicproducts/dashboard?from=2026-07-07
-GET electronicproducts/dashboard?from=2026-07-01T12:30:00
+GET electronicproducts/dashboard?from=2026-07-01
 ```
 
-Range query values are sent in Danish operational time. `Since yesterday` sends a date-only `from` value so the backend can interpret it as midnight in `Europe/Copenhagen`. Preset ranges omit `to`, so refresh requests always use the backend's current time.
+Range query values are sent in Danish operational time. `Since yesterday` and `Last 7 days` send date-only `from` values so the backend can interpret them as midnight in `Europe/Copenhagen`. Preset ranges omit `to`, so refresh requests always use the backend's current time.
 
 Expected payload shape:
 

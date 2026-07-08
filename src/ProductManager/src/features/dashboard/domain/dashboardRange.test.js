@@ -20,13 +20,13 @@ describe("dashboardRange", () => {
     assert.match(range.displayLabel, /^Since yesterday:/);
   });
 
-  it("creates a rolling last seven days range in Danish query time", () => {
+  it("creates a last seven calendar days range from Danish midnight", () => {
     const now = new Date("2026-07-08T10:30:00.000Z");
     const range = createDashboardRange(DASHBOARD_RANGE_PRESETS.last7Days, {}, now);
 
     assert.equal(range.preset, DASHBOARD_RANGE_PRESETS.last7Days);
-    assert.equal(range.fromIso, "2026-07-01T10:30:00.000Z");
-    assert.equal(range.fromQueryValue, "2026-07-01T12:30:00");
+    assert.equal(range.fromIso, "2026-06-30T22:00:00.000Z");
+    assert.equal(range.fromQueryValue, "2026-07-01");
     assert.equal(range.toQueryValue, null);
     assert.equal(range.toIso, "2026-07-08T10:30:00.000Z");
   });
@@ -36,6 +36,7 @@ describe("dashboardRange", () => {
 
     assert.match(formatted, /07 Jul 2026/);
     assert.match(formatted, /00:00/);
+    assert.doesNotMatch(formatted, /CET|CEST/);
   });
 
   it("falls back to the default preset for unknown values", () => {

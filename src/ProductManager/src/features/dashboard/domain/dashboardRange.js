@@ -15,7 +15,7 @@ const RANGE_OPTIONS = [
   {
     value: DASHBOARD_RANGE_PRESETS.last7Days,
     label: "Last 7 days",
-    description: "Rolling activity for the last seven days in Danish time.",
+    description: "Activity from seven calendar days ago at 00:00 Danish time until now.",
   },
   {
     value: DASHBOARD_RANGE_PRESETS.custom,
@@ -42,14 +42,20 @@ export function createDashboardRange(
   const normalizedNow = normalizeDate(now) ?? new Date();
 
   if (normalizedPreset === DASHBOARD_RANGE_PRESETS.last7Days) {
-    const rangeFrom = addDays(normalizedNow, -7);
+    const nowParts = getTimeZoneDateParts(normalizedNow, DASHBOARD_TIME_ZONE);
+    const rangeFromParts = addCalendarDays(nowParts, -7);
+    const rangeFrom = createDateInTimeZone(
+      { ...rangeFromParts, hour: 0, minute: 0, second: 0 },
+      DASHBOARD_TIME_ZONE
+    );
 
     return createRange({
       preset: DASHBOARD_RANGE_PRESETS.last7Days,
       label: "Last 7 days",
       from: rangeFrom,
       to: normalizedNow,
-      fromQueryValue: formatDashboardQueryDateTime(rangeFrom),
+      // Date-only input keeps the range aligned to Danish calendar days.
+      fromQueryValue: formatDateOnly(rangeFromParts),
       // Keep preset ranges open-ended so Refresh always asks the backend for "now".
       toQueryValue: null,
     });
@@ -112,7 +118,6 @@ export function formatDashboardRangeDateTime(value, { timeZone = DASHBOARD_TIME_
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    timeZoneName: "short",
   }).format(date);
 }
 

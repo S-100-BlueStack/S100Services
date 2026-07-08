@@ -96,12 +96,8 @@ function createHeader({ range, dashboard, loading }) {
 
 function createHeaderMeta(range, dashboard) {
   const displayRange = dashboard?.range ?? range;
-  const timeZone = displayRange.timeZone ?? range.timeZone;
-  const generatedAt = dashboard?.generatedAt
-    ? `Generated ${formatDashboardRangeDateTime(dashboard.generatedAt, { timeZone })}`
-    : "Generated when data is loaded";
 
-  return `${displayRange.displayLabel}. ${generatedAt}.`;
+  return displayRange.displayLabel;
 }
 
 function createRangeControls(range) {
@@ -274,10 +270,71 @@ function createActivityList(activities, loading, timeZone) {
     tableWrapper.appendChild(createEmptyText("No activity found for the selected range."));
   } else {
     tableWrapper.appendChild(createActivityTable(activities, timeZone));
+    tableWrapper.appendChild(createActivityFilterEmptyText());
+    header.appendChild(createActivitySearch(activities.length, tableWrapper));
   }
 
   section.append(header, tableWrapper);
   return section;
+}
+
+function createActivitySearch(totalCount, tableWrapper) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "pm-dashboard-activity-search";
+
+  const text = document.createElement("span");
+  text.className = "pm-dashboard-activity-search__label";
+  text.textContent = "Search";
+
+  const input = document.createElement("input");
+  input.className = "pm-dashboard-activity-search__input";
+  input.type = "search";
+  input.placeholder = "Search activity...";
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  input.setAttribute("aria-label", "Search dashboard activity");
+
+  input.addEventListener("input", () => {
+    applyActivityFilter(tableWrapper, input.value, totalCount);
+  });
+
+  wrapper.append(text, input);
+  return wrapper;
+}
+
+function createActivityFilterEmptyText() {
+  const empty = createEmptyText("No activity matches the search.");
+  empty.classList.add("pm-dashboard-activity__filter-empty");
+  empty.hidden = true;
+  return empty;
+}
+
+function applyActivityFilter(tableWrapper, value, totalCount) {
+  const query = normalizeSearchValue(value);
+  const rows = [...tableWrapper.querySelectorAll(".pm-dashboard-activity-table__row")];
+  let visibleCount = 0;
+
+  for (const row of rows) {
+    const matches = !query || row.dataset.searchText?.includes(query);
+    row.hidden = !matches;
+
+    if (matches) {
+      visibleCount += 1;
+    }
+  }
+
+  const panel = tableWrapper.closest(".pm-dashboard-activity");
+  const meta = panel?.querySelector(".pm-dashboard-panel__meta");
+
+  if (meta) {
+    meta.textContent = query ? `${visibleCount} / ${totalCount}` : String(totalCount);
+  }
+
+  const empty = tableWrapper.querySelector(".pm-dashboard-activity__filter-empty");
+
+  if (empty) {
+    empty.hidden = visibleCount > 0;
+  }
 }
 
 function createActivityTable(activities, timeZone) {
@@ -309,6 +366,7 @@ function createActivityTable(activities, timeZone) {
 function createActivityRow(activity, timeZone) {
   const row = document.createElement("tr");
   row.className = `pm-dashboard-activity-table__row is-${activity.severity}`;
+  row.dataset.searchText = createActivitySearchText(activity);
 
   const time = document.createElement("td");
   time.className = "pm-dashboard-activity-table__time";
@@ -541,7 +599,7 @@ function createSummaryRows(title, rows) {
   section.appendChild(
     createPanelHeader({
       title,
-      count: rows.length,
+      count: sumSummaryRowCounts(rows),
     })
   );
 
@@ -574,6 +632,35 @@ function createSummaryRow(row) {
 
   item.append(label, values);
   return item;
+}
+
+function createActivitySearchText(activity) {
+  const detailText = activity.details.map((item) => `${item.label} ${item.value}`).join(" ");
+
+  return normalizeSearchValue(
+    [
+      activity.timestamp,
+      activity.datasetName,
+      activity.productName,
+      activity.type,
+      activity.status,
+      activity.severity,
+      activity.title,
+      activity.description,
+      activity.actor,
+      detailText,
+    ].join(" ")
+  );
+}
+
+function sumSummaryRowCounts(rows) {
+  return rows.reduce((total, row) => total + (Number(row.count) || 0), 0);
+}
+
+function normalizeSearchValue(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 function createPanelHeader({ title, count, status = null }) {
