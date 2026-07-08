@@ -1,11 +1,8 @@
 # Product Manager frontend
 
-Product Manager is an ArcGIS/Vite frontend for managing product corrections for
-nautical chart production.
+Product Manager is an ArcGIS/Vite frontend for managing product corrections for nautical chart production.
 
-The app loads product correction data from backend APIs, renders them as ArcGIS
-graphics, and lets users perform product actions through a custom popup action
-bar.
+The app loads product correction data from backend APIs, renders them as ArcGIS graphics, and lets users perform product actions through a custom popup action bar.
 
 ## Technology
 
@@ -18,19 +15,24 @@ Current frontend stack:
 - JavaScript
 - HTML/CSS
 
-Backend/API calls are consumed from the frontend through shared API helpers and
-feature-specific API modules.
+Backend/API calls are consumed from the frontend through shared API helpers and feature-specific API modules.
 
 ## Main routes
 
-Product Manager currently has two main frontend routes:
+Product Manager currently has these main frontend routes:
 
 - Main map route
+- Dashboard route
 - Analyze route
+- Review route
 
 The main map route owns product correction management and popup actions.
 
+The Dashboard route owns read-only operational activity summaries for selected time ranges. It does not own product mutation actions, map popup state, Product Collection state, Analyze state, or Review state.
+
 The Analyze route owns analysis/report display for selected products.
+
+The Review route owns side-by-side product review for multiple selected products.
 
 ## Stable frontend flows
 
@@ -52,8 +54,11 @@ The following flows are implemented and considered stable frontend behavior:
 - manual refresh button loading
 - display-scale hiding
 - attribute filters
-- Product History panel shell and demo content
-- Analyze page shell and demo fallback content
+- Product History quick panel
+- Product Collection tray
+- Analyze page
+- Review workspace
+- Dashboard page with backend-driven activity data, range presets, search, filters, summary cards and activity links
 
 ## Important architecture
 
@@ -71,12 +76,9 @@ Runtime ArcGIS layers are registered in:
 src/features/map/core/layerRegistry.js
 ```
 
-Layer definitions are static frontend metadata. Runtime layer registry state
-should not be used as static config.
+Layer definitions are static frontend metadata. Runtime layer registry state should not be used as static config.
 
-Each logical layer should have a stable `id`, `layerKind` and explicit
-capabilities. UI systems should check capabilities instead of assuming every
-graphic is a product correction.
+Each logical layer should have a stable `id`, `layerKind` and explicit capabilities. UI systems should check capabilities instead of assuming every graphic is a product correction.
 
 ### Popup actions
 
@@ -118,8 +120,7 @@ Frontend operation state lives in:
 src/features/products/state/productOperationState.js
 ```
 
-It tracks local browser-tab operations and has a skeleton for future backend
-operation state.
+It tracks local browser-tab operations and has a skeleton for future backend operation state.
 
 Documentation:
 
@@ -127,8 +128,7 @@ Documentation:
 src/features/products/state/README.md
 ```
 
-Product operation state is a UX guard only. The backend must still enforce real
-business rules and operation conflicts.
+Product operation state is a UX guard only. The backend must still enforce real business rules and operation conflicts.
 
 ### Export state
 
@@ -146,8 +146,7 @@ src/features/map/popups/popupExportConfig.js
 
 `popupExportState.js` owns export scope conflicts and leaf-level loading state.
 
-`productOperationState.js` only tracks that the product has an export operation
-running.
+`productOperationState.js` only tracks that the product has an export operation running.
 
 ### Notices and API results
 
@@ -159,6 +158,24 @@ src/features/notices/services/apiNoticeService.js
 ```
 
 Do not parse API errors directly in UI files unless there is a strong reason.
+
+### Dashboard
+
+Dashboard feature files live in:
+
+```txt
+src/features/dashboard
+```
+
+Dashboard documentation:
+
+```txt
+src/features/dashboard/README.md
+```
+
+Dashboard is a read-only operational activity route. It loads activity data from `/electronicproducts/dashboard`, applies local search and filters to the loaded payload, and links users onward to Review or Analyze.
+
+Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
 
 ### Analyze
 
@@ -174,11 +191,25 @@ Analyze documentation:
 src/features/analyze/README.md
 ```
 
-Analyze owns product analysis/report display. It does not own product mutation
-actions.
+Analyze owns product analysis/report display. It does not own product mutation actions.
 
-Product actions such as Freeze, Unfreeze, Send to IC-ENC, Export and Rollback
-must stay in the product popup.
+Product actions such as Freeze, Unfreeze, Send to IC-ENC, Export and Rollback must stay in the product popup.
+
+### Review
+
+Review feature files live in:
+
+```txt
+src/features/review
+```
+
+Review documentation:
+
+```txt
+src/features/review/README.md
+```
+
+Review owns multi-product review. Review tabs are independent and should not reintroduce BroadcastChannel/session picker workflows without a clear UX reason.
 
 ### Timeline and Product History
 
@@ -194,21 +225,18 @@ Timeline documentation:
 src/features/timeline/README.md
 ```
 
-Current Product History content uses frontend demo data. Global map timeline is
-not implemented yet.
+Product History uses the backend product history endpoint for product-level history views. Global map timeline is not implemented yet.
 
-## Frontend-only and demo behavior
+## Frontend-only and placeholder behavior
 
-Some current behavior is intentionally frontend-only:
+Some current behavior is intentionally frontend-only or placeholder-only:
 
 - popup export state
 - product operation state
-- Product History content
-- Analyze demo fallback data
 - future S57/S100 export action placeholders
+- Dashboard report actions until IC-ENC/internal validation report IDs or URLs exist
 
-These features prepare the UI and architecture, but they are not backend source
-of truth.
+These features prepare the UI and architecture, but they are not backend source of truth.
 
 ## Backend-dependent work
 
@@ -218,10 +246,11 @@ Do not implement the following fully until backend/database contracts are ready:
 - cross-user/cross-tab operation locking
 - async export jobs
 - job-status endpoint
-- real Product History endpoint
 - global map timeline
 - S57/S100 export endpoints
 - backend-driven export conflict state
+- real Dashboard IC-ENC report links
+- real Dashboard internal validation report links
 
 ## Refresh behavior
 
@@ -250,9 +279,29 @@ Analyze sidebar can show:
 - product cards
 - XML/report content
 - load warnings
-- history placeholder content
+- history content
+- internal validation placeholder content
 
 Analyze sidebar should not show product mutation actions.
+
+## Dashboard behavior
+
+Dashboard is a separate route at `/dashboard`.
+
+Dashboard can show:
+
+- range presets for `Since yesterday` and `Last 7 days`
+- read-only operational summary cards
+- compact activity list
+- important changes
+- status summary
+- operation summary
+- client-side search
+- client-side filters
+- onward links to Review and Analyze
+- disabled or placeholder report actions until report endpoints exist
+
+Dashboard filters run on the loaded activity payload. Summary cards, important changes, status summary and operation summary should stay derived from the same filtered activity set as the visible list.
 
 ## Adding future export endpoints
 
@@ -298,8 +347,7 @@ When adding a new logical map layer:
 
 4. Ensure popup/filter/display-scale behavior checks layer capabilities.
 
-5. Avoid enabling product actions unless the layer truly supports product
-   correction mutations.
+5. Avoid enabling product actions unless the layer truly supports product correction mutations.
 
 ## Build and formatting
 
@@ -308,26 +356,29 @@ From this folder:
 ```bash
 npm run format
 npm run build
+npm run check
 ```
 
-Use `npm run format` before committing frontend changes.
+Use `npm run check` before considering a ProductManager change ready.
 
-Use `npm run build` before considering a ProductManager change ready.
+## Current status
 
-## Current cleanup status
-
-Recent frontend cleanup has focused on:
+Recent frontend work has focused on:
 
 - custom popup action lifecycle
 - product operation state
 - backend operation-state skeleton
 - export config extraction
-- Product History content
-- Analyze demo-mode cleanup
+- Product History integration
 - Analyze lifecycle cleanup
+- Review workspace foundation
+- Product Collection workflow
+- Dashboard phase 1 foundation
 - layer capability foundation
 
-The frontend is now in a good state for either:
+The frontend is ready for either:
 
-- backend contract work, or
-- a final manual smoke test pass before continuing with larger features.
+- custom Dashboard range picker work
+- report endpoint integration when backend report IDs/storage contracts exist
+- backend operation/job state work
+- final manual smoke test pass before continuing with larger features
