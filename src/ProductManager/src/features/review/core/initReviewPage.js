@@ -16,6 +16,7 @@ import {
   getCurrentReviewRoute,
   setReviewRouteUrl,
 } from "../routing/reviewRoute.js";
+import { initReviewSessionChannel } from "../session/reviewSessionChannel.js";
 import { renderReviewPage } from "../ui/reviewPage.js";
 
 export async function initReviewPage({ datasetNames } = {}) {
@@ -23,6 +24,7 @@ export async function initReviewPage({ datasetNames } = {}) {
   let currentProducts = [];
   let loadRequestId = 0;
   let lookupsLoaded = false;
+  let reviewSessionChannel = null;
 
   const enabledDatasetNames = getEnabledReviewDatasetNames(productItems);
 
@@ -41,6 +43,7 @@ export async function initReviewPage({ datasetNames } = {}) {
     }
 
     document.title = createReviewDocumentTitle(enabledNextDatasetNames);
+    reviewSessionChannel?.refresh?.();
 
     renderReviewPage({
       productItems,
@@ -56,6 +59,7 @@ export async function initReviewPage({ datasetNames } = {}) {
         products: [],
         loading: false,
       });
+      reviewSessionChannel?.refresh?.();
       return;
     }
 
@@ -75,6 +79,7 @@ export async function initReviewPage({ datasetNames } = {}) {
         products,
         loading: false,
       });
+      reviewSessionChannel?.refresh?.();
     } catch (error) {
       if (requestId !== loadRequestId) {
         return;
@@ -91,17 +96,12 @@ export async function initReviewPage({ datasetNames } = {}) {
         "Product Review failed",
         error instanceof Error ? error.message : "Unknown review error"
       );
+      reviewSessionChannel?.refresh?.();
     }
   };
 
-  const loadReviewDatasetNames = async (nextDatasetNames, options = {}) => {
-    await loadReviewProductItems(createReviewProductItems(nextDatasetNames), options);
-  };
-
-  const handleProductAdd = async (event) => {
-    const datasetNames = normalizeDatasetNames(
-      event.detail?.datasetNames ?? event.detail?.datasetName ?? []
-    );
+  const addDatasetNamesToReview = async (datasetNamesToAdd, { updateUrl = true } = {}) => {
+    const datasetNames = normalizeDatasetNames(datasetNamesToAdd);
 
     if (datasetNames.length === 0) {
       return;
@@ -114,6 +114,22 @@ export async function initReviewPage({ datasetNames } = {}) {
     }
 
     await loadReviewProductItems(nextProductItems, {
+      updateUrl,
+    });
+  };
+
+  const replaceDatasetNamesInReview = async (nextDatasetNames, { updateUrl = true } = {}) => {
+    await loadReviewProductItems(createReviewProductItems(nextDatasetNames), {
+      updateUrl,
+    });
+  };
+
+  const loadReviewDatasetNames = async (nextDatasetNames, options = {}) => {
+    await replaceDatasetNamesInReview(nextDatasetNames, options);
+  };
+
+  const handleProductAdd = async (event) => {
+    await addDatasetNamesToReview(event.detail?.datasetNames ?? event.detail?.datasetName ?? [], {
       updateUrl: true,
     });
   };
@@ -165,12 +181,27 @@ export async function initReviewPage({ datasetNames } = {}) {
       products: currentProducts,
       loading: false,
     });
+    reviewSessionChannel?.refresh?.();
   };
 
   document.addEventListener("pm-review-product-add", handleProductAdd);
   document.addEventListener("pm-review-product-toggle", handleProductToggle);
   document.addEventListener("pm-review-content-toggle", handleContentToggle);
   document.addEventListener("pm-review-product-remove", handleProductRemove);
+
+  reviewSessionChannel = initReviewSessionChannel({
+    getDatasetNames: () => getEnabledReviewDatasetNames(productItems),
+    onAddProducts: async ({ datasetNames: broadcastDatasetNames }) => {
+      await addDatasetNamesToReview(broadcastDatasetNames, {
+        updateUrl: true,
+      });
+    },
+    onReplaceProducts: async ({ datasetNames: broadcastDatasetNames }) => {
+      await replaceDatasetNamesInReview(broadcastDatasetNames, {
+        updateUrl: true,
+      });
+    },
+  });
 
   await waitForNextPaint();
   hideLoader();
@@ -207,6 +238,8 @@ export async function initReviewPage({ datasetNames } = {}) {
       document.removeEventListener("pm-review-content-toggle", handleContentToggle);
       document.removeEventListener("pm-review-product-remove", handleProductRemove);
       window.removeEventListener("popstate", handlePopState);
+      reviewSessionChannel?.destroy?.();
+      reviewSessionChannel = null;
       document.body.classList.remove("pm-review-route");
     },
   };

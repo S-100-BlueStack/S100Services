@@ -1,102 +1,66 @@
 # Product Review
 
-Product Review is a workspace for comparing extra product data that does not
-belong directly in feature attributes.
+Product Review is a workspace for comparing product-specific data that does not
+belong directly in main map feature attributes.
 
-The first implementation focuses on multi-product history comparison. The
-workspace is intentionally broader than History so it can later contain:
+It currently supports:
 
-- Product history
-- IC-ENC reports
-- Internal validation reports
-- S-57 and S-100 specific report tracks
-- Future dynamic review content types
-
-## Current scope
-
-- `/review` route
-- `/review/{datasetName&datasetName}` route
-- Sidebar product list
-- Add, disable and remove product names
+- Multiple products in one Review page
 - Per-product content toggles
-- Multi-product history cards rendered side by side
-- Placeholder cards for IC-ENC reports and internal validation reports
-- Existing floating Product History panel remains unchanged
+- Product History cards
+- Placeholder cards for IC-ENC reports
+- Placeholder cards for internal validation reports
+- Fixed content ordering and bounded content heights for comparison
+- A lightweight review session channel for sending products from the main map to
+  an already open Review tab
+- Explicit `New Review` and `Update Review` collection actions when a Review tab
+  is already open
 
-## Content ordering
+The existing floating Product History panel is still the quick-view workflow for
+one selected product on the main map. Product Review is the multi-product and
+multi-content workspace.
 
-Review content should be rendered in a deterministic order across products so
-comparison stays predictable. The current frontend order is:
+## Review sessions
+
+A Review page registers itself as an active local Review session while it is
+open. The Product Collection tray can then communicate with the latest active
+Review tab via `BroadcastChannel`.
+
+When no Review tab is open, the Product Collection tray shows `Review` and opens
+a new Review tab. When a Review tab is already open, the tray shows:
+
+- `New Review`: opens a new Review tab with the current collection.
+- `Update Review`: replaces the latest active Review tab with the current
+  collection, keeping the Review page 1:1 with the collection at the time of the
+  click.
+
+This is intentionally lightweight. It does not yet expose a user-facing session
+picker and it does not persist Review sessions permanently. If multiple Review
+tabs are open, `Update Review` targets the most recently active session.
+
+Future session work can add:
+
+- Named Review sessions
+- A session picker in the Product Collection tray
+- Session metadata such as product count, last updated time and window title
+- Explicit add/replace controls per selected session
+
+## Content model
+
+Review content types should stay dynamic. The current frontend content types are:
 
 1. History
 2. IC-ENC reports
 3. Internal validation reports
 
-Do not order cards based only on the product that happens to load first. Later,
-when the backend exposes S-57/S-100 tracks and report metadata, this order should
-be moved into a content registry so new review content types can be added without
-rewriting the Review board.
+The ordering is fixed so product columns remain comparable even when individual
+products have different content toggles enabled.
 
-## Content height
+History uses bounded height so long histories do not push later content types out
+of alignment. Future report cards should use the same pattern.
 
-Review cards should have bounded height so one long content type does not push
-other selected content out of view. The current history card is capped in CSS and
-scrolls internally. Future report renderers should follow the same model.
+## Backend integration
 
-A future comparison mode may align common content types across products. For
-example, History could be shown in the same row for all products that have
-History enabled, while products without History either leave that row empty or
-collapse it depending on the selected comparison mode.
-
-## Future scope
-
-The Review board should move toward a dynamic content registry where each
-selected product can contain multiple enabled content items. Example future
-items:
-
-```js
-{
-  id: "history:101DK001NORSO",
-  productId: "101DK001NORSO",
-  type: "history",
-  title: "History",
-  params: {}
-}
-```
-
-```js
-{
-  id: "report:101DK001NORSO:s100:validation:abc123",
-  productId: "101DK001NORSO",
-  type: "internal-validation-report",
-  title: "S-100 validation report",
-  params: {
-    productType: "S100",
-    reportId: "abc123",
-    edition: 5,
-    update: 2
-  }
-}
-```
-
-The current column layout is meant to be replaced or extended with comparison
-modes once report sizes and backend contracts are known.
-
-## Future review sessions
-
-A later implementation can add live review sessions with `BroadcastChannel` so a
-main map tab can add products to an already-open Product Review tab. That should
-include an explicit session model so users can decide whether to add to an
-existing Review tab or open a new one.
-
-## Review layout notes
-
-The board renders enabled content types in a fixed order for each product so
-columns remain comparable across products. History is currently constrained to a
-fixed review-card height before later content types render below it. This keeps
-IC-ENC and internal validation sections aligned even when products have different
-history event counts.
-
-Future work should keep the content type order explicit and add global Open all /
-Collapse all controls in the Review page header or board toolbar once more
-content types are implemented.
+The Review page currently reuses the existing Product History API and placeholder
+report cards. When backend contracts are ready, add loaders/renderers per content
+type rather than hardcoding report-specific behavior into the core Review page.
