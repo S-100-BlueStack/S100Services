@@ -1,11 +1,11 @@
 import { addNotice } from "../../notices/state/noticeStore.js";
 import { getStatusColor } from "../../data/stores/statusStore.js";
 import {
-  addAnalyzeCollectionProduct,
-  hasAnalyzeCollectionProduct,
-  removeAnalyzeCollectionProduct,
-  subscribeAnalyzeCollection,
-} from "../../analyze/state/analyzeCollectionStore.js";
+  addProductCollectionProduct,
+  hasProductCollectionProduct,
+  removeProductCollectionProduct,
+  subscribeProductCollection,
+} from "../../productCollection/state/productCollectionStore.js";
 
 let currentFeatureId = null;
 let headerMode = "default";
@@ -151,6 +151,7 @@ function removeCopyButton(header) {
 }
 
 function removeCollectionButton(header) {
+  removeHeaderButton(header, ".popup-product-collection-btn");
   removeHeaderButton(header, ".popup-analyze-collection-btn");
 }
 
@@ -223,11 +224,11 @@ function ensureCollectionButton(header, attributes) {
     return;
   }
 
-  let btn = actions.querySelector(".popup-analyze-collection-btn");
+  let btn = actions.querySelector(".popup-product-collection-btn");
 
   if (!btn) {
     btn = document.createElement("calcite-action");
-    btn.className = "popup-analyze-collection-btn";
+    btn.className = "popup-product-collection-btn";
     btn.scale = "m";
     btn.appearance = "transparent";
 
@@ -235,10 +236,10 @@ function ensureCollectionButton(header, attributes) {
 
     btn.addEventListener("click", () => {
       const datasetName = btn.dataset.datasetName;
-      const isSelected = hasAnalyzeCollectionProduct(datasetName);
+      const isSelected = hasProductCollectionProduct(datasetName);
 
       if (isSelected) {
-        removeAnalyzeCollectionProduct(datasetName);
+        removeProductCollectionProduct(datasetName);
 
         addNotice({
           type: "info",
@@ -251,7 +252,7 @@ function ensureCollectionButton(header, attributes) {
         return;
       }
 
-      const result = addAnalyzeCollectionProduct({ datasetName });
+      const result = addProductCollectionProduct({ datasetName });
 
       if (result.added) {
         addNotice({
@@ -279,7 +280,7 @@ function ensureCollectionButton(header, attributes) {
       syncCollectionButtonState(btn);
     });
 
-    btn.cleanup = subscribeAnalyzeCollection(() => {
+    btn.cleanup = subscribeProductCollection(() => {
       syncCollectionButtonState(btn);
     });
   }
@@ -290,7 +291,7 @@ function ensureCollectionButton(header, attributes) {
 
 function syncCollectionButtonState(btn) {
   const datasetName = btn.dataset.datasetName;
-  const isSelected = hasAnalyzeCollectionProduct(datasetName);
+  const isSelected = hasProductCollectionProduct(datasetName);
   const title = isSelected ? "Remove from collection" : "Add to collection";
 
   btn.icon = isSelected ? "check" : "chart-magnifying-glass";

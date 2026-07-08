@@ -194,10 +194,7 @@ function createContentTypeToggle(productItem, definition) {
   checkbox.type = "checkbox";
   checkbox.checked = isReviewContentTypeEnabled(productItem, definition.id);
   checkbox.disabled = !productItem.enabled;
-  checkbox.setAttribute(
-    "aria-label",
-    `${definition.label} for ${productItem.datasetName}`
-  );
+  checkbox.setAttribute("aria-label", `${definition.label} for ${productItem.datasetName}`);
 
   const text = document.createElement("span");
   text.textContent = definition.shortLabel;
@@ -210,7 +207,6 @@ function createContentTypeToggle(productItem, definition) {
 
   return label;
 }
-
 
 function createProductCountText(productItems) {
   const enabledCount = productItems.filter((item) => item.enabled).length;

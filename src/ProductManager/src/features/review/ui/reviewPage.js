@@ -1,4 +1,7 @@
-import { getEnabledReviewDatasetNames, normalizeReviewProductItems } from "../domain/reviewProductList.js";
+import {
+  getEnabledReviewDatasetNames,
+  normalizeReviewProductItems,
+} from "../domain/reviewProductList.js";
 import { createReviewBoard } from "./reviewBoard.js";
 import { createReviewSidebar } from "./reviewSidebar.js";
 

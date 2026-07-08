@@ -125,7 +125,9 @@ function createColumnMeta(productItem) {
     getReviewContentTypeDefinitions().map((definition) => [definition.id, definition.shortLabel])
   );
 
-  return enabledContentTypes.map((contentType) => labelsById.get(contentType) ?? contentType).join(" · ");
+  return enabledContentTypes
+    .map((contentType) => labelsById.get(contentType) ?? contentType)
+    .join(" · ");
 }
 
 function createReviewContentCard(product, contentType) {

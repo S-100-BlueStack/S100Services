@@ -15,7 +15,7 @@ import {
 } from "../features/map/scale/displayScaleVisibility.js";
 import { createAttributeFilterService } from "../features/map/filters/attributeFilterService.js";
 import { initAttributeFilterPanel } from "../features/map/filters/attributeFilterPanel.js";
-import { initAnalyzeCollectionTray } from "../features/analyze/ui/analyzeCollectionTray.js";
+import { initProductCollectionTray } from "../features/productCollection/ui/productCollectionTray.js";
 import { initProductHistoryPanel } from "../features/timeline/ui/productHistoryPanel.js";
 import { bindMapViewpointPersistence } from "../features/map/state/mapViewpointPersistence.js";
 import { initPreferencesPanel } from "../features/preferences/ui/preferencesPanel.js";
@@ -86,7 +86,7 @@ export function initMap() {
   const productHistoryPanel = initProductHistoryPanel({
     view,
   });
-  const analyzeCollectionTray = initAnalyzeCollectionTray();
+  const productCollectionTray = initProductCollectionTray();
 
   bindOverlapPicker(view);
 
@@ -150,7 +150,8 @@ export function initMap() {
     filterService,
     filterPanel,
     productHistoryPanel,
-    analyzeCollectionTray,
+    productCollectionTray,
+    analyzeCollectionTray: productCollectionTray,
     applyMapVisibility,
     bindMapVisibility,
     updateLastUpdated,
