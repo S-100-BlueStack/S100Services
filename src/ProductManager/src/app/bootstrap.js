@@ -1,5 +1,7 @@
 import { initAnalyzePage } from "../features/analyze/core/initAnalyzePage.js";
 import { createAnalyzeDocumentTitle } from "../features/analyze/routing/analyzeRoute.js";
+import { initDashboardPage } from "../features/dashboard/core/initDashboardPage.js";
+import { createDashboardDocumentTitle } from "../features/dashboard/routing/dashboardRoute.js";
 import { initReviewPage } from "../features/review/core/initReviewPage.js";
 import { createReviewDocumentTitle } from "../features/review/routing/reviewRoute.js";
 import { noticeError } from "../features/notices/services/noticeService.js";
@@ -22,8 +24,12 @@ async function waitForCalcite() {
 
 export async function bootstrap() {
   const route = getCurrentRoute();
-
   document.title = createInitialDocumentTitle(route);
+
+  if (route.name === "dashboard") {
+    await bootstrapDashboardRoute(route);
+    return;
+  }
 
   if (route.name === "analyze") {
     await bootstrapAnalyzeRoute(route);
@@ -59,7 +65,6 @@ async function bootstrapMainRoute() {
     await waitForCalcite();
 
     setLoaderText("Loading data...");
-
     await loadInitialData(app);
 
     app.bindMapVisibility?.();
@@ -68,6 +73,33 @@ async function bootstrapMainRoute() {
   } catch (error) {
     hideLoader();
     noticeError("Application failed to start", error.message);
+    console.error(error);
+  }
+}
+
+async function bootstrapDashboardRoute(route) {
+  try {
+    await initUI();
+
+    showLoader("Preparing Dashboard...", {
+      progress: 0.01,
+    });
+
+    await waitForNextPaint();
+    await waitForCalcite();
+
+    await initDashboardPage({
+      rangePreset: route.rangePreset,
+      from: route.from,
+      to: route.to,
+    });
+
+    initializeTheme();
+    registerThemeToggle();
+    hideLoader();
+  } catch (error) {
+    hideLoader();
+    noticeError("Dashboard failed to start", error.message);
     console.error(error);
   }
 }
@@ -123,6 +155,10 @@ async function bootstrapReviewRoute(route) {
 }
 
 function createInitialDocumentTitle(route) {
+  if (route.name === "dashboard") {
+    return createDashboardDocumentTitle(route);
+  }
+
   if (route.name === "analyze") {
     return createAnalyzeDocumentTitle(route.datasetNames);
   }

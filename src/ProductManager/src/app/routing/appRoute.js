@@ -1,7 +1,15 @@
 export function getCurrentRoute() {
   const pathname = getPathnameWithoutBase(window.location.pathname);
-  const analyzeMatch = pathname.match(/^\/analyze(?:\/(.+))?\/?$/i);
 
+  const dashboardMatch = pathname.match(/^\/dashboard\/?$/i);
+  if (dashboardMatch) {
+    return {
+      name: "dashboard",
+      ...parseDashboardSearch(window.location.search),
+    };
+  }
+
+  const analyzeMatch = pathname.match(/^\/analyze(?:\/(.+))?\/?$/i);
   if (analyzeMatch) {
     return {
       name: "analyze",
@@ -10,7 +18,6 @@ export function getCurrentRoute() {
   }
 
   const reviewMatch = pathname.match(/^\/review(?:\/(.+))?\/?$/i);
-
   if (reviewMatch) {
     return {
       name: "review",
@@ -18,8 +25,16 @@ export function getCurrentRoute() {
     };
   }
 
+  return { name: "main" };
+}
+
+function parseDashboardSearch(search) {
+  const params = new URLSearchParams(search || "");
+
   return {
-    name: "main",
+    rangePreset: params.get("range") || params.get("preset") || "since-yesterday",
+    from: params.get("from"),
+    to: params.get("to"),
   };
 }
 
