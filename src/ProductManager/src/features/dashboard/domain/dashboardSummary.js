@@ -2,11 +2,26 @@ export function createDashboardSummary({ summary = {}, activities = [] } = {}) {
   const normalizedActivities = Array.isArray(activities) ? activities : [];
 
   return {
-    totalActivities: readNumber(summary.totalActivities, normalizedActivities.length),
-    productsTouched: readNumber(summary.productsTouched, countProducts(normalizedActivities)),
-    importantChanges: readNumber(summary.importantChanges, countImportant(normalizedActivities)),
-    failedOperations: readNumber(summary.failedOperations, countFailed(normalizedActivities)),
-    reportsAvailable: readNumber(summary.reportsAvailable, countReports(normalizedActivities)),
+    totalActivities: readNumber(
+      summary.totalActivities ?? summary.TotalActivities,
+      normalizedActivities.length
+    ),
+    productsTouched: readNumber(
+      summary.productsTouched ?? summary.ProductsTouched,
+      countProducts(normalizedActivities)
+    ),
+    importantChanges: readNumber(
+      summary.importantChanges ?? summary.ImportantChanges,
+      countImportant(normalizedActivities)
+    ),
+    failedOperations: readNumber(
+      summary.failedOperations ?? summary.FailedOperations,
+      countFailed(normalizedActivities)
+    ),
+    reportsAvailable: readNumber(
+      summary.reportsAvailable ?? summary.ReportsAvailable,
+      countReports(normalizedActivities)
+    ),
   };
 }
 
@@ -19,17 +34,22 @@ function countImportant(activities) {
 }
 
 function countFailed(activities) {
-  return activities.filter((activity) => activity.status === "failed").length;
+  return activities.filter((activity) => {
+    return ["failed", "error", "rejected"].includes(activity.status);
+  }).length;
 }
 
 function countReports(activities) {
-  return activities.filter((activity) => {
-    return activity.links.icEncReport?.available || activity.links.internalValidation?.available;
-  }).length;
+  return activities.reduce((count, activity) => {
+    return (
+      count +
+      (activity.links.icEncReports?.length ?? 0) +
+      (activity.links.internalValidationReports?.length ?? 0)
+    );
+  }, 0);
 }
 
 function readNumber(value, fallbackValue) {
   const numericValue = Number(value);
-
   return Number.isFinite(numericValue) ? numericValue : fallbackValue;
 }

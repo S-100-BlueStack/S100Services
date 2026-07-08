@@ -91,16 +91,17 @@ function createHeader({ range, dashboard, loading }) {
   actions.append(createRangeControls(range), createRefreshButton(loading));
 
   header.append(text, actions);
-
   return header;
 }
 
 function createHeaderMeta(range, dashboard) {
+  const displayRange = dashboard?.range ?? range;
+  const timeZone = displayRange.timeZone ?? range.timeZone;
   const generatedAt = dashboard?.generatedAt
-    ? `Generated ${formatDashboardRangeDateTime(dashboard.generatedAt)}`
+    ? `Generated ${formatDashboardRangeDateTime(dashboard.generatedAt, { timeZone })}`
     : "Generated when data is loaded";
 
-  return `${range.displayLabel}. ${generatedAt}.`;
+  return `${displayRange.displayLabel}. ${generatedAt}.`;
 }
 
 function createRangeControls(range) {
@@ -172,7 +173,6 @@ function createBody({ range, dashboard, loading, error }) {
   }
 
   body.append(createSummaryCards(dashboard.summary), createDashboardGrid({ dashboard, loading }));
-
   return body;
 }
 
@@ -190,7 +190,6 @@ function createDemoBanner(dashboard) {
     : " Backend endpoint is not available yet.";
 
   banner.append(title, message);
-
   return banner;
 }
 
@@ -205,7 +204,6 @@ function createStateMessage(title, description) {
   text.textContent = description;
 
   state.append(heading, text);
-
   return state;
 }
 
@@ -241,24 +239,25 @@ function createDashboardGrid({ dashboard, loading }) {
   const grid = document.createElement("section");
   grid.className = "pm-dashboard-grid";
 
+  const timeZone = dashboard.range?.timeZone;
+
   const main = document.createElement("div");
   main.className = "pm-dashboard-grid__main";
-  main.appendChild(createActivityList(dashboard.activities, loading));
+  main.appendChild(createActivityList(dashboard.activities, loading, timeZone));
 
   const aside = document.createElement("aside");
   aside.className = "pm-dashboard-grid__aside";
   aside.append(
-    createImportantChanges(dashboard.importantChanges),
+    createImportantChanges(dashboard.importantChanges, timeZone),
     createSummaryRows("Status summary", dashboard.statusSummary),
     createSummaryRows("Operation summary", dashboard.operationSummary)
   );
 
   grid.append(main, aside);
-
   return grid;
 }
 
-function createActivityList(activities, loading) {
+function createActivityList(activities, loading, timeZone) {
   const section = document.createElement("section");
   section.className = "pm-dashboard-panel pm-dashboard-activity";
 
@@ -274,15 +273,14 @@ function createActivityList(activities, loading) {
   if (activities.length === 0) {
     tableWrapper.appendChild(createEmptyText("No activity found for the selected range."));
   } else {
-    tableWrapper.appendChild(createActivityTable(activities));
+    tableWrapper.appendChild(createActivityTable(activities, timeZone));
   }
 
   section.append(header, tableWrapper);
-
   return section;
 }
 
-function createActivityTable(activities) {
+function createActivityTable(activities, timeZone) {
   const table = document.createElement("table");
   table.className = "pm-dashboard-activity-table";
 
@@ -301,21 +299,20 @@ function createActivityTable(activities) {
   const tbody = document.createElement("tbody");
 
   for (const activity of activities) {
-    tbody.appendChild(createActivityRow(activity));
+    tbody.appendChild(createActivityRow(activity, timeZone));
   }
 
   table.append(thead, tbody);
-
   return table;
 }
 
-function createActivityRow(activity) {
+function createActivityRow(activity, timeZone) {
   const row = document.createElement("tr");
   row.className = `pm-dashboard-activity-table__row is-${activity.severity}`;
 
   const time = document.createElement("td");
   time.className = "pm-dashboard-activity-table__time";
-  time.textContent = formatDashboardRangeDateTime(activity.timestamp);
+  time.textContent = formatDashboardRangeDateTime(activity.timestamp, { timeZone });
 
   const product = document.createElement("td");
   product.className = "pm-dashboard-activity-table__product";
@@ -337,7 +334,6 @@ function createActivityRow(activity) {
   links.appendChild(createActivityLinks(activity));
 
   row.append(time, product, activityCell, status, links);
-
   return row;
 }
 
@@ -345,7 +341,6 @@ function createActivityTitle(activity) {
   const title = document.createElement("div");
   title.className = "pm-dashboard-activity-table__title";
   title.textContent = activity.title;
-
   return title;
 }
 
@@ -353,7 +348,6 @@ function createActivityDescription(activity) {
   const description = document.createElement("div");
   description.className = "pm-dashboard-activity-table__description";
   description.textContent = activity.description || activity.actor || "-";
-
   return description;
 }
 
@@ -379,7 +373,6 @@ function createStatusPill(status, severity) {
   const pill = document.createElement("span");
   pill.className = `pm-dashboard-status-pill is-${status} is-${severity}`;
   pill.textContent = toTitleCase(status);
-
   return pill;
 }
 
@@ -403,13 +396,13 @@ function createActivityLinks(activity) {
       enabled: activity.links.history,
       title: "History is available in Review and the main map quick panel.",
     }),
-    createReportLink({
+    createReportLinkGroup({
       label: "IC-ENC",
-      report: activity.links.icEncReport,
+      reports: activity.links.icEncReports,
     }),
-    createReportLink({
+    createReportLinkGroup({
       label: "Validation",
-      report: activity.links.internalValidation,
+      reports: activity.links.internalValidationReports,
     })
   );
 
@@ -441,8 +434,8 @@ function createPlaceholderLink({ label, enabled, title }) {
 
   if (enabled) {
     button.addEventListener("click", () => {
-      noticeError("History link is not available", title, {
-        dedupeKey: "dashboard-history-link-placeholder",
+      noticeError("Dashboard link is not available", title, {
+        dedupeKey: `dashboard-${label.toLowerCase()}-link-placeholder`,
         storeInCenter: false,
         countAsUnread: false,
       });
@@ -452,24 +445,29 @@ function createPlaceholderLink({ label, enabled, title }) {
   return button;
 }
 
-function createReportLink({ label, report }) {
-  if (!report?.available) {
+function createReportLinkGroup({ label, reports }) {
+  const normalizedReports = Array.isArray(reports) ? reports : [];
+
+  if (normalizedReports.length === 0) {
     return createDisabledLink(label);
   }
 
-  if (report.url) {
+  const firstReportWithUrl = normalizedReports.find((report) => report.url);
+  const linkLabel = normalizedReports.length > 1 ? `${label} (${normalizedReports.length})` : label;
+
+  if (firstReportWithUrl?.url) {
     const link = document.createElement("a");
     link.className = "pm-dashboard-link-button";
-    link.href = report.url;
+    link.href = firstReportWithUrl.url;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    link.textContent = label;
-
+    link.textContent = linkLabel;
+    link.title = firstReportWithUrl.title || label;
     return link;
   }
 
   return createPlaceholderLink({
-    label,
+    label: linkLabel,
     enabled: true,
     title: `${label} report metadata is available, but no report URL endpoint exists yet.`,
   });
@@ -486,7 +484,7 @@ function createDisabledLink(label) {
   return button;
 }
 
-function createImportantChanges(activities) {
+function createImportantChanges(activities, timeZone) {
   const section = document.createElement("section");
   section.className = "pm-dashboard-panel pm-dashboard-important";
   section.appendChild(
@@ -503,16 +501,15 @@ function createImportantChanges(activities) {
     list.appendChild(createEmptyText("No important changes in this range."));
   } else {
     for (const activity of activities.slice(0, 8)) {
-      list.appendChild(createImportantChange(activity));
+      list.appendChild(createImportantChange(activity, timeZone));
     }
   }
 
   section.appendChild(list);
-
   return section;
 }
 
-function createImportantChange(activity) {
+function createImportantChange(activity, timeZone) {
   const item = document.createElement("article");
   item.className = `pm-dashboard-important-item is-${activity.severity}`;
 
@@ -523,7 +520,7 @@ function createImportantChange(activity) {
   title.textContent = activity.title;
 
   const time = document.createElement("span");
-  time.textContent = formatDashboardRangeDateTime(activity.timestamp);
+  time.textContent = formatDashboardRangeDateTime(activity.timestamp, { timeZone });
 
   header.append(title, time);
 
@@ -535,7 +532,6 @@ function createImportantChange(activity) {
   description.textContent = activity.description || "No details available.";
 
   item.append(header, product, description);
-
   return item;
 }
 
@@ -561,7 +557,6 @@ function createSummaryRows(title, rows) {
   }
 
   section.appendChild(list);
-
   return section;
 }
 
@@ -578,7 +573,6 @@ function createSummaryRow(row) {
   values.textContent = row.failed > 0 ? `${row.count} (${row.failed} failed)` : String(row.count);
 
   item.append(label, values);
-
   return item;
 }
 
@@ -595,7 +589,6 @@ function createPanelHeader({ title, count, status = null }) {
   meta.textContent = status ? `${status} - ${count}` : String(count);
 
   header.append(heading, meta);
-
   return header;
 }
 

@@ -2,6 +2,15 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { normalizeDashboardPayload } from "./dashboardActivity.js";
 
+const TEST_RANGE = {
+  preset: "since-yesterday",
+  label: "Since yesterday",
+  fromIso: "2026-07-07T00:00:00.000Z",
+  toIso: "2026-07-08T10:30:00.000Z",
+  displayLabel: "Since yesterday",
+  timeZone: "Europe/Copenhagen",
+};
+
 describe("dashboardActivity", () => {
   it("normalizes API payloads and sorts newest activity first", () => {
     const dashboard = normalizeDashboardPayload(
@@ -25,7 +34,7 @@ describe("dashboardActivity", () => {
           ],
         },
       },
-      { preset: "since-yesterday" }
+      TEST_RANGE
     );
 
     assert.equal(dashboard.activities[0].id, "new");
@@ -35,21 +44,23 @@ describe("dashboardActivity", () => {
     assert.equal(dashboard.importantChanges.length, 1);
   });
 
-  it("uses summary values when the backend provides them", () => {
+  it("uses PascalCase summary and summary row values from the backend", () => {
     const dashboard = normalizeDashboardPayload(
       {
-        data: {
-          summary: {
-            totalActivities: 10,
-            productsTouched: 4,
-            importantChanges: 3,
-            failedOperations: 2,
-            reportsAvailable: 1,
+        Data: {
+          Summary: {
+            TotalActivities: 10,
+            ProductsTouched: 4,
+            ImportantChanges: 3,
+            FailedOperations: 2,
+            ReportsAvailable: 1,
           },
-          activities: [],
+          StatusSummary: [{ Status: "Exported", Count: 7 }],
+          OperationSummary: [{ Type: "Export", Count: 7, Failed: 1 }],
+          Activities: [],
         },
       },
-      { preset: "last-7-days" }
+      { ...TEST_RANGE, preset: "last-7-days" }
     );
 
     assert.equal(dashboard.summary.totalActivities, 10);
@@ -57,5 +68,62 @@ describe("dashboardActivity", () => {
     assert.equal(dashboard.summary.importantChanges, 3);
     assert.equal(dashboard.summary.failedOperations, 2);
     assert.equal(dashboard.summary.reportsAvailable, 1);
+    assert.deepEqual(dashboard.statusSummary[0], {
+      label: "Exported",
+      count: 7,
+      failed: 0,
+    });
+    assert.deepEqual(dashboard.operationSummary[0], {
+      label: "Export",
+      count: 7,
+      failed: 1,
+    });
+  });
+
+  it("normalizes report arrays while keeping singular aliases during transition", () => {
+    const dashboard = normalizeDashboardPayload(
+      {
+        Data: {
+          Activities: [
+            {
+              Id: "activity-1",
+              Timestamp: "2026-07-08T10:00:00+02:00",
+              DatasetName: "101DK0040943E",
+              Type: "validation",
+              Status: "completed",
+              Links: {
+                Review: true,
+                Analyze: true,
+                History: true,
+                IcEncReports: [
+                  {
+                    Id: "icenc-1",
+                    Title: "IC-ENC report",
+                    Status: "available",
+                    GeneratedAt: "2026-07-08T10:00:00+02:00",
+                  },
+                ],
+                InternalValidationReports: [
+                  {
+                    Id: "internal-1",
+                    Title: "Internal validation",
+                    Status: "warning",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      TEST_RANGE
+    );
+
+    const links = dashboard.activities[0].links;
+
+    assert.equal(links.icEncReports.length, 1);
+    assert.equal(links.internalValidationReports.length, 1);
+    assert.equal(links.icEncReport.reportId, "icenc-1");
+    assert.equal(links.internalValidation.reportId, "internal-1");
+    assert.equal(dashboard.summary.reportsAvailable, 2);
   });
 });

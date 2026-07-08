@@ -18,8 +18,22 @@ export function createDemoDashboardPayload(range) {
         review: true,
         analyze: true,
         history: true,
-        icEncReport: { available: true, reportId: "demo-icenc-101DK0040943E" },
-        internalValidation: { available: true, reportId: "demo-validation-101DK0040943E" },
+        icEncReports: [
+          {
+            id: "demo-icenc-101DK0040943E",
+            title: "IC-ENC validation report",
+            status: "failed",
+            generatedAt: now.toISOString(),
+          },
+        ],
+        internalValidationReports: [
+          {
+            id: "demo-validation-101DK0040943E",
+            title: "Internal validation",
+            status: "warning",
+            generatedAt: now.toISOString(),
+          },
+        ],
       },
       now,
     }),
@@ -37,6 +51,8 @@ export function createDemoDashboardPayload(range) {
         review: true,
         analyze: true,
         history: true,
+        icEncReports: [],
+        internalValidationReports: [],
       },
       now,
     }),
@@ -54,7 +70,15 @@ export function createDemoDashboardPayload(range) {
         review: true,
         analyze: true,
         history: true,
-        icEncReport: { available: true, reportId: "demo-icenc-101DK0062280E" },
+        icEncReports: [
+          {
+            id: "demo-icenc-101DK0062280E",
+            title: "IC-ENC XML report",
+            status: "available",
+            generatedAt: now.toISOString(),
+          },
+        ],
+        internalValidationReports: [],
       },
       now,
     }),
@@ -72,6 +96,8 @@ export function createDemoDashboardPayload(range) {
         review: true,
         analyze: true,
         history: true,
+        icEncReports: [],
+        internalValidationReports: [],
       },
       now,
     }),
@@ -89,46 +115,50 @@ export function createDemoDashboardPayload(range) {
         review: true,
         analyze: true,
         history: true,
-        internalValidation: { available: false, reportId: null },
+        icEncReports: [],
+        internalValidationReports: [],
       },
       now,
     }),
   ];
 
   return {
-    success: true,
-    data: {
-      generatedAt: now.toISOString(),
-      range: {
-        preset: range.preset,
-        from: range.fromIso,
-        to: range.toIso,
-        label: range.label,
-        displayLabel: range.displayLabel,
+    Success: true,
+    Data: {
+      GeneratedAt: now.toISOString(),
+      Range: {
+        Preset: range.preset,
+        From: range.fromIso,
+        To: range.toIso,
+        Label: range.label,
+        DisplayLabel: range.displayLabel,
+        TimeZone: range.timeZone,
       },
-      summary: {
-        totalActivities: activities.length,
-        productsTouched: new Set(activities.map((activity) => activity.datasetName)).size,
-        importantChanges: activities.filter((activity) => activity.severity !== "normal").length,
-        failedOperations: activities.filter((activity) => activity.status === "failed").length,
-        reportsAvailable: activities.filter((activity) => {
+      Summary: {
+        TotalActivities: activities.length,
+        ProductsTouched: new Set(activities.map((activity) => activity.datasetName)).size,
+        ImportantChanges: activities.filter((activity) => activity.severity !== "normal").length,
+        FailedOperations: activities.filter((activity) => activity.status === "failed").length,
+        ReportsAvailable: activities.reduce((count, activity) => {
           return (
-            activity.links.icEncReport?.available || activity.links.internalValidation?.available
+            count +
+            (activity.links.icEncReports?.length ?? 0) +
+            (activity.links.internalValidationReports?.length ?? 0)
           );
-        }).length,
+        }, 0),
       },
-      statusSummary: [
-        { status: "completed", count: 4 },
-        { status: "failed", count: 1 },
+      StatusSummary: [
+        { Status: "completed", Count: 4 },
+        { Status: "failed", Count: 1 },
       ],
-      operationSummary: [
-        { type: "export", count: 1, failed: 1 },
-        { type: "freeze", count: 1, failed: 0 },
-        { type: "analysis", count: 1, failed: 0 },
-        { type: "send", count: 1, failed: 0 },
-        { type: "validation", count: 1, failed: 0 },
+      OperationSummary: [
+        { Type: "export", Count: 1, Failed: 1 },
+        { Type: "freeze", Count: 1, Failed: 0 },
+        { Type: "analysis", Count: 1, Failed: 0 },
+        { Type: "send", Count: 1, Failed: 0 },
+        { Type: "validation", Count: 1, Failed: 0 },
       ],
-      activities,
+      Activities: activities,
     },
   };
 }
@@ -138,8 +168,8 @@ function createActivity({ offsetHours, now, ...activity }) {
   timestamp.setHours(timestamp.getHours() - offsetHours);
 
   return {
-    actor: "Product Manager",
+    Actor: "Product Manager",
     ...activity,
-    timestamp: timestamp.toISOString(),
+    Timestamp: timestamp.toISOString(),
   };
 }

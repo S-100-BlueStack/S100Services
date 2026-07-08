@@ -1,3 +1,4 @@
+import { createDashboardRangeDisplayLabel, DASHBOARD_TIME_ZONE } from "./dashboardRange.js";
 import { createDashboardSummary } from "./dashboardSummary.js";
 
 const DEFAULT_SEVERITY = "normal";
@@ -13,11 +14,12 @@ export function normalizeDashboardPayload(
 ) {
   const data = unwrapDashboardPayload(payload);
   const activities = normalizeActivities(data.activities ?? data.Activities);
+  const normalizedRange = normalizePayloadRange(data.range ?? data.Range, range);
 
   return {
     generatedAt:
       normalizeDateValue(data.generatedAt ?? data.GeneratedAt) ?? new Date().toISOString(),
-    range: normalizePayloadRange(data.range ?? data.Range, range),
+    range: normalizedRange,
     summary: createDashboardSummary({
       summary: data.summary ?? data.Summary,
       activities,
@@ -96,31 +98,87 @@ function isImportantActivity(activity) {
 
 function normalizeLinks(value) {
   const source = isPlainObject(value) ? value : {};
+  const icEncReports = normalizeReportList(
+    readFirstDefined(source, [
+      "icEncReports",
+      "IcEncReports",
+      "ICENCReports",
+      "icEncReport",
+      "IcEncReport",
+      "ICENCReport",
+    ])
+  );
+  const internalValidationReports = normalizeReportList(
+    readFirstDefined(source, [
+      "internalValidationReports",
+      "InternalValidationReports",
+      "internalValidation",
+      "InternalValidation",
+    ])
+  );
 
   return {
     review: Boolean(source.review ?? source.Review),
     analyze: Boolean(source.analyze ?? source.Analyze),
     history: Boolean(source.history ?? source.History),
-    icEncReport: normalizeReportLink(
-      source.icEncReport ?? source.IcEncReport ?? source.ICENCReport
-    ),
-    internalValidation: normalizeReportLink(source.internalValidation ?? source.InternalValidation),
+    icEncReports,
+    internalValidationReports,
+    // Keep singular aliases during the frontend/backend contract transition.
+    icEncReport: icEncReports[0] ?? { available: false, reportId: null, url: null },
+    internalValidation: internalValidationReports[0] ?? {
+      available: false,
+      reportId: null,
+      url: null,
+    },
   };
 }
 
-function normalizeReportLink(value) {
+function normalizeReportList(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalizeReportMetadata).filter((report) => report.available);
+  }
+
+  const report = normalizeReportMetadata(value);
+  return report.available ? [report] : [];
+}
+
+function normalizeReportMetadata(value) {
   if (value === true) {
-    return { available: true, reportId: null, url: null };
+    return {
+      available: true,
+      id: null,
+      reportId: null,
+      title: "Report",
+      status: "available",
+      generatedAt: null,
+      url: null,
+    };
   }
 
   if (!isPlainObject(value)) {
-    return { available: false, reportId: null, url: null };
+    return {
+      available: false,
+      id: null,
+      reportId: null,
+      title: "",
+      status: "",
+      generatedAt: null,
+      url: null,
+    };
   }
 
+  const id = normalizeText(value.id ?? value.Id ?? value.reportId ?? value.ReportId);
+  const url = normalizeText(value.url ?? value.Url ?? value.href ?? value.Href);
+
   return {
-    available: Boolean(value.available ?? value.Available),
-    reportId: normalizeText(value.reportId ?? value.ReportId ?? value.id ?? value.Id),
-    url: normalizeText(value.url ?? value.Url ?? value.href ?? value.Href),
+    available: Boolean(value.available ?? value.Available ?? id ?? url),
+    id,
+    reportId: id,
+    title: normalizeText(value.title ?? value.Title) || "Report",
+    status: normalizeToken(value.status ?? value.Status, "available"),
+    generatedAt: normalizeDateValue(value.generatedAt ?? value.GeneratedAt),
+    url,
+    raw: value,
   };
 }
 
@@ -149,17 +207,25 @@ function normalizeDetails(value) {
 
 function normalizePayloadRange(value, fallbackRange) {
   const source = isPlainObject(value) ? value : {};
+  const preset =
+    normalizeText(source.preset ?? source.Preset) || fallbackRange?.preset || "since-yesterday";
+  const label = normalizeText(source.label ?? source.Label) || fallbackRange?.label || preset;
+  const fromIso = normalizeDateValue(source.from ?? source.From) || fallbackRange?.fromIso || null;
+  const toIso = normalizeDateValue(source.to ?? source.To) || fallbackRange?.toIso || null;
+  const timeZone =
+    normalizeText(source.timeZone ?? source.TimeZone) ||
+    fallbackRange?.timeZone ||
+    DASHBOARD_TIME_ZONE;
 
   return {
-    preset:
-      normalizeText(source.preset ?? source.Preset) || fallbackRange?.preset || "since-yesterday",
-    fromIso: normalizeDateValue(source.from ?? source.From) || fallbackRange?.fromIso || null,
-    toIso: normalizeDateValue(source.to ?? source.To) || fallbackRange?.toIso || null,
-    label: normalizeText(source.label ?? source.Label) || fallbackRange?.label || null,
+    preset,
+    fromIso,
+    toIso,
+    timeZone,
+    label,
     displayLabel:
       normalizeText(source.displayLabel ?? source.DisplayLabel) ||
-      fallbackRange?.displayLabel ||
-      null,
+      createDashboardRangeDisplayLabel({ label, fromIso, toIso, timeZone }),
   };
 }
 
@@ -174,7 +240,9 @@ function normalizeSummaryRows(value, labelKey) {
         return null;
       }
 
-      const label = normalizeText(row[labelKey] ?? row.Label ?? row.label);
+      const label = normalizeText(
+        row[labelKey] ?? row[toPascalCase(labelKey)] ?? row.Label ?? row.label
+      );
       const count = Number(row.count ?? row.Count);
       const failed = Number(row.failed ?? row.Failed);
 
@@ -234,13 +302,11 @@ function normalizeDateValue(value) {
   }
 
   const date = new Date(value);
-
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function normalizeToken(value, fallbackValue) {
   const normalizedValue = normalizeText(value).toLowerCase();
-
   return normalizedValue || fallbackValue;
 }
 
@@ -264,6 +330,11 @@ function toTitleCase(value) {
     .filter(Boolean)
     .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
     .join(" ");
+}
+
+function toPascalCase(value) {
+  const text = String(value ?? "");
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
 }
 
 function isPlainObject(value) {

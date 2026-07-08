@@ -1,94 +1,79 @@
 # Dashboard foundation
 
-FI-001 introduces a separate read-only Dashboard route at `/dashboard`.
-
-The Dashboard is intentionally isolated from the main map, Product Collection, Analyze and Review state. It summarizes operational activity for a selected range and links users onward to product-level Review or Analyze pages.
+FI-001 introduces a separate read-only Dashboard route at `/dashboard`. The Dashboard is intentionally isolated from the main map, Product Collection, Analyze and Review state. It summarizes operational activity for a selected range and links users onward to product-level Review or Analyze pages.
 
 ## Phase 1 scope
 
 - Dedicated `/dashboard` route.
 - Navbar link for Dashboard.
 - Range presets for `Since yesterday` and `Last 7 days`.
-- Disabled `Custom range` control until the backend contract is ready.
+- Disabled `Custom range` control until date/time inputs are enabled.
 - Summary cards for operational activity counts.
 - Compact activity list with product links.
 - Important changes panel.
 - Status and operation breakdowns.
 - API-first loader with visible demo-data fallback when the endpoint is unavailable.
 
-## Backend contract target
+## Backend contract
 
 The frontend calls:
 
 ```http
-GET productmanager/dashboard/activity?from=<utc-iso>&to=<utc-iso>&range=<preset>
+GET electronicproducts/dashboard?from=2026-07-07
+GET electronicproducts/dashboard?from=2026-07-01T12:30:00
 ```
+
+Range query values are sent in Danish operational time. `Since yesterday` sends a date-only `from` value so the backend can interpret it as midnight in `Europe/Copenhagen`. Preset ranges omit `to`, so refresh requests always use the backend's current time.
 
 Expected payload shape:
 
 ```json
 {
-  "success": true,
-  "data": {
-    "generatedAt": "2026-07-08T08:15:00Z",
-    "range": {
-      "from": "2026-07-07T00:00:00Z",
-      "to": "2026-07-08T23:59:59Z",
-      "preset": "since-yesterday"
+  "Success": true,
+  "Data": {
+    "GeneratedAt": "2026-07-08T12:15:00+02:00",
+    "Range": {
+      "From": "2026-07-07T00:00:00+02:00",
+      "To": "2026-07-08T12:15:00+02:00",
+      "TimeZone": "Europe/Copenhagen"
     },
-    "summary": {
-      "totalActivities": 42,
-      "productsTouched": 18,
-      "importantChanges": 6,
-      "failedOperations": 2,
-      "reportsAvailable": 9
+    "Summary": {
+      "TotalActivities": 42,
+      "ProductsTouched": 18,
+      "ImportantChanges": 6,
+      "FailedOperations": 2,
+      "ReportsAvailable": 9
     },
-    "statusSummary": [
+    "StatusSummary": [{ "Status": "Exported", "Count": 12 }],
+    "OperationSummary": [{ "Type": "Export", "Count": 12, "Failed": 1 }],
+    "Activities": [
       {
-        "status": "failed",
-        "count": 2
-      }
-    ],
-    "operationSummary": [
-      {
-        "type": "export",
-        "count": 12,
-        "failed": 1
-      }
-    ],
-    "activities": [
-      {
-        "id": "activity-123",
-        "timestamp": "2026-07-08T07:45:00Z",
-        "datasetName": "101DK0040943E",
-        "productName": "101DK0040943E",
-        "type": "export",
-        "severity": "critical",
-        "title": "Export failed",
-        "description": "All Edition export failed validation.",
-        "status": "failed",
-        "actor": "DOMAIN\\user",
-        "links": {
-          "review": true,
-          "analyze": true,
-          "history": true,
-          "icEncReport": {
-            "available": true,
-            "reportId": "icenc-report-123",
-            "url": null
-          },
-          "internalValidation": {
-            "available": true,
-            "reportId": "validation-report-456",
-            "url": null
-          }
+        "Id": "activity-123",
+        "Timestamp": "2026-07-08T07:45:00+02:00",
+        "DatasetName": "101DK0040943E",
+        "ProductName": "101DK0040943E",
+        "Type": "export",
+        "Severity": "critical",
+        "Title": "Export failed",
+        "Description": "All Edition export failed validation.",
+        "Status": "failed",
+        "Actor": "DOMAIN\\user",
+        "Links": {
+          "Review": true,
+          "Analyze": true,
+          "History": true,
+          "IcEncReports": [
+            {
+              "Id": "icenc-report-123",
+              "Title": "IC-ENC validation report",
+              "Status": "Failed",
+              "GeneratedAt": "2026-07-08T07:45:00+02:00",
+              "Url": null
+            }
+          ],
+          "InternalValidationReports": []
         },
-        "details": [
-          {
-            "label": "Scope",
-            "value": "All"
-          }
-        ]
+        "Details": [{ "Label": "Scope", "Value": "All" }]
       }
     ]
   }
@@ -97,4 +82,4 @@ Expected payload shape:
 
 ## Notes
 
-Report links support direct URLs when the backend provides them. Until then, report metadata is shown as available but actions remain placeholder notices.
+Report links support multiple IC-ENC and internal validation report metadata entries. Until report URL endpoints exist, Dashboard renders report metadata as available but keeps the action as a placeholder notice.
