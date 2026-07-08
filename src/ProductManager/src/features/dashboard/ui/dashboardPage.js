@@ -2,6 +2,13 @@ import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { buildReviewUrl } from "../../review/routing/reviewRoute.js";
 import {
+  buildDashboardFilterOptions,
+  createDefaultDashboardFilters,
+  createFilteredDashboardView,
+  hasActiveDashboardFilters,
+  normalizeDashboardFilters,
+} from "../domain/dashboardFilters.js";
+import {
   formatDashboardRangeDateTime,
   getDashboardRangeOptions,
 } from "../domain/dashboardRange.js";
@@ -34,7 +41,25 @@ const SUMMARY_CARDS = [
   },
 ];
 
+const IMPORTANCE_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "important", label: "Important only" },
+  { value: "failed", label: "Failed only" },
+];
+
+const REPORT_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "any", label: "Any report" },
+  { value: "ic-enc", label: "IC-ENC" },
+  { value: "internal-validation", label: "Validation" },
+];
+
+let dashboardFilters = createDefaultDashboardFilters();
+let lastRenderArgs = null;
+
 export function renderDashboardPage({ range, dashboard, loading = false, error = null }) {
+  lastRenderArgs = { range, dashboard, loading, error };
+
   const page = getOrCreateDashboardPage();
 
   page.replaceChildren(
@@ -96,7 +121,6 @@ function createHeader({ range, dashboard, loading }) {
 
 function createHeaderMeta(range, dashboard) {
   const displayRange = dashboard?.range ?? range;
-
   return displayRange.displayLabel;
 }
 
@@ -168,7 +192,21 @@ function createBody({ range, dashboard, loading, error }) {
     return body;
   }
 
-  body.append(createSummaryCards(dashboard.summary), createDashboardGrid({ dashboard, loading }));
+  const filterOptions = buildDashboardFilterOptions(dashboard.activities);
+  dashboardFilters = normalizeDashboardFilters(dashboardFilters, filterOptions);
+  const filteredDashboard = createFilteredDashboardView(dashboard, dashboardFilters);
+
+  body.append(
+    createSummaryCards(filteredDashboard.summary),
+    createDashboardGrid({
+      dashboard: filteredDashboard,
+      sourceActivityCount: dashboard.activities.length,
+      loading,
+      filters: dashboardFilters,
+      filterOptions,
+    })
+  );
+
   return body;
 }
 
@@ -231,7 +269,7 @@ function createSummaryCards(summary) {
   return cards;
 }
 
-function createDashboardGrid({ dashboard, loading }) {
+function createDashboardGrid({ dashboard, sourceActivityCount, loading, filters, filterOptions }) {
   const grid = document.createElement("section");
   grid.className = "pm-dashboard-grid";
 
@@ -239,7 +277,13 @@ function createDashboardGrid({ dashboard, loading }) {
 
   const main = document.createElement("div");
   main.className = "pm-dashboard-grid__main";
-  main.appendChild(createActivityList(dashboard.activities, loading, timeZone));
+  main.appendChild(
+    createActivityList(dashboard.activities, loading, timeZone, {
+      filters,
+      filterOptions,
+      sourceActivityCount,
+    })
+  );
 
   const aside = document.createElement("aside");
   aside.className = "pm-dashboard-grid__aside";
@@ -253,13 +297,19 @@ function createDashboardGrid({ dashboard, loading }) {
   return grid;
 }
 
-function createActivityList(activities, loading, timeZone) {
+function createActivityList(
+  activities,
+  loading,
+  timeZone,
+  { filters, filterOptions, sourceActivityCount }
+) {
   const section = document.createElement("section");
   section.className = "pm-dashboard-panel pm-dashboard-activity";
 
+  const hasFilters = hasActiveDashboardFilters(filters);
   const header = createPanelHeader({
     title: "Activity list",
-    count: activities.length,
+    count: hasFilters ? `${activities.length} / ${sourceActivityCount}` : activities.length,
     status: loading ? "Refreshing" : null,
   });
 
@@ -267,73 +317,186 @@ function createActivityList(activities, loading, timeZone) {
   tableWrapper.className = "pm-dashboard-activity__table-wrapper";
 
   if (activities.length === 0) {
-    tableWrapper.appendChild(createEmptyText("No activity found for the selected range."));
+    const emptyText = hasFilters
+      ? "No activity matches the selected filters."
+      : "No activity found for the selected range.";
+    tableWrapper.appendChild(createEmptyText(emptyText));
   } else {
     tableWrapper.appendChild(createActivityTable(activities, timeZone));
-    tableWrapper.appendChild(createActivityFilterEmptyText());
-    header.appendChild(createActivitySearch(activities.length, tableWrapper));
   }
 
-  section.append(header, tableWrapper);
+  section.append(
+    header,
+    createActivityFilterBar({ filters, filterOptions, hasFilters }),
+    tableWrapper
+  );
   return section;
 }
 
-function createActivitySearch(totalCount, tableWrapper) {
-  const wrapper = document.createElement("label");
-  wrapper.className = "pm-dashboard-activity-search";
+function createActivityFilterBar({ filters, filterOptions, hasFilters }) {
+  const form = document.createElement("form");
+  form.className = "pm-dashboard-filters";
+  form.setAttribute("aria-label", "Dashboard activity filters");
+  form.addEventListener("submit", (event) => event.preventDefault());
 
-  const text = document.createElement("span");
-  text.className = "pm-dashboard-activity-search__label";
-  text.textContent = "Search";
+  form.append(
+    createSearchFilter(filters.search),
+    createSelectFilter({
+      key: "type",
+      label: "Type",
+      value: filters.type,
+      options: [{ value: "all", label: "All types" }, ...filterOptions.types],
+    }),
+    createSelectFilter({
+      key: "status",
+      label: "Status",
+      value: filters.status,
+      options: [{ value: "all", label: "All statuses" }, ...filterOptions.statuses],
+    }),
+    createSelectFilter({
+      key: "importance",
+      label: "Importance",
+      value: filters.importance,
+      options: IMPORTANCE_OPTIONS,
+    }),
+    createSelectFilter({
+      key: "reports",
+      label: "Reports",
+      value: filters.reports,
+      options: REPORT_OPTIONS,
+    }),
+    createSelectFilter({
+      key: "product",
+      label: "Product",
+      value: filters.product,
+      options: [{ value: "all", label: "All products" }, ...filterOptions.products],
+    }),
+    createClearFiltersButton(hasFilters)
+  );
 
+  return form;
+}
+
+function createSearchFilter(value) {
+  const wrapper = createFilterWrapper("Search");
   const input = document.createElement("input");
-  input.className = "pm-dashboard-activity-search__input";
+  input.className = "pm-dashboard-filter__control pm-dashboard-filter__search";
   input.type = "search";
+  input.value = value;
   input.placeholder = "Search activity...";
   input.autocomplete = "off";
   input.spellcheck = false;
+  input.dataset.dashboardFilterKey = "search";
   input.setAttribute("aria-label", "Search dashboard activity");
+  input.addEventListener("input", () => updateDashboardFilters({ search: input.value }));
 
-  input.addEventListener("input", () => {
-    applyActivityFilter(tableWrapper, input.value, totalCount);
-  });
-
-  wrapper.append(text, input);
+  wrapper.appendChild(input);
   return wrapper;
 }
 
-function createActivityFilterEmptyText() {
-  const empty = createEmptyText("No activity matches the search.");
-  empty.classList.add("pm-dashboard-activity__filter-empty");
-  empty.hidden = true;
-  return empty;
+function createSelectFilter({ key, label, value, options }) {
+  const wrapper = createFilterWrapper(label);
+  const select = document.createElement("select");
+  select.className = "pm-dashboard-filter__control";
+  select.value = value;
+  select.dataset.dashboardFilterKey = key;
+  select.setAttribute("aria-label", `${label} filter`);
+
+  for (const option of options) {
+    const element = document.createElement("option");
+    element.value = option.value;
+    element.textContent = option.label;
+    select.appendChild(element);
+  }
+
+  select.value = value;
+  select.addEventListener("change", () => updateDashboardFilters({ [key]: select.value }));
+
+  wrapper.appendChild(select);
+  return wrapper;
 }
 
-function applyActivityFilter(tableWrapper, value, totalCount) {
-  const query = normalizeSearchValue(value);
-  const rows = [...tableWrapper.querySelectorAll(".pm-dashboard-activity-table__row")];
-  let visibleCount = 0;
+function createFilterWrapper(labelText) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "pm-dashboard-filter";
 
-  for (const row of rows) {
-    const matches = !query || row.dataset.searchText?.includes(query);
-    row.hidden = !matches;
+  const label = document.createElement("span");
+  label.className = "pm-dashboard-filter__label";
+  label.textContent = labelText;
 
-    if (matches) {
-      visibleCount += 1;
-    }
+  wrapper.appendChild(label);
+  return wrapper;
+}
+
+function createClearFiltersButton(hasFilters) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "pm-dashboard-filter-clear";
+  button.textContent = "Clear filters";
+  button.disabled = !hasFilters;
+  button.addEventListener("click", () => {
+    dashboardFilters = createDefaultDashboardFilters();
+    rerenderDashboardPage();
+  });
+
+  return button;
+}
+
+function updateDashboardFilters(partialFilters) {
+  const focusState = captureDashboardFilterFocus();
+  dashboardFilters = normalizeDashboardFilters({ ...dashboardFilters, ...partialFilters });
+  rerenderDashboardPage(focusState);
+}
+
+function rerenderDashboardPage(focusState = null) {
+  if (!lastRenderArgs) {
+    return;
   }
 
-  const panel = tableWrapper.closest(".pm-dashboard-activity");
-  const meta = panel?.querySelector(".pm-dashboard-panel__meta");
+  renderDashboardPage(lastRenderArgs);
+  restoreDashboardFilterFocus(focusState);
+}
 
-  if (meta) {
-    meta.textContent = query ? `${visibleCount} / ${totalCount}` : String(totalCount);
+function captureDashboardFilterFocus() {
+  const activeElement = document.activeElement;
+
+  if (!(activeElement instanceof HTMLInputElement || activeElement instanceof HTMLSelectElement)) {
+    return null;
   }
 
-  const empty = tableWrapper.querySelector(".pm-dashboard-activity__filter-empty");
+  const filterKey = activeElement.dataset.dashboardFilterKey;
 
-  if (empty) {
-    empty.hidden = visibleCount > 0;
+  if (!filterKey) {
+    return null;
+  }
+
+  return {
+    filterKey,
+    selectionStart: activeElement instanceof HTMLInputElement ? activeElement.selectionStart : null,
+    selectionEnd: activeElement instanceof HTMLInputElement ? activeElement.selectionEnd : null,
+  };
+}
+
+function restoreDashboardFilterFocus(focusState) {
+  if (!focusState?.filterKey) {
+    return;
+  }
+
+  const selector = `[data-dashboard-filter-key="${focusState.filterKey}"]`;
+  const nextElement = document.querySelector(selector);
+
+  if (!(nextElement instanceof HTMLInputElement || nextElement instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  nextElement.focus({ preventScroll: true });
+
+  if (
+    nextElement instanceof HTMLInputElement &&
+    Number.isInteger(focusState.selectionStart) &&
+    Number.isInteger(focusState.selectionEnd)
+  ) {
+    nextElement.setSelectionRange(focusState.selectionStart, focusState.selectionEnd);
   }
 }
 
@@ -366,7 +529,6 @@ function createActivityTable(activities, timeZone) {
 function createActivityRow(activity, timeZone) {
   const row = document.createElement("tr");
   row.className = `pm-dashboard-activity-table__row is-${activity.severity}`;
-  row.dataset.searchText = createActivitySearchText(activity);
 
   const time = document.createElement("td");
   time.className = "pm-dashboard-activity-table__time";
@@ -634,33 +796,8 @@ function createSummaryRow(row) {
   return item;
 }
 
-function createActivitySearchText(activity) {
-  const detailText = activity.details.map((item) => `${item.label} ${item.value}`).join(" ");
-
-  return normalizeSearchValue(
-    [
-      activity.timestamp,
-      activity.datasetName,
-      activity.productName,
-      activity.type,
-      activity.status,
-      activity.severity,
-      activity.title,
-      activity.description,
-      activity.actor,
-      detailText,
-    ].join(" ")
-  );
-}
-
 function sumSummaryRowCounts(rows) {
   return rows.reduce((total, row) => total + (Number(row.count) || 0), 0);
-}
-
-function normalizeSearchValue(value) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
 }
 
 function createPanelHeader({ title, count, status = null }) {

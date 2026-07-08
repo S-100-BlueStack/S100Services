@@ -9,7 +9,8 @@ FI-001 introduces a separate read-only Dashboard route at `/dashboard`. The Dash
 - Range presets for `Since yesterday` and `Last 7 days`.
 - Disabled `Custom range` control until date/time inputs are enabled.
 - Summary cards for operational activity counts.
-- Compact searchable activity list with product links.
+- Compact activity list with product links.
+- Client-side filters for search, type, status, importance, reports and product.
 - Important changes panel.
 - Status and operation breakdowns.
 - API-first loader with visible demo-data fallback when the endpoint is unavailable.
@@ -20,10 +21,10 @@ The frontend calls:
 
 ```http
 GET electronicproducts/dashboard?from=2026-07-07
-GET electronicproducts/dashboard?from=2026-07-01
+GET electronicproducts/dashboard?from=2026-07-01T12:30:00
 ```
 
-Range query values are sent in Danish operational time. `Since yesterday` and `Last 7 days` send date-only `from` values so the backend can interpret them as midnight in `Europe/Copenhagen`. Preset ranges omit `to`, so refresh requests always use the backend's current time.
+Range query values are sent in Danish operational time. `Since yesterday` sends a date-only `from` value so the backend can interpret it as midnight in `Europe/Copenhagen`. Preset ranges omit `to`, so refresh requests always use the backend's current time.
 
 Expected payload shape:
 
@@ -83,3 +84,9 @@ Expected payload shape:
 ## Notes
 
 Report links support multiple IC-ENC and internal validation report metadata entries. Until report URL endpoints exist, Dashboard renders report metadata as available but keeps the action as a placeholder notice.
+
+## Client-side filters
+
+Dashboard filters run on the loaded activity payload. They intentionally do not change the backend query contract. Summary cards, important changes, status summary and operation summary are derived from the filtered activity set so the visible counts always match the activity list.
+
+The filter state is local to the Dashboard page render lifecycle. It is safe to reset or replace when custom server-side ranges are introduced later.

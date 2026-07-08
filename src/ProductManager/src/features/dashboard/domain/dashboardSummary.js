@@ -1,5 +1,5 @@
 export function createDashboardSummary({ summary = {}, activities = [] } = {}) {
-  const normalizedActivities = Array.isArray(activities) ? activities : [];
+  const normalizedActivities = normalizeActivities(activities);
 
   return {
     totalActivities: readNumber(
@@ -25,6 +25,24 @@ export function createDashboardSummary({ summary = {}, activities = [] } = {}) {
   };
 }
 
+export function createDashboardSummaryFromActivities(activities = []) {
+  const normalizedActivities = normalizeActivities(activities);
+
+  // Filtered dashboard views must not reuse backend totals, because the cards
+  // need to describe exactly the rows the user is currently looking at.
+  return {
+    totalActivities: normalizedActivities.length,
+    productsTouched: countProducts(normalizedActivities),
+    importantChanges: countImportant(normalizedActivities),
+    failedOperations: countFailed(normalizedActivities),
+    reportsAvailable: countReports(normalizedActivities),
+  };
+}
+
+function normalizeActivities(activities) {
+  return Array.isArray(activities) ? activities : [];
+}
+
 function countProducts(activities) {
   return new Set(activities.map((activity) => activity.datasetName).filter(Boolean)).size;
 }
@@ -43,8 +61,8 @@ function countReports(activities) {
   return activities.reduce((count, activity) => {
     return (
       count +
-      (activity.links.icEncReports?.length ?? 0) +
-      (activity.links.internalValidationReports?.length ?? 0)
+      (activity.links?.icEncReports?.length ?? 0) +
+      (activity.links?.internalValidationReports?.length ?? 0)
     );
   }, 0);
 }
