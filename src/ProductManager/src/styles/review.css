@@ -102,7 +102,8 @@ body.pm-review-route #last-updated {
 }
 
 .pm-review-product-form__button,
-.pm-review-product-list__remove-button {
+.pm-review-product-list__remove-button,
+.pm-review-content-card__action-button {
   font: inherit;
   cursor: pointer;
 }
@@ -124,7 +125,8 @@ body.pm-review-route #last-updated {
 
 .pm-review-product-form__button:focus-visible,
 .pm-review-product-form__input:focus-visible,
-.pm-review-product-list__remove-button:focus-visible {
+.pm-review-product-list__remove-button:focus-visible,
+.pm-review-content-card__action-button:focus-visible {
   outline: 2px solid var(--pm-focus-ring);
   outline-offset: 2px;
 }
@@ -140,7 +142,8 @@ body.pm-review-route #last-updated {
   border: 1px solid var(--pm-border);
 }
 
-.pm-review-product-list__header {
+.pm-review-product-list__header,
+.pm-review-product-list__item-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
@@ -172,9 +175,7 @@ body.pm-review-route #last-updated {
 
 .pm-review-product-list__item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
+  gap: 7px;
   min-width: 0;
   padding: 8px;
   background: var(--pm-surface);
@@ -201,7 +202,6 @@ body.pm-review-route #last-updated {
 
 .pm-review-product-list__item-content {
   display: grid;
-  gap: 2px;
   min-width: 0;
 }
 
@@ -215,10 +215,31 @@ body.pm-review-route #last-updated {
   white-space: nowrap;
 }
 
-.pm-review-product-list__item-meta {
+.pm-review-product-list__content-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding-left: 22px;
+}
+
+.pm-review-product-list__content-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
   color: var(--pm-text-muted);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.pm-review-product-list__content-type > input {
+  margin: 0;
+}
+
+.pm-review-product-list__content-type:has(input:checked) {
+  color: var(--pm-text);
 }
 
 .pm-review-product-list__remove-button {
@@ -247,6 +268,8 @@ body.pm-review-route #last-updated {
 }
 
 .pm-review-board {
+  --pm-review-history-card-height: 500px;
+
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -301,18 +324,23 @@ body.pm-review-route #last-updated {
 }
 
 .pm-review-column__meta {
+  overflow: hidden;
   color: var(--pm-text-muted);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .pm-review-column__content {
   display: grid;
+  align-content: start;
+  gap: 0;
   min-height: 0;
-  overflow: hidden;
-  padding: 0;
+  overflow: auto;
+  padding: 0 0 8px;
 }
 
 .pm-review-content-card {
@@ -320,13 +348,20 @@ body.pm-review-route #last-updated {
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
-  height: 100%;
+  max-height: 500px;
   background: var(--pm-surface);
+  border-bottom: 1px solid var(--pm-border);
+}
+
+.pm-review-content-card--history {
+  height: var(--pm-review-history-card-height);
+  min-height: var(--pm-review-history-card-height);
+  max-height: var(--pm-review-history-card-height);
 }
 
 .pm-review-content-card__header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
   padding: 7px 10px;
@@ -346,6 +381,27 @@ body.pm-review-route #last-updated {
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.pm-review-content-card__actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.pm-review-content-card__action-button {
+  padding: 3px 6px;
+  color: var(--pm-button-secondary-text);
+  background: transparent;
+  border: 1px solid var(--pm-button-secondary-border);
+  border-radius: 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.pm-review-content-card__action-button:hover {
+  color: var(--pm-text);
+  background: var(--pm-button-secondary-bg-hover);
 }
 
 .pm-review-content-card__body {
@@ -398,12 +454,15 @@ body.pm-review-route #last-updated {
   justify-content: center;
   width: 16px;
   height: 16px;
-  color: #ffffff;
-  background: var(--calcite-color-brand, #0079c1);
+  color: var(--calcite-color-brand, #0079c1);
+  background: transparent;
 }
 
 .pm-review-history-event__marker calcite-icon {
   display: block;
+  color: currentColor;
+  background: transparent;
+  --calcite-ui-icon-color: currentColor;
 }
 
 .pm-review-history-event__title {
@@ -461,35 +520,35 @@ body.pm-review-route #last-updated {
 }
 
 .pm-review-history-list__item--freeze .pm-review-history-event__marker {
-  background: #3b82f6;
+  color: #3b82f6;
 }
 
 .pm-review-history-list__item--unfreeze .pm-review-history-event__marker {
-  background: #f59e0b;
+  color: #f59e0b;
 }
 
 .pm-review-history-list__item--export .pm-review-history-event__marker {
-  background: #8b5cf6;
+  color: #8b5cf6;
 }
 
 .pm-review-history-list__item--send .pm-review-history-event__marker {
-  background: #10b981;
+  color: #10b981;
 }
 
 .pm-review-history-list__item--rollback .pm-review-history-event__marker {
-  background: #ef4444;
+  color: #ef4444;
 }
 
 .pm-review-history-list__item--analysis .pm-review-history-event__marker {
-  background: #6366f1;
+  color: #6366f1;
 }
 
 .pm-review-history-list__item--status .pm-review-history-event__marker {
-  background: var(--calcite-color-brand, #0079c1);
+  color: var(--calcite-color-brand, #0079c1);
 }
 
-
 .pm-review-board__columns,
+.pm-review-column__content,
 .pm-review-content-card__body,
 .pm-review-product-list__items,
 .pm-review-sidebar {
@@ -498,6 +557,7 @@ body.pm-review-route #last-updated {
 }
 
 .pm-review-board__columns::-webkit-scrollbar,
+.pm-review-column__content::-webkit-scrollbar,
 .pm-review-content-card__body::-webkit-scrollbar,
 .pm-review-product-list__items::-webkit-scrollbar,
 .pm-review-sidebar::-webkit-scrollbar {
@@ -506,6 +566,7 @@ body.pm-review-route #last-updated {
 }
 
 .pm-review-board__columns::-webkit-scrollbar-track,
+.pm-review-column__content::-webkit-scrollbar-track,
 .pm-review-content-card__body::-webkit-scrollbar-track,
 .pm-review-product-list__items::-webkit-scrollbar-track,
 .pm-review-sidebar::-webkit-scrollbar-track {
@@ -513,6 +574,7 @@ body.pm-review-route #last-updated {
 }
 
 .pm-review-board__columns::-webkit-scrollbar-thumb,
+.pm-review-column__content::-webkit-scrollbar-thumb,
 .pm-review-content-card__body::-webkit-scrollbar-thumb,
 .pm-review-product-list__items::-webkit-scrollbar-thumb,
 .pm-review-sidebar::-webkit-scrollbar-thumb {
@@ -522,6 +584,7 @@ body.pm-review-route #last-updated {
 }
 
 .pm-review-board__columns::-webkit-scrollbar-thumb:hover,
+.pm-review-column__content::-webkit-scrollbar-thumb:hover,
 .pm-review-content-card__body::-webkit-scrollbar-thumb:hover,
 .pm-review-product-list__items::-webkit-scrollbar-thumb:hover,
 .pm-review-sidebar::-webkit-scrollbar-thumb:hover {

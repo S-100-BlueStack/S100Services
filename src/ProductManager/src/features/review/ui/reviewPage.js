@@ -1,7 +1,4 @@
-import {
-  getEnabledReviewDatasetNames,
-  normalizeReviewProductItems,
-} from "../domain/reviewProductList.js";
+import { getEnabledReviewDatasetNames, normalizeReviewProductItems } from "../domain/reviewProductList.js";
 import { createReviewBoard } from "./reviewBoard.js";
 import { createReviewSidebar } from "./reviewSidebar.js";
 
@@ -16,6 +13,7 @@ export function renderReviewPage({ productItems, products = [], loading = false,
       loading,
     }),
     createReviewBoard({
+      productItems: normalizedProductItems,
       enabledDatasetNames,
       products,
       loading,

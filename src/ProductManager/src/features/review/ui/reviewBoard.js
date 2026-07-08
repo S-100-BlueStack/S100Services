@@ -4,8 +4,13 @@ import {
   createProductHistoryStateMessage,
   formatHistoryTimestamp,
 } from "../../timeline/ui/productHistoryRenderers.js";
+import {
+  REVIEW_CONTENT_TYPES,
+  getEnabledReviewContentTypes,
+  getReviewContentTypeDefinitions,
+} from "../domain/reviewProductList.js";
 
-export function createReviewBoard({ enabledDatasetNames, products, loading, error }) {
+export function createReviewBoard({ productItems, enabledDatasetNames, products, loading, error }) {
   const board = document.createElement("section");
   board.className = "pm-review-board";
   board.setAttribute("aria-label", "Review board");
@@ -37,10 +42,16 @@ export function createReviewBoard({ enabledDatasetNames, products, loading, erro
   const productsByDatasetName = new Map(
     products.map((product) => [normalizeKey(product.datasetName), product])
   );
+  const enabledProductItems = productItems.filter((productItem) => productItem.enabled);
 
-  for (const datasetName of enabledDatasetNames) {
+  for (const productItem of enabledProductItems) {
     columns.appendChild(
-      createProductReviewColumn(productsByDatasetName.get(normalizeKey(datasetName)) ?? { datasetName })
+      createProductReviewColumn(
+        productItem,
+        productsByDatasetName.get(normalizeKey(productItem.datasetName)) ?? {
+          datasetName: productItem.datasetName,
+        }
+      )
     );
   }
 
@@ -64,7 +75,7 @@ function createEmptyState() {
   });
 }
 
-function createProductReviewColumn(product) {
+function createProductReviewColumn(productItem, product) {
   const column = document.createElement("article");
   column.className = "pm-review-column";
 
@@ -73,49 +84,181 @@ function createProductReviewColumn(product) {
 
   const title = document.createElement("h2");
   title.className = "pm-review-column__title";
-  title.textContent = product.datasetName;
-  title.title = product.datasetName;
+  title.textContent = productItem.datasetName;
+  title.title = productItem.datasetName;
 
   const meta = document.createElement("div");
   meta.className = "pm-review-column__meta";
-  meta.textContent = "History";
+  meta.textContent = createColumnMeta(productItem);
 
   header.append(title, meta);
 
   const content = document.createElement("div");
   content.className = "pm-review-column__content";
-  content.appendChild(createHistoryReviewCard(product));
+
+  for (const contentType of getEnabledReviewContentTypes(productItem)) {
+    content.appendChild(createReviewContentCard(product, contentType));
+  }
+
+  if (!content.hasChildNodes()) {
+    content.appendChild(
+      createProductHistoryStateMessage({
+        title: "No review content selected",
+        message: "Select one or more content types in the sidebar for this product.",
+      })
+    );
+  }
 
   column.append(header, content);
 
   return column;
 }
 
+function createColumnMeta(productItem) {
+  const enabledContentTypes = getEnabledReviewContentTypes(productItem);
+
+  if (enabledContentTypes.length === 0) {
+    return "No content";
+  }
+
+  const labelsById = new Map(
+    getReviewContentTypeDefinitions().map((definition) => [definition.id, definition.shortLabel])
+  );
+
+  return enabledContentTypes.map((contentType) => labelsById.get(contentType) ?? contentType).join(" · ");
+}
+
+function createReviewContentCard(product, contentType) {
+  if (contentType === REVIEW_CONTENT_TYPES.HISTORY) {
+    return createHistoryReviewCard(product);
+  }
+
+  if (contentType === REVIEW_CONTENT_TYPES.IC_ENC_REPORTS) {
+    return createPendingReviewCard({
+      product,
+      contentType,
+      title: "IC-ENC reports",
+      status: "Pending",
+      message:
+        "IC-ENC report selection is ready in Product Review, but report metadata is not available in the Review model yet.",
+    });
+  }
+
+  if (contentType === REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS) {
+    return createPendingReviewCard({
+      product,
+      contentType,
+      title: "Internal validation",
+      status: "Pending",
+      message:
+        "Internal validation report selection is ready in Product Review, but the backend endpoint is not available yet.",
+    });
+  }
+
+  return createPendingReviewCard({
+    product,
+    contentType,
+    title: "Review content",
+    status: "Unknown",
+    message: "This review content type does not have a renderer yet.",
+  });
+}
+
 function createHistoryReviewCard(product) {
+  const card = createContentCardShell({
+    product,
+    contentType: REVIEW_CONTENT_TYPES.HISTORY,
+    title: "History",
+    status: createHistoryStatusText(product),
+  });
+
+  const actions = document.createElement("div");
+  actions.className = "pm-review-content-card__actions";
+  actions.append(
+    createCardActionButton({
+      label: "Open all history events",
+      text: "Open all",
+      onClick: () => setHistoryEventsOpen(card, true),
+    }),
+    createCardActionButton({
+      label: "Collapse all history events",
+      text: "Collapse all",
+      onClick: () => setHistoryEventsOpen(card, false),
+    })
+  );
+
+  card.header.appendChild(actions);
+  card.body.appendChild(createHistoryContent(product));
+
+  return card.root;
+}
+
+function createPendingReviewCard({ product, contentType, title, status, message }) {
+  const card = createContentCardShell({
+    product,
+    contentType,
+    title,
+    status,
+  });
+
+  card.body.appendChild(
+    createProductHistoryStateMessage({
+      title: `${title} unavailable`,
+      message,
+    })
+  );
+
+  return card.root;
+}
+
+function createContentCardShell({ product, contentType, title, status }) {
   const card = document.createElement("section");
-  card.className = "pm-review-content-card";
-  card.setAttribute("aria-label", `${product.datasetName} history`);
+  card.className = `pm-review-content-card pm-review-content-card--${normalizeType(contentType)}`;
+  card.dataset.reviewContentType = contentType;
+  card.setAttribute("aria-label", `${product.datasetName} ${title}`);
 
   const header = document.createElement("div");
   header.className = "pm-review-content-card__header";
 
-  const title = document.createElement("h3");
-  title.className = "pm-review-content-card__title";
-  title.textContent = "History";
+  const titleElement = document.createElement("h3");
+  titleElement.className = "pm-review-content-card__title";
+  titleElement.textContent = title;
 
-  const status = document.createElement("span");
-  status.className = "pm-review-content-card__status";
-  status.textContent = createHistoryStatusText(product);
-
-  header.append(title, status);
+  const statusElement = document.createElement("span");
+  statusElement.className = "pm-review-content-card__status";
+  statusElement.textContent = status;
 
   const body = document.createElement("div");
   body.className = "pm-review-content-card__body";
-  body.appendChild(createHistoryContent(product));
 
+  header.append(titleElement, statusElement);
   card.append(header, body);
 
-  return card;
+  return {
+    root: card,
+    header,
+    body,
+  };
+}
+
+function createCardActionButton({ label, text, onClick }) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "pm-review-content-card__action-button";
+  button.textContent = text;
+  button.title = label;
+  button.setAttribute("aria-label", label);
+  button.addEventListener("click", onClick);
+
+  return button;
+}
+
+function setHistoryEventsOpen(card, open) {
+  const events = card.root.querySelectorAll(".pm-review-history-event");
+
+  for (const event of events) {
+    event.open = open;
+  }
 }
 
 function createHistoryContent(product) {

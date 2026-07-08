@@ -1,3 +1,39 @@
+export const REVIEW_CONTENT_TYPES = Object.freeze({
+  HISTORY: "history",
+  IC_ENC_REPORTS: "ic-enc-reports",
+  INTERNAL_VALIDATION_REPORTS: "internal-validation-reports",
+});
+
+const REVIEW_CONTENT_TYPE_DEFINITIONS = Object.freeze([
+  Object.freeze({
+    id: REVIEW_CONTENT_TYPES.HISTORY,
+    label: "History",
+    shortLabel: "History",
+    description: "Product history events and status changes.",
+    defaultEnabled: true,
+  }),
+  Object.freeze({
+    id: REVIEW_CONTENT_TYPES.IC_ENC_REPORTS,
+    label: "IC-ENC reports",
+    shortLabel: "IC-ENC",
+    description: "IC-ENC report content for this product.",
+    defaultEnabled: false,
+  }),
+  Object.freeze({
+    id: REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS,
+    label: "Internal validation reports",
+    shortLabel: "Validation",
+    description: "Internal validation reports for this product.",
+    defaultEnabled: false,
+  }),
+]);
+
+const REVIEW_CONTENT_TYPE_IDS = new Set(
+  REVIEW_CONTENT_TYPE_DEFINITIONS.map((definition) => definition.id)
+);
+
+const DEFAULT_REVIEW_CONTENT_TYPES = createDefaultReviewContentTypes();
+
 export function createReviewProductItems(datasetNames) {
   return normalizeReviewProductItems(toArray(datasetNames));
 }
@@ -24,6 +60,7 @@ export function normalizeReviewProductItems(productItems) {
       id,
       datasetName,
       enabled: getProductItemEnabled(value),
+      contentTypes: normalizeReviewContentTypes(getProductItemContentTypes(value)),
     });
   }
 
@@ -64,6 +101,7 @@ export function addReviewProductItem(productItems, datasetName) {
       id,
       datasetName: normalizedDatasetName,
       enabled: true,
+      contentTypes: createDefaultReviewContentTypes(),
     },
   ];
 }
@@ -81,6 +119,28 @@ export function toggleReviewProductItem(productItems, itemId, enabled) {
   });
 }
 
+export function toggleReviewProductContentType(productItems, itemId, contentTypeId, enabled) {
+  const normalizedContentTypeId = normalizeReviewContentTypeId(contentTypeId);
+
+  if (!normalizedContentTypeId) {
+    return normalizeReviewProductItems(productItems);
+  }
+
+  return normalizeReviewProductItems(productItems).map((item) => {
+    if (item.id !== itemId) {
+      return item;
+    }
+
+    return {
+      ...item,
+      contentTypes: {
+        ...item.contentTypes,
+        [normalizedContentTypeId]: Boolean(enabled),
+      },
+    };
+  });
+}
+
 export function removeReviewProductItem(productItems, itemId) {
   return normalizeReviewProductItems(productItems).filter((item) => item.id !== itemId);
 }
@@ -89,6 +149,28 @@ export function getEnabledReviewDatasetNames(productItems) {
   return normalizeReviewProductItems(productItems)
     .filter((item) => item.enabled)
     .map((item) => item.datasetName);
+}
+
+export function getReviewContentTypeDefinitions() {
+  return REVIEW_CONTENT_TYPE_DEFINITIONS.map((definition) => ({ ...definition }));
+}
+
+export function getEnabledReviewContentTypes(productItem) {
+  const normalizedContentTypes = normalizeReviewContentTypes(productItem?.contentTypes);
+
+  return REVIEW_CONTENT_TYPE_DEFINITIONS.filter(
+    (definition) => normalizedContentTypes[definition.id]
+  ).map((definition) => definition.id);
+}
+
+export function isReviewContentTypeEnabled(productItem, contentTypeId) {
+  const normalizedContentTypeId = normalizeReviewContentTypeId(contentTypeId);
+
+  if (!normalizedContentTypeId) {
+    return false;
+  }
+
+  return Boolean(normalizeReviewContentTypes(productItem?.contentTypes)[normalizedContentTypeId]);
 }
 
 function getProductItemDatasetName(value) {
@@ -109,6 +191,43 @@ function getProductItemEnabled(value) {
   }
 
   return true;
+}
+
+function getProductItemContentTypes(value) {
+  if (value !== null && typeof value === "object") {
+    return value.contentTypes ?? value.reviewContentTypes ?? null;
+  }
+
+  return null;
+}
+
+function normalizeReviewContentTypes(contentTypes) {
+  const normalizedContentTypes = createDefaultReviewContentTypes();
+
+  if (!contentTypes || typeof contentTypes !== "object") {
+    return normalizedContentTypes;
+  }
+
+  for (const definition of REVIEW_CONTENT_TYPE_DEFINITIONS) {
+    if (Object.hasOwn(contentTypes, definition.id)) {
+      normalizedContentTypes[definition.id] = contentTypes[definition.id] !== false;
+    }
+  }
+
+  return normalizedContentTypes;
+}
+
+function normalizeReviewContentTypeId(contentTypeId) {
+  const normalizedContentTypeId = String(contentTypeId ?? "").trim();
+
+  return REVIEW_CONTENT_TYPE_IDS.has(normalizedContentTypeId) ? normalizedContentTypeId : "";
+}
+
+function createDefaultReviewContentTypes() {
+  return REVIEW_CONTENT_TYPE_DEFINITIONS.reduce((selection, definition) => {
+    selection[definition.id] = definition.defaultEnabled;
+    return selection;
+  }, {});
 }
 
 function createReviewProductItemId(datasetName) {

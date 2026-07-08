@@ -7,6 +7,7 @@ import {
   getEnabledReviewDatasetNames,
   normalizeReviewProductItems,
   removeReviewProductItem,
+  toggleReviewProductContentType,
   toggleReviewProductItem,
 } from "../domain/reviewProductList.js";
 import { loadReviewHistories } from "../services/reviewHistoryLoader.js";
@@ -144,8 +145,31 @@ export async function initReviewPage({ datasetNames } = {}) {
     });
   };
 
+  const handleContentToggle = (event) => {
+    const itemId = event.detail?.id;
+    const contentType = event.detail?.contentType;
+
+    if (!itemId || !contentType) {
+      return;
+    }
+
+    productItems = toggleReviewProductContentType(
+      productItems,
+      itemId,
+      contentType,
+      event.detail?.enabled
+    );
+
+    renderReviewPage({
+      productItems,
+      products: currentProducts,
+      loading: false,
+    });
+  };
+
   document.addEventListener("pm-review-product-add", handleProductAdd);
   document.addEventListener("pm-review-product-toggle", handleProductToggle);
+  document.addEventListener("pm-review-content-toggle", handleContentToggle);
   document.addEventListener("pm-review-product-remove", handleProductRemove);
 
   await waitForNextPaint();
@@ -180,6 +204,7 @@ export async function initReviewPage({ datasetNames } = {}) {
       loadRequestId += 1;
       document.removeEventListener("pm-review-product-add", handleProductAdd);
       document.removeEventListener("pm-review-product-toggle", handleProductToggle);
+      document.removeEventListener("pm-review-content-toggle", handleContentToggle);
       document.removeEventListener("pm-review-product-remove", handleProductRemove);
       window.removeEventListener("popstate", handlePopState);
       document.body.classList.remove("pm-review-route");

@@ -1,3 +1,8 @@
+import {
+  getReviewContentTypeDefinitions,
+  isReviewContentTypeEnabled,
+} from "../domain/reviewProductList.js";
+
 export function createReviewSidebar({ productItems, loading }) {
   const sidebar = document.createElement("aside");
   sidebar.className = "pm-review-sidebar";
@@ -18,7 +23,7 @@ export function createReviewSidebar({ productItems, loading }) {
   const description = document.createElement("p");
   description.className = "pm-review-sidebar__description";
   description.textContent =
-    "Collect products and compare history, reports and future review content side by side.";
+    "Collect products and choose which review content to compare side by side.";
 
   header.append(eyebrow, title, description);
 
@@ -126,6 +131,9 @@ function createProductListItem(productItem) {
     item.classList.add("is-disabled");
   }
 
+  const header = document.createElement("div");
+  header.className = "pm-review-product-list__item-header";
+
   const toggleLabel = document.createElement("label");
   toggleLabel.className = "pm-review-product-list__toggle";
 
@@ -142,11 +150,7 @@ function createProductListItem(productItem) {
   name.textContent = productItem.datasetName;
   name.title = productItem.datasetName;
 
-  const meta = document.createElement("span");
-  meta.className = "pm-review-product-list__item-meta";
-  meta.textContent = "History";
-
-  content.append(name, meta);
+  content.appendChild(name);
 
   const removeButton = document.createElement("button");
   removeButton.type = "button";
@@ -163,10 +167,50 @@ function createProductListItem(productItem) {
   });
 
   toggleLabel.append(checkbox, content);
-  item.append(toggleLabel, removeButton);
+  header.append(toggleLabel, removeButton);
+  item.append(header, createContentTypeList(productItem));
 
   return item;
 }
+
+function createContentTypeList(productItem) {
+  const list = document.createElement("div");
+  list.className = "pm-review-product-list__content-types";
+  list.setAttribute("aria-label", `${productItem.datasetName} review content`);
+
+  for (const definition of getReviewContentTypeDefinitions()) {
+    list.appendChild(createContentTypeToggle(productItem, definition));
+  }
+
+  return list;
+}
+
+function createContentTypeToggle(productItem, definition) {
+  const label = document.createElement("label");
+  label.className = "pm-review-product-list__content-type";
+  label.title = definition.description;
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = isReviewContentTypeEnabled(productItem, definition.id);
+  checkbox.disabled = !productItem.enabled;
+  checkbox.setAttribute(
+    "aria-label",
+    `${definition.label} for ${productItem.datasetName}`
+  );
+
+  const text = document.createElement("span");
+  text.textContent = definition.shortLabel;
+
+  checkbox.addEventListener("change", () => {
+    dispatchReviewContentToggle(label, productItem.id, definition.id, checkbox.checked);
+  });
+
+  label.append(checkbox, text);
+
+  return label;
+}
+
 
 function createProductCountText(productItems) {
   const enabledCount = productItems.filter((item) => item.enabled).length;
@@ -202,6 +246,19 @@ function dispatchReviewProductToggle(target, id, enabled) {
       bubbles: true,
       detail: {
         id,
+        enabled,
+      },
+    })
+  );
+}
+
+function dispatchReviewContentToggle(target, id, contentType, enabled) {
+  target.dispatchEvent(
+    new CustomEvent("pm-review-content-toggle", {
+      bubbles: true,
+      detail: {
+        id,
+        contentType,
         enabled,
       },
     })
