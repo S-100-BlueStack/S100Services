@@ -85,13 +85,6 @@
   border-color: var(--pm-button-secondary-border);
 }
 
-.pm-product-collection-tray__clear-button:focus-visible,
-.pm-product-collection-tray__remove-button:focus-visible,
-.pm-product-collection-tray__action:focus-visible {
-  outline: 2px solid var(--pm-focus-ring);
-  outline-offset: 2px;
-}
-
 .pm-product-collection-tray__list {
   display: grid;
   gap: 4px;
@@ -126,10 +119,6 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-}
-
-.pm-product-collection-tray__footer[data-review-session-active] {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .pm-product-collection-tray__action {

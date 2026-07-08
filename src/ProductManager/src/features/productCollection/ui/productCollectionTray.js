@@ -1,12 +1,6 @@
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
 import { noticeError } from "../../notices/services/noticeService.js";
-import { addNotice } from "../../notices/state/noticeStore.js";
 import { buildReviewUrl } from "../../review/routing/reviewRoute.js";
-import {
-  getLatestActiveReviewSession,
-  sendProductsToReviewSession,
-  subscribeReviewSessionRegistry,
-} from "../../review/session/reviewSessionChannel.js";
 import {
   clearProductCollection,
   getProductCollectionSnapshot,
@@ -22,26 +16,16 @@ export function initProductCollectionTray({ root = document.body } = {}) {
 
   root.appendChild(tray);
 
-  let currentSnapshot = getProductCollectionSnapshot();
-
-  const render = () => {
-    renderProductCollectionTray(tray, currentSnapshot);
-  };
-
   const unsubscribeCollection = subscribeProductCollection((snapshot) => {
-    currentSnapshot = snapshot;
-    render();
+    renderProductCollectionTray(tray, snapshot);
   });
 
-  const unsubscribeReviewSessions = subscribeReviewSessionRegistry(render);
-
-  render();
+  renderProductCollectionTray(tray, getProductCollectionSnapshot());
 
   return {
     element: tray,
     destroy() {
       unsubscribeCollection();
-      unsubscribeReviewSessions();
       tray.remove();
     },
   };
@@ -129,45 +113,14 @@ function createProductItem(item) {
 
 function createActions(datasetNames) {
   const footer = document.createElement("div");
-  const activeReviewSession = getLatestActiveReviewSession();
-
   footer.className = "pm-product-collection-tray__footer";
-  footer.toggleAttribute("data-review-session-active", Boolean(activeReviewSession));
-
-  if (activeReviewSession) {
-    footer.append(
-      createActionButton({
-        label: "New Review",
-        title: "Open a new Product Review tab with the current collection",
-        onClick: () => {
-          openReviewCollection(datasetNames);
-        },
-      }),
-      createActionButton({
-        label: "Update Review",
-        title: "Replace the latest open Product Review tab with the current collection",
-        onClick: () => {
-          updateReviewCollection(datasetNames, activeReviewSession);
-        },
-      }),
-      createActionButton({
-        label: "Analyze",
-        title: "Open Analyze in a new tab with the current collection",
-        onClick: () => {
-          openCollectionUrl(buildAnalyzeUrl(datasetNames), "Analyze page was blocked");
-        },
-      })
-    );
-
-    return footer;
-  }
 
   footer.append(
     createActionButton({
       label: "Review",
-      title: "Open Product Review in a new tab",
+      title: "Open Product Review in a new tab with the current collection",
       onClick: () => {
-        openReviewCollection(datasetNames);
+        openCollectionUrl(buildReviewUrl(datasetNames), "Product Review page was blocked");
       },
     }),
     createActionButton({
@@ -192,34 +145,6 @@ function createActionButton({ label, title, onClick }) {
   button.addEventListener("click", onClick);
 
   return button;
-}
-
-function openReviewCollection(datasetNames) {
-  openCollectionUrl(buildReviewUrl(datasetNames), "Product Review page was blocked");
-}
-
-function updateReviewCollection(datasetNames, activeReviewSession) {
-  const sent = sendProductsToReviewSession(datasetNames, {
-    sessionId: activeReviewSession.sessionId,
-    mode: "replace",
-  });
-
-  if (!sent) {
-    noticeError(
-      "Product Review could not be updated",
-      "The open Review tab could not be reached. Open a new Review tab and try again."
-    );
-    return;
-  }
-
-  addNotice({
-    type: "success",
-    message: `Updated Product Review with ${datasetNames.length} product${
-      datasetNames.length === 1 ? "" : "s"
-    }`,
-    duration: 2200,
-    storeInCenter: false,
-  });
 }
 
 function openCollectionUrl(url, errorTitle) {
