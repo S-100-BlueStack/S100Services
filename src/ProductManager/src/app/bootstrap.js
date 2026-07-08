@@ -1,8 +1,7 @@
 import { initAnalyzePage } from "../features/analyze/core/initAnalyzePage.js";
-import {
-  createAnalyzeDocumentTitle,
-  getCurrentRoute,
-} from "../features/analyze/routing/analyzeRoute.js";
+import { createAnalyzeDocumentTitle } from "../features/analyze/routing/analyzeRoute.js";
+import { initReviewPage } from "../features/review/core/initReviewPage.js";
+import { createReviewDocumentTitle } from "../features/review/routing/reviewRoute.js";
 import { noticeError } from "../features/notices/services/noticeService.js";
 import { hideLoader, setLoaderText, showLoader } from "../shared/ui/loader.js";
 import { initMap } from "./initMap.js";
@@ -13,6 +12,7 @@ import { initializeTheme } from "../features/themes/themeService.js";
 import { registerThemeToggle } from "../features/themes/themeToggle.js";
 import { initDisplayScaleOverrideControl } from "../features/map/scale/displayScaleOverrideControl.js";
 import { waitForCalciteComponents } from "../shared/ui/calciteComponentReady.js";
+import { getCurrentRoute } from "./routing/appRoute.js";
 
 const REQUIRED_CALCITE_COMPONENTS = ["calcite-shell", "calcite-shell-panel", "calcite-panel"];
 
@@ -23,11 +23,15 @@ async function waitForCalcite() {
 export async function bootstrap() {
   const route = getCurrentRoute();
 
-  document.title =
-    route.name === "analyze" ? createAnalyzeDocumentTitle(route.datasetNames) : "Product Manager";
+  document.title = createInitialDocumentTitle(route);
 
   if (route.name === "analyze") {
     await bootstrapAnalyzeRoute(route);
+    return;
+  }
+
+  if (route.name === "review") {
+    await bootstrapReviewRoute(route);
     return;
   }
 
@@ -52,10 +56,10 @@ async function bootstrapMainRoute() {
     });
 
     await waitForNextPaint();
-
     await waitForCalcite();
 
     setLoaderText("Loading data...");
+
     await loadInitialData(app);
 
     app.bindMapVisibility?.();
@@ -77,7 +81,6 @@ async function bootstrapAnalyzeRoute(route) {
     });
 
     await waitForNextPaint();
-
     await waitForCalcite();
 
     const app = await initAnalyzePage({
@@ -92,6 +95,43 @@ async function bootstrapAnalyzeRoute(route) {
     noticeError("Analyze page failed to start", error.message);
     console.error(error);
   }
+}
+
+async function bootstrapReviewRoute(route) {
+  try {
+    await initUI();
+
+    showLoader("Preparing Product Review...", {
+      progress: 0.01,
+    });
+
+    await waitForNextPaint();
+    await waitForCalcite();
+
+    await initReviewPage({
+      datasetNames: route.datasetNames,
+    });
+
+    initializeTheme();
+    registerThemeToggle();
+    hideLoader();
+  } catch (error) {
+    hideLoader();
+    noticeError("Product Review failed to start", error.message);
+    console.error(error);
+  }
+}
+
+function createInitialDocumentTitle(route) {
+  if (route.name === "analyze") {
+    return createAnalyzeDocumentTitle(route.datasetNames);
+  }
+
+  if (route.name === "review") {
+    return createReviewDocumentTitle(route.datasetNames);
+  }
+
+  return "Product Manager";
 }
 
 function waitForNextPaint() {

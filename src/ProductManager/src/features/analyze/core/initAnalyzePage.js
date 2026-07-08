@@ -1,12 +1,12 @@
-import { loadStatuses } from '../../data/stores/statusStore.js';
-import { createMap } from '../../map/core/createMap.js';
-import { createView } from '../../map/core/createView.js';
-import { createHoverManager } from '../../map/interactions/hoverManager.js';
-import { registerPopupHoverSync } from '../../map/interactions/registerPopupHoverSync.js';
-import { noticeError, noticeWarning } from '../../notices/services/noticeService.js';
-import { fetchProductHistory } from '../../timeline/api/productHistoryApi.js';
-import { createLoaderProgressSession } from '../../../shared/ui/loaderProgressSession.js';
-import { hideLoader } from '../../../shared/ui/loader.js';
+import { loadStatuses } from "../../data/stores/statusStore.js";
+import { createMap } from "../../map/core/createMap.js";
+import { createView } from "../../map/core/createView.js";
+import { createHoverManager } from "../../map/interactions/hoverManager.js";
+import { registerPopupHoverSync } from "../../map/interactions/registerPopupHoverSync.js";
+import { noticeError, noticeWarning } from "../../notices/services/noticeService.js";
+import { fetchProductHistory } from "../../timeline/api/productHistoryApi.js";
+import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
+import { hideLoader } from "../../../shared/ui/loader.js";
 import {
   addAnalyzeDatasetItem,
   createAnalyzeDatasetItems,
@@ -14,16 +14,16 @@ import {
   normalizeAnalyzeDatasetItems,
   removeAnalyzeDatasetItem,
   toggleAnalyzeDatasetItem,
-} from '../domain/analyzeDatasetList.js';
-import { fetchAnalyzeProducts } from '../api/analyzeApi.js';
-import { createAnalyzeLayers } from '../map/createAnalyzeLayers.js';
-import { zoomToGraphicsExtent } from '../map/zoomToGraphics.js';
+} from "../domain/analyzeDatasetList.js";
+import { fetchAnalyzeProducts } from "../api/analyzeApi.js";
+import { createAnalyzeLayers } from "../map/createAnalyzeLayers.js";
+import { zoomToGraphicsExtent } from "../map/zoomToGraphics.js";
 import {
   createAnalyzeDocumentTitle,
   getCurrentRoute,
   setAnalyzeRouteUrl,
-} from '../routing/analyzeRoute.js';
-import { renderAnalyzeSidebar } from '../ui/analyzeSidebar.js';
+} from "../routing/analyzeRoute.js";
+import { renderAnalyzeSidebar } from "../ui/analyzeSidebar.js";
 
 export async function initAnalyzePage({ datasetNames }) {
   let currentLayers = [];
@@ -36,7 +36,7 @@ export async function initAnalyzePage({ datasetNames }) {
 
   const enabledDatasetNames = getEnabledAnalyzeDatasetNames(datasetItems);
 
-  document.body.classList.add('pm-analyze-route');
+  document.body.classList.add("pm-analyze-route");
   document.title = createAnalyzeDocumentTitle(enabledDatasetNames);
 
   const map = createMap();
@@ -100,7 +100,7 @@ export async function initAnalyzePage({ datasetNames }) {
     }
 
     try {
-      loaderProgress.startLoading('Loading analyze data...', {
+      loaderProgress.startLoading("Loading analyze data...", {
         rotateImmediately: true,
       });
 
@@ -121,7 +121,7 @@ export async function initAnalyzePage({ datasetNames }) {
       loaderProgress.markDataReceived();
       loaderProgress.startRendering({
         text: `Rendering ${productsWithHistory.length} analyze product${
-          productsWithHistory.length === 1 ? '' : 's'
+          productsWithHistory.length === 1 ? "" : "s"
         }...`,
       });
 
@@ -166,29 +166,29 @@ export async function initAnalyzePage({ datasetNames }) {
 
         if (!didZoom) {
           noticeWarning(
-            'Analyze geometry not found',
-            'The product metadata was loaded, but no AOI geometry could be rendered on the map.'
+            "Analyze geometry not found",
+            "The product metadata was loaded, but no AOI geometry could be rendered on the map."
           );
         }
       } else if (productsWithHistory.length > 0) {
         noticeWarning(
-          'Analyze geometry unavailable',
-          'The product metadata was loaded, but the backend response did not include AOI geometry.'
+          "Analyze geometry unavailable",
+          "The product metadata was loaded, but the backend response did not include AOI geometry."
         );
       }
 
       loaderProgress.complete({
-        text: 'Analyze ready',
+        text: "Analyze ready",
       });
     } catch (error) {
       if (requestId === loadRequestId) {
         loaderProgress.fail({
-          text: 'Failed to load analyze data',
+          text: "Failed to load analyze data",
         });
 
         noticeError(
-          'Analyze data failed',
-          error instanceof Error ? error.message : 'Unknown analyze error'
+          "Analyze data failed",
+          error instanceof Error ? error.message : "Unknown analyze error"
         );
       }
     } finally {
@@ -258,10 +258,10 @@ export async function initAnalyzePage({ datasetNames }) {
     });
   };
 
-  document.addEventListener('pm-analyze-dataset-add', handleAnalyzeDatasetAdd);
-  document.addEventListener('pm-analyze-dataset-toggle', handleAnalyzeDatasetToggle);
-  document.addEventListener('pm-analyze-dataset-remove', handleAnalyzeDatasetRemove);
-  document.addEventListener('pm-analyze-dataset-submit', handleAnalyzeDatasetSubmit);
+  document.addEventListener("pm-analyze-dataset-add", handleAnalyzeDatasetAdd);
+  document.addEventListener("pm-analyze-dataset-toggle", handleAnalyzeDatasetToggle);
+  document.addEventListener("pm-analyze-dataset-remove", handleAnalyzeDatasetRemove);
+  document.addEventListener("pm-analyze-dataset-submit", handleAnalyzeDatasetSubmit);
 
   cleanupViewPadding = applyAnalyzeViewPadding(view);
 
@@ -291,7 +291,7 @@ export async function initAnalyzePage({ datasetNames }) {
     });
   };
 
-  window.addEventListener('popstate', handlePopState);
+  window.addEventListener("popstate", handlePopState);
 
   return {
     map,
@@ -305,11 +305,11 @@ export async function initAnalyzePage({ datasetNames }) {
     loadAnalyzeDatasetNames,
     destroy() {
       loadRequestId += 1;
-      document.removeEventListener('pm-analyze-dataset-add', handleAnalyzeDatasetAdd);
-      document.removeEventListener('pm-analyze-dataset-toggle', handleAnalyzeDatasetToggle);
-      document.removeEventListener('pm-analyze-dataset-remove', handleAnalyzeDatasetRemove);
-      document.removeEventListener('pm-analyze-dataset-submit', handleAnalyzeDatasetSubmit);
-      window.removeEventListener('popstate', handlePopState);
+      document.removeEventListener("pm-analyze-dataset-add", handleAnalyzeDatasetAdd);
+      document.removeEventListener("pm-analyze-dataset-toggle", handleAnalyzeDatasetToggle);
+      document.removeEventListener("pm-analyze-dataset-remove", handleAnalyzeDatasetRemove);
+      document.removeEventListener("pm-analyze-dataset-submit", handleAnalyzeDatasetSubmit);
+      window.removeEventListener("popstate", handlePopState);
       closePopup(view);
       cleanupPopupHoverSync?.();
       activeLoaderProgress?.cleanup();
@@ -363,7 +363,7 @@ function createSilentAnalyzeLoaderProgress() {
 
 function normalizeDatasetNames(datasetNames) {
   return (Array.isArray(datasetNames) ? datasetNames : [datasetNames])
-    .map((datasetName) => String(datasetName ?? '').trim())
+    .map((datasetName) => String(datasetName ?? "").trim())
     .filter(Boolean);
 }
 
@@ -371,8 +371,8 @@ async function loadLookupsSafely() {
   const results = await Promise.allSettled([loadStatuses()]);
 
   for (const result of results) {
-    if (result.status === 'rejected') {
-      console.warn('[Analyze] Lookup data failed to load', result.reason);
+    if (result.status === "rejected") {
+      console.warn("[Analyze] Lookup data failed to load", result.reason);
     }
   }
 }
@@ -383,7 +383,7 @@ async function waitForLayerViews(view, layers) {
       try {
         await view.whenLayerView(layer);
       } catch (error) {
-        console.warn('[Analyze] Failed to create layer view', {
+        console.warn("[Analyze] Failed to create layer view", {
           layerId: layer.id,
           error,
         });
@@ -404,9 +404,9 @@ function applyAnalyzeViewPadding(view) {
   const updatePadding = () => {
     pendingAnimationFrame = null;
 
-    const panel = document.getElementById('analyze-sidebar-panel');
+    const panel = document.getElementById("analyze-sidebar-panel");
     const panelWidth = panel?.getBoundingClientRect?.().width ?? 420;
-    const isNarrowScreen = window.matchMedia('(max-width: 700px)').matches;
+    const isNarrowScreen = window.matchMedia("(max-width: 700px)").matches;
 
     view.padding = {
       left: isNarrowScreen ? 0 : Math.min(panelWidth + 24, window.innerWidth * 0.45),
@@ -426,10 +426,10 @@ function applyAnalyzeViewPadding(view) {
 
   updatePadding();
   schedulePaddingUpdate();
-  window.addEventListener('resize', schedulePaddingUpdate);
+  window.addEventListener("resize", schedulePaddingUpdate);
 
   return () => {
-    window.removeEventListener('resize', schedulePaddingUpdate);
+    window.removeEventListener("resize", schedulePaddingUpdate);
 
     if (pendingAnimationFrame !== null) {
       window.cancelAnimationFrame(pendingAnimationFrame);
@@ -446,10 +446,10 @@ function showMockWarningIfNeeded(products) {
   }
 
   noticeWarning(
-    'Using mock analyze data',
+    "Using mock analyze data",
     `Backend data was not available for ${mockProducts
       .map((product) => product.datasetName)
-      .join(', ')}.`
+      .join(", ")}.`
   );
 }
 
@@ -469,7 +469,7 @@ async function loadProductHistories(products) {
   return results.map((result, index) => {
     const product = products[index];
 
-    if (result.status === 'fulfilled') {
+    if (result.status === "fulfilled") {
       return result.value;
     }
 
@@ -477,7 +477,7 @@ async function loadProductHistories(products) {
       ...product,
       history: null,
       historyError:
-        result.reason instanceof Error ? result.reason.message : 'Unknown history error.',
+        result.reason instanceof Error ? result.reason.message : "Unknown history error.",
     };
   });
 }

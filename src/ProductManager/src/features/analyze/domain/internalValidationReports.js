@@ -37,7 +37,9 @@ function normalizeInternalValidationReport(report, index) {
   const title = normalizeText(
     readFirstDefined(report, ["title", "Title", "name", "Name", "reportName", "ReportName"])
   );
-  const type = normalizeText(readFirstDefined(report, ["type", "Type", "reportType", "ReportType"]));
+  const type = normalizeText(
+    readFirstDefined(report, ["type", "Type", "reportType", "ReportType"])
+  );
   const id = normalizeText(
     readFirstDefined(report, ["id", "Id", "reportId", "ReportId", "key", "Key"])
   );
@@ -58,18 +60,41 @@ function normalizeInternalValidationReport(report, index) {
     ])
   );
   const summary = normalizeText(
-    readFirstDefined(report, ["summary", "Summary", "message", "Message", "description", "Description"])
+    readFirstDefined(report, [
+      "summary",
+      "Summary",
+      "message",
+      "Message",
+      "description",
+      "Description",
+    ])
   );
   const explicitFormat = normalizeText(
-    readFirstDefined(report, ["format", "Format", "contentType", "ContentType", "mimeType", "MimeType"])
+    readFirstDefined(report, [
+      "format",
+      "Format",
+      "contentType",
+      "ContentType",
+      "mimeType",
+      "MimeType",
+    ])
   );
 
-  if (!title && !type && !status && !source && !generatedAt && !summary && !hasReportContent(content)) {
+  if (
+    !title &&
+    !type &&
+    !status &&
+    !source &&
+    !generatedAt &&
+    !summary &&
+    !hasReportContent(content)
+  ) {
     return null;
   }
 
   return {
-    id: id || createStableReportId(title || type || source || status || `report-${index + 1}`, index),
+    id:
+      id || createStableReportId(title || type || source || status || `report-${index + 1}`, index),
     title: title || type || `Internal validation report ${index + 1}`,
     status: status || "available",
     source: source || "Internal validation",

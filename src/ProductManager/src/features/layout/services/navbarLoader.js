@@ -11,6 +11,7 @@ export async function loadNavbar() {
 function initializeNavbarLinks() {
   const homeLink = document.querySelector("[data-nav-home-link]");
   const analyzeLink = document.querySelector("[data-nav-analyze-link]");
+  const reviewLink = document.querySelector("[data-nav-review-link]");
 
   if (homeLink) {
     homeLink.href = getAppUrl("");
@@ -18,6 +19,10 @@ function initializeNavbarLinks() {
 
   if (analyzeLink) {
     analyzeLink.href = getAppUrl("analyze/");
+  }
+
+  if (reviewLink) {
+    reviewLink.href = getAppUrl("review/");
   }
 }
 

@@ -92,7 +92,7 @@ export function getEnabledAnalyzeDatasetNames(datasetItems) {
 }
 
 function normalizeAnalyzeDatasetName(value) {
-  return String(value ?? '').trim();
+  return String(value ?? "").trim();
 }
 
 function getAnalyzeDatasetItemId(datasetName) {
@@ -101,18 +101,18 @@ function getAnalyzeDatasetItemId(datasetName) {
 
 function getDatasetItemName(value) {
   if (value === null || value === undefined) {
-    return '';
+    return "";
   }
 
-  if (typeof value === 'object') {
-    return value.name ?? value.datasetName ?? '';
+  if (typeof value === "object") {
+    return value.name ?? value.datasetName ?? "";
   }
 
   return value;
 }
 
 function getDatasetItemEnabled(value) {
-  if (value !== null && typeof value === 'object' && 'enabled' in value) {
+  if (value !== null && typeof value === "object" && "enabled" in value) {
     return value.enabled !== false;
   }
 

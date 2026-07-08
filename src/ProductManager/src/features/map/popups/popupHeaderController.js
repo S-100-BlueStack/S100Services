@@ -68,12 +68,7 @@ function waitForFeatureHeader(view, featureId, remainingFrames = 20) {
     header.dataset.statusColor = color;
   }
 
-  if (isAnalyzeCollectionPopupActionEnabled()) {
-    ensureAnalyzeCollectionButton(header, attr);
-  } else {
-    removeAnalyzeCollectionButton(header);
-  }
-
+  ensureCollectionButton(header, attr);
   ensureCopyButton(header, attr.datasetName);
 }
 
@@ -99,7 +94,7 @@ function waitForDefaultHeader(view, remainingFrames = 20) {
   delete header.dataset.statusColor;
 
   removeCopyButton(header);
-  removeAnalyzeCollectionButton(header);
+  removeCollectionButton(header);
 }
 
 function getPopupHeader(view) {
@@ -128,8 +123,11 @@ function isOverlapPickerPopup(view) {
   return content instanceof Element && content.classList.contains("overlap-picker");
 }
 
-function isAnalyzeCollectionPopupActionEnabled() {
-  return !document.body.classList.contains("pm-analyze-route");
+function isReviewOrAnalyzeRoute() {
+  return (
+    document.body.classList.contains("pm-analyze-route") ||
+    document.body.classList.contains("pm-review-route")
+  );
 }
 
 function getHeaderActions(header) {
@@ -152,7 +150,7 @@ function removeCopyButton(header) {
   removeHeaderButton(header, ".popup-copy-btn");
 }
 
-function removeAnalyzeCollectionButton(header) {
+function removeCollectionButton(header) {
   removeHeaderButton(header, ".popup-analyze-collection-btn");
 }
 
@@ -212,9 +210,9 @@ function ensureCopyButton(header, datasetName) {
   btn.dataset.datasetName = datasetName;
 }
 
-function ensureAnalyzeCollectionButton(header, attributes) {
-  if (!isAnalyzeCollectionPopupActionEnabled()) {
-    removeAnalyzeCollectionButton(header);
+function ensureCollectionButton(header, attributes) {
+  if (isReviewOrAnalyzeRoute()) {
+    removeCollectionButton(header);
     return;
   }
 
@@ -244,12 +242,12 @@ function ensureAnalyzeCollectionButton(header, attributes) {
 
         addNotice({
           type: "info",
-          message: `${datasetName} removed from Analyze collection`,
+          message: `${datasetName} removed from collection`,
           duration: 2200,
           storeInCenter: false,
         });
 
-        syncAnalyzeCollectionButtonState(btn);
+        syncCollectionButtonState(btn);
         return;
       }
 
@@ -258,42 +256,42 @@ function ensureAnalyzeCollectionButton(header, attributes) {
       if (result.added) {
         addNotice({
           type: "success",
-          message: `${datasetName} added to Analyze collection`,
+          message: `${datasetName} added to collection`,
           duration: 2200,
           storeInCenter: false,
         });
       } else if (result.reason === "already-added") {
         addNotice({
           type: "info",
-          message: `${datasetName} is already in the Analyze collection`,
+          message: `${datasetName} is already in the collection`,
           duration: 2200,
           storeInCenter: false,
         });
       } else {
         addNotice({
           type: "danger",
-          message: "Selected product could not be added to Analyze collection",
+          message: "Selected product could not be added to collection",
           duration: 3000,
           storeInCenter: false,
         });
       }
 
-      syncAnalyzeCollectionButtonState(btn);
+      syncCollectionButtonState(btn);
     });
 
     btn.cleanup = subscribeAnalyzeCollection(() => {
-      syncAnalyzeCollectionButtonState(btn);
+      syncCollectionButtonState(btn);
     });
   }
 
   btn.dataset.datasetName = datasetName;
-  syncAnalyzeCollectionButtonState(btn);
+  syncCollectionButtonState(btn);
 }
 
-function syncAnalyzeCollectionButtonState(btn) {
+function syncCollectionButtonState(btn) {
   const datasetName = btn.dataset.datasetName;
   const isSelected = hasAnalyzeCollectionProduct(datasetName);
-  const title = isSelected ? "Remove from Analyze collection" : "Add to Analyze collection";
+  const title = isSelected ? "Remove from collection" : "Add to collection";
 
   btn.icon = isSelected ? "check" : "chart-magnifying-glass";
   btn.title = title;

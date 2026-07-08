@@ -1,4 +1,5 @@
 import { buildAnalyzeUrl } from "../routing/analyzeRoute.js";
+import { buildReviewUrl } from "../../review/routing/reviewRoute.js";
 import {
   clearAnalyzeCollection,
   getAnalyzeCollectionSnapshot,
@@ -11,7 +12,7 @@ export function initAnalyzeCollectionTray({ root = document.body } = {}) {
   const tray = document.createElement("section");
   tray.className = "pm-analyze-collection-tray";
   tray.hidden = true;
-  tray.setAttribute("aria-label", "Analyze collection");
+  tray.setAttribute("aria-label", "Product collection");
 
   root.appendChild(tray);
 
@@ -41,7 +42,7 @@ function renderAnalyzeCollectionTray(tray, snapshot) {
   tray.hidden = false;
   tray.appendChild(createHeader(snapshot));
   tray.appendChild(createProductList(snapshot.items));
-  tray.appendChild(createAnalyzeAction(snapshot.datasetNames));
+  tray.appendChild(createActions(snapshot.datasetNames));
 }
 
 function createHeader(snapshot) {
@@ -50,7 +51,7 @@ function createHeader(snapshot) {
 
   const title = document.createElement("div");
   title.className = "pm-analyze-collection-tray__title";
-  title.textContent = "Analyze collection";
+  title.textContent = "Collection";
 
   const count = document.createElement("span");
   count.className = "pm-analyze-collection-tray__count";
@@ -63,8 +64,8 @@ function createHeader(snapshot) {
   const clearButton = document.createElement("button");
   clearButton.type = "button";
   clearButton.className = "pm-analyze-collection-tray__clear-button";
-  clearButton.title = "Clear Analyze collection";
-  clearButton.setAttribute("aria-label", "Clear Analyze collection");
+  clearButton.title = "Clear collection";
+  clearButton.setAttribute("aria-label", "Clear collection");
   clearButton.addEventListener("click", () => {
     clearAnalyzeCollection();
   });
@@ -110,32 +111,35 @@ function createProductItem(item) {
   return row;
 }
 
-function createAnalyzeAction(datasetNames) {
+function createActions(datasetNames) {
   const footer = document.createElement("div");
   footer.className = "pm-analyze-collection-tray__footer";
 
-  const analyzeButton = document.createElement("button");
-  analyzeButton.type = "button";
-  analyzeButton.className = "pm-analyze-collection-tray__analyze-button";
-  analyzeButton.textContent = "Analyze";
-  analyzeButton.addEventListener("click", () => {
-    openAnalyzeCollection(datasetNames);
+  const reviewButton = document.createElement("button");
+  reviewButton.type = "button";
+  reviewButton.className = "pm-analyze-collection-tray__secondary-action";
+  reviewButton.textContent = "Review";
+  reviewButton.addEventListener("click", () => {
+    openCollectionUrl(buildReviewUrl(datasetNames), "Product Review page was blocked");
   });
 
-  footer.appendChild(analyzeButton);
+  const analyzeButton = document.createElement("button");
+  analyzeButton.type = "button";
+  analyzeButton.className = "pm-analyze-collection-tray__primary-action";
+  analyzeButton.textContent = "Analyze";
+  analyzeButton.addEventListener("click", () => {
+    openCollectionUrl(buildAnalyzeUrl(datasetNames), "Analyze page was blocked");
+  });
+
+  footer.append(reviewButton, analyzeButton);
 
   return footer;
 }
 
-function openAnalyzeCollection(datasetNames) {
-  if (!Array.isArray(datasetNames) || datasetNames.length === 0) {
-    return;
-  }
-
-  const analyzeUrl = buildAnalyzeUrl(datasetNames);
-  const openedWindow = window.open(analyzeUrl, "_blank", "noopener,noreferrer");
+function openCollectionUrl(url, errorTitle) {
+  const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
 
   if (!openedWindow) {
-    noticeError("Analyze page was blocked", "Allow popups for this site and try again.");
+    noticeError(errorTitle, "Allow popups for this site and try again.");
   }
 }
