@@ -19,7 +19,7 @@ using static ProductManagerAPI.Models.ResponseTypes;
 
 namespace ProductManagerAPI.Controllers
 {
-    [AllowAnonymous] 
+    [AllowAnonymous]
     //[Authorize("productmanager:access")]
     [ApiController]
     [Route("[controller]")]
@@ -215,7 +215,8 @@ namespace ProductManagerAPI.Controllers
         //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpPost()]
         //[Authorize("productmanager:manage")]
-        public async Task<IActionResult> CreateElectronicProduct([FromBody] CreateProductRequest product) {
+        public async Task<IActionResult> CreateElectronicProduct([FromBody] CreateProductRequest product)
+        {
             return StatusCode(StatusCodes.Status501NotImplemented);
 
 #pragma warning disable CS0162 // Unreachable code is kept because this endpoint is intentionally parked.
@@ -254,7 +255,13 @@ namespace ProductManagerAPI.Controllers
             };
 
             // Todo: change argument to AOI and do arcgis core geometry conversion in productmanager
-            await _electronicProductManager.CreateElectronicProductAsync(product.Name, productSpecification, specificUsage, boundary, "", product.OptimumDisplayScale);
+            await _electronicProductManager.CreateElectronicProductAsync(
+                product.Name,
+                productSpecification,
+                specificUsage,
+                boundary,
+                "",
+                product.OptimumDisplayScale);
 
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
@@ -296,7 +303,7 @@ namespace ProductManagerAPI.Controllers
 
             var rows = (await _repository.GetHistoryAsync(fromDatabaseTime, toDatabaseTime)).ToArray();
             var activities = rows.Select(ToDashboardActivity).ToList();
-            var responseData = CreateDashboardResponse(fromDanishTime, toDanishTime, activities, rows);
+            var responseData = CreateDashboardResponse(fromDanishTime, toDanishTime, activities);
 
             var response = new ApiResponse<DashboardResponse>
             {
@@ -354,8 +361,7 @@ namespace ProductManagerAPI.Controllers
         private static DashboardResponse CreateDashboardResponse(
             DateTimeOffset fromDanishTime,
             DateTimeOffset toDanishTime,
-            IReadOnlyCollection<DashboardActivityResponse> activities,
-            IReadOnlyCollection<ProductRecord> rows)
+            IReadOnlyCollection<DashboardActivityResponse> activities)
         {
             return new DashboardResponse
             {
@@ -380,9 +386,10 @@ namespace ProductManagerAPI.Controllers
                         activity.Links.IcEncReports.Count + activity.Links.InternalValidationReports.Count)
                 },
                 StatusSummary = [
-                    .. rows
-                        .GroupBy(row => row.State.ToString())
-                        .OrderBy(group => group.Key)
+                    .. activities
+                        .GroupBy(activity => activity.Status)
+                        .OrderBy(group => GetDashboardStatusSortOrder(group.Key))
+                        .ThenBy(group => group.Key)
                         .Select(group => new DashboardStatusSummaryItemResponse
                         {
                             Status = group.Key,
@@ -440,6 +447,7 @@ namespace ProductManagerAPI.Controllers
             var details = new List<DashboardActivityDetailResponse>
             {
                 new() { Label = "Product specification", Value = record.ProductSpecification },
+                new() { Label = "Source state", Value = record.State.ToString() },
                 new() { Label = "Edition", Value = record.EditionNo.ToString(CultureInfo.InvariantCulture) },
                 new() { Label = "Update", Value = record.UpdateNo.ToString(CultureInfo.InvariantCulture) }
             };
@@ -462,35 +470,35 @@ namespace ProductManagerAPI.Controllers
                     Type: "export",
                     Severity: "normal",
                     Status: "completed",
-                    Title: "Product exported",
-                    Description: "The product was exported as a new edition or update."),
+                    Title: "Export completed",
+                    Description: "The product export was completed."),
 
                 ProductState.Frozen => new DashboardActivityMetadata(
                     Type: "freeze",
                     Severity: "important",
-                    Status: "blocked",
+                    Status: "active",
                     Title: "Product frozen",
-                    Description: "The product was frozen and awaits manual handling."),
+                    Description: "The product is frozen and awaits manual handling."),
 
                 ProductState.InTransit => new DashboardActivityMetadata(
                     Type: "send",
-                    Severity: "important",
-                    Status: "pending",
-                    Title: "Product sent to IC-ENC",
-                    Description: "The product is awaiting IC-ENC confirmation."),
+                    Severity: "normal",
+                    Status: "active",
+                    Title: "Sent to IC-ENC",
+                    Description: "The product has been sent and is awaiting IC-ENC follow-up."),
 
                 ProductState.Rejected => new DashboardActivityMetadata(
                     Type: "validation",
                     Severity: "critical",
                     Status: "failed",
-                    Title: "Product rejected by IC-ENC",
+                    Title: "Validation failed",
                     Description: "The product was rejected by IC-ENC and needs follow-up."),
 
                 ProductState.Idle => new DashboardActivityMetadata(
-                    Type: "status",
+                    Type: "lifecycle",
                     Severity: "normal",
-                    Status: "completed",
-                    Title: "Product returned to idle",
+                    Status: "idle",
+                    Title: "Product idle",
                     Description: "The product has no active operation state."),
 
                 _ => new DashboardActivityMetadata(
@@ -499,6 +507,18 @@ namespace ProductManagerAPI.Controllers
                     Status: "completed",
                     Title: "Product activity recorded",
                     Description: "A product state change was recorded.")
+            };
+        }
+
+        private static int GetDashboardStatusSortOrder(string status)
+        {
+            return status switch
+            {
+                "failed" => 0,
+                "active" => 1,
+                "completed" => 2,
+                "idle" => 3,
+                _ => 4
             };
         }
 
