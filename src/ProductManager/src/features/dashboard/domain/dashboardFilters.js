@@ -15,6 +15,11 @@ export const DASHBOARD_REPORT_FILTERS = {
   internalValidation: "internal-validation",
 };
 
+export const DASHBOARD_SUMMARY_FILTER_KEYS = {
+  status: "status",
+  operation: "type",
+};
+
 const FAILED_STATUSES = new Set(["failed", "error", "rejected"]);
 const SEARCH_FIELDS_SEPARATOR = " ";
 
@@ -86,31 +91,19 @@ export function filterDashboardActivities(activities, filters) {
   const normalizedFilters = normalizeDashboardFilters(filters);
 
   return normalizedActivities.filter((activity) => {
-    if (
-      normalizedFilters.search &&
-      !createActivitySearchText(activity).includes(normalizedFilters.search)
-    ) {
+    if (normalizedFilters.search && !createActivitySearchText(activity).includes(normalizedFilters.search)) {
       return false;
     }
 
-    if (
-      normalizedFilters.type !== DASHBOARD_FILTER_ANY &&
-      activity.type !== normalizedFilters.type
-    ) {
+    if (normalizedFilters.type !== DASHBOARD_FILTER_ANY && activity.type !== normalizedFilters.type) {
       return false;
     }
 
-    if (
-      normalizedFilters.status !== DASHBOARD_FILTER_ANY &&
-      activity.status !== normalizedFilters.status
-    ) {
+    if (normalizedFilters.status !== DASHBOARD_FILTER_ANY && activity.status !== normalizedFilters.status) {
       return false;
     }
 
-    if (
-      normalizedFilters.product !== DASHBOARD_FILTER_ANY &&
-      activity.datasetName !== normalizedFilters.product
-    ) {
+    if (normalizedFilters.product !== DASHBOARD_FILTER_ANY && activity.datasetName !== normalizedFilters.product) {
       return false;
     }
 
@@ -120,6 +113,38 @@ export function filterDashboardActivities(activities, filters) {
 
     return matchesReportFilter(activity, normalizedFilters.reports);
   });
+}
+
+
+export function createDashboardSummaryRowFilterPatch(filters, { filterKey, rowValue } = {}) {
+  const normalizedFilters = normalizeDashboardFilters(filters);
+  const normalizedFilterKey = normalizeSummaryFilterKey(filterKey);
+
+  if (!normalizedFilterKey) {
+    return {};
+  }
+
+  const normalizedRowValue = normalizeTokenFilter(rowValue);
+
+  if (normalizedRowValue === DASHBOARD_FILTER_ANY) {
+    return { [normalizedFilterKey]: DASHBOARD_FILTER_ANY };
+  }
+
+  return {
+    [normalizedFilterKey]:
+      normalizedFilters[normalizedFilterKey] === normalizedRowValue ? DASHBOARD_FILTER_ANY : normalizedRowValue,
+  };
+}
+
+export function isDashboardSummaryRowFilterActive(filters, { filterKey, rowValue } = {}) {
+  const normalizedFilterKey = normalizeSummaryFilterKey(filterKey);
+
+  if (!normalizedFilterKey) {
+    return false;
+  }
+
+  const normalizedFilters = normalizeDashboardFilters(filters);
+  return normalizedFilters[normalizedFilterKey] === normalizeTokenFilter(rowValue);
 }
 
 export function createFilteredDashboardView(dashboard, filters) {
@@ -136,16 +161,23 @@ export function createFilteredDashboardView(dashboard, filters) {
   };
 }
 
+
+function normalizeSummaryFilterKey(filterKey) {
+  const normalizedKey = String(filterKey ?? "").trim();
+
+  if (normalizedKey === DASHBOARD_SUMMARY_FILTER_KEYS.status || normalizedKey === DASHBOARD_SUMMARY_FILTER_KEYS.operation) {
+    return normalizedKey;
+  }
+
+  return null;
+}
+
 function normalizeActivities(activities) {
   return Array.isArray(activities) ? activities : [];
 }
 
 function buildTokenOptions(values) {
-  return [
-    ...new Set(
-      values.map(normalizeTokenFilter).filter((value) => value && value !== DASHBOARD_FILTER_ANY)
-    ),
-  ]
+  return [...new Set(values.map(normalizeTokenFilter).filter((value) => value && value !== DASHBOARD_FILTER_ANY))]
     .sort((left, right) => left.localeCompare(right))
     .map((value) => ({ value, label: toTitleCase(value) }));
 }
@@ -167,9 +199,7 @@ function keepValidOption(value, options) {
     return value;
   }
 
-  const validValues = new Set(
-    (Array.isArray(options) ? options : []).map((option) => option.value)
-  );
+  const validValues = new Set((Array.isArray(options) ? options : []).map((option) => option.value));
   return validValues.has(value) ? value : DASHBOARD_FILTER_ANY;
 }
 

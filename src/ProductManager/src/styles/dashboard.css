@@ -741,9 +741,30 @@ body.pm-dashboard-route #last-updated {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
+  width: 100%;
   min-width: 0;
   padding: 7px 10px;
+  color: inherit;
+  background: transparent;
+  border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--pm-border) 74%, transparent);
+  font: inherit;
+  text-align: left;
+}
+
+.pm-dashboard-breakdown-row.is-actionable {
+  cursor: pointer;
+}
+
+.pm-dashboard-breakdown-row.is-actionable:hover,
+.pm-dashboard-breakdown-row.is-actionable:focus-visible {
+  background: color-mix(in srgb, var(--pm-button-secondary-bg-hover) 56%, transparent);
+  outline: none;
+}
+
+.pm-dashboard-breakdown-row.is-active {
+  background: color-mix(in srgb, var(--pm-button-secondary-bg-hover) 72%, transparent);
+  box-shadow: inset 3px 0 0 var(--pm-focus-ring, var(--calcite-color-brand));
 }
 
 .pm-dashboard-breakdown-row__label {

@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   buildDashboardFilterOptions,
+  createDashboardSummaryRowFilterPatch,
   createDefaultDashboardFilters,
   createFilteredDashboardView,
   filterDashboardActivities,
   hasActiveDashboardFilters,
+  isDashboardSummaryRowFilterActive,
   normalizeDashboardFilters,
 } from "./dashboardFilters.js";
 
@@ -177,4 +179,27 @@ describe("dashboardFilters", () => {
       { label: "validation", count: 1, failed: 0 },
     ]);
   });
+
+  it("creates toggle patches for actionable summary rows", () => {
+    const statusPatch = createDashboardSummaryRowFilterPatch(createDefaultDashboardFilters(), {
+      filterKey: "status",
+      rowValue: "Failed",
+    });
+    const typePatch = createDashboardSummaryRowFilterPatch({ type: "export" }, {
+      filterKey: "type",
+      rowValue: "export",
+    });
+
+    assert.deepEqual(statusPatch, { status: "failed" });
+    assert.deepEqual(typePatch, { type: "all" });
+    assert.equal(
+      isDashboardSummaryRowFilterActive({ status: "failed" }, { filterKey: "status", rowValue: "failed" }),
+      true
+    );
+    assert.equal(
+      isDashboardSummaryRowFilterActive({ type: "send" }, { filterKey: "type", rowValue: "export" }),
+      false
+    );
+  });
+
 });

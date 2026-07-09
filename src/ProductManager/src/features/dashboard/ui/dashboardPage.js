@@ -3,9 +3,11 @@ import { noticeError } from "../../notices/services/noticeService.js";
 import { buildReviewUrl } from "../../review/routing/reviewRoute.js";
 import {
   buildDashboardFilterOptions,
+  createDashboardSummaryRowFilterPatch,
   createDefaultDashboardFilters,
   createFilteredDashboardView,
   hasActiveDashboardFilters,
+  isDashboardSummaryRowFilterActive,
   normalizeDashboardFilters,
 } from "../domain/dashboardFilters.js";
 import {
@@ -909,8 +911,18 @@ function createDashboardGrid({
   const aside = document.createElement("aside");
   aside.className = "pm-dashboard-grid__aside";
   aside.append(
-    createSummaryRows("Status summary", dashboard.statusSummary),
-    createSummaryRows("Operation summary", dashboard.operationSummary)
+    createSummaryRows({
+      title: "Status summary",
+      rows: dashboard.statusSummary,
+      filterKey: "status",
+      filters,
+    }),
+    createSummaryRows({
+      title: "Operation summary",
+      rows: dashboard.operationSummary,
+      filterKey: "type",
+      filters,
+    })
   );
 
   grid.append(main, aside);
@@ -1282,7 +1294,7 @@ function createDisabledLink(label) {
   return button;
 }
 
-function createSummaryRows(title, rows) {
+function createSummaryRows({ title, rows, filterKey, filters }) {
   const section = document.createElement("section");
   section.className = "pm-dashboard-panel pm-dashboard-breakdown";
   section.appendChild(
@@ -1299,7 +1311,7 @@ function createSummaryRows(title, rows) {
     list.appendChild(createEmptyText("No summary rows available yet."));
   } else {
     for (const row of rows) {
-      list.appendChild(createSummaryRow(row));
+      list.appendChild(createSummaryRow({ row, filterKey, filters }));
     }
   }
 
@@ -1307,9 +1319,25 @@ function createSummaryRows(title, rows) {
   return section;
 }
 
-function createSummaryRow(row) {
-  const item = document.createElement("div");
-  item.className = "pm-dashboard-breakdown-row";
+function createSummaryRow({ row, filterKey, filters }) {
+  const isActive = isDashboardSummaryRowFilterActive(filters, {
+    filterKey,
+    rowValue: row.label,
+  });
+  const item = document.createElement("button");
+  item.type = "button";
+  item.className = "pm-dashboard-breakdown-row is-actionable";
+  item.classList.toggle("is-active", isActive);
+  item.setAttribute("aria-pressed", String(isActive));
+  item.title = isActive ? `Clear ${toTitleCase(row.label)} filter` : `Filter activity by ${toTitleCase(row.label)}`;
+  item.addEventListener("click", () => {
+    updateDashboardFilters(
+      createDashboardSummaryRowFilterPatch(dashboardFilters, {
+        filterKey,
+        rowValue: row.label,
+      })
+    );
+  });
 
   const label = document.createElement("span");
   label.className = "pm-dashboard-breakdown-row__label";
