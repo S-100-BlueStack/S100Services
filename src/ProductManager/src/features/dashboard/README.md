@@ -1,8 +1,6 @@
 # Dashboard foundation
 
-FI-001 introduces a separate read-only Dashboard route at `/dashboard`.
-
-The Dashboard is intentionally isolated from the main map, Product Collection, Analyze and Review state. It summarizes operational activity for a selected range and links users onward to product-level Review or Analyze pages.
+FI-001 introduces a separate read-only Dashboard route at `/dashboard`. The Dashboard is intentionally isolated from the main map, Product Collection, Analyze and Review state. It summarizes operational activity for a selected range and links users onward to product-level Review or Analyze pages.
 
 ## Phase 1 status
 
@@ -14,13 +12,17 @@ Implemented scope:
 - Navbar link for Dashboard.
 - Backend endpoint integration through `GET electronicproducts/dashboard`.
 - Danish operational time handling through backend-provided `Europe/Copenhagen` range metadata.
-- Always-visible Danish local `From` and optional `To` date/time controls. Date selection uses a compact Dashboard date picker instead of the browser-native date picker so month/year navigation stays predictable.
+- Always-visible Danish local `From` and optional `To` date/time controls.
+- Compact Dashboard-owned date picker for date selection so month/year navigation stays predictable.
 - Quick range action buttons for `Since yesterday` and `Last 7 days` that fill the range fields without loading data.
+- `Apply` loads data for the currently selected range.
+- `Refresh` reloads the currently applied range.
 - Summary cards for operational activity counts.
 - Compact activity list with product links.
 - Client-side search.
 - Client-side filters for type, status, importance, reports and product.
 - Status and operation breakdowns.
+- Actionable status and operation summary rows that apply matching activity filters.
 - Review and Analyze links from activity rows.
 - Disabled or placeholder report actions until report URLs or report detail endpoints exist.
 
@@ -35,9 +37,13 @@ GET electronicproducts/dashboard?from=2026-07-01T08:15:00
 GET electronicproducts/dashboard?from=2026-07-01T08:15:00&to=2026-07-07T16:45:00
 ```
 
-Range query values are sent in Danish operational time.
+Range query values are sent in Danish operational time. The Dashboard header always shows `From` and optional `To` date/time fields.
 
-The Dashboard header always shows `From` and optional `To` date/time fields. `Since yesterday` and `Last 7 days` are quick actions that only fill the fields; they do not load data until the user selects `Apply`. Selecting a `From` date defaults its time to `00:00`; selecting a `To` date defaults its time to `23:59`. The date controls use a compact Dashboard-owned date picker while time values remain native compact time inputs. Leaving `To` empty keeps the range open-ended, so refresh requests continue to include the latest backend activity. The backend interprets offset-free datetime values as `Europe/Copenhagen` wall time, not UTC.
+`Since yesterday` and `Last 7 days` are quick actions that only fill the fields; they do not load data until the user selects `Apply`. Selecting a `From` date defaults its time to `00:00`; selecting a `To` date defaults its time to `23:59`.
+
+Leaving `To` empty keeps the range open-ended, so refresh requests continue to include the latest backend activity.
+
+The backend interprets offset-free datetime values as `Europe/Copenhagen` wall time, not UTC.
 
 Expected payload shape:
 
@@ -110,28 +116,64 @@ Expected payload shape:
 }
 ```
 
+## Range builder
+
+The Dashboard does not use separate preset modes. It uses one always-visible range builder:
+
+```txt
+[Refresh] [Apply] [Since yesterday] [Last 7 days] [From date] [From time] [To date] [To time]
+```
+
+Behavior:
+
+- `From` is required before `Apply` can load data.
+- `To` is optional.
+- `Since yesterday` sets `From` to yesterday at `00:00` and clears `To`.
+- `Last 7 days` sets `From` to seven calendar days back at `00:00` and clears `To`.
+- Quick range actions do not load data directly.
+- `Apply` loads the selected range and updates the URL query.
+- `Refresh` reloads the currently applied range.
+- The custom date picker is Dashboard-owned and should stay compact because it lives in the route header.
+
 ## Client-side filters
 
 Dashboard filters run on the loaded activity payload. They intentionally do not change the backend query contract.
 
-Summary cards, status summary and operation summary are derived from the filtered activity set so the visible counts always match the activity list.
+The current client-side filters are:
 
-The filter state is local to the Dashboard page render lifecycle and is applied to whichever range payload is currently loaded.
+- free-text search
+- type
+- status
+- importance
+- reports
+- product
+
+Summary cards, status summary and operation summary are derived from the filtered activity set so the visible counts always match the activity list. The filter state is local to the Dashboard page render lifecycle and is applied to whichever range payload is currently loaded.
+
+## Actionable summaries
+
+`Status summary` and `Operation summary` rows are actionable:
+
+- Selecting a status row applies the matching status filter.
+- Selecting an operation row applies the matching type filter.
+- Selecting an already active summary row toggles the corresponding filter off.
+- `Clear filters` resets search, filters and active summary row state.
+
+These summary panels should stay small and data-oriented. Do not reintroduce the removed `Important changes` panel unless it becomes a clearly filterable and useful activity concept.
 
 ## Report links
 
 Report links support multiple IC-ENC and internal validation report metadata entries.
 
-Until report URL endpoints exist, Dashboard renders report metadata as available but keeps the action as a placeholder notice or disabled action depending on the metadata returned by the backend.
-
-Dashboard should not fetch full report content as part of the activity payload. The activity endpoint should return only enough metadata to show summary rows and route users to a report detail endpoint later.
+Until report URL endpoints exist, Dashboard renders report metadata as available but keeps the action as a placeholder notice or disabled action depending on the metadata returned by the backend. Dashboard should not fetch full report content as part of the activity payload. The activity endpoint should return only enough metadata to show summary rows and route users to a report detail endpoint later.
 
 ## Future scope
 
 The following work remains intentionally outside phase 1:
 
+- Add a simple Dashboard History panel that reuses product history data and opens from an activity row.
 - Add real IC-ENC report links when backend report IDs/storage contract exists.
 - Add real internal validation report links when backend report IDs/storage contract exists.
-- Improve important-change classification if it becomes useful as a filterable activity concept.
+- Improve important-change classification only if it becomes useful as a filterable activity concept.
 - Consider server-side filtering only if dashboard payload becomes large.
 - Consider richer dashboard charts only if they remain compact and data-oriented.

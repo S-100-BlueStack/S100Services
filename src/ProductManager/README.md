@@ -1,8 +1,6 @@
 # Product Manager frontend
 
-Product Manager is an ArcGIS/Vite frontend for managing product corrections for nautical chart production.
-
-The app loads product correction data from backend APIs, renders them as ArcGIS graphics, and lets users perform product actions through a custom popup action bar.
+Product Manager is an ArcGIS/Vite frontend for managing product corrections for nautical chart production. The app loads product correction data from backend APIs, renders them as ArcGIS graphics, and lets users perform product actions through a custom popup action bar.
 
 ## Technology
 
@@ -58,7 +56,7 @@ The following flows are implemented and considered stable frontend behavior:
 - Product Collection tray
 - Analyze page
 - Review workspace
-- Dashboard page with backend-driven activity data, range presets, search, filters, summary cards and activity links
+- Dashboard page with backend-driven activity data, range builder, client-side search, client-side filters, actionable summary panels, summary cards and activity links
 
 ## Important architecture
 
@@ -76,9 +74,7 @@ Runtime ArcGIS layers are registered in:
 src/features/map/core/layerRegistry.js
 ```
 
-Layer definitions are static frontend metadata. Runtime layer registry state should not be used as static config.
-
-Each logical layer should have a stable `id`, `layerKind` and explicit capabilities. UI systems should check capabilities instead of assuming every graphic is a product correction.
+Layer definitions are static frontend metadata. Runtime layer registry state should not be used as static config. Each logical layer should have a stable `id`, `layerKind` and explicit capabilities. UI systems should check capabilities instead of assuming every graphic is a product correction.
 
 ### Popup actions
 
@@ -144,9 +140,7 @@ Export structure/configuration lives in:
 src/features/map/popups/popupExportConfig.js
 ```
 
-`popupExportState.js` owns export scope conflicts and leaf-level loading state.
-
-`productOperationState.js` only tracks that the product has an export operation running.
+`popupExportState.js` owns export scope conflicts and leaf-level loading state. `productOperationState.js` only tracks that the product has an export operation running.
 
 ### Notices and API results
 
@@ -173,9 +167,7 @@ Dashboard documentation:
 src/features/dashboard/README.md
 ```
 
-Dashboard is a read-only operational activity route. It loads activity data from `/electronicproducts/dashboard`, applies local search and filters to the loaded payload, and links users onward to Review or Analyze.
-
-Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
+Dashboard is a read-only operational activity route. It loads activity data from `/electronicproducts/dashboard`, applies local search and filters to the loaded payload, and links users onward to Review or Analyze. Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
 
 ### Analyze
 
@@ -191,9 +183,7 @@ Analyze documentation:
 src/features/analyze/README.md
 ```
 
-Analyze owns product analysis/report display. It does not own product mutation actions.
-
-Product actions such as Freeze, Unfreeze, Send to IC-ENC, Export and Rollback must stay in the product popup.
+Analyze owns product analysis/report display. It does not own product mutation actions. Product actions such as Freeze, Unfreeze, Send to IC-ENC, Export and Rollback must stay in the product popup.
 
 ### Review
 
@@ -262,11 +252,7 @@ Refresh behavior should preserve:
 - scale-dependent visibility
 - popup action state where possible
 
-Manual refresh uses button loading.
-
-Auto-refresh should be silent.
-
-Refresh should not use fullscreen loader.
+Manual refresh uses button loading. Auto-refresh should be silent. Refresh should not use fullscreen loader.
 
 ## Analyze behavior
 
@@ -290,18 +276,19 @@ Dashboard is a separate route at `/dashboard`.
 
 Dashboard can show:
 
-- range presets for `Since yesterday` and `Last 7 days`
+- an always-visible range builder with `From`, optional `To`, `Refresh` and `Apply`
+- quick range actions for `Since yesterday` and `Last 7 days`
 - read-only operational summary cards
 - compact activity list
-- important changes
 - status summary
 - operation summary
 - client-side search
 - client-side filters
+- actionable status/operation summary rows that apply matching filters
 - onward links to Review and Analyze
 - disabled or placeholder report actions until report endpoints exist
 
-Dashboard filters run on the loaded activity payload. Summary cards, important changes, status summary and operation summary should stay derived from the same filtered activity set as the visible list.
+Dashboard filters run on the loaded activity payload. Summary cards, status summary and operation summary should stay derived from the same filtered activity set as the visible list.
 
 ## Adding future export endpoints
 
@@ -320,9 +307,7 @@ To activate a future export leaf action:
    ```
 
 3. Set the relevant leaf action to `implemented: true`.
-
 4. Assign the request function.
-
 5. Add or adjust confirm text if needed.
 
 Do not add endpoint wiring directly in `popupActionConfig.js`.
@@ -344,9 +329,7 @@ When adding a new logical map layer:
    ```
 
 3. Set capabilities explicitly.
-
 4. Ensure popup/filter/display-scale behavior checks layer capabilities.
-
 5. Avoid enabling product actions unless the layer truly supports product correction mutations.
 
 ## Build and formatting
@@ -374,11 +357,12 @@ Recent frontend work has focused on:
 - Review workspace foundation
 - Product Collection workflow
 - Dashboard phase 1 foundation
+- Dashboard range builder and actionable summary panels
 - layer capability foundation
 
 The frontend is ready for either:
 
-- custom Dashboard range picker work
+- Dashboard History panel work
 - report endpoint integration when backend report IDs/storage contracts exist
 - backend operation/job state work
 - final manual smoke test pass before continuing with larger features
