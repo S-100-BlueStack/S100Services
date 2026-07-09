@@ -212,6 +212,7 @@ function createRangeDateTimeField({ idPrefix, label, dateKey, timeKey, defaultTi
     label,
     dateKey,
     timeKey,
+    defaultTime,
     required,
   });
 
@@ -251,7 +252,7 @@ function createRangeDateTimeField({ idPrefix, label, dateKey, timeKey, defaultTi
   return field;
 }
 
-function createRangeDatePicker({ id, label, dateKey, timeKey, required }) {
+function createRangeDatePicker({ id, label, dateKey, timeKey, defaultTime, required }) {
   ensureDashboardDatePickerDismissHandlers();
 
   const root = document.createElement("div");
@@ -1152,6 +1153,7 @@ function createActivityTable(activities, timeZone) {
 function createActivityRow(activity, timeZone) {
   const row = document.createElement("tr");
   row.className = `pm-dashboard-activity-table__row is-${activity.severity}`;
+  row.classList.toggle("is-history-selected", isDashboardHistoryActivitySelected(activity));
 
   const time = document.createElement("td");
   time.className = "pm-dashboard-activity-table__time";
@@ -1269,17 +1271,38 @@ function createDashboardHistoryLink(activity) {
   button.className = "pm-dashboard-link-button";
   button.disabled = !activity.links.history || !activity.datasetName;
   button.textContent = "History";
+  button.classList.toggle("is-active", isDashboardHistoryActivitySelected(activity));
+  button.setAttribute(
+    "aria-pressed",
+    isDashboardHistoryActivitySelected(activity) ? "true" : "false"
+  );
   button.title = button.disabled
     ? "History is not available for this activity."
     : `Open product history for ${activity.datasetName}.`;
 
   if (!button.disabled) {
     button.addEventListener("click", () => {
-      openDashboardHistory(activity.datasetName);
+      openDashboardHistory(activity);
     });
   }
 
   return button;
+}
+
+function isDashboardHistoryActivitySelected(activity) {
+  if (!dashboardHistoryState.isOpen || !dashboardHistoryState.activity) {
+    return false;
+  }
+
+  if (activity.id && dashboardHistoryState.activity.id) {
+    return activity.id === dashboardHistoryState.activity.id;
+  }
+
+  return (
+    activity.datasetName === dashboardHistoryState.activity.datasetName &&
+    activity.timestamp === dashboardHistoryState.activity.timestamp &&
+    activity.title === dashboardHistoryState.activity.title
+  );
 }
 
 function ensureDashboardHistoryKeyboardHandlers() {
@@ -1306,6 +1329,7 @@ function createDashboardHistoryState() {
   return {
     isOpen: false,
     datasetName: null,
+    activity: null,
     history: null,
     loading: false,
     error: null,
@@ -1313,13 +1337,17 @@ function createDashboardHistoryState() {
   };
 }
 
-async function openDashboardHistory(datasetName) {
-  const normalizedDatasetName = normalizeDashboardDatasetName(datasetName);
+async function openDashboardHistory(activityOrDatasetName) {
+  const normalizedDatasetName = normalizeDashboardDatasetName(
+    typeof activityOrDatasetName === "string"
+      ? activityOrDatasetName
+      : activityOrDatasetName?.datasetName
+  );
 
   if (!normalizedDatasetName) {
     noticeError(
       "History could not be opened",
-      "The selected activity does not have a dataset name.",
+      "The selected activity does not have a product name.",
       {
         storeInCenter: false,
         countAsUnread: false,
@@ -1328,10 +1356,16 @@ async function openDashboardHistory(datasetName) {
     return;
   }
 
+  const activity =
+    typeof activityOrDatasetName === "string"
+      ? null
+      : createDashboardHistoryActivitySnapshot(activityOrDatasetName, normalizedDatasetName);
+
   const requestId = dashboardHistoryState.requestId + 1;
   dashboardHistoryState = {
     isOpen: true,
     datasetName: normalizedDatasetName,
+    activity,
     history: null,
     loading: true,
     error: null,
@@ -1394,13 +1428,19 @@ function createDashboardHistoryPanel() {
 
   const eyebrow = document.createElement("div");
   eyebrow.className = "pm-dashboard-history-panel__eyebrow";
-  eyebrow.textContent = "History";
+  eyebrow.textContent = "Product history";
 
   const title = document.createElement("h2");
   title.className = "pm-dashboard-history-panel__title";
-  title.textContent = dashboardHistoryState.datasetName ?? "Product history";
+  title.textContent = dashboardHistoryState.datasetName ?? "No product selected";
 
-  titleWrap.append(eyebrow, title);
+  const subTitle = document.createElement("div");
+  subTitle.className = "pm-dashboard-history-panel__subtitle";
+  subTitle.textContent = dashboardHistoryState.loading
+    ? "Loading selected product history..."
+    : "Activity context and product timeline";
+
+  titleWrap.append(eyebrow, title, subTitle);
 
   const closeButton = document.createElement("button");
   closeButton.type = "button";
@@ -1422,6 +1462,10 @@ function createDashboardHistoryPanel() {
 
 function createDashboardHistoryPanelContent() {
   const fragment = document.createDocumentFragment();
+
+  if (dashboardHistoryState.activity) {
+    fragment.appendChild(createDashboardHistoryActivityContext(dashboardHistoryState.activity));
+  }
 
   if (dashboardHistoryState.loading) {
     fragment.appendChild(
@@ -1491,6 +1535,76 @@ function createDashboardHistoryPanelContent() {
   fragment.appendChild(createProductHistorySummary(history));
   fragment.appendChild(createProductHistoryEventList(history.events));
   return fragment;
+}
+
+function createDashboardHistoryActivitySnapshot(activity, datasetName) {
+  return {
+    id: activity?.id ?? null,
+    datasetName,
+    timestamp: activity?.timestamp ?? null,
+    title: activity?.title ?? "Activity",
+    description: activity?.description ?? "",
+    status: activity?.status ?? "unknown",
+    severity: activity?.severity ?? "info",
+    type: activity?.type ?? "status",
+    actor: activity?.actor ?? "",
+  };
+}
+
+function createDashboardHistoryActivityContext(activity) {
+  const context = document.createElement("section");
+  context.className = "pm-dashboard-history-context";
+  context.setAttribute("aria-label", "Selected dashboard activity");
+
+  const header = document.createElement("div");
+  header.className = "pm-dashboard-history-context__header";
+
+  const label = document.createElement("div");
+  label.className = "pm-dashboard-history-context__label";
+  label.textContent = "Selected activity";
+
+  const status = createStatusPill(activity.status, activity.severity);
+  status.classList.add("pm-dashboard-history-context__status");
+
+  header.append(label, status);
+
+  const title = document.createElement("div");
+  title.className = "pm-dashboard-history-context__title";
+  title.textContent = activity.title || "Activity";
+
+  const meta = document.createElement("div");
+  meta.className = "pm-dashboard-history-context__meta";
+  meta.textContent = createDashboardHistoryActivityMeta(activity);
+
+  if (activity.description) {
+    const description = document.createElement("div");
+    description.className = "pm-dashboard-history-context__description";
+    description.textContent = activity.description;
+    context.append(header, title, meta, description);
+    return context;
+  }
+
+  context.append(header, title, meta);
+  return context;
+}
+
+function createDashboardHistoryActivityMeta(activity) {
+  const items = [];
+  const timeZone = lastRenderArgs?.dashboard?.range?.timeZone ?? lastRenderArgs?.range?.timeZone;
+
+  if (activity.timestamp) {
+    items.push(formatDashboardRangeDateTime(activity.timestamp, { timeZone }));
+  }
+
+  if (activity.type) {
+    items.push(toTitleCase(activity.type));
+  }
+
+  if (activity.actor) {
+    items.push(activity.actor);
+  }
+
+  return items.length ? items.join(" · ") : "No activity details available";
 }
 
 function normalizeDashboardDatasetName(datasetName) {

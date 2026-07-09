@@ -26,6 +26,8 @@ Implemented scope:
 - Review and Analyze links from activity rows.
 - Dashboard History panel that opens from activity-row `History` actions.
 - Dashboard History panel can be closed with `Close` or `Escape`.
+- Dashboard History panel shows selected activity context above the product timeline.
+- Dashboard highlights the activity row whose `History` action opened the panel.
 - Dashboard History panel loads product state lookups before normalizing backend history so numeric status IDs render as status names.
 - Disabled or placeholder report actions until report URLs or report detail endpoints exist.
 
@@ -183,15 +185,17 @@ Behavior:
 - The panel opens only for activities with a `datasetName` and `Links.History = true`.
 - The panel has a single `Close` action and also closes on `Escape`.
 - Closing the panel restores `Status summary` and `Operation summary`.
-- Loading, empty and error states use the same product history state renderer as the main map quick panel.
+- The row whose `History` action opened the panel is highlighted while the panel is open.
+- A compact selected-activity context card is shown above the product history timeline.
+- Loading, empty and error states stay inside the panel content area and keep the panel header available.
 - Product state lookups are loaded before history normalization so backend status IDs render as status names.
 - The Dashboard panel does not pin, auto-close on popup state, or interact with Product Collection.
 
-Possible future polish:
+History panel guidance:
 
-- Improve panel visual hierarchy if long histories make the close action feel too far away.
-- Add selected-activity context if users need to see which activity opened the panel.
 - Keep the panel route-local; do not reuse main-map popup lifecycle or pinning behavior.
+- Keep the panel simple; do not turn it into a second Review workspace.
+- Prefer compact context and timeline content over additional action bars.
 
 ## Report links
 
@@ -208,4 +212,4 @@ The following work remains intentionally outside phase 1:
 - Improve important-change classification only if it becomes useful as a filterable activity concept.
 - Consider server-side filtering only if dashboard payload becomes large.
 - Consider richer dashboard charts only if they remain compact and data-oriented.
-- Consider Dashboard History panel polish if real use shows that the right-side panel needs stronger context or shorter close affordance.
+- Consider additional History panel polish only if it improves scanability without turning the panel into a second Review workspace.
