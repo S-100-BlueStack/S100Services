@@ -32,6 +32,14 @@ The Analyze route owns analysis/report display for selected products.
 
 The Review route owns side-by-side product review for multiple selected products.
 
+## Terminology
+
+Use `Product` and `Products` in user-facing UI text. Do not use `Dataset`, `Datasets`, `dataset`, or similar dataset-oriented labels in visible UI unless the backend/domain concept specifically requires a technical distinction.
+
+Code may continue using stable technical identifiers such as `datasetName` where that matches backend contracts or existing normalized attribute names. UI labels, headings, buttons, empty states, help text and documentation intended for users should use product terminology.
+
+A future terminology hardening task tracks a full UI audit to align Analyze, Review, Dashboard and main map labels around `Product` / `Products`.
+
 ## Stable frontend flows
 
 The following flows are implemented and considered stable frontend behavior:
@@ -56,7 +64,7 @@ The following flows are implemented and considered stable frontend behavior:
 - Product Collection tray
 - Analyze page
 - Review workspace
-- Dashboard page with backend-driven activity data, range builder, client-side search, client-side filters, actionable summary panels, summary cards and activity links
+- Dashboard page with backend-driven activity data, range builder, client-side search, client-side filters, actionable summary panels, Dashboard History panel, summary cards and activity links
 
 ## Important architecture
 
@@ -74,7 +82,9 @@ Runtime ArcGIS layers are registered in:
 src/features/map/core/layerRegistry.js
 ```
 
-Layer definitions are static frontend metadata. Runtime layer registry state should not be used as static config. Each logical layer should have a stable `id`, `layerKind` and explicit capabilities. UI systems should check capabilities instead of assuming every graphic is a product correction.
+Layer definitions are static frontend metadata.
+
+Runtime layer registry state should not be used as static config. Each logical layer should have a stable `id`, `layerKind` and explicit capabilities. UI systems should check capabilities instead of assuming every graphic is a product correction.
 
 ### Popup actions
 
@@ -153,6 +163,24 @@ src/features/notices/services/apiNoticeService.js
 
 Do not parse API errors directly in UI files unless there is a strong reason.
 
+### Product catalog and product picker
+
+A future shared product picker should use the lightweight product catalog endpoint:
+
+```http
+GET /electronicproducts
+```
+
+Current expected lightweight shape:
+
+```json
+{ "Data": ["101DK0040943E", "101DK0040944E"] }
+```
+
+The shared picker should be implemented once and reused by Analyze and Review so users can open those routes directly and add products without first using the main map or Product Collection.
+
+Do not use the AOI/map geometry endpoint for product picker lists. A product picker only needs identifiers and optional light metadata when backend supports it.
+
 ### Dashboard
 
 Dashboard feature files live in:
@@ -167,7 +195,9 @@ Dashboard documentation:
 src/features/dashboard/README.md
 ```
 
-Dashboard is a read-only operational activity route. It loads activity data from `/electronicproducts/dashboard`, applies local search and filters to the loaded payload, and links users onward to Review or Analyze. Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
+Dashboard is a read-only operational activity route. It loads activity data from `/electronicproducts/dashboard`, applies local search and filters to the loaded payload, opens a route-local Product History panel from activity rows, and links users onward to Review or Analyze.
+
+Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
 
 ### Analyze
 
@@ -252,15 +282,15 @@ Refresh behavior should preserve:
 - scale-dependent visibility
 - popup action state where possible
 
-Manual refresh uses button loading. Auto-refresh should be silent. Refresh should not use fullscreen loader.
+Manual refresh uses button loading.
+
+Auto-refresh should be silent. Refresh should not use fullscreen loader.
 
 ## Analyze behavior
 
-Analyze uses chunked layer creation and loader progress.
+Analyze uses chunked layer creation and loader progress. Analyze sidebar can show:
 
-Analyze sidebar can show:
-
-- dataset input
+- product input/list
 - loading state
 - product cards
 - XML/report content
@@ -269,6 +299,8 @@ Analyze sidebar can show:
 - internal validation placeholder content
 
 Analyze sidebar should not show product mutation actions.
+
+Analyze should later use the shared product picker/catalog workflow instead of requiring users to know exact product identifiers.
 
 ## Dashboard behavior
 
@@ -285,6 +317,7 @@ Dashboard can show:
 - client-side search
 - client-side filters
 - actionable status/operation summary rows that apply matching filters
+- Dashboard History panel opened from activity-row `History`
 - onward links to Review and Analyze
 - disabled or placeholder report actions until report endpoints exist
 
@@ -296,15 +329,15 @@ To activate a future export leaf action:
 
 1. Add the backend request function in:
 
-   ```txt
-   src/features/data/api/exportApi.js
-   ```
+```txt
+src/features/data/api/exportApi.js
+```
 
 2. Import that request in:
 
-   ```txt
-   src/features/map/popups/popupExportConfig.js
-   ```
+```txt
+src/features/map/popups/popupExportConfig.js
+```
 
 3. Set the relevant leaf action to `implemented: true`.
 4. Assign the request function.
@@ -318,15 +351,15 @@ When adding a new logical map layer:
 
 1. Add a layer definition in:
 
-   ```txt
-   src/features/map/config/layerDefinitions.js
-   ```
+```txt
+src/features/map/config/layerDefinitions.js
+```
 
 2. Reference the layer from:
 
-   ```txt
-   src/features/map/config/layerConfigs.js
-   ```
+```txt
+src/features/map/config/layerConfigs.js
+```
 
 3. Set capabilities explicitly.
 4. Ensure popup/filter/display-scale behavior checks layer capabilities.
@@ -357,12 +390,12 @@ Recent frontend work has focused on:
 - Review workspace foundation
 - Product Collection workflow
 - Dashboard phase 1 foundation
-- Dashboard range builder and actionable summary panels
+- Dashboard range builder, actionable summary panels and Dashboard History panel
 - layer capability foundation
 
 The frontend is ready for either:
 
-- Dashboard History panel work
+- shared product picker/catalog work for Analyze and Review
 - report endpoint integration when backend report IDs/storage contracts exist
 - backend operation/job state work
 - final manual smoke test pass before continuing with larger features
