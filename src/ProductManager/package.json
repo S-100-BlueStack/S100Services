@@ -11,7 +11,8 @@
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "test": "node --test",
-    "check": "npm run format:check && npm run lint && npm run test && npm run build"
+    "check": "npm run format:check && npm run lint && npm run test && npm run build",
+    "rdy": "npm run format && npm run lint && npm run test && npm run build && npm run dev"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

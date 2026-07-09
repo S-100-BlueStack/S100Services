@@ -1,5 +1,6 @@
 import { apiGet } from "../../../shared/api/apiClient.js";
 import { normalizeProductExportMetadata } from "../../data/normalizers/productExportMetadata.js";
+import { normalizeInternalValidationReports } from "../domain/internalValidationReports.js";
 
 const ANALYZE_PRODUCT_ENDPOINT = "electronicproducts";
 const USE_MOCK_ANALYZE_API = import.meta.env.DEV && false;
@@ -21,7 +22,7 @@ async function fetchAnalyzeProduct(datasetName) {
 
   try {
     const payload = await apiGet(
-      `${ANALYZE_PRODUCT_ENDPOINT}/${encodeURIComponent(datasetName)}`,
+      `${ANALYZE_PRODUCT_ENDPOINT}/${encodeURIComponent(datasetName)}/aoi`,
       `Analyze data request failed for ${datasetName}`
     );
 
@@ -40,6 +41,7 @@ function normalizeAnalyzeProduct(
   { isMock = false, loadError = null } = {}
 ) {
   const product = getAnalyzeProductPayload(payload);
+
   const datasetName =
     readFirstDefined(product, ["datasetName", "DatasetName", "name", "Name"]) ??
     requestedDatasetName;
@@ -60,11 +62,33 @@ function normalizeAnalyzeProduct(
     // Only read the top-level product error message. Do not read Data.Exports[*].
     errorMessage: readFirstDefined(product, ["errorMessage", "ErrorMessage"]) ?? "",
 
-    // These are optional. Current backend response may not include them.
+    // The analyze AOI endpoint currently returns Esri JSON as Data.Geometry.
+    // Older/mock payloads may still use Aoi/AOI/aoiGeometry, so keep all aliases here.
     aoiGeometry:
-      readFirstDefined(product, ["aoiGeometry", "AoiGeometry", "aoi", "Aoi", "AOI"]) ?? null,
+      readFirstDefined(product, [
+        "aoiGeometry",
+        "AoiGeometry",
+        "aoi",
+        "Aoi",
+        "AOI",
+        "geometry",
+        "Geometry",
+      ]) ?? null,
 
     xml: readFirstDefined(product, ["xml", "Xml", "XML", "reportXml", "ReportXml"]) ?? null,
+
+    internalValidationReports: normalizeInternalValidationReports(
+      readFirstDefined(product, [
+        "internalValidationReports",
+        "InternalValidationReports",
+        "internalValidation",
+        "InternalValidation",
+        "validationReports",
+        "ValidationReports",
+        "validation",
+        "Validation",
+      ])
+    ),
 
     raw: payload,
     isMock,
@@ -78,11 +102,29 @@ function normalizeAnalyzeProduct(
 function getAnalyzeProductPayload(payload) {
   const data = payload?.Data ?? payload?.data;
 
-  if (data && typeof data === "object" && !Array.isArray(data)) {
+  if (isPlainObject(data)) {
+    const attributes = readFirstDefined(data, ["Attributes", "attributes"]);
+
+    if (isPlainObject(attributes)) {
+      return {
+        ...data,
+        ...attributes,
+
+        // Geometry belongs to the AOI wrapper in the current backend contract,
+        // while product metadata may later move into Attributes.
+        Geometry:
+          readFirstDefined(data, ["Geometry", "geometry"]) ??
+          readFirstDefined(attributes, ["Geometry", "geometry"]),
+        geometry:
+          readFirstDefined(data, ["geometry", "Geometry"]) ??
+          readFirstDefined(attributes, ["geometry", "Geometry"]),
+      };
+    }
+
     return data;
   }
 
-  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+  if (isPlainObject(payload)) {
     return payload;
   }
 
@@ -90,7 +132,7 @@ function getAnalyzeProductPayload(payload) {
 }
 
 function readFirstDefined(source, keys) {
-  if (!source || typeof source !== "object") {
+  if (!isPlainObject(source)) {
     return undefined;
   }
 
@@ -109,6 +151,10 @@ function normalizeStatus(value) {
   return Number.isFinite(number) ? number : value;
 }
 
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 function createMockAnalyzeProduct(datasetName) {
   const geometry = createMockAoiGeometry(datasetName);
 
@@ -124,6 +170,7 @@ function createMockAnalyzeProduct(datasetName) {
         "Demo IC-ENC rejection message. Replace this when the backend report payload is ready.",
       Aoi: JSON.stringify(geometry),
       Xml: createMockXml(datasetName),
+      InternalValidationReports: [],
       Exports: [
         {
           Type: "S-57",

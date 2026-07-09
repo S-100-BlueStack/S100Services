@@ -1,4 +1,4 @@
-﻿@import "./base.css";
+@import "./base.css";
 @import "./theme.css";
 @import "./loader.css";
 @import "./map-accessibility.css";
@@ -14,3 +14,6 @@
 @import "./preferences.css";
 @import "./product-history.css";
 @import "./analyze.css";
+@import "./product-collection.css";
+@import "./review.css";
+@import "./dashboard.css";

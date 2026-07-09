@@ -1,20 +1,34 @@
 import { getStatusName } from "../../data/stores/statusStore.js";
 import {
+  getEnabledAnalyzeDatasetNames,
+  normalizeAnalyzeDatasetItems,
+} from "../domain/analyzeDatasetList.js";
+import {
   createProductHistoryEventList,
   createProductHistoryStateMessage,
   createProductHistorySummary,
 } from "../../timeline/ui/productHistoryRenderers.js";
 
-export function renderAnalyzeSidebar({ datasetNames, products, loading }) {
+export function renderAnalyzeSidebar({
+  datasetItems,
+  datasetNames,
+  products = [],
+  loading = false,
+}) {
   const panel = getOrCreateAnalyzePanel();
   const calcitePanel = panel.querySelector("calcite-panel");
   const content = panel.querySelector(".analyze-sidebar__content");
+  const normalizedDatasetItems = normalizeAnalyzeDatasetItems(datasetItems ?? datasetNames);
+  const enabledDatasetNames =
+    datasetNames === undefined
+      ? getEnabledAnalyzeDatasetNames(normalizedDatasetItems)
+      : normalizeDatasetNames(datasetNames);
 
-  calcitePanel.heading = createHeading(datasetNames);
+  calcitePanel.heading = createHeading(enabledDatasetNames);
 
   content.replaceChildren(
-    createDatasetForm(datasetNames),
-    loading ? createLoadingState(datasetNames) : createProductsContent(products)
+    createDatasetManager(normalizedDatasetItems, { loading }),
+    loading ? createLoadingState(enabledDatasetNames) : createProductsContent(products)
   );
 }
 
@@ -63,14 +77,26 @@ function createHeading(datasetNames) {
   return `Analyze ${datasetNames.length} products`;
 }
 
-function createDatasetForm(datasetNames) {
+function createDatasetManager(datasetItems, { loading }) {
+  const container = document.createElement("section");
+  container.className = "analyze-dataset-manager";
+  container.setAttribute("aria-label", "Analyze dataset names");
+  container.setAttribute("aria-busy", loading ? "true" : "false");
+
+  container.appendChild(createDatasetAddForm());
+  container.appendChild(createDatasetList(datasetItems));
+
+  return container;
+}
+
+function createDatasetAddForm() {
   const form = document.createElement("form");
   form.className = "analyze-dataset-form";
 
   const label = document.createElement("label");
   label.className = "analyze-dataset-form__label";
   label.htmlFor = "analyze-dataset-input";
-  label.textContent = "Dataset name(s)";
+  label.textContent = "Add dataset";
 
   const row = document.createElement("div");
   row.className = "analyze-dataset-form__row";
@@ -79,18 +105,19 @@ function createDatasetForm(datasetNames) {
   input.id = "analyze-dataset-input";
   input.className = "analyze-dataset-form__input";
   input.type = "text";
-  input.value = datasetNames.join("&");
-  input.placeholder = "DK5ABC123&DK5ABC456";
+  input.placeholder = "DK5ABC123";
   input.autocomplete = "off";
+  input.spellcheck = false;
 
   const button = document.createElement("button");
   button.className = "analyze-dataset-form__button";
   button.type = "submit";
-  button.textContent = "Open";
+  button.textContent = "Add";
 
   const help = document.createElement("p");
   help.className = "analyze-dataset-form__help";
-  help.textContent = "Use & between dataset names when analyzing more than one product.";
+  help.textContent =
+    "Add one product at a time, or paste multiple names from an existing Analyze URL.";
 
   row.appendChild(input);
   row.appendChild(button);
@@ -102,27 +129,109 @@ function createDatasetForm(datasetNames) {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
 
-    const nextDatasetNames = input.value
-      .split("&")
-      .map((value) => value.trim())
-      .filter(Boolean);
+    const datasetNames = parseDatasetInput(input.value);
 
-    if (nextDatasetNames.length === 0) {
+    if (datasetNames.length === 0) {
       input.focus();
       return;
     }
 
-    form.dispatchEvent(
-      new CustomEvent("pm-analyze-dataset-submit", {
-        bubbles: true,
-        detail: {
-          datasetNames: nextDatasetNames,
-        },
-      })
-    );
+    dispatchAnalyzeDatasetAdd(form, datasetNames);
   });
 
   return form;
+}
+
+function createDatasetList(datasetItems) {
+  const details = document.createElement("details");
+  details.className = "analyze-dataset-list";
+  details.open = true;
+
+  const enabledCount = datasetItems.filter((item) => item.enabled).length;
+
+  const summary = document.createElement("summary");
+  summary.className = "analyze-dataset-list__summary";
+
+  const title = document.createElement("span");
+  title.className = "analyze-dataset-list__title";
+  title.textContent = "Dataset list";
+
+  const count = document.createElement("span");
+  count.className = "analyze-dataset-list__count";
+  count.textContent =
+    datasetItems.length === 0 ? "0 datasets" : `${enabledCount}/${datasetItems.length} enabled`;
+
+  summary.appendChild(title);
+  summary.appendChild(count);
+
+  const content = document.createElement("div");
+  content.className = "analyze-dataset-list__content";
+
+  if (datasetItems.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "analyze-dataset-list__empty";
+    empty.textContent = "No dataset names added.";
+    content.appendChild(empty);
+  } else {
+    const list = document.createElement("div");
+    list.className = "analyze-dataset-list__items";
+    list.setAttribute("role", "list");
+
+    for (const datasetItem of datasetItems) {
+      list.appendChild(createDatasetListItem(datasetItem));
+    }
+
+    content.appendChild(list);
+  }
+
+  details.appendChild(summary);
+  details.appendChild(content);
+
+  return details;
+}
+
+function createDatasetListItem(datasetItem) {
+  const item = document.createElement("div");
+  item.className = "analyze-dataset-list__item";
+  item.setAttribute("role", "listitem");
+
+  if (!datasetItem.enabled) {
+    item.classList.add("is-disabled");
+  }
+
+  const toggleLabel = document.createElement("label");
+  toggleLabel.className = "analyze-dataset-list__item-toggle";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = datasetItem.enabled;
+  checkbox.setAttribute("aria-label", `Enable ${datasetItem.name}`);
+
+  const name = document.createElement("span");
+  name.className = "analyze-dataset-list__item-name";
+  name.textContent = datasetItem.name;
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "analyze-dataset-list__remove-button";
+  removeButton.title = `Remove ${datasetItem.name}`;
+  removeButton.setAttribute("aria-label", `Remove ${datasetItem.name}`);
+
+  checkbox.addEventListener("change", () => {
+    dispatchAnalyzeDatasetToggle(item, datasetItem.id, checkbox.checked);
+  });
+
+  removeButton.addEventListener("click", () => {
+    dispatchAnalyzeDatasetRemove(item, datasetItem.id);
+  });
+
+  toggleLabel.appendChild(checkbox);
+  toggleLabel.appendChild(name);
+
+  item.appendChild(toggleLabel);
+  item.appendChild(removeButton);
+
+  return item;
 }
 
 function createLoadingState(datasetNames) {
@@ -130,7 +239,7 @@ function createLoadingState(datasetNames) {
   container.className = "analyze-sidebar__loading";
 
   if (datasetNames.length === 0) {
-    container.textContent = "Enter a dataset name to load product analysis.";
+    container.textContent = "Enable or add a dataset name to load product analysis.";
     return container;
   }
 
@@ -229,9 +338,7 @@ function createProductCard(product) {
   rows.appendChild(createInfoRow("Edition", product.edition));
   rows.appendChild(createInfoRow("Update", product.update));
   rows.appendChild(createInfoRow("Status", getStatusName(product.status)));
-  rows.appendChild(createInfoRow("Usage band", product.usageBand));
   rows.appendChild(createInfoRow("Issue date", product.issueDate));
-  rows.appendChild(createInfoRow("AOI geometry", product.aoiGeometry ? "Loaded" : "Missing"));
 
   if (product.errorMessage) {
     rows.appendChild(createInfoRow("Message", product.errorMessage));
@@ -243,6 +350,7 @@ function createProductCard(product) {
 
   content.appendChild(rows);
   content.appendChild(createXmlBlock(product.xml));
+  content.appendChild(createInternalValidationReportsBlock(product.internalValidationReports));
   content.appendChild(createHistoryBlock(product));
 
   card.appendChild(summary);
@@ -288,6 +396,150 @@ function createXmlBlock(xml) {
   details.appendChild(pre);
 
   return details;
+}
+
+function createInternalValidationReportsBlock(reports = []) {
+  const details = document.createElement("details");
+  details.className = "analyze-internal-validation";
+
+  const validReports = Array.isArray(reports) ? reports : [];
+  const hasReports = validReports.length > 0;
+  details.open = hasReports;
+
+  const summary = document.createElement("summary");
+  summary.textContent = hasReports
+    ? `Internal validation reports (${validReports.length})`
+    : "Internal validation reports unavailable";
+
+  const content = document.createElement("div");
+  content.className = "analyze-internal-validation__content";
+
+  if (!hasReports) {
+    content.appendChild(
+      createInternalValidationStateMessage({
+        title: "Internal validation not available",
+        message:
+          "The Analyze UI is ready for internal validation reports, but no report payload was returned for this product.",
+      })
+    );
+
+    details.append(summary, content);
+    return details;
+  }
+
+  for (const [index, report] of validReports.entries()) {
+    content.appendChild(createInternalValidationReport(report, index));
+  }
+
+  details.append(summary, content);
+  return details;
+}
+
+function createInternalValidationReport(report, index) {
+  const details = document.createElement("details");
+  details.className = "analyze-internal-validation__report";
+  details.open = true;
+
+  const summary = document.createElement("summary");
+  summary.className = "analyze-internal-validation__report-summary";
+
+  const title = document.createElement("span");
+  title.className = "analyze-internal-validation__report-title";
+  title.textContent = report.title || `Internal validation report ${index + 1}`;
+
+  const status = document.createElement("span");
+  status.className = "analyze-internal-validation__report-status";
+  status.textContent = report.status || "available";
+
+  summary.append(title, status);
+
+  const content = document.createElement("div");
+  content.className = "analyze-internal-validation__report-content";
+
+  const metadataRows = createInternalValidationReportMetadata(report);
+
+  if (metadataRows.length > 0) {
+    const metadata = document.createElement("div");
+    metadata.className = "analyze-internal-validation__metadata";
+    metadata.append(...metadataRows);
+    content.appendChild(metadata);
+  }
+
+  if (hasText(report.summary)) {
+    const summaryText = document.createElement("p");
+    summaryText.className = "analyze-internal-validation__summary-text";
+    summaryText.textContent = report.summary;
+    content.appendChild(summaryText);
+  }
+
+  if (hasReportContent(report.content)) {
+    const pre = document.createElement("pre");
+    const code = document.createElement("code");
+    code.textContent = formatInternalValidationReportContent(report);
+
+    pre.appendChild(code);
+    content.appendChild(pre);
+  } else if (!hasText(report.summary)) {
+    content.appendChild(
+      createInternalValidationStateMessage({
+        title: "Report content unavailable",
+        message: "The report metadata was returned, but no report content was included.",
+      })
+    );
+  }
+
+  details.append(summary, content);
+  return details;
+}
+
+function createInternalValidationReportMetadata(report) {
+  const rows = [];
+
+  if (hasText(report.source)) {
+    rows.push(createInternalValidationMetadataItem("Source", report.source));
+  }
+
+  if (hasText(report.generatedAt)) {
+    rows.push(createInternalValidationMetadataItem("Generated", report.generatedAt));
+  }
+
+  if (hasText(report.format)) {
+    rows.push(createInternalValidationMetadataItem("Format", report.format.toUpperCase()));
+  }
+
+  return rows;
+}
+
+function createInternalValidationMetadataItem(label, value) {
+  const item = document.createElement("div");
+  item.className = "analyze-internal-validation__metadata-item";
+
+  const labelElement = document.createElement("span");
+  labelElement.className = "analyze-internal-validation__metadata-label";
+  labelElement.textContent = label;
+
+  const valueElement = document.createElement("span");
+  valueElement.className = "analyze-internal-validation__metadata-value";
+  valueElement.textContent = value;
+
+  item.append(labelElement, valueElement);
+  return item;
+}
+
+function createInternalValidationStateMessage({ title, message }) {
+  const container = document.createElement("div");
+  container.className = "analyze-internal-validation__state";
+
+  const titleElement = document.createElement("p");
+  titleElement.className = "analyze-internal-validation__state-title";
+  titleElement.textContent = title;
+
+  const messageElement = document.createElement("p");
+  messageElement.className = "analyze-internal-validation__state-message";
+  messageElement.textContent = message;
+
+  container.append(titleElement, messageElement);
+  return container;
 }
 
 function createHistoryBlock(product) {
@@ -343,6 +595,71 @@ function createHistoryBlock(product) {
   return details;
 }
 
+function parseDatasetInput(value) {
+  return String(value ?? "")
+    .split("&")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function normalizeDatasetNames(datasetNames) {
+  return normalizeAnalyzeDatasetItems(datasetNames).map((item) => item.name);
+}
+
+function dispatchAnalyzeDatasetAdd(target, datasetNames) {
+  target.dispatchEvent(
+    new CustomEvent("pm-analyze-dataset-add", {
+      bubbles: true,
+      detail: {
+        datasetNames,
+      },
+    })
+  );
+}
+
+function dispatchAnalyzeDatasetToggle(target, id, enabled) {
+  target.dispatchEvent(
+    new CustomEvent("pm-analyze-dataset-toggle", {
+      bubbles: true,
+      detail: {
+        id,
+        enabled,
+      },
+    })
+  );
+}
+
+function dispatchAnalyzeDatasetRemove(target, id) {
+  target.dispatchEvent(
+    new CustomEvent("pm-analyze-dataset-remove", {
+      bubbles: true,
+      detail: {
+        id,
+      },
+    })
+  );
+}
+
+function formatInternalValidationReportContent(report) {
+  if (report.format === "json" || isJsonLike(report.content)) {
+    try {
+      return JSON.stringify(
+        typeof report.content === "string" ? JSON.parse(report.content) : report.content,
+        null,
+        2
+      );
+    } catch {
+      return String(report.content ?? "").trim();
+    }
+  }
+
+  if (report.format === "xml") {
+    return formatXml(report.content);
+  }
+
+  return String(report.content ?? "").trim();
+}
+
 function formatXml(xml) {
   const text = String(xml ?? "").trim();
 
@@ -358,6 +675,18 @@ function formatXml(xml) {
   } catch {
     return text;
   }
+}
+
+function hasReportContent(content) {
+  if (isJsonLike(content)) {
+    return true;
+  }
+
+  return hasText(content);
+}
+
+function isJsonLike(value) {
+  return value !== null && typeof value === "object";
 }
 
 function hasText(value) {

@@ -91,7 +91,8 @@ namespace S100FC.ProductCatalogue
                 var code = Convert.ToString(c["code"]);
                 if (!string.IsNullOrEmpty(code) && code.Equals("ProductCatalogue")) {
                     if (!c.IsNull("json")) {
-                        var settings = System.Text.Json.JsonSerializer.Deserialize<S100Horizon.Settings.ProductCatalogue>(Convert.ToString(c["json"])!);
+                        var settings = System.Text.Json.JsonSerializer.Deserialize<S100Horizon.Settings.ProductCatalogue>(
+                            Convert.ToString(c["json"])!);
 
                         if (settings != null) {
                             var connections = settings.Connections.Select(e => {
@@ -679,7 +680,7 @@ namespace S100FC.ProductCatalogue
                 ENCVer = "INT.IHO.S-101.2.0",
                 FCVer = "2.0",
                 verticalDatum = "Baltic Sea Chart Datum 2000,44",
-                //Update = (uint?)electronicProduct.updateNumber,   // todo: Bug in s100ocompiler and must always be null 
+                //Update = (uint?)electronicProduct.updateNumber,   // todo: Bug in s100ocompiler and must always be null
             };
 
             var supportFiles = new List<string>();
@@ -755,7 +756,7 @@ namespace S100FC.ProductCatalogue
 
                         var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
 
-                        var foid = $"110:{name.Substring(1)}:1";       // Geodatastyrelsen: 110 
+                        var foid = $"110:{name.Substring(1)}:1";       // Geodatastyrelsen: 110
 
                         var feature = new YAML.Feature {
                             Prim = Primitive.NoGeometry,
@@ -812,7 +813,7 @@ namespace S100FC.ProductCatalogue
 
                         var code = Convert.ToString(current["code"]);
 
-                        var foid = $"110:{name.Substring(1)}:1";       // Geodatastyrelsen: 110 
+                        var foid = $"110:{name.Substring(1)}:1";       // Geodatastyrelsen: 110
 
                         var prim = shapetype switch {
                             GeometryType.Point => Primitive.Point,
