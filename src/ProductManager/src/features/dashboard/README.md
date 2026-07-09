@@ -42,11 +42,11 @@ GET electronicproducts/dashboard?from=2026-07-01T08:15:00&to=2026-07-07T16:45:00
 
 Range query values are sent in Danish operational time. The Dashboard header always shows `From` and optional `To` date/time fields.
 
-`Since yesterday` and `Last 7 days` are quick actions that only fill the fields; they do not load data until the user selects `Apply`. Selecting a `From` date defaults its time to `00:00`; selecting a `To` date defaults its time to `23:59`.
+`Since yesterday` and `Last 7 days` are quick actions that only fill the fields; they do not load data until the user selects `Apply`.
 
-Leaving `To` empty keeps the range open-ended, so refresh requests continue to include the latest backend activity.
+Selecting a `From` date defaults its time to `00:00`; selecting a `To` date defaults its time to `23:59`.
 
-The backend interprets offset-free datetime values as `Europe/Copenhagen` wall time, not UTC.
+Leaving `To` empty keeps the range open-ended, so refresh requests continue to include the latest backend activity. The backend interprets offset-free datetime values as `Europe/Copenhagen` wall time, not UTC.
 
 Expected payload shape:
 
@@ -162,7 +162,9 @@ Summary cards, status summary and operation summary are derived from the filtere
 - Selecting an already active summary row toggles the corresponding filter off.
 - `Clear filters` resets search, filters and active summary row state.
 
-These summary panels should stay small and data-oriented. Do not reintroduce the removed `Important changes` panel unless it becomes a clearly filterable and useful activity concept.
+These summary panels should stay small and data-oriented.
+
+Do not reintroduce the removed `Important changes` panel unless it becomes a clearly filterable and useful activity concept.
 
 ## Dashboard History panel
 
@@ -185,6 +187,12 @@ Behavior:
 - Product state lookups are loaded before history normalization so backend status IDs render as status names.
 - The Dashboard panel does not pin, auto-close on popup state, or interact with Product Collection.
 
+Possible future polish:
+
+- Improve panel visual hierarchy if long histories make the close action feel too far away.
+- Add selected-activity context if users need to see which activity opened the panel.
+- Keep the panel route-local; do not reuse main-map popup lifecycle or pinning behavior.
+
 ## Report links
 
 Report links support multiple IC-ENC and internal validation report metadata entries.
@@ -200,3 +208,4 @@ The following work remains intentionally outside phase 1:
 - Improve important-change classification only if it becomes useful as a filterable activity concept.
 - Consider server-side filtering only if dashboard payload becomes large.
 - Consider richer dashboard charts only if they remain compact and data-oriented.
+- Consider Dashboard History panel polish if real use shows that the right-side panel needs stronger context or shorter close affordance.
