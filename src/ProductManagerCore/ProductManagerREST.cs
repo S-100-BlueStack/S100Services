@@ -871,5 +871,9 @@ namespace ProductCatalogue
         public Task CreateElectronicProductAsync(string name, productSpecification productSpecification, string boundary, string? ProductMapping, int? optimumDisplayScale = null) {
             throw new NotImplementedException();
         }
+
+        public Task CreateElectronicProductAsync(string name, productSpecification productSpecification, int? specificUsage, string boundary, string? ProductMapping, int? optimumDisplayScale = null) {
+            throw new NotImplementedException();
+        }
     }
 }

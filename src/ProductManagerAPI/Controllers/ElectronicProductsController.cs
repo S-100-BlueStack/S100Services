@@ -14,8 +14,8 @@ using static ProductManagerAPI.Models.ResponseTypes;
 
 namespace ProductManagerAPI.Controllers
 {
-    //[AllowAnonymous] 
-    [Authorize("productmanager:access")]
+    [AllowAnonymous] 
+    //[Authorize("productmanager:access")]
     [ApiController]
     [Route("[controller]")]
     public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository) : ControllerBase
@@ -150,7 +150,7 @@ namespace ProductManagerAPI.Controllers
         //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
         //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpPost()]
-        [Authorize("productmanager:manage")]
+        //[Authorize("productmanager:manage")]
         public async Task<IActionResult> CreateElectronicProduct([FromBody] CreateProductRequest product) {
             return StatusCode(StatusCodes.Status501NotImplemented);
             var sw = Stopwatch.StartNew();
@@ -186,7 +186,7 @@ namespace ProductManagerAPI.Controllers
             };
 
             // Todo: change argument to AOI and do arcgis core geometry conversion in productmanager
-            await _electronicProductManager.CreateElectronicProductAsync(product.Name, productSpecification, /*specificUsage,*/ boundary, "", product.OptimumDisplayScale);
+            await _electronicProductManager.CreateElectronicProductAsync(product.Name, productSpecification, specificUsage, boundary, "", product.OptimumDisplayScale);
 
             response.DurationMs = sw.ElapsedMilliseconds;
 

@@ -95,14 +95,14 @@ namespace S100FC.ProductCatalogue
 
                         if (settings != null) {
                             var connections = settings.Connections.Select(e => {
-                                 var uri = e.ConnectionFile;
+                                var uri = e.ConnectionFile;
                                 //var path = $"config/{e.ConnectionFile.OriginalString}";
 
                                 //var exist = IO.Path.Exists(path);
 
-                                Log.Information("Adding connection for {productSpecification}  with connection file: {path}.", e.ProductSpecification, uri?.LocalPath);
+                                Log.Information("Adding connection for {productSpecification}  with connection file: {path}.", e.ProductSpecification, uri?.OriginalString);
 
-                              //  var uri = new Uri(System.IO.Path.GetFullPath(path));
+                                //  var uri = new Uri(System.IO.Path.GetFullPath(path));
 
                                 return new Connection(e.ProductSpecification, uri);
                             });
@@ -158,7 +158,7 @@ namespace S100FC.ProductCatalogue
 
         #region IElectronicProductManager
 
-        async Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, /*S100FC.S128.SimpleAttributes.specificUsage specificUsage,*/ string boundary, string? productMapping, int? optimumDisplayScale) {
+        async Task IElectronicProductManager.CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? productMapping, int? optimumDisplayScale) {
             if (string.IsNullOrEmpty(name))
                 throw new System.ArgumentNullException(nameof(name));
 
@@ -182,31 +182,33 @@ namespace S100FC.ProductCatalogue
                             notForNavigation = true,
                             issueDate = DateOnly.FromDateTime(DateTime.Now),
                             editionNumber = 0,
+                            updateNumber = 0,
                             agencyResponsibleForProduction = "Danish Geodata Agency",
-                            // specificUsage = specificUsage.value,
+                            specificUsage = specificUsage,
                             productSpecification = productSpecification,
                             optimumDisplayScale = optimumDisplayScale,
 
 
+
                         };
 
-                        if (!string.IsNullOrEmpty(productMapping)) {
+                        //if (!string.IsNullOrEmpty(productMapping)) {
 
 
-                            featureBinding[] bindings = [
-                                new featureBinding<ProductMapping>
-                                {
-                                    roleType = "association",
-                                    role = "theReference",
-                                    association = new() {
-                                       // ProductMapping
-                                    }
-                                }
-                            ];
+                        //    featureBinding[] bindings = [
+                        //        new featureBinding<ProductMapping>
+                        //        {
+                        //            roleType = "association",
+                        //            role = "theReference",
+                        //            association = new() {
+                        //               // ProductMapping
+                        //            }
+                        //        }
+                        //    ];
 
-                            buffer["featurebindings"] = bindings;
+                        //    buffer["featurebindings"] = bindings;
 
-                        }
+                        //}
 
                         var flattened = electronicProduct.Flatten();
                         buffer["attributebindings"] = flattened;
@@ -236,7 +238,7 @@ namespace S100FC.ProductCatalogue
 
             var result = await this.GetElectronicProductAsync(name);
 
-            if (result.ElectronicProduct.editionNumber.HasValue && result.ElectronicProduct.updateNumber.HasValue)
+            if (result.ElectronicProduct.editionNumber > 0)
                 throw new InvalidOperationException();
 
             // set ed/upd

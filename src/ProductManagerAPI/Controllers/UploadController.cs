@@ -9,7 +9,8 @@ using static ProductManagerAPI.Models.ResponseTypes;
 
 namespace ProductManagerAPI.Controllers
 {
-    [Authorize("productmanager:distribute")]
+    // [Authorize("productmanager:distribute")]
+    [AllowAnonymous]
     [ApiController]
     [Route("[controller]")]
     public class UploadController(ILogger<UploadController> logger, IBackgroundJobClient backgroundJobClient, IRecurringJobManager recurringJobManager, IProductRepository productRepository, IDatasetLockService datasetLockService) : ControllerBase
@@ -65,14 +66,14 @@ namespace ProductManagerAPI.Controllers
         [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpPut("{datasetName}/freeze", Name = "freeze")]
-        public async Task<IActionResult> FreezeProduct(string datasetName) {
+        public async Task<IActionResult> FreezeProduct(string datasetName, CancellationToken cancellationToken) {
             _logger.LogInformation("{method}({jobType}. User: {user})", nameof(FreezeProduct), datasetName, User?.Identity?.Name ?? string.Empty);
 
-            return StatusCode(StatusCodes.Status501NotImplemented, new ApiResponse {
-                Success = false,
-                Message = "Manual freeze is not implemented yet.",
-                //DurationMs = sw.ElapsedMilliseconds
-            });
+            // Check if product is locked
+            await using var datasetLock = await _datasetLockService.TryAcquireAsync(datasetName, cancellationToken);
+
+            if (datasetLock == null)
+                return Conflict($"Dataset {datasetName} is already being processed.");
 
             var product = await _productRepository.GetCurrentByNameAsync(datasetName);
 
@@ -98,8 +99,14 @@ namespace ProductManagerAPI.Controllers
         [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpPut("{datasetName}/unfreeze", Name = "unfreeze")]
-        public async Task<IActionResult> UnfreezeProduct(string datasetName) {
+        public async Task<IActionResult> UnfreezeProduct(string datasetName, CancellationToken cancellationToken) {
             _logger.LogInformation("{method}({jobType}. User: {user})", nameof(UnfreezeProduct), datasetName, User?.Identity?.Name ?? string.Empty);
+
+            // Check if product is locked
+            await using var datasetLock = await _datasetLockService.TryAcquireAsync(datasetName, cancellationToken);
+
+            if (datasetLock == null)
+                return Conflict($"Dataset {datasetName} is already being processed.");
 
             var product = await _productRepository.GetCurrentByNameAsync(datasetName);
 

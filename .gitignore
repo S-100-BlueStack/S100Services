@@ -464,3 +464,6 @@ job-manager-review-context.md
 src/ProductManagerAPI/config/policies.json
 src/ProductManagerAPI/config/system.connection
 src/ProductManagerAPI/config/hangfire.connection
+/src/ProductManagerAPI/config/SQLServer-ncps-sql101041-s100ed15_maya(s100_dbo).sde
+/src/ProductManagerAPI/config/SQLServer-ncps-sql101041-s100ed15_productcatalogue(s100_dbo).sde
+/src/ProductManagerAPI/config/ed12/SQLServer-ncps-sql101041-s100ed12_columbia_L3(s100_dbo).sde

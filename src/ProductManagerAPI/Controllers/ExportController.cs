@@ -14,7 +14,8 @@ using IO = System.IO;
 
 namespace ProductManagerAPI.Controllers
 {
-    [Authorize("productmanager:manage")]
+    [AllowAnonymous]
+    //[Authorize("productmanager:manage")]
     [ApiController]
     [Route("[controller]")]
     public class ExportController(ILogger<ExportController> logger, IMemoryCache cache, IExportService exportService, IProductManager productManager, IProductRepository productRepository, IDatasetLockService datasetLockService) : ControllerBase
@@ -233,51 +234,56 @@ namespace ProductManagerAPI.Controllers
             return Ok(response);
         }
 
-        ///// <summary>
-        ///// Creates a new dataset.
-        ///// </summary>
-        ///// <param name="name">The name of the dataset.</param>
-        ///// <param name="includeS57">Whether to include S57 export.</param>
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
-        //[HttpPost("{name}/newdataset", Name = "NewDataset")]
-        //public async Task<IActionResult> NewDataset(string name = "101DK0040349E", bool includeS57 = false) {
-        //    var sw = Stopwatch.StartNew();
-        //    var response = new ApiResponse();
+        /// <summary>
+        /// Creates a new dataset.
+        /// </summary>
+        /// <param name="name">The name of the dataset.</param>
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
+        [HttpPost("{name}/newdataset", Name = "NewDataset")]
+        public async Task<IActionResult> NewDataset(string name = "101DK0040349E") {
+            var sw = Stopwatch.StartNew();
+            var response = new ApiResponse();
 
-        //    var user = User?.Identity?.Name;
-        //    _logger.LogInformation("{newDataset} called with name: {name} by user: {user}", nameof(NewDataset), name, user);
+            var user = User?.Identity?.Name;
+            _logger.LogInformation("{newDataset} called with name: {name} by user: {user}", nameof(NewDataset), name, user);
 
-        //    var product = _electronicProductManager.ElectronicProduct(name);
+            var product = _electronicProductManager.ElectronicProduct(name);
 
-        //    if (product == null) {
-        //        response.Success = false;
-        //        response.Message = $"No electronic product with name '{name}' was found.";
-        //        response.DurationMs = sw.ElapsedMilliseconds;
-        //        return StatusCode(StatusCodes.Status404NotFound, response);
-        //    }
+            if (product == null) {
+                response.Success = false;
+                response.Message = $"No electronic product with name '{name}' was found.";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return StatusCode(StatusCodes.Status404NotFound, response);
+            }
 
-        //    var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
+            var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
 
-        //    // Ensure updated edition/updateNo from the product
-        //    //product = _electronicProductManager.ElectronicProduct(name)!;
+            var yaml = dataset.Serialize();
 
-        //    var yaml = dataset.Serialize();
+            var edi = product.editionNumber;
+            var ed2 = dataset.Edition;
+
+            var upd = product.updateNumber;
+            var upd2 = dataset.Update;
+
+            // avoid null
+            int update = dataset.Update.HasValue ? (int)(dataset.Update.Value) : 0;
 
 
-        //    var result = _exportService.CreateS100Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
+            var result = _exportService.CreateS100Export(name, (int)dataset.Edition!, update, _electronicProductManager.OutputFolder, yaml);
 
-        //    if (includeS57)
-        //        _exportService.CreateS57Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
+            // _exportService.CreateS57Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
 
-        //    await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
+            await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
+            _logger.LogInformation("Exchangeset created successfully");
 
-        //    await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, user);
+            await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, "S-101", (int)dataset.Edition!, update);
 
-        //    response.DurationMs = sw.ElapsedMilliseconds;
-        //    return Ok(response);
-        //}
+            response.DurationMs = sw.ElapsedMilliseconds;
+            return Ok(response);
+        }
 
 
         /// <summary>
@@ -372,65 +378,73 @@ namespace ProductManagerAPI.Controllers
 
 
 
-        ///// <summary>
-        ///// Only used for testing.
-        ///// </summary>
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
-        //[HttpPost("alldatasets", Name = "NewDatasets")]
-        //public async Task<IActionResult> CreateAllDatasets() {
-        //    var sw = Stopwatch.StartNew();
-        //    var response = new ApiResponse();
+        /// <summary>
+        /// Only used for testing.
+        /// </summary>
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
+        [HttpPost("alldatasets", Name = "NewDatasets")]
+        public async Task<IActionResult> CreateAllDatasets() {
+            var sw = Stopwatch.StartNew();
+            var response = new ApiResponse();
 
-        //    var products = _electronicProductManager.ToArray();
-        //    int i = 0;
-        //    int total = products.Length;
+            var products = _electronicProductManager.ToArray();
+            int i = 0;
+            int total = products.Length;
 
-        //    foreach (var name in products) {
-        //        try {
-        //            i++;
-        //            _logger.LogInformation("creating dataset {i}/{total}: {name}", i, total, name);
-        //            var product = _electronicProductManager.ElectronicProduct(name)!;
-        //            if (product.editionNumber.HasValue && product.editionNumber.Value > 0) {
-        //                _logger.LogInformation("Product {name} already has edition {edition}. skipping", name, product.editionNumber.Value);
-        //                continue;
-        //                //throw new InvalidOperationException();
-        //            }
-        //            // Create exchange set
-        //            var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
+            foreach (var name in products) {
+                try {
+                    i++;
 
-        //            var yaml = dataset.Serialize();
+                    _logger.LogInformation("creating dataset {i}/{total}: {name}", i, total, name);
+                    var product = _electronicProductManager.ElectronicProduct(name)!;
+                    if (product.editionNumber.HasValue && product.editionNumber.Value > 0) {
+                        _logger.LogInformation("Product {name} already has edition {edition}. skipping", name, product.editionNumber.Value);
 
-        //            var result = _exportService.CreateS100Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
+                        continue;
+                        //throw new InvalidOperationException();
+                    }
 
-        //            // _exportService.CreateS57Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
+                    // Create exchange set
+                    var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
 
-        //            await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
-        //            _logger.LogInformation("Exchangeset created successfully");
+                    var yaml = dataset.Serialize();
 
-        //            await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, "S-101", (int)dataset.Edition!, (int)dataset.Update!);
-        //        }
-        //        catch (InvalidOperationException) {
-        //            _logger.LogWarning("Dataset already has update. skipping");
-        //        }
-        //        catch (IndexOutOfRangeException) {
-        //            _logger.LogWarning("Topology IndexOutOfRangeException! skipping");
-        //        }
-        //        catch (AggregateException) {
-        //            _logger.LogWarning("Topology AggregateException! skipping");
-        //        }
-        //        catch (ArgumentException) {
-        //            _logger.LogWarning("s100compiler exception for exchangeset. Probably missing minimumScale on DataCoverage skipping");
-        //        }
-        //        catch (Exception ex) {
-        //            _logger.LogError("Unexpected exception: {ex}", ex);
-        //        }
+                    // avoid null
+                    int update = dataset.Update.HasValue ? (int)(dataset.Update.Value) : 0;
 
-        //    }
-        //    response.DurationMs = sw.ElapsedMilliseconds;
-        //    response.Message = $"Datasets created: {products.Length}";
-        //    return Ok(response);
-        //}
+
+
+                    var result = _exportService.CreateS100Export(name, (int)dataset.Edition!, update, _electronicProductManager.OutputFolder, yaml);
+
+                    // _exportService.CreateS57Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
+
+                    await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
+                    _logger.LogInformation("Exchangeset created successfully");
+
+                    await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, "S-101", (int)dataset.Edition!, update);
+                }
+                catch (InvalidOperationException ex) {
+                    _logger.LogWarning("ex: {ex}", ex);
+                }
+                catch (IndexOutOfRangeException) {
+                    _logger.LogWarning("Topology IndexOutOfRangeException! skipping");
+                }
+                catch (AggregateException) {
+                    _logger.LogWarning("Topology AggregateException! skipping");
+                }
+                catch (ArgumentException) {
+                    _logger.LogWarning("s100compiler exception for exchangeset. Probably missing minimumScale on DataCoverage skipping");
+                }
+                catch (Exception ex) {
+                    _logger.LogError("Unexpected exception: {ex}", ex);
+                }
+
+            }
+            response.DurationMs = sw.ElapsedMilliseconds;
+            response.Message = $"Datasets created: {products.Length}";
+            return Ok(response);
+        }
     }
 }

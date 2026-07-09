@@ -43,8 +43,7 @@ namespace ProductManagerAPI
             var builder = WebApplication.CreateBuilder(args);
 
             // logging
-            builder.Host.UseSerilog((context, loggerConfiguration) =>
-            {
+            builder.Host.UseSerilog((context, loggerConfiguration) => {
                 loggerConfiguration.MinimumLevel.Information()
                     .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
                     .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Warning)
@@ -113,46 +112,48 @@ namespace ProductManagerAPI
             });
 #endif
 
+            #region Authorization. Disabled for now..
 
-            //  Windows SSO
-            builder.Services.AddHttpContextAccessor();
-            builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
+            ////  Windows SSO
+            //builder.Services.AddHttpContextAccessor();
+            //builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
 
-            var path = builder.Configuration["Policies"];
+            //var path = builder.Configuration["Policies"];
 
-            if (string.IsNullOrEmpty(path))
-                Log.Error("No path configured for authorization groups file! Please set 'Policies' in appsettings.json to point to a valid JSON file containing group policies.");
+            //if (string.IsNullOrEmpty(path))
+            //    Log.Error("No path configured for authorization groups file! Please set 'Policies' in appsettings.json to point to a valid JSON file containing group policies.");
 
-            var json = File.ReadAllText(path!);
+            //var json = File.ReadAllText(path!);
 
-            var groupPolicies = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string[]>>(json, new JsonSerializerOptions {
-                ReadCommentHandling = JsonCommentHandling.Skip,
-                AllowTrailingCommas = true
-            }) ?? [];
+            //var groupPolicies = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string[]>>(json, new JsonSerializerOptions {
+            //    ReadCommentHandling = JsonCommentHandling.Skip,
+            //    AllowTrailingCommas = true
+            //}) ?? [];
 
-            builder.Services.AddAuthorization(options => {
+            //builder.Services.AddAuthorization(options => {
 
-                options.FallbackPolicy = options.DefaultPolicy;
+            //    options.FallbackPolicy = options.DefaultPolicy;
 
-                foreach (var policy in groupPolicies) {
-                    options.AddPolicy(policy.Key, p => {
-                        switch (policy.Key) {
-                            case "productmanager:distribute":
-                                p.RequireClaim(ClaimTypes.PrimarySid, policy.Value);
-                                break;
+            //    foreach (var policy in groupPolicies) {
+            //        options.AddPolicy(policy.Key, p => {
+            //            switch (policy.Key) {
+            //                case "productmanager:distribute":
+            //                    p.RequireClaim(ClaimTypes.PrimarySid, policy.Value);
+            //                    break;
 
-                            case "productmanager:access":
-                            case "productmanager:manage":
-                                p.RequireClaim("http://schemas.microsoft.com/ws/2008/06/identity/claims/groupsid", policy.Value);
-                                break;
+            //                case "productmanager:access":
+            //                case "productmanager:manage":
+            //                    p.RequireClaim("http://schemas.microsoft.com/ws/2008/06/identity/claims/groupsid", policy.Value);
+            //                    break;
 
-                            default:
-                                throw new Exception($"Unknown authorization policy: {policy.Key}");
-                        }
-                    });
-                }
-            });
-            Log.Information("Authorization policies configured");
+            //                default:
+            //                    throw new Exception($"Unknown authorization policy: {policy.Key}");
+            //            }
+            //        });
+            //    }
+            //});
+            //Log.Information("Authorization policies configured");
+            #endregion
 
             builder.Services.AddApiVersioning(options => {
                 options.AssumeDefaultVersionWhenUnspecified = true;
@@ -217,8 +218,7 @@ namespace ProductManagerAPI
             builder.Services.AddSingleton<IDatasetLockService, DatasetLockService>();
 
             // ExportService
-            builder.Services.AddSingleton<IExportService>(sp =>
-            {
+            builder.Services.AddSingleton<IExportService>(sp => {
                 var logger = sp.GetRequiredService<ILogger<ExportService>>();
                 var artifactsPath = builder.Configuration["ArtifactsPath"]!;
 

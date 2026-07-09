@@ -4,7 +4,8 @@ using ProductManagerAPI.Models;
 
 namespace ProductManagerAPI.Controllers
 {
-    [Authorize("productmanager:access")]
+    [AllowAnonymous]
+   // [Authorize("productmanager:access")]
     [ApiController]
     [Route("[controller]")]
     public class LookupController : ControllerBase

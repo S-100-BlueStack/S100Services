@@ -4,19 +4,24 @@ using IO = System.IO;
 
 namespace ProductManagerAPI.Services.Export
 {
-    public class ExportService(ILogger<ExportService> logger, string artifactsPath) : IExportService
+    public partial class ExportService(ILogger<ExportService> logger, string artifactsPath) : IExportService
     {
         private readonly ILogger<ExportService> _logger = logger;
         private readonly string _artifactsPath = artifactsPath;
         const string fileReferencePattern = @"^101[A-Z]{2}\d{2}";
         private static readonly Regex fileReferenceRegex = new Regex(fileReferencePattern);
 
-        public ExportResult CreateS100Export(string datasetName, int editionNo, int updateNo, string outputFolder, string yaml, string prevIndex = "") {
+        public ExportResult CreateS100Export(string datasetName, int editionNo, int? updateNo, string outputFolder, string yaml, string prevIndex = "") {
             var dir = IO.Directory.CreateDirectory(outputFolder);
 
             var Export = IO.Directory.CreateDirectory(Path.Combine(dir.FullName, datasetName, $"{editionNo}"));
 
-            var update = updateNo > 0 ? updateNo.ToString("D3") : "000";
+            var update = (updateNo ?? 0).ToString("D3");
+
+    
+
+           // yaml = SetMinimumDisplayScale().Replace(yaml, "$1\r\n        Value: 19999999");
+            yaml = Regex.Replace(yaml, @"(?m)^(\s*)-\s*Name:\s*minimumDisplayScale\s*$", "$0\r\n$1  Value: 19999999");
 
             // Write temp YAML file for the compiler
             IO.File.WriteAllText(Path.Combine(Export.FullName, $"temp_{datasetName}.yaml"), yaml);
@@ -173,5 +178,8 @@ namespace ProductManagerAPI.Services.Export
                 return false;
             }
         }
+
+        [GeneratedRegex(@"(?ms)(^\s*-\s*Name:\s*minimumDisplayScale\s*$)(?!\s*\r?\n\s*Value:)")]
+        private static partial Regex SetMinimumDisplayScale();
     }
 }
