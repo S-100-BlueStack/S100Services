@@ -1,6 +1,8 @@
 # Dashboard foundation
 
-FI-001 introduces a separate read-only Dashboard route at `/dashboard`. The Dashboard is intentionally isolated from the main map, Product Collection, Analyze and Review state. It summarizes operational activity for a selected range and links users onward to product-level Review or Analyze pages.
+FI-001 introduces a separate read-only Dashboard route at `/dashboard`.
+
+The Dashboard is intentionally isolated from the main map, Product Collection, Analyze and Review state. It summarizes operational activity for a selected range and links users onward to product-level Review or Analyze pages.
 
 ## Phase 1 status
 
@@ -42,13 +44,13 @@ GET electronicproducts/dashboard?from=2026-07-01T08:15:00
 GET electronicproducts/dashboard?from=2026-07-01T08:15:00&to=2026-07-07T16:45:00
 ```
 
-Range query values are sent in Danish operational time. The Dashboard header always shows `From` and optional `To` date/time fields.
+Range query values are sent in Danish operational time.
 
-`Since yesterday` and `Last 7 days` are quick actions that only fill the fields; they do not load data until the user selects `Apply`.
+The Dashboard header always shows `From` and optional `To` date/time fields. `Since yesterday` and `Last 7 days` are quick actions that only fill the fields; they do not load data until the user selects `Apply`.
 
-Selecting a `From` date defaults its time to `00:00`; selecting a `To` date defaults its time to `23:59`.
+Selecting a `From` date defaults its time to `00:00`; selecting a `To` date defaults its time to `23:59`. Leaving `To` empty keeps the range open-ended, so refresh requests continue to include the latest backend activity.
 
-Leaving `To` empty keeps the range open-ended, so refresh requests continue to include the latest backend activity. The backend interprets offset-free datetime values as `Europe/Copenhagen` wall time, not UTC.
+The backend interprets offset-free datetime values as `Europe/Copenhagen` wall time, not UTC.
 
 Expected payload shape:
 
@@ -186,7 +188,9 @@ Behavior:
 - The panel has a single `Close` action and also closes on `Escape`.
 - Closing the panel restores `Status summary` and `Operation summary`.
 - The row whose `History` action opened the panel is highlighted while the panel is open.
+- The active activity row's `History` button is marked as active.
 - A compact selected-activity context card is shown above the product history timeline.
+- The panel header/close area is sticky within the panel.
 - Loading, empty and error states stay inside the panel content area and keep the panel header available.
 - Product state lookups are loaded before history normalization so backend status IDs render as status names.
 - The Dashboard panel does not pin, auto-close on popup state, or interact with Product Collection.
@@ -196,12 +200,15 @@ History panel guidance:
 - Keep the panel route-local; do not reuse main-map popup lifecycle or pinning behavior.
 - Keep the panel simple; do not turn it into a second Review workspace.
 - Prefer compact context and timeline content over additional action bars.
+- Keep the panel aligned with the activity table and right summary column rather than using a floating overlay.
 
 ## Report links
 
 Report links support multiple IC-ENC and internal validation report metadata entries.
 
-Until report URL endpoints exist, Dashboard renders report metadata as available but keeps the action as a placeholder notice or disabled action depending on the metadata returned by the backend. Dashboard should not fetch full report content as part of the activity payload. The activity endpoint should return only enough metadata to show summary rows and route users to a report detail endpoint later.
+Until report URL endpoints exist, Dashboard renders report metadata as available but keeps the action as a placeholder notice or disabled action depending on the metadata returned by the backend.
+
+Dashboard should not fetch full report content as part of the activity payload. The activity endpoint should return only enough metadata to show summary rows and route users to a report detail endpoint later.
 
 ## Future scope
 
@@ -210,6 +217,6 @@ The following work remains intentionally outside phase 1:
 - Add real IC-ENC report links when backend report IDs/storage contract exists.
 - Add real internal validation report links when backend report IDs/storage contract exists.
 - Improve important-change classification only if it becomes useful as a filterable activity concept.
+- Improve backend activity classification when backend event semantics become richer.
 - Consider server-side filtering only if dashboard payload becomes large.
 - Consider richer dashboard charts only if they remain compact and data-oriented.
-- Consider additional History panel polish only if it improves scanability without turning the panel into a second Review workspace.
