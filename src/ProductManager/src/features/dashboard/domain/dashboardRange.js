@@ -106,15 +106,10 @@ export function normalizeDashboardRangePreset(value) {
     .toLowerCase();
   const values = Object.values(DASHBOARD_RANGE_PRESETS);
 
-  return values.includes(normalizedValue)
-    ? normalizedValue
-    : getDefaultDashboardRangePreset();
+  return values.includes(normalizedValue) ? normalizedValue : getDefaultDashboardRangePreset();
 }
 
-export function formatDashboardRangeDateTime(
-  value,
-  { timeZone = DASHBOARD_TIME_ZONE } = {}
-) {
+export function formatDashboardRangeDateTime(value, { timeZone = DASHBOARD_TIME_ZONE } = {}) {
   const date = normalizeDate(value);
 
   if (!date) {
@@ -131,10 +126,7 @@ export function formatDashboardRangeDateTime(
   }).format(date);
 }
 
-export function formatDashboardDateTimeInputValue(
-  value,
-  { timeZone = DASHBOARD_TIME_ZONE } = {}
-) {
+export function formatDashboardDateTimeInputValue(value, { timeZone = DASHBOARD_TIME_ZONE } = {}) {
   const date = normalizeDate(value);
 
   if (!date) {
@@ -158,14 +150,7 @@ export function createDashboardRangeDisplayLabel({
   return `${label}: ${fromText} - ${toText}${zoneSuffix}`;
 }
 
-function createRange({
-  preset,
-  label,
-  from,
-  to,
-  fromQueryValue,
-  toQueryValue,
-}) {
+function createRange({ preset, label, from, to, fromQueryValue, toQueryValue }) {
   const fromIso = from.toISOString();
   const toIso = to.toISOString();
 
@@ -210,9 +195,7 @@ function parseDashboardRangeInput(value, { dateOnlyDefaultTime = null } = {}) {
 }
 
 function parseOffsetFreeDanishDateTime(value, { dateOnlyDefaultTime = null } = {}) {
-  const match = value.match(
-    /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?$/
-  );
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
 
   if (!match) {
     return null;
@@ -225,8 +208,8 @@ function parseOffsetFreeDanishDateTime(value, { dateOnlyDefaultTime = null } = {
     month: Number(match[2]),
     day: Number(match[3]),
     hour: Number(hasExplicitTime ? match[4] : defaultTime.hour),
-    minute: Number(hasExplicitTime ? match[5] ?? 0 : defaultTime.minute),
-    second: Number(hasExplicitTime ? match[6] ?? 0 : defaultTime.second),
+    minute: Number(hasExplicitTime ? (match[5] ?? 0) : defaultTime.minute),
+    second: Number(hasExplicitTime ? (match[6] ?? 0) : defaultTime.second),
   };
 
   return areValidDateTimeParts(parts) ? parts : null;

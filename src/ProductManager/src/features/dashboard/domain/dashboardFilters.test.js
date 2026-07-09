@@ -185,21 +185,29 @@ describe("dashboardFilters", () => {
       filterKey: "status",
       rowValue: "Failed",
     });
-    const typePatch = createDashboardSummaryRowFilterPatch({ type: "export" }, {
-      filterKey: "type",
-      rowValue: "export",
-    });
+    const typePatch = createDashboardSummaryRowFilterPatch(
+      { type: "export" },
+      {
+        filterKey: "type",
+        rowValue: "export",
+      }
+    );
 
     assert.deepEqual(statusPatch, { status: "failed" });
     assert.deepEqual(typePatch, { type: "all" });
     assert.equal(
-      isDashboardSummaryRowFilterActive({ status: "failed" }, { filterKey: "status", rowValue: "failed" }),
+      isDashboardSummaryRowFilterActive(
+        { status: "failed" },
+        { filterKey: "status", rowValue: "failed" }
+      ),
       true
     );
     assert.equal(
-      isDashboardSummaryRowFilterActive({ type: "send" }, { filterKey: "type", rowValue: "export" }),
+      isDashboardSummaryRowFilterActive(
+        { type: "send" },
+        { filterKey: "type", rowValue: "export" }
+      ),
       false
     );
   });
-
 });

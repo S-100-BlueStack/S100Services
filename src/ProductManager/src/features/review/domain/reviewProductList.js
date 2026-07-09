@@ -32,8 +32,6 @@ const REVIEW_CONTENT_TYPE_IDS = new Set(
   REVIEW_CONTENT_TYPE_DEFINITIONS.map((definition) => definition.id)
 );
 
-const DEFAULT_REVIEW_CONTENT_TYPES = createDefaultReviewContentTypes();
-
 export function createReviewProductItems(datasetNames) {
   return normalizeReviewProductItems(toArray(datasetNames));
 }
@@ -56,6 +54,7 @@ export function normalizeReviewProductItems(productItems) {
     }
 
     seenIds.add(id);
+
     normalizedItems.push({
       id,
       datasetName,

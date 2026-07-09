@@ -130,7 +130,11 @@ function createHeader({ range, dashboard, loading }) {
 
   const actions = document.createElement("div");
   actions.className = "pm-dashboard-header__actions";
-  actions.append(createRefreshButton(loading), createRangeApplyButton(), createRangeControls(range));
+  actions.append(
+    createRefreshButton(loading),
+    createRangeApplyButton(),
+    createRangeControls(range)
+  );
 
   header.append(text, actions);
   return header;
@@ -195,14 +199,7 @@ function createQuickRangeButton({ label, description, preset }) {
   return button;
 }
 
-function createRangeDateTimeField({
-  idPrefix,
-  label,
-  dateKey,
-  timeKey,
-  defaultTime,
-  required,
-}) {
+function createRangeDateTimeField({ idPrefix, label, dateKey, timeKey, defaultTime, required }) {
   const field = document.createElement("div");
   field.className = "pm-dashboard-range-field";
 
@@ -215,7 +212,6 @@ function createRangeDateTimeField({
     label,
     dateKey,
     timeKey,
-    defaultTime,
     required,
   });
 
@@ -255,7 +251,7 @@ function createRangeDateTimeField({
   return field;
 }
 
-function createRangeDatePicker({ id, label, dateKey, timeKey, defaultTime, required }) {
+function createRangeDatePicker({ id, label, dateKey, timeKey, required }) {
   ensureDashboardDatePickerDismissHandlers();
 
   const root = document.createElement("div");
@@ -264,7 +260,8 @@ function createRangeDatePicker({ id, label, dateKey, timeKey, defaultTime, requi
   const button = document.createElement("button");
   button.id = id;
   button.type = "button";
-  button.className = "pm-dashboard-range-field__input pm-dashboard-range-field__input--date pm-dashboard-range-date-button";
+  button.className =
+    "pm-dashboard-range-field__input pm-dashboard-range-field__input--date pm-dashboard-range-date-button";
   button.setAttribute("aria-label", `${label} date`);
   button.setAttribute("aria-haspopup", "dialog");
   button.setAttribute("aria-expanded", "false");
@@ -286,25 +283,39 @@ function createRangeDatePicker({ id, label, dateKey, timeKey, defaultTime, requi
 
   button.addEventListener("click", (event) => {
     event.stopPropagation();
-    toggleDashboardDatePicker({ root, button, panel, onSelect: (nextDate) => {
-      setDashboardDateButtonValue(button, nextDate);
-      closeDashboardDatePickers();
-      result.onDateChange?.(nextDate);
-    } });
+    toggleDashboardDatePicker({
+      root,
+      button,
+      panel,
+      onSelect: (nextDate) => {
+        setDashboardDateButtonValue(button, nextDate);
+        closeDashboardDatePickers();
+        result.onDateChange?.(nextDate);
+      },
+    });
   });
 
   panel.addEventListener("click", (event) => {
     event.stopPropagation();
   });
 
-  panel.addEventListener("wheel", (event) => {
-    event.preventDefault();
-    shiftDashboardDatePickerMonth({ root, panel, delta: event.deltaY > 0 ? 1 : -1, onSelect: (nextDate) => {
-      setDashboardDateButtonValue(button, nextDate);
-      closeDashboardDatePickers();
-      result.onDateChange?.(nextDate);
-    } });
-  }, { passive: false });
+  panel.addEventListener(
+    "wheel",
+    (event) => {
+      event.preventDefault();
+      shiftDashboardDatePickerMonth({
+        root,
+        panel,
+        delta: event.deltaY > 0 ? 1 : -1,
+        onSelect: (nextDate) => {
+          setDashboardDateButtonValue(button, nextDate);
+          closeDashboardDatePickers();
+          result.onDateChange?.(nextDate);
+        },
+      });
+    },
+    { passive: false }
+  );
 
   root.append(button, panel);
 
@@ -329,11 +340,15 @@ function createRangeDatePicker({ id, label, dateKey, timeKey, defaultTime, requi
     root.appendChild(clearButton);
   }
 
-  renderDashboardDatePickerPanel({ root, panel, onSelect: (nextDate) => {
-    setDashboardDateButtonValue(button, nextDate);
-    closeDashboardDatePickers();
-    result.onDateChange?.(nextDate);
-  } });
+  renderDashboardDatePickerPanel({
+    root,
+    panel,
+    onSelect: (nextDate) => {
+      setDashboardDateButtonValue(button, nextDate);
+      closeDashboardDatePickers();
+      result.onDateChange?.(nextDate);
+    },
+  });
 
   return result;
 }
@@ -356,7 +371,8 @@ function toggleDashboardDatePicker({ root, button, panel, onSelect }) {
     return;
   }
 
-  root.dataset.viewDate = getDashboardDateButtonValue(button) || root.dataset.viewDate || getTodayDateValue();
+  root.dataset.viewDate =
+    getDashboardDateButtonValue(button) || root.dataset.viewDate || getTodayDateValue();
   renderDashboardDatePickerPanel({ root, panel, onSelect });
 
   root.classList.add("is-open");
@@ -404,8 +420,11 @@ function ensureDashboardDatePickerDismissHandlers() {
 }
 
 function renderDashboardDatePickerPanel({ root, panel, onSelect }) {
-  const view = parseDashboardDateValue(root.dataset.viewDate) ?? parseDashboardDateValue(getTodayDateValue());
-  const selectedDate = getDashboardDateButtonValue(root.querySelector(".pm-dashboard-range-date-button"));
+  const view =
+    parseDashboardDateValue(root.dataset.viewDate) ?? parseDashboardDateValue(getTodayDateValue());
+  const selectedDate = getDashboardDateButtonValue(
+    root.querySelector(".pm-dashboard-range-date-button")
+  );
   const firstDay = new Date(view.year, view.month - 1, 1);
   const startOffset = (firstDay.getDay() + 6) % 7;
   const daysInMonth = new Date(view.year, view.month, 0).getDate();
@@ -494,7 +513,8 @@ function createDashboardDatePickerNavButton(label, text) {
 }
 
 function shiftDashboardDatePickerMonth({ root, panel, delta, onSelect }) {
-  const view = parseDashboardDateValue(root.dataset.viewDate) ?? parseDashboardDateValue(getTodayDateValue());
+  const view =
+    parseDashboardDateValue(root.dataset.viewDate) ?? parseDashboardDateValue(getTodayDateValue());
   const shiftedView = shiftDashboardMonth(view.year, view.month, delta);
   root.dataset.viewDate = formatDashboardDateValue({ ...shiftedView, day: 1 });
   renderDashboardDatePickerPanel({ root, panel, onSelect });
@@ -542,7 +562,9 @@ function getDashboardDateButtonValue(button) {
 function setDashboardDateButtonValue(button, value) {
   const normalizedValue = /^\d{4}-\d{2}-\d{2}$/.test(String(value ?? "")) ? value : "";
   button.dataset.dateValue = normalizedValue;
-  button.textContent = normalizedValue ? formatDashboardDateButtonText(normalizedValue) : "dd-mm-yyyy";
+  button.textContent = normalizedValue
+    ? formatDashboardDateButtonText(normalizedValue)
+    : "dd-mm-yyyy";
   button.classList.toggle("is-empty", !normalizedValue);
 
   const root = button.closest(".pm-dashboard-date-picker");
@@ -701,7 +723,10 @@ function setDashboardRangeInputValue(id, value) {
     return;
   }
 
-  if (element instanceof HTMLButtonElement && element.classList.contains("pm-dashboard-range-date-button")) {
+  if (
+    element instanceof HTMLButtonElement &&
+    element.classList.contains("pm-dashboard-range-date-button")
+  ) {
     setDashboardDateButtonValue(element, value);
   }
 }
@@ -744,9 +769,7 @@ function captureDashboardControlFocus() {
   }
 
   const filterKey = activeElement.dataset.dashboardFilterKey;
-  const rangeInputId = activeElement.id?.startsWith("dashboard-range-")
-    ? activeElement.id
-    : null;
+  const rangeInputId = activeElement.id?.startsWith("dashboard-range-") ? activeElement.id : null;
 
   if (!filterKey && !rangeInputId) {
     return null;
@@ -898,13 +921,7 @@ function createSummaryCards(summary) {
   return cards;
 }
 
-function createDashboardGrid({
-  dashboard,
-  sourceActivityCount,
-  loading,
-  filters,
-  filterOptions,
-}) {
+function createDashboardGrid({ dashboard, sourceActivityCount, loading, filters, filterOptions }) {
   const grid = document.createElement("section");
   grid.className = "pm-dashboard-grid";
 
@@ -1265,7 +1282,6 @@ function createDashboardHistoryLink(activity) {
   return button;
 }
 
-
 function ensureDashboardHistoryKeyboardHandlers() {
   if (dashboardHistoryKeyboardHandlersRegistered) {
     return;
@@ -1301,10 +1317,14 @@ async function openDashboardHistory(datasetName) {
   const normalizedDatasetName = normalizeDashboardDatasetName(datasetName);
 
   if (!normalizedDatasetName) {
-    noticeError("History could not be opened", "The selected activity does not have a dataset name.", {
-      storeInCenter: false,
-      countAsUnread: false,
-    });
+    noticeError(
+      "History could not be opened",
+      "The selected activity does not have a dataset name.",
+      {
+        storeInCenter: false,
+        countAsUnread: false,
+      }
+    );
     return;
   }
 
@@ -1438,7 +1458,9 @@ function createDashboardHistoryPanelContent() {
   if (!history.events.length) {
     fragment.appendChild(
       createProductHistoryStateMessage({
-        title: history.endpointAvailable ? "No historical changes found" : "Historical changes are not available yet",
+        title: history.endpointAvailable
+          ? "No historical changes found"
+          : "Historical changes are not available yet",
         message: history.endpointAvailable
           ? "No history events were returned for this product."
           : "The history UI is ready, but the backend endpoint has not been implemented yet.",
@@ -1451,7 +1473,8 @@ function createDashboardHistoryPanelContent() {
     fragment.appendChild(
       createProductHistoryBanner({
         title: "Demo history",
-        message: "This product history is generated in the frontend until the backend endpoint is available.",
+        message:
+          "This product history is generated in the frontend until the backend endpoint is available.",
       })
     );
   }
@@ -1508,8 +1531,7 @@ function createReportLinkGroup({ label, reports }) {
   }
 
   const firstReportWithUrl = normalizedReports.find((report) => report.url);
-  const linkLabel =
-    normalizedReports.length > 1 ? `${label} (${normalizedReports.length})` : label;
+  const linkLabel = normalizedReports.length > 1 ? `${label} (${normalizedReports.length})` : label;
 
   if (firstReportWithUrl?.url) {
     const link = document.createElement("a");
@@ -1575,7 +1597,9 @@ function createSummaryRow({ row, filterKey, filters }) {
   item.className = "pm-dashboard-breakdown-row is-actionable";
   item.classList.toggle("is-active", isActive);
   item.setAttribute("aria-pressed", String(isActive));
-  item.title = isActive ? `Clear ${toTitleCase(row.label)} filter` : `Filter activity by ${toTitleCase(row.label)}`;
+  item.title = isActive
+    ? `Clear ${toTitleCase(row.label)} filter`
+    : `Filter activity by ${toTitleCase(row.label)}`;
   item.addEventListener("click", () => {
     updateDashboardFilters(
       createDashboardSummaryRowFilterPatch(dashboardFilters, {

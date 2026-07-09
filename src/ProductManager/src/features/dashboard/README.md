@@ -171,9 +171,9 @@ The activity-row `History` action opens a route-local panel in the Dashboard rig
 The panel reuses the existing product history API and renderers:
 
 ```js
-fetchProductHistory(datasetName)
-createProductHistorySummary(history)
-createProductHistoryEventList(history.events)
+fetchProductHistory(datasetName);
+createProductHistorySummary(history);
+createProductHistoryEventList(history.events);
 ```
 
 Behavior:

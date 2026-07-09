@@ -46,7 +46,6 @@ describe("dashboardRange", () => {
     assert.match(range.displayLabel, /^Selected range:/);
   });
 
-
   it("creates an open-ended custom range when To is empty", () => {
     const now = new Date("2026-07-08T10:30:00.000Z");
     const range = createDashboardRange(
@@ -64,7 +63,6 @@ describe("dashboardRange", () => {
     assert.equal(range.fromQueryValue, "2026-07-01T08:15:00");
     assert.equal(range.toQueryValue, null);
   });
-
 
   it("uses start and end of day defaults for custom date-only inputs", () => {
     const range = createDashboardRange(DASHBOARD_RANGE_PRESETS.custom, {
@@ -113,16 +111,10 @@ describe("dashboardRange", () => {
   });
 
   it("formats date/time input values in Europe/Copenhagen", () => {
-    assert.equal(
-      formatDashboardDateTimeInputValue("2026-07-01T06:15:00.000Z"),
-      "2026-07-01T08:15"
-    );
+    assert.equal(formatDashboardDateTimeInputValue("2026-07-01T06:15:00.000Z"), "2026-07-01T08:15");
   });
 
   it("falls back to the default preset for unknown values", () => {
-    assert.equal(
-      normalizeDashboardRangePreset("unknown"),
-      DASHBOARD_RANGE_PRESETS.sinceYesterday
-    );
+    assert.equal(normalizeDashboardRangePreset("unknown"), DASHBOARD_RANGE_PRESETS.sinceYesterday);
   });
 });
