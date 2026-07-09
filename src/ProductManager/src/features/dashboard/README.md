@@ -1,8 +1,6 @@
-# Dashboard foundation
+# Dashboard
 
-FI-001 introduces a separate read-only Dashboard route at `/dashboard`.
-
-The Dashboard is intentionally isolated from the main map, Product Collection, Analyze and Review state. It summarizes operational activity for a selected range and links users onward to product-level Review or Analyze pages.
+FI-001 introduces a separate read-only Dashboard route at `/dashboard`. The Dashboard is intentionally isolated from the main map, Product Collection, Analyze and Review state. It summarizes operational activity for a selected range and links users onward to product-level Review or Analyze pages.
 
 ## Phase 1 status
 
@@ -31,6 +29,7 @@ Implemented scope:
 - Dashboard History panel shows selected activity context above the product timeline.
 - Dashboard highlights the activity row whose `History` action opened the panel.
 - Dashboard History panel loads product state lookups before normalizing backend history so numeric status IDs render as status names.
+- Backend activity classification maps raw product states into dashboard-oriented activity type, status, severity and title values.
 - Disabled or placeholder report actions until report URLs or report detail endpoints exist.
 
 ## Backend contract
@@ -72,17 +71,13 @@ Expected payload shape:
       "ReportsAvailable": 9
     },
     "StatusSummary": [
-      {
-        "Status": "Exported",
-        "Count": 12
-      }
+      { "Status": "active", "Count": 12 },
+      { "Status": "completed", "Count": 8 },
+      { "Status": "failed", "Count": 2 }
     ],
     "OperationSummary": [
-      {
-        "Type": "Export",
-        "Count": 12,
-        "Failed": 1
-      }
+      { "Type": "export", "Count": 12, "Failed": 1 },
+      { "Type": "freeze", "Count": 4, "Failed": 0 }
     ],
     "Activities": [
       {
@@ -90,10 +85,10 @@ Expected payload shape:
         "Timestamp": "2026-07-08T07:45:00+02:00",
         "DatasetName": "101DK0040943E",
         "ProductName": "101DK0040943E",
-        "Type": "export",
+        "Type": "validation",
         "Severity": "critical",
-        "Title": "Export failed",
-        "Description": "All Edition export failed validation.",
+        "Title": "Product rejected",
+        "Description": "The product was rejected by validation.",
         "Status": "failed",
         "Actor": "DOMAIN\\user",
         "Links": {
@@ -111,17 +106,28 @@ Expected payload shape:
           ],
           "InternalValidationReports": []
         },
-        "Details": [
-          {
-            "Label": "Scope",
-            "Value": "All"
-          }
-        ]
+        "Details": [{ "Label": "Source state", "Value": "Rejected" }]
       }
     ]
   }
 }
 ```
+
+## Activity classification
+
+Dashboard activity classification is owned by the backend endpoint. The frontend should render and filter the returned `Type`, `Status` and `Severity` values, not duplicate source-state mapping rules.
+
+Current intended classification examples:
+
+```txt
+ProductState.Exported  -> Type: export,     Status: completed, Severity: normal
+ProductState.Frozen    -> Type: freeze,     Status: active,    Severity: important
+ProductState.InTransit -> Type: send,       Status: active,    Severity: normal
+ProductState.Rejected  -> Type: validation, Status: failed,    Severity: critical
+ProductState.Idle      -> Type: lifecycle,  Status: idle,      Severity: normal
+```
+
+The source backend state can still appear in activity details as `Source state` for traceability.
 
 ## Range builder
 
@@ -204,9 +210,7 @@ History panel guidance:
 
 ## Report links
 
-Report links support multiple IC-ENC and internal validation report metadata entries.
-
-Until report URL endpoints exist, Dashboard renders report metadata as available but keeps the action as a placeholder notice or disabled action depending on the metadata returned by the backend.
+Report links support multiple IC-ENC and internal validation report metadata entries. Until report URL endpoints exist, Dashboard renders report metadata as available but keeps the action as a placeholder notice or disabled action depending on the metadata returned by the backend.
 
 Dashboard should not fetch full report content as part of the activity payload. The activity endpoint should return only enough metadata to show summary rows and route users to a report detail endpoint later.
 
@@ -217,6 +221,5 @@ The following work remains intentionally outside phase 1:
 - Add real IC-ENC report links when backend report IDs/storage contract exists.
 - Add real internal validation report links when backend report IDs/storage contract exists.
 - Improve important-change classification only if it becomes useful as a filterable activity concept.
-- Improve backend activity classification when backend event semantics become richer.
 - Consider server-side filtering only if dashboard payload becomes large.
 - Consider richer dashboard charts only if they remain compact and data-oriented.
