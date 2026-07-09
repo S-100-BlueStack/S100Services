@@ -1,6 +1,6 @@
 import "@esri/calcite-components/components/calcite-slider";
 import { formatAttributeDisplayValue } from "../attributes/attributeDisplay.js";
-import { ATTRIBUTE_FILTER_CONFIG } from "./attributeFilterConfig.js";
+import { ATTRIBUTE_FILTER_CONFIG, getAttributeFilterFieldLabel } from "./attributeFilterConfig.js";
 import { setDisplayScaleHidingDisabled } from "../scale/displayScaleOverrideState.js";
 import {
   PREFERENCE_PERSISTENCE_KEY,
@@ -93,7 +93,7 @@ function escapeHtml(value) {
       "<": "&lt;",
       ">": "&gt;",
       '"': "&quot;",
-      "'": "&#039;",
+      "'": "&#39;",
     };
 
     return entities[character];
@@ -198,13 +198,11 @@ function getRangeUiState({ entries, minIndex, maxIndex, fieldName }) {
   const rangeMax = entries.length - 1;
   const normalizedMinIndex = Math.min(minIndex, maxIndex);
   const normalizedMaxIndex = Math.max(minIndex, maxIndex);
-
   const selectedEntries = entries.filter(
     (entry) =>
       entry.numericValue >= entries[normalizedMinIndex].numericValue &&
       entry.numericValue <= entries[normalizedMaxIndex].numericValue
   );
-
   const featureCount = selectedEntries.reduce((sum, entry) => sum + entry.count, 0);
 
   return {
@@ -248,7 +246,6 @@ function updateRangePreview(panel, filterService, layerId, fieldName) {
     maxIndex: clampRangeIndex(slider.maxValue, rangeMax),
     fieldName,
   });
-
   const rangeElement = panel.querySelector(
     `[data-range-values][data-layer-id="${CSS.escape(layerId)}"][data-field-name="${CSS.escape(fieldName)}"]`
   );
@@ -271,7 +268,7 @@ function updateRangePreview(panel, filterService, layerId, fieldName) {
   }
 
   if (hint) {
-    hint.textContent = `${state.featureCount} feature(s) in range`;
+    hint.textContent = `${state.featureCount} product(s) in range`;
   }
 
   if (summary) {
@@ -289,42 +286,30 @@ function shouldRenderRangeFilter(layerId, fieldName, values) {
 
 function renderCheckboxField({ filterService, layerId, fieldName, values, openFieldKeys }) {
   const selectedValues = filterService.getSelectedValues(layerId, fieldName);
-
   const selectedCount = selectedValues
     ? values.filter((entry) => selectedValues.has(entry.value)).length
     : values.length;
-
   const isOpen = openFieldKeys.has(getFieldKey(layerId, fieldName));
+  const fieldLabel = getAttributeFilterFieldLabel(fieldName);
 
   return `
-    <details
-      class="pm-filter-field"
-      data-layer-id="${escapeHtml(layerId)}"
-      data-field-name="${escapeHtml(fieldName)}"
-      ${isOpen ? "open" : ""}
-    >
+    <details class="pm-filter-field" data-layer-id="${escapeHtml(layerId)}" data-field-name="${escapeHtml(fieldName)}" ${isOpen ? "open" : ""}>
       <summary>
-        <span>${escapeHtml(fieldName)}</span>
+        <span>${escapeHtml(fieldLabel)}</span>
         <span class="pm-filter-field__summary">${selectedCount}/${values.length}</span>
       </summary>
-
       <div class="pm-filter-field__actions">
-        <button type="button" data-select-field data-layer-id="${escapeHtml(layerId)}" data-field-name="${escapeHtml(fieldName)}">
-          Select all
-        </button>
-        <button type="button" data-clear-field data-layer-id="${escapeHtml(layerId)}" data-field-name="${escapeHtml(fieldName)}">
-          Clear
-        </button>
+        <button type="button" data-select-field data-layer-id="${escapeHtml(layerId)}" data-field-name="${escapeHtml(fieldName)}">Select all</button>
+        <button type="button" data-clear-field data-layer-id="${escapeHtml(layerId)}" data-field-name="${escapeHtml(fieldName)}">Clear</button>
       </div>
-
-      <div class="pm-filter-values">
+      <div class="pm-filter-options">
         ${values
           .map((entry) => {
             const checked = !selectedValues || selectedValues.has(entry.value);
             const displayLabel = formatAttributeDisplayValue(fieldName, entry.value, entry.label);
 
             return `
-              <label class="pm-filter-value">
+              <label class="pm-filter-option ${entry.count === 0 ? "pm-filter-option--empty" : ""}">
                 <input
                   type="checkbox"
                   data-filter-checkbox
@@ -333,8 +318,8 @@ function renderCheckboxField({ filterService, layerId, fieldName, values, openFi
                   data-filter-value="${escapeHtml(entry.value)}"
                   ${checked ? "checked" : ""}
                 />
-                <span class="pm-filter-value__label">${escapeHtml(displayLabel)}</span>
-                <span class="pm-filter-value__count">${entry.count}</span>
+                <span class="pm-filter-option__label">${escapeHtml(displayLabel)}</span>
+                <span class="pm-filter-option__count">${entry.count}</span>
               </label>
             `;
           })
@@ -347,74 +332,50 @@ function renderCheckboxField({ filterService, layerId, fieldName, values, openFi
 function renderRangeField({ filterService, layerId, fieldName, values, openFieldKeys }) {
   const entries = getNumericEntries(values);
   const rangeFilter = filterService.getRangeFilter(layerId, fieldName);
-
   const fullMinValue = entries[0].numericValue;
   const fullMaxValue = entries[entries.length - 1].numericValue;
-
   const minIndex = rangeFilter ? getRangeIndexForMin(entries, rangeFilter.min) : 0;
   const maxIndex = rangeFilter ? getRangeIndexForMax(entries, rangeFilter.max) : entries.length - 1;
-
   const state = getRangeUiState({
     entries,
     minIndex,
     maxIndex,
     fieldName,
   });
-
   const isOpen = openFieldKeys.has(getFieldKey(layerId, fieldName));
   const rangeMax = entries.length - 1;
+  const fieldLabel = getAttributeFilterFieldLabel(fieldName);
 
   return `
-    <details
-      class="pm-filter-field"
-      data-layer-id="${escapeHtml(layerId)}"
-      data-field-name="${escapeHtml(fieldName)}"
-      ${isOpen ? "open" : ""}
-    >
+    <details class="pm-filter-field" data-layer-id="${escapeHtml(layerId)}" data-field-name="${escapeHtml(fieldName)}" ${isOpen ? "open" : ""}>
       <summary>
-        <span>${escapeHtml(fieldName)}</span>
-        <span class="pm-filter-field__summary" data-range-summary>
-          ${state.selectedValueCount}/${values.length}
-        </span>
+        <span>${escapeHtml(fieldLabel)}</span>
+        <span class="pm-filter-field__summary" data-range-summary>${state.selectedValueCount}/${values.length}</span>
       </summary>
-
       <div class="pm-filter-field__actions">
-        <button type="button" data-reset-range data-layer-id="${escapeHtml(layerId)}" data-field-name="${escapeHtml(fieldName)}">
-          Reset
-        </button>
+        <button type="button" data-reset-range data-layer-id="${escapeHtml(layerId)}" data-field-name="${escapeHtml(fieldName)}">Reset</button>
       </div>
-
-      <div
-        class="pm-filter-range"
-        data-range-values
-        data-layer-id="${escapeHtml(layerId)}"
-        data-field-name="${escapeHtml(fieldName)}"
-        data-full-min-value="${escapeHtml(fullMinValue)}"
-        data-full-max-value="${escapeHtml(fullMaxValue)}"
-      >
+      <div class="pm-filter-range" data-range-values data-layer-id="${escapeHtml(layerId)}" data-field-name="${escapeHtml(fieldName)}">
         <div class="pm-filter-range__values">
           <output data-range-output="min">${escapeHtml(state.minDisplayValue)}</output>
           <output data-range-output="max">${escapeHtml(state.maxDisplayValue)}</output>
         </div>
-
         <calcite-slider
-  data-filter-range
-  data-layer-id="${escapeHtml(layerId)}"
-  data-field-name="${escapeHtml(fieldName)}"
-  min="0"
-  max="${rangeMax}"
-  step="1"
-  min-value="${state.normalizedMinIndex}"
-  max-value="${state.normalizedMaxIndex}"
-  min-label="${escapeHtml(fieldName)} lower bound"
-  max-label="${escapeHtml(fieldName)} upper bound"
-  scale="s"
-  snap
-></calcite-slider>
-
-        <div class="pm-filter-range__hint" data-range-hint>
-          ${state.featureCount} feature(s) in range
-        </div>
+          data-filter-range
+          data-layer-id="${escapeHtml(layerId)}"
+          data-field-name="${escapeHtml(fieldName)}"
+          min="0"
+          max="${rangeMax}"
+          min-value="${state.normalizedMinIndex}"
+          max-value="${state.normalizedMaxIndex}"
+          step="1"
+          scale="s"
+          label-handles
+          ticks="0"
+        ></calcite-slider>
+        <div class="pm-filter-range__hint" data-range-hint>${state.featureCount} product(s) in range</div>
+        <input type="hidden" data-full-min-value value="${fullMinValue}" />
+        <input type="hidden" data-full-max-value value="${fullMaxValue}" />
       </div>
     </details>
   `;
@@ -461,7 +422,6 @@ function renderLayer({ filterService, layerId, openFieldKeys }) {
   return `
     <section class="pm-filter-layer">
       <h3>${escapeHtml(layerId)}</h3>
-
       ${fields
         .map((fieldName) =>
           renderField({
@@ -491,7 +451,7 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
   panel.id = "attribute-filter-panel";
   panel.className = "pm-filter-panel";
   panel.hidden = true;
-  panel.setAttribute("aria-label", "Attribute filters");
+  panel.setAttribute("aria-label", "Product filters");
 
   let hasInitializedFilterState = false;
   let wasDisplayScaleFilterActive = false;
@@ -515,7 +475,6 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
     filterService.clearAll();
     writeFilterSnapshot(filterService);
     syncDisplayScaleFilterAutoDisable();
-
     applyVisibility();
     render();
   }
@@ -529,22 +488,19 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
       return false;
     }
 
-    const savedFilterState = readSavedFilterSnapshot();
-    if (!isPreferencePersistenceEnabled(PREFERENCE_PERSISTENCE_KEY.ATTRIBUTE_FILTERS)) {
-      return {
-        exists: false,
-        snapshot: null,
-      };
-    }
-    if (savedFilterState.exists) {
-      const didApplySavedState = filterService.applyFilterSnapshot(savedFilterState.snapshot);
+    if (isPreferencePersistenceEnabled(PREFERENCE_PERSISTENCE_KEY.ATTRIBUTE_FILTERS)) {
+      const savedFilterState = readSavedFilterSnapshot();
 
-      if (didApplySavedState) {
-        hasInitializedFilterState = true;
-        return true;
+      if (savedFilterState.exists) {
+        const didApplySavedState = filterService.applyFilterSnapshot(savedFilterState.snapshot);
+
+        if (didApplySavedState) {
+          hasInitializedFilterState = true;
+          return true;
+        }
+
+        removeSavedFilterSnapshot();
       }
-
-      removeSavedFilterSnapshot();
     }
 
     const didApplyDefault = applyDefaultFilterState(filterService);
@@ -552,7 +508,6 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
     // Save the initial state so clearing all filters later does not cause
     // the default filter to reappear on the next page visit.
     writeFilterSnapshot(filterService);
-
     hasInitializedFilterState = true;
 
     return didApplyDefault;
@@ -604,33 +559,32 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
     const openFieldKeys = getOpenFieldKeys(panel);
 
     panel.innerHTML = `
-    <div class="pm-filter-panel__header">
-      <div>
-        <h2>Filters</h2>
-        <p>Filter by layer attributes.</p>
+      <div class="pm-filter-panel__header">
+        <div>
+          <h2>Filters</h2>
+          <p>Filter by product attributes.</p>
+        </div>
+        <button type="button" data-clear-all-filters>Clear all</button>
       </div>
-
-      <button type="button" class="pm-filter-clear-all" data-clear-all-filters>
-        Clear all
-      </button>
-    </div>
-
-    ${
-      layerIds.length
-        ? layerIds
-            .map((layerId) =>
-              renderLayer({
-                filterService,
-                layerId,
-                openFieldKeys,
-              })
-            )
-            .join("")
-        : '<p class="pm-filter-empty">No layers loaded.</p>'
-    }
-  `;
+      <div class="pm-filter-panel__body">
+        ${
+          layerIds.length
+            ? layerIds
+                .map((layerId) =>
+                  renderLayer({
+                    filterService,
+                    layerId,
+                    openFieldKeys,
+                  })
+                )
+                .join("")
+            : '<p class="pm-filter-empty">No layers loaded.</p>'
+        }
+      </div>
+    `;
 
     refreshBadge();
+
     if (didInitializeFilterState) {
       syncDisplayScaleFilterAutoDisable();
       applyVisibility();
@@ -644,7 +598,6 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
     filterService.setFilter(layerId, fieldName, selectedValues, values.length);
     writeFilterSnapshot(filterService);
     syncDisplayScaleFilterAutoDisable();
-
     applyVisibility();
     render();
   }
@@ -681,10 +634,8 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
       entries[0].numericValue,
       entries[entries.length - 1].numericValue
     );
-
     writeFilterSnapshot(filterService);
     syncDisplayScaleFilterAutoDisable();
-
     applyVisibility();
     render();
   }
@@ -752,7 +703,6 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
       );
       writeFilterSnapshot(filterService);
       syncDisplayScaleFilterAutoDisable();
-
       applyVisibility();
       render();
       return;
@@ -772,7 +722,6 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
       );
       writeFilterSnapshot(filterService);
       syncDisplayScaleFilterAutoDisable();
-
       applyVisibility();
       render();
       return;
@@ -787,7 +736,6 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
       );
       writeFilterSnapshot(filterService);
       syncDisplayScaleFilterAutoDisable();
-
       applyVisibility();
       render();
     }
@@ -819,7 +767,6 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
     refresh: render,
     close: () => setOpen(false),
     clearAllFilters,
-
     destroy() {
       persistenceHandle?.remove?.();
       panel.remove();

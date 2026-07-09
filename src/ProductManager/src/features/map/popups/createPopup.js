@@ -12,7 +12,6 @@ const GENERIC_POPUP_EXCLUDED_FIELDS = new Set([
   "featureKey",
   "layerId",
   "layerKind",
-
   // Internal Analyze/report fields should not leak into generic map popups.
   "aoiGeometry",
   "errorMessage",
@@ -47,9 +46,10 @@ export function createPopup() {
 
       async function refreshAndRender({ showFailureNotice = true } = {}) {
         const refreshId = ++latestRefreshId;
-        const datasetName = currentAttributes.datasetName ?? graphic?.attributes?.datasetName;
+        const datasetName =
+          readDatasetName(currentAttributes) ?? readDatasetName(graphic?.attributes);
 
-        if (!attributesSupportLayerCapability(currentAttributes, "supportsProductActions")) {
+        if (!shouldRenderProductContent(currentAttributes)) {
           return false;
         }
 
@@ -82,7 +82,6 @@ export function createPopup() {
       const unsubscribeFromExportState = onPopupExportStateChanged(({ datasetName }) => {
         rerenderWhenDatasetMatches(datasetName);
       });
-
       const unsubscribeFromProductOperationState = onProductOperationStateChanged(
         ({ datasetName }) => {
           rerenderWhenDatasetMatches(datasetName);
@@ -96,7 +95,7 @@ export function createPopup() {
 
       function rerenderWhenDatasetMatches(datasetName) {
         const currentDatasetName =
-          currentAttributes.datasetName ?? graphic?.attributes?.datasetName;
+          readDatasetName(currentAttributes) ?? readDatasetName(graphic?.attributes);
 
         if (!isSameDatasetName(datasetName, currentDatasetName)) {
           return;
@@ -139,7 +138,7 @@ function renderPopupContent(container, attributes, { refreshAndRender }) {
   section.className = "popup-section";
   container.appendChild(section);
 
-  if (attributesSupportLayerCapability(attributes, "supportsProductActions")) {
+  if (shouldRenderProductContent(attributes)) {
     renderProductRows(section, attributes);
     return;
   }
@@ -152,7 +151,10 @@ function renderProductRows(section, attributes) {
 
   if (table) {
     section.appendChild(table);
+    return;
   }
+
+  section.appendChild(createRow("Details", "No displayable product attributes."));
 }
 
 function renderGenericRows(section, attributes) {
@@ -203,10 +205,9 @@ function createRow(label, value, withCopy = false) {
 
 function getPopupTitle(attributes) {
   return (
-    attributes?.datasetName ??
-    attributes?.name ??
-    attributes?.Name ??
-    attributes?.featureKey ??
+    readDatasetName(attributes) ??
+    readAttribute(attributes, ["name", "Name"]) ??
+    readAttribute(attributes, ["featureKey", "FeatureKey"]) ??
     "Feature"
   );
 }
@@ -303,6 +304,30 @@ function normalizeDatasetName(value) {
     .toUpperCase();
 }
 
+function shouldRenderProductContent(attributes) {
+  return (
+    attributesSupportLayerCapability(attributes, "supportsProductActions") ||
+    looksLikeProductAttributes(attributes)
+  );
+}
+
+function looksLikeProductAttributes(attributes) {
+  if (!attributes || typeof attributes !== "object") {
+    return false;
+  }
+
+  return Boolean(
+    readDatasetName(attributes) ||
+    readAttribute(attributes, ["edition", "Edition"]) !== undefined ||
+    readAttribute(attributes, ["update", "Update"]) !== undefined ||
+    readAttribute(attributes, ["status", "Status"]) !== undefined
+  );
+}
+
+function readDatasetName(attributes) {
+  return readAttribute(attributes, ["datasetName", "DatasetName", "datasetname"]);
+}
+
 function createProductMetadataTable(attributes) {
   const columns = createProductMetadataColumns(attributes);
 
@@ -321,7 +346,6 @@ function createProductMetadataTable(attributes) {
 
   const table = document.createElement("table");
   table.className = "popup-product-table";
-
   table.appendChild(createProductTableHead(columns));
   table.appendChild(createProductTableBody(columns, rows));
 
@@ -360,11 +384,11 @@ function createProductMetadataColumns(attributes) {
 
 function createMainProductMetadataItem(attributes) {
   return {
-    edition: attributes?.edition,
-    update: attributes?.update,
-    status: attributes?.status,
-    date: attributes?.issueDate,
-    errorMessage: attributes?.errorMessage,
+    edition: readAttribute(attributes, ["edition", "Edition"]),
+    update: readAttribute(attributes, ["update", "Update"]),
+    status: readAttribute(attributes, ["status", "Status"]),
+    date: readAttribute(attributes, ["issueDate", "IssueDate"]),
+    errorMessage: readAttribute(attributes, ["errorMessage", "ErrorMessage"]),
   };
 }
 
@@ -404,7 +428,6 @@ function createProductMetadataRows(columns) {
 function createProductTableHead(columns) {
   const head = document.createElement("thead");
   const row = document.createElement("tr");
-
   const attributeHeader = createProductTableHeaderCell("");
   attributeHeader.setAttribute("aria-label", "Attribute");
   row.appendChild(attributeHeader);
@@ -464,4 +487,33 @@ function formatProductStatus(status) {
 
 function formatProductTableValue(value) {
   return hasDisplayableValue(value) ? String(value) : "";
+}
+
+function readAttribute(attributes, names) {
+  if (!attributes) {
+    return undefined;
+  }
+
+  for (const name of names) {
+    if (Object.prototype.hasOwnProperty.call(attributes, name)) {
+      return attributes[name];
+    }
+  }
+
+  const normalizedNames = new Set(names.map(normalizeAttributeName));
+
+  for (const [name, value] of Object.entries(attributes)) {
+    if (normalizedNames.has(normalizeAttributeName(name))) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+function normalizeAttributeName(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/[_\-\s]/g, "")
+    .toLowerCase();
 }

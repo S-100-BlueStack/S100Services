@@ -1,9 +1,16 @@
+import { getAllStatuses } from "../../data/stores/statusStore.js";
+import { getAllUsages } from "../../data/stores/usageStore.js";
 import { getAllLayers } from "../core/layerRegistry.js";
 import { layerSupportsCapability } from "../config/layerDefinitions.js";
+import {
+  getAttributeFilterFieldDefinition,
+  getAttributeFilterFieldDefinitions,
+  getCanonicalAttributeFilterFieldName,
+  isConfiguredAttributeFilterField,
+  normalizeAttributeFilterFieldKey,
+} from "./attributeFilterConfig.js";
 
-const EXCLUDED_FIELD_KEYS = new Set(["datasetname", "featurekey", "layerid", "layerkind"]);
 const EMPTY_FILTER_VALUE = "__pm_empty_value__";
-
 const FILTER_MODE = {
   VALUES: "values",
   RANGE: "range",
@@ -38,6 +45,18 @@ function toFiniteNumber(value) {
 }
 
 function compareValues(a, b) {
+  if (Number.isFinite(a.sortIndex) && Number.isFinite(b.sortIndex)) {
+    return a.sortIndex - b.sortIndex;
+  }
+
+  if (Number.isFinite(a.sortIndex)) {
+    return -1;
+  }
+
+  if (Number.isFinite(b.sortIndex)) {
+    return 1;
+  }
+
   const aNumber = Number(a.value);
   const bNumber = Number(b.value);
 
@@ -49,10 +68,7 @@ function compareValues(a, b) {
 }
 
 function normalizeFieldKey(fieldName) {
-  return String(fieldName ?? "")
-    .trim()
-    .replace(/[_\-\s]/g, "")
-    .toLowerCase();
+  return normalizeAttributeFilterFieldKey(fieldName);
 }
 
 function getSourceLayers(layerId) {
@@ -66,7 +82,7 @@ function isLayerFilterable(layer) {
 }
 
 function isFilterableField(fieldName) {
-  return fieldName && !EXCLUDED_FIELD_KEYS.has(normalizeFieldKey(fieldName));
+  return isConfiguredAttributeFilterField(fieldName);
 }
 
 export function createAttributeFilterService() {
@@ -103,7 +119,6 @@ export function createAttributeFilterService() {
             min: filter.min,
             max: filter.max,
           });
-
           continue;
         }
 
@@ -140,7 +155,9 @@ export function createAttributeFilterService() {
       const layerFilters = ensureLayerFilters(layerEntry.layerId);
 
       for (const fieldEntry of layerEntry.fields) {
-        if (!isFilterableField(fieldEntry?.fieldName)) {
+        const canonicalFieldName = getCanonicalAttributeFilterFieldName(fieldEntry?.fieldName);
+
+        if (!canonicalFieldName) {
           continue;
         }
 
@@ -152,17 +169,16 @@ export function createAttributeFilterService() {
             continue;
           }
 
-          layerFilters.set(fieldEntry.fieldName, {
+          layerFilters.set(canonicalFieldName, {
             mode: FILTER_MODE.RANGE,
             min: Math.min(min, max),
             max: Math.max(min, max),
           });
-
           continue;
         }
 
         if (fieldEntry.mode === FILTER_MODE.VALUES && Array.isArray(fieldEntry.values)) {
-          layerFilters.set(fieldEntry.fieldName, {
+          layerFilters.set(canonicalFieldName, {
             mode: FILTER_MODE.VALUES,
             values: new Set(fieldEntry.values.map(normalizeFilterValue)),
           });
@@ -176,13 +192,14 @@ export function createAttributeFilterService() {
   }
 
   function setFilter(layerId, fieldName, selectedValues, totalValuesCount) {
+    const canonicalFieldName = getCanonicalAttributeFilterFieldName(fieldName) ?? fieldName;
     const normalizedValues = new Set(Array.from(selectedValues ?? []).map(normalizeFilterValue));
     const layerFilters = ensureLayerFilters(layerId);
 
     if (normalizedValues.size === totalValuesCount) {
-      layerFilters.delete(fieldName);
+      layerFilters.delete(canonicalFieldName);
     } else {
-      layerFilters.set(fieldName, {
+      layerFilters.set(canonicalFieldName, {
         mode: FILTER_MODE.VALUES,
         values: normalizedValues,
       });
@@ -192,6 +209,7 @@ export function createAttributeFilterService() {
   }
 
   function setRangeFilter(layerId, fieldName, minValue, maxValue, fullMinValue, fullMaxValue) {
+    const canonicalFieldName = getCanonicalAttributeFilterFieldName(fieldName) ?? fieldName;
     const minNumber = toFiniteNumber(minValue);
     const maxNumber = toFiniteNumber(maxValue);
     const fullMinNumber = toFiniteNumber(fullMinValue);
@@ -203,7 +221,7 @@ export function createAttributeFilterService() {
       fullMinNumber === null ||
       fullMaxNumber === null
     ) {
-      clearFilter(layerId, fieldName);
+      clearFilter(layerId, canonicalFieldName);
       return;
     }
 
@@ -212,9 +230,9 @@ export function createAttributeFilterService() {
     const layerFilters = ensureLayerFilters(layerId);
 
     if (normalizedMin <= fullMinNumber && normalizedMax >= fullMaxNumber) {
-      layerFilters.delete(fieldName);
+      layerFilters.delete(canonicalFieldName);
     } else {
-      layerFilters.set(fieldName, {
+      layerFilters.set(canonicalFieldName, {
         mode: FILTER_MODE.RANGE,
         min: normalizedMin,
         max: normalizedMax,
@@ -225,13 +243,14 @@ export function createAttributeFilterService() {
   }
 
   function clearFilter(layerId, fieldName) {
+    const canonicalFieldName = getCanonicalAttributeFilterFieldName(fieldName) ?? fieldName;
     const layerFilters = filtersByLayer.get(layerId);
 
     if (!layerFilters) {
       return;
     }
 
-    layerFilters.delete(fieldName);
+    layerFilters.delete(canonicalFieldName);
     cleanupLayerFilters(layerId, layerFilters);
   }
 
@@ -240,13 +259,15 @@ export function createAttributeFilterService() {
   }
 
   function getSelectedValues(layerId, fieldName) {
-    const filter = filtersByLayer.get(layerId)?.get(fieldName);
+    const canonicalFieldName = getCanonicalAttributeFilterFieldName(fieldName) ?? fieldName;
+    const filter = filtersByLayer.get(layerId)?.get(canonicalFieldName);
 
     return filter?.mode === FILTER_MODE.VALUES ? filter.values : null;
   }
 
   function getRangeFilter(layerId, fieldName) {
-    const filter = filtersByLayer.get(layerId)?.get(fieldName);
+    const canonicalFieldName = getCanonicalAttributeFilterFieldName(fieldName) ?? fieldName;
+    const filter = filtersByLayer.get(layerId)?.get(canonicalFieldName);
 
     return filter?.mode === FILTER_MODE.RANGE ? filter : null;
   }
@@ -292,41 +313,31 @@ export function createAttributeFilterService() {
   }
 
   function getFilterableFields(layerId) {
-    const fieldsByNormalizedKey = new Map();
+    const availableFieldKeys = collectAvailableFieldKeys(layerId);
 
-    for (const layer of getSourceLayers(layerId)) {
-      for (const graphic of getLayerGraphics(layer)) {
-        for (const fieldName of Object.keys(graphic.attributes ?? {})) {
-          if (!isFilterableField(fieldName)) {
-            continue;
-          }
-
-          const normalizedKey = normalizeFieldKey(fieldName);
-
-          if (!fieldsByNormalizedKey.has(normalizedKey)) {
-            fieldsByNormalizedKey.set(normalizedKey, new Set());
-          }
-
-          fieldsByNormalizedKey.get(normalizedKey).add(fieldName);
+    return getAttributeFilterFieldDefinitions()
+      .filter((definition) => {
+        if (availableFieldKeys.has(normalizeFieldKey(definition.fieldName))) {
+          return true;
         }
-      }
-    }
 
-    return Array.from(fieldsByNormalizedKey.values())
-      .map(selectCanonicalFieldName)
-      .sort((a, b) => a.localeCompare(b));
+        // Status is authoritative metadata from the lookup endpoint. Show the
+        // full status list even when no visible feature currently uses a value.
+        return definition.optionSource === "productStates" && getAllStatuses().length > 0;
+      })
+      .map((definition) => definition.fieldName);
   }
 
   function getValuesForField(layerId, fieldName) {
-    const values = new Map();
+    const definition = getAttributeFilterFieldDefinition(fieldName);
+    const values = createLookupOptionEntries(definition);
 
     for (const layer of getSourceLayers(layerId)) {
       for (const graphic of getLayerGraphics(layer)) {
         const value = normalizeFilterValue(readAttributeValue(graphic, fieldName));
-        const label = value === EMPTY_FILTER_VALUE ? "(empty)" : value;
         const entry = values.get(value) ?? {
           value,
-          label,
+          label: createFallbackValueLabel(value),
           count: 0,
         };
 
@@ -376,53 +387,6 @@ export function createAttributeFilterService() {
     return true;
   }
 
-  function selectCanonicalFieldName(fieldNames) {
-    const names = Array.from(fieldNames);
-    const normalizedKey = normalizeFieldKey(names[0]);
-
-    // Prefer generated/internal canonical fields when they exist, because config
-    // such as default filters and range filters already uses those field names.
-    const exactNormalizedMatch = names.find((name) => name === normalizedKey);
-
-    if (exactNormalizedMatch) {
-      return exactNormalizedMatch;
-    }
-
-    const lowerCaseMatch = names.find((name) => name.toLowerCase() === normalizedKey);
-
-    if (lowerCaseMatch) {
-      return lowerCaseMatch;
-    }
-
-    return names.sort((a, b) => a.localeCompare(b))[0];
-  }
-
-  function readAttributeValue(graphic, fieldName) {
-    const attributes = graphic.attributes ?? {};
-    const exactValue = attributes[fieldName];
-
-    if (!isEmptyAttributeValue(exactValue)) {
-      return exactValue;
-    }
-
-    const normalizedFieldName = normalizeFieldKey(fieldName);
-
-    for (const [candidateName, candidateValue] of Object.entries(attributes)) {
-      if (
-        normalizeFieldKey(candidateName) === normalizedFieldName &&
-        !isEmptyAttributeValue(candidateValue)
-      ) {
-        return candidateValue;
-      }
-    }
-
-    return exactValue;
-  }
-
-  function isEmptyAttributeValue(value) {
-    return value === null || value === undefined || value === "";
-  }
-
   return {
     setFilter,
     setRangeFilter,
@@ -439,4 +403,87 @@ export function createAttributeFilterService() {
     getFilterSnapshot,
     applyFilterSnapshot,
   };
+}
+
+function collectAvailableFieldKeys(layerId) {
+  const fieldKeys = new Set();
+
+  for (const layer of getSourceLayers(layerId)) {
+    for (const graphic of getLayerGraphics(layer)) {
+      for (const fieldName of Object.keys(graphic.attributes ?? {})) {
+        if (!isFilterableField(fieldName)) {
+          continue;
+        }
+
+        fieldKeys.add(normalizeFieldKey(fieldName));
+      }
+    }
+  }
+
+  return fieldKeys;
+}
+
+function createLookupOptionEntries(definition) {
+  const values = new Map();
+
+  if (definition?.optionSource === "productStates") {
+    addLookupEntries(values, getAllStatuses());
+  }
+
+  if (definition?.optionSource === "specificUsages") {
+    addLookupEntries(values, getAllUsages());
+  }
+
+  return values;
+}
+
+function addLookupEntries(values, entries) {
+  entries.forEach((entry, index) => {
+    const value = normalizeFilterValue(entry.Id);
+    values.set(value, {
+      value,
+      label: String(entry.Name ?? entry.Id ?? ""),
+      count: 0,
+      sortIndex: index,
+    });
+  });
+}
+
+function readAttributeValue(graphic, fieldName) {
+  const attributes = graphic.attributes ?? {};
+  const definition = getAttributeFilterFieldDefinition(fieldName);
+  const candidateFieldNames = [
+    fieldName,
+    definition?.fieldName,
+    ...(definition?.aliases ?? []),
+  ].filter(Boolean);
+
+  for (const candidateName of candidateFieldNames) {
+    const exactValue = attributes[candidateName];
+
+    if (!isEmptyAttributeValue(exactValue)) {
+      return exactValue;
+    }
+  }
+
+  const normalizedFieldName = normalizeFieldKey(fieldName);
+
+  for (const [candidateName, candidateValue] of Object.entries(attributes)) {
+    if (
+      normalizeFieldKey(candidateName) === normalizedFieldName &&
+      !isEmptyAttributeValue(candidateValue)
+    ) {
+      return candidateValue;
+    }
+  }
+
+  return attributes[fieldName];
+}
+
+function createFallbackValueLabel(value) {
+  return value === EMPTY_FILTER_VALUE ? "(empty)" : value;
+}
+
+function isEmptyAttributeValue(value) {
+  return value === null || value === undefined || value === "";
 }

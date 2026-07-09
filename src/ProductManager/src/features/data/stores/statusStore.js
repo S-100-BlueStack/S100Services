@@ -6,8 +6,10 @@ const statusMap = new Map();
 export async function loadStatuses() {
   const data = await apiGet("lookup/productstates", "Failed to load product states");
 
+  statusMap.clear();
+
   data.forEach((state) => {
-    statusMap.set(state.Id, state);
+    statusMap.set(normalizeStatusId(state.Id), state);
   });
 }
 
@@ -25,10 +27,17 @@ export function getStatus(id) {
   return statusMap.get(normalizeStatusId(id));
 }
 
-function normalizeStatusId(id) {
-  const number = Number(id);
+export function getAllStatuses() {
+  return Array.from(statusMap.values()).sort((left, right) => {
+    const leftId = normalizeStatusId(left.Id);
+    const rightId = normalizeStatusId(right.Id);
 
-  return Number.isFinite(number) ? number : id;
+    if (typeof leftId === "number" && typeof rightId === "number") {
+      return leftId - rightId;
+    }
+
+    return String(left.Name ?? left.Id).localeCompare(String(right.Name ?? right.Id));
+  });
 }
 
 export function getStatusIdByName(name) {
@@ -47,8 +56,15 @@ export function isFrozenStatus(id) {
   const name = normalizeStatusName(getStatusName(id));
 
   return (
-    name === "frozen" || name === "in transit" // TODO: Remove this when backend returns Frozen.
+    name === "frozen" ||
+    name === "in transit" // TODO: Remove this when backend returns Frozen.
   );
+}
+
+function normalizeStatusId(id) {
+  const number = Number(id);
+
+  return Number.isFinite(number) ? number : id;
 }
 
 function normalizeStatusName(value) {
