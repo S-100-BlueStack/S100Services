@@ -5,7 +5,13 @@ import {
 import { createReviewBoard } from "./reviewBoard.js";
 import { createReviewSidebar } from "./reviewSidebar.js";
 
-export function renderReviewPage({ productItems, products = [], loading = false, error = null }) {
+export function renderReviewPage({
+  productItems,
+  products = [],
+  loading = false,
+  error = null,
+  productCatalog = createEmptyProductCatalogState(),
+}) {
   const page = getOrCreateReviewPage();
   const normalizedProductItems = normalizeReviewProductItems(productItems);
   const enabledDatasetNames = getEnabledReviewDatasetNames(normalizedProductItems);
@@ -14,6 +20,7 @@ export function renderReviewPage({ productItems, products = [], loading = false,
     createReviewSidebar({
       productItems: normalizedProductItems,
       loading,
+      productCatalog,
     }),
     createReviewBoard({
       productItems: normalizedProductItems,
@@ -42,8 +49,15 @@ function getOrCreateReviewPage() {
   page.id = "product-review-page";
   page.className = "pm-review-page";
   page.setAttribute("aria-label", "Product Review");
-
   shell.appendChild(page);
 
   return page;
+}
+
+function createEmptyProductCatalogState() {
+  return {
+    products: [],
+    loading: false,
+    error: null,
+  };
 }

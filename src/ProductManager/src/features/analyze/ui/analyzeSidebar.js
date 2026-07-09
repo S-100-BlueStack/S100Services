@@ -1,4 +1,5 @@
 import { getStatusName } from "../../data/stores/statusStore.js";
+import { createProductPickerForm } from "../../products/ui/productPicker.js";
 import {
   getEnabledAnalyzeDatasetNames,
   normalizeAnalyzeDatasetItems,
@@ -14,6 +15,7 @@ export function renderAnalyzeSidebar({
   datasetNames,
   products = [],
   loading = false,
+  productCatalog = createEmptyProductCatalogState(),
 }) {
   const panel = getOrCreateAnalyzePanel();
   const calcitePanel = panel.querySelector("calcite-panel");
@@ -25,9 +27,8 @@ export function renderAnalyzeSidebar({
       : normalizeDatasetNames(datasetNames);
 
   calcitePanel.heading = createHeading(enabledDatasetNames);
-
   content.replaceChildren(
-    createDatasetManager(normalizedDatasetItems, { loading }),
+    createDatasetManager(normalizedDatasetItems, { loading, productCatalog }),
     loading ? createLoadingState(enabledDatasetNames) : createProductsContent(products)
   );
 }
@@ -59,7 +60,6 @@ function getOrCreateAnalyzePanel() {
 
   panel.appendChild(content);
   shellPanel.appendChild(panel);
-
   shell.appendChild(shellPanel);
 
   return shellPanel;
@@ -77,69 +77,30 @@ function createHeading(datasetNames) {
   return `Analyze ${datasetNames.length} products`;
 }
 
-function createDatasetManager(datasetItems, { loading }) {
+function createDatasetManager(datasetItems, { loading, productCatalog }) {
   const container = document.createElement("section");
   container.className = "analyze-dataset-manager";
-  container.setAttribute("aria-label", "Analyze dataset names");
+  container.setAttribute("aria-label", "Analyze products");
   container.setAttribute("aria-busy", loading ? "true" : "false");
 
-  container.appendChild(createDatasetAddForm());
+  container.appendChild(createDatasetAddForm(productCatalog));
   container.appendChild(createDatasetList(datasetItems));
 
   return container;
 }
 
-function createDatasetAddForm() {
-  const form = document.createElement("form");
-  form.className = "analyze-dataset-form";
-
-  const label = document.createElement("label");
-  label.className = "analyze-dataset-form__label";
-  label.htmlFor = "analyze-dataset-input";
-  label.textContent = "Add dataset";
-
-  const row = document.createElement("div");
-  row.className = "analyze-dataset-form__row";
-
-  const input = document.createElement("input");
-  input.id = "analyze-dataset-input";
-  input.className = "analyze-dataset-form__input";
-  input.type = "text";
-  input.placeholder = "DK5ABC123";
-  input.autocomplete = "off";
-  input.spellcheck = false;
-
-  const button = document.createElement("button");
-  button.className = "analyze-dataset-form__button";
-  button.type = "submit";
-  button.textContent = "Add";
-
-  const help = document.createElement("p");
-  help.className = "analyze-dataset-form__help";
-  help.textContent =
-    "Add one product at a time, or paste multiple names from an existing Analyze URL.";
-
-  row.appendChild(input);
-  row.appendChild(button);
-
-  form.appendChild(label);
-  form.appendChild(row);
-  form.appendChild(help);
-
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-
-    const datasetNames = parseDatasetInput(input.value);
-
-    if (datasetNames.length === 0) {
-      input.focus();
-      return;
-    }
-
-    dispatchAnalyzeDatasetAdd(form, datasetNames);
+function createDatasetAddForm(productCatalog) {
+  return createProductPickerForm({
+    id: "analyze-dataset-input",
+    eventName: "pm-analyze-dataset-add",
+    labelText: "Add product",
+    placeholder: "Search or type product name",
+    helpText: "Add one product at a time, or paste multiple names from an Analyze URL.",
+    products: productCatalog.products,
+    loading: productCatalog.loading,
+    error: productCatalog.error,
+    className: "analyze-dataset-form",
   });
-
-  return form;
 }
 
 function createDatasetList(datasetItems) {
@@ -148,18 +109,17 @@ function createDatasetList(datasetItems) {
   details.open = true;
 
   const enabledCount = datasetItems.filter((item) => item.enabled).length;
-
   const summary = document.createElement("summary");
   summary.className = "analyze-dataset-list__summary";
 
   const title = document.createElement("span");
   title.className = "analyze-dataset-list__title";
-  title.textContent = "Dataset list";
+  title.textContent = "Product list";
 
   const count = document.createElement("span");
   count.className = "analyze-dataset-list__count";
   count.textContent =
-    datasetItems.length === 0 ? "0 datasets" : `${enabledCount}/${datasetItems.length} enabled`;
+    datasetItems.length === 0 ? "0 products" : `${enabledCount}/${datasetItems.length} enabled`;
 
   summary.appendChild(title);
   summary.appendChild(count);
@@ -170,7 +130,7 @@ function createDatasetList(datasetItems) {
   if (datasetItems.length === 0) {
     const empty = document.createElement("p");
     empty.className = "analyze-dataset-list__empty";
-    empty.textContent = "No dataset names added.";
+    empty.textContent = "No products added.";
     content.appendChild(empty);
   } else {
     const list = document.createElement("div");
@@ -227,7 +187,6 @@ function createDatasetListItem(datasetItem) {
 
   toggleLabel.appendChild(checkbox);
   toggleLabel.appendChild(name);
-
   item.appendChild(toggleLabel);
   item.appendChild(removeButton);
 
@@ -239,12 +198,11 @@ function createLoadingState(datasetNames) {
   container.className = "analyze-sidebar__loading";
 
   if (datasetNames.length === 0) {
-    container.textContent = "Enable or add a dataset name to load product analysis.";
+    container.textContent = "Enable or add a product to load analysis.";
     return container;
   }
 
   container.textContent = `Loading analysis for ${datasetNames.join(", ")}...`;
-
   return container;
 }
 
@@ -257,6 +215,7 @@ function createProductsContent(products) {
     empty.className = "analyze-sidebar__empty";
     empty.textContent = "No products were loaded.";
     container.appendChild(empty);
+
     return container;
   }
 
@@ -270,7 +229,6 @@ function createProductsContent(products) {
   }
 
   container.appendChild(list);
-
   return container;
 }
 
@@ -334,7 +292,6 @@ function createProductCard(product) {
 
   const rows = document.createElement("div");
   rows.className = "analyze-product-card__rows";
-
   rows.appendChild(createInfoRow("Edition", product.edition));
   rows.appendChild(createInfoRow("Update", product.update));
   rows.appendChild(createInfoRow("Status", getStatusName(product.status)));
@@ -422,7 +379,6 @@ function createInternalValidationReportsBlock(reports = []) {
           "The Analyze UI is ready for internal validation reports, but no report payload was returned for this product.",
       })
     );
-
     details.append(summary, content);
     return details;
   }
@@ -476,7 +432,6 @@ function createInternalValidationReport(report, index) {
     const pre = document.createElement("pre");
     const code = document.createElement("code");
     code.textContent = formatInternalValidationReportContent(report);
-
     pre.appendChild(code);
     content.appendChild(pre);
   } else if (!hasText(report.summary)) {
@@ -523,6 +478,7 @@ function createInternalValidationMetadataItem(label, value) {
   valueElement.textContent = value;
 
   item.append(labelElement, valueElement);
+
   return item;
 }
 
@@ -539,6 +495,7 @@ function createInternalValidationStateMessage({ title, message }) {
   messageElement.textContent = message;
 
   container.append(titleElement, messageElement);
+
   return container;
 }
 
@@ -559,7 +516,6 @@ function createHistoryBlock(product) {
         message: product.historyError,
       })
     );
-
     details.append(summary, content);
     return details;
   }
@@ -571,7 +527,6 @@ function createHistoryBlock(product) {
         message: `History for ${product.datasetName} was not loaded.`,
       })
     );
-
     details.append(summary, content);
     return details;
   }
@@ -583,38 +538,19 @@ function createHistoryBlock(product) {
         message: "No history events were returned for this product.",
       })
     );
-
     details.append(summary, content);
     return details;
   }
 
   content.appendChild(createProductHistorySummary(product.history));
   content.appendChild(createProductHistoryEventList(product.history.events));
-
   details.append(summary, content);
-  return details;
-}
 
-function parseDatasetInput(value) {
-  return String(value ?? "")
-    .split("&")
-    .map((part) => part.trim())
-    .filter(Boolean);
+  return details;
 }
 
 function normalizeDatasetNames(datasetNames) {
   return normalizeAnalyzeDatasetItems(datasetNames).map((item) => item.name);
-}
-
-function dispatchAnalyzeDatasetAdd(target, datasetNames) {
-  target.dispatchEvent(
-    new CustomEvent("pm-analyze-dataset-add", {
-      bubbles: true,
-      detail: {
-        datasetNames,
-      },
-    })
-  );
 }
 
 function dispatchAnalyzeDatasetToggle(target, id, enabled) {
@@ -691,4 +627,12 @@ function isJsonLike(value) {
 
 function hasText(value) {
   return String(value ?? "").trim().length > 0;
+}
+
+function createEmptyProductCatalogState() {
+  return {
+    products: [],
+    loading: false,
+    error: null,
+  };
 }

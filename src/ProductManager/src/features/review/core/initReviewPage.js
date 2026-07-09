@@ -1,5 +1,6 @@
 import { loadStatuses } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
+import { fetchProductCatalog } from "../../products/api/productCatalogApi.js";
 import { hideLoader } from "../../../shared/ui/loader.js";
 import {
   addReviewProductItem,
@@ -21,19 +22,57 @@ import { renderReviewPage } from "../ui/reviewPage.js";
 export async function initReviewPage({ datasetNames } = {}) {
   let productItems = createReviewProductItems(datasetNames);
   let currentProducts = [];
+  let productCatalog = createProductCatalogState();
   let loadRequestId = 0;
+  let productCatalogRequestId = 0;
   let lookupsLoaded = false;
+  let isLoadingReviewProducts = false;
+  let reviewError = null;
 
   const enabledDatasetNames = getEnabledReviewDatasetNames(productItems);
 
   document.body.classList.add("pm-review-route");
   document.title = createReviewDocumentTitle(enabledDatasetNames);
 
+  const renderCurrentReviewPage = () => {
+    renderReviewPage({
+      productItems,
+      products: currentProducts,
+      loading: isLoadingReviewProducts,
+      error: reviewError,
+      productCatalog,
+    });
+  };
+
+  const loadProductCatalogForPicker = async () => {
+    const requestId = ++productCatalogRequestId;
+    productCatalog = createProductCatalogState({ loading: true });
+    renderCurrentReviewPage();
+
+    try {
+      const products = await fetchProductCatalog();
+
+      if (requestId !== productCatalogRequestId) {
+        return;
+      }
+
+      productCatalog = createProductCatalogState({ products });
+    } catch (error) {
+      if (requestId !== productCatalogRequestId) {
+        return;
+      }
+
+      productCatalog = createProductCatalogState({
+        error: error instanceof Error ? error.message : "Unknown product catalog error.",
+      });
+    }
+
+    renderCurrentReviewPage();
+  };
+
   const loadReviewProductItems = async (nextProductItems, { updateUrl = true } = {}) => {
     const requestId = ++loadRequestId;
-
     productItems = normalizeReviewProductItems(nextProductItems);
-
     const enabledNextDatasetNames = getEnabledReviewDatasetNames(productItems);
 
     if (updateUrl) {
@@ -42,26 +81,20 @@ export async function initReviewPage({ datasetNames } = {}) {
 
     document.title = createReviewDocumentTitle(enabledNextDatasetNames);
 
-    renderReviewPage({
-      productItems,
-      products: currentProducts,
-      loading: enabledNextDatasetNames.length > 0,
-    });
+    isLoadingReviewProducts = enabledNextDatasetNames.length > 0;
+    reviewError = null;
+    renderCurrentReviewPage();
 
     currentProducts = [];
 
     if (enabledNextDatasetNames.length === 0) {
-      renderReviewPage({
-        productItems,
-        products: [],
-        loading: false,
-      });
+      isLoadingReviewProducts = false;
+      renderCurrentReviewPage();
       return;
     }
 
     try {
       await ensureLookupsLoaded();
-
       const products = await loadReviewHistories(enabledNextDatasetNames);
 
       if (requestId !== loadRequestId) {
@@ -69,24 +102,17 @@ export async function initReviewPage({ datasetNames } = {}) {
       }
 
       currentProducts = products;
-
-      renderReviewPage({
-        productItems,
-        products,
-        loading: false,
-      });
+      isLoadingReviewProducts = false;
+      renderCurrentReviewPage();
     } catch (error) {
       if (requestId !== loadRequestId) {
         return;
       }
 
-      renderReviewPage({
-        productItems,
-        products: [],
-        loading: false,
-        error: error instanceof Error ? error.message : "Unknown review error.",
-      });
-
+      currentProducts = [];
+      isLoadingReviewProducts = false;
+      reviewError = error instanceof Error ? error.message : "Unknown review error.";
+      renderCurrentReviewPage();
       noticeError(
         "Product Review failed",
         error instanceof Error ? error.message : "Unknown review error"
@@ -169,12 +195,7 @@ export async function initReviewPage({ datasetNames } = {}) {
       contentType,
       event.detail?.enabled
     );
-
-    renderReviewPage({
-      productItems,
-      products: currentProducts,
-      loading: false,
-    });
+    renderCurrentReviewPage();
   };
 
   document.addEventListener("pm-review-product-add", handleProductAdd);
@@ -185,22 +206,13 @@ export async function initReviewPage({ datasetNames } = {}) {
   await waitForNextPaint();
   hideLoader();
 
-  renderReviewPage({
-    productItems,
-    products: [],
-    loading: false,
-  });
-
-  await loadReviewProductItems(productItems, {
-    updateUrl: false,
-  });
+  renderCurrentReviewPage();
+  void loadProductCatalogForPicker();
+  await loadReviewProductItems(productItems, { updateUrl: false });
 
   const handlePopState = async () => {
     const route = getCurrentReviewRoute();
-
-    await loadReviewDatasetNames(route.datasetNames, {
-      updateUrl: false,
-    });
+    await loadReviewDatasetNames(route.datasetNames, { updateUrl: false });
   };
 
   window.addEventListener("popstate", handlePopState);
@@ -212,6 +224,7 @@ export async function initReviewPage({ datasetNames } = {}) {
     loadReviewDatasetNames,
     destroy() {
       loadRequestId += 1;
+      productCatalogRequestId += 1;
       document.removeEventListener("pm-review-product-add", handleProductAdd);
       document.removeEventListener("pm-review-product-toggle", handleProductToggle);
       document.removeEventListener("pm-review-content-toggle", handleContentToggle);
@@ -233,7 +246,6 @@ export async function initReviewPage({ datasetNames } = {}) {
 
 function normalizeDatasetNames(datasetNames) {
   const values = Array.isArray(datasetNames) ? datasetNames : [datasetNames];
-
   return values.map((value) => String(value ?? "").trim()).filter(Boolean);
 }
 
@@ -253,4 +265,12 @@ function waitForNextPaint() {
       requestAnimationFrame(resolve);
     });
   });
+}
+
+function createProductCatalogState({ products = [], loading = false, error = null } = {}) {
+  return {
+    products,
+    loading,
+    error,
+  };
 }

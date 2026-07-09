@@ -1,9 +1,10 @@
+import { createProductPickerForm } from "../../products/ui/productPicker.js";
 import {
   getReviewContentTypeDefinitions,
   isReviewContentTypeEnabled,
 } from "../domain/reviewProductList.js";
 
-export function createReviewSidebar({ productItems, loading }) {
+export function createReviewSidebar({ productItems, loading, productCatalog }) {
   const sidebar = document.createElement("aside");
   sidebar.className = "pm-review-sidebar";
   sidebar.setAttribute("aria-label", "Review products");
@@ -26,60 +27,23 @@ export function createReviewSidebar({ productItems, loading }) {
     "Collect products and choose which review content to compare side by side.";
 
   header.append(eyebrow, title, description);
-
-  sidebar.append(header, createProductAddForm(), createProductList(productItems));
+  sidebar.append(header, createProductAddForm(productCatalog), createProductList(productItems));
 
   return sidebar;
 }
 
-function createProductAddForm() {
-  const form = document.createElement("form");
-  form.className = "pm-review-product-form";
-
-  const label = document.createElement("label");
-  label.className = "pm-review-product-form__label";
-  label.htmlFor = "review-product-input";
-  label.textContent = "Add product";
-
-  const row = document.createElement("div");
-  row.className = "pm-review-product-form__row";
-
-  const input = document.createElement("input");
-  input.id = "review-product-input";
-  input.className = "pm-review-product-form__input";
-  input.type = "text";
-  input.placeholder = "DK5ABC123";
-  input.autocomplete = "off";
-  input.spellcheck = false;
-
-  const button = document.createElement("button");
-  button.className = "pm-review-product-form__button";
-  button.type = "submit";
-  button.textContent = "Add";
-
-  const help = document.createElement("p");
-  help.className = "pm-review-product-form__help";
-  help.textContent = "Add one product at a time, or paste multiple names from a Review URL.";
-
-  row.append(input, button);
-  form.append(label, row, help);
-
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-
-    const datasetNames = parseProductInput(input.value);
-
-    if (datasetNames.length === 0) {
-      input.focus();
-      return;
-    }
-
-    dispatchReviewProductAdd(form, datasetNames);
-    input.value = "";
-    input.focus();
+function createProductAddForm(productCatalog) {
+  return createProductPickerForm({
+    id: "review-product-input",
+    eventName: "pm-review-product-add",
+    labelText: "Add product",
+    placeholder: "Search or type product name",
+    helpText: "Add one product at a time, or paste multiple names from a Review URL.",
+    products: productCatalog?.products ?? [],
+    loading: productCatalog?.loading ?? false,
+    error: productCatalog?.error ?? null,
+    className: "pm-review-product-form",
   });
-
-  return form;
 }
 
 function createProductList(productItems) {
@@ -106,6 +70,7 @@ function createProductList(productItems) {
     empty.className = "pm-review-product-list__empty";
     empty.textContent = "No products added.";
     section.appendChild(empty);
+
     return section;
   }
 
@@ -118,7 +83,6 @@ function createProductList(productItems) {
   }
 
   section.appendChild(list);
-
   return section;
 }
 
@@ -204,7 +168,6 @@ function createContentTypeToggle(productItem, definition) {
   });
 
   label.append(checkbox, text);
-
   return label;
 }
 
@@ -216,24 +179,6 @@ function createProductCountText(productItems) {
   }
 
   return `${enabledCount}/${productItems.length} visible`;
-}
-
-function parseProductInput(value) {
-  return String(value ?? "")
-    .split("&")
-    .map((part) => part.trim())
-    .filter(Boolean);
-}
-
-function dispatchReviewProductAdd(target, datasetNames) {
-  target.dispatchEvent(
-    new CustomEvent("pm-review-product-add", {
-      bubbles: true,
-      detail: {
-        datasetNames,
-      },
-    })
-  );
 }
 
 function dispatchReviewProductToggle(target, id, enabled) {

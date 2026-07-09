@@ -4,9 +4,10 @@ import { createView } from "../../map/core/createView.js";
 import { createHoverManager } from "../../map/interactions/hoverManager.js";
 import { registerPopupHoverSync } from "../../map/interactions/registerPopupHoverSync.js";
 import { noticeError, noticeWarning } from "../../notices/services/noticeService.js";
+import { fetchProductCatalog } from "../../products/api/productCatalogApi.js";
 import { fetchProductHistory } from "../../timeline/api/productHistoryApi.js";
-import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
 import { hideLoader } from "../../../shared/ui/loader.js";
+import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
 import {
   addAnalyzeDatasetItem,
   createAnalyzeDatasetItems,
@@ -29,7 +30,9 @@ export async function initAnalyzePage({ datasetNames }) {
   let currentLayers = [];
   let currentProducts = [];
   let datasetItems = createAnalyzeDatasetItems(datasetNames);
+  let productCatalog = createProductCatalogState();
   let loadRequestId = 0;
+  let productCatalogRequestId = 0;
   let lookupsLoaded = false;
   let activeLoaderProgress = null;
   let cleanupViewPadding = null;
@@ -44,14 +47,48 @@ export async function initAnalyzePage({ datasetNames }) {
   const hoverManager = createHoverManager(view);
   const cleanupPopupHoverSync = registerPopupHoverSync(view, hoverManager);
 
+  const renderSidebar = ({ loading = false } = {}) => {
+    renderAnalyzeSidebar({
+      datasetItems,
+      datasetNames: getEnabledAnalyzeDatasetNames(datasetItems),
+      products: currentProducts,
+      loading,
+      productCatalog,
+    });
+  };
+
+  const loadProductCatalogForPicker = async () => {
+    const requestId = ++productCatalogRequestId;
+    productCatalog = createProductCatalogState({ loading: true });
+    renderSidebar({ loading: enabledDatasetNames.length > 0 && currentProducts.length === 0 });
+
+    try {
+      const products = await fetchProductCatalog();
+
+      if (requestId !== productCatalogRequestId) {
+        return;
+      }
+
+      productCatalog = createProductCatalogState({ products });
+    } catch (error) {
+      if (requestId !== productCatalogRequestId) {
+        return;
+      }
+
+      productCatalog = createProductCatalogState({
+        error: error instanceof Error ? error.message : "Unknown product catalog error.",
+      });
+    }
+
+    renderSidebar({ loading: false });
+  };
+
   const loadAnalyzeDatasetItems = async (
     nextDatasetItems,
     { updateUrl = true, showLoader = true } = {}
   ) => {
     const requestId = ++loadRequestId;
-
     datasetItems = normalizeAnalyzeDatasetItems(nextDatasetItems);
-
     const enabledNextDatasetNames = getEnabledAnalyzeDatasetNames(datasetItems);
 
     // The Analyze route represents the active load set. Disabled names are local
@@ -66,7 +103,6 @@ export async function initAnalyzePage({ datasetNames }) {
     // keep rendering details for a graphic that is no longer present in the map.
     closePopup(view);
     hoverManager.clear();
-
     activeLoaderProgress?.cleanup();
     activeLoaderProgress = null;
 
@@ -75,6 +111,7 @@ export async function initAnalyzePage({ datasetNames }) {
       datasetNames: enabledNextDatasetNames,
       products: currentProducts,
       loading: enabledNextDatasetNames.length > 0,
+      productCatalog,
     });
 
     removeLayers(map, currentLayers);
@@ -87,6 +124,7 @@ export async function initAnalyzePage({ datasetNames }) {
         datasetNames: [],
         products: [],
         loading: false,
+        productCatalog,
       });
       return;
     }
@@ -151,8 +189,8 @@ export async function initAnalyzePage({ datasetNames }) {
         datasetNames: enabledNextDatasetNames,
         products: productsWithHistory,
         loading: false,
+        productCatalog,
       });
-
       showMockWarningIfNeeded(productsWithHistory);
 
       if (layers.length > 0) {
@@ -177,15 +215,10 @@ export async function initAnalyzePage({ datasetNames }) {
         );
       }
 
-      loaderProgress.complete({
-        text: "Analyze ready",
-      });
+      loaderProgress.complete({ text: "Analyze ready" });
     } catch (error) {
       if (requestId === loadRequestId) {
-        loaderProgress.fail({
-          text: "Failed to load analyze data",
-        });
-
+        loaderProgress.fail({ text: "Failed to load analyze data" });
         noticeError(
           "Analyze data failed",
           error instanceof Error ? error.message : "Unknown analyze error"
@@ -266,7 +299,6 @@ export async function initAnalyzePage({ datasetNames }) {
   cleanupViewPadding = applyAnalyzeViewPadding(view);
 
   await view.when();
-
   // The bootstrap loader covers initial page and map setup. Hide it before
   // data loading starts so the delayed Analyze loader can decide whether a
   // loader is needed at all.
@@ -277,18 +309,14 @@ export async function initAnalyzePage({ datasetNames }) {
     datasetNames: enabledDatasetNames,
     products: [],
     loading: false,
+    productCatalog,
   });
-
-  await loadAnalyzeDatasetItems(datasetItems, {
-    updateUrl: false,
-  });
+  void loadProductCatalogForPicker();
+  await loadAnalyzeDatasetItems(datasetItems, { updateUrl: false });
 
   const handlePopState = async () => {
     const route = getCurrentRoute();
-
-    await loadAnalyzeDatasetNames(route.datasetNames, {
-      updateUrl: false,
-    });
+    await loadAnalyzeDatasetNames(route.datasetNames, { updateUrl: false });
   };
 
   window.addEventListener("popstate", handlePopState);
@@ -305,6 +333,7 @@ export async function initAnalyzePage({ datasetNames }) {
     loadAnalyzeDatasetNames,
     destroy() {
       loadRequestId += 1;
+      productCatalogRequestId += 1;
       document.removeEventListener("pm-analyze-dataset-add", handleAnalyzeDatasetAdd);
       document.removeEventListener("pm-analyze-dataset-toggle", handleAnalyzeDatasetToggle);
       document.removeEventListener("pm-analyze-dataset-remove", handleAnalyzeDatasetRemove);
@@ -488,4 +517,12 @@ async function registerHoverLayers(hoverManager, layers) {
 
 function closePopup(view) {
   view.popup?.close?.();
+}
+
+function createProductCatalogState({ products = [], loading = false, error = null } = {}) {
+  return {
+    products,
+    loading,
+    error,
+  };
 }
