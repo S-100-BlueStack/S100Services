@@ -1,4 +1,3 @@
-import { noticeInfo } from "../../notices/services/noticeService.js";
 import {
   createProductActionAvailability,
   createProductExportAvailability,
@@ -15,6 +14,7 @@ import {
   sendImmediately,
   triggerExport,
   triggerFreeze,
+  triggerRollback,
 } from "./popupProductActions.js";
 
 export function createPopupActionGroups({ attributes, frozen, refreshAndRender } = {}) {
@@ -22,7 +22,6 @@ export function createPopupActionGroups({ attributes, frozen, refreshAndRender }
   const productOperationState = getProductOperationState(datasetName);
   const productHasRunningNonExportMutation =
     hasRunningNonExportProductOperation(productOperationState);
-
   const availability = createProductActionAvailability({
     attributes,
     frozen,
@@ -57,10 +56,11 @@ export function createPopupActionGroups({ attributes, frozen, refreshAndRender }
       }),
       createRollbackAction({
         attributes,
+        availability,
+        productOperationState,
+        refreshAndRender,
       }),
-      createToolsAction({
-        attributes,
-      }),
+      createToolsAction({ attributes }),
     ],
   ];
 }
@@ -78,10 +78,7 @@ function createFreezeAction({
 
   return {
     id: frozen ? "unfreeze-feature" : "freeze-feature",
-    label: getFreezeActionLabel({
-      frozen,
-      operationIsRunning,
-    }),
+    label: getFreezeActionLabel({ frozen, operationIsRunning }),
     icon: frozen ? "brightness" : "snow",
     loading: operationIsRunning,
     disabled: actionAvailability.disabled,
@@ -89,7 +86,6 @@ function createFreezeAction({
     className: "popup-action-bar__action--freeze",
     onClick: async ({ anchorElement }) => {
       const nextFrozenState = !frozen;
-
       await triggerFreeze(attributes?.datasetName, nextFrozenState, anchorElement, {
         afterResult: refreshAndRender,
       });
@@ -184,7 +180,6 @@ function createExportLeafAction({
     scope: group.scope,
     exportType: exportAction.exportType,
   });
-
   const availability = createProductExportAvailability({
     attributes,
     frozen,
@@ -215,16 +210,29 @@ function createExportLeafAction({
   };
 }
 
-function createRollbackAction({ attributes }) {
+function createRollbackAction({
+  attributes,
+  availability,
+  productOperationState,
+  refreshAndRender,
+}) {
+  const operationIsRunning = isOperationTypeRunning(
+    productOperationState,
+    PRODUCT_OPERATION_TYPE.ROLLBACK
+  );
+
   return {
     id: "rollback",
-    label: "Rollback",
+    label: operationIsRunning ? "Rolling back..." : "Rollback",
     icon: "undo",
-    disabled: true,
-    disabledReason: "Feature is not available yet.",
+    loading: operationIsRunning,
+    disabled: availability.rollback.disabled,
+    disabledReason: availability.rollback.disabledReason,
     className: "popup-action-bar__action--rollback",
-    onClick: () => {
-      noticeInfo("Rollback is not available yet", attributes?.datasetName);
+    onClick: async ({ anchorElement }) => {
+      await triggerRollback(attributes?.datasetName, anchorElement, {
+        afterResult: refreshAndRender,
+      });
     },
   };
 }

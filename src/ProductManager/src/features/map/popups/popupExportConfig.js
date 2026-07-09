@@ -1,4 +1,4 @@
-import { exportNewEdition, exportNewUpdate } from "../../data/api/exportApi.js";
+import { exportNewEdition } from "../../data/api/exportApi.js";
 
 export const EXPORT_SCOPE = Object.freeze({
   ALL: "All",
@@ -22,21 +22,16 @@ export const POPUP_EXPORT_GROUPS = [
     label: "All",
     scope: EXPORT_SCOPE.ALL,
     actions: [
-      createImplementedExportAction({
+      createFutureExportAction({
         id: "export-all-edition",
         exportType: EXPORT_TYPE.EDITION,
-        request: exportNewEdition,
-        createConfirm: createAllEditionConfirm,
       }),
-      createImplementedExportAction({
+      createFutureExportAction({
         id: "export-all-update",
         exportType: EXPORT_TYPE.UPDATE,
-        request: exportNewUpdate,
-        createConfirm: createAllUpdateConfirm,
       }),
     ],
   }),
-
   createExportGroup({
     id: "export-s57",
     label: "S57",
@@ -52,15 +47,16 @@ export const POPUP_EXPORT_GROUPS = [
       }),
     ],
   }),
-
   createExportGroup({
     id: "export-s100",
     label: "S100",
     scope: EXPORT_SCOPE.S100,
     actions: [
-      createFutureExportAction({
+      createImplementedExportAction({
         id: "s100-export-edition",
         exportType: EXPORT_TYPE.EDITION,
+        request: exportNewEdition,
+        createConfirm: createS100EditionConfirm,
       }),
       createFutureExportAction({
         id: "s100-export-update",
@@ -99,29 +95,16 @@ function createFutureExportAction({ id, exportType }) {
     icon: EXPORT_ACTION_ICON[exportType],
     exportType,
     implemented: false,
-
     // Add the endpoint request here and set `implemented` to true when the
     // backend supports this export.
     request: null,
   };
 }
 
-function createAllEditionConfirm(datasetName) {
+function createS100EditionConfirm(datasetName) {
   return {
-    title: `Export new edition for ${datasetName}`,
-    message:
-      `Are you sure you want to export a new Edition in ALL formats of ${datasetName}? ` +
-      "The export will include ALL formats of the product - Currently S57 and S100",
+    title: `Export S100 edition for ${datasetName}`,
+    message: `Are you sure you want to export a new S100 Edition for ${datasetName}?`,
     confirmText: "Export edition",
-  };
-}
-
-function createAllUpdateConfirm(datasetName) {
-  return {
-    title: `Export new update for ${datasetName}`,
-    message:
-      `Are you sure you want to export a new Update in ALL formats of ${datasetName}? ` +
-      "The export will include ALL formats of the product - Currently S57 and S100",
-    confirmText: "Export update",
   };
 }

@@ -1,5 +1,6 @@
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
 import { changeFreezeState, uploadProduct } from "../../data/api/productApi.js";
+import { exportRollback } from "../../data/api/exportApi.js";
 import {
   noticeApiFailure,
   noticeApiSuccess,
@@ -54,9 +55,9 @@ export async function triggerFreeze(datasetName, state, anchorElement, { afterRe
     datasetName,
     confirm: {
       title: `${state ? "Freeze" : "Unfreeze"} ${datasetName}`,
-      message: `Are you sure you want to ${
-        state ? "freeze" : "unfreeze"
-      } ${datasetName}? Freezing a product will prevent it from being sent to IC-ENC until it is unfrozen.`,
+      message:
+        `Are you sure you want to ${state ? "freeze" : "unfreeze"} ${datasetName}? ` +
+        "Freezing a product will prevent it from being sent to IC-ENC until it is unfrozen.",
       confirmText: "Confirm",
       cancelText: "Cancel",
       anchorElement,
@@ -88,7 +89,9 @@ export async function sendImmediately(datasetName, anchorElement, { afterResult 
     datasetName,
     confirm: {
       title: `Send ${datasetName}`,
-      message: `Are you sure you want to send ${datasetName} immediately? This will upload the product to IC-ENC immediately without waiting for the automated upload.`,
+      message:
+        `Are you sure you want to send ${datasetName} immediately? ` +
+        "This will upload the product to IC-ENC immediately without waiting for the automated upload.",
       confirmText: "Send",
       cancelText: "Cancel",
       anchorElement,
@@ -106,6 +109,38 @@ export async function sendImmediately(datasetName, anchorElement, { afterResult 
       failureTitle: `Failed to send ${datasetName}`,
     },
     unexpectedErrorTitle: `Unexpected error while sending ${datasetName}`,
+    afterResult,
+  });
+}
+
+export async function triggerRollback(datasetName, anchorElement, { afterResult } = {}) {
+  if (!datasetName) {
+    noticeError("Cannot rollback product", "The selected feature does not have a datasetName.");
+    return null;
+  }
+
+  return runConfirmedProductOperation({
+    datasetName,
+    confirm: {
+      title: `Rollback ${datasetName}`,
+      message: `Are you sure you want to rollback ${datasetName}? This will call the rollback endpoint for the selected product.`,
+      confirmText: "Rollback",
+      cancelText: "Cancel",
+      anchorElement,
+    },
+    operation: {
+      type: PRODUCT_OPERATION_TYPE.ROLLBACK,
+      label: "Rolling back",
+    },
+    execute: () => exportRollback(datasetName),
+    onSuccess: () => {
+      noticeApiSuccess(`Product ${datasetName} rolled back successfully`);
+    },
+    failureNotice: {
+      networkTitle: `Network error while rolling back ${datasetName}`,
+      failureTitle: `Failed to rollback ${datasetName}`,
+    },
+    unexpectedErrorTitle: `Unexpected error while rolling back ${datasetName}`,
     afterResult,
   });
 }
@@ -185,7 +220,6 @@ async function runConfirmedProductOperation({
         "Product operation is already running",
         runningOperation.reason ?? `${operation.label} is already running for ${datasetName}.`
       );
-
       return createSkippedActionResult("already-running");
     }
 
@@ -247,7 +281,6 @@ async function runConfirmedExportOperation({
         "Export is already running",
         runningExport.reason ?? `${exportLabel} is already running for ${datasetName}.`
       );
-
       return createSkippedActionResult("already-running");
     }
 
@@ -262,13 +295,11 @@ async function runConfirmedExportOperation({
     if (!runningOperation.started) {
       endPopupExportAction(runningExport.key);
       runningExport = null;
-
       noticeError(
         "Product operation is already running",
         runningOperation.reason ??
           `Another product operation is already running for ${datasetName}.`
       );
-
       return createSkippedActionResult("already-running");
     }
 
