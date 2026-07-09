@@ -24,6 +24,9 @@ Implemented scope:
 - Status and operation breakdowns.
 - Actionable status and operation summary rows that apply matching activity filters.
 - Review and Analyze links from activity rows.
+- Dashboard History panel that opens from activity-row `History` actions.
+- Dashboard History panel can be closed with `Close` or `Escape`.
+- Dashboard History panel loads product state lookups before normalizing backend history so numeric status IDs render as status names.
 - Disabled or placeholder report actions until report URLs or report detail endpoints exist.
 
 ## Backend contract
@@ -161,6 +164,27 @@ Summary cards, status summary and operation summary are derived from the filtere
 
 These summary panels should stay small and data-oriented. Do not reintroduce the removed `Important changes` panel unless it becomes a clearly filterable and useful activity concept.
 
+## Dashboard History panel
+
+The activity-row `History` action opens a route-local panel in the Dashboard right column. The panel intentionally replaces the status and operation summaries while it is open, so it uses the same vertical space as the activity table and avoids an extra floating overlay.
+
+The panel reuses the existing product history API and renderers:
+
+```js
+fetchProductHistory(datasetName)
+createProductHistorySummary(history)
+createProductHistoryEventList(history.events)
+```
+
+Behavior:
+
+- The panel opens only for activities with a `datasetName` and `Links.History = true`.
+- The panel has a single `Close` action and also closes on `Escape`.
+- Closing the panel restores `Status summary` and `Operation summary`.
+- Loading, empty and error states use the same product history state renderer as the main map quick panel.
+- Product state lookups are loaded before history normalization so backend status IDs render as status names.
+- The Dashboard panel does not pin, auto-close on popup state, or interact with Product Collection.
+
 ## Report links
 
 Report links support multiple IC-ENC and internal validation report metadata entries.
@@ -171,7 +195,6 @@ Until report URL endpoints exist, Dashboard renders report metadata as available
 
 The following work remains intentionally outside phase 1:
 
-- Add a simple Dashboard History panel that reuses product history data and opens from an activity row.
 - Add real IC-ENC report links when backend report IDs/storage contract exists.
 - Add real internal validation report links when backend report IDs/storage contract exists.
 - Improve important-change classification only if it becomes useful as a filterable activity concept.

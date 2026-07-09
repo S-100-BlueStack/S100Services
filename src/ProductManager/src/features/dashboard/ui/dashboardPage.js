@@ -1,6 +1,14 @@
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
+import { loadStatuses } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { buildReviewUrl } from "../../review/routing/reviewRoute.js";
+import { fetchProductHistory } from "../../timeline/api/productHistoryApi.js";
+import {
+  createProductHistoryBanner,
+  createProductHistoryEventList,
+  createProductHistoryStateMessage,
+  createProductHistorySummary,
+} from "../../timeline/ui/productHistoryRenderers.js";
 import {
   buildDashboardFilterOptions,
   createDashboardSummaryRowFilterPatch,
@@ -60,9 +68,13 @@ const REPORT_OPTIONS = [
 
 let dashboardFilters = createDefaultDashboardFilters();
 let dashboardRangeDraft = null;
+let dashboardHistoryState = createDashboardHistoryState();
+let dashboardHistoryKeyboardHandlersRegistered = false;
+let dashboardHistoryLookupLoadPromise = null;
 let lastRenderArgs = null;
 
 export function renderDashboardPage({ range, dashboard, loading = false, error = null }) {
+  ensureDashboardHistoryKeyboardHandlers();
   lastRenderArgs = { range, dashboard, loading, error };
 
   const page = getOrCreateDashboardPage();
@@ -910,19 +922,24 @@ function createDashboardGrid({
 
   const aside = document.createElement("aside");
   aside.className = "pm-dashboard-grid__aside";
+  aside.classList.toggle("has-history-panel", dashboardHistoryState.isOpen);
   aside.append(
-    createSummaryRows({
-      title: "Status summary",
-      rows: dashboard.statusSummary,
-      filterKey: "status",
-      filters,
-    }),
-    createSummaryRows({
-      title: "Operation summary",
-      rows: dashboard.operationSummary,
-      filterKey: "type",
-      filters,
-    })
+    ...(dashboardHistoryState.isOpen
+      ? [createDashboardHistoryPanel()]
+      : [
+          createSummaryRows({
+            title: "Status summary",
+            rows: dashboard.statusSummary,
+            filterKey: "status",
+            filters,
+          }),
+          createSummaryRows({
+            title: "Operation summary",
+            rows: dashboard.operationSummary,
+            filterKey: "type",
+            filters,
+          }),
+        ])
   );
 
   grid.append(main, aside);
@@ -1200,11 +1217,7 @@ function createActivityLinks(activity) {
       enabled: activity.links.analyze && activity.datasetName,
       url: activity.datasetName ? buildAnalyzeUrl([activity.datasetName]) : null,
     }),
-    createPlaceholderLink({
-      label: "History",
-      enabled: activity.links.history,
-      title: "History is available in Review and the main map quick panel.",
-    }),
+    createDashboardHistoryLink(activity),
     createReportLinkGroup({
       label: "IC-ENC",
       reports: activity.links.icEncReports,
@@ -1231,6 +1244,239 @@ function createProductLink({ label, enabled, url }) {
   link.textContent = label;
 
   return link;
+}
+
+function createDashboardHistoryLink(activity) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "pm-dashboard-link-button";
+  button.disabled = !activity.links.history || !activity.datasetName;
+  button.textContent = "History";
+  button.title = button.disabled
+    ? "History is not available for this activity."
+    : `Open product history for ${activity.datasetName}.`;
+
+  if (!button.disabled) {
+    button.addEventListener("click", () => {
+      openDashboardHistory(activity.datasetName);
+    });
+  }
+
+  return button;
+}
+
+
+function ensureDashboardHistoryKeyboardHandlers() {
+  if (dashboardHistoryKeyboardHandlersRegistered) {
+    return;
+  }
+
+  dashboardHistoryKeyboardHandlersRegistered = true;
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !dashboardHistoryState.isOpen) {
+      return;
+    }
+
+    closeDashboardHistory();
+  });
+}
+
+function ensureDashboardHistoryLookupsLoaded() {
+  dashboardHistoryLookupLoadPromise ??= loadStatuses();
+  return dashboardHistoryLookupLoadPromise;
+}
+
+function createDashboardHistoryState() {
+  return {
+    isOpen: false,
+    datasetName: null,
+    history: null,
+    loading: false,
+    error: null,
+    requestId: 0,
+  };
+}
+
+async function openDashboardHistory(datasetName) {
+  const normalizedDatasetName = normalizeDashboardDatasetName(datasetName);
+
+  if (!normalizedDatasetName) {
+    noticeError("History could not be opened", "The selected activity does not have a dataset name.", {
+      storeInCenter: false,
+      countAsUnread: false,
+    });
+    return;
+  }
+
+  const requestId = dashboardHistoryState.requestId + 1;
+  dashboardHistoryState = {
+    isOpen: true,
+    datasetName: normalizedDatasetName,
+    history: null,
+    loading: true,
+    error: null,
+    requestId,
+  };
+  rerenderDashboardPage();
+
+  try {
+    await ensureDashboardHistoryLookupsLoaded();
+    const history = await fetchProductHistory(normalizedDatasetName);
+
+    if (dashboardHistoryState.requestId !== requestId) {
+      return;
+    }
+
+    dashboardHistoryState = {
+      ...dashboardHistoryState,
+      history,
+      loading: false,
+      error: null,
+    };
+    rerenderDashboardPage();
+  } catch (error) {
+    if (dashboardHistoryState.requestId !== requestId) {
+      return;
+    }
+
+    dashboardHistoryState = {
+      ...dashboardHistoryState,
+      history: null,
+      loading: false,
+      error,
+    };
+    rerenderDashboardPage();
+    noticeError("History failed to load", getDashboardHistoryErrorMessage(error), {
+      storeInCenter: false,
+      countAsUnread: false,
+    });
+  }
+}
+
+function closeDashboardHistory() {
+  dashboardHistoryState = {
+    ...createDashboardHistoryState(),
+    requestId: dashboardHistoryState.requestId + 1,
+  };
+  rerenderDashboardPage();
+}
+
+function createDashboardHistoryPanel() {
+  const section = document.createElement("section");
+  section.className = "pm-dashboard-panel pm-dashboard-history-panel";
+  section.setAttribute("aria-label", "Product history");
+
+  const header = document.createElement("header");
+  header.className = "pm-dashboard-history-panel__header";
+
+  const titleWrap = document.createElement("div");
+  titleWrap.className = "pm-dashboard-history-panel__title-wrap";
+
+  const eyebrow = document.createElement("div");
+  eyebrow.className = "pm-dashboard-history-panel__eyebrow";
+  eyebrow.textContent = "History";
+
+  const title = document.createElement("h2");
+  title.className = "pm-dashboard-history-panel__title";
+  title.textContent = dashboardHistoryState.datasetName ?? "Product history";
+
+  titleWrap.append(eyebrow, title);
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "pm-dashboard-history-panel__close";
+  closeButton.textContent = "Close";
+  closeButton.setAttribute("aria-label", "Close product history");
+  closeButton.title = "Close product history (Esc)";
+  closeButton.addEventListener("click", closeDashboardHistory);
+
+  header.append(titleWrap, closeButton);
+
+  const content = document.createElement("div");
+  content.className = "pm-dashboard-history-panel__content";
+  content.appendChild(createDashboardHistoryPanelContent());
+
+  section.append(header, content);
+  return section;
+}
+
+function createDashboardHistoryPanelContent() {
+  const fragment = document.createDocumentFragment();
+
+  if (dashboardHistoryState.loading) {
+    fragment.appendChild(
+      createProductHistoryStateMessage({
+        title: "Loading history...",
+        message: "Checking whether historical changes are available for this product.",
+      })
+    );
+    return fragment;
+  }
+
+  if (dashboardHistoryState.error) {
+    fragment.appendChild(
+      createProductHistoryStateMessage({
+        title: "History could not be loaded",
+        message: getDashboardHistoryErrorMessage(dashboardHistoryState.error),
+      })
+    );
+    return fragment;
+  }
+
+  const history = dashboardHistoryState.history;
+
+  if (!history) {
+    fragment.appendChild(
+      createProductHistoryStateMessage({
+        title: "No history loaded",
+        message: "Select History on an activity to inspect product history.",
+      })
+    );
+    return fragment;
+  }
+
+  if (!history.events.length) {
+    fragment.appendChild(
+      createProductHistoryStateMessage({
+        title: history.endpointAvailable ? "No historical changes found" : "Historical changes are not available yet",
+        message: history.endpointAvailable
+          ? "No history events were returned for this product."
+          : "The history UI is ready, but the backend endpoint has not been implemented yet.",
+      })
+    );
+    return fragment;
+  }
+
+  if (history.isDemo) {
+    fragment.appendChild(
+      createProductHistoryBanner({
+        title: "Demo history",
+        message: "This product history is generated in the frontend until the backend endpoint is available.",
+      })
+    );
+  }
+
+  for (const warning of history.warnings) {
+    fragment.appendChild(
+      createProductHistoryBanner({
+        title: "History note",
+        message: warning,
+      })
+    );
+  }
+
+  fragment.appendChild(createProductHistorySummary(history));
+  fragment.appendChild(createProductHistoryEventList(history.events));
+  return fragment;
+}
+
+function normalizeDashboardDatasetName(datasetName) {
+  const normalizedDatasetName = String(datasetName ?? "").trim();
+  return normalizedDatasetName.length > 0 ? normalizedDatasetName : null;
+}
+
+function getDashboardHistoryErrorMessage(error) {
+  return error instanceof Error ? error.message : "Unknown history error.";
 }
 
 function createPlaceholderLink({ label, enabled, title }) {

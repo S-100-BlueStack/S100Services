@@ -884,3 +884,109 @@ body.pm-dashboard-route #last-updated {
     grid-template-columns: 1fr;
   }
 }
+
+/* Dashboard product history panel -------------------------------------------------- */
+.pm-dashboard-history-panel {
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+}
+
+.pm-dashboard-history-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--pm-border);
+}
+
+.pm-dashboard-history-panel__title-wrap {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pm-dashboard-history-panel__eyebrow {
+  overflow: hidden;
+  color: var(--pm-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pm-dashboard-history-panel__title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--pm-text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-dashboard-history-panel__close {
+  min-height: 27px;
+  padding: 3px 8px;
+  color: var(--pm-button-secondary-text);
+  background: var(--pm-button-secondary-bg);
+  border: 1px solid var(--pm-button-secondary-border);
+  border-radius: 0;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.pm-dashboard-history-panel__close:hover,
+.pm-dashboard-history-panel__close:focus-visible {
+  color: var(--pm-text);
+  background: var(--pm-button-secondary-bg-hover);
+  outline: none;
+}
+
+.pm-dashboard-history-panel__content {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--pm-text-muted) 38%, transparent) transparent;
+}
+
+.pm-dashboard-history-panel__content::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.pm-dashboard-history-panel__content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pm-dashboard-history-panel__content::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--pm-text-muted) 34%, transparent);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.pm-dashboard-history-panel .pm-product-history-summary {
+  margin: 0 0 10px;
+}
+
+.pm-dashboard-history-panel .pm-product-history-list__body {
+  background: var(--pm-surface-alt);
+}
+
+@media (max-width: 1100px) {
+  .pm-dashboard-grid__aside.has-history-panel {
+    grid-template-columns: 1fr;
+  }
+}
