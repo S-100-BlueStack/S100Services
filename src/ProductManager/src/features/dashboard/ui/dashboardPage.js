@@ -9,8 +9,10 @@ import {
   normalizeDashboardFilters,
 } from "../domain/dashboardFilters.js";
 import {
+  DASHBOARD_RANGE_PRESETS,
+  createDashboardRange,
+  formatDashboardDateTimeInputValue,
   formatDashboardRangeDateTime,
-  getDashboardRangeOptions,
 } from "../domain/dashboardRange.js";
 
 const SUMMARY_CARDS = [
@@ -55,6 +57,7 @@ const REPORT_OPTIONS = [
 ];
 
 let dashboardFilters = createDefaultDashboardFilters();
+let dashboardRangeDraft = null;
 let lastRenderArgs = null;
 
 export function renderDashboardPage({ range, dashboard, loading = false, error = null }) {
@@ -113,7 +116,7 @@ function createHeader({ range, dashboard, loading }) {
 
   const actions = document.createElement("div");
   actions.className = "pm-dashboard-header__actions";
-  actions.append(createRangeControls(range), createRefreshButton(loading));
+  actions.append(createRefreshButton(loading), createRangeApplyButton(), createRangeControls(range));
 
   header.append(text, actions);
   return header;
@@ -125,35 +128,647 @@ function createHeaderMeta(range, dashboard) {
 }
 
 function createRangeControls(range) {
-  const group = document.createElement("div");
-  group.className = "pm-dashboard-range";
-  group.setAttribute("aria-label", "Dashboard range");
+  const wrapper = document.createElement("div");
+  wrapper.className = "pm-dashboard-range-builder";
+  wrapper.setAttribute("aria-label", "Dashboard range");
 
-  for (const option of getDashboardRangeOptions()) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "pm-dashboard-range__button";
-    button.textContent = option.label;
-    button.title = option.description;
-    button.disabled = Boolean(option.disabled);
-    button.setAttribute("aria-pressed", String(option.value === range.preset));
+  dashboardRangeDraft ??= createDashboardRangeDraftFromRange(range);
 
-    if (option.value === range.preset) {
-      button.classList.add("is-active");
+  wrapper.append(
+    createQuickRangeButton({
+      label: "Since yesterday",
+      description: "Fill From with yesterday at 00:00 and leave To open-ended.",
+      preset: DASHBOARD_RANGE_PRESETS.sinceYesterday,
+    }),
+    createQuickRangeButton({
+      label: "Last 7 days",
+      description: "Fill From with seven calendar days ago at 00:00 and leave To open-ended.",
+      preset: DASHBOARD_RANGE_PRESETS.last7Days,
+    }),
+    createRangeDateTimeField({
+      idPrefix: "dashboard-range-from",
+      label: "From",
+      dateKey: "fromDate",
+      timeKey: "fromTime",
+      defaultTime: "00:00",
+      required: true,
+    }),
+    createRangeDateTimeField({
+      idPrefix: "dashboard-range-to",
+      label: "To",
+      dateKey: "toDate",
+      timeKey: "toTime",
+      defaultTime: "23:59",
+      required: false,
+    })
+  );
+
+  return wrapper;
+}
+
+function createQuickRangeButton({ label, description, preset }) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "pm-dashboard-range-action";
+  button.textContent = label;
+  button.title = description;
+  button.addEventListener("click", () => {
+    dashboardRangeDraft = createDashboardRangeDraftFromRange(createDashboardRange(preset));
+    updateDashboardRangeInputsFromDraft();
+    updateDashboardRangeApplyButtons();
+  });
+
+  return button;
+}
+
+function createRangeDateTimeField({
+  idPrefix,
+  label,
+  dateKey,
+  timeKey,
+  defaultTime,
+  required,
+}) {
+  const field = document.createElement("div");
+  field.className = "pm-dashboard-range-field";
+
+  const labelElement = document.createElement("span");
+  labelElement.className = "pm-dashboard-range-field__label";
+  labelElement.textContent = label;
+
+  const datePicker = createRangeDatePicker({
+    id: `${idPrefix}-date`,
+    label,
+    dateKey,
+    timeKey,
+    defaultTime,
+    required,
+  });
+
+  const timeInput = document.createElement("input");
+  timeInput.id = `${idPrefix}-time`;
+  timeInput.className = "pm-dashboard-range-field__input pm-dashboard-range-field__input--time";
+  timeInput.type = "time";
+  timeInput.step = "60";
+  timeInput.value = dashboardRangeDraft?.[timeKey] ?? "";
+  timeInput.setAttribute("aria-label", `${label} time`);
+  enableNativePickerOnFocus(timeInput);
+
+  datePicker.onDateChange = (dateValue) => {
+    if (dateValue && !timeInput.value) {
+      timeInput.value = defaultTime;
     }
 
-    button.addEventListener("click", () => {
-      document.dispatchEvent(
-        new CustomEvent("pm-dashboard-range-change", {
-          detail: { preset: option.value },
-        })
-      );
-    });
+    if (!dateValue && !required) {
+      timeInput.value = "";
+    }
 
-    group.appendChild(button);
+    syncRangeDateTimeDraft({ dateKey, timeKey, dateValue, timeValue: timeInput.value });
+    updateDashboardRangeApplyButtons();
+  };
+
+  timeInput.addEventListener("input", () => {
+    syncRangeDateTimeDraft({
+      dateKey,
+      timeKey,
+      dateValue: getDashboardDateButtonValue(datePicker.button),
+      timeValue: timeInput.value,
+    });
+    updateDashboardRangeApplyButtons();
+  });
+
+  field.append(labelElement, datePicker.root, timeInput);
+  return field;
+}
+
+function createRangeDatePicker({ id, label, dateKey, timeKey, defaultTime, required }) {
+  ensureDashboardDatePickerDismissHandlers();
+
+  const root = document.createElement("div");
+  root.className = "pm-dashboard-date-picker";
+
+  const button = document.createElement("button");
+  button.id = id;
+  button.type = "button";
+  button.className = "pm-dashboard-range-field__input pm-dashboard-range-field__input--date pm-dashboard-range-date-button";
+  button.setAttribute("aria-label", `${label} date`);
+  button.setAttribute("aria-haspopup", "dialog");
+  button.setAttribute("aria-expanded", "false");
+  setDashboardDateButtonValue(button, dashboardRangeDraft?.[dateKey] ?? "");
+
+  const panel = document.createElement("div");
+  panel.className = "pm-dashboard-date-picker__panel";
+  panel.hidden = true;
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-label", `${label} date picker`);
+
+  const result = {
+    root,
+    button,
+    onDateChange: null,
+  };
+
+  root.dataset.viewDate = getDashboardDateButtonValue(button) || getTodayDateValue();
+
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleDashboardDatePicker({ root, button, panel, onSelect: (nextDate) => {
+      setDashboardDateButtonValue(button, nextDate);
+      closeDashboardDatePickers();
+      result.onDateChange?.(nextDate);
+    } });
+  });
+
+  panel.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+
+  panel.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    shiftDashboardDatePickerMonth({ root, panel, delta: event.deltaY > 0 ? 1 : -1, onSelect: (nextDate) => {
+      setDashboardDateButtonValue(button, nextDate);
+      closeDashboardDatePickers();
+      result.onDateChange?.(nextDate);
+    } });
+  }, { passive: false });
+
+  root.append(button, panel);
+
+  if (!required) {
+    const clearButton = document.createElement("button");
+    clearButton.type = "button";
+    clearButton.className = "pm-dashboard-range-date-clear";
+    clearButton.textContent = "Clear";
+    clearButton.title = `Clear ${label} date`;
+    clearButton.setAttribute("aria-label", `Clear ${label} date`);
+    clearButton.addEventListener("click", () => {
+      setDashboardDateButtonValue(button, "");
+      syncRangeDateTimeDraft({
+        dateKey,
+        timeKey,
+        dateValue: "",
+        timeValue: "",
+      });
+      setDashboardRangeInputValue("dashboard-range-to-time", "");
+      updateDashboardRangeApplyButtons();
+    });
+    root.appendChild(clearButton);
   }
 
-  return group;
+  renderDashboardDatePickerPanel({ root, panel, onSelect: (nextDate) => {
+    setDashboardDateButtonValue(button, nextDate);
+    closeDashboardDatePickers();
+    result.onDateChange?.(nextDate);
+  } });
+
+  return result;
+}
+
+function syncRangeDateTimeDraft({ dateKey, timeKey, dateValue, timeValue }) {
+  dashboardRangeDraft = {
+    ...createEmptyDashboardRangeDraft(),
+    ...dashboardRangeDraft,
+    [dateKey]: dateValue,
+    [timeKey]: timeValue,
+  };
+}
+
+function toggleDashboardDatePicker({ root, button, panel, onSelect }) {
+  const willOpen = panel.hidden;
+  closeDashboardDatePickers(root);
+
+  if (!willOpen) {
+    closeDashboardDatePicker(root);
+    return;
+  }
+
+  root.dataset.viewDate = getDashboardDateButtonValue(button) || root.dataset.viewDate || getTodayDateValue();
+  renderDashboardDatePickerPanel({ root, panel, onSelect });
+
+  root.classList.add("is-open");
+  panel.hidden = false;
+  button.setAttribute("aria-expanded", "true");
+}
+
+function closeDashboardDatePickers(exceptRoot = null) {
+  document.querySelectorAll(".pm-dashboard-date-picker.is-open").forEach((root) => {
+    if (root !== exceptRoot) {
+      closeDashboardDatePicker(root);
+    }
+  });
+}
+
+function closeDashboardDatePicker(root) {
+  const panel = root.querySelector(".pm-dashboard-date-picker__panel");
+  const button = root.querySelector(".pm-dashboard-range-date-button");
+
+  root.classList.remove("is-open");
+
+  if (panel instanceof HTMLElement) {
+    panel.hidden = true;
+  }
+
+  if (button instanceof HTMLButtonElement) {
+    button.setAttribute("aria-expanded", "false");
+  }
+}
+
+let dashboardDatePickerDismissHandlersRegistered = false;
+
+function ensureDashboardDatePickerDismissHandlers() {
+  if (dashboardDatePickerDismissHandlersRegistered) {
+    return;
+  }
+
+  dashboardDatePickerDismissHandlersRegistered = true;
+  document.addEventListener("click", () => closeDashboardDatePickers());
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeDashboardDatePickers();
+    }
+  });
+}
+
+function renderDashboardDatePickerPanel({ root, panel, onSelect }) {
+  const view = parseDashboardDateValue(root.dataset.viewDate) ?? parseDashboardDateValue(getTodayDateValue());
+  const selectedDate = getDashboardDateButtonValue(root.querySelector(".pm-dashboard-range-date-button"));
+  const firstDay = new Date(view.year, view.month - 1, 1);
+  const startOffset = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(view.year, view.month, 0).getDate();
+  const previousMonthDays = new Date(view.year, view.month - 1, 0).getDate();
+
+  panel.replaceChildren();
+
+  const header = document.createElement("div");
+  header.className = "pm-dashboard-date-picker__header";
+
+  const previousButton = createDashboardDatePickerNavButton("Previous month", "‹");
+  previousButton.addEventListener("click", () => {
+    shiftDashboardDatePickerMonth({ root, panel, delta: -1, onSelect });
+  });
+
+  const title = document.createElement("div");
+  title.className = "pm-dashboard-date-picker__title";
+  title.textContent = formatDashboardCalendarMonthTitle(view);
+
+  const nextButton = createDashboardDatePickerNavButton("Next month", "›");
+  nextButton.addEventListener("click", () => {
+    shiftDashboardDatePickerMonth({ root, panel, delta: 1, onSelect });
+  });
+
+  header.append(previousButton, title, nextButton);
+
+  const weekdays = document.createElement("div");
+  weekdays.className = "pm-dashboard-date-picker__weekdays";
+
+  ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach((weekday) => {
+    const weekdayElement = document.createElement("span");
+    weekdayElement.textContent = weekday;
+    weekdays.appendChild(weekdayElement);
+  });
+
+  const days = document.createElement("div");
+  days.className = "pm-dashboard-date-picker__days";
+
+  for (let index = 0; index < 42; index += 1) {
+    const dayOffset = index - startOffset + 1;
+    let year = view.year;
+    let month = view.month;
+    let day = dayOffset;
+    let isOutsideMonth = false;
+
+    if (dayOffset < 1) {
+      const previousMonth = shiftDashboardMonth(view.year, view.month, -1);
+      year = previousMonth.year;
+      month = previousMonth.month;
+      day = previousMonthDays + dayOffset;
+      isOutsideMonth = true;
+    } else if (dayOffset > daysInMonth) {
+      const nextMonth = shiftDashboardMonth(view.year, view.month, 1);
+      year = nextMonth.year;
+      month = nextMonth.month;
+      day = dayOffset - daysInMonth;
+      isOutsideMonth = true;
+    }
+
+    const dateValue = formatDashboardDateValue({ year, month, day });
+    const dayButton = document.createElement("button");
+    dayButton.type = "button";
+    dayButton.className = "pm-dashboard-date-picker__day";
+    dayButton.textContent = String(day);
+    dayButton.dataset.dateValue = dateValue;
+    dayButton.classList.toggle("is-outside-month", isOutsideMonth);
+    dayButton.classList.toggle("is-selected", dateValue === selectedDate);
+    dayButton.classList.toggle("is-today", dateValue === getTodayDateValue());
+    dayButton.addEventListener("click", () => {
+      root.dataset.viewDate = dateValue;
+      onSelect(dateValue);
+    });
+    days.appendChild(dayButton);
+  }
+
+  panel.append(header, weekdays, days);
+}
+
+function createDashboardDatePickerNavButton(label, text) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "pm-dashboard-date-picker__nav";
+  button.textContent = text;
+  button.setAttribute("aria-label", label);
+  return button;
+}
+
+function shiftDashboardDatePickerMonth({ root, panel, delta, onSelect }) {
+  const view = parseDashboardDateValue(root.dataset.viewDate) ?? parseDashboardDateValue(getTodayDateValue());
+  const shiftedView = shiftDashboardMonth(view.year, view.month, delta);
+  root.dataset.viewDate = formatDashboardDateValue({ ...shiftedView, day: 1 });
+  renderDashboardDatePickerPanel({ root, panel, onSelect });
+}
+
+function shiftDashboardMonth(year, month, delta) {
+  const shifted = new Date(year, month - 1 + delta, 1);
+  return {
+    year: shifted.getFullYear(),
+    month: shifted.getMonth() + 1,
+  };
+}
+
+function parseDashboardDateValue(value) {
+  const match = String(value ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+}
+
+function formatDashboardDateValue({ year, month, day }) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function getTodayDateValue() {
+  const today = new Date();
+  return formatDashboardDateValue({
+    year: today.getFullYear(),
+    month: today.getMonth() + 1,
+    day: today.getDate(),
+  });
+}
+
+function getDashboardDateButtonValue(button) {
+  return button?.dataset?.dateValue ?? "";
+}
+
+function setDashboardDateButtonValue(button, value) {
+  const normalizedValue = /^\d{4}-\d{2}-\d{2}$/.test(String(value ?? "")) ? value : "";
+  button.dataset.dateValue = normalizedValue;
+  button.textContent = normalizedValue ? formatDashboardDateButtonText(normalizedValue) : "dd-mm-yyyy";
+  button.classList.toggle("is-empty", !normalizedValue);
+
+  const root = button.closest(".pm-dashboard-date-picker");
+  if (root && normalizedValue) {
+    root.dataset.viewDate = normalizedValue;
+  }
+}
+
+function formatDashboardDateButtonText(value) {
+  const match = String(value ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : "dd-mm-yyyy";
+}
+
+function formatDashboardCalendarMonthTitle({ year, month }) {
+  const date = new Date(year, month - 1, 1);
+  return new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(date);
+}
+
+function createRangeApplyButton() {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "pm-dashboard-range-apply";
+  button.textContent = "Apply";
+  button.disabled = !isDashboardRangeDraftValid(dashboardRangeDraft);
+  button.title = button.disabled
+    ? "Select From, and keep To after From when used."
+    : "Load dashboard activity for the selected range.";
+  button.addEventListener("click", () => {
+    if (!isDashboardRangeDraftValid(dashboardRangeDraft)) {
+      return;
+    }
+
+    const fromValue = buildDashboardRangeDraftDateTimeValue({
+      date: dashboardRangeDraft.fromDate,
+      time: dashboardRangeDraft.fromTime,
+      defaultTime: "00:00",
+    });
+    const toValue = buildDashboardRangeDraftDateTimeValue({
+      date: dashboardRangeDraft.toDate,
+      time: dashboardRangeDraft.toTime,
+      defaultTime: "23:59",
+    });
+
+    document.dispatchEvent(
+      new CustomEvent("pm-dashboard-range-change", {
+        detail: {
+          preset: DASHBOARD_RANGE_PRESETS.custom,
+          from: fromValue,
+          to: toValue,
+        },
+      })
+    );
+  });
+
+  return button;
+}
+
+function createDashboardRangeDraftFromRange(range) {
+  const fromParts = splitDashboardRangeInputValue(
+    range.fromQueryValue
+      ? normalizeRangeInputValueForDraft(range.fromQueryValue, "00:00")
+      : formatDashboardDateTimeInputValue(range.from, { timeZone: range.timeZone })
+  );
+  const toParts = splitDashboardRangeInputValue(
+    range.toQueryValue ? normalizeRangeInputValueForDraft(range.toQueryValue, "23:59") : ""
+  );
+
+  return {
+    fromDate: fromParts.date,
+    fromTime: fromParts.time,
+    toDate: toParts.date,
+    toTime: toParts.time,
+  };
+}
+
+function normalizeRangeInputValueForDraft(value, defaultTime) {
+  const normalizedValue = String(value ?? "").trim();
+
+  if (!normalizedValue) {
+    return "";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
+    return `${normalizedValue}T${defaultTime}`;
+  }
+
+  return normalizedValue;
+}
+
+function splitDashboardRangeInputValue(value) {
+  const normalizedValue = String(value ?? "").trim();
+
+  if (!normalizedValue) {
+    return { date: "", time: "" };
+  }
+
+  const [datePart, timePart = ""] = normalizedValue.split("T");
+  return {
+    date: datePart,
+    time: timePart.slice(0, 5),
+  };
+}
+
+function createEmptyDashboardRangeDraft() {
+  return {
+    fromDate: "",
+    fromTime: "",
+    toDate: "",
+    toTime: "",
+  };
+}
+
+function isDashboardRangeDraftValid(draft) {
+  if (!draft?.fromDate) {
+    return false;
+  }
+
+  if (!draft.toDate) {
+    return !draft.toTime;
+  }
+
+  const fromValue = buildDashboardRangeDraftDateTimeValue({
+    date: draft.fromDate,
+    time: draft.fromTime,
+    defaultTime: "00:00",
+  });
+  const toValue = buildDashboardRangeDraftDateTimeValue({
+    date: draft.toDate,
+    time: draft.toTime,
+    defaultTime: "23:59",
+  });
+
+  return Boolean(fromValue && toValue && fromValue <= toValue);
+}
+
+function buildDashboardRangeDraftDateTimeValue({ date, time, defaultTime }) {
+  if (!date) {
+    return null;
+  }
+
+  return `${date}T${time || defaultTime}`;
+}
+
+function updateDashboardRangeInputsFromDraft() {
+  setDashboardRangeInputValue("dashboard-range-from-date", dashboardRangeDraft?.fromDate ?? "");
+  setDashboardRangeInputValue("dashboard-range-from-time", dashboardRangeDraft?.fromTime ?? "");
+  setDashboardRangeInputValue("dashboard-range-to-date", dashboardRangeDraft?.toDate ?? "");
+  setDashboardRangeInputValue("dashboard-range-to-time", dashboardRangeDraft?.toTime ?? "");
+}
+
+function setDashboardRangeInputValue(id, value) {
+  const element = document.getElementById(id);
+
+  if (element instanceof HTMLInputElement) {
+    element.value = value;
+    return;
+  }
+
+  if (element instanceof HTMLButtonElement && element.classList.contains("pm-dashboard-range-date-button")) {
+    setDashboardDateButtonValue(element, value);
+  }
+}
+
+function updateDashboardRangeApplyButtons() {
+  const isValid = isDashboardRangeDraftValid(dashboardRangeDraft);
+  const title = isValid
+    ? "Load dashboard activity for the selected range."
+    : "Select From, and keep To after From when used.";
+
+  document.querySelectorAll(".pm-dashboard-range-apply").forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+
+    button.disabled = !isValid;
+    button.title = title;
+  });
+}
+
+function enableNativePickerOnFocus(input) {
+  input.addEventListener("focus", () => {
+    if (typeof input.showPicker !== "function") {
+      return;
+    }
+
+    try {
+      input.showPicker();
+    } catch {
+      // Browsers may reject showPicker outside direct user interaction; the native input remains usable.
+    }
+  });
+}
+
+function captureDashboardControlFocus() {
+  const activeElement = document.activeElement;
+
+  if (!(activeElement instanceof HTMLInputElement || activeElement instanceof HTMLSelectElement)) {
+    return null;
+  }
+
+  const filterKey = activeElement.dataset.dashboardFilterKey;
+  const rangeInputId = activeElement.id?.startsWith("dashboard-range-")
+    ? activeElement.id
+    : null;
+
+  if (!filterKey && !rangeInputId) {
+    return null;
+  }
+
+  return {
+    filterKey,
+    rangeInputId,
+    selectionStart: activeElement instanceof HTMLInputElement ? activeElement.selectionStart : null,
+    selectionEnd: activeElement instanceof HTMLInputElement ? activeElement.selectionEnd : null,
+  };
+}
+
+function restoreDashboardControlFocus(focusState) {
+  if (!focusState) {
+    return;
+  }
+
+  const selector = focusState.rangeInputId
+    ? `#${CSS.escape(focusState.rangeInputId)}`
+    : `[data-dashboard-filter-key="${focusState.filterKey}"]`;
+  const nextElement = document.querySelector(selector);
+
+  if (!(nextElement instanceof HTMLInputElement || nextElement instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  nextElement.focus({ preventScroll: true });
+
+  if (
+    nextElement instanceof HTMLInputElement &&
+    Number.isInteger(focusState.selectionStart) &&
+    Number.isInteger(focusState.selectionEnd)
+  ) {
+    nextElement.setSelectionRange(focusState.selectionStart, focusState.selectionEnd);
+  }
 }
 
 function createRefreshButton(loading) {
@@ -269,7 +884,13 @@ function createSummaryCards(summary) {
   return cards;
 }
 
-function createDashboardGrid({ dashboard, sourceActivityCount, loading, filters, filterOptions }) {
+function createDashboardGrid({
+  dashboard,
+  sourceActivityCount,
+  loading,
+  filters,
+  filterOptions,
+}) {
   const grid = document.createElement("section");
   grid.className = "pm-dashboard-grid";
 
@@ -288,7 +909,6 @@ function createDashboardGrid({ dashboard, sourceActivityCount, loading, filters,
   const aside = document.createElement("aside");
   aside.className = "pm-dashboard-grid__aside";
   aside.append(
-    createImportantChanges(dashboard.importantChanges, timeZone),
     createSummaryRows("Status summary", dashboard.statusSummary),
     createSummaryRows("Operation summary", dashboard.operationSummary)
   );
@@ -443,7 +1063,7 @@ function createClearFiltersButton(hasFilters) {
 }
 
 function updateDashboardFilters(partialFilters) {
-  const focusState = captureDashboardFilterFocus();
+  const focusState = captureDashboardControlFocus();
   dashboardFilters = normalizeDashboardFilters({ ...dashboardFilters, ...partialFilters });
   rerenderDashboardPage(focusState);
 }
@@ -454,50 +1074,7 @@ function rerenderDashboardPage(focusState = null) {
   }
 
   renderDashboardPage(lastRenderArgs);
-  restoreDashboardFilterFocus(focusState);
-}
-
-function captureDashboardFilterFocus() {
-  const activeElement = document.activeElement;
-
-  if (!(activeElement instanceof HTMLInputElement || activeElement instanceof HTMLSelectElement)) {
-    return null;
-  }
-
-  const filterKey = activeElement.dataset.dashboardFilterKey;
-
-  if (!filterKey) {
-    return null;
-  }
-
-  return {
-    filterKey,
-    selectionStart: activeElement instanceof HTMLInputElement ? activeElement.selectionStart : null,
-    selectionEnd: activeElement instanceof HTMLInputElement ? activeElement.selectionEnd : null,
-  };
-}
-
-function restoreDashboardFilterFocus(focusState) {
-  if (!focusState?.filterKey) {
-    return;
-  }
-
-  const selector = `[data-dashboard-filter-key="${focusState.filterKey}"]`;
-  const nextElement = document.querySelector(selector);
-
-  if (!(nextElement instanceof HTMLInputElement || nextElement instanceof HTMLSelectElement)) {
-    return;
-  }
-
-  nextElement.focus({ preventScroll: true });
-
-  if (
-    nextElement instanceof HTMLInputElement &&
-    Number.isInteger(focusState.selectionStart) &&
-    Number.isInteger(focusState.selectionEnd)
-  ) {
-    nextElement.setSelectionRange(focusState.selectionStart, focusState.selectionEnd);
-  }
+  restoreDashboardControlFocus(focusState);
 }
 
 function createActivityTable(activities, timeZone) {
@@ -673,7 +1250,8 @@ function createReportLinkGroup({ label, reports }) {
   }
 
   const firstReportWithUrl = normalizedReports.find((report) => report.url);
-  const linkLabel = normalizedReports.length > 1 ? `${label} (${normalizedReports.length})` : label;
+  const linkLabel =
+    normalizedReports.length > 1 ? `${label} (${normalizedReports.length})` : label;
 
   if (firstReportWithUrl?.url) {
     const link = document.createElement("a");
@@ -702,57 +1280,6 @@ function createDisabledLink(label) {
   button.title = `${label} is not available for this activity.`;
 
   return button;
-}
-
-function createImportantChanges(activities, timeZone) {
-  const section = document.createElement("section");
-  section.className = "pm-dashboard-panel pm-dashboard-important";
-  section.appendChild(
-    createPanelHeader({
-      title: "Important changes",
-      count: activities.length,
-    })
-  );
-
-  const list = document.createElement("div");
-  list.className = "pm-dashboard-important__list";
-
-  if (activities.length === 0) {
-    list.appendChild(createEmptyText("No important changes in this range."));
-  } else {
-    for (const activity of activities.slice(0, 8)) {
-      list.appendChild(createImportantChange(activity, timeZone));
-    }
-  }
-
-  section.appendChild(list);
-  return section;
-}
-
-function createImportantChange(activity, timeZone) {
-  const item = document.createElement("article");
-  item.className = `pm-dashboard-important-item is-${activity.severity}`;
-
-  const header = document.createElement("div");
-  header.className = "pm-dashboard-important-item__header";
-
-  const title = document.createElement("strong");
-  title.textContent = activity.title;
-
-  const time = document.createElement("span");
-  time.textContent = formatDashboardRangeDateTime(activity.timestamp, { timeZone });
-
-  header.append(title, time);
-
-  const product = document.createElement("div");
-  product.className = "pm-dashboard-important-item__product";
-  product.textContent = activity.datasetName || "-";
-
-  const description = document.createElement("p");
-  description.textContent = activity.description || "No details available.";
-
-  item.append(header, product, description);
-  return item;
 }
 
 function createSummaryRows(title, rows) {

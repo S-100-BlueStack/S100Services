@@ -20,8 +20,7 @@ const RANGE_OPTIONS = [
   {
     value: DASHBOARD_RANGE_PRESETS.custom,
     label: "Custom range",
-    description: "Requires enabled date/time controls.",
-    disabled: true,
+    description: "Activity between selected Danish date/time values.",
   },
 ];
 
@@ -62,17 +61,23 @@ export function createDashboardRange(
   }
 
   if (normalizedPreset === DASHBOARD_RANGE_PRESETS.custom) {
-    const customFrom = normalizeDate(from);
-    const customTo = normalizeDate(to);
+    const customFrom = parseDashboardRangeInput(from, {
+      dateOnlyDefaultTime: { hour: 0, minute: 0, second: 0 },
+    });
+    const customTo = parseDashboardRangeInput(to, {
+      dateOnlyDefaultTime: { hour: 23, minute: 59, second: 0 },
+    });
 
-    if (customFrom && customTo && customFrom <= customTo) {
+    if (customFrom && (!customTo || customFrom <= customTo)) {
       return createRange({
         preset: DASHBOARD_RANGE_PRESETS.custom,
-        label: "Custom range",
+        label: "Selected range",
         from: customFrom,
-        to: customTo,
+        // An empty To keeps the range open-ended so Refresh always includes the latest backend data.
+        to: customTo ?? normalizedNow,
+        // The backend interprets offset-free datetime values as Europe/Copenhagen.
         fromQueryValue: formatDashboardQueryDateTime(customFrom),
-        toQueryValue: formatDashboardQueryDateTime(customTo),
+        toQueryValue: customTo ? formatDashboardQueryDateTime(customTo) : null,
       });
     }
   }
@@ -101,10 +106,15 @@ export function normalizeDashboardRangePreset(value) {
     .toLowerCase();
   const values = Object.values(DASHBOARD_RANGE_PRESETS);
 
-  return values.includes(normalizedValue) ? normalizedValue : getDefaultDashboardRangePreset();
+  return values.includes(normalizedValue)
+    ? normalizedValue
+    : getDefaultDashboardRangePreset();
 }
 
-export function formatDashboardRangeDateTime(value, { timeZone = DASHBOARD_TIME_ZONE } = {}) {
+export function formatDashboardRangeDateTime(
+  value,
+  { timeZone = DASHBOARD_TIME_ZONE } = {}
+) {
   const date = normalizeDate(value);
 
   if (!date) {
@@ -121,6 +131,20 @@ export function formatDashboardRangeDateTime(value, { timeZone = DASHBOARD_TIME_
   }).format(date);
 }
 
+export function formatDashboardDateTimeInputValue(
+  value,
+  { timeZone = DASHBOARD_TIME_ZONE } = {}
+) {
+  const date = normalizeDate(value);
+
+  if (!date) {
+    return "";
+  }
+
+  const parts = getTimeZoneDateParts(date, timeZone);
+  return `${formatDateOnly(parts)}T${pad2(parts.hour)}:${pad2(parts.minute)}`;
+}
+
 export function createDashboardRangeDisplayLabel({
   label,
   fromIso,
@@ -134,7 +158,14 @@ export function createDashboardRangeDisplayLabel({
   return `${label}: ${fromText} - ${toText}${zoneSuffix}`;
 }
 
-function createRange({ preset, label, from, to, fromQueryValue, toQueryValue }) {
+function createRange({
+  preset,
+  label,
+  from,
+  to,
+  fromQueryValue,
+  toQueryValue,
+}) {
   const fromIso = from.toISOString();
   const toIso = to.toISOString();
 
@@ -157,6 +188,80 @@ function createRange({ preset, label, from, to, fromQueryValue, toQueryValue }) 
   };
 }
 
+function parseDashboardRangeInput(value, { dateOnlyDefaultTime = null } = {}) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value;
+  }
+
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+  const localParts = parseOffsetFreeDanishDateTime(trimmedValue, {
+    dateOnlyDefaultTime,
+  });
+
+  if (localParts) {
+    return createDateInTimeZone(localParts, DASHBOARD_TIME_ZONE);
+  }
+
+  return normalizeDate(trimmedValue);
+}
+
+function parseOffsetFreeDanishDateTime(value, { dateOnlyDefaultTime = null } = {}) {
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?$/
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const defaultTime = dateOnlyDefaultTime ?? { hour: 0, minute: 0, second: 0 };
+  const hasExplicitTime = match[4] !== undefined;
+  const parts = {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+    hour: Number(hasExplicitTime ? match[4] : defaultTime.hour),
+    minute: Number(hasExplicitTime ? match[5] ?? 0 : defaultTime.minute),
+    second: Number(hasExplicitTime ? match[6] ?? 0 : defaultTime.second),
+  };
+
+  return areValidDateTimeParts(parts) ? parts : null;
+}
+
+function areValidDateTimeParts(parts) {
+  if (
+    parts.month < 1 ||
+    parts.month > 12 ||
+    parts.day < 1 ||
+    parts.day > 31 ||
+    parts.hour < 0 ||
+    parts.hour > 23 ||
+    parts.minute < 0 ||
+    parts.minute > 59 ||
+    parts.second < 0 ||
+    parts.second > 59
+  ) {
+    return false;
+  }
+
+  const check = new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second)
+  );
+
+  return (
+    check.getUTCFullYear() === parts.year &&
+    check.getUTCMonth() + 1 === parts.month &&
+    check.getUTCDate() === parts.day &&
+    check.getUTCHours() === parts.hour &&
+    check.getUTCMinutes() === parts.minute &&
+    check.getUTCSeconds() === parts.second
+  );
+}
+
 function normalizeDate(value) {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value;
@@ -168,12 +273,6 @@ function normalizeDate(value) {
 
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function addDays(value, days) {
-  const date = new Date(value);
-  date.setDate(date.getDate() + days);
-  return date;
 }
 
 function addCalendarDays(parts, days) {

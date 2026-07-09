@@ -18,9 +18,12 @@ export function buildDashboardUrl({ rangePreset, from = null, to = null } = {}) 
 
   params.set("range", range.preset);
 
-  if (range.preset === "custom" && range.fromIso && range.toIso) {
-    params.set("from", range.fromIso);
-    params.set("to", range.toIso);
+  if (range.preset === "custom" && range.fromQueryValue) {
+    params.set("from", range.fromQueryValue);
+
+    if (range.toQueryValue) {
+      params.set("to", range.toQueryValue);
+    }
   }
 
   return `${baseUrl}dashboard/?${params.toString()}`;
@@ -29,8 +32,8 @@ export function buildDashboardUrl({ rangePreset, from = null, to = null } = {}) 
 export function setDashboardRouteUrl(range, { replace = false } = {}) {
   const nextUrl = buildDashboardUrl({
     rangePreset: range.preset,
-    from: range.fromIso,
-    to: range.toIso,
+    from: range.fromQueryValue ?? range.fromIso,
+    to: range.toQueryValue,
   });
   const method = replace ? "replaceState" : "pushState";
 
@@ -38,8 +41,8 @@ export function setDashboardRouteUrl(range, { replace = false } = {}) {
     {
       route: "dashboard",
       rangePreset: range.preset,
-      from: range.fromIso,
-      to: range.toIso,
+      from: range.fromQueryValue ?? range.fromIso,
+      to: range.toQueryValue,
     },
     "",
     nextUrl

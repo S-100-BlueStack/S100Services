@@ -14,13 +14,12 @@ Implemented scope:
 - Navbar link for Dashboard.
 - Backend endpoint integration through `GET electronicproducts/dashboard`.
 - Danish operational time handling through backend-provided `Europe/Copenhagen` range metadata.
-- Range presets for `Since yesterday` and `Last 7 days`.
-- Disabled `Custom range` control until date/time inputs are enabled.
+- Always-visible Danish local `From` and optional `To` date/time controls. Date selection uses a compact Dashboard date picker instead of the browser-native date picker so month/year navigation stays predictable.
+- Quick range action buttons for `Since yesterday` and `Last 7 days` that fill the range fields without loading data.
 - Summary cards for operational activity counts.
 - Compact activity list with product links.
 - Client-side search.
 - Client-side filters for type, status, importance, reports and product.
-- Important changes panel.
 - Status and operation breakdowns.
 - Review and Analyze links from activity rows.
 - Disabled or placeholder report actions until report URLs or report detail endpoints exist.
@@ -32,13 +31,13 @@ The frontend calls:
 ```http
 GET electronicproducts/dashboard?from=2026-07-07
 GET electronicproducts/dashboard?from=2026-07-01
+GET electronicproducts/dashboard?from=2026-07-01T08:15:00
+GET electronicproducts/dashboard?from=2026-07-01T08:15:00&to=2026-07-07T16:45:00
 ```
 
 Range query values are sent in Danish operational time.
 
-`Since yesterday` sends a date-only `from` value so the backend can interpret it as midnight in `Europe/Copenhagen`.
-
-`Last 7 days` sends a date-only `from` value for seven calendar days back. Preset ranges omit `to`, so refresh requests always use the backend's current time.
+The Dashboard header always shows `From` and optional `To` date/time fields. `Since yesterday` and `Last 7 days` are quick actions that only fill the fields; they do not load data until the user selects `Apply`. Selecting a `From` date defaults its time to `00:00`; selecting a `To` date defaults its time to `23:59`. The date controls use a compact Dashboard-owned date picker while time values remain native compact time inputs. Leaving `To` empty keeps the range open-ended, so refresh requests continue to include the latest backend activity. The backend interprets offset-free datetime values as `Europe/Copenhagen` wall time, not UTC.
 
 Expected payload shape:
 
@@ -115,9 +114,9 @@ Expected payload shape:
 
 Dashboard filters run on the loaded activity payload. They intentionally do not change the backend query contract.
 
-Summary cards, important changes, status summary and operation summary are derived from the filtered activity set so the visible counts always match the activity list.
+Summary cards, status summary and operation summary are derived from the filtered activity set so the visible counts always match the activity list.
 
-The filter state is local to the Dashboard page render lifecycle. It is safe to reset or replace when custom server-side ranges are introduced later.
+The filter state is local to the Dashboard page render lifecycle and is applied to whichever range payload is currently loaded.
 
 ## Report links
 
@@ -131,9 +130,8 @@ Dashboard should not fetch full report content as part of the activity payload. 
 
 The following work remains intentionally outside phase 1:
 
-- Enable custom range picker.
 - Add real IC-ENC report links when backend report IDs/storage contract exists.
 - Add real internal validation report links when backend report IDs/storage contract exists.
-- Improve important-change classification when backend operation/event semantics are richer.
+- Improve important-change classification if it becomes useful as a filterable activity concept.
 - Consider server-side filtering only if dashboard payload becomes large.
 - Consider richer dashboard charts only if they remain compact and data-oriented.

@@ -25,7 +25,6 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
     }
 
     document.title = createDashboardDocumentTitle(currentRange);
-
     renderDashboardPage({
       range: currentRange,
       dashboard: currentDashboard,
@@ -69,7 +68,13 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
       return;
     }
 
-    await loadDashboard(createDashboardRange(preset), { updateUrl: true });
+    await loadDashboard(
+      createDashboardRange(preset, {
+        from: event.detail?.from,
+        to: event.detail?.to,
+      }),
+      { updateUrl: true }
+    );
   };
 
   const handleRefresh = async () => {
