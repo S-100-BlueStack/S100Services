@@ -86,7 +86,7 @@ namespace ProductManagerAPI.Controllers
             if (product.State == Data.Models.ProductState.InTransit)
                 return BadRequest($"Product {datasetName} is currently in transit and cannot be frozen.");
 
-            await _productRepository.AppendAsync(datasetName, Data.Models.ProductState.Frozen, "S-101", product.EditionNo, product.UpdateNo, User?.Identity?.Name);
+            await _productRepository.AppendAsync(datasetName, Data.Models.ProductState.Frozen, "S-101", (uint)product.EditionNo, (uint?)product.UpdateNo, User?.Identity?.Name);
 
 
             return Ok();
@@ -116,7 +116,7 @@ namespace ProductManagerAPI.Controllers
             if (product.State != Data.Models.ProductState.Frozen)
                 return BadRequest($"Product {datasetName} is not frozen and cannot be unfrozen.");
 
-            await _productRepository.AppendAsync(datasetName, Data.Models.ProductState.Idle, "S-101", product.EditionNo, product.UpdateNo, User?.Identity?.Name);
+            await _productRepository.AppendAsync(datasetName, Data.Models.ProductState.Idle, "S-101", (uint)product.EditionNo, (uint?)product.UpdateNo, User?.Identity?.Name);
 
 
             return Ok();

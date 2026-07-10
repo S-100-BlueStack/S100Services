@@ -32,7 +32,7 @@ namespace ProductManagerAPI.Jobs
 
             _logger.LogWarning("UploadProductJob is not yet implemented fully. Waiting 10 seconds and assume dataset was sent and accepted for now.");
             await Task.Delay(10, token);
-            await _repository.AppendAsync(datasetName, Data.Models.ProductState.Idle, "S-128", product.editionNumber.GetValueOrDefault(), product.updateNumber.GetValueOrDefault());
+            await _repository.AppendAsync(datasetName, Data.Models.ProductState.Idle, "S-128", (uint)product.editionNumber.GetValueOrDefault(), (uint?)product.updateNumber.GetValueOrDefault());
 
             _logger.LogInformation("Job: {jobName} finished", nameof(UploadSingularProductJob));
         }

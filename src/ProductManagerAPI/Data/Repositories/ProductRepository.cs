@@ -10,15 +10,7 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
     private readonly DbConnectionFactory _connectionFactory = connectionFactory;
     private static readonly DateTime MaxDate = new(9999, 12, 31);
 
-    public async Task AppendAsync(
-        string name,
-        ProductState state,
-        string productSpecification,
-        int editionNo,
-        int updateNo,
-        string? owner = null,
-        byte[]? attachment = null,
-        string? attachmentFileName = null)
+    public async Task AppendAsync(string name, ProductState state, string productSpecification, uint editionNo, uint? updateNo, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null)
     {
         using var conn = _connectionFactory.Create();
         conn.Open();
@@ -56,7 +48,7 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
                 State = state,
                 ProductSpecification = productSpecification,
                 EditionNo = editionNo,
-                UpdateNo = updateNo,
+                UpdateNo = updateNo ?? 0,
                 Owner = owner,
                 DateFrom = now,
                 DateTo = MaxDate,
@@ -260,15 +252,7 @@ public class InMemoryProductRepository : IProductRepository
     private readonly Dictionary<string, DateTime> _lastSuccessfulRuns = new(StringComparer.OrdinalIgnoreCase);
     private static readonly DateTime MaxDate = new(9999, 12, 31);
 
-    public Task AppendAsync(
-        string name,
-        ProductState state,
-        string productSpecification,
-        int editionNo,
-        int updateNo,
-        string? owner = null,
-        byte[]? attachment = null,
-        string? attachmentFileName = null)
+    public Task AppendAsync(string name, ProductState state, string productSpecification, uint editionNo, uint? updateNo, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null)
     {
         var now = DateTime.UtcNow;
 
@@ -283,8 +267,8 @@ public class InMemoryProductRepository : IProductRepository
             Name = name,
             State = state,
             ProductSpecification = productSpecification,
-            EditionNo = editionNo,
-            UpdateNo = updateNo,
+            EditionNo = (int)editionNo,
+            UpdateNo = updateNo.HasValue ? (int)updateNo.Value : 0,
             Owner = owner,
             Date_From = now,
             Date_to = MaxDate,

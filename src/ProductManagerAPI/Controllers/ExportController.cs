@@ -81,15 +81,12 @@ namespace ProductManagerAPI.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, response);
             }
 
-            // avoid null
-            int update = dataset.Update.HasValue ? (int)(dataset.Update.Value) : 0;
-
 
             // Create export(s)
 
             // S-100
             if (exportTarget is Models.RequestTypes.ExportFormat.Both or Models.RequestTypes.ExportFormat.S100) {
-                var result = _exportService.CreateS100Export(name, (int)dataset.Edition!, update, _electronicProductManager.OutputFolder, yaml);
+                var result = _exportService.CreateS100Export(name, dataset.Edition!.Value, dataset.Update, _electronicProductManager.OutputFolder, yaml);
 
                 var exportResult = (result.Index, result.Sign);
 
@@ -97,7 +94,7 @@ namespace ProductManagerAPI.Controllers
                 await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewEdition, yaml, exportResult.Index, exportResult.Sign);
 
                 // Store in system job table.
-                await _productRepository.AppendAsync(name, Data.Models.ProductState.Exported, "S-101", (int)dataset.Edition, update, user);
+                await _productRepository.AppendAsync(name, Data.Models.ProductState.Exported, "S-101", dataset.Edition.Value, dataset.Update, user);
             }
 
 
@@ -204,24 +201,24 @@ namespace ProductManagerAPI.Controllers
 
             // S-100
             if (exportTarget is Models.RequestTypes.ExportFormat.Both or Models.RequestTypes.ExportFormat.S100) {
-                var result = _exportService.CreateS100Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, update, prevIndex);
+                var result = _exportService.CreateS100Export(name, dataset.Edition.Value, dataset.Update!, _electronicProductManager.OutputFolder, update, prevIndex);
 
                 // Store in s128 attachment table
                 await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.Update, update, result.Index, result.Sign);
 
 
                 // Store in system job table.
-                await _productRepository.AppendAsync(name, Data.Models.ProductState.Exported, "S-101", (int)dataset.Edition!, (int)dataset.Update!, user);
+                await _productRepository.AppendAsync(name, Data.Models.ProductState.Exported, "S-101", dataset.Edition.Value, dataset.Update!, user);
             }
 
 
             // S-57
             if (exportTarget is Models.RequestTypes.ExportFormat.Both or Models.RequestTypes.ExportFormat.S57) {
                 var S57Name = name;
-                var S57Edition = 1;
-                var S57Update = 1;
+                uint S57Edition = 1;
+                uint S57Update = 1;
 
-                _exportService.CreateS57Export(S57Name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, latest);
+                _exportService.CreateS57Export(S57Name, dataset.Edition.Value!, dataset.Update!, _electronicProductManager.OutputFolder, latest);
 
                 // Store in s128 attachment table. TODO: Add necessary files if needed
                 await _electronicProductManager.CreateS57AttachmentAsync(S57Name, ExportTypes.Update, latest);
@@ -262,24 +259,16 @@ namespace ProductManagerAPI.Controllers
 
             var yaml = dataset.Serialize();
 
-            var edi = product.editionNumber;
-            var ed2 = dataset.Edition;
-
-            var upd = product.updateNumber;
-            var upd2 = dataset.Update;
-
-            // avoid null
-            int update = dataset.Update.HasValue ? (int)(dataset.Update.Value) : 0;
 
 
-            var result = _exportService.CreateS100Export(name, (int)dataset.Edition!, update, _electronicProductManager.OutputFolder, yaml);
+            var result = _exportService.CreateS100Export(name, dataset.Edition!.Value, dataset.Update, _electronicProductManager.OutputFolder, yaml);
 
             // _exportService.CreateS57Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
 
             await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
             _logger.LogInformation("Exchangeset created successfully");
 
-            await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, "S-101", (int)dataset.Edition!, update);
+            await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, "S-101", dataset.Edition.Value, dataset.Update);
 
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
@@ -320,8 +309,8 @@ namespace ProductManagerAPI.Controllers
                 return StatusCode(StatusCodes.Status409Conflict, response);
             }
 
-            int oldEdition = product.editionNumber!.Value;
-            int oldUpdate = product.updateNumber.GetValueOrDefault();
+            uint oldEdition = (uint)product.editionNumber!.Value;
+            uint? oldUpdate = (uint?)product.updateNumber.GetValueOrDefault();
 
 
             if (oldEdition <= 1) {
@@ -344,7 +333,7 @@ namespace ProductManagerAPI.Controllers
             _exportService.DeleteExport(name, _electronicProductManager.OutputFolder, oldEdition, oldUpdate);
 
             // Rollback in JobState
-            await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, "S-128", product.editionNumber.Value, product.updateNumber.GetValueOrDefault());
+            await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, "S-128", (uint)product.editionNumber.Value, (uint?)product.updateNumber);
 
 
 
@@ -417,19 +406,15 @@ namespace ProductManagerAPI.Controllers
 
                     var yaml = dataset.Serialize();
 
-                    // avoid null
-                    int update = dataset.Update.HasValue ? (int)(dataset.Update.Value) : 0;
 
-
-
-                    var result = _exportService.CreateS100Export(name, (int)dataset.Edition!, update, _electronicProductManager.OutputFolder, yaml);
+                    var result = _exportService.CreateS100Export(name, dataset.Edition!.Value, dataset.Update, _electronicProductManager.OutputFolder, yaml);
 
                     // _exportService.CreateS57Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
 
                     await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
                     _logger.LogInformation("Exchangeset created successfully");
 
-                    await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, "S-101", (int)dataset.Edition!, update);
+                    await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, "S-101", dataset.Edition.Value, dataset.Update);
                 }
                 catch (InvalidOperationException ex) {
                     _logger.LogWarning("ex: {ex}", ex);

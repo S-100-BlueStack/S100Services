@@ -8,8 +8,8 @@ namespace ProductManagerAPI.Data.Repositories
             string name,
             ProductState state,
             string productSpecification,
-            int editionNo,
-            int updateNo,
+            uint editionNo,
+            uint? updateNo,
             string? owner = null,
             byte[]? attachment = null,
             string? attachmentFileName = null);

@@ -11,16 +11,16 @@ namespace ProductManagerAPI.Services.Export
         const string fileReferencePattern = @"^101[A-Z]{2}\d{2}";
         private static readonly Regex fileReferenceRegex = new Regex(fileReferencePattern);
 
-        public ExportResult CreateS100Export(string datasetName, int editionNo, int? updateNo, string outputFolder, string yaml, string prevIndex = "") {
+        public ExportResult CreateS100Export(string datasetName, uint editionNo, uint? updateNo, string outputFolder, string yaml, string prevIndex = "") {
             var dir = IO.Directory.CreateDirectory(outputFolder);
 
             var Export = IO.Directory.CreateDirectory(Path.Combine(dir.FullName, datasetName, $"{editionNo}"));
 
             var update = (updateNo ?? 0).ToString("D3");
 
-    
 
-           // yaml = SetMinimumDisplayScale().Replace(yaml, "$1\r\n        Value: 19999999");
+
+            // yaml = SetMinimumDisplayScale().Replace(yaml, "$1\r\n        Value: 19999999");
             yaml = Regex.Replace(yaml, @"(?m)^(\s*)-\s*Name:\s*minimumDisplayScale\s*$", "$0\r\n$1  Value: 19999999");
 
             // Write temp YAML file for the compiler
@@ -88,11 +88,13 @@ namespace ProductManagerAPI.Services.Export
         }
 
 
-        public int CreateS57Export(string datasetName, int editionNo, int updateNo, string output, string yaml) {
+        public int CreateS57Export(string datasetName, uint editionNo, uint? updateNo, string output, string yaml) {
             var featureCataloguePath = Path.Combine(_artifactsPath, "101_FC_2.0.0.xml");
 
             if (!IO.File.Exists(featureCataloguePath))
                 throw new NullReferenceException("Could not find featurecatalogue!");
+
+            var update = (updateNo ?? 0).ToString("D3");
 
             if (IO.File.Exists(@"c:\Program Files\s57compiler\s57compiler.exe")) {
                 if (IO.File.Exists(@"c:\Program Files\s100mapper\s100mapper.exe")) {
@@ -149,12 +151,12 @@ namespace ProductManagerAPI.Services.Export
             throw new NotImplementedException();
         }
 
-        public bool DeleteExport(string datasetName, string outputFolder, int editionNo, int updateNo = 0) {
+        public bool DeleteExport(string datasetName, string outputFolder, uint editionNo, uint? updateNo = 0) {
             try {
                 var editionFolder = Path.Combine(outputFolder, datasetName, editionNo.ToString());
 
                 // If no update number is provided, delete the entire edition folder. Otherwise, just delete the specific update file.
-                if (updateNo == 0) {
+                if (!updateNo.HasValue || updateNo == 0) {
                     Directory.Delete(editionFolder, recursive: true);
                     return true;
                 }

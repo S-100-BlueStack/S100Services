@@ -75,12 +75,12 @@ namespace ProductManagerAPI.Jobs
 
                     if (string.IsNullOrEmpty(yaml)) {
                         _logger.LogWarning("Failed to create new edition for dataset {dataset}.", productName);
-                        await _repository.AppendAsync(productName, Data.Models.ProductState.Frozen, "S-101", (int)dataset.Edition!, (int)dataset.Update!, "system");
+                        await _repository.AppendAsync(productName, Data.Models.ProductState.Frozen, "S-101", dataset.Edition!.Value, dataset.Update, "system");
                         continue;
                     }
 
                     _logger.LogInformation("Creating export.. ");
-                    var result = _exportService.CreateS100Export(productName, (int)dataset.Edition!, (int)dataset.Update!, output, yaml);
+                    var result = _exportService.CreateS100Export(productName, dataset.Edition!.Value, dataset.Update, output, yaml);
 
                     // Validate .000 files
                     _logger.LogInformation("Validating .000 files with SevenCs.. ");
@@ -88,7 +88,7 @@ namespace ProductManagerAPI.Jobs
                         var summary = await _sevenCsService.ValidateDatasetAsync(electronicProduct, output);
 
                         if (summary.Errors == 0 & summary.Critical == 0) {
-                            await _repository.AppendAsync(productName, Data.Models.ProductState.Exported, "S-101", (int)dataset.Edition!, (int)dataset.Update!, "system");
+                            await _repository.AppendAsync(productName, Data.Models.ProductState.Exported, "S-101", dataset.Edition!.Value, dataset.Update, "system");
                             // write to s128 database
                             _logger.LogInformation("Writing to s128.attachments.. ");
                             await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
@@ -96,15 +96,15 @@ namespace ProductManagerAPI.Jobs
                         else {
                             _logger.LogWarning("Product {product} failed the SevenCs Validation check. Errors: {err}. Critical: {crit}. Marking product as Invalid.", productName, summary.Errors, summary.Critical);
 
-                            await _repository.AppendAsync(productName, Data.Models.ProductState.Frozen, "S-101", (int)dataset.Edition!, (int)dataset.Update!, "system");
+                            await _repository.AppendAsync(productName, Data.Models.ProductState.Frozen, "S-101", dataset.Edition!.Value, dataset.Update, "system");
 
                             _logger.LogInformation("Rolling back export creation.. ");
-                            _exportService.DeleteExport(productName, output, electronicProduct.editionNumber!.Value, electronicProduct.updateNumber.GetValueOrDefault());
+                            _exportService.DeleteExport(productName, output, dataset.Edition!.Value, dataset.Update);
                         }
                     }
                     catch (Exception ex) {
                         _logger.LogWarning(ex, "An error occurred during SevenCs validation for product {product}. Assume validation was succesful for now.", productName);
-                        await _repository.AppendAsync(productName, Data.Models.ProductState.Exported, "S-101", (int)dataset.Edition!, (int)dataset.Update!, "system");
+                        await _repository.AppendAsync(productName, Data.Models.ProductState.Exported, "S-101", dataset.Edition!.Value, dataset.Update, "system");
                         // write to s128 database
                         _logger.LogInformation("Writing to s128.attachments.. ");
                         await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.NewEdition, yaml, result.Index, result.Sign);
@@ -120,7 +120,7 @@ namespace ProductManagerAPI.Jobs
 
                     if (string.IsNullOrEmpty(incoming)) {
                         _logger.LogWarning("Failed to create new edition for dataset {dataset}.", productName);
-                        await _repository.AppendAsync(productName, Data.Models.ProductState.Frozen, "S-101", (int)dataset.Edition!, (int)dataset.Update!, "system");
+                        await _repository.AppendAsync(productName, Data.Models.ProductState.Frozen, "S-101", dataset.Edition!.Value, dataset.Update, "system");
                         continue;
                     }
 
@@ -139,7 +139,7 @@ namespace ProductManagerAPI.Jobs
                     var update = S100FC.YAML.Converter.Serialize(delta);
 
                     _logger.LogInformation("Creating export.. ");
-                    var result = _exportService.CreateS100Export(productName, (int)dataset.Edition!, (int)dataset.Update!, output, update, prevIndex);
+                    var result = _exportService.CreateS100Export(productName, dataset.Edition!.Value, dataset.Update, output, update, prevIndex);
                     // Validate .000 files
                     _logger.LogInformation("Validating .000 files with SevenCs.. ");
                     try {
@@ -149,7 +149,7 @@ namespace ProductManagerAPI.Jobs
                         _logger.LogInformation("Saving productstate in database..");
 
                         if (summary.Errors == 0 & summary.Critical == 0) {
-                            await _repository.AppendAsync(productName, Data.Models.ProductState.Exported, "S-101", (int)dataset.Edition!, (int)dataset.Update!, "system");
+                            await _repository.AppendAsync(productName, Data.Models.ProductState.Exported, "S-101", dataset.Edition!.Value, dataset.Update, "system");
 
                             _logger.LogInformation("Writing to s128.attachments.. ");
                             await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.Update, update, result.Index, result.Sign);
@@ -158,16 +158,16 @@ namespace ProductManagerAPI.Jobs
                         else {
                             _logger.LogWarning("Product {product} failed the SevenCs Validation check. Errors: {err}. Critical: {crit}. Marking product as Frozen.", productName, summary.Errors, summary.Critical);
 
-                            await _repository.AppendAsync(productName, Data.Models.ProductState.Frozen, "S-101", (int)dataset.Edition!, (int)dataset.Update!, "system");
+                            await _repository.AppendAsync(productName, Data.Models.ProductState.Frozen, "S-101", dataset.Edition!.Value, dataset.Update, "system");
 
                             _logger.LogInformation("Rolling back export creation.. ");
-                            _exportService.DeleteExport(productName, output, electronicProduct.editionNumber!.Value, electronicProduct.updateNumber.GetValueOrDefault());
+                            _exportService.DeleteExport(productName, output, dataset.Edition!.Value, dataset.Update);
                         }
                     }
                     catch (Exception ex) {
                         // TODO: This is a temporary solution to avoid blocking exports due to issues with SevenCs.
                         _logger.LogWarning(ex, "An error occurred during SevenCs validation for product {product}. Assume validation was succesful for now.", productName);
-                        await _repository.AppendAsync(productName, Data.Models.ProductState.Exported, "S-101", (int)dataset.Edition!, (int)dataset.Update!, "system");
+                        await _repository.AppendAsync(productName, Data.Models.ProductState.Exported, "S-101", dataset.Edition!.Value, dataset.Update, "system");
 
                         _logger.LogInformation("Writing to s128.attachments.. ");
                         await _productManager.ElectronicProductManager.CreateAttachmentAsync(productName, ExportTypes.Update, update, result.Index, result.Sign);
