@@ -28,17 +28,13 @@ The main map route owns product correction management and popup actions.
 
 The Dashboard route owns read-only operational activity summaries for selected time ranges. It does not own product mutation actions, map popup state, Product Collection state, Analyze state, or Review state.
 
-The Analyze route owns analysis/report display for selected products.
-
-The Review route owns side-by-side product review for multiple selected products.
+The Analyze route owns analysis/report display for selected products. The Review route owns side-by-side product review for multiple selected products.
 
 ## Terminology
 
 Use `Product` and `Products` in user-facing UI text.
 
-Do not use `Dataset`, `Datasets`, `dataset`, or similar dataset-oriented labels in visible UI unless the backend/domain concept specifically requires a technical distinction.
-
-Code may continue using stable technical identifiers such as `datasetName` where that matches backend contracts or existing normalized attribute names. UI labels, headings, buttons, empty states, help text and documentation intended for users should use product terminology.
+Do not use `Dataset`, `Datasets`, `dataset`, or similar dataset-oriented labels in visible UI unless the backend/domain concept specifically requires a technical distinction. Code may continue using stable technical identifiers such as `datasetName` where that matches backend contracts or existing normalized attribute names.
 
 A future terminology hardening task tracks a full UI audit to align Analyze, Review, Dashboard and main map labels around `Product` / `Products`.
 
@@ -62,12 +58,13 @@ The following flows are implemented and considered stable frontend behavior:
 - manual refresh button loading
 - display-scale hiding
 - main map filters constrained to `Display scale`, `Status` and `Usage band`
-- Product History quick panel
+- Product History quick panel with collapsed event rows
 - Product Collection tray
 - Analyze page
 - Review workspace
 - shared Product catalog picker for Analyze and Review
-- Dashboard page with backend-driven activity data, Danish range builder, client-side search, client-side filters, actionable summary panels, polished Dashboard History panel, domain-oriented backend activity classification, summary cards and activity links
+- Dashboard page with backend-driven activity data, Danish range builder, client-side search, client-side filters, actionable summary panels, polished Dashboard History panel, collapsed product history events, domain-oriented backend activity classification, summary cards and activity links
+- release-readiness keyboard hardening for route/panel close behavior
 
 ## Important architecture
 
@@ -118,16 +115,6 @@ Current popup action endpoint status:
 - `Export > All > Edition` and `Export > All > Update` are intentionally disabled.
 - `Export > S57 > Edition`, `Export > S57 > Update` and `Export > S100 > Update` remain disabled until the backend contract changes.
 
-### Action availability
-
-Product action availability rules live in:
-
-```txt
-src/features/products/domain/productActionAvailability.js
-```
-
-Do not duplicate action availability rules in popup DOM or UI rendering code.
-
 ### Product operation state
 
 Frontend operation state lives in:
@@ -136,31 +123,7 @@ Frontend operation state lives in:
 src/features/products/state/productOperationState.js
 ```
 
-It tracks local browser-tab operations and has a skeleton for future backend operation state.
-
-Documentation:
-
-```txt
-src/features/products/state/README.md
-```
-
-Product operation state is a UX guard only. The backend must still enforce real business rules and operation conflicts.
-
-### Export state
-
-Export leaf-level state lives in:
-
-```txt
-src/features/map/popups/popupExportState.js
-```
-
-Export structure/configuration lives in:
-
-```txt
-src/features/map/popups/popupExportConfig.js
-```
-
-`popupExportState.js` owns export scope conflicts and leaf-level loading state. `productOperationState.js` only tracks that the product has an export operation running.
+It tracks local browser-tab operations and has a skeleton for future backend operation state. Product operation state is a UX guard only. The backend must still enforce real business rules and operation conflicts.
 
 ### Notices and API results
 
@@ -215,11 +178,9 @@ Dashboard documentation:
 src/features/dashboard/README.md
 ```
 
-Dashboard is a read-only operational activity route. It loads activity data from `/electronicproducts/dashboard`, applies local search and filters to the loaded payload, opens a route-local Product History panel from activity rows, and links users onward to Review or Analyze.
+Dashboard is a read-only operational activity route. It loads activity data from `/electronicproducts/dashboard`, applies local search and filters to the loaded payload, opens a route-local Product History panel from activity rows, and links users onward to Review or Analyze. Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
 
-Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
-
-### Analyze
+### Analyze and Review
 
 Analyze feature files live in:
 
@@ -227,29 +188,13 @@ Analyze feature files live in:
 src/features/analyze
 ```
 
-Analyze documentation:
-
-```txt
-src/features/analyze/README.md
-```
-
-Analyze owns product analysis/report display. It does not own product mutation actions. Product actions such as Freeze, Unfreeze, Send to IC-ENC, Export and Rollback must stay in the product popup.
-
-### Review
-
 Review feature files live in:
 
 ```txt
 src/features/review
 ```
 
-Review documentation:
-
-```txt
-src/features/review/README.md
-```
-
-Review owns multi-product review. Review tabs are independent and should not reintroduce BroadcastChannel/session picker workflows without a clear UX reason.
+Analyze owns product analysis/report display. It does not own product mutation actions. Review owns multi-product review. Review tabs are independent and should not reintroduce BroadcastChannel/session picker workflows without a clear UX reason.
 
 ### Timeline and Product History
 
@@ -265,7 +210,9 @@ Timeline documentation:
 src/features/timeline/README.md
 ```
 
-Product History uses the backend product history endpoint for product-level history views. Global map timeline is not implemented yet.
+Product History uses the backend product history endpoint for product-level history views. Product History rows are collapsed by default on both the main map quick panel and the Dashboard History panel. Collapsed rows show the event title, timestamp and short description; row details such as previous/new state are expanded only when the user opens that row.
+
+Global map timeline is not implemented yet.
 
 ## Frontend-only and placeholder behavior
 
@@ -282,12 +229,11 @@ These features prepare the UI and architecture, but they are not backend source 
 
 Do not implement the following fully until backend/database contracts are ready:
 
-- backend active product operation state
-- cross-user/cross-tab operation locking
+- backend active product operation visibility across sessions
 - async export jobs
 - job-status endpoint
 - global map timeline
-- backend-driven export conflict state
+- backend-driven export conflict state beyond current 409 handling
 - S57 export endpoints
 - S100 update export endpoint
 - real Dashboard IC-ENC report links
@@ -305,20 +251,6 @@ Refresh behavior should preserve:
 
 Manual refresh uses button loading. Auto-refresh should be silent. Refresh should not use fullscreen loader.
 
-## Analyze behavior
-
-Analyze uses chunked layer creation and loader progress. Analyze sidebar can show:
-
-- product input/list
-- loading state
-- product cards
-- XML/report content
-- load warnings
-- history content
-- internal validation placeholder content
-
-Analyze sidebar should not show product mutation actions.
-
 ## Dashboard behavior
 
 Dashboard is a separate route at `/dashboard`.
@@ -335,14 +267,13 @@ Dashboard can show:
 - client-side filters
 - actionable status/operation summary rows that apply matching filters
 - Dashboard History panel opened from activity-row `History`
+- collapsed Product History event rows inside the Dashboard History panel
 - onward links to Review and Analyze
 - disabled or placeholder report actions until report endpoints exist
 
 Dashboard filters run on the loaded activity payload. Summary cards, status summary and operation summary should stay derived from the same filtered activity set as the visible list.
 
 Dashboard History panel is route-local. It replaces the right summary column while open, closes with `Close` or `Escape`, shows selected activity context, highlights the selected activity row, and reuses the shared product history API/renderers without interacting with main map popup state or Product Collection state.
-
-Dashboard activity classification is backend-driven. The backend maps raw product state/history records into user-facing activity `Type`, `Status`, `Severity`, `Title` and summary rows. The frontend should not duplicate backend classification rules.
 
 ## Adding future export endpoints
 
@@ -416,9 +347,8 @@ Recent frontend work has focused on:
 
 - custom popup action lifecycle
 - product operation state
-- backend operation-state skeleton
 - export config extraction
-- Product History integration
+- Product History integration and collapsed history event rows
 - Analyze lifecycle cleanup
 - Review workspace foundation
 - Product Collection workflow
@@ -429,11 +359,7 @@ Recent frontend work has focused on:
 - main map filter hardening
 - S100 Edition export activation
 - Rollback activation
+- release-readiness smoke-test hardening
 - layer capability foundation
 
-The frontend is ready for either:
-
-- further popup action smoke testing
-- report endpoint integration when backend report IDs/storage contracts exist
-- backend operation/job state work
-- final manual smoke test pass before continuing with larger features
+The frontend is ready for controlled user testing while backend-dependent report links, async export/job state, and active operation visibility continue separately.
