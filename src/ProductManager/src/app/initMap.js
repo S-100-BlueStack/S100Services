@@ -18,6 +18,7 @@ import { initAttributeFilterPanel } from "../features/map/filters/attributeFilte
 import { closePopupActionDropdown } from "../features/map/popups/popupActionDropdown.js";
 import { initProductCollectionTray } from "../features/productCollection/ui/productCollectionTray.js";
 import { initProductHistoryPanel } from "../features/timeline/ui/productHistoryPanel.js";
+import { initMainMapProductSearch } from "../features/map/search/mainMapProductSearch.js";
 import { bindMapViewpointPersistence } from "../features/map/state/mapViewpointPersistence.js";
 import { initPreferencesPanel } from "../features/preferences/ui/preferencesPanel.js";
 
@@ -60,12 +61,15 @@ export function initMap() {
   registerPopupHoverSync(view, hoverManager);
 
   const filterService = createAttributeFilterService();
+
   const isGraphicAllowed = (graphic, layer) => {
     return filterService.matchesGraphic(graphic, layer);
   };
+
   const applyMapVisibility = (layers = getAllLayers()) => {
     applyDisplayScaleVisibility(view, layers, { isGraphicAllowed });
   };
+
   const bindMapVisibility = (layers = getAllLayers()) => {
     bindDisplayScaleVisibility(view, {
       layers,
@@ -85,11 +89,13 @@ export function initMap() {
     view,
   });
   const productCollectionTray = initProductCollectionTray();
+  const productSearch = initMainMapProductSearch({ view });
   const cleanupKeyboardClose = bindMainMapKeyboardClose({
     view,
     filterPanel,
     preferencesPanel,
     productHistoryPanel,
+    productSearch,
   });
 
   bindOverlapPicker(view);
@@ -161,8 +167,10 @@ export function initMap() {
     updateLastUpdated,
     mapViewpointPersistence,
     preferencesPanel,
+    productSearch,
     destroy() {
       cleanupKeyboardClose?.();
+      productSearch?.destroy?.();
       filterPanel?.destroy?.();
       preferencesPanel?.destroy?.();
       productHistoryPanel?.destroy?.();
@@ -172,9 +180,20 @@ export function initMap() {
   };
 }
 
-function bindMainMapKeyboardClose({ view, filterPanel, preferencesPanel, productHistoryPanel }) {
+function bindMainMapKeyboardClose({
+  view,
+  filterPanel,
+  preferencesPanel,
+  productHistoryPanel,
+  productSearch,
+}) {
   const handleKeydown = (event) => {
     if (event.key !== "Escape" || event.defaultPrevented) {
+      return;
+    }
+
+    if (productSearch?.close?.()) {
+      event.preventDefault();
       return;
     }
 
