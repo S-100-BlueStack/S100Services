@@ -1,6 +1,7 @@
 import { loadStatuses } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { fetchProductCatalog } from "../../products/api/productCatalogApi.js";
+import { validateProductCatalogSelection } from "../../products/domain/productCatalog.js";
 import { hideLoader } from "../../../shared/ui/loader.js";
 import {
   addReviewProductItem,
@@ -72,7 +73,9 @@ export async function initReviewPage({ datasetNames } = {}) {
 
   const loadReviewProductItems = async (nextProductItems, { updateUrl = true } = {}) => {
     const requestId = ++loadRequestId;
-    productItems = normalizeReviewProductItems(nextProductItems);
+    const validatedProductItems = validateReviewProductItems(nextProductItems);
+    productItems = validatedProductItems.items;
+    notifyRejectedCatalogProducts(validatedProductItems);
     const enabledNextDatasetNames = getEnabledReviewDatasetNames(productItems);
 
     if (updateUrl) {
@@ -127,9 +130,19 @@ export async function initReviewPage({ datasetNames } = {}) {
       return;
     }
 
+    const validation = validateCatalogProductNames(normalizedDatasetNames, {
+      excludedProductNames: productItems.map((item) => item.datasetName),
+    });
+
+    notifyRejectedCatalogProducts(validation);
+
+    if (validation.valid.length === 0) {
+      return;
+    }
+
     let nextProductItems = productItems;
 
-    for (const datasetName of normalizedDatasetNames) {
+    for (const datasetName of validation.valid) {
       nextProductItems = addReviewProductItem(nextProductItems, datasetName);
     }
 
@@ -207,7 +220,7 @@ export async function initReviewPage({ datasetNames } = {}) {
   hideLoader();
 
   renderCurrentReviewPage();
-  void loadProductCatalogForPicker();
+  await loadProductCatalogForPicker();
   await loadReviewProductItems(productItems, { updateUrl: false });
 
   const handlePopState = async () => {
@@ -233,6 +246,62 @@ export async function initReviewPage({ datasetNames } = {}) {
       document.body.classList.remove("pm-review-route");
     },
   };
+
+  function validateReviewProductItems(nextProductItems) {
+    const normalizedItems = normalizeReviewProductItems(nextProductItems);
+
+    if (!canValidateCatalog(productCatalog)) {
+      return {
+        items: normalizedItems,
+        valid: normalizedItems.map((item) => item.datasetName),
+        unknown: [],
+        alreadySelected: [],
+      };
+    }
+
+    const validation = validateProductCatalogSelection(
+      productCatalog.products,
+      normalizedItems.map((item) => item.datasetName)
+    );
+    const validKeys = new Set(validation.valid.map((name) => name.toUpperCase()));
+
+    return {
+      ...validation,
+      items: normalizedItems.filter((item) => validKeys.has(item.datasetName.toUpperCase())),
+    };
+  }
+
+  function validateCatalogProductNames(productNames, { excludedProductNames = [] } = {}) {
+    if (!canValidateCatalog(productCatalog)) {
+      return {
+        valid: normalizeDatasetNames(productNames),
+        unknown: [],
+        alreadySelected: [],
+      };
+    }
+
+    return validateProductCatalogSelection(productCatalog.products, productNames, {
+      excludedProductNames,
+    });
+  }
+
+  function notifyRejectedCatalogProducts({ unknown = [], alreadySelected = [] } = {}) {
+    if (unknown.length > 0) {
+      noticeError(
+        "Product not found",
+        `The product catalog does not contain: ${unknown.join(", ")}.`
+      );
+    }
+
+    if (alreadySelected.length > 0) {
+      noticeError(
+        "Product already added",
+        `${alreadySelected.join(", ")} ${
+          alreadySelected.length === 1 ? "is" : "are"
+        } already in Product Review.`
+      );
+    }
+  }
 
   async function ensureLookupsLoaded() {
     if (lookupsLoaded) {
@@ -273,4 +342,13 @@ function createProductCatalogState({ products = [], loading = false, error = nul
     loading,
     error,
   };
+}
+
+function canValidateCatalog(productCatalog) {
+  return (
+    !productCatalog.loading &&
+    !productCatalog.error &&
+    Array.isArray(productCatalog.products) &&
+    productCatalog.products.length > 0
+  );
 }

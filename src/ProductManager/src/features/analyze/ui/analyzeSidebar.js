@@ -83,13 +83,13 @@ function createDatasetManager(datasetItems, { loading, productCatalog }) {
   container.setAttribute("aria-label", "Analyze products");
   container.setAttribute("aria-busy", loading ? "true" : "false");
 
-  container.appendChild(createDatasetAddForm(productCatalog));
+  container.appendChild(createDatasetAddForm(productCatalog, datasetItems));
   container.appendChild(createDatasetList(datasetItems));
 
   return container;
 }
 
-function createDatasetAddForm(productCatalog) {
+function createDatasetAddForm(productCatalog, datasetItems) {
   return createProductPickerForm({
     id: "analyze-dataset-input",
     eventName: "pm-analyze-dataset-add",
@@ -97,8 +97,10 @@ function createDatasetAddForm(productCatalog) {
     placeholder: "Search or type product name",
     helpText: "Add one product at a time, or paste multiple names from an Analyze URL.",
     products: productCatalog.products,
+    excludedProductNames: datasetItems.map((item) => item.name),
     loading: productCatalog.loading,
     error: productCatalog.error,
+    requireCatalogMatch: true,
     className: "analyze-dataset-form",
   });
 }

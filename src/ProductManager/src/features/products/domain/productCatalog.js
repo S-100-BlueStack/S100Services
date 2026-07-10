@@ -27,8 +27,15 @@ export function normalizeProductCatalog(payload) {
   return products.sort((left, right) => left.name.localeCompare(right.name));
 }
 
-export function filterProductCatalog(products, query, { limit = 20 } = {}) {
-  const normalizedProducts = normalizeProductCatalog(products);
+export function filterProductCatalog(
+  products,
+  query,
+  { limit = 20, excludedProductNames = [] } = {}
+) {
+  const excludedKeys = createProductKeySet(excludedProductNames);
+  const normalizedProducts = normalizeProductCatalog(products).filter(
+    (product) => !excludedKeys.has(product.id)
+  );
   const normalizedQuery = normalizeSearchQuery(query);
 
   if (!normalizedQuery) {
@@ -57,6 +64,57 @@ export function parseProductInput(value) {
     .split(/[&\n,]+/)
     .map((part) => part.trim())
     .filter(Boolean);
+}
+
+export function findProductCatalogMatch(products, productName) {
+  const key = createProductKey(productName);
+
+  if (!key) {
+    return null;
+  }
+
+  return normalizeProductCatalog(products).find((product) => product.id === key) ?? null;
+}
+
+export function validateProductCatalogSelection(
+  products,
+  productNames,
+  { excludedProductNames = [] } = {}
+) {
+  const normalizedProducts = normalizeProductCatalog(products);
+  const catalogByKey = new Map(normalizedProducts.map((product) => [product.id, product]));
+  const excludedKeys = createProductKeySet(excludedProductNames);
+  const valid = [];
+  const alreadySelected = [];
+  const unknown = [];
+
+  for (const productName of parseProductInput(productNames)) {
+    const key = createProductKey(productName);
+
+    if (!key) {
+      continue;
+    }
+
+    if (excludedKeys.has(key)) {
+      alreadySelected.push(productName);
+      continue;
+    }
+
+    const match = catalogByKey.get(key);
+
+    if (!match) {
+      unknown.push(productName);
+      continue;
+    }
+
+    valid.push(match.name);
+  }
+
+  return {
+    valid,
+    alreadySelected,
+    unknown,
+  };
 }
 
 function getCatalogValues(payload) {
@@ -109,6 +167,10 @@ function normalizeProductName(value) {
 
 function createProductKey(value) {
   return normalizeProductName(value).toUpperCase();
+}
+
+function createProductKeySet(productNames) {
+  return new Set(parseProductInput(productNames).map(createProductKey).filter(Boolean));
 }
 
 function createSearchText(name) {

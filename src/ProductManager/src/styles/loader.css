@@ -1,14 +1,20 @@
-﻿/* =========================================================
+/* =========================================================
    Loader
    ========================================================= */
+#header {
+  position: relative;
+  z-index: 10000;
+}
 
 .app-loader {
   position: fixed;
   inset: 0;
+  box-sizing: border-box;
   z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding-block-start: var(--pm-app-header-height, 58px);
   background: var(--pm-loader-overlay, rgba(10, 18, 26, 0.28));
   opacity: 1;
   transition: opacity 200ms ease;
@@ -40,8 +46,9 @@
   -webkit-backdrop-filter: blur(16px) saturate(145%);
 }
 
-/* The old Calcite spinner is intentionally disabled. It looks broken whenever
-   the main thread is busy, while the progress bar can still show chunk progress. */
+/* The old Calcite spinner is intentionally disabled.
+   It looks broken whenever the main thread is busy, while the progress bar can
+   still show chunk progress. */
 .loader-content calcite-loader {
   display: none !important;
 }

@@ -126,3 +126,8 @@
   font-size: 12px;
   line-height: 1.35;
 }
+
+.pm-product-picker__help.is-error {
+  color: var(--calcite-color-status-danger, #d83020);
+  font-weight: 650;
+}

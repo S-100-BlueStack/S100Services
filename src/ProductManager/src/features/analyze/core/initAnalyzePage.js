@@ -5,6 +5,7 @@ import { createHoverManager } from "../../map/interactions/hoverManager.js";
 import { registerPopupHoverSync } from "../../map/interactions/registerPopupHoverSync.js";
 import { noticeError, noticeWarning } from "../../notices/services/noticeService.js";
 import { fetchProductCatalog } from "../../products/api/productCatalogApi.js";
+import { validateProductCatalogSelection } from "../../products/domain/productCatalog.js";
 import { fetchProductHistory } from "../../timeline/api/productHistoryApi.js";
 import { hideLoader } from "../../../shared/ui/loader.js";
 import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
@@ -88,7 +89,9 @@ export async function initAnalyzePage({ datasetNames }) {
     { updateUrl = true, showLoader = true } = {}
   ) => {
     const requestId = ++loadRequestId;
-    datasetItems = normalizeAnalyzeDatasetItems(nextDatasetItems);
+    const validatedDatasetItems = validateAnalyzeDatasetItems(nextDatasetItems);
+    datasetItems = validatedDatasetItems.items;
+    notifyRejectedCatalogProducts(validatedDatasetItems);
     const enabledNextDatasetNames = getEnabledAnalyzeDatasetNames(datasetItems);
 
     // The Analyze route represents the active load set. Disabled names are local
@@ -244,9 +247,19 @@ export async function initAnalyzePage({ datasetNames }) {
       return;
     }
 
+    const validation = validateCatalogProductNames(nextDatasetNames, {
+      excludedProductNames: datasetItems.map((item) => item.name),
+    });
+
+    notifyRejectedCatalogProducts(validation);
+
+    if (validation.valid.length === 0) {
+      return;
+    }
+
     let nextDatasetItems = datasetItems;
 
-    for (const datasetName of nextDatasetNames) {
+    for (const datasetName of validation.valid) {
       nextDatasetItems = addAnalyzeDatasetItem(nextDatasetItems, datasetName);
     }
 
@@ -311,7 +324,7 @@ export async function initAnalyzePage({ datasetNames }) {
     loading: false,
     productCatalog,
   });
-  void loadProductCatalogForPicker();
+  await loadProductCatalogForPicker();
   await loadAnalyzeDatasetItems(datasetItems, { updateUrl: false });
 
   const handlePopState = async () => {
@@ -351,6 +364,62 @@ export async function initAnalyzePage({ datasetNames }) {
       currentProducts = [];
     },
   };
+
+  function validateAnalyzeDatasetItems(nextDatasetItems) {
+    const normalizedItems = normalizeAnalyzeDatasetItems(nextDatasetItems);
+
+    if (!canValidateCatalog(productCatalog)) {
+      return {
+        items: normalizedItems,
+        valid: normalizedItems.map((item) => item.name),
+        unknown: [],
+        alreadySelected: [],
+      };
+    }
+
+    const validation = validateProductCatalogSelection(
+      productCatalog.products,
+      normalizedItems.map((item) => item.name)
+    );
+    const validKeys = new Set(validation.valid.map((name) => name.toUpperCase()));
+
+    return {
+      ...validation,
+      items: normalizedItems.filter((item) => validKeys.has(item.name.toUpperCase())),
+    };
+  }
+
+  function validateCatalogProductNames(productNames, { excludedProductNames = [] } = {}) {
+    if (!canValidateCatalog(productCatalog)) {
+      return {
+        valid: normalizeDatasetNames(productNames),
+        unknown: [],
+        alreadySelected: [],
+      };
+    }
+
+    return validateProductCatalogSelection(productCatalog.products, productNames, {
+      excludedProductNames,
+    });
+  }
+
+  function notifyRejectedCatalogProducts({ unknown = [], alreadySelected = [] } = {}) {
+    if (unknown.length > 0) {
+      noticeError(
+        "Product not found",
+        `The product catalog does not contain: ${unknown.join(", ")}.`
+      );
+    }
+
+    if (alreadySelected.length > 0) {
+      noticeWarning(
+        "Product already added",
+        `${alreadySelected.join(", ")} ${
+          alreadySelected.length === 1 ? "is" : "are"
+        } already in Analyze.`
+      );
+    }
+  }
 
   async function ensureLookupsLoaded() {
     if (lookupsLoaded) {
@@ -525,4 +594,13 @@ function createProductCatalogState({ products = [], loading = false, error = nul
     loading,
     error,
   };
+}
+
+function canValidateCatalog(productCatalog) {
+  return (
+    !productCatalog.loading &&
+    !productCatalog.error &&
+    Array.isArray(productCatalog.products) &&
+    productCatalog.products.length > 0
+  );
 }
