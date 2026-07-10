@@ -179,7 +179,6 @@ namespace ProductCatalogue
 
 
             var result = this._electronicProducts.TryAdd(name, electronicProduct);
-            Debug.Assert(result);
         }
 
         public async Task CreateElectronicProductAsync(string name, productSpecification productSpecification, /*specificUsage specificUsage,*/ string boundary, int edition, int update, byte[] zipfile) => throw new NotImplementedException();
@@ -463,7 +462,6 @@ namespace ProductCatalogue
 
             //    cursorS128.MoveNext();
 
-            //    Debug.Assert(cursorS128.Current != null);
 
             //    if (cursorS128.Current.IsNull("attributebindings"))
             //        throw new System.ArgumentNullException(nameof(dataset.DatasetName));
@@ -652,7 +650,7 @@ namespace ProductCatalogue
                     var geometry = name;
 
 
-                    if (topology.Mapping.TryGetValue(name!, out var value))
+                    if (topology.MappingFOID.TryGetValue(name!, out var value))
                         geometry = value;
 
 
