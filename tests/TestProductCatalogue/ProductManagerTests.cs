@@ -113,7 +113,6 @@ namespace TestProductManagerAPI
             // Build LalaLand arguments
             var boundary = "";
             var optimumDisplayScale = 22000;
-            var specificUsage = 4;
 
             var datasetName = "101DK00LALALAND";
          
@@ -144,7 +143,7 @@ namespace TestProductManagerAPI
             Assert.True(!string.IsNullOrEmpty(boundary));
 
             // Import
-            await productManager.ElectronicProductManager.CreateElectronicProductAsync(datasetName, productSpecification, specificUsage, boundary, "", optimumDisplayScale);
+            await productManager.ElectronicProductManager.CreateElectronicProductAsync(datasetName, productSpecification, boundary, "", optimumDisplayScale);
 
 
             System.Diagnostics.Debugger.Break();
@@ -265,7 +264,7 @@ namespace TestProductManagerAPI
 
                     var cover = (ArcGIS.Core.Geometry.Polygon)GeometryEngine.Instance.Union(polygons);
 
-                    tasks.Add(productManager.ElectronicProductManager.CreateElectronicProductAsync(name, productSpecification, specificUsage, cover.ToJson(), "", compilationScale));
+                    tasks.Add(productManager.ElectronicProductManager.CreateElectronicProductAsync(name, productSpecification, /*specificUsage,*/ cover.ToJson(), "", compilationScale));
                 }
             }
 

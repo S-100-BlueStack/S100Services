@@ -84,7 +84,6 @@ namespace S100FC.ProductCatalogue
 
                 cursor.MoveNext();
 
-                Debug.Assert(cursor.Current != null);
 
                 var c = cursor.Current;
 
@@ -220,7 +219,6 @@ namespace S100FC.ProductCatalogue
                         surface.CreateRow(buffer);
 
                         var result = this._electronicProducts.TryAdd(name, electronicProduct);
-                        Debug.Assert(result);
                     }
                 });
             });
@@ -634,7 +632,6 @@ namespace S100FC.ProductCatalogue
 
                 cursorS128.MoveNext();
 
-                Debug.Assert(cursorS128.Current != null);
 
                 row128 = cursorS128.Current;
 
@@ -745,7 +742,7 @@ namespace S100FC.ProductCatalogue
                     while (featureCursor.MoveNext()) {
                         var current = featureCursor.Current;
 
-                        var name = $"{current.UID()}";
+                        var name = current["UID"].ToString()!;  //$"{current.UID()}";
                         var code = current["code"].ToString()!;
                         var flatten = current.FindField("attributebindings") != -1 &&
                            current["attributebindings"] != null &&
@@ -801,12 +798,12 @@ namespace S100FC.ProductCatalogue
                     using var featureCursor = fc.Search(filter, true);
                     while (featureCursor.MoveNext()) {
                         var current = (ArcGIS.Core.Data.Feature)featureCursor.Current;
-                        var name = $"{current.UID()}";
+                        var name = current["UID"].ToString()!;  //$"{current.UID()}";
 
                         // Only map geometry, and keep name seperate so foids remain unique
                         var geometry = name;
 
-                        if (topology.Mapping.TryGetValue(name!, out var value))
+                        if (topology.mapper.TryGetValue(name!, out var value))
                             geometry = value;
 
                         var shapetype = def.GetShapeType();
@@ -850,8 +847,8 @@ namespace S100FC.ProductCatalogue
 
 
                             // Surface Masks
-                            var topologySurface = topology.Surfaces.FirstOrDefault(e => e.Ref!.Equals(name, StringComparison.InvariantCultureIgnoreCase));
-
+                            var topologySurface = topology.matrix.Surfaces.FirstOrDefault(e => e.Ref!.Equals(name, StringComparison.InvariantCultureIgnoreCase));
+                           
                             // Build comma seperated string of masks, with :1 or :2 indicating which mask it is. Should be null/omitted if empty.
                             var masks = new[] {
                                     topologySurface?.Masks1?.Select(e => $"C{e}:1"),
@@ -1006,7 +1003,7 @@ namespace S100FC.ProductCatalogue
                     Log.Verbose("Adding {geometryType} with ID: {name}", geometry.GeometryType, name);
                 }
 
-                dataset!.AddTopology(topology);
+                dataset!.AddTopology(topology.matrix);
 
                 // Add Spatial Association Informationbindings. Must be handled after curves are added to dataset.
                 foreach (var sa in spatialAssociations) {
@@ -1298,6 +1295,9 @@ namespace S100FC.ProductCatalogue
 
                 var electronicProduct = this._electronicProducts[name.ToUpperInvariant()];
 
+                if(electronicProduct.editionNumber <= 1)
+                    throw new InvalidOperationException($"Cannot rollback edition number below 1 for dataset {name}");
+
                 // Delete most recent attachment from attachmenttable
                 this._geodatabase!.ApplyEdits(() => {
                     using var attachment = this._geodatabase!.OpenDataset<Table>(this.QualifyTableName("attachment"));
@@ -1341,7 +1341,6 @@ namespace S100FC.ProductCatalogue
 
                     cursorS128.MoveNext();
 
-                    Debug.Assert(cursorS128.Current != null);
 
                     if (electronicProduct.updateNumber > 0)
                         electronicProduct.updateNumber--;
