@@ -14,7 +14,8 @@ import "@esri/calcite-components/components/calcite-switch";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "@esri/calcite-components/main.css";
 import "./styles/index.css";
-
 import { bootstrap } from "./app/bootstrap.js";
+import { initGlobalHelpTooltips } from "./shared/ui/tooltips/globalHelpTooltips.js";
 
+initGlobalHelpTooltips();
 bootstrap();

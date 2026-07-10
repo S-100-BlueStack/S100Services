@@ -255,11 +255,11 @@ Do not implement the following fully until backend/database contracts are ready:
 
 ## User guidance and onboarding future work
 
-Controlled user testing showed that users need more inline explanation of what actions and controls do. Future UX work should add a consistent hover/help pattern and an optional introduction flow.
+Controlled user testing showed that users need more inline explanation of what actions and controls do. The frontend now adds concise hover help/tooltips to common clickable controls and icon-only actions. Future UX work should add an optional introduction flow.
 
 Track this as separate future work rather than mixing it into feature implementation:
 
-- add concise tooltips/help text to all clickable controls and icon-only actions
+- maintain concise tooltips/help text for new clickable controls and icon-only actions
 - ensure tooltip text explains consequence, not only label duplication
 - keep text static and useful in RDP/VDI environments where animations may not render smoothly
 - create an introduction flow that walks users through the main map, filters, Product search, popup actions, Product Collection, Dashboard, Analyze and Review
@@ -389,4 +389,4 @@ Recent frontend work has focused on:
 - release-readiness smoke-test hardening
 - layer capability foundation
 
-The frontend is ready for controlled user testing while backend-dependent report links, async export/job state, active operation visibility, tooltip/help coverage and introduction flow continue separately.
+The frontend is ready for controlled user testing while backend-dependent report links, async export/job state, active operation visibility and introduction flow continue separately.
