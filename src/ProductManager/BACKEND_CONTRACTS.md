@@ -1,10 +1,6 @@
 # Product Manager backend contracts
 
-This document describes the backend contracts Product Manager frontend needs for
-future work.
-
-The contracts are drafts. They describe frontend requirements and proposed
-response shapes, not finalized backend implementation details.
+This document describes the backend contracts Product Manager frontend needs for future work. The contracts are drafts. They describe frontend requirements and proposed response shapes, not finalized backend implementation details.
 
 ## Goals
 
@@ -17,8 +13,7 @@ The frontend needs backend support for:
 - Analyze product data
 - global map timeline
 
-The backend should remain the source of truth for business rules. Frontend state
-is only a UX guard.
+The backend should remain the source of truth for business rules. Frontend state is only a UX guard.
 
 ## General API conventions
 
@@ -29,10 +24,7 @@ Prefer a consistent response shape for all Product Manager endpoints.
 Successful response:
 
 ```json
-{
-  "success": true,
-  "data": {}
-}
+{ "success": true, "data": {} }
 ```
 
 Failed response:
@@ -59,8 +51,7 @@ Use clear HTTP status codes:
 
 ### Error body
 
-Error responses should include enough information for user-facing notices and
-debugging.
+Error responses should include enough information for user-facing notices and debugging.
 
 Recommended shape:
 
@@ -68,7 +59,7 @@ Recommended shape:
 {
   "success": false,
   "errorCode": "EXPORT_CONFLICT",
-  "message": "All Edition export is already running for DK5ABC123.",
+  "message": "An export is already running for DK5ABC123.",
   "details": {
     "datasetName": "DK5ABC123",
     "operationId": "job-123",
@@ -90,10 +81,7 @@ If backend has a better stable product id, clarify whether frontend should use:
 Preferred future shape:
 
 ```json
-{
-  "productId": "product-123",
-  "datasetName": "DK5ABC123"
-}
+{ "productId": "product-123", "datasetName": "DK5ABC123" }
 ```
 
 Until this is clarified, all draft contracts use `datasetName`.
@@ -146,12 +134,12 @@ Example response:
       {
         "id": "job-123",
         "type": "export",
-        "label": "Exporting All Edition",
+        "label": "Exporting S100 Edition",
         "status": "running",
         "startedAt": "2026-06-08T10:15:00Z",
         "startedBy": "DOMAIN\\user",
         "source": "backend",
-        "scope": "All",
+        "scope": "S100",
         "exportType": "Edition"
       }
     ]
@@ -170,9 +158,7 @@ POST /productmanager/products/operations/active
 Request:
 
 ```json
-{
-  "datasetNames": ["DK5ABC123", "DK5ABC456"]
-}
+{ "datasetNames": ["DK5ABC123", "DK5ABC456"] }
 ```
 
 Response:
@@ -182,10 +168,7 @@ Response:
   "success": true,
   "data": {
     "products": [
-      {
-        "datasetName": "DK5ABC123",
-        "operations": []
-      },
+      { "datasetName": "DK5ABC123", "operations": [] },
       {
         "datasetName": "DK5ABC456",
         "operations": [
@@ -221,8 +204,7 @@ Frontend mainly needs `queued` and `running` for active operation blocking.
 
 ### Conflict behavior
 
-If a mutation cannot start because another operation is active, backend should
-return:
+If a mutation cannot start because another operation is active, backend should return:
 
 ```http
 409 Conflict
@@ -240,23 +222,52 @@ Example:
     "activeOperation": {
       "id": "job-123",
       "type": "export",
-      "label": "Exporting All Edition",
+      "label": "Exporting S100 Edition",
       "status": "running"
     }
   }
 }
 ```
 
+## Current synchronous export and rollback endpoints
+
+The current frontend uses synchronous popup actions for these implemented endpoints:
+
+```http
+POST /export/{name}/newedition
+POST /export/{name}/rollback
+```
+
+Current frontend wiring:
+
+```txt
+Export > S100 > Edition -> POST /export/{name}/newedition
+Rollback               -> POST /export/{name}/rollback
+```
+
+Current disabled export leaves:
+
+```txt
+Export > All > Edition
+Export > All > Update
+Export > S57 > Edition
+Export > S57 > Update
+Export > S100 > Update
+```
+
+Rollback is treated as a product mutation and should conflict with active export/send/freeze operations.
+
 ## Async export jobs
 
 ### Current frontend behavior
 
-Frontend currently supports synchronous export calls for:
+Frontend currently supports a synchronous export call for:
 
-- `All > Edition`
-- `All > Update`
+```txt
+S100 > Edition
+```
 
-S57/S100 export actions are present but disabled.
+The former `All > Edition` and `All > Update` UI leaves are now disabled. S57 exports and S100 update exports remain disabled until backend contracts are ready.
 
 ### Desired backend model
 
@@ -273,10 +284,7 @@ POST /productmanager/products/{datasetName}/exports
 Request:
 
 ```json
-{
-  "scope": "All",
-  "exportType": "Edition"
-}
+{ "scope": "S100", "exportType": "Edition" }
 ```
 
 Response:
@@ -292,7 +300,7 @@ Response:
     "jobId": "export-job-123",
     "datasetName": "DK5ABC123",
     "operationType": "export",
-    "scope": "All",
+    "scope": "S100",
     "exportType": "Edition",
     "status": "queued",
     "createdAt": "2026-06-08T10:15:00Z"
@@ -316,7 +324,7 @@ Response:
   "data": {
     "jobId": "export-job-123",
     "datasetName": "DK5ABC123",
-    "scope": "All",
+    "scope": "S100",
     "exportType": "Edition",
     "status": "running",
     "createdAt": "2026-06-08T10:15:00Z",
@@ -326,7 +334,7 @@ Response:
     "progress": {
       "current": 2,
       "total": 5,
-      "label": "Creating S-57 package"
+      "label": "Creating S-100 package"
     }
   }
 }
@@ -357,6 +365,7 @@ Examples:
 - running `All Edition` blocks `All`, `S57`, and `S100`
 - running `S57 Edition` blocks `S57` and `All`
 - running `S57 Edition` does not block `S100`, if `S100` is implemented
+- running `S100 Edition` blocks `S100` and `All`
 
 Backend should either:
 
@@ -369,9 +378,9 @@ Preferred backend active export operation shape:
 {
   "id": "export-job-123",
   "type": "export",
-  "label": "Exporting All Edition",
+  "label": "Exporting S100 Edition",
   "status": "running",
-  "scope": "All",
+  "scope": "S100",
   "exportType": "Edition",
   "startedAt": "2026-06-08T10:15:00Z",
   "startedBy": "DOMAIN\\user"
@@ -385,7 +394,7 @@ Current product mutation actions:
 - Freeze
 - Unfreeze
 - Send to IC-ENC
-- Rollback placeholder
+- Rollback
 
 ### Freeze / Unfreeze
 
@@ -398,9 +407,7 @@ POST /productmanager/products/{datasetName}/freeze
 Request:
 
 ```json
-{
-  "frozen": true
-}
+{ "frozen": true }
 ```
 
 Response:
@@ -445,15 +452,27 @@ Response:
 
 ### Rollback
 
-Rollback is currently disabled in the UI.
+Rollback is currently enabled in the popup and calls:
 
-Before activating rollback, clarify:
+```http
+POST /export/{name}/rollback
+```
 
-1. What can be rolled back?
-2. Is rollback synchronous or async?
-3. Which statuses allow rollback?
-4. Can rollback conflict with export/send/freeze?
-5. Should rollback create product history events?
+Expected behavior:
+
+- use confirmation before running
+- show rollback loading state while the request and selected product refresh are running
+- refresh selected product after completion
+- create product history events when backend supports it
+- conflict with active export/send/freeze operations
+
+Open backend questions for future hardening:
+
+1. Is rollback synchronous or should it become an async job?
+2. Which statuses allow rollback?
+3. Should rollback return the updated product payload directly?
+4. Should rollback return a history/event identifier?
+5. Should rollback conflicts return `409 Conflict` with active operation details?
 
 ## Product data refresh
 
@@ -475,8 +494,7 @@ Preferred product response shape:
 }
 ```
 
-Frontend can normalize older casing, but backend should prefer stable lowercase
-fields for new endpoints.
+Frontend can normalize older casing, but backend should prefer stable lowercase fields for new endpoints.
 
 Important fields:
 
@@ -491,7 +509,7 @@ Important fields:
 
 ### Current frontend behavior
 
-Product History currently uses frontend demo data.
+Product History uses the backend product history endpoint for product-level history views.
 
 ### Desired endpoint
 
@@ -518,14 +536,8 @@ Response:
         "actor": "DOMAIN\\user",
         "source": "backend",
         "details": [
-          {
-            "label": "Previous state",
-            "value": "Active"
-          },
-          {
-            "label": "Next state",
-            "value": "Frozen"
-          }
+          { "label": "Previous state", "value": "Active" },
+          { "label": "Next state", "value": "Frozen" }
         ]
       }
     ]
@@ -564,7 +576,7 @@ Before implementation, clarify:
 
 ### Current frontend behavior
 
-Analyze currently has demo fallback data.
+Analyze can load product analysis data from backend APIs and shows history/report placeholders where backend contracts are incomplete.
 
 ### Desired endpoint
 
@@ -585,13 +597,8 @@ Response:
     "edition": "1",
     "update": "0",
     "errorMessage": "IC-ENC report message.",
-    "aoiGeometry": {
-      "rings": [],
-      "spatialReference": {
-        "wkid": 4326
-      }
-    },
-    "xml": "<ICENCReport></ICENCReport>"
+    "aoiGeometry": { "rings": [], "spatialReference": { "wkid": 4326 } },
+    "xml": ""
   }
 }
 ```
@@ -656,12 +663,7 @@ Response:
   "success": true,
   "data": {
     "timestamp": "2026-06-08T10:00:00Z",
-    "layers": [
-      {
-        "id": "aoi",
-        "features": []
-      }
-    ]
+    "layers": [{ "id": "aoi", "features": [] }]
   }
 }
 ```
@@ -680,13 +682,7 @@ Response:
   "data": {
     "from": "2026-06-08T09:00:00Z",
     "to": "2026-06-08T10:00:00Z",
-    "changes": [
-      {
-        "type": "updated",
-        "datasetName": "DK5ABC123",
-        "attributes": {}
-      }
-    ]
+    "changes": [{ "type": "updated", "datasetName": "DK5ABC123", "attributes": {} }]
   }
 }
 ```
@@ -732,11 +728,7 @@ Frontend now supports static layer definitions and capability checks.
 When backend adds more map layers, each layer should have:
 
 ```json
-{
-  "id": "aoi",
-  "title": "Product corrections",
-  "features": []
-}
+{ "id": "aoi", "title": "Product corrections", "features": [] }
 ```
 
 Frontend needs each layer to define or imply:
@@ -749,34 +741,4 @@ Frontend needs each layer to define or imply:
 - whether display-scale hiding is supported
 - whether popup actions are supported
 
-Layer capabilities are currently frontend config, but backend should avoid
-returning ambiguous layer payloads.
-
-## Open backend decisions
-
-The following decisions should be made before more frontend integration:
-
-1. Is `datasetName` the final stable identifier?
-2. Which operations are synchronous and which are async jobs?
-3. What is the active operation source of truth?
-4. What exact conflict rules should backend enforce?
-5. Should backend expose export leaf conflicts directly?
-6. Is Product History audit-log-based, snapshot-based, or both?
-7. Should Analyze support batch loading?
-8. Is global timeline snapshot-based or delta-based?
-9. Are all timestamps UTC ISO 8601 strings?
-10. What user identity should be returned in operation/history responses?
-
-## Recommended implementation order
-
-Recommended backend contract order:
-
-1. Active product operation state
-2. Async export jobs and job-status endpoint
-3. Export conflict state
-4. Real Product History endpoint
-5. Real Analyze data contract
-6. Global map timeline metadata and snapshot/delta model
-
-This order reduces frontend rework because operation state and export jobs affect
-the most existing UI behavior.
+Layer capabilities are currently frontend config, but backend should avoid returning ambiguous layer payloads.

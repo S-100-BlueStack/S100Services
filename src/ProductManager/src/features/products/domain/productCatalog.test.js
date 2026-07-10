@@ -3,8 +3,10 @@ import test from "node:test";
 
 import {
   filterProductCatalog,
+  findProductCatalogMatch,
   normalizeProductCatalog,
   parseProductInput,
+  validateProductCatalogSelection,
 } from "./productCatalog.js";
 
 test("normalizeProductCatalog reads lightweight Data arrays", () => {
@@ -56,6 +58,45 @@ test("filterProductCatalog prioritizes exact and prefix matches", () => {
   assert.deepEqual(
     filterProductCatalog(products, "DK5ABC123").map((product) => product.name),
     ["DK5ABC123", "DK5ABC123-ALT", "XX-DK5ABC123"]
+  );
+});
+
+test("filterProductCatalog excludes already selected products", () => {
+  const products = normalizeProductCatalog({
+    Data: ["DK5ABC123", "DK5ABC456", "DK5ABC789"],
+  });
+
+  assert.deepEqual(
+    filterProductCatalog(products, "DK5", {
+      excludedProductNames: ["dk5abc456"],
+    }).map((product) => product.name),
+    ["DK5ABC123", "DK5ABC789"]
+  );
+});
+
+test("findProductCatalogMatch finds products case-insensitively", () => {
+  const products = normalizeProductCatalog({
+    Data: ["DK5ABC123"],
+  });
+
+  assert.equal(findProductCatalogMatch(products, "dk5abc123")?.name, "DK5ABC123");
+  assert.equal(findProductCatalogMatch(products, "DK5ABC999"), null);
+});
+
+test("validateProductCatalogSelection separates valid, existing and unknown products", () => {
+  const products = normalizeProductCatalog({
+    Data: ["DK5ABC123", "DK5ABC456"],
+  });
+
+  assert.deepEqual(
+    validateProductCatalogSelection(products, ["DK5ABC123", "DK5ABC456", "DK5ABC999"], {
+      excludedProductNames: ["DK5ABC456"],
+    }),
+    {
+      valid: ["DK5ABC123"],
+      alreadySelected: ["DK5ABC456"],
+      unknown: ["DK5ABC999"],
+    }
   );
 });
 

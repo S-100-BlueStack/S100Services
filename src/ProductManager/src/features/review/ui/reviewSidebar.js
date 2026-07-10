@@ -27,12 +27,16 @@ export function createReviewSidebar({ productItems, loading, productCatalog }) {
     "Collect products and choose which review content to compare side by side.";
 
   header.append(eyebrow, title, description);
-  sidebar.append(header, createProductAddForm(productCatalog), createProductList(productItems));
+  sidebar.append(
+    header,
+    createProductAddForm(productCatalog, productItems),
+    createProductList(productItems)
+  );
 
   return sidebar;
 }
 
-function createProductAddForm(productCatalog) {
+function createProductAddForm(productCatalog, productItems) {
   return createProductPickerForm({
     id: "review-product-input",
     eventName: "pm-review-product-add",
@@ -40,8 +44,10 @@ function createProductAddForm(productCatalog) {
     placeholder: "Search or type product name",
     helpText: "Add one product at a time, or paste multiple names from a Review URL.",
     products: productCatalog?.products ?? [],
+    excludedProductNames: productItems.map((item) => item.datasetName),
     loading: productCatalog?.loading ?? false,
     error: productCatalog?.error ?? null,
+    requireCatalogMatch: true,
     className: "pm-review-product-form",
   });
 }

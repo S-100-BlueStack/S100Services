@@ -2,6 +2,7 @@ import {
   filterProductCatalog,
   normalizeProductCatalog,
   parseProductInput,
+  validateProductCatalogSelection,
 } from "../domain/productCatalog.js";
 
 const PRODUCT_PICKER_RESULT_LIMIT = 16;
@@ -13,8 +14,10 @@ export function createProductPickerForm({
   placeholder = "Search or type product name",
   helpText = "Select an existing product, or type a product name manually.",
   products = [],
+  excludedProductNames = [],
   loading = false,
   error = null,
+  requireCatalogMatch = false,
   className = "",
 } = {}) {
   const normalizedProducts = normalizeProductCatalog(products);
@@ -23,15 +26,18 @@ export function createProductPickerForm({
   form.dataset.productPicker = id ?? "product-picker";
 
   const label = document.createElement("label");
+  const inputId = id ?? "product-picker-input";
+  const labelId = `${inputId}-label`;
+
+  label.id = labelId;
   label.className = "pm-product-picker__label";
-  label.htmlFor = id;
   label.textContent = labelText;
 
   const row = document.createElement("div");
   row.className = "pm-product-picker__row";
 
   const input = document.createElement("input");
-  input.id = id;
+  input.id = inputId;
   input.className = "pm-product-picker__input";
   input.type = "text";
   input.placeholder = placeholder;
@@ -39,6 +45,7 @@ export function createProductPickerForm({
   input.spellcheck = false;
   input.setAttribute("aria-autocomplete", "list");
   input.setAttribute("aria-expanded", "false");
+  input.setAttribute("aria-labelledby", labelId);
 
   const button = document.createElement("button");
   button.className = "pm-product-picker__button";
@@ -58,14 +65,32 @@ export function createProductPickerForm({
     loading,
     error,
     productCount: normalizedProducts.length,
+    requireCatalogMatch,
   });
 
   row.append(input, button);
   form.append(label, row, results, help);
 
+  const setMessage = (message) => {
+    help.textContent = message;
+    help.classList.toggle("is-error", Boolean(message));
+  };
+
+  const resetMessage = () => {
+    help.textContent = createHelpText({
+      helpText,
+      loading,
+      error,
+      productCount: normalizedProducts.length,
+      requireCatalogMatch,
+    });
+    help.classList.remove("is-error");
+  };
+
   const closeResults = () => {
     results.hidden = true;
     input.setAttribute("aria-expanded", "false");
+    input.setAttribute("aria-labelledby", labelId);
   };
 
   const openResults = () => {
@@ -73,11 +98,13 @@ export function createProductPickerForm({
       container: results,
       products: normalizedProducts,
       query: input.value,
+      excludedProductNames,
       loading,
       error,
       onSelect(productName) {
         dispatchProductAdd(form, eventName, [productName]);
         input.value = "";
+        resetMessage();
         closeResults();
         input.focus();
       },
@@ -87,7 +114,10 @@ export function createProductPickerForm({
   };
 
   input.addEventListener("focus", openResults);
-  input.addEventListener("input", openResults);
+  input.addEventListener("input", () => {
+    resetMessage();
+    openResults();
+  });
 
   input.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
@@ -153,8 +183,25 @@ export function createProductPickerForm({
       return;
     }
 
-    dispatchProductAdd(form, eventName, productNames);
+    const validation = validatePickerSelection({
+      products: normalizedProducts,
+      productNames,
+      excludedProductNames,
+      loading,
+      error,
+      requireCatalogMatch,
+    });
+
+    if (!validation.canSubmit) {
+      setMessage(validation.message);
+      input.focus();
+      openResults();
+      return;
+    }
+
+    dispatchProductAdd(form, eventName, validation.productNames);
     input.value = "";
+    resetMessage();
     closeResults();
     input.focus();
   });
@@ -162,7 +209,15 @@ export function createProductPickerForm({
   return form;
 }
 
-function renderProductResults({ container, products, query, loading, error, onSelect }) {
+function renderProductResults({
+  container,
+  products,
+  query,
+  excludedProductNames,
+  loading,
+  error,
+  onSelect,
+}) {
   container.replaceChildren();
 
   if (loading) {
@@ -172,6 +227,7 @@ function renderProductResults({ container, products, query, loading, error, onSe
 
   const matches = filterProductCatalog(products, query, {
     limit: PRODUCT_PICKER_RESULT_LIMIT,
+    excludedProductNames,
   });
 
   if (matches.length === 0) {
@@ -179,7 +235,7 @@ function renderProductResults({ container, products, query, loading, error, onSe
       createStateMessage(
         error
           ? "Product catalog is unavailable. Typed input still works."
-          : "No matching products. Typed input still works."
+          : "No matching available products."
       )
     );
     return;
@@ -214,9 +270,9 @@ function createStateMessage(message) {
   return state;
 }
 
-function createHelpText({ helpText, loading, error, productCount }) {
+function createHelpText({ helpText, loading, error, productCount, requireCatalogMatch }) {
   if (loading) {
-    return "Loading product catalog. Typed input still works.";
+    return "Loading product catalog. Typed input still works after catalog load.";
   }
 
   if (error) {
@@ -224,10 +280,57 @@ function createHelpText({ helpText, loading, error, productCount }) {
   }
 
   if (productCount > 0) {
-    return `${helpText} ${productCount} products available.`;
+    const suffix = requireCatalogMatch
+      ? "Only existing products can be added."
+      : `${productCount} products available.`;
+
+    return `${helpText} ${suffix}`;
   }
 
   return helpText;
+}
+
+function validatePickerSelection({
+  products,
+  productNames,
+  excludedProductNames,
+  loading,
+  error,
+  requireCatalogMatch,
+}) {
+  if (!requireCatalogMatch || loading || error || products.length === 0) {
+    return {
+      canSubmit: true,
+      productNames,
+      message: "",
+    };
+  }
+
+  const result = validateProductCatalogSelection(products, productNames, {
+    excludedProductNames,
+  });
+
+  if (result.unknown.length > 0) {
+    return {
+      canSubmit: false,
+      productNames: [],
+      message: `Product not found: ${result.unknown.join(", ")}.`,
+    };
+  }
+
+  if (result.valid.length === 0 && result.alreadySelected.length > 0) {
+    return {
+      canSubmit: false,
+      productNames: [],
+      message: `Product already added: ${result.alreadySelected.join(", ")}.`,
+    };
+  }
+
+  return {
+    canSubmit: true,
+    productNames: result.valid,
+    message: "",
+  };
 }
 
 function getResultOptions(container) {
