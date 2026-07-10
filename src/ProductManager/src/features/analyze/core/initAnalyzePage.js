@@ -37,6 +37,7 @@ export async function initAnalyzePage({ datasetNames }) {
   let lookupsLoaded = false;
   let activeLoaderProgress = null;
   let cleanupViewPadding = null;
+  let cleanupKeyboardClose = null;
 
   const enabledDatasetNames = getEnabledAnalyzeDatasetNames(datasetItems);
 
@@ -310,6 +311,7 @@ export async function initAnalyzePage({ datasetNames }) {
   document.addEventListener("pm-analyze-dataset-submit", handleAnalyzeDatasetSubmit);
 
   cleanupViewPadding = applyAnalyzeViewPadding(view);
+  cleanupKeyboardClose = bindAnalyzeKeyboardClose(view);
 
   await view.when();
   // The bootstrap loader covers initial page and map setup. Hide it before
@@ -352,6 +354,8 @@ export async function initAnalyzePage({ datasetNames }) {
       document.removeEventListener("pm-analyze-dataset-remove", handleAnalyzeDatasetRemove);
       document.removeEventListener("pm-analyze-dataset-submit", handleAnalyzeDatasetSubmit);
       window.removeEventListener("popstate", handlePopState);
+      cleanupKeyboardClose?.();
+      cleanupKeyboardClose = null;
       closePopup(view);
       cleanupPopupHoverSync?.();
       activeLoaderProgress?.cleanup();
@@ -586,6 +590,27 @@ async function registerHoverLayers(hoverManager, layers) {
 
 function closePopup(view) {
   view.popup?.close?.();
+}
+
+function bindAnalyzeKeyboardClose(view) {
+  const handleKeydown = (event) => {
+    if (event.key !== "Escape" || event.defaultPrevented) {
+      return;
+    }
+
+    if (!view?.popup?.visible) {
+      return;
+    }
+
+    closePopup(view);
+    event.preventDefault();
+  };
+
+  document.addEventListener("keydown", handleKeydown);
+
+  return () => {
+    document.removeEventListener("keydown", handleKeydown);
+  };
 }
 
 function createProductCatalogState({ products = [], loading = false, error = null } = {}) {

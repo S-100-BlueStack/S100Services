@@ -223,8 +223,6 @@ function createRangeDateTimeField({ idPrefix, label, dateKey, timeKey, defaultTi
   timeInput.step = "60";
   timeInput.value = dashboardRangeDraft?.[timeKey] ?? "";
   timeInput.setAttribute("aria-label", `${label} time`);
-  enableNativePickerOnFocus(timeInput);
-
   datePicker.onDateChange = (dateValue) => {
     if (dateValue && !timeInput.value) {
       timeInput.value = defaultTime;
@@ -745,20 +743,6 @@ function updateDashboardRangeApplyButtons() {
 
     button.disabled = !isValid;
     button.title = title;
-  });
-}
-
-function enableNativePickerOnFocus(input) {
-  input.addEventListener("focus", () => {
-    if (typeof input.showPicker !== "function") {
-      return;
-    }
-
-    try {
-      input.showPicker();
-    } catch {
-      // Browsers may reject showPicker outside direct user interaction; the native input remains usable.
-    }
   });
 }
 
