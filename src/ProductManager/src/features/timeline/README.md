@@ -51,7 +51,7 @@ Current frontend shape:
       id: "stable-event-id",
       timestamp: "2026-07-09T10:15:00+02:00",
       title: "Product frozen",
-      description: "Product status changed from idle to frozen.",
+      description: "The product changed from Idle to Frozen.",
       actor: "DOMAIN\\user",
       source: "backend",
       type: "freeze",
@@ -71,15 +71,29 @@ The shared product history renderer is used by both:
 - the main map floating Product History panel
 - the Dashboard route-local Product History panel
 
-History event rows are collapsed by default. Collapsed rows show only:
+History event rows are collapsed by default.
+
+Collapsed rows show only:
 
 - event title
 - timestamp
 - short description
 
-Expandable details show technical/event details such as previous status, new status, source state, or other backend-provided metadata. This keeps history panels compact during smoke testing and prevents detailed attributes from dominating the panel.
+Expandable details show technical/event details such as previous status, new status, edition/update changes, source state, or other backend-provided metadata. This keeps history panels compact during smoke testing and prevents detailed attributes from dominating the panel.
 
 Each event expands independently. Do not expand all events by default unless a future workflow specifically requires detailed audit comparison.
+
+## History summary interpretation
+
+History summaries are derived from adjacent backend records. Status changes take priority, but edition/update changes are also surfaced. This avoids collapsed rows saying that a product remained in the same status when the actual record change was an edition or update change.
+
+Examples:
+
+- `Status` changed: show a status/freeze/unfreeze summary.
+- `Edition` or `Update` increased while status stayed the same: show a version increase summary.
+- `Edition` or `Update` decreased while status stayed the same: show a version decrease summary.
+
+The frontend may display negative edition/update values if the backend returns them, but those values should be treated as backend data issues. The frontend should still describe the actual change instead of hiding it behind an unchanged-status summary.
 
 ## Expected backend product history questions
 

@@ -51,13 +51,21 @@ function normalizeBackendProductHistory(payload, requestedDatasetName) {
 function normalizeBackendHistoryRecord(record, { index, datasetName, previousRecord }) {
   const status = readFirstDefined(record, ["Status", "status"]);
   const previousStatus = readFirstDefined(previousRecord, ["Status", "status"]);
-  const statusChange = createStatusChange(status, previousStatus);
-
   const from = readFirstDefined(record, ["From", "from"]);
   const to = readFirstDefined(record, ["To", "to"]);
   const owner = readFirstDefined(record, ["Owner", "owner"]);
   const edition = readFirstDefined(record, ["Edition", "edition"]);
+  const previousEdition = readFirstDefined(previousRecord, ["Edition", "edition"]);
   const update = readFirstDefined(record, ["Update", "update"]);
+  const previousUpdate = readFirstDefined(previousRecord, ["Update", "update"]);
+  const change = createProductHistoryChange({
+    status,
+    previousStatus,
+    edition,
+    previousEdition,
+    update,
+    previousUpdate,
+  });
   const isCurrent = isOpenEndedHistoryDate(to);
 
   return {
@@ -68,29 +76,28 @@ function normalizeBackendHistoryRecord(record, { index, datasetName, previousRec
       to,
       index,
     }),
-    type: statusChange.type,
+    type: change.type,
     timestamp: from,
-    title: statusChange.title,
-    description: statusChange.description,
+    title: change.title,
+    description: change.description,
     actor: normalizeText(owner),
     source: "Backend",
     details: [
-      {
-        label: "Previous status",
-        value: statusChange.previousStatusLabel,
-      },
-      {
-        label: "New status",
-        value: statusChange.statusLabel,
-      },
-      {
+      ...createStatusDetails({
+        statusLabel: change.statusLabel,
+        previousStatusLabel: change.previousStatusLabel,
+        hasPreviousStatus: previousStatus !== undefined && previousStatus !== null,
+      }),
+      ...createValueDetails({
         label: "Edition",
         value: edition,
-      },
-      {
+        previousValue: previousEdition,
+      }),
+      ...createValueDetails({
         label: "Update",
         value: update,
-      },
+        previousValue: previousUpdate,
+      }),
       {
         label: "From",
         value: formatHistoryDate(from),
@@ -105,6 +112,57 @@ function normalizeBackendHistoryRecord(record, { index, datasetName, previousRec
       },
     ].filter((detail) => hasDisplayableValue(detail.value)),
   };
+}
+
+function createProductHistoryChange({
+  status,
+  previousStatus,
+  edition,
+  previousEdition,
+  update,
+  previousUpdate,
+}) {
+  const statusChange = createStatusChange(status, previousStatus);
+  const valueChanges = createValueChanges([
+    {
+      label: "Edition",
+      value: edition,
+      previousValue: previousEdition,
+    },
+    {
+      label: "Update",
+      value: update,
+      previousValue: previousUpdate,
+    },
+  ]);
+
+  if (previousStatus === undefined || previousStatus === null) {
+    return statusChange;
+  }
+
+  if (String(status) !== String(previousStatus)) {
+    return {
+      ...statusChange,
+      description: joinDescriptionParts([
+        statusChange.description,
+        ...valueChanges.map((change) => change.description),
+      ]),
+    };
+  }
+
+  if (valueChanges.length > 0) {
+    const direction = getValueChangeDirection(valueChanges);
+
+    return {
+      type: getValueChangeEventType(direction),
+      title: getValueChangeTitle(direction),
+      description: valueChanges.map((change) => change.description).join(" "),
+      statusLabel: statusChange.statusLabel,
+      previousStatusLabel: statusChange.previousStatusLabel,
+    };
+  }
+
+  return statusChange;
 }
 
 function createStatusChange(status, previousStatus) {
@@ -163,6 +221,123 @@ function createStatusChange(status, previousStatus) {
   };
 }
 
+function createValueChanges(fields) {
+  return fields
+    .filter(({ value, previousValue }) => {
+      return (
+        hasComparableValue(value) &&
+        hasComparableValue(previousValue) &&
+        !areEqualHistoryValues(value, previousValue)
+      );
+    })
+    .map(({ label, value, previousValue }) => ({
+      label,
+      value,
+      previousValue,
+      direction: getNumericDirection(previousValue, value),
+      description: `${label} changed from ${formatHistoryValue(previousValue)} to ${formatHistoryValue(value)}.`,
+    }));
+}
+
+function createStatusDetails({ statusLabel, previousStatusLabel, hasPreviousStatus }) {
+  if (!hasPreviousStatus) {
+    return [
+      {
+        label: "Status",
+        value: statusLabel,
+      },
+    ];
+  }
+
+  return [
+    {
+      label: "Previous status",
+      value: previousStatusLabel,
+    },
+    {
+      label: "New status",
+      value: statusLabel,
+    },
+  ];
+}
+
+function createValueDetails({ label, value, previousValue }) {
+  if (hasComparableValue(previousValue) && !areEqualHistoryValues(value, previousValue)) {
+    return [
+      {
+        label: `Previous ${label.toLowerCase()}`,
+        value: previousValue,
+      },
+      {
+        label: `New ${label.toLowerCase()}`,
+        value,
+      },
+    ];
+  }
+
+  return [
+    {
+      label,
+      value,
+    },
+  ];
+}
+
+function getValueChangeDirection(changes) {
+  if (changes.some((change) => change.direction === "decrease")) {
+    return "decrease";
+  }
+
+  if (changes.some((change) => change.direction === "increase")) {
+    return "increase";
+  }
+
+  return "change";
+}
+
+function getValueChangeEventType(direction) {
+  if (direction === "decrease") {
+    return PRODUCT_HISTORY_EVENT_TYPE.ROLLBACK;
+  }
+
+  if (direction === "increase") {
+    return PRODUCT_HISTORY_EVENT_TYPE.EXPORT;
+  }
+
+  return PRODUCT_HISTORY_EVENT_TYPE.STATUS;
+}
+
+function getValueChangeTitle(direction) {
+  if (direction === "decrease") {
+    return "Product version decreased";
+  }
+
+  if (direction === "increase") {
+    return "Product version increased";
+  }
+
+  return "Product version changed";
+}
+
+function getNumericDirection(previousValue, value) {
+  const previousNumber = Number(previousValue);
+  const number = Number(value);
+
+  if (!Number.isFinite(previousNumber) || !Number.isFinite(number)) {
+    return "change";
+  }
+
+  if (number < previousNumber) {
+    return "decrease";
+  }
+
+  if (number > previousNumber) {
+    return "increase";
+  }
+
+  return "change";
+}
+
 function getHistoryRecords(payload) {
   const data = payload?.Data ?? payload?.data ?? payload;
 
@@ -210,6 +385,10 @@ function formatHistoryDate(value) {
   });
 }
 
+function formatHistoryValue(value) {
+  return normalizeText(value) ?? "Unknown";
+}
+
 function isOpenEndedHistoryDate(value) {
   const text = normalizeText(value);
 
@@ -236,6 +415,7 @@ function readFirstDefined(source, keys) {
 
 function normalizeDatasetName(datasetName) {
   const normalizedDatasetName = String(datasetName ?? "").trim();
+
   return normalizedDatasetName || null;
 }
 
@@ -245,9 +425,22 @@ function normalizeText(value) {
   }
 
   const text = String(value).trim();
+
   return text.length > 0 ? text : null;
 }
 
 function hasDisplayableValue(value) {
   return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
+function hasComparableValue(value) {
+  return value !== null && value !== undefined;
+}
+
+function areEqualHistoryValues(left, right) {
+  return String(left) === String(right);
+}
+
+function joinDescriptionParts(parts) {
+  return parts.filter(Boolean).join(" ");
 }
