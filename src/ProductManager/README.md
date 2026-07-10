@@ -24,11 +24,13 @@ Product Manager currently has these main frontend routes:
 - Analyze route
 - Review route
 
-The main map route owns product correction management and popup actions.
+The main map route owns product correction management, popup actions, map filters, Product History quick panel, Product Collection, and Product search.
 
 The Dashboard route owns read-only operational activity summaries for selected time ranges. It does not own product mutation actions, map popup state, Product Collection state, Analyze state, or Review state.
 
-The Analyze route owns analysis/report display for selected products. The Review route owns side-by-side product review for multiple selected products.
+The Analyze route owns analysis/report display for selected products.
+
+The Review route owns side-by-side product review for multiple selected products.
 
 ## Terminology
 
@@ -40,7 +42,7 @@ A future terminology hardening task tracks a full UI audit to align Analyze, Rev
 
 ## Stable frontend flows
 
-The following flows are implemented and considered stable frontend behavior:
+The following flows are implemented and considered stable frontend behavior for controlled user testing:
 
 - map creation and product correction rendering
 - hover highlight
@@ -52,12 +54,13 @@ The following flows are implemented and considered stable frontend behavior:
 - Rollback
 - disabled export leaves for `All`, `S57` and `S100 > Update`
 - popup export loading/conflict state
-- product operation state
+- product operation state as a local UX guard
 - refresh after successful and failed product actions
 - silent auto-refresh
 - manual refresh button loading
 - display-scale hiding
 - main map filters constrained to `Display scale`, `Status` and `Usage band`
+- Product search on the main map
 - Product History quick panel with collapsed event rows
 - Product Collection tray
 - Analyze page
@@ -123,7 +126,7 @@ Frontend operation state lives in:
 src/features/products/state/productOperationState.js
 ```
 
-It tracks local browser-tab operations and has a skeleton for future backend operation state. Product operation state is a UX guard only. The backend must still enforce real business rules and operation conflicts.
+It tracks local browser-tab operations and has a skeleton for future backend operation state. Product operation state is a UX guard only. The backend still enforces real operation conflicts with `409 Conflict`, but other sessions cannot see an active operation before attempting one until a backend active-operation state endpoint exists.
 
 ### Notices and API results
 
@@ -150,7 +153,7 @@ Current expected lightweight shape:
 { "Data": ["101DK0040943E", "101DK0040944E"] }
 ```
 
-The picker is implemented once and reused by Analyze and Review so users can add products directly without first using the main map or Product Collection. It does not use the AOI/map geometry endpoint.
+The picker is implemented once and reused by Analyze and Review so users can add products directly without first using the main map or Product Collection. It does not use the AOI/map geometry endpoint. Already-added products are hidden from the picker, and unknown products are rejected when catalog validation is available.
 
 ### Main map filters
 
@@ -163,6 +166,12 @@ Main map attribute filters are constrained to the intended operational filter se
 Status filter options come from the full product state/status endpoint, not only from statuses currently present in rendered map features. Statuses with no matching visible products remain listed with count `0`, so users can trust that the list represents all possible status values.
 
 Product popup attribute rendering is hardened so first-load popup details do not fall back to showing all raw feature attributes when field metadata is not ready yet.
+
+### Main map Product search
+
+The main map has a route-local Product search overlay. It uses the shared product catalog endpoint for suggestions and opens the selected Product's popup on the map when a matching rendered graphic exists.
+
+Product search is a map control, not global navigation. It should stay out of the navbar to avoid layout conflicts on smaller screens.
 
 ### Dashboard
 
@@ -178,7 +187,9 @@ Dashboard documentation:
 src/features/dashboard/README.md
 ```
 
-Dashboard is a read-only operational activity route. It loads activity data from `/electronicproducts/dashboard`, applies local search and filters to the loaded payload, opens a route-local Product History panel from activity rows, and links users onward to Review or Analyze. Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
+Dashboard is a read-only operational activity route. It loads activity data from `/electronicproducts/dashboard`, applies local search and filters to the loaded payload, opens a route-local Product History panel from activity rows, and links users onward to Review or Analyze.
+
+Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
 
 ### Analyze and Review
 
@@ -194,7 +205,9 @@ Review feature files live in:
 src/features/review
 ```
 
-Analyze owns product analysis/report display. It does not own product mutation actions. Review owns multi-product review. Review tabs are independent and should not reintroduce BroadcastChannel/session picker workflows without a clear UX reason.
+Analyze owns product analysis/report display. It does not own product mutation actions.
+
+Review owns multi-product review. Review tabs are independent and should not reintroduce BroadcastChannel/session picker workflows without a clear UX reason.
 
 ### Timeline and Product History
 
@@ -210,7 +223,9 @@ Timeline documentation:
 src/features/timeline/README.md
 ```
 
-Product History uses the backend product history endpoint for product-level history views. Product History rows are collapsed by default on both the main map quick panel and the Dashboard History panel. Collapsed rows show the event title, timestamp and short description; row details such as previous/new state are expanded only when the user opens that row.
+Product History uses the backend product history endpoint for product-level history views. Product History rows are collapsed by default on both the main map quick panel and the Dashboard History panel.
+
+Collapsed rows show the event title, timestamp and short description; row details such as previous/new state are expanded only when the user opens that row.
 
 Global map timeline is not implemented yet.
 
@@ -219,7 +234,7 @@ Global map timeline is not implemented yet.
 Some current behavior is intentionally frontend-only or placeholder-only:
 
 - popup export state
-- product operation state
+- product operation state as local UX state
 - disabled future export leaves for `All`, `S57` and `S100 > Update`
 - Dashboard report actions until IC-ENC/internal validation report IDs or URLs exist
 
@@ -233,11 +248,22 @@ Do not implement the following fully until backend/database contracts are ready:
 - async export jobs
 - job-status endpoint
 - global map timeline
-- backend-driven export conflict state beyond current 409 handling
 - S57 export endpoints
 - S100 update export endpoint
 - real Dashboard IC-ENC report links
 - real Dashboard internal validation report links
+
+## User guidance and onboarding future work
+
+Controlled user testing showed that users need more inline explanation of what actions and controls do. Future UX work should add a consistent hover/help pattern and an optional introduction flow.
+
+Track this as separate future work rather than mixing it into feature implementation:
+
+- add concise tooltips/help text to all clickable controls and icon-only actions
+- ensure tooltip text explains consequence, not only label duplication
+- keep text static and useful in RDP/VDI environments where animations may not render smoothly
+- create an introduction flow that walks users through the main map, filters, Product search, popup actions, Product Collection, Dashboard, Analyze and Review
+- avoid blocking expert users; the introduction should be skippable and replayable
 
 ## Refresh behavior
 
@@ -357,9 +383,10 @@ Recent frontend work has focused on:
 - Dashboard backend activity classification
 - shared Product catalog picker for Analyze and Review
 - main map filter hardening
+- main map Product search
 - S100 Edition export activation
 - Rollback activation
 - release-readiness smoke-test hardening
 - layer capability foundation
 
-The frontend is ready for controlled user testing while backend-dependent report links, async export/job state, and active operation visibility continue separately.
+The frontend is ready for controlled user testing while backend-dependent report links, async export/job state, active operation visibility, tooltip/help coverage and introduction flow continue separately.
