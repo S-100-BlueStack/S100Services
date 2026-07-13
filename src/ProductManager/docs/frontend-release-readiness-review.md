@@ -8,7 +8,7 @@ This review focuses on Product Manager frontend readiness for controlled user te
 
 The frontend is ready for controlled user testing if the known backend-dependent limitations are communicated clearly to testers. There are no frontend P0 blockers identified in the current implemented flows.
 
-The largest remaining user-facing risk is discoverability. User feedback says users do not always know what controls do. Hover/help text has now been added to common clickable controls. The remaining discoverability work is a skippable and replayable introduction flow.
+The largest remaining user-facing risk is discoverability. Hover/help text and a compact replayable introduction flow are implemented. Current onboarding polish highlights concrete controls and confirms before stopping; the remaining follow-up is an interactive map-popup-Product Collection sequence.
 
 ## Severity scale
 
@@ -29,7 +29,7 @@ The largest remaining user-facing risk is discoverability. User feedback says us
 | Dashboard     | Ready for controlled testing                         | Separate read-only route with backend activity data, Danish range builder, search, filters, actionable summaries, and route-local History panel.                                                                                                                        |
 | Analyze       | Ready for controlled testing with backend caveats    | Product loading, history, XML/report content, internal validation placeholder/report foundation, and shared Product picker are in place. Unknown products are rejected when catalog validation is available.                                                            |
 | Review        | Ready for controlled testing with backend caveats    | Multi-product review, content toggles, history, placeholder report sections, and shared Product picker are in place. Unknown products are rejected when catalog validation is available.                                                                                |
-| User guidance | Ready for controlled testing with known future scope | Hover/help text is implemented for common clickable controls. Guided introduction flow remains future work.                                                                                                                                                             |
+| User guidance | Ready for controlled testing with known future scope | Hover/help text and a compact replayable introduction flow are implemented. The remaining guided-workflow follow-up is the interactive map-popup-Product Collection sequence.                                                                                           |
 | Documentation | Usable                                               | README, tracker and feature docs describe the current architecture and frontend-only/backend-dependent behavior.                                                                                                                                                        |
 
 ## Smoke-test summary
@@ -62,7 +62,7 @@ Remaining observations:
 - `UsageBand` currently shows descriptive text; including the ID may be solved better in backend data
 - active operation visibility across sessions is not visible before the user attempts an action
 - report/validation links remain disabled until backend report metadata exists
-- a skippable/replayable introduction flow remains future UX work
+- the introduction flow is available and replayable; interactive popup-to-collection progression remains future UX work
 
 ## P0 findings
 
@@ -161,7 +161,7 @@ Recommendation:
 
 - Keep maintaining tooltip coverage as new clickable controls are added.
 - Do not duplicate the visible label; explain consequence or context.
-- Add a skippable and replayable introduction flow as a future guided onboarding feature.
+- Continue onboarding with an interactive popup-to-Product Collection sequence after positioning/highlight polish is validated.
 
 Blocks controlled user testing: No.
 
@@ -279,7 +279,7 @@ Recommendation:
 1. Park new frontend feature development for controlled user testing.
 2. Communicate backend-dependent limitations to testers and backend owners.
 3. Keep hover/help text coverage current when controls are added or changed.
-4. Design a skippable and replayable introduction flow if user feedback confirms discoverability remains the largest issue.
+4. Validate onboarding highlighting and positioning, then implement the interactive popup-to-Product Collection sequence.
 5. Keep report-link UI deferred until backend report contracts are known.
 6. Continue focused smoke tests on clean and persisted browser profiles.
 

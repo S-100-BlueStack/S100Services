@@ -1,6 +1,10 @@
 import { getOnboardingSteps } from "../config/onboardingSteps.js";
 import { readOnboardingState, writeOnboardingState } from "../state/onboardingStorage.js";
-import { createTourPopover, createWelcomeDialog } from "../ui/onboardingUi.js";
+import {
+  createStopIntroductionDialog,
+  createTourPopover,
+  createWelcomeDialog,
+} from "../ui/onboardingUi.js";
 
 let activeService = null;
 
@@ -18,20 +22,37 @@ function createOnboardingService({ routeName }) {
   let routeReady = false;
   let welcomeOffered = false;
   let welcomeDialog = null;
+  let stopDialog = null;
   let tour = null;
   let currentStepIndex = 0;
   let currentTarget = null;
+  let currentStep = null;
   let previousFocus = null;
   let state = readOnboardingState();
 
   const handleKeydown = (event) => {
-    if (event.key !== "Escape" || (!welcomeDialog && !tour)) return;
-    event.preventDefault();
-    closeActiveUi();
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+
+    if (stopDialog) {
+      event.preventDefault();
+      closeStopDialog();
+      return;
+    }
+
+    if (tour) {
+      event.preventDefault();
+      requestStopIntroduction();
+      return;
+    }
+
+    if (welcomeDialog) {
+      event.preventDefault();
+      closeActiveUi();
+    }
   };
 
   const handleViewportChange = () => {
-    tour?.reposition(currentTarget);
+    tour?.reposition(currentTarget, currentStep);
   };
 
   document.addEventListener("keydown", handleKeydown, true);
@@ -86,7 +107,7 @@ function createOnboardingService({ routeName }) {
         }
         showStep(currentStepIndex + 1);
       },
-      onSkip: () => closeActiveUi(),
+      onRequestClose: requestStopIntroduction,
     });
     showStep(0);
     return manual;
@@ -95,15 +116,32 @@ function createOnboardingService({ routeName }) {
   function showStep(index) {
     const steps = getOnboardingSteps(routeName);
     currentStepIndex = Math.min(Math.max(index, 0), steps.length - 1);
-    const step = steps[currentStepIndex];
-    currentTarget = resolveTarget(step.selectors);
+    currentStep = steps[currentStepIndex];
+    currentTarget = resolveTarget(currentStep.selectors);
     currentTarget?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     tour?.render({
-      step,
+      step: currentStep,
       index: currentStepIndex,
       count: steps.length,
       target: currentTarget,
     });
+  }
+
+  function requestStopIntroduction() {
+    if (!tour || stopDialog) return;
+
+    stopDialog = createStopIntroductionDialog({
+      onContinue: closeStopDialog,
+      onStop: () => {
+        closeStopDialog();
+        closeActiveUi();
+      },
+    });
+  }
+
+  function closeStopDialog() {
+    stopDialog?.remove();
+    stopDialog = null;
   }
 
   function completeCurrentFlow() {
@@ -118,11 +156,13 @@ function createOnboardingService({ routeName }) {
   }
 
   function closeActiveUi({ restoreFocus = true } = {}) {
+    closeStopDialog();
     welcomeDialog?.close({ restoreFocus: false });
     welcomeDialog = null;
     tour?.remove();
     tour = null;
     currentTarget = null;
+    currentStep = null;
 
     if (restoreFocus && previousFocus instanceof HTMLElement) {
       previousFocus.focus({ preventScroll: true });

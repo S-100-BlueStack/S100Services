@@ -1,4 +1,5 @@
-.pm-onboarding-welcome {
+.pm-onboarding-welcome,
+.pm-onboarding-stop {
   position: fixed;
   inset: 0;
   z-index: 5000;
@@ -9,6 +10,7 @@
 }
 
 .pm-onboarding-welcome__dialog,
+.pm-onboarding-stop__dialog,
 .pm-onboarding-popover {
   color: var(--pm-text);
   background: var(--pm-surface);
@@ -17,7 +19,8 @@
   box-shadow: var(--pm-shadow);
 }
 
-.pm-onboarding-welcome__dialog {
+.pm-onboarding-welcome__dialog,
+.pm-onboarding-stop__dialog {
   width: min(430px, calc(100vw - 32px));
   padding: 16px;
 }
@@ -32,6 +35,7 @@
 }
 
 .pm-onboarding-welcome h2,
+.pm-onboarding-stop h2,
 .pm-onboarding-popover__title {
   margin: 4px 0 0;
   color: var(--pm-text);
@@ -40,6 +44,7 @@
 }
 
 .pm-onboarding-welcome p,
+.pm-onboarding-stop p,
 .pm-onboarding-popover__description {
   margin: 8px 0 0;
   color: var(--pm-text-muted);
@@ -48,6 +53,7 @@
 }
 
 .pm-onboarding-welcome__actions,
+.pm-onboarding-stop__actions,
 .pm-onboarding-popover__actions {
   display: flex;
   gap: 6px;
@@ -55,7 +61,8 @@
   margin-top: 16px;
 }
 
-.pm-onboarding-welcome__actions {
+.pm-onboarding-welcome__actions,
+.pm-onboarding-stop__actions {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -91,7 +98,8 @@
   opacity: 0.5;
 }
 
-.pm-onboarding-button:focus-visible {
+.pm-onboarding-button:focus-visible,
+.pm-onboarding-popover__close:focus-visible {
   outline: 2px solid var(--pm-focus-ring, var(--calcite-color-brand));
   outline-offset: 2px;
 }
@@ -100,9 +108,11 @@
   position: fixed;
   z-index: 4998;
   pointer-events: none;
-  border: 2px solid var(--pm-focus-ring, #0079c1);
+  border: 3px solid var(--pm-focus-ring, #0079c1);
   border-radius: 2px;
-  box-shadow: 0 0 0 9999px rgb(0 0 0 / 16%);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--pm-surface) 82%, transparent),
+    0 0 0 9999px rgb(0 0 0 / 10%);
 }
 
 .pm-onboarding-popover {
@@ -118,18 +128,52 @@
   transform: translate(-50%, -50%);
 }
 
+.pm-onboarding-popover__close {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--pm-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0;
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pm-onboarding-popover__close:hover {
+  color: var(--pm-text);
+  background: var(--pm-surface-alt);
+  border-color: var(--pm-border);
+}
+
+.pm-onboarding-popover__meta,
+.pm-onboarding-popover__title,
+.pm-onboarding-popover__description {
+  padding-right: 30px;
+}
+
 @media (max-width: 520px) {
-  .pm-onboarding-welcome__actions {
+  .pm-onboarding-welcome__actions,
+  .pm-onboarding-stop__actions {
     align-items: stretch;
   }
 
-  .pm-onboarding-welcome__actions .pm-onboarding-button {
+  .pm-onboarding-welcome__actions .pm-onboarding-button,
+  .pm-onboarding-stop__actions .pm-onboarding-button {
     flex: 1 1 100%;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .pm-onboarding-welcome *,
+  .pm-onboarding-stop *,
   .pm-onboarding-popover * {
     scroll-behavior: auto !important;
     transition: none !important;
