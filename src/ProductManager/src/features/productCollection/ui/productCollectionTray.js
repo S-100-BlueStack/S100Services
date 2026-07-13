@@ -13,6 +13,7 @@ export function initProductCollectionTray({ root = document.body } = {}) {
   tray.className = "pm-product-collection-tray";
   tray.hidden = true;
   tray.setAttribute("aria-label", "Product collection");
+  tray.dataset.onboardingTarget = "product-collection";
 
   root.appendChild(tray);
 

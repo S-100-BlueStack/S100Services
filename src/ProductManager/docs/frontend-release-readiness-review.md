@@ -365,3 +365,11 @@ Recommendation:
 - Add/remove products.
 - Enable/disable products.
 - Toggle History, IC-ENC reports, and Internal validation content.
+
+## Introduction flow phase 1
+
+A compact introduction flow is available after the main map finishes loading. The welcome prompt can be postponed or permanently dismissed in the current browser. Users can replay the current route introduction from Preferences.
+
+The implementation is intentionally route-specific: the main map contains focused guidance for Product search, filters, popup behavior and actions, Product Collection, and workspace navigation. Dashboard, Analyze, and Review each provide a compact overview. The flow does not navigate automatically, execute Product actions, or depend on BroadcastChannel/session state.
+
+Completion and dismissal are stored in versioned localStorage under `pm.onboarding.v1`. Missing or hidden UI targets fall back to a centered information card so onboarding never blocks the application.
