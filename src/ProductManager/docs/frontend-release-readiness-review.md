@@ -1,16 +1,14 @@
 # Frontend release-readiness review
 
-Review baseline: `046ea8495f48ffbc2f76c1aa5e0da33fb5317466`
+Review baseline: `982d9be01f1ace939fe479494c8e05b5c347107e`
 
 This review focuses on Product Manager frontend readiness for controlled user testing. It identifies release risks, backend dependencies, smoke-test findings, and follow-up hardening work.
 
 ## Decision
 
-The frontend is ready for controlled user testing if the known backend-dependent limitations are communicated clearly to testers.
+The frontend is ready for controlled user testing if the known backend-dependent limitations are communicated clearly to testers. There are no frontend P0 blockers identified in the current implemented flows.
 
-There are no frontend P0 blockers identified in the current implemented flows.
-
-The largest remaining user-facing risk is discoverability: user feedback says users do not always know what controls do. This should be tracked as a user guidance/onboarding follow-up, not as a release blocker for controlled testing.
+The largest remaining user-facing risk is discoverability. User feedback says users do not always know what controls do. Hover/help text has now been added to common clickable controls. The remaining discoverability work is a skippable and replayable introduction flow.
 
 ## Severity scale
 
@@ -24,31 +22,39 @@ The largest remaining user-facing risk is discoverability: user feedback says us
 
 ## Current stable areas
 
-| Area          | Status                                            | Notes                                                                                                                                                                                                                                                                   |
-| ------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Main map      | Ready for controlled testing                      | Map rendering, hover, popup details, filters, Product search, Product History quick panel, Product Collection, refresh preservation, display-scale hiding, and product popup actions are implemented. Header navigation remains usable during initial map load.         |
-| Popup actions | Ready for controlled testing                      | Freeze/Unfreeze, Send to IC-ENC, Rollback, and `Export > S100 > Edition` are wired. Disabled export leaves are intentionally unavailable. Actions have textual loading states, which is important for RDP/VDI sessions where spinner animation may not render reliably. |
-| Dashboard     | Ready for controlled testing                      | Separate read-only route with backend activity data, Danish range builder, search, filters, actionable summaries, and route-local History panel.                                                                                                                        |
-| Analyze       | Ready for controlled testing with backend caveats | Product loading, history, XML/report content, internal validation placeholder/report foundation, and shared Product picker are in place. Unknown products are rejected when catalog validation is available.                                                            |
-| Review        | Ready for controlled testing with backend caveats | Multi-product review, content toggles, history, placeholder report sections, and shared Product picker are in place. Unknown products are rejected when catalog validation is available.                                                                                |
-| Documentation | Usable                                            | README, tracker and feature docs describe the current architecture and frontend-only/backend-dependent behavior.                                                                                                                                                        |
+| Area          | Status                                               | Notes                                                                                                                                                                                                                                                                   |
+| ------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Main map      | Ready for controlled testing                         | Map rendering, hover, popup details, filters, Product search, Product History quick panel, Product Collection, refresh preservation, display-scale hiding, and product popup actions are implemented. Header navigation remains usable during initial map load.         |
+| Popup actions | Ready for controlled testing                         | Freeze/Unfreeze, Send to IC-ENC, Rollback, and `Export > S100 > Edition` are wired. Disabled export leaves are intentionally unavailable. Actions have textual loading states, which is important for RDP/VDI sessions where spinner animation may not render reliably. |
+| Dashboard     | Ready for controlled testing                         | Separate read-only route with backend activity data, Danish range builder, search, filters, actionable summaries, and route-local History panel.                                                                                                                        |
+| Analyze       | Ready for controlled testing with backend caveats    | Product loading, history, XML/report content, internal validation placeholder/report foundation, and shared Product picker are in place. Unknown products are rejected when catalog validation is available.                                                            |
+| Review        | Ready for controlled testing with backend caveats    | Multi-product review, content toggles, history, placeholder report sections, and shared Product picker are in place. Unknown products are rejected when catalog validation is available.                                                                                |
+| User guidance | Ready for controlled testing with known future scope | Hover/help text is implemented for common clickable controls. Guided introduction flow remains future work.                                                                                                                                                             |
+| Documentation | Usable                                               | README, tracker and feature docs describe the current architecture and frontend-only/backend-dependent behavior.                                                                                                                                                        |
 
 ## Smoke-test summary
 
-A smoke test on 2026-07-09 found no P0 blockers. Key findings were either fixed or documented:
+A smoke test on 2026-07-09 found no P0 blockers.
+
+Key findings were either fixed or documented:
 
 - startup/routes worked without issues
 - `/aoi` load takes about 12 seconds, but data loads correctly
+- header navigation remains usable while initial main map data is loading
 - main map filters show the intended filter set
 - filter persistence works
 - popup actions work and return correctly to the frontend
 - Dashboard range builder, quick filters, History, Review and Analyze links work
 - Analyze/Review Product picker works
+- Product picker hides already-added products
+- unknown products are rejected when catalog validation is available
 - light/dark mode looks correct
 - Dashboard time input tab trap was fixed
 - Escape close behavior was hardened
 - Product History rows were changed to collapsed by default
+- Product History summaries describe edition/update changes even when status remains unchanged
 - main map Product search was added and polished
+- hover/help tooltips were added to common clickable controls
 
 Remaining observations:
 
@@ -56,7 +62,7 @@ Remaining observations:
 - `UsageBand` currently shows descriptive text; including the ID may be solved better in backend data
 - active operation visibility across sessions is not visible before the user attempts an action
 - report/validation links remain disabled until backend report metadata exists
-- users need more inline guidance/help text and an introduction flow
+- a skippable/replayable introduction flow remains future UX work
 
 ## P0 findings
 
@@ -140,25 +146,24 @@ Recommendation:
 
 Blocks controlled user testing: No, but it should be fixed before broader rollout if visible labels remain inconsistent.
 
-### RR-011: User guidance/discoverability is incomplete
+### RR-011: User guidance/discoverability
 
 Severity: P1/P2
 
-User feedback says users do not know what all controls do. The app now has several compact controls, icon buttons, route-specific actions, popup actions and panel buttons.
+User feedback says users do not know what all controls do. The app now has concise hover/help text for common clickable controls, icon buttons, route actions, popup actions and panel buttons.
 
-Risk:
+Remaining risk:
 
-- Users may avoid useful functionality because they do not know what it does.
-- Users may trigger impactful actions without understanding the consequence.
+- Native hover text helps discoverability, but does not proactively teach the main workflows.
+- First-time users may still not understand the intended order of work.
 
 Recommendation:
 
-- Add concise hover/focus help to clickable controls.
+- Keep maintaining tooltip coverage as new clickable controls are added.
 - Do not duplicate the visible label; explain consequence or context.
-- Prefer consistent native `title`/tooltip patterns before building custom help UI.
-- Add an introduction flow as a future guided onboarding feature.
+- Add a skippable and replayable introduction flow as a future guided onboarding feature.
 
-Blocks controlled user testing: No, but should be prioritized if testers remain unsure where to start.
+Blocks controlled user testing: No.
 
 ## P2 findings
 
@@ -273,8 +278,8 @@ Recommendation:
 
 1. Park new frontend feature development for controlled user testing.
 2. Communicate backend-dependent limitations to testers and backend owners.
-3. Add hover/help text to clickable controls if user uncertainty continues in testing.
-4. Design a skippable and replayable introduction flow.
+3. Keep hover/help text coverage current when controls are added or changed.
+4. Design a skippable and replayable introduction flow if user feedback confirms discoverability remains the largest issue.
 5. Keep report-link UI deferred until backend report contracts are known.
 6. Continue focused smoke tests on clean and persisted browser profiles.
 
@@ -297,6 +302,7 @@ Recommendation:
 - Confirm hover highlight works.
 - Use Product search to find a known product and open its popup.
 - Use Product search with Enter and Escape.
+- Hover Product search and common main map controls to confirm help text appears.
 - Open popup and confirm product fields are constrained to the intended layout.
 - Confirm first popup after fresh load does not show all raw attributes.
 - Test manual refresh.
@@ -307,6 +313,7 @@ Recommendation:
 - Confirm only `Display scale`, `Status`, and `Usage band` are visible.
 - Confirm Status includes all statuses from the status endpoint, including count `0` values.
 - Select a zero-count status and confirm the map/list result is empty.
+- Hover filter actions and verify help text.
 - Clear filters.
 - Reload and confirm old filter categories do not return.
 
@@ -320,6 +327,7 @@ Recommendation:
 - Confirm mutation actions are blocked while export is running.
 - Confirm popup refreshes after successful actions.
 - Confirm textual loading state remains clear if spinner animation does not move in RDP/VDI.
+- Hover popup actions and verify help text.
 
 ### Dashboard
 
@@ -328,6 +336,7 @@ Recommendation:
 - Test `Since yesterday` and `Last 7 days` quick actions.
 - Test search and filters.
 - Click Status summary rows and Operation summary rows.
+- Hover Dashboard controls and activity action buttons.
 - Open Dashboard History panel from an activity.
 - Expand/collapse Product History rows.
 - Close Dashboard History panel with `Close` and Escape.
@@ -340,6 +349,7 @@ Recommendation:
 - Use Product picker dropdown.
 - Confirm already-added Products are hidden.
 - Confirm unknown Products are rejected when catalog validation is available.
+- Hover Product picker, Add, Open all and Collapse all controls.
 - Load one product.
 - Load multiple products.
 - Confirm history content loads or fails per product without breaking the page.
@@ -351,23 +361,7 @@ Recommendation:
 - Use Product picker dropdown.
 - Confirm already-added Products are hidden.
 - Confirm unknown Products are rejected when catalog validation is available.
+- Hover Product picker and common Review controls.
 - Add/remove products.
 - Enable/disable products.
 - Toggle History, IC-ENC reports, and Internal validation content.
-- Confirm Review remains independent of Product Collection after opening.
-
-### Theme and accessibility
-
-- Repeat key checks in light mode and dark mode.
-- Tab through Dashboard controls.
-- Tab through Product picker.
-- Tab through main map Product search.
-- Tab through popup actions and nested export menu.
-- Confirm visible focus states.
-- Confirm Escape behavior for Dashboard History, main Product History, popup/dropdown flows, filter panel, notification panel and preferences panel.
-
-## Release recommendation
-
-Proceed with controlled user testing.
-
-Do not market report links, async job progress, backend active-operation visibility, or global timeline as complete until backend contracts exist.

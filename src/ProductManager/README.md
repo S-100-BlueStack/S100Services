@@ -13,7 +13,7 @@ Current frontend stack:
 - JavaScript
 - HTML/CSS
 
-Backend/API calls are consumed from the frontend through shared API helpers and feature-specific API modules.
+Backend/API calls are consumed through shared API helpers and feature-specific API modules.
 
 ## Main routes
 
@@ -24,21 +24,15 @@ Product Manager currently has these main frontend routes:
 - Analyze route
 - Review route
 
-The main map route owns product correction management, popup actions, map filters, Product History quick panel, Product Collection, and Product search.
+The main map route owns product correction management, popup actions, map filters, Product History quick panel, Product Collection, and Product search. The Dashboard route owns read-only operational activity summaries for selected time ranges. It does not own product mutation actions, map popup state, Product Collection state, Analyze state, or Review state.
 
-The Dashboard route owns read-only operational activity summaries for selected time ranges. It does not own product mutation actions, map popup state, Product Collection state, Analyze state, or Review state.
-
-The Analyze route owns analysis/report display for selected products.
-
-The Review route owns side-by-side product review for multiple selected products.
+The Analyze route owns analysis/report display for selected products. The Review route owns side-by-side product review for multiple selected products.
 
 ## Terminology
 
-Use `Product` and `Products` in user-facing UI text.
+Use `Product` and `Products` in user-facing UI text. Do not use `Dataset`, `Datasets`, `dataset`, or similar dataset-oriented labels in visible UI unless the backend/domain concept specifically requires a technical distinction.
 
-Do not use `Dataset`, `Datasets`, `dataset`, or similar dataset-oriented labels in visible UI unless the backend/domain concept specifically requires a technical distinction. Code may continue using stable technical identifiers such as `datasetName` where that matches backend contracts or existing normalized attribute names.
-
-A future terminology hardening task tracks a full UI audit to align Analyze, Review, Dashboard and main map labels around `Product` / `Products`.
+Code may continue using stable technical identifiers such as `datasetName` where that matches backend contracts or existing normalized attribute names. A future terminology hardening task tracks a full UI audit to align Analyze, Review, Dashboard and main map labels around `Product` / `Products`.
 
 ## Stable frontend flows
 
@@ -68,6 +62,7 @@ The following flows are implemented and considered stable frontend behavior for 
 - shared Product catalog picker for Analyze and Review
 - Dashboard page with backend-driven activity data, Danish range builder, client-side search, client-side filters, actionable summary panels, polished Dashboard History panel, collapsed product history events, domain-oriented backend activity classification, summary cards and activity links
 - release-readiness keyboard hardening for route/panel close behavior
+- hover help/tooltips for common clickable controls and icon-only actions
 
 ## Important architecture
 
@@ -187,9 +182,7 @@ Dashboard documentation:
 src/features/dashboard/README.md
 ```
 
-Dashboard is a read-only operational activity route. It loads activity data from `/electronicproducts/dashboard`, applies local search and filters to the loaded payload, opens a route-local Product History panel from activity rows, and links users onward to Review or Analyze.
-
-Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
+Dashboard is a read-only operational activity route. It loads activity data from `/electronicproducts/dashboard`, applies local search and filters to the loaded payload, opens a route-local Product History panel from activity rows, and links users onward to Review or Analyze. Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
 
 ### Analyze and Review
 
@@ -205,9 +198,7 @@ Review feature files live in:
 src/features/review
 ```
 
-Analyze owns product analysis/report display. It does not own product mutation actions.
-
-Review owns multi-product review. Review tabs are independent and should not reintroduce BroadcastChannel/session picker workflows without a clear UX reason.
+Analyze owns product analysis/report display. It does not own product mutation actions. Review owns multi-product review. Review tabs are independent and should not reintroduce BroadcastChannel/session picker workflows without a clear UX reason.
 
 ### Timeline and Product History
 
@@ -223,9 +214,7 @@ Timeline documentation:
 src/features/timeline/README.md
 ```
 
-Product History uses the backend product history endpoint for product-level history views. Product History rows are collapsed by default on both the main map quick panel and the Dashboard History panel.
-
-Collapsed rows show the event title, timestamp and short description; row details such as previous/new state are expanded only when the user opens that row.
+Product History uses the backend product history endpoint for product-level history views. Product History rows are collapsed by default on both the main map quick panel and the Dashboard History panel. Collapsed rows show the event title, timestamp and short description; row details such as previous/new state are expanded only when the user opens that row.
 
 Global map timeline is not implemented yet.
 
@@ -255,12 +244,13 @@ Do not implement the following fully until backend/database contracts are ready:
 
 ## User guidance and onboarding future work
 
-Controlled user testing showed that users need more inline explanation of what actions and controls do. The frontend now adds concise hover help/tooltips to common clickable controls and icon-only actions. Future UX work should add an optional introduction flow.
+Controlled user testing showed that users need more inline explanation of what actions and controls do.
 
-Track this as separate future work rather than mixing it into feature implementation:
+The frontend now adds concise hover help/tooltips to common clickable controls and icon-only actions. Tooltip text should explain consequence or context, not just duplicate the visible label. New clickable controls should include either explicit text, `aria-label`, or a tooltip entry in the global hover-help registry.
+
+Future UX work should add an optional introduction flow. Track this as separate future work rather than mixing it into feature implementation:
 
 - maintain concise tooltips/help text for new clickable controls and icon-only actions
-- ensure tooltip text explains consequence, not only label duplication
 - keep text static and useful in RDP/VDI environments where animations may not render smoothly
 - create an introduction flow that walks users through the main map, filters, Product search, popup actions, Product Collection, Dashboard, Analyze and Review
 - avoid blocking expert users; the introduction should be skippable and replayable
@@ -387,6 +377,7 @@ Recent frontend work has focused on:
 - S100 Edition export activation
 - Rollback activation
 - release-readiness smoke-test hardening
+- hover help/tooltips for clickable controls
 - layer capability foundation
 
 The frontend is ready for controlled user testing while backend-dependent report links, async export/job state, active operation visibility and introduction flow continue separately.
