@@ -2,7 +2,7 @@
 .pm-onboarding-stop {
   position: fixed;
   inset: 0;
-  z-index: 5000;
+  z-index: 7000;
   display: grid;
   place-items: center;
   padding: 16px;
@@ -104,20 +104,37 @@
   outline-offset: 2px;
 }
 
+.pm-onboarding-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 5998;
+  pointer-events: none;
+  background: rgb(0 0 0 / 10%);
+}
+
+.pm-onboarding-highlight-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 6002;
+  pointer-events: none;
+}
+
 .pm-onboarding-highlight {
   position: fixed;
-  z-index: 4998;
   pointer-events: none;
   border: 3px solid var(--pm-focus-ring, #0079c1);
   border-radius: 2px;
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--pm-surface) 82%, transparent),
-    0 0 0 9999px rgb(0 0 0 / 10%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pm-surface) 82%, transparent);
+}
+
+.pm-onboarding-active-surface {
+  position: relative !important;
+  z-index: 6001 !important;
 }
 
 .pm-onboarding-popover {
   position: fixed;
-  z-index: 4999;
+  z-index: 6003;
   width: min(340px, calc(100vw - 24px));
   padding: 14px;
 }

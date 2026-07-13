@@ -25,15 +25,26 @@ test("uses unique step identifiers and complete user-facing copy", () => {
   }
 });
 
-test("targets concrete main map controls before broad fallback surfaces", () => {
+test("keeps the connected map workflow aligned and targets concrete controls", () => {
   const [searchStep, filterStep, mapStep, popupStep, collectionStep, workspaceStep] =
     getOnboardingSteps("main");
 
   assert.match(searchStep.selectors[0], /input/);
-  assert.equal(filterStep.selectors[0], "#filter-button");
+  assert.equal(searchStep.placement, "adjacent-horizontal");
+  assert.ok(searchStep.activeSurfaceSelectors.length > 0);
+
+  assert.equal(filterStep.selectors[0], ".filter-wrapper");
+  assert.deepEqual(filterStep.activeSurfaceSelectors, [".filter-wrapper"]);
+
   assert.equal(mapStep.highlight, false);
   assert.equal(mapStep.placement, "left-center");
   assert.equal(popupStep.placement, "left-center");
-  assert.match(collectionStep.selectors[0], /popup-action/);
+  assert.equal(collectionStep.placement, "left-center");
+
+  assert.equal(popupStep.selectorMode, "all");
+  assert.match(collectionStep.selectors[0], /product-collection/);
+  assert.equal(collectionStep.selectors.includes("[data-nav-analyze-link]"), false);
+
   assert.equal(workspaceStep.selectors[0], "#header .header-center");
+  assert.deepEqual(workspaceStep.activeSurfaceSelectors, ["#header .header-center"]);
 });

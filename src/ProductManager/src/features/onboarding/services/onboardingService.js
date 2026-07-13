@@ -6,6 +6,8 @@ import {
   createWelcomeDialog,
 } from "../ui/onboardingUi.js";
 
+const ACTIVE_SURFACE_CLASS = "pm-onboarding-active-surface";
+
 let activeService = null;
 
 export function initOnboarding({ routeName }) {
@@ -25,8 +27,9 @@ function createOnboardingService({ routeName }) {
   let stopDialog = null;
   let tour = null;
   let currentStepIndex = 0;
-  let currentTarget = null;
+  let currentTargets = [];
   let currentStep = null;
+  let activeSurfaces = [];
   let previousFocus = null;
   let state = readOnboardingState();
 
@@ -52,7 +55,7 @@ function createOnboardingService({ routeName }) {
   };
 
   const handleViewportChange = () => {
-    tour?.reposition(currentTarget, currentStep);
+    tour?.reposition(currentTargets, currentStep);
   };
 
   document.addEventListener("keydown", handleKeydown, true);
@@ -117,14 +120,32 @@ function createOnboardingService({ routeName }) {
     const steps = getOnboardingSteps(routeName);
     currentStepIndex = Math.min(Math.max(index, 0), steps.length - 1);
     currentStep = steps[currentStepIndex];
-    currentTarget = resolveTarget(currentStep.selectors);
-    currentTarget?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    currentTargets = resolveTargets(currentStep);
+    updateActiveSurfaces(currentStep.activeSurfaceSelectors);
+
+    currentTargets[0]?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     tour?.render({
       step: currentStep,
       index: currentStepIndex,
       count: steps.length,
-      target: currentTarget,
+      targets: currentTargets,
     });
+  }
+
+  function updateActiveSurfaces(selectors = []) {
+    clearActiveSurfaces();
+    activeSurfaces = resolveAllVisibleElements(selectors);
+
+    for (const element of activeSurfaces) {
+      element.classList.add(ACTIVE_SURFACE_CLASS);
+    }
+  }
+
+  function clearActiveSurfaces() {
+    for (const element of activeSurfaces) {
+      element.classList.remove(ACTIVE_SURFACE_CLASS);
+    }
+    activeSurfaces = [];
   }
 
   function requestStopIntroduction() {
@@ -161,7 +182,8 @@ function createOnboardingService({ routeName }) {
     welcomeDialog = null;
     tour?.remove();
     tour = null;
-    currentTarget = null;
+    clearActiveSurfaces();
+    currentTargets = [];
     currentStep = null;
 
     if (restoreFocus && previousFocus instanceof HTMLElement) {
@@ -181,12 +203,38 @@ function createOnboardingService({ routeName }) {
   };
 }
 
-function resolveTarget(selectors = []) {
+function resolveTargets(step) {
+  if (step?.selectorMode === "all") {
+    return resolveAllVisibleElements(step.selectors);
+  }
+
+  const target = resolveFirstVisibleElement(step?.selectors);
+  return target ? [target] : [];
+}
+
+function resolveFirstVisibleElement(selectors = []) {
   for (const selector of selectors) {
     const target = document.querySelector(selector);
-    if (target instanceof HTMLElement && !target.hidden && target.getClientRects().length > 0) {
-      return target;
-    }
+    if (isVisibleElement(target)) return target;
   }
   return null;
+}
+
+function resolveAllVisibleElements(selectors = []) {
+  const elements = [];
+  const seen = new Set();
+
+  for (const selector of selectors) {
+    for (const element of document.querySelectorAll(selector)) {
+      if (!isVisibleElement(element) || seen.has(element)) continue;
+      seen.add(element);
+      elements.push(element);
+    }
+  }
+
+  return elements;
+}
+
+function isVisibleElement(element) {
+  return element instanceof HTMLElement && !element.hidden && element.getClientRects().length > 0;
 }

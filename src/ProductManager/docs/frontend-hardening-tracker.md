@@ -112,3 +112,16 @@ This document tracks frontend-only cleanup, hardening, and architecture improvem
 | 2026-07-09 | 900299f523e97c021a6736c78de6a46bff54cac4 | FH-041          | Improved Product History summaries for edition/update changes.                                                                                                                        |
 | 2026-07-09 | 046ea8495f48ffbc2f76c1aa5e0da33fb5317466 | FI-007          | Added and polished main map Product search overlay.                                                                                                                                   |
 | 2026-07-10 | 982d9be01f1ace939fe479494c8e05b5c347107e | FH-043          | Added and completed global hover help/tooltips for clickable controls and icon-only actions.                                                                                          |
+
+### FI-008 onboarding UX follow-up (baseline 250109d0)
+
+Status: In progress
+
+- Position the Product search introduction card beside the search control instead of at the viewport edge.
+- Keep the Product search surface, including its result dropdown, above the onboarding scrim.
+- Highlight the Filters wrapper rather than relying on the Calcite action internals.
+- Keep steps 3, 4 and 5 at the same left-side position.
+- Support multiple highlight rectangles for popup header controls and the popup action bar.
+- Remove the incorrect Analyze navigation fallback from the Product Collection step.
+- Render onboarding highlights above the navbar while preserving pointer interaction with active controls.
+- Interactive popup-open and Product Collection progression remains a separate follow-up.

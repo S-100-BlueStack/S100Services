@@ -45,9 +45,11 @@ export function createWelcomeDialog({ onStart, onNotNow, onDismiss }) {
 }
 
 export function createTourPopover({ onBack, onNext, onRequestClose }) {
-  const highlight = document.createElement("div");
-  highlight.className = "pm-onboarding-highlight";
-  highlight.hidden = true;
+  const scrim = document.createElement("div");
+  scrim.className = "pm-onboarding-scrim";
+
+  const highlightLayer = document.createElement("div");
+  highlightLayer.className = "pm-onboarding-highlight-layer";
 
   const popover = document.createElement("section");
   popover.className = "pm-onboarding-popover";
@@ -75,7 +77,7 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
     </div>
   `;
 
-  document.body.append(highlight, popover);
+  document.body.append(scrim, highlightLayer, popover);
 
   popover.addEventListener("click", (event) => {
     const action = event.target.closest("[data-action]")?.dataset.action;
@@ -85,7 +87,7 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
   });
 
   return {
-    render({ step, index, count, target }) {
+    render({ step, index, count, targets }) {
       popover.querySelector(".pm-onboarding-popover__meta").textContent =
         `Step ${index + 1} of ${count}`;
       popover.querySelector(".pm-onboarding-popover__title").textContent = step.title;
@@ -94,14 +96,15 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
       const nextButton = popover.querySelector("[data-action='next']");
       backButton.disabled = index === 0;
       nextButton.textContent = index === count - 1 ? "Finish" : "Next";
-      positionTourElements({ popover, highlight, target, step });
+      positionTourElements({ popover, highlightLayer, targets, step });
       nextButton.focus({ preventScroll: true });
     },
-    reposition(target, step) {
-      positionTourElements({ popover, highlight, target, step });
+    reposition(targets, step) {
+      positionTourElements({ popover, highlightLayer, targets, step });
     },
     remove() {
-      highlight.remove();
+      scrim.remove();
+      highlightLayer.remove();
       popover.remove();
     },
   };
@@ -148,22 +151,19 @@ export function createStopIntroductionDialog({ onContinue, onStop }) {
   };
 }
 
-function positionTourElements({ popover, highlight, target, step }) {
-  const targetRect = getVisibleTargetRect(target);
-  const shouldHighlight = step?.highlight !== false && Boolean(targetRect);
+function positionTourElements({ popover, highlightLayer, targets, step }) {
+  const targetRects = getVisibleTargetRects(targets);
+  const anchorRect = getCombinedRect(targetRects);
+  const shouldHighlight = step?.highlight !== false && targetRects.length > 0;
 
-  if (shouldHighlight) {
-    positionHighlight(highlight, targetRect);
-  } else {
-    highlight.hidden = true;
-  }
+  renderHighlights(highlightLayer, shouldHighlight ? targetRects : []);
 
   popover.classList.remove("is-centered");
   popover.style.removeProperty("transform");
 
   const position = calculatePopoverPosition({
     popoverRect: popover.getBoundingClientRect(),
-    targetRect,
+    targetRect: anchorRect,
     placement: step?.placement,
   });
 
@@ -178,9 +178,19 @@ function positionTourElements({ popover, highlight, target, step }) {
   popover.style.left = `${position.left}px`;
 }
 
+function renderHighlights(layer, targetRects) {
+  layer.replaceChildren();
+
+  for (const targetRect of targetRects) {
+    const highlight = document.createElement("div");
+    highlight.className = "pm-onboarding-highlight";
+    positionHighlight(highlight, targetRect);
+    layer.appendChild(highlight);
+  }
+}
+
 function positionHighlight(highlight, targetRect) {
   const padding = 5;
-  highlight.hidden = false;
   highlight.style.top = `${Math.max(4, targetRect.top - padding)}px`;
   highlight.style.left = `${Math.max(4, targetRect.left - padding)}px`;
   highlight.style.width = `${Math.max(0, targetRect.width + padding * 2)}px`;
@@ -209,7 +219,7 @@ function calculatePopoverPosition({ popoverRect, targetRect, placement = "auto" 
 
   if (placement === "right-center") {
     return clampPosition({
-      top: Math.max(targetRect.bottom + margin, (viewportHeight - popoverRect.height) / 2),
+      top: (viewportHeight - popoverRect.height) / 2,
       left: viewportWidth - popoverRect.width - margin,
       popoverRect,
       margin,
@@ -218,18 +228,34 @@ function calculatePopoverPosition({ popoverRect, targetRect, placement = "auto" 
     });
   }
 
-  const candidates = createPlacementCandidates({ targetRect, popoverRect, margin, placement });
-  const fittingCandidate = candidates.find((candidate) => {
-    return (
-      candidate.top >= margin &&
-      candidate.left >= margin &&
-      candidate.top + popoverRect.height <= viewportHeight - margin &&
-      candidate.left + popoverRect.width <= viewportWidth - margin
-    );
-  });
+  if (placement === "adjacent-horizontal") {
+    const candidates = [
+      {
+        top: targetRect.top + (targetRect.height - popoverRect.height) / 2,
+        left: targetRect.right + margin,
+      },
+      {
+        top: targetRect.top + (targetRect.height - popoverRect.height) / 2,
+        left: targetRect.left - popoverRect.width - margin,
+      },
+      {
+        top: targetRect.bottom + margin,
+        left: targetRect.left + (targetRect.width - popoverRect.width) / 2,
+      },
+    ];
 
-  return clampPosition({
-    ...(fittingCandidate ?? candidates[0]),
+    return pickAndClampPosition({
+      candidates,
+      popoverRect,
+      margin,
+      viewportWidth,
+      viewportHeight,
+    });
+  }
+
+  const candidates = createPlacementCandidates({ targetRect, popoverRect, margin, placement });
+  return pickAndClampPosition({
+    candidates,
     popoverRect,
     margin,
     viewportWidth,
@@ -244,11 +270,17 @@ function createPlacementCandidates({ targetRect, popoverRect, margin, placement 
         top: targetRect.top + (targetRect.height - popoverRect.height) / 2,
         left: targetRect.left - popoverRect.width - margin,
       },
-      { top: targetRect.bottom + margin, left: targetRect.right - popoverRect.width },
+      {
+        top: targetRect.bottom + margin,
+        left: targetRect.right - popoverRect.width,
+      },
     ],
     below: [
+      {
+        top: targetRect.bottom + margin,
+        left: targetRect.left + (targetRect.width - popoverRect.width) / 2,
+      },
       { top: targetRect.bottom + margin, left: targetRect.left },
-      { top: targetRect.bottom + margin, left: targetRect.right - popoverRect.width },
     ],
     auto: [
       { top: targetRect.bottom + margin, left: targetRect.left },
@@ -267,6 +299,25 @@ function createPlacementCandidates({ targetRect, popoverRect, margin, placement 
   return placements[placement] ?? placements.auto;
 }
 
+function pickAndClampPosition({ candidates, popoverRect, margin, viewportWidth, viewportHeight }) {
+  const fittingCandidate = candidates.find((candidate) => {
+    return (
+      candidate.top >= margin &&
+      candidate.left >= margin &&
+      candidate.top + popoverRect.height <= viewportHeight - margin &&
+      candidate.left + popoverRect.width <= viewportWidth - margin
+    );
+  });
+
+  return clampPosition({
+    ...(fittingCandidate ?? candidates[0]),
+    popoverRect,
+    margin,
+    viewportWidth,
+    viewportHeight,
+  });
+}
+
 function clampPosition({ top, left, popoverRect, margin, viewportWidth, viewportHeight }) {
   return {
     centered: false,
@@ -281,9 +332,31 @@ function clampPosition({ top, left, popoverRect, margin, viewportWidth, viewport
   };
 }
 
+function getVisibleTargetRects(targets = []) {
+  return targets.map(getVisibleTargetRect).filter(Boolean);
+}
+
 function getVisibleTargetRect(target) {
   if (!(target instanceof HTMLElement) || target.hidden) return null;
   const rect = target.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return null;
   return rect;
+}
+
+function getCombinedRect(rects) {
+  if (rects.length === 0) return null;
+
+  const left = Math.min(...rects.map((rect) => rect.left));
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const right = Math.max(...rects.map((rect) => rect.right));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: right - left,
+    height: bottom - top,
+  };
 }
