@@ -27,7 +27,7 @@ test("uses unique step identifiers and complete user-facing copy", () => {
   }
 });
 
-test("targets stable main-map controls without changing their stacking context", () => {
+test("connects map selection, popup actions and Product Collection", () => {
   const [searchStep, filterStep, mapStep, popupStep, collectionStep, workspaceStep] =
     getOnboardingSteps("main");
 
@@ -38,15 +38,21 @@ test("targets stable main-map controls without changing their stacking context",
 
   assert.equal(mapStep.highlight, false);
   assert.equal(mapStep.placement, "left-center");
-  assert.equal(popupStep.placement, "left-center");
-  assert.equal(collectionStep.placement, "left-center");
+  assert.equal(mapStep.behavior.type, "wait-for-popup");
+  assert.equal(mapStep.behavior.waitingNextLabel, "Open a Product");
 
+  assert.equal(popupStep.placement, "left-center");
   assert.equal(popupStep.selectorMode, "all");
+  assert.equal(popupStep.behavior.type, "require-popup");
+  assert.equal(popupStep.behavior.fallbackStepId, "main-map");
   assert.ok(popupStep.selectors.includes(".popup-copy-btn"));
   assert.ok(popupStep.selectors.includes(".popup-product-collection-btn"));
   assert.ok(popupStep.selectors.includes(".popup-action-bar"));
 
+  assert.equal(collectionStep.placement, "left-center");
   assert.equal(collectionStep.selectors[0], ".popup-product-collection-btn");
+  assert.equal(collectionStep.behavior.type, "wait-for-collection");
+  assert.deepEqual(collectionStep.behavior.readySelectors, [".pm-product-collection-tray"]);
   assert.equal(collectionStep.selectors.includes("[data-nav-analyze-link]"), false);
 
   assert.equal(workspaceStep.selectorMode, "all");

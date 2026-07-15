@@ -30,6 +30,12 @@ export const ONBOARDING_STEPS = Object.freeze({
       selectors: ["#viewDiv"],
       placement: "left-center",
       highlight: false,
+      behavior: {
+        type: "wait-for-popup",
+        waitingNextLabel: "Open a Product",
+        waitingNextTitle: "Select a Product on the map to continue.",
+        readyNextLabel: "Continue",
+      },
     },
     {
       id: "main-popup-actions",
@@ -39,14 +45,27 @@ export const ONBOARDING_STEPS = Object.freeze({
       selectors: [".popup-copy-btn", ".popup-product-collection-btn", ".popup-action-bar"],
       selectorMode: "all",
       placement: "left-center",
+      behavior: {
+        type: "require-popup",
+        fallbackStepId: "main-map",
+      },
     },
     {
       id: "main-product-collection",
       title: "Build a Product Collection",
       description:
-        "Use the Product Collection action in the popup. Collected Products can then be opened together in Analyze or Review.",
-      selectors: [".popup-product-collection-btn", ".pm-product-collection-tray"],
+        "Use the highlighted Product Collection action in the popup to add the selected Product.",
+      selectors: [".popup-product-collection-btn"],
       placement: "left-center",
+      behavior: {
+        type: "wait-for-collection",
+        waitingNextLabel: "Add to Collection",
+        waitingNextTitle: "Add a Product to the Collection to continue.",
+        readyNextLabel: "Next",
+        readyDescription:
+          "The Product Collection tray keeps selected Products together. Open the collection in Analyze or Review when you are ready.",
+        readySelectors: [".pm-product-collection-tray"],
+      },
     },
     {
       id: "main-workspaces",

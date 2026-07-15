@@ -84,7 +84,7 @@ This document tracks frontend-only cleanup, hardening, and architecture improvem
 | FI-005 | Analyze                          | Add product collection tray for Analyze from map                       | Done                              | Added a main-map workflow for collecting products before opening Analyze or Review.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | FI-006 | Analyze / Review                 | Add shared product catalog picker for direct Analyze/Review access     | Done                              | Uses the lightweight `GET /electronicproducts` endpoint to power a shared searchable Product picker reused by Analyze and Review.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | FI-007 | Main map                         | Add main page Product search                                           | Done                              | Added a compact Product search overlay that suggests catalog products and opens the selected Product popup on the main map.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| FI-008 | Introduction flow                | Add compact first-time and replayable route guidance                   | In progress                       | Phase 1 is implemented with replay from Preferences and versioned localStorage. Current polish highlights concrete controls, improves placement and confirms before stopping. Remaining work: connect map selection, popup actions and Product Collection as one interactive sequence.                                                                                                                                                                                                                                                                                                    |
+| FI-008 | Introduction flow                | Add compact first-time and replayable route guidance                   | In progress                       | Phase 1 includes replay from Preferences, versioned localStorage, stable highlights and interactive main-map progression. Manual verification remains before the item is marked Done.                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ## Planned order
 
@@ -113,16 +113,17 @@ This document tracks frontend-only cleanup, hardening, and architecture improvem
 | 2026-07-09 | 046ea8495f48ffbc2f76c1aa5e0da33fb5317466 | FI-007          | Added and polished main map Product search overlay.                                                                                                                                   |
 | 2026-07-10 | 982d9be01f1ace939fe479494c8e05b5c347107e | FH-043          | Added and completed global hover help/tooltips for clickable controls and icon-only actions.                                                                                          |
 
-### FI-008 onboarding UX follow-up (baseline 84b28a17)
+### FI-008 onboarding interactive main-map sequence (baseline 592159df)
 
-Status: In progress
+Status: Ready for manual verification
 
-- Remove the step-level scrim so Product search, the map, popup controls and navigation remain visibly interactive.
-- Keep modal dimming only for the welcome and stop-confirmation dialogs.
-- Render simple fixed highlight outlines above ArcGIS UI and the navbar without changing application element positioning or z-index.
-- Resolve targets through open Calcite/ArcGIS shadow roots so popup Copy and Product Collection controls can be highlighted reliably.
-- Use the concrete popup classes `.popup-copy-btn`, `.popup-product-collection-btn` and `.popup-action-bar`.
-- Keep steps 3, 4 and 5 at the same left-side position.
-- Place the Product search card beside the input whenever horizontal viewport space exists; vertical clamping must not force it below the dropdown.
-- Highlight Dashboard, Analyze and Review as individual workspace links.
-- Interactive popup-open and Product Collection progression remains a separate follow-up.
+- Keep introduction steps non-modal while welcome and stop-confirmation dialogs retain modal dimming.
+- Require a visible Product popup before Step 3 can continue.
+- Automatically advance from Step 3 to Step 4 when a Product popup is opened during the step.
+- Keep Back usable when a popup was already open before returning to Step 3.
+- Return to Step 3 when the Product popup closes during Step 4, with a short grace period for popup re-rendering.
+- Require a visible Product Collection tray before Step 5 can continue.
+- Highlight the popup Product Collection action while waiting, then switch the highlight and guidance to the tray after a Product is collected.
+- Return to Step 3 if both the popup and Product Collection tray disappear during Step 5.
+- Keep Steps 3, 4 and 5 at one stable left-side position.
+- Preserve replay from Preferences, versioned localStorage, light/dark support and static RDP/VDI-safe states.

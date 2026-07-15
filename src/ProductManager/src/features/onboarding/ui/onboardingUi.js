@@ -85,18 +85,39 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
   });
 
   return {
-    render({ step, index, count, targets }) {
+    render({
+      step,
+      index,
+      count,
+      targets,
+      nextDisabled = false,
+      nextLabel = null,
+      nextTitle = null,
+      focusNext = true,
+    }) {
       popover.dataset.stepId = step.id;
       popover.querySelector(".pm-onboarding-popover__meta").textContent =
         `Step ${index + 1} of ${count}`;
       popover.querySelector(".pm-onboarding-popover__title").textContent = step.title;
       popover.querySelector(".pm-onboarding-popover__description").textContent = step.description;
+
       const backButton = popover.querySelector("[data-action='back']");
       const nextButton = popover.querySelector("[data-action='next']");
       backButton.disabled = index === 0;
-      nextButton.textContent = index === count - 1 ? "Finish" : "Next";
+      nextButton.disabled = Boolean(nextDisabled);
+      nextButton.textContent = nextLabel || (index === count - 1 ? "Finish" : "Next");
+
+      if (nextTitle) {
+        nextButton.title = nextTitle;
+      } else {
+        nextButton.removeAttribute("title");
+      }
+
       positionTourElements({ popover, highlightLayer, targets, step });
-      nextButton.focus({ preventScroll: true });
+
+      if (focusNext && !nextButton.disabled) {
+        nextButton.focus({ preventScroll: true });
+      }
     },
     reposition(targets, step) {
       positionTourElements({ popover, highlightLayer, targets, step });
