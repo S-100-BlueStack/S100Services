@@ -12,12 +12,6 @@ export const ONBOARDING_STEPS = Object.freeze({
         ".pm-main-map-product-search input",
         ".main-map-product-search input",
       ],
-      activeSurfaceSelectors: [
-        "[data-onboarding-target='product-search']",
-        "#main-map-product-search",
-        ".pm-main-map-product-search",
-        ".main-map-product-search",
-      ],
       placement: "adjacent-horizontal",
     },
     {
@@ -25,8 +19,7 @@ export const ONBOARDING_STEPS = Object.freeze({
       title: "Filter visible Products",
       description:
         "Filters narrow the map by Display scale, Status and Usage band. The active count is shown beside the control.",
-      selectors: [".filter-wrapper", "#filter-button"],
-      activeSurfaceSelectors: [".filter-wrapper"],
+      selectors: ["#filter-button", ".filter-wrapper"],
       placement: "left",
     },
     {
@@ -43,15 +36,8 @@ export const ONBOARDING_STEPS = Object.freeze({
       title: "Use Product actions",
       description:
         "The Product popup contains controls for copying, collecting and running operational actions such as Freeze, Send, Export and Rollback.",
-      selectors: [
-        ".popup-action-bar",
-        "[data-popup-action-id='copy-product-name']",
-        "[data-popup-action-id='copy-name']",
-        "[data-popup-action-id='add-to-product-collection']",
-        ".esri-popup__header-actions",
-      ],
+      selectors: [".popup-copy-btn", ".popup-product-collection-btn", ".popup-action-bar"],
       selectorMode: "all",
-      activeSurfaceSelectors: [".esri-popup"],
       placement: "left-center",
     },
     {
@@ -59,12 +45,7 @@ export const ONBOARDING_STEPS = Object.freeze({
       title: "Build a Product Collection",
       description:
         "Use the Product Collection action in the popup. Collected Products can then be opened together in Analyze or Review.",
-      selectors: [
-        "[data-popup-action-id='add-to-product-collection']",
-        "[data-popup-action-id='toggle-product-collection']",
-        ".pm-product-collection-tray",
-      ],
-      activeSurfaceSelectors: [".esri-popup", ".pm-product-collection-tray"],
+      selectors: [".popup-product-collection-btn", ".pm-product-collection-tray"],
       placement: "left-center",
     },
     {
@@ -72,8 +53,8 @@ export const ONBOARDING_STEPS = Object.freeze({
       title: "Open another workspace",
       description:
         "Dashboard shows operational activity. Analyze inspects Product data and reports. Review compares Product history side by side.",
-      selectors: ["#header .header-center"],
-      activeSurfaceSelectors: ["#header .header-center"],
+      selectors: ["[data-nav-dashboard-link]", "[data-nav-analyze-link]", "[data-nav-review-link]"],
+      selectorMode: "all",
       placement: "below",
     },
   ],

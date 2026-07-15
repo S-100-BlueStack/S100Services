@@ -2,7 +2,7 @@
 .pm-onboarding-stop {
   position: fixed;
   inset: 0;
-  z-index: 7000;
+  z-index: 12000;
   display: grid;
   place-items: center;
   padding: 16px;
@@ -12,6 +12,7 @@
 .pm-onboarding-welcome__dialog,
 .pm-onboarding-stop__dialog,
 .pm-onboarding-popover {
+  box-sizing: border-box;
   color: var(--pm-text);
   background: var(--pm-surface);
   border: 1px solid var(--pm-border);
@@ -104,37 +105,24 @@
   outline-offset: 2px;
 }
 
-.pm-onboarding-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 5998;
-  pointer-events: none;
-  background: rgb(0 0 0 / 10%);
-}
-
 .pm-onboarding-highlight-layer {
   position: fixed;
   inset: 0;
-  z-index: 6002;
+  z-index: 11000;
   pointer-events: none;
 }
 
 .pm-onboarding-highlight {
   position: fixed;
   pointer-events: none;
-  border: 3px solid var(--pm-focus-ring, #0079c1);
+  border: 2px solid var(--pm-focus-ring, #0079c1);
   border-radius: 2px;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pm-surface) 82%, transparent);
-}
-
-.pm-onboarding-active-surface {
-  position: relative !important;
-  z-index: 6001 !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pm-surface) 88%, transparent);
 }
 
 .pm-onboarding-popover {
   position: fixed;
-  z-index: 6003;
+  z-index: 11001;
   width: min(340px, calc(100vw - 24px));
   padding: 14px;
 }

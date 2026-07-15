@@ -376,4 +376,4 @@ Completion and dismissal are stored in versioned localStorage under `pm.onboardi
 
 ### Onboarding UX follow-up
 
-The phase 1 introduction now supports adjacent Product search positioning, active-surface elevation above the scrim, multiple target highlights, stable placement across the map/popup/collection steps and navbar-safe highlighting. Automatic progression from map selection through popup and Product Collection is still intentionally deferred.
+Introduction steps no longer dim the application. The welcome and stop-confirmation dialogs retain modal dimming, while route steps use lightweight fixed outlines that do not alter the target element's stacking context. Target resolution traverses open Calcite and ArcGIS shadow roots, allowing the popup Copy and Product Collection controls to be outlined alongside the custom action bar. Product search uses true side placement when horizontal room exists, steps 3-5 retain one stable left-side card position, and workspace links are outlined above the navbar. Automatic progression from map selection through popup and Product Collection is still intentionally deferred.

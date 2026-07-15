@@ -27,7 +27,7 @@ export function createWelcomeDialog({ onStart, onNotNow, onDismiss }) {
   const previousFocus = document.activeElement;
 
   dialog.addEventListener("click", (event) => {
-    const action = event.target.closest("[data-action]")?.dataset.action;
+    const action = getAction(event);
 
     if (action === "start") onStart();
     if (action === "later") onNotNow();
@@ -45,11 +45,9 @@ export function createWelcomeDialog({ onStart, onNotNow, onDismiss }) {
 }
 
 export function createTourPopover({ onBack, onNext, onRequestClose }) {
-  const scrim = document.createElement("div");
-  scrim.className = "pm-onboarding-scrim";
-
   const highlightLayer = document.createElement("div");
   highlightLayer.className = "pm-onboarding-highlight-layer";
+  highlightLayer.setAttribute("aria-hidden", "true");
 
   const popover = document.createElement("section");
   popover.className = "pm-onboarding-popover";
@@ -77,10 +75,10 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
     </div>
   `;
 
-  document.body.append(scrim, highlightLayer, popover);
+  document.body.append(highlightLayer, popover);
 
   popover.addEventListener("click", (event) => {
-    const action = event.target.closest("[data-action]")?.dataset.action;
+    const action = getAction(event);
     if (action === "back") onBack();
     if (action === "next") onNext();
     if (action === "close") onRequestClose();
@@ -88,6 +86,7 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
 
   return {
     render({ step, index, count, targets }) {
+      popover.dataset.stepId = step.id;
       popover.querySelector(".pm-onboarding-popover__meta").textContent =
         `Step ${index + 1} of ${count}`;
       popover.querySelector(".pm-onboarding-popover__title").textContent = step.title;
@@ -103,7 +102,6 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
       positionTourElements({ popover, highlightLayer, targets, step });
     },
     remove() {
-      scrim.remove();
       highlightLayer.remove();
       popover.remove();
     },
@@ -139,7 +137,7 @@ export function createStopIntroductionDialog({ onContinue, onStop }) {
   continueButton?.focus({ preventScroll: true });
 
   dialog.addEventListener("click", (event) => {
-    const action = event.target.closest("[data-action]")?.dataset.action;
+    const action = getAction(event);
     if (action === "continue") onContinue();
     if (action === "stop") onStop();
   });
@@ -165,6 +163,9 @@ function positionTourElements({ popover, highlightLayer, targets, step }) {
     popoverRect: popover.getBoundingClientRect(),
     targetRect: anchorRect,
     placement: step?.placement,
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight,
+    minimumTop: getApplicationContentTop(),
   });
 
   if (position.centered) {
@@ -190,28 +191,40 @@ function renderHighlights(layer, targetRects) {
 }
 
 function positionHighlight(highlight, targetRect) {
-  const padding = 5;
-  highlight.style.top = `${Math.max(4, targetRect.top - padding)}px`;
-  highlight.style.left = `${Math.max(4, targetRect.left - padding)}px`;
-  highlight.style.width = `${Math.max(0, targetRect.width + padding * 2)}px`;
-  highlight.style.height = `${Math.max(0, targetRect.height + padding * 2)}px`;
-}
-
-function calculatePopoverPosition({ popoverRect, targetRect, placement = "auto" }) {
-  const margin = 12;
+  const padding = 4;
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
+  const left = Math.max(2, targetRect.left - padding);
+  const top = Math.max(2, targetRect.top - padding);
+  const right = Math.min(viewportWidth - 2, targetRect.right + padding);
+  const bottom = Math.min(viewportHeight - 2, targetRect.bottom + padding);
 
+  highlight.style.top = `${top}px`;
+  highlight.style.left = `${left}px`;
+  highlight.style.width = `${Math.max(0, right - left)}px`;
+  highlight.style.height = `${Math.max(0, bottom - top)}px`;
+}
+
+export function calculatePopoverPosition({
+  popoverRect,
+  targetRect,
+  placement = "auto",
+  viewportWidth,
+  viewportHeight,
+  margin = 12,
+  minimumTop = margin,
+}) {
   if (placement === "center" || !targetRect) {
     return { centered: true };
   }
 
   if (placement === "left-center") {
     return clampPosition({
-      top: (viewportHeight - popoverRect.height) / 2,
+      top: minimumTop + (viewportHeight - minimumTop - popoverRect.height) / 2,
       left: margin,
       popoverRect,
       margin,
+      minimumTop,
       viewportWidth,
       viewportHeight,
     });
@@ -219,37 +232,24 @@ function calculatePopoverPosition({ popoverRect, targetRect, placement = "auto" 
 
   if (placement === "right-center") {
     return clampPosition({
-      top: (viewportHeight - popoverRect.height) / 2,
+      top: minimumTop + (viewportHeight - minimumTop - popoverRect.height) / 2,
       left: viewportWidth - popoverRect.width - margin,
       popoverRect,
       margin,
+      minimumTop,
       viewportWidth,
       viewportHeight,
     });
   }
 
   if (placement === "adjacent-horizontal") {
-    const candidates = [
-      {
-        top: targetRect.top + (targetRect.height - popoverRect.height) / 2,
-        left: targetRect.right + margin,
-      },
-      {
-        top: targetRect.top + (targetRect.height - popoverRect.height) / 2,
-        left: targetRect.left - popoverRect.width - margin,
-      },
-      {
-        top: targetRect.bottom + margin,
-        left: targetRect.left + (targetRect.width - popoverRect.width) / 2,
-      },
-    ];
-
-    return pickAndClampPosition({
-      candidates,
+    return calculateAdjacentHorizontalPosition({
       popoverRect,
-      margin,
+      targetRect,
       viewportWidth,
       viewportHeight,
+      margin,
+      minimumTop,
     });
   }
 
@@ -258,6 +258,61 @@ function calculatePopoverPosition({ popoverRect, targetRect, placement = "auto" 
     candidates,
     popoverRect,
     margin,
+    minimumTop,
+    viewportWidth,
+    viewportHeight,
+  });
+}
+
+function calculateAdjacentHorizontalPosition({
+  popoverRect,
+  targetRect,
+  viewportWidth,
+  viewportHeight,
+  margin,
+  minimumTop,
+}) {
+  const alignedTop = Math.max(minimumTop, targetRect.top);
+  const candidates = [
+    {
+      top: alignedTop,
+      left: targetRect.right + margin,
+    },
+    {
+      top: alignedTop,
+      left: targetRect.left - popoverRect.width - margin,
+    },
+  ];
+
+  // Side placement should not be rejected merely because a tall card would
+  // extend above the map content. The vertical coordinate is clamped after the
+  // side with sufficient horizontal room has been selected.
+  const horizontalCandidate = candidates.find((candidate) => {
+    return candidate.left >= margin && candidate.left + popoverRect.width <= viewportWidth - margin;
+  });
+
+  if (horizontalCandidate) {
+    return clampPosition({
+      ...horizontalCandidate,
+      popoverRect,
+      margin,
+      minimumTop,
+      viewportWidth,
+      viewportHeight,
+    });
+  }
+
+  const spaceOnRight = viewportWidth - targetRect.right;
+  const spaceOnLeft = targetRect.left;
+  const fallbackLeft =
+    spaceOnRight >= spaceOnLeft ? viewportWidth - popoverRect.width - margin : margin;
+
+  return clampPosition({
+    top: targetRect.bottom + margin,
+    left: fallbackLeft,
+    popoverRect,
+    margin,
+    minimumTop,
     viewportWidth,
     viewportHeight,
   });
@@ -299,10 +354,17 @@ function createPlacementCandidates({ targetRect, popoverRect, margin, placement 
   return placements[placement] ?? placements.auto;
 }
 
-function pickAndClampPosition({ candidates, popoverRect, margin, viewportWidth, viewportHeight }) {
+function pickAndClampPosition({
+  candidates,
+  popoverRect,
+  margin,
+  minimumTop,
+  viewportWidth,
+  viewportHeight,
+}) {
   const fittingCandidate = candidates.find((candidate) => {
     return (
-      candidate.top >= margin &&
+      candidate.top >= minimumTop &&
       candidate.left >= margin &&
       candidate.top + popoverRect.height <= viewportHeight - margin &&
       candidate.left + popoverRect.width <= viewportWidth - margin
@@ -313,17 +375,26 @@ function pickAndClampPosition({ candidates, popoverRect, margin, viewportWidth, 
     ...(fittingCandidate ?? candidates[0]),
     popoverRect,
     margin,
+    minimumTop,
     viewportWidth,
     viewportHeight,
   });
 }
 
-function clampPosition({ top, left, popoverRect, margin, viewportWidth, viewportHeight }) {
+function clampPosition({
+  top,
+  left,
+  popoverRect,
+  margin,
+  minimumTop,
+  viewportWidth,
+  viewportHeight,
+}) {
   return {
     centered: false,
     top: Math.min(
-      Math.max(margin, top),
-      Math.max(margin, viewportHeight - popoverRect.height - margin)
+      Math.max(minimumTop, top),
+      Math.max(minimumTop, viewportHeight - popoverRect.height - margin)
     ),
     left: Math.min(
       Math.max(margin, left),
@@ -339,8 +410,21 @@ function getVisibleTargetRects(targets = []) {
 function getVisibleTargetRect(target) {
   if (!(target instanceof HTMLElement) || target.hidden) return null;
   const rect = target.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) return null;
-  return rect;
+  const left = Math.max(0, rect.left);
+  const top = Math.max(0, rect.top);
+  const right = Math.min(window.innerWidth, rect.right);
+  const bottom = Math.min(window.innerHeight, rect.bottom);
+
+  if (right <= left || bottom <= top) return null;
+
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: right - left,
+    height: bottom - top,
+  };
 }
 
 function getCombinedRect(rects) {
@@ -359,4 +443,14 @@ function getCombinedRect(rects) {
     width: right - left,
     height: bottom - top,
   };
+}
+
+function getApplicationContentTop() {
+  const headerBottom = document.getElementById("header")?.getBoundingClientRect().bottom ?? 0;
+  return Math.max(12, headerBottom + 10);
+}
+
+function getAction(event) {
+  const target = event.target;
+  return target instanceof Element ? target.closest("[data-action]")?.dataset.action : null;
 }

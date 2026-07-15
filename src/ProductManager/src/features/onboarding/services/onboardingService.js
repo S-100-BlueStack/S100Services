@@ -6,8 +6,6 @@ import {
   createWelcomeDialog,
 } from "../ui/onboardingUi.js";
 
-const ACTIVE_SURFACE_CLASS = "pm-onboarding-active-surface";
-
 let activeService = null;
 
 export function initOnboarding({ routeName }) {
@@ -29,7 +27,8 @@ function createOnboardingService({ routeName }) {
   let currentStepIndex = 0;
   let currentTargets = [];
   let currentStep = null;
-  let activeSurfaces = [];
+  let targetRefreshFrame = null;
+  let targetRefreshAttempts = 0;
   let previousFocus = null;
   let state = readOnboardingState();
 
@@ -55,7 +54,7 @@ function createOnboardingService({ routeName }) {
   };
 
   const handleViewportChange = () => {
-    tour?.reposition(currentTargets, currentStep);
+    scheduleTargetRefresh(1);
   };
 
   document.addEventListener("keydown", handleKeydown, true);
@@ -121,7 +120,6 @@ function createOnboardingService({ routeName }) {
     currentStepIndex = Math.min(Math.max(index, 0), steps.length - 1);
     currentStep = steps[currentStepIndex];
     currentTargets = resolveTargets(currentStep);
-    updateActiveSurfaces(currentStep.activeSurfaceSelectors);
 
     currentTargets[0]?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     tour?.render({
@@ -130,22 +128,47 @@ function createOnboardingService({ routeName }) {
       count: steps.length,
       targets: currentTargets,
     });
+
+    // ArcGIS and Calcite can attach popup controls through nested shadow roots
+    // over several frames. Re-resolving briefly keeps the outline aligned without
+    // changing the popup's own stacking context or layout.
+    scheduleTargetRefresh(6);
   }
 
-  function updateActiveSurfaces(selectors = []) {
-    clearActiveSurfaces();
-    activeSurfaces = resolveAllVisibleElements(selectors);
+  function scheduleTargetRefresh(attempts = 1) {
+    targetRefreshAttempts = Math.max(targetRefreshAttempts, attempts);
 
-    for (const element of activeSurfaces) {
-      element.classList.add(ACTIVE_SURFACE_CLASS);
+    if (targetRefreshFrame !== null) {
+      return;
+    }
+
+    targetRefreshFrame = window.requestAnimationFrame(runTargetRefresh);
+  }
+
+  function runTargetRefresh() {
+    targetRefreshFrame = null;
+
+    if (!tour || !currentStep) {
+      targetRefreshAttempts = 0;
+      return;
+    }
+
+    currentTargets = resolveTargets(currentStep);
+    tour.reposition(currentTargets, currentStep);
+    targetRefreshAttempts -= 1;
+
+    if (targetRefreshAttempts > 0) {
+      targetRefreshFrame = window.requestAnimationFrame(runTargetRefresh);
     }
   }
 
-  function clearActiveSurfaces() {
-    for (const element of activeSurfaces) {
-      element.classList.remove(ACTIVE_SURFACE_CLASS);
+  function cancelTargetRefresh() {
+    targetRefreshAttempts = 0;
+
+    if (targetRefreshFrame !== null) {
+      window.cancelAnimationFrame(targetRefreshFrame);
+      targetRefreshFrame = null;
     }
-    activeSurfaces = [];
   }
 
   function requestStopIntroduction() {
@@ -182,7 +205,7 @@ function createOnboardingService({ routeName }) {
     welcomeDialog = null;
     tour?.remove();
     tour = null;
-    clearActiveSurfaces();
+    cancelTargetRefresh();
     currentTargets = [];
     currentStep = null;
 
@@ -213,9 +236,13 @@ function resolveTargets(step) {
 }
 
 function resolveFirstVisibleElement(selectors = []) {
+  const roots = collectQueryRoots();
+
   for (const selector of selectors) {
-    const target = document.querySelector(selector);
-    if (isVisibleElement(target)) return target;
+    for (const root of roots) {
+      const target = [...root.querySelectorAll(selector)].find(isVisibleElement);
+      if (target) return target;
+    }
   }
   return null;
 }
@@ -223,18 +250,55 @@ function resolveFirstVisibleElement(selectors = []) {
 function resolveAllVisibleElements(selectors = []) {
   const elements = [];
   const seen = new Set();
+  const roots = collectQueryRoots();
 
   for (const selector of selectors) {
-    for (const element of document.querySelectorAll(selector)) {
-      if (!isVisibleElement(element) || seen.has(element)) continue;
-      seen.add(element);
-      elements.push(element);
+    for (const root of roots) {
+      for (const element of root.querySelectorAll(selector)) {
+        if (!isVisibleElement(element) || seen.has(element)) continue;
+        seen.add(element);
+        elements.push(element);
+      }
     }
   }
 
   return elements;
 }
 
+function collectQueryRoots() {
+  const roots = [];
+  const pendingRoots = [document];
+  const visitedRoots = new Set();
+
+  while (pendingRoots.length > 0) {
+    const root = pendingRoots.shift();
+
+    if (!root || visitedRoots.has(root) || typeof root.querySelectorAll !== "function") {
+      continue;
+    }
+
+    visitedRoots.add(root);
+    roots.push(root);
+
+    for (const element of root.querySelectorAll("*")) {
+      if (element.shadowRoot && !visitedRoots.has(element.shadowRoot)) {
+        pendingRoots.push(element.shadowRoot);
+      }
+    }
+  }
+
+  return roots;
+}
+
 function isVisibleElement(element) {
-  return element instanceof HTMLElement && !element.hidden && element.getClientRects().length > 0;
+  if (
+    !(element instanceof HTMLElement) ||
+    element.hidden ||
+    element.getClientRects().length === 0
+  ) {
+    return false;
+  }
+
+  const style = window.getComputedStyle(element);
+  return style.visibility !== "hidden" && style.display !== "none";
 }
