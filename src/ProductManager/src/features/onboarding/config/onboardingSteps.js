@@ -95,6 +95,34 @@ export const ONBOARDING_STEPS = Object.freeze({
       selectorMode: "all",
       placement: "below",
     },
+    {
+      id: "main-theme",
+      title: "Choose your theme",
+      description: "Switch between light and dark mode. Your choice can be saved in this browser.",
+      selectors: ["#theme-toggle"],
+      placement: "below",
+    },
+    {
+      id: "main-preferences",
+      title: "Manage your preferences",
+      description:
+        "Open Preferences to choose which map and display settings are saved in this browser.",
+      selectors: ["#preferences-button"],
+      placement: "below",
+      behavior: {
+        type: "wait-for-target-count",
+        selectors: ["#preferences-panel:not([hidden])"],
+        minimumCount: 1,
+        autoAdvance: false,
+        waitingNextLabel: "Open Preferences",
+        waitingNextTitle: "Open Preferences to continue.",
+        readyNextLabel: "Finish",
+        readyDescription:
+          "Choose which map and display settings are saved in this browser. You can also restart the introduction here at any time.",
+        readySelectors: ["#preferences-panel"],
+        readyPlacement: "left",
+      },
+    },
   ],
   dashboard: [
     {

@@ -37,12 +37,12 @@ export function createOnboardingStepPresentation(
     case INTERACTION_TYPE.WAIT_FOR_COLLECTION:
       if (collectionVisible) {
         return {
-          ...createDefaultPresentation({
-            ...step,
-            description: behavior.readyDescription || step.description,
-            selectors: behavior.readySelectors || step.selectors,
-            selectorMode: behavior.readySelectorMode,
-          }),
+          ...createDefaultPresentation(
+            createReadyStep(step, behavior, {
+              defaultDescription: step.description,
+              defaultSelectors: step.selectors,
+            })
+          ),
           nextLabel: behavior.readyNextLabel || "Next",
         };
       }
@@ -57,9 +57,15 @@ export function createOnboardingStepPresentation(
 
     case INTERACTION_TYPE.WAIT_FOR_TARGET_COUNT: {
       const requirementMet = isTargetCountRequirementMet(step, targetCount);
+      const presentationStep = requirementMet
+        ? createReadyStep(step, behavior, {
+            defaultDescription: step.description,
+            defaultSelectors: step.selectors,
+          })
+        : step;
 
       return {
-        ...createDefaultPresentation(step),
+        ...createDefaultPresentation(presentationStep),
         nextDisabled: !requirementMet,
         nextLabel: requirementMet
           ? behavior.readyNextLabel || "Continue"
@@ -101,6 +107,16 @@ export function isTargetCountRequiredOnboardingStep(step) {
 export function isTargetCountRequirementMet(step, targetCount) {
   const minimumCount = Math.max(1, Number(step?.behavior?.minimumCount) || 1);
   return Number(targetCount) >= minimumCount;
+}
+
+function createReadyStep(step, behavior, { defaultDescription, defaultSelectors }) {
+  return {
+    ...step,
+    description: behavior.readyDescription || defaultDescription,
+    selectors: behavior.readySelectors || defaultSelectors,
+    selectorMode: behavior.readySelectorMode ?? step.selectorMode,
+    placement: behavior.readyPlacement || step.placement,
+  };
 }
 
 function createDefaultPresentation(step) {

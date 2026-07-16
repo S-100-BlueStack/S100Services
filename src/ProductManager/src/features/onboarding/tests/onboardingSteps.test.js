@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+
 import {
   ONBOARDING_STEPS,
   getOnboardingSteps,
@@ -8,7 +9,7 @@ import {
 import { calculatePopoverPosition } from "../ui/onboardingUi.js";
 
 test("defines a compact flow for every Product Manager route", () => {
-  assert.equal(getOnboardingSteps("main").length, 6);
+  assert.equal(getOnboardingSteps("main").length, 8);
   assert.equal(getOnboardingSteps("dashboard").length, 5);
   assert.equal(getOnboardingSteps("analyze").length, 4);
   assert.equal(getOnboardingSteps("review").length, 4);
@@ -39,20 +40,25 @@ test("uses unique step identifiers and complete user-facing copy", () => {
   }
 });
 
-test("connects map selection, popup actions and Product Collection", () => {
-  const [searchStep, filterStep, mapStep, popupStep, collectionStep, workspaceStep] =
-    getOnboardingSteps("main");
+test("connects map selection, popup actions, Product Collection and browser preferences", () => {
+  const [
+    searchStep,
+    filterStep,
+    mapStep,
+    popupStep,
+    collectionStep,
+    workspaceStep,
+    themeStep,
+    preferencesStep,
+  ] = getOnboardingSteps("main");
 
   assert.match(searchStep.selectors[0], /input/);
   assert.equal(searchStep.placement, "adjacent-horizontal");
-
   assert.equal(filterStep.selectors[0], "#filter-button");
-
   assert.equal(mapStep.highlight, false);
   assert.equal(mapStep.placement, "left-center");
   assert.equal(mapStep.behavior.type, "wait-for-popup");
   assert.equal(mapStep.behavior.waitingNextLabel, "Open a Product");
-
   assert.equal(popupStep.placement, "left-center");
   assert.equal(popupStep.selectorMode, "all");
   assert.equal(popupStep.behavior.type, "require-popup");
@@ -60,19 +66,24 @@ test("connects map selection, popup actions and Product Collection", () => {
   assert.ok(popupStep.selectors.includes(".popup-copy-btn"));
   assert.ok(popupStep.selectors.includes(".popup-product-collection-btn"));
   assert.ok(popupStep.selectors.includes(".popup-action-bar"));
-
   assert.equal(collectionStep.placement, "left-center");
   assert.equal(collectionStep.selectors[0], ".popup-product-collection-btn");
   assert.equal(collectionStep.behavior.type, "wait-for-collection");
   assert.deepEqual(collectionStep.behavior.readySelectors, [".pm-product-collection-tray"]);
   assert.equal(collectionStep.selectors.includes("[data-nav-analyze-link]"), false);
-
   assert.equal(workspaceStep.selectorMode, "all");
   assert.deepEqual(workspaceStep.selectors, [
     "[data-nav-dashboard-link]",
     "[data-nav-analyze-link]",
     "[data-nav-review-link]",
   ]);
+  assert.deepEqual(themeStep.selectors, ["#theme-toggle"]);
+  assert.deepEqual(preferencesStep.selectors, ["#preferences-button"]);
+  assert.equal(preferencesStep.behavior.type, "wait-for-target-count");
+  assert.deepEqual(preferencesStep.behavior.selectors, ["#preferences-panel:not([hidden])"]);
+  assert.deepEqual(preferencesStep.behavior.readySelectors, ["#preferences-panel"]);
+  assert.equal(preferencesStep.behavior.autoAdvance, false);
+  assert.equal(preferencesStep.behavior.readyNextLabel, "Finish");
 });
 
 test("covers the primary Dashboard workflow without route navigation", () => {

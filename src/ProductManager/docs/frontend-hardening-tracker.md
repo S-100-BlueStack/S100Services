@@ -129,9 +129,9 @@ Status: Done
 - Keep Steps 3, 4 and 5 at one stable left-side position.
 - Preserve replay from Preferences, versioned localStorage, light/dark support and static RDP/VDI-safe states.
 
-### FI-008 route-specific onboarding expansion (baseline 7e2632ee)
+### FI-008 route-specific onboarding expansion (verified at 58e721ee)
 
-Status: Ready for manual verification
+Status: Done
 
 - Auto-offer the first-time introduction independently on Main map, Dashboard, Analyze and Review.
 - Store dismissal and completion in separate versioned localStorage keys per route while preserving the completed legacy Main map state.
@@ -143,3 +143,14 @@ Status: Ready for manual verification
 - Require two loaded Review Products before advancing to side-by-side comparison.
 - Highlight the first two Review Product columns instead of the entire Review workspace.
 - Return to the Product picker if required Analyze or Review Products are removed during the introduction.
+
+### FI-008 main-map onboarding completion (baseline 58e721ee)
+
+Status: Ready for manual verification
+
+- Add a Theme step after workspace navigation and keep the theme toggle usable during the introduction.
+- End the main-map flow with an interactive Preferences step.
+- Require the user to open Preferences before `Finish` becomes available.
+- Move the highlight and guidance from the Preferences button to the open panel.
+- Explain that map and display preferences can be saved in the browser and that the current route introduction can be restarted from the panel.
+- Keep Dashboard, Analyze and Review onboarding unchanged.
