@@ -5,9 +5,9 @@ import { calculatePopoverPosition } from "../ui/onboardingUi.js";
 
 test("defines a compact flow for every Product Manager route", () => {
   assert.equal(getOnboardingSteps("main").length, 6);
-  assert.equal(getOnboardingSteps("dashboard").length, 1);
-  assert.equal(getOnboardingSteps("analyze").length, 1);
-  assert.equal(getOnboardingSteps("review").length, 1);
+  assert.equal(getOnboardingSteps("dashboard").length, 5);
+  assert.equal(getOnboardingSteps("analyze").length, 4);
+  assert.equal(getOnboardingSteps("review").length, 4);
   assert.deepEqual(getOnboardingSteps("unknown"), []);
 });
 
@@ -61,6 +61,62 @@ test("connects map selection, popup actions and Product Collection", () => {
     "[data-nav-analyze-link]",
     "[data-nav-review-link]",
   ]);
+});
+
+test("covers the primary Dashboard workflow without route navigation", () => {
+  const steps = getOnboardingSteps("dashboard");
+
+  assert.deepEqual(
+    steps.map((step) => step.id),
+    [
+      "dashboard-range",
+      "dashboard-summary",
+      "dashboard-filters",
+      "dashboard-activity-links",
+      "dashboard-breakdowns",
+    ]
+  );
+  assert.equal(steps[0].selectors[0], ".pm-dashboard-range-builder");
+  assert.equal(steps[2].selectors[0], ".pm-dashboard-filters");
+  assert.equal(steps[3].selectors[0], ".pm-dashboard-activity-links");
+  assert.equal(steps[4].selectors[0], ".pm-dashboard-grid__aside");
+  assert.ok(steps.every((step) => !step.behavior));
+});
+
+test("covers Product management and report inspection in Analyze", () => {
+  const steps = getOnboardingSteps("analyze");
+
+  assert.deepEqual(
+    steps.map((step) => step.id),
+    [
+      "analyze-product-picker",
+      "analyze-product-list",
+      "analyze-product-cards",
+      "analyze-reports-history",
+    ]
+  );
+  assert.equal(steps[0].selectors[0], ".analyze-dataset-form");
+  assert.equal(steps[1].selectors[0], ".analyze-dataset-list");
+  assert.equal(steps[2].selectors[0], ".analyze-products__actions");
+  assert.equal(steps[3].selectors[0], ".analyze-product-card__content");
+});
+
+test("covers Product configuration and comparison in Review", () => {
+  const steps = getOnboardingSteps("review");
+
+  assert.deepEqual(
+    steps.map((step) => step.id),
+    [
+      "review-product-picker",
+      "review-product-list",
+      "review-comparison-board",
+      "review-product-content",
+    ]
+  );
+  assert.equal(steps[0].selectors[0], ".pm-review-product-form");
+  assert.equal(steps[1].selectors[0], ".pm-review-product-list");
+  assert.equal(steps[2].selectors[0], ".pm-review-board__columns");
+  assert.equal(steps[3].selectors[0], ".pm-review-content-card");
 });
 
 test("keeps an adjacent Product search card on the right when horizontal space exists", () => {

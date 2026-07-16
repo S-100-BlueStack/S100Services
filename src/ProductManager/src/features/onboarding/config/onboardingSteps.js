@@ -79,33 +79,112 @@ export const ONBOARDING_STEPS = Object.freeze({
   ],
   dashboard: [
     {
-      id: "dashboard-overview",
-      title: "Dashboard overview",
+      id: "dashboard-range",
+      title: "Set the activity range",
       description:
-        "Choose a time range, filter the activity list, use summary rows as filters and open Product History from an activity.",
-      selectors: ["#product-dashboard-page", ".pm-dashboard-page"],
-      placement: "center",
-      highlight: false,
+        "Use a quick range or choose From and To values, then select Apply. Refresh reloads the current range without changing it.",
+      selectors: [".pm-dashboard-range-builder", ".pm-dashboard-header__actions"],
+      placement: "left",
+    },
+    {
+      id: "dashboard-summary",
+      title: "Read the operational summary",
+      description:
+        "The summary cards show activity volume, affected Products, important changes, available reports and failed operations for the active range.",
+      selectors: [".pm-dashboard-summary"],
+      placement: "below",
+    },
+    {
+      id: "dashboard-filters",
+      title: "Filter the activity list",
+      description:
+        "Search activity or filter by type, status, importance, reports and Product. The list count shows matching rows against the full result.",
+      selectors: [".pm-dashboard-filters"],
+      placement: "below",
+    },
+    {
+      id: "dashboard-activity-links",
+      title: "Open Product workflows",
+      description:
+        "Each activity can open Review, Analyze, Product History and available reports. Disabled links mean that content is not available for the activity.",
+      selectors: [".pm-dashboard-activity-links", ".pm-dashboard-activity"],
+      placement: "left",
+    },
+    {
+      id: "dashboard-breakdowns",
+      title: "Use summary panels as filters",
+      description:
+        "Select a Status or Operation summary row to filter the activity list. Opening History replaces these panels until the History panel is closed.",
+      selectors: [".pm-dashboard-grid__aside"],
+      placement: "left",
     },
   ],
   analyze: [
     {
-      id: "analyze-overview",
-      title: "Analyze Products",
+      id: "analyze-product-picker",
+      title: "Add Products",
       description:
-        "Add Products with the catalog picker, enable or disable them in the Product list and inspect metadata, reports and history.",
-      selectors: ["#analyze-sidebar-panel", ".analyze-sidebar__content"],
+        "Use the Product catalog picker to add one or more Products to the Analyze workspace.",
+      selectors: [".analyze-dataset-form", ".analyze-dataset-manager"],
+      placement: "right-center",
+    },
+    {
+      id: "analyze-product-list",
+      title: "Manage the Product list",
+      description:
+        "Enable or disable Products without removing them, or remove Products that are no longer needed in the workspace.",
+      selectors: [".analyze-dataset-list"],
+      placement: "right-center",
+    },
+    {
+      id: "analyze-product-cards",
+      title: "Control Product cards",
+      description:
+        "Open or collapse all Product cards, then expand individual Products to focus on the content you need.",
+      selectors: [".analyze-products__actions", ".analyze-products__list"],
+      placement: "right-center",
+    },
+    {
+      id: "analyze-reports-history",
+      title: "Inspect reports and History",
+      description:
+        "Each Product card contains metadata, IC-ENC XML, internal validation reports and Product History when the backend provides them.",
+      selectors: [".analyze-product-card__content", ".analyze-sidebar__content"],
       placement: "right-center",
     },
   ],
   review: [
     {
-      id: "review-overview",
-      title: "Review Products",
+      id: "review-product-picker",
+      title: "Add Products",
       description:
-        "Add Products in the sidebar, choose the content to include and compare Product history in parallel columns.",
-      selectors: [".pm-review-sidebar", "#product-review-page", ".pm-review-page"],
+        "Use the Product catalog picker to add Products directly to the Review workspace.",
+      selectors: [".pm-review-product-form", ".pm-review-sidebar"],
       placement: "right-center",
+    },
+    {
+      id: "review-product-list",
+      title: "Configure the comparison",
+      description:
+        "Enable or disable Products and choose which content types each Product should include in the comparison.",
+      selectors: [".pm-review-product-list"],
+      placement: "right-center",
+    },
+    {
+      id: "review-comparison-board",
+      title: "Compare Products side by side",
+      description:
+        "Enabled Products are shown as parallel columns. Scroll horizontally when the comparison contains more columns than the viewport.",
+      selectors: [".pm-review-board__columns", ".pm-review-board"],
+      placement: "left-center",
+    },
+    {
+      id: "review-product-content",
+      title: "Inspect Product content",
+      description:
+        "Each column keeps content in a fixed order so History, IC-ENC reports and internal validation can be compared consistently.",
+      selectors: [".pm-review-content-card", ".pm-review-column__content", ".pm-review-board"],
+      placement: "left-center",
     },
   ],
 });
