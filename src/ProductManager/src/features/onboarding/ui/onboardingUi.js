@@ -1,4 +1,10 @@
-export function createWelcomeDialog({ onStart, onNotNow, onDismiss }) {
+export function createWelcomeDialog({
+  title = "Welcome to Product Manager",
+  description = "Take a short tour of the main controls and Product workflows.",
+  onStart,
+  onNotNow,
+  onDismiss,
+}) {
   const overlay = document.createElement("div");
   overlay.className = "pm-onboarding-welcome";
   overlay.setAttribute("role", "presentation");
@@ -11,14 +17,17 @@ export function createWelcomeDialog({ onStart, onNotNow, onDismiss }) {
 
   dialog.innerHTML = `
     <div class="pm-onboarding-welcome__eyebrow">Introduction</div>
-    <h2 id="pm-onboarding-welcome-title">Welcome to Product Manager</h2>
-    <p>Take a short tour of the main controls and Product workflows.</p>
+    <h2 id="pm-onboarding-welcome-title"></h2>
+    <p class="pm-onboarding-welcome__description"></p>
     <div class="pm-onboarding-welcome__actions">
       <button type="button" class="pm-onboarding-button pm-onboarding-button--secondary" data-action="dismiss">Do not show again</button>
       <button type="button" class="pm-onboarding-button pm-onboarding-button--secondary" data-action="later">Not now</button>
       <button type="button" class="pm-onboarding-button pm-onboarding-button--primary" data-action="start">Start introduction</button>
     </div>
   `;
+
+  dialog.querySelector("#pm-onboarding-welcome-title").textContent = title;
+  dialog.querySelector(".pm-onboarding-welcome__description").textContent = description;
 
   overlay.appendChild(dialog);
   document.body.appendChild(overlay);
@@ -274,7 +283,24 @@ export function calculatePopoverPosition({
     });
   }
 
-  const candidates = createPlacementCandidates({ targetRect, popoverRect, margin, placement });
+  if (placement === "target-top-right") {
+    return clampPosition({
+      top: targetRect.top + margin,
+      left: targetRect.right - popoverRect.width - margin,
+      popoverRect,
+      margin,
+      minimumTop,
+      viewportWidth,
+      viewportHeight,
+    });
+  }
+
+  const candidates = createPlacementCandidates({
+    targetRect,
+    popoverRect,
+    margin,
+    placement,
+  });
   return pickAndClampPosition({
     candidates,
     popoverRect,
@@ -368,7 +394,10 @@ function createPlacementCandidates({ targetRect, popoverRect, margin, placement 
         top: targetRect.top + (targetRect.height - popoverRect.height) / 2,
         left: targetRect.left - popoverRect.width - margin,
       },
-      { top: targetRect.top - popoverRect.height - margin, left: targetRect.left },
+      {
+        top: targetRect.top - popoverRect.height - margin,
+        left: targetRect.left,
+      },
     ],
   };
 

@@ -1,4 +1,23 @@
-export const ONBOARDING_FLOW_VERSION = 1;
+export const ONBOARDING_FLOW_VERSION = 2;
+
+export const ONBOARDING_WELCOME_CONTENT = Object.freeze({
+  main: {
+    title: "Welcome to Product Manager",
+    description: "Take a short tour of the main controls and Product workflows.",
+  },
+  dashboard: {
+    title: "Welcome to Dashboard",
+    description: "Take a short tour of activity ranges, filters and Product workflows.",
+  },
+  analyze: {
+    title: "Welcome to Analyze",
+    description: "Take a short tour of adding Products and reviewing their data and reports.",
+  },
+  review: {
+    title: "Welcome to Product Review",
+    description: "Take a short tour of adding Products and comparing them side by side.",
+  },
+});
 
 export const ONBOARDING_STEPS = Object.freeze({
   main: [
@@ -122,73 +141,123 @@ export const ONBOARDING_STEPS = Object.freeze({
   analyze: [
     {
       id: "analyze-product-picker",
-      title: "Add Products",
-      description:
-        "Use the Product catalog picker to add one or more Products to the Analyze workspace.",
+      title: "Add a Product",
+      description: "Search the Product catalog and add a Product to begin the analysis.",
       selectors: [".analyze-dataset-form", ".analyze-dataset-manager"],
-      placement: "right-center",
+      placement: "adjacent-horizontal",
+      behavior: {
+        type: "wait-for-target-count",
+        selectors: [".analyze-product-card"],
+        minimumCount: 1,
+        autoAdvance: true,
+        waitingNextLabel: "Add a Product",
+        waitingNextTitle: "Add a Product to continue.",
+        readyNextLabel: "Continue",
+      },
     },
     {
       id: "analyze-product-list",
       title: "Manage the Product list",
       description:
-        "Enable or disable Products without removing them, or remove Products that are no longer needed in the workspace.",
+        "Enable or disable Products without removing them, or remove Products that are no longer needed.",
       selectors: [".analyze-dataset-list"],
-      placement: "right-center",
+      placement: "adjacent-horizontal",
     },
     {
       id: "analyze-product-cards",
       title: "Control Product cards",
       description:
-        "Open or collapse all Product cards, then expand individual Products to focus on the content you need.",
+        "Use Open all and Collapse all, or open individual Product cards to focus on the information you need.",
       selectors: [".analyze-products__actions", ".analyze-products__list"],
-      placement: "right-center",
+      selectorMode: "all",
+      placement: "adjacent-horizontal",
+      behavior: {
+        type: "require-target-count",
+        selectors: [".analyze-product-card"],
+        minimumCount: 1,
+        fallbackStepId: "analyze-product-picker",
+      },
     },
     {
       id: "analyze-reports-history",
-      title: "Inspect reports and History",
+      title: "Inspect Product information",
       description:
-        "Each Product card contains metadata, IC-ENC XML, internal validation reports and Product History when the backend provides them.",
-      selectors: [".analyze-product-card__content", ".analyze-sidebar__content"],
-      placement: "right-center",
+        "Open a Product card to review edition, update, status, reports and Product History. Unavailable sections are shown clearly.",
+      selectors: [".analyze-product-card__content", ".analyze-product-card"],
+      placement: "adjacent-horizontal",
+      behavior: {
+        type: "require-target-count",
+        selectors: [".analyze-product-card"],
+        minimumCount: 1,
+        fallbackStepId: "analyze-product-picker",
+      },
     },
   ],
   review: [
     {
       id: "review-product-picker",
-      title: "Add Products",
+      title: "Add two Products",
       description:
-        "Use the Product catalog picker to add Products directly to the Review workspace.",
+        "Add at least two Products so you can compare them side by side in Product Review.",
       selectors: [".pm-review-product-form", ".pm-review-sidebar"],
-      placement: "right-center",
+      placement: "adjacent-horizontal",
+      behavior: {
+        type: "wait-for-target-count",
+        selectors: [".pm-review-column"],
+        minimumCount: 2,
+        autoAdvance: true,
+        waitingNextLabel: "Add two Products",
+        waitingNextTitle: "Add at least two Products to continue.",
+        readyNextLabel: "Continue",
+      },
     },
     {
       id: "review-product-list",
       title: "Configure the comparison",
       description:
-        "Enable or disable Products and choose which content types each Product should include in the comparison.",
+        "Enable or disable Products and choose which content types each Product should include.",
       selectors: [".pm-review-product-list"],
-      placement: "right-center",
+      placement: "adjacent-horizontal",
     },
     {
       id: "review-comparison-board",
       title: "Compare Products side by side",
       description:
-        "Enabled Products are shown as parallel columns. Scroll horizontally when the comparison contains more columns than the viewport.",
-      selectors: [".pm-review-board__columns", ".pm-review-board"],
-      placement: "left-center",
+        "The highlighted Product columns make it easier to compare the same information across Products.",
+      selectors: [".pm-review-column"],
+      selectorMode: "all",
+      maximumTargets: 2,
+      placement: "target-top-right",
+      behavior: {
+        type: "require-target-count",
+        selectors: [".pm-review-column"],
+        minimumCount: 2,
+        fallbackStepId: "review-product-picker",
+      },
     },
     {
       id: "review-product-content",
       title: "Inspect Product content",
       description:
-        "Each column keeps content in a fixed order so History, IC-ENC reports and internal validation can be compared consistently.",
-      selectors: [".pm-review-content-card", ".pm-review-column__content", ".pm-review-board"],
-      placement: "left-center",
+        "Each Product column keeps History and available reports in the same order for easier comparison.",
+      selectors: [".pm-review-column__content", ".pm-review-column"],
+      selectorMode: "all",
+      maximumTargets: 2,
+      placement: "target-top-right",
+      behavior: {
+        type: "require-target-count",
+        selectors: [".pm-review-column"],
+        minimumCount: 2,
+        fallbackStepId: "review-product-picker",
+      },
     },
   ],
 });
 
 export function getOnboardingSteps(routeName) {
   return ONBOARDING_STEPS[routeName] ?? [];
+}
+
+export function getOnboardingWelcomeContent(routeName) {
+  return ONBOARDING_WELCOME_CONTENT[routeName] ?? ONBOARDING_WELCOME_CONTENT.main;
 }

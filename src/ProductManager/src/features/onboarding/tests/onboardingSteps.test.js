@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ONBOARDING_STEPS, getOnboardingSteps } from "../config/onboardingSteps.js";
+import {
+  ONBOARDING_STEPS,
+  getOnboardingSteps,
+  getOnboardingWelcomeContent,
+} from "../config/onboardingSteps.js";
 import { calculatePopoverPosition } from "../ui/onboardingUi.js";
 
 test("defines a compact flow for every Product Manager route", () => {
@@ -9,6 +13,13 @@ test("defines a compact flow for every Product Manager route", () => {
   assert.equal(getOnboardingSteps("analyze").length, 4);
   assert.equal(getOnboardingSteps("review").length, 4);
   assert.deepEqual(getOnboardingSteps("unknown"), []);
+});
+
+test("defines route-specific welcome copy", () => {
+  assert.equal(getOnboardingWelcomeContent("main").title, "Welcome to Product Manager");
+  assert.equal(getOnboardingWelcomeContent("dashboard").title, "Welcome to Dashboard");
+  assert.equal(getOnboardingWelcomeContent("analyze").title, "Welcome to Analyze");
+  assert.equal(getOnboardingWelcomeContent("review").title, "Welcome to Product Review");
 });
 
 test("uses unique step identifiers and complete user-facing copy", () => {
@@ -24,6 +35,7 @@ test("uses unique step identifiers and complete user-facing copy", () => {
     assert.ok(step.selectors.length > 0);
     assert.equal(typeof step.placement, "string");
     assert.equal("activeSurfaceSelectors" in step, false);
+    assert.doesNotMatch(step.description, /backend/i);
   }
 });
 
@@ -83,7 +95,7 @@ test("covers the primary Dashboard workflow without route navigation", () => {
   assert.ok(steps.every((step) => !step.behavior));
 });
 
-test("covers Product management and report inspection in Analyze", () => {
+test("requires an Analyze Product and keeps guidance beside the sidebar", () => {
   const steps = getOnboardingSteps("analyze");
 
   assert.deepEqual(
@@ -95,13 +107,15 @@ test("covers Product management and report inspection in Analyze", () => {
       "analyze-reports-history",
     ]
   );
-  assert.equal(steps[0].selectors[0], ".analyze-dataset-form");
-  assert.equal(steps[1].selectors[0], ".analyze-dataset-list");
-  assert.equal(steps[2].selectors[0], ".analyze-products__actions");
-  assert.equal(steps[3].selectors[0], ".analyze-product-card__content");
+  assert.ok(steps.every((step) => step.placement === "adjacent-horizontal"));
+  assert.equal(steps[0].behavior.type, "wait-for-target-count");
+  assert.equal(steps[0].behavior.minimumCount, 1);
+  assert.deepEqual(steps[0].behavior.selectors, [".analyze-product-card"]);
+  assert.equal(steps[2].behavior.type, "require-target-count");
+  assert.equal(steps[3].behavior.type, "require-target-count");
 });
 
-test("covers Product configuration and comparison in Review", () => {
+test("requires two Review Products and highlights two columns", () => {
   const steps = getOnboardingSteps("review");
 
   assert.deepEqual(
@@ -113,10 +127,15 @@ test("covers Product configuration and comparison in Review", () => {
       "review-product-content",
     ]
   );
-  assert.equal(steps[0].selectors[0], ".pm-review-product-form");
-  assert.equal(steps[1].selectors[0], ".pm-review-product-list");
-  assert.equal(steps[2].selectors[0], ".pm-review-board__columns");
-  assert.equal(steps[3].selectors[0], ".pm-review-content-card");
+  assert.equal(steps[0].placement, "adjacent-horizontal");
+  assert.equal(steps[0].behavior.type, "wait-for-target-count");
+  assert.equal(steps[0].behavior.minimumCount, 2);
+  assert.deepEqual(steps[0].behavior.selectors, [".pm-review-column"]);
+  assert.equal(steps[2].selectors[0], ".pm-review-column");
+  assert.equal(steps[2].selectorMode, "all");
+  assert.equal(steps[2].maximumTargets, 2);
+  assert.equal(steps[2].placement, "target-top-right");
+  assert.equal(steps[2].behavior.type, "require-target-count");
 });
 
 test("keeps an adjacent Product search card on the right when horizontal space exists", () => {
@@ -143,7 +162,7 @@ test("keeps an adjacent Product search card on the right when horizontal space e
   });
 });
 
-test("uses the left side when Product search has no room on the right", () => {
+test("uses the left side when an adjacent card has no room on the right", () => {
   const position = calculatePopoverPosition({
     popoverRect: { width: 340, height: 190 },
     targetRect: {
@@ -164,5 +183,29 @@ test("uses the left side when Product search has no room on the right", () => {
     centered: false,
     top: 68,
     left: 768,
+  });
+});
+
+test("places Review guidance inside the top-right of the highlighted columns", () => {
+  const position = calculatePopoverPosition({
+    popoverRect: { width: 340, height: 190 },
+    targetRect: {
+      left: 330,
+      top: 70,
+      right: 1140,
+      bottom: 820,
+      width: 810,
+      height: 750,
+    },
+    placement: "target-top-right",
+    viewportWidth: 1440,
+    viewportHeight: 900,
+    minimumTop: 62,
+  });
+
+  assert.deepEqual(position, {
+    centered: false,
+    top: 82,
+    left: 788,
   });
 });

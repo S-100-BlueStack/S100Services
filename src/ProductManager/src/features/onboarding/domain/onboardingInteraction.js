@@ -2,11 +2,13 @@ const INTERACTION_TYPE = Object.freeze({
   WAIT_FOR_POPUP: "wait-for-popup",
   REQUIRE_POPUP: "require-popup",
   WAIT_FOR_COLLECTION: "wait-for-collection",
+  WAIT_FOR_TARGET_COUNT: "wait-for-target-count",
+  REQUIRE_TARGET_COUNT: "require-target-count",
 });
 
 export function createOnboardingStepPresentation(
   step,
-  { popupOpen = false, collectionVisible = false } = {}
+  { popupOpen = false, collectionVisible = false, targetCount = 0 } = {}
 ) {
   const behavior = step?.behavior;
 
@@ -29,6 +31,7 @@ export function createOnboardingStepPresentation(
       };
 
     case INTERACTION_TYPE.REQUIRE_POPUP:
+    case INTERACTION_TYPE.REQUIRE_TARGET_COUNT:
       return createDefaultPresentation(step);
 
     case INTERACTION_TYPE.WAIT_FOR_COLLECTION:
@@ -52,6 +55,20 @@ export function createOnboardingStepPresentation(
         focusNext: false,
       };
 
+    case INTERACTION_TYPE.WAIT_FOR_TARGET_COUNT: {
+      const requirementMet = isTargetCountRequirementMet(step, targetCount);
+
+      return {
+        ...createDefaultPresentation(step),
+        nextDisabled: !requirementMet,
+        nextLabel: requirementMet
+          ? behavior.readyNextLabel || "Continue"
+          : behavior.waitingNextLabel || "Continue",
+        nextTitle: requirementMet ? null : behavior.waitingNextTitle || null,
+        focusNext: requirementMet,
+      };
+    }
+
     default:
       return createDefaultPresentation(step);
   }
@@ -71,6 +88,19 @@ export function isPopupWaitOnboardingStep(step) {
 
 export function isCollectionWaitOnboardingStep(step) {
   return step?.behavior?.type === INTERACTION_TYPE.WAIT_FOR_COLLECTION;
+}
+
+export function isTargetCountWaitOnboardingStep(step) {
+  return step?.behavior?.type === INTERACTION_TYPE.WAIT_FOR_TARGET_COUNT;
+}
+
+export function isTargetCountRequiredOnboardingStep(step) {
+  return step?.behavior?.type === INTERACTION_TYPE.REQUIRE_TARGET_COUNT;
+}
+
+export function isTargetCountRequirementMet(step, targetCount) {
+  const minimumCount = Math.max(1, Number(step?.behavior?.minimumCount) || 1);
+  return Number(targetCount) >= minimumCount;
 }
 
 function createDefaultPresentation(step) {

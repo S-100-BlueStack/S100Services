@@ -8,7 +8,7 @@ This review focuses on Product Manager frontend readiness for controlled user te
 
 The frontend is ready for controlled user testing if the known backend-dependent limitations are communicated clearly to testers. There are no frontend P0 blockers identified in the current implemented flows.
 
-Discoverability is mitigated by hover/help text and a compact replayable introduction flow. The interactive main-map sequence has been manually verified, while the expanded Dashboard, Analyze and Review flows remain ready for route-level manual verification.
+Discoverability is mitigated by hover/help text and compact replayable onboarding. The interactive main-map sequence and Dashboard flow have been manually verified; the updated Analyze and Review flows remain ready for route-level verification.
 
 ## Severity scale
 
@@ -22,15 +22,15 @@ Discoverability is mitigated by hover/help text and a compact replayable introdu
 
 ## Current stable areas
 
-| Area          | Status                                                       | Notes                                                                                                                                                                                                                                                                   |
-| ------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Main map      | Ready for controlled testing                                 | Map rendering, hover, popup details, filters, Product search, Product History quick panel, Product Collection, refresh preservation, display-scale hiding, and product popup actions are implemented. Header navigation remains usable during initial map load.         |
-| Popup actions | Ready for controlled testing                                 | Freeze/Unfreeze, Send to IC-ENC, Rollback, and `Export > S100 > Edition` are wired. Disabled export leaves are intentionally unavailable. Actions have textual loading states, which is important for RDP/VDI sessions where spinner animation may not render reliably. |
-| Dashboard     | Ready for controlled testing                                 | Separate read-only route with backend activity data, Danish range builder, search, filters, actionable summaries, and route-local History panel.                                                                                                                        |
-| Analyze       | Ready for controlled testing with backend caveats            | Product loading, history, XML/report content, internal validation placeholder/report foundation, and shared Product picker are in place. Unknown products are rejected when catalog validation is available.                                                            |
-| Review        | Ready for controlled testing with backend caveats            | Multi-product review, content toggles, history, placeholder report sections, and shared Product picker are in place. Unknown products are rejected when catalog validation is available.                                                                                |
-| User guidance | Ready for controlled testing with route verification pending | Hover/help text and replayable onboarding are implemented. The main-map sequence is verified; deeper Dashboard, Analyze and Review flows require manual route-level verification.                                                                                       |
-| Documentation | Usable                                                       | README, tracker and feature docs describe the current architecture and frontend-only/backend-dependent behavior.                                                                                                                                                        |
+| Area          | Status                                                                | Notes                                                                                                                                                                                                                                                                   |
+| ------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Main map      | Ready for controlled testing                                          | Map rendering, hover, popup details, filters, Product search, Product History quick panel, Product Collection, refresh preservation, display-scale hiding, and product popup actions are implemented. Header navigation remains usable during initial map load.         |
+| Popup actions | Ready for controlled testing                                          | Freeze/Unfreeze, Send to IC-ENC, Rollback, and `Export > S100 > Edition` are wired. Disabled export leaves are intentionally unavailable. Actions have textual loading states, which is important for RDP/VDI sessions where spinner animation may not render reliably. |
+| Dashboard     | Ready for controlled testing                                          | Separate read-only route with backend activity data, Danish range builder, search, filters, actionable summaries, and route-local History panel.                                                                                                                        |
+| Analyze       | Ready for controlled testing with backend caveats                     | Product loading, history, XML/report content, internal validation placeholder/report foundation, and shared Product picker are in place. Unknown products are rejected when catalog validation is available.                                                            |
+| Review        | Ready for controlled testing with backend caveats                     | Multi-product review, content toggles, history, placeholder report sections, and shared Product picker are in place. Unknown products are rejected when catalog validation is available.                                                                                |
+| User guidance | Ready for controlled testing with Analyze/Review verification pending | Hover/help text and route-specific onboarding are implemented. Main map and Dashboard are verified; Analyze and Review now enforce the Product prerequisites needed for meaningful guidance.                                                                            |
+| Documentation | Usable                                                                | README, tracker and feature docs describe the current architecture and frontend-only/backend-dependent behavior.                                                                                                                                                        |
 
 ## Smoke-test summary
 
@@ -62,7 +62,7 @@ Remaining observations:
 - `UsageBand` currently shows descriptive text; including the ID may be solved better in backend data
 - active operation visibility across sessions is not visible before the user attempts an action
 - report/validation links remain disabled until backend report metadata exists
-- the introduction flow is available and replayable; the main-map sequence is verified and route-specific Dashboard, Analyze and Review expansions require manual verification
+- onboarding is available and replayable per route; Main map and Dashboard are verified, while the updated Analyze and Review flows require manual verification
 
 ## P0 findings
 
@@ -161,7 +161,7 @@ Recommendation:
 
 - Keep maintaining tooltip coverage as new clickable controls are added.
 - Do not duplicate the visible label; explain consequence or context.
-- Manually verify the expanded Dashboard, Analyze and Review onboarding flows against populated and empty route states.
+- Manually verify automatic first-time onboarding on all routes and the updated Analyze/Review Product prerequisites.
 
 Blocks controlled user testing: No.
 
@@ -279,7 +279,7 @@ Recommendation:
 1. Park new frontend feature development for controlled user testing.
 2. Communicate backend-dependent limitations to testers and backend owners.
 3. Keep hover/help text coverage current when controls are added or changed.
-4. Validate the expanded Dashboard, Analyze and Review onboarding flows on populated and empty route states.
+4. Validate independent route onboarding storage plus the updated Analyze and Review flows with empty and populated states.
 5. Keep report-link UI deferred until backend report contracts are known.
 6. Continue focused smoke tests on clean and persisted browser profiles.
 
@@ -368,11 +368,11 @@ Recommendation:
 
 ## Introduction flow phase 1
 
-A compact introduction flow is available after the main map finishes loading. The welcome prompt can be postponed or permanently dismissed in the current browser. Users can replay the current route introduction from Preferences.
+A compact introduction flow is available after each route finishes loading. Main map, Dashboard, Analyze and Review offer their own first-time welcome prompt, which can be postponed or dismissed independently. Users can replay the current route introduction from Preferences.
 
 The implementation is intentionally route-specific. The main map contains focused guidance for Product search, filters, popup behavior and actions, Product Collection, and workspace navigation. Dashboard now covers range selection, summary cards, activity filters, activity links and actionable summary panels. Analyze covers the Product picker, Product list, card controls, reports and Product History. Review covers Product selection, content configuration, side-by-side comparison and fixed-order Product content. The flow does not navigate automatically, execute Product actions, or depend on BroadcastChannel/session state.
 
-Completion and dismissal are stored in versioned localStorage under `pm.onboarding.v1`. Missing or hidden UI targets fall back to a centered information card so onboarding never blocks the application.
+Completion and dismissal are stored in separate versioned localStorage keys: `pm.onboarding.main.v2`, `pm.onboarding.dashboard.v2`, `pm.onboarding.analyze.v2` and `pm.onboarding.review.v2`. The completed legacy Main map state is preserved during migration, while the other routes begin with independent first-time state.
 
 ### Onboarding UX follow-up
 
@@ -384,4 +384,4 @@ The main-map sequence is now interactive. Step 3 waits for a Product popup and a
 
 Dashboard uses five compact steps for the activity range, summary cards, activity filters, per-activity workflow links and actionable Status/Operation panels. Analyze uses four steps for adding Products, managing the Product list, controlling Product cards and inspecting reports and Product History. Review uses four steps for adding Products, configuring included content, comparing columns and inspecting fixed-order Product content.
 
-These flows remain manually started from Preferences. They use ordered selector fallbacks so guidance remains available when a route has no loaded Products or activity rows; missing targets produce the existing centered information card rather than a blocked step.
+Each route now offers its introduction automatically on first use and stores completion independently. Analyze Step 1 remains beside the Product picker and waits for one loaded Product before continuing. Later Analyze steps return to the picker if the Product is removed. Review Step 1 waits for two loaded Products, after which the first two Product columns are highlighted specifically for comparison. The text avoids software implementation terminology and focuses on the user-visible Product workflow. Manual replay from Preferences remains available on every route.

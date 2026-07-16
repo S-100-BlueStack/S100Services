@@ -1,35 +1,47 @@
 import { ONBOARDING_FLOW_VERSION } from "../config/onboardingSteps.js";
 
-export const ONBOARDING_STORAGE_KEY = "pm.onboarding.v1";
+const LEGACY_ONBOARDING_STORAGE_KEY = "pm.onboarding.v1";
+const ONBOARDING_STORAGE_PREFIX = "pm.onboarding";
+const SUPPORTED_ROUTES = new Set(["main", "dashboard", "analyze", "review"]);
+
+export function getOnboardingStorageKey(routeName) {
+  return `${ONBOARDING_STORAGE_PREFIX}.${normalizeRouteName(routeName)}.v${ONBOARDING_FLOW_VERSION}`;
+}
 
 export function createDefaultOnboardingState() {
   return {
     version: ONBOARDING_FLOW_VERSION,
     dismissedWelcome: false,
-    completedFlows: {},
+    completed: false,
   };
 }
 
-export function readOnboardingState(storage = window.localStorage) {
-  try {
-    const value = storage.getItem(ONBOARDING_STORAGE_KEY);
+export function readOnboardingState(routeName, storage = window.localStorage) {
+  const normalizedRouteName = normalizeRouteName(routeName);
 
-    if (!value) {
-      return createDefaultOnboardingState();
+  try {
+    const value = storage.getItem(getOnboardingStorageKey(normalizedRouteName));
+
+    if (value) {
+      return normalizeOnboardingState(JSON.parse(value));
     }
 
-    return normalizeOnboardingState(JSON.parse(value));
+    if (normalizedRouteName === "main") {
+      return readLegacyMainState(storage);
+    }
+
+    return createDefaultOnboardingState();
   } catch (error) {
     console.warn("Failed to read introduction preference.", error);
     return createDefaultOnboardingState();
   }
 }
 
-export function writeOnboardingState(state, storage = window.localStorage) {
+export function writeOnboardingState(routeName, state, storage = window.localStorage) {
   const normalizedState = normalizeOnboardingState(state);
 
   try {
-    storage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(normalizedState));
+    storage.setItem(getOnboardingStorageKey(routeName), JSON.stringify(normalizedState));
   } catch (error) {
     console.warn("Failed to save introduction preference.", error);
   }
@@ -45,18 +57,30 @@ export function normalizeOnboardingState(value) {
   return {
     version: ONBOARDING_FLOW_VERSION,
     dismissedWelcome: value.dismissedWelcome === true,
-    completedFlows: normalizeCompletedFlows(value.completedFlows),
+    completed: value.completed === true,
   };
 }
 
-function normalizeCompletedFlows(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
+function readLegacyMainState(storage) {
+  const rawLegacyValue = storage.getItem(LEGACY_ONBOARDING_STORAGE_KEY);
+
+  if (!rawLegacyValue) {
+    return createDefaultOnboardingState();
   }
 
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([, completed]) => completed === true)
-      .map(([routeName]) => [routeName, true])
-  );
+  const legacyState = JSON.parse(rawLegacyValue);
+
+  return {
+    version: ONBOARDING_FLOW_VERSION,
+    dismissedWelcome: legacyState?.dismissedWelcome === true,
+    completed: legacyState?.completedFlows?.main === true,
+  };
+}
+
+function normalizeRouteName(routeName) {
+  const normalizedRouteName = String(routeName ?? "main")
+    .trim()
+    .toLowerCase();
+
+  return SUPPORTED_ROUTES.has(normalizedRouteName) ? normalizedRouteName : "main";
 }

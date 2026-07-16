@@ -1,10 +1,13 @@
-import { getOnboardingSteps } from "../config/onboardingSteps.js";
+import { getOnboardingSteps, getOnboardingWelcomeContent } from "../config/onboardingSteps.js";
 import {
   createOnboardingStepPresentation,
   isCollectionWaitOnboardingStep,
   isInteractiveOnboardingStep,
   isPopupRequiredOnboardingStep,
   isPopupWaitOnboardingStep,
+  isTargetCountRequiredOnboardingStep,
+  isTargetCountRequirementMet,
+  isTargetCountWaitOnboardingStep,
 } from "../domain/onboardingInteraction.js";
 import { readOnboardingState, writeOnboardingState } from "../state/onboardingStorage.js";
 import {
@@ -46,8 +49,9 @@ function createOnboardingService({ routeName }) {
   let interactionFallbackTimeoutId = null;
   let interactionState = readInteractionState();
   let allowMapAutoAdvance = false;
+  let allowTargetAutoAdvance = false;
   let previousFocus = null;
-  let state = readOnboardingState();
+  let state = readOnboardingState(routeName);
 
   const handleKeydown = (event) => {
     if (event.key !== "Escape" || event.defaultPrevented) return;
@@ -81,12 +85,7 @@ function createOnboardingService({ routeName }) {
   function setRouteReady() {
     routeReady = true;
 
-    if (
-      routeName === "main" &&
-      !welcomeOffered &&
-      !state.dismissedWelcome &&
-      state.completedFlows.main !== true
-    ) {
+    if (!welcomeOffered && !state.dismissedWelcome && !state.completed) {
       welcomeOffered = true;
       showWelcome();
     }
@@ -95,7 +94,10 @@ function createOnboardingService({ routeName }) {
   function showWelcome() {
     closeActiveUi();
     previousFocus = document.activeElement;
+    const welcomeContent = getOnboardingWelcomeContent(routeName);
     welcomeDialog = createWelcomeDialog({
+      title: welcomeContent.title,
+      description: welcomeContent.description,
       onStart: () => {
         welcomeDialog?.close({ restoreFocus: false });
         welcomeDialog = null;
@@ -103,7 +105,10 @@ function createOnboardingService({ routeName }) {
       },
       onNotNow: () => closeActiveUi(),
       onDismiss: () => {
-        state = writeOnboardingState({ ...state, dismissedWelcome: true });
+        state = writeOnboardingState(routeName, {
+          ...state,
+          dismissedWelcome: true,
+        });
         closeActiveUi();
       },
     });
@@ -149,7 +154,7 @@ function createOnboardingService({ routeName }) {
     const steps = getOnboardingSteps(routeName);
     currentStepIndex = Math.min(Math.max(index, 0), steps.length - 1);
     currentStep = steps[currentStepIndex];
-    interactionState = readInteractionState();
+    interactionState = readInteractionState(currentStep);
     cancelInteractionFallback();
 
     if (isPopupRequiredOnboardingStep(currentStep) && !interactionState.popupOpen) {
@@ -159,7 +164,20 @@ function createOnboardingService({ routeName }) {
       return;
     }
 
+    if (
+      isTargetCountRequiredOnboardingStep(currentStep) &&
+      !isTargetCountRequirementMet(currentStep, interactionState.targetCount)
+    ) {
+      showStep(findStepIndex(currentStep.behavior?.fallbackStepId, currentStepIndex - 1), {
+        focusNext: false,
+      });
+      return;
+    }
+
     allowMapAutoAdvance = isPopupWaitOnboardingStep(currentStep) && !interactionState.popupOpen;
+    allowTargetAutoAdvance =
+      isTargetCountWaitOnboardingStep(currentStep) &&
+      !isTargetCountRequirementMet(currentStep, interactionState.targetCount);
 
     renderCurrentStep({ focusNext });
     syncInteractionPolling();
@@ -175,7 +193,10 @@ function createOnboardingService({ routeName }) {
     currentRenderedStep = presentation.step;
     currentTargets = resolveTargets(currentRenderedStep);
 
-    currentTargets[0]?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    currentTargets[0]?.scrollIntoView?.({
+      block: "nearest",
+      inline: "nearest",
+    });
     tour.render({
       step: currentRenderedStep,
       index: currentStepIndex,
@@ -217,7 +238,7 @@ function createOnboardingService({ routeName }) {
     }
 
     const previousState = interactionState;
-    const nextState = readInteractionState();
+    const nextState = readInteractionState(currentStep);
     interactionState = nextState;
 
     if (isPopupWaitOnboardingStep(currentStep)) {
@@ -232,6 +253,16 @@ function createOnboardingService({ routeName }) {
 
     if (isCollectionWaitOnboardingStep(currentStep)) {
       handleCollectionWaitStep(previousState, nextState);
+      return;
+    }
+
+    if (isTargetCountWaitOnboardingStep(currentStep)) {
+      handleTargetCountWaitStep(previousState, nextState);
+      return;
+    }
+
+    if (isTargetCountRequiredOnboardingStep(currentStep)) {
+      handleTargetCountRequiredStep(nextState);
     }
   }
 
@@ -259,7 +290,7 @@ function createOnboardingService({ routeName }) {
     }
 
     scheduleInteractionFallback(() => {
-      if (!readInteractionState().popupOpen) {
+      if (!readInteractionState(currentStep).popupOpen) {
         showStep(findStepIndex(currentStep?.behavior?.fallbackStepId, currentStepIndex - 1), {
           focusNext: false,
         });
@@ -284,10 +315,53 @@ function createOnboardingService({ routeName }) {
     }
 
     scheduleInteractionFallback(() => {
-      const latestState = readInteractionState();
+      const latestState = readInteractionState(currentStep);
 
       if (!latestState.collectionVisible && !latestState.popupOpen) {
         showStep(findStepIndex("main-map", currentStepIndex - 2), {
+          focusNext: false,
+        });
+      }
+    });
+  }
+
+  function handleTargetCountWaitStep(previousState, nextState) {
+    const previousRequirementMet = isTargetCountRequirementMet(
+      currentStep,
+      previousState.targetCount
+    );
+    const nextRequirementMet = isTargetCountRequirementMet(currentStep, nextState.targetCount);
+
+    if (
+      allowTargetAutoAdvance &&
+      !previousRequirementMet &&
+      nextRequirementMet &&
+      currentStep.behavior?.autoAdvance !== false
+    ) {
+      allowTargetAutoAdvance = false;
+      showStep(currentStepIndex + 1, { focusNext: false });
+      return;
+    }
+
+    if (previousState.targetCount !== nextState.targetCount) {
+      renderCurrentStep({ focusNext: false });
+    } else {
+      scheduleTargetRefresh(1);
+    }
+  }
+
+  function handleTargetCountRequiredStep(nextState) {
+    if (isTargetCountRequirementMet(currentStep, nextState.targetCount)) {
+      cancelInteractionFallback();
+      scheduleTargetRefresh(1);
+      return;
+    }
+
+    scheduleInteractionFallback(() => {
+      const latestState = readInteractionState(currentStep);
+
+      if (!isTargetCountRequirementMet(currentStep, latestState.targetCount)) {
+        showStep(findStepIndex(currentStep?.behavior?.fallbackStepId, currentStepIndex - 1), {
           focusNext: false,
         });
       }
@@ -377,12 +451,9 @@ function createOnboardingService({ routeName }) {
   }
 
   function completeCurrentFlow() {
-    state = writeOnboardingState({
+    state = writeOnboardingState(routeName, {
       ...state,
-      completedFlows: {
-        ...state.completedFlows,
-        [routeName]: true,
-      },
+      completed: true,
     });
     closeActiveUi();
   }
@@ -421,18 +492,24 @@ function createOnboardingService({ routeName }) {
   };
 }
 
-function readInteractionState() {
+function readInteractionState(step = null) {
   const roots = collectQueryRoots();
 
   return {
     popupOpen: Boolean(resolveFirstVisibleElement(POPUP_TARGET_SELECTORS, roots)),
     collectionVisible: Boolean(resolveFirstVisibleElement(COLLECTION_TARGET_SELECTORS, roots)),
+    targetCount: countVisibleElements(step?.behavior?.selectors, roots),
   };
 }
 
 function resolveTargets(step) {
   if (step?.selectorMode === "all") {
-    return resolveAllVisibleElements(step.selectors);
+    const targets = resolveAllVisibleElements(step.selectors);
+    const maximumTargets = Number(step.maximumTargets);
+
+    return Number.isInteger(maximumTargets) && maximumTargets > 0
+      ? targets.slice(0, maximumTargets)
+      : targets;
   }
 
   const target = resolveFirstVisibleElement(step?.selectors);
@@ -466,6 +543,26 @@ function resolveAllVisibleElements(selectors = []) {
   }
 
   return elements;
+}
+
+function countVisibleElements(selectors = [], roots = collectQueryRoots()) {
+  if (!Array.isArray(selectors) || selectors.length === 0) {
+    return 0;
+  }
+
+  const elements = new Set();
+
+  for (const selector of selectors) {
+    for (const root of roots) {
+      for (const element of root.querySelectorAll(selector)) {
+        if (isVisibleElement(element)) {
+          elements.add(element);
+        }
+      }
+    }
+  }
+
+  return elements.size;
 }
 
 function collectQueryRoots() {
