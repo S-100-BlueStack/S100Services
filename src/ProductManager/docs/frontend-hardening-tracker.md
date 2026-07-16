@@ -2,6 +2,8 @@
 
 This document tracks frontend-only cleanup, hardening, and architecture improvements for Product Manager. The goal is to improve maintainability, reliability, and structure without changing the user-facing feature set unless an item explicitly tracks a feature foundation.
 
+Current documentation baseline: `0c677549963bb7ce4206fed379dd30dc8c2cc783`.
+
 ## Status values
 
 | Status             | Meaning                                                       |
@@ -61,7 +63,7 @@ This document tracks frontend-only cleanup, hardening, and architecture improvem
 | FH-041 | P2       | Product history    | Improve Product History version-change summaries                                               | Done     | 900299f523e97c021a6736c78de6a46bff54cac4                                                                                                                                  | History summaries now describe edition/update changes even when status remains unchanged. Backend should still prevent invalid negative version values.                                                                                                                                                                       |
 | FH-042 | P2       | Main map           | Add Product search overlay                                                                     | Done     | 046ea8495f48ffbc2f76c1aa5e0da33fb5317466                                                                                                                                  | Main map has a catalog-backed Product search overlay that opens the selected product popup.                                                                                                                                                                                                                                   |
 | FH-043 | P1       | User guidance      | Add hover help/tooltips to clickable controls                                                  | Done     | 982d9be01f1ace939fe479494c8e05b5c347107e                                                                                                                                  | Added global hover help that applies concise native tooltips to route navigation, main map controls, Product search, filters, popup actions, Dashboard controls, Product picker actions, Product Collection actions and common icon-only controls. Also covered Dashboard activity links and Analyze Open all / Collapse all. |
-| FH-044 | P1       | User guidance      | Add introduction flow for first-time users                                                     | Done     | Introduction flow phase 1                                                                                                                                                 | Added compact first-time and replayable onboarding with independent route preferences, verified interactive main-map guidance and guided Dashboard, Analyze and Review flows.                                                                                                                                                 |
+| FH-044 | P1       | User guidance      | Add introduction flow for first-time users                                                     | Done     | 0c677549963bb7ce4206fed379dd30dc8c2cc783                                                                                                                                  | Completed compact first-time and replayable onboarding with independent route preferences. Main map, Dashboard, Analyze and Review flows are manually verified, including Theme, Preferences and the interactive Product popup/Product Collection sequence.                                                                   |
 
 ## Deferred / backend-dependent notes
 
@@ -84,14 +86,15 @@ This document tracks frontend-only cleanup, hardening, and architecture improvem
 | FI-005 | Analyze                          | Add product collection tray for Analyze from map                       | Done                              | Added a main-map workflow for collecting products before opening Analyze or Review.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | FI-006 | Analyze / Review                 | Add shared product catalog picker for direct Analyze/Review access     | Done                              | Uses the lightweight `GET /electronicproducts` endpoint to power a shared searchable Product picker reused by Analyze and Review.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | FI-007 | Main map                         | Add main page Product search                                           | Done                              | Added a compact Product search overlay that suggests catalog products and opens the selected Product popup on the main map.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| FI-008 | Introduction flow                | Add compact first-time and replayable route guidance                   | In progress                       | Main-map onboarding is manually verified at `1540d005`. Route flows now auto-offer independently; Analyze requires one Product and Review requires two Products before comparison guidance continues.                                                                                                                                                                                                                                                                                                                                                                                     |
+| FI-008 | Introduction flow                | Add compact first-time and replayable route guidance                   | Done                              | Completed and manually verified at `0c677549963bb7ce4206fed379dd30dc8c2cc783`. Each route has independent first-time state and replay from Preferences. Main map includes Product search, filters, interactive popup/Product Collection guidance, workspace navigation, Theme and Preferences. Dashboard, Analyze and Review use compact route-specific flows with Product prerequisites where needed.                                                                                                                                                                                    |
 
 ## Planned order
 
 1. Park new frontend feature development for controlled user testing.
-2. Add the guided introduction flow if user feedback confirms discoverability remains the largest issue after hover/help text.
-3. Keep report-link foundation deferred until backend report IDs/storage contracts exist.
-4. Coordinate with backend owners on active operation visibility, async job state, report storage and timeline contracts.
+2. Complete the UI-only Product/Products terminology audit tracked by `FH-034`.
+3. Continue focused smoke testing with clean and persisted browser state.
+4. Keep report-link UI deferred until backend report IDs/storage contracts exist.
+5. Coordinate with backend owners on active operation visibility, async job state, report storage, AOI performance and timeline contracts.
 
 ## Commit log
 
@@ -113,8 +116,11 @@ This document tracks frontend-only cleanup, hardening, and architecture improvem
 | 2026-07-09 | 046ea8495f48ffbc2f76c1aa5e0da33fb5317466 | FI-007          | Added and polished main map Product search overlay.                                                                                                                                   |
 | 2026-07-10 | 982d9be01f1ace939fe479494c8e05b5c347107e | FH-043          | Added and completed global hover help/tooltips for clickable controls and icon-only actions.                                                                                          |
 | 2026-07-15 | 1540d005af6ae5a2ef5f1bf24f2ee70e9ecf7a47 | FI-008          | Completed and manually verified the interactive main-map onboarding sequence through Product Collection.                                                                              |
+| 2026-07-16 | 58e721ee7f517f7db945bdfc5fd417abde12c530 | FI-008          | Completed and manually verified independent first-time route onboarding, Analyze Product prerequisite guidance and two-Product Review comparison guidance.                            |
+| 2026-07-16 | 2b5f5f414c97a105ff09411c2711c67f680afce8 | FI-008          | Added and manually verified the final Theme and interactive Preferences steps on the main map.                                                                                        |
+| 2026-07-16 | 0c677549963bb7ce4206fed379dd30dc8c2cc783 | FI-008 / FH-044 | Aligned main-map Steps 3-5 beside Product search and completed the verified introduction-flow phase 1 baseline.                                                                       |
 
-### FI-008 onboarding interactive main-map sequence (verified at 1540d005)
+### FI-008 onboarding interactive main-map sequence (verified at 0c677549)
 
 Status: Done
 
@@ -126,7 +132,7 @@ Status: Done
 - Require a visible Product Collection tray before Step 5 can continue.
 - Highlight the popup Product Collection action while waiting, then switch the highlight and guidance to the tray after a Product is collected.
 - Return to Step 3 if both the popup and Product Collection tray disappear during Step 5.
-- Keep Steps 3, 4 and 5 at one stable left-side position.
+- Keep Steps 3, 4 and 5 at one stable position beside Product search.
 - Preserve replay from Preferences, versioned localStorage, light/dark support and static RDP/VDI-safe states.
 
 ### FI-008 route-specific onboarding expansion (verified at 58e721ee)
@@ -144,9 +150,9 @@ Status: Done
 - Highlight the first two Review Product columns instead of the entire Review workspace.
 - Return to the Product picker if required Analyze or Review Products are removed during the introduction.
 
-### FI-008 main-map onboarding completion (baseline 58e721ee)
+### FI-008 main-map onboarding completion (verified at 0c677549)
 
-Status: Ready for manual verification
+Status: Done
 
 - Add a Theme step after workspace navigation and keep the theme toggle usable during the introduction.
 - End the main-map flow with an interactive Preferences step.
@@ -154,3 +160,5 @@ Status: Ready for manual verification
 - Move the highlight and guidance from the Preferences button to the open panel.
 - Explain that map and display preferences can be saved in the browser and that the current route introduction can be restarted from the panel.
 - Keep Dashboard, Analyze and Review onboarding unchanged.
+- Keep Steps 3-5 aligned beside Product search while their highlights follow popup and Product Collection controls.
+- Confirm the complete flow in light and dark mode and preserve static text/state for RDP/VDI use.
