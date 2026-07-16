@@ -2,7 +2,7 @@
 
 This document tracks frontend-only cleanup, hardening, and architecture improvements for Product Manager. The goal is to improve maintainability, reliability, and structure without changing the user-facing feature set unless an item explicitly tracks a feature foundation.
 
-Current documentation baseline: `0c677549963bb7ce4206fed379dd30dc8c2cc783`.
+Current documentation baseline: `4dd26665b6424f4f96306eeecb117d42a193426e`.
 
 ## Status values
 
@@ -53,7 +53,7 @@ Current documentation baseline: `0c677549963bb7ce4206fed379dd30dc8c2cc783`.
 | FH-031 | P2       | Analyze            | Review Preferences availability on Analyze route                                               | Rejected |                                                                                                                                                                           | Full Preferences remain disabled on Analyze because most preferences are main-map scoped.                                                                                                                                                                                                                                     |
 | FH-032 | P1       | Product data       | Normalize product export metadata                                                              | Done     | 9ede3a5c94fbce900f0d5ae05d20e826b07faba3                                                                                                                                  | Added shared normalization for product `Exports` metadata.                                                                                                                                                                                                                                                                    |
 | FH-033 | P1       | Popup UI           | Render export metadata comparison in product popup                                             | Done     | 9ede3a5c94fbce900f0d5ae05d20e826b07faba3                                                                                                                                  | Popup shows S100 product metadata next to export metadata columns.                                                                                                                                                                                                                                                            |
-| FH-034 | P2       | Terminology        | Standardize user-facing naming around Product/Products                                         | Todo     |                                                                                                                                                                           | Audit UI labels so visible UI uses `Product`/`Products` consistently.                                                                                                                                                                                                                                                         |
+| FH-034 | P2       | Terminology        | Standardize user-facing naming around Product/Products                                         | Done     |                                                                                                                                                                           | Completed a UI-only terminology audit across the main user-facing surfaces. Visible copy uses `Product`/`Products`, technical identifiers such as `datasetName` remain unchanged, and a regression test protects the terminology boundary.                                                                                    |
 | FH-035 | P1       | Main map filters   | Restrict main map filters to Display scale, Status and Usage band                              | Done     | 708865afd5e21cc5893f3fade960d63407ec5710                                                                                                                                  | Status options come from the full status/product state endpoint, including count `0` options.                                                                                                                                                                                                                                 |
 | FH-036 | P1       | Popup / attributes | Stabilize first-load attribute display                                                         | Done     | 708865afd5e21cc5893f3fade960d63407ec5710                                                                                                                                  | Product popup details no longer fall back to all raw attributes when field/capability metadata is not ready.                                                                                                                                                                                                                  |
 | FH-037 | P1       | Popup actions      | Enable S100 Edition export and Rollback                                                        | Done     | a3ab23ee615d59b25cccdda4197b226e7efc09ad                                                                                                                                  | Enabled `S100 > Edition` and `Rollback`; disabled `All` export leaves.                                                                                                                                                                                                                                                        |
@@ -91,10 +91,9 @@ Current documentation baseline: `0c677549963bb7ce4206fed379dd30dc8c2cc783`.
 ## Planned order
 
 1. Park new frontend feature development for controlled user testing.
-2. Complete the UI-only Product/Products terminology audit tracked by `FH-034`.
-3. Continue focused smoke testing with clean and persisted browser state.
-4. Keep report-link UI deferred until backend report IDs/storage contracts exist.
-5. Coordinate with backend owners on active operation visibility, async job state, report storage, AOI performance and timeline contracts.
+2. Continue focused smoke testing with clean and persisted browser state.
+3. Keep report-link UI deferred until backend report IDs/storage contracts exist.
+4. Coordinate with backend owners on active operation visibility, async job state, report storage, AOI performance and timeline contracts.
 
 ## Commit log
 
@@ -119,6 +118,16 @@ Current documentation baseline: `0c677549963bb7ce4206fed379dd30dc8c2cc783`.
 | 2026-07-16 | 58e721ee7f517f7db945bdfc5fd417abde12c530 | FI-008          | Completed and manually verified independent first-time route onboarding, Analyze Product prerequisite guidance and two-Product Review comparison guidance.                            |
 | 2026-07-16 | 2b5f5f414c97a105ff09411c2711c67f680afce8 | FI-008          | Added and manually verified the final Theme and interactive Preferences steps on the main map.                                                                                        |
 | 2026-07-16 | 0c677549963bb7ce4206fed379dd30dc8c2cc783 | FI-008 / FH-044 | Aligned main-map Steps 3-5 beside Product search and completed the verified introduction-flow phase 1 baseline.                                                                       |
+
+### FH-034 user-facing Product terminology audit
+
+Status: Done
+
+- Keep `Product` and `Products` as the shared user-facing terms on Main map, Dashboard, Analyze, Review, Product History, Product Collection, Preferences and onboarding surfaces.
+- Keep backend-aligned technical identifiers such as `datasetName`, `datasetNames`, route parameters and API response fields unchanged.
+- Treat the terminology boundary as a UI concern rather than a backend/domain rename.
+- Run `userFacingTerminology.test.js` as part of `npm test` so representative user-facing source files cannot reintroduce visible `Dataset` or `Datasets` labels without an intentional review.
+- Continue the same terminology rule when adding new controls, notices, tooltips and onboarding copy.
 
 ### FI-008 onboarding interactive main-map sequence (verified at 0c677549)
 

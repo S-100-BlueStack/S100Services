@@ -32,7 +32,7 @@ The Analyze route owns analysis/report display for selected products. The Review
 
 Use `Product` and `Products` in user-facing UI text. Do not use `Dataset`, `Datasets`, `dataset`, or similar dataset-oriented labels in visible UI unless the backend/domain concept specifically requires a technical distinction.
 
-Code may continue using stable technical identifiers such as `datasetName` where that matches backend contracts or existing normalized attribute names. A future terminology hardening task tracks a full UI audit to align Analyze, Review, Dashboard and main map labels around `Product` / `Products`.
+Code may continue using stable technical identifiers such as `datasetName` where that matches backend contracts or existing normalized attribute names. The user-facing terminology audit is complete, and `userFacingTerminology.test.js` protects representative UI sources from reintroducing visible `Dataset` / `Datasets` labels.
 
 ## Stable frontend flows
 
@@ -242,18 +242,20 @@ Do not implement the following fully until backend/database contracts are ready:
 - real Dashboard IC-ENC report links
 - real Dashboard internal validation report links
 
-## User guidance and onboarding future work
+## User guidance and onboarding
 
-Controlled user testing showed that users need more inline explanation of what actions and controls do.
+Controlled user testing showed that users need concise explanations of what actions and controls do.
 
-The frontend now adds concise hover help/tooltips to common clickable controls and icon-only actions. Tooltip text should explain consequence or context, not just duplicate the visible label. New clickable controls should include either explicit text, `aria-label`, or a tooltip entry in the global hover-help registry.
+The frontend provides hover help/tooltips for common clickable controls and icon-only actions. Tooltip text should explain consequence or context, not just duplicate the visible label. New clickable controls should include explicit text, an `aria-label`, or a tooltip entry in the global hover-help registry.
 
-Future UX work should add an optional introduction flow. Track this as separate future work rather than mixing it into feature implementation:
+The compact introduction flow is implemented and manually verified on Main map, Dashboard, Analyze and Review:
 
-- maintain concise tooltips/help text for new clickable controls and icon-only actions
-- keep text static and useful in RDP/VDI environments where animations may not render smoothly
-- create an introduction flow that walks users through the main map, filters, Product search, popup actions, Product Collection, Dashboard, Analyze and Review
-- avoid blocking expert users; the introduction should be skippable and replayable
+- each route has independent first-time state and can be replayed from Preferences
+- Main map covers Product search, filters, popup actions, Product Collection, workspace navigation, Theme and Preferences
+- Analyze requires a loaded Product before dependent guidance continues
+- Review requires two loaded Products before side-by-side comparison guidance continues
+- static text and disabled states carry the workflow in RDP/VDI environments without depending on animation
+- the flow remains optional and does not automatically navigate between routes
 
 ## Refresh behavior
 
@@ -378,6 +380,8 @@ Recent frontend work has focused on:
 - Rollback activation
 - release-readiness smoke-test hardening
 - hover help/tooltips for clickable controls
+- route-specific onboarding and Preferences replay
+- user-facing Product/Products terminology audit
 - layer capability foundation
 
-The frontend is ready for controlled user testing while backend-dependent report links, async export/job state, active operation visibility and introduction flow continue separately.
+The frontend is ready for controlled user testing while backend-dependent report links, async export/job state and active operation visibility continue separately.

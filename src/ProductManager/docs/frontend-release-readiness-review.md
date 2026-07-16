@@ -1,6 +1,6 @@
 # Frontend release-readiness review
 
-Review baseline: `0c677549963bb7ce4206fed379dd30dc8c2cc783`
+Review baseline: `4dd26665b6424f4f96306eeecb117d42a193426e`
 
 This review focuses on Product Manager frontend readiness for controlled user testing. It identifies release risks, backend dependencies, smoke-test findings, and follow-up hardening work.
 
@@ -128,23 +128,21 @@ Recommendation:
 
 Blocks controlled user testing: No, if reports are documented as unavailable/future scope.
 
-### RR-004: Product terminology audit remains open
+### RR-004: Product terminology audit completed
 
-Severity: P1/P2
+Severity: Resolved
 
-The architecture says user-facing UI should use `Product` / `Products`, while code may still use `datasetName` where required by backend contracts. A full UI pass is still tracked separately.
+The user-facing terminology audit is complete. Main map, Dashboard, Analyze, Review, Product History, Product Collection, Preferences and onboarding use `Product` / `Products` as the shared visible terms.
 
-Risk:
+Technical identifiers such as `datasetName`, `datasetNames`, route parameters and backend response fields remain unchanged because they belong to established API and normalized data contracts.
 
-- Mixed `Dataset` and `Product` terms can make user testing feedback harder to interpret.
-- Users may think Dataset and Product are different workflow concepts.
+Regression protection:
 
-Recommendation:
+- `userFacingTerminology.test.js` scans representative user-facing JavaScript and HTML sources for visible `Dataset` / `Datasets` copy.
+- Lowercase technical tokens, CSS selectors, event names and backend-aligned identifiers remain allowed.
+- New visible controls, notices, tooltips and onboarding copy should continue using `Product` / `Products`.
 
-- Run a UI-only terminology audit before broader rollout.
-- Do not rename backend-aligned code identifiers unless there is a separate refactor.
-
-Blocks controlled user testing: No, but it should be fixed before broader rollout if visible labels remain inconsistent.
+Blocks controlled user testing: No. Resolved before broader rollout.
 
 ### RR-011: User guidance/discoverability
 
@@ -277,11 +275,10 @@ Recommendation:
 ## Recommended next actions
 
 1. Park new frontend feature development for controlled user testing.
-2. Complete the UI-only Product/Products terminology audit tracked by `FH-034`.
-3. Communicate backend-dependent limitations to testers and backend owners.
-4. Keep hover/help and onboarding target coverage current when controls are added or changed.
-5. Keep report-link UI deferred until backend report contracts are known.
-6. Continue focused smoke tests on clean and persisted browser profiles.
+2. Communicate backend-dependent limitations to testers and backend owners.
+3. Keep hover/help, onboarding targets and Product terminology coverage current when controls are added or changed.
+4. Keep report-link UI deferred until backend report contracts are known.
+5. Continue focused smoke tests on clean and persisted browser profiles.
 
 ## Manual smoke checklist
 
