@@ -99,6 +99,7 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
       index,
       count,
       targets,
+      positionTargets = [],
       nextDisabled = false,
       nextLabel = null,
       nextTitle = null,
@@ -122,14 +123,26 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
         nextButton.removeAttribute("title");
       }
 
-      positionTourElements({ popover, highlightLayer, targets, step });
+      positionTourElements({
+        popover,
+        highlightLayer,
+        targets,
+        positionTargets,
+        step,
+      });
 
       if (focusNext && !nextButton.disabled) {
         nextButton.focus({ preventScroll: true });
       }
     },
-    reposition(targets, step) {
-      positionTourElements({ popover, highlightLayer, targets, step });
+    reposition(targets, step, positionTargets = []) {
+      positionTourElements({
+        popover,
+        highlightLayer,
+        targets,
+        positionTargets,
+        step,
+      });
     },
     remove() {
       highlightLayer.remove();
@@ -179,9 +192,12 @@ export function createStopIntroductionDialog({ onContinue, onStop }) {
   };
 }
 
-function positionTourElements({ popover, highlightLayer, targets, step }) {
+function positionTourElements({ popover, highlightLayer, targets, positionTargets = [], step }) {
   const targetRects = getVisibleTargetRects(targets);
-  const anchorRect = getCombinedRect(targetRects);
+  const positionTargetRects = getVisibleTargetRects(positionTargets);
+  const anchorRect = getCombinedRect(
+    positionTargetRects.length > 0 ? positionTargetRects : targetRects
+  );
   const shouldHighlight = step?.highlight !== false && targetRects.length > 0;
 
   renderHighlights(highlightLayer, shouldHighlight ? targetRects : []);
@@ -283,6 +299,17 @@ export function calculatePopoverPosition({
     });
   }
 
+  if (placement === "adjacent-left") {
+    return calculateAdjacentLeftPosition({
+      popoverRect,
+      targetRect,
+      viewportWidth,
+      viewportHeight,
+      margin,
+      minimumTop,
+    });
+  }
+
   if (placement === "target-top-right") {
     return clampPosition({
       top: targetRect.top + margin,
@@ -303,6 +330,29 @@ export function calculatePopoverPosition({
   });
   return pickAndClampPosition({
     candidates,
+    popoverRect,
+    margin,
+    minimumTop,
+    viewportWidth,
+    viewportHeight,
+  });
+}
+
+function calculateAdjacentLeftPosition({
+  popoverRect,
+  targetRect,
+  viewportWidth,
+  viewportHeight,
+  margin,
+  minimumTop,
+}) {
+  const preferredLeft = targetRect.left - popoverRect.width - margin;
+  const fallbackLeft = targetRect.right + margin;
+  const hasPreferredSpace = preferredLeft >= margin;
+
+  return clampPosition({
+    top: Math.max(minimumTop, targetRect.top),
+    left: hasPreferredSpace ? preferredLeft : fallbackLeft,
     popoverRect,
     margin,
     minimumTop,

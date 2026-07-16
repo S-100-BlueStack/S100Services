@@ -46,8 +46,13 @@ export const ONBOARDING_STEPS = Object.freeze({
       title: "Inspect Products on the map",
       description:
         "Select a Product geometry to open its popup. Hover highlights Products without changing the current selection.",
-      selectors: ["#viewDiv"],
-      placement: "left-center",
+      selectors: [
+        "[data-onboarding-target='product-search']",
+        "#main-map-product-search",
+        ".pm-main-map-product-search",
+        ".main-map-product-search",
+      ],
+      placement: "adjacent-left",
       highlight: false,
       behavior: {
         type: "wait-for-popup",
@@ -63,7 +68,13 @@ export const ONBOARDING_STEPS = Object.freeze({
         "The Product popup contains controls for copying, collecting and running operational actions such as Freeze, Send, Export and Rollback.",
       selectors: [".popup-copy-btn", ".popup-product-collection-btn", ".popup-action-bar"],
       selectorMode: "all",
-      placement: "left-center",
+      positionSelectors: [
+        "[data-onboarding-target='product-search']",
+        "#main-map-product-search",
+        ".pm-main-map-product-search",
+        ".main-map-product-search",
+      ],
+      placement: "adjacent-left",
       behavior: {
         type: "require-popup",
         fallbackStepId: "main-map",
@@ -75,7 +86,13 @@ export const ONBOARDING_STEPS = Object.freeze({
       description:
         "Use the highlighted Product Collection action in the popup to add the selected Product.",
       selectors: [".popup-product-collection-btn"],
-      placement: "left-center",
+      positionSelectors: [
+        "[data-onboarding-target='product-search']",
+        "#main-map-product-search",
+        ".pm-main-map-product-search",
+        ".main-map-product-search",
+      ],
+      placement: "adjacent-left",
       behavior: {
         type: "wait-for-collection",
         waitingNextLabel: "Add to Collection",

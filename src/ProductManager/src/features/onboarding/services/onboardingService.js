@@ -43,6 +43,7 @@ function createOnboardingService({ routeName }) {
   let currentStep = null;
   let currentRenderedStep = null;
   let currentTargets = [];
+  let currentPositionTargets = [];
   let targetRefreshFrame = null;
   let targetRefreshAttempts = 0;
   let interactionIntervalId = null;
@@ -192,6 +193,7 @@ function createOnboardingService({ routeName }) {
     const presentation = createCurrentStepPresentation();
     currentRenderedStep = presentation.step;
     currentTargets = resolveTargets(currentRenderedStep);
+    currentPositionTargets = resolvePositionTargets(currentRenderedStep);
 
     currentTargets[0]?.scrollIntoView?.({
       block: "nearest",
@@ -202,6 +204,7 @@ function createOnboardingService({ routeName }) {
       index: currentStepIndex,
       count: steps.length,
       targets: currentTargets,
+      positionTargets: currentPositionTargets,
       nextDisabled: presentation.nextDisabled,
       nextLabel: presentation.nextLabel,
       nextTitle: presentation.nextTitle,
@@ -416,7 +419,8 @@ function createOnboardingService({ routeName }) {
     }
 
     currentTargets = resolveTargets(currentRenderedStep);
-    tour.reposition(currentTargets, currentRenderedStep);
+    currentPositionTargets = resolvePositionTargets(currentRenderedStep);
+    tour.reposition(currentTargets, currentRenderedStep, currentPositionTargets);
     targetRefreshAttempts -= 1;
 
     if (targetRefreshAttempts > 0) {
@@ -467,6 +471,7 @@ function createOnboardingService({ routeName }) {
     stopInteractionPolling();
     cancelTargetRefresh();
     currentTargets = [];
+    currentPositionTargets = [];
     currentStep = null;
     currentRenderedStep = null;
 
@@ -513,6 +518,15 @@ function resolveTargets(step) {
   }
 
   const target = resolveFirstVisibleElement(step?.selectors);
+  return target ? [target] : [];
+}
+
+function resolvePositionTargets(step) {
+  if (!Array.isArray(step?.positionSelectors)) {
+    return [];
+  }
+
+  const target = resolveFirstVisibleElement(step.positionSelectors);
   return target ? [target] : [];
 }
 

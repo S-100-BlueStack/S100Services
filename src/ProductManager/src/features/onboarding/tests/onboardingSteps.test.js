@@ -56,17 +56,20 @@ test("connects map selection, popup actions, Product Collection and browser pref
   assert.equal(searchStep.placement, "adjacent-horizontal");
   assert.equal(filterStep.selectors[0], "#filter-button");
   assert.equal(mapStep.highlight, false);
-  assert.equal(mapStep.placement, "left-center");
+  assert.equal(mapStep.selectors[0], "[data-onboarding-target='product-search']");
+  assert.equal(mapStep.placement, "adjacent-left");
   assert.equal(mapStep.behavior.type, "wait-for-popup");
   assert.equal(mapStep.behavior.waitingNextLabel, "Open a Product");
-  assert.equal(popupStep.placement, "left-center");
+  assert.equal(popupStep.placement, "adjacent-left");
+  assert.deepEqual(popupStep.positionSelectors, mapStep.selectors);
   assert.equal(popupStep.selectorMode, "all");
   assert.equal(popupStep.behavior.type, "require-popup");
   assert.equal(popupStep.behavior.fallbackStepId, "main-map");
   assert.ok(popupStep.selectors.includes(".popup-copy-btn"));
   assert.ok(popupStep.selectors.includes(".popup-product-collection-btn"));
   assert.ok(popupStep.selectors.includes(".popup-action-bar"));
-  assert.equal(collectionStep.placement, "left-center");
+  assert.equal(collectionStep.placement, "adjacent-left");
+  assert.deepEqual(collectionStep.positionSelectors, mapStep.selectors);
   assert.equal(collectionStep.selectors[0], ".popup-product-collection-btn");
   assert.equal(collectionStep.behavior.type, "wait-for-collection");
   assert.deepEqual(collectionStep.behavior.readySelectors, [".pm-product-collection-tray"]);
@@ -147,6 +150,40 @@ test("requires two Review Products and highlights two columns", () => {
   assert.equal(steps[2].maximumTargets, 2);
   assert.equal(steps[2].placement, "target-top-right");
   assert.equal(steps[2].behavior.type, "require-target-count");
+});
+
+test("keeps map, popup and collection guidance anchored to Product search", () => {
+  const [, , mapStep, popupStep, collectionStep] = getOnboardingSteps("main");
+
+  assert.equal(mapStep.placement, "adjacent-left");
+  assert.equal(popupStep.placement, mapStep.placement);
+  assert.equal(collectionStep.placement, mapStep.placement);
+  assert.deepEqual(popupStep.positionSelectors, mapStep.selectors);
+  assert.deepEqual(collectionStep.positionSelectors, mapStep.selectors);
+});
+
+test("places map guidance to the upper left of Product search", () => {
+  const position = calculatePopoverPosition({
+    popoverRect: { width: 340, height: 190 },
+    targetRect: {
+      left: 640,
+      top: 60,
+      right: 1080,
+      bottom: 100,
+      width: 440,
+      height: 40,
+    },
+    placement: "adjacent-left",
+    viewportWidth: 1728,
+    viewportHeight: 900,
+    minimumTop: 68,
+  });
+
+  assert.deepEqual(position, {
+    centered: false,
+    top: 68,
+    left: 288,
+  });
 });
 
 test("keeps an adjacent Product search card on the right when horizontal space exists", () => {
