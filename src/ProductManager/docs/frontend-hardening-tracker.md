@@ -2,7 +2,7 @@
 
 This document tracks frontend-only cleanup, hardening, and architecture improvements for Product Manager. The goal is to improve maintainability, reliability, and structure without changing the user-facing feature set unless an item explicitly tracks a feature foundation.
 
-Current documentation baseline: `4dd26665b6424f4f96306eeecb117d42a193426e`.
+Current documentation baseline: `805a853259b6594fe16384ae37b2e828d6de4c76`.
 
 ## Status values
 
@@ -53,7 +53,7 @@ Current documentation baseline: `4dd26665b6424f4f96306eeecb117d42a193426e`.
 | FH-031 | P2       | Analyze            | Review Preferences availability on Analyze route                                               | Rejected |                                                                                                                                                                           | Full Preferences remain disabled on Analyze because most preferences are main-map scoped.                                                                                                                                                                                                                                     |
 | FH-032 | P1       | Product data       | Normalize product export metadata                                                              | Done     | 9ede3a5c94fbce900f0d5ae05d20e826b07faba3                                                                                                                                  | Added shared normalization for product `Exports` metadata.                                                                                                                                                                                                                                                                    |
 | FH-033 | P1       | Popup UI           | Render export metadata comparison in product popup                                             | Done     | 9ede3a5c94fbce900f0d5ae05d20e826b07faba3                                                                                                                                  | Popup shows S100 product metadata next to export metadata columns.                                                                                                                                                                                                                                                            |
-| FH-034 | P2       | Terminology        | Standardize user-facing naming around Product/Products                                         | Done     |                                                                                                                                                                           | Completed a UI-only terminology audit across the main user-facing surfaces. Visible copy uses `Product`/`Products`, technical identifiers such as `datasetName` remain unchanged, and a regression test protects the terminology boundary.                                                                                    |
+| FH-034 | P2       | Terminology        | Standardize user-facing naming around Product/Products                                         | Done     | 805a853259b6594fe16384ae37b2e828d6de4c76                                                                                                                                  | Completed a UI-only terminology audit across the main user-facing surfaces. Visible copy uses `Product`/`Products`, technical identifiers such as `datasetName` remain unchanged, and a regression test protects the terminology boundary.                                                                                    |
 | FH-035 | P1       | Main map filters   | Restrict main map filters to Display scale, Status and Usage band                              | Done     | 708865afd5e21cc5893f3fade960d63407ec5710                                                                                                                                  | Status options come from the full status/product state endpoint, including count `0` options.                                                                                                                                                                                                                                 |
 | FH-036 | P1       | Popup / attributes | Stabilize first-load attribute display                                                         | Done     | 708865afd5e21cc5893f3fade960d63407ec5710                                                                                                                                  | Product popup details no longer fall back to all raw attributes when field/capability metadata is not ready.                                                                                                                                                                                                                  |
 | FH-037 | P1       | Popup actions      | Enable S100 Edition export and Rollback                                                        | Done     | a3ab23ee615d59b25cccdda4197b226e7efc09ad                                                                                                                                  | Enabled `S100 > Edition` and `Rollback`; disabled `All` export leaves.                                                                                                                                                                                                                                                        |
@@ -64,6 +64,7 @@ Current documentation baseline: `4dd26665b6424f4f96306eeecb117d42a193426e`.
 | FH-042 | P2       | Main map           | Add Product search overlay                                                                     | Done     | 046ea8495f48ffbc2f76c1aa5e0da33fb5317466                                                                                                                                  | Main map has a catalog-backed Product search overlay that opens the selected product popup.                                                                                                                                                                                                                                   |
 | FH-043 | P1       | User guidance      | Add hover help/tooltips to clickable controls                                                  | Done     | 982d9be01f1ace939fe479494c8e05b5c347107e                                                                                                                                  | Added global hover help that applies concise native tooltips to route navigation, main map controls, Product search, filters, popup actions, Dashboard controls, Product picker actions, Product Collection actions and common icon-only controls. Also covered Dashboard activity links and Analyze Open all / Collapse all. |
 | FH-044 | P1       | User guidance      | Add introduction flow for first-time users                                                     | Done     | 0c677549963bb7ce4206fed379dd30dc8c2cc783                                                                                                                                  | Completed compact first-time and replayable onboarding with independent route preferences. Main map, Dashboard, Analyze and Review flows are manually verified, including Theme, Preferences and the interactive Product popup/Product Collection sequence.                                                                   |
+| FH-045 | P1       | Release readiness  | Run comprehensive smoke test across routes and critical workflows                              | Done     |                                                                                                                                                                           | Completed against `805a853259b6594fe16384ae37b2e828d6de4c76` with clean and persisted browser state. Main map, Dashboard, Analyze, Review, onboarding, preferences, keyboard behavior and critical Product workflows passed without new frontend findings.                                                                    |
 
 ## Deferred / backend-dependent notes
 
@@ -90,10 +91,11 @@ Current documentation baseline: `4dd26665b6424f4f96306eeecb117d42a193426e`.
 
 ## Planned order
 
-1. Park new frontend feature development for controlled user testing.
-2. Continue focused smoke testing with clean and persisted browser state.
-3. Keep report-link UI deferred until backend report IDs/storage contracts exist.
-4. Coordinate with backend owners on active operation visibility, async job state, report storage, AOI performance and timeline contracts.
+1. Keep the smoke-tested frontend baseline stable while controlled user testing begins.
+2. Coordinate backend design for active per-Product operation visibility across sessions.
+3. Define async job semantics for long-running Export and Rollback operations.
+4. Keep report-link UI deferred until backend report IDs and storage contracts exist.
+5. Continue targeted regression smoke tests after frontend or backend contract changes.
 
 ## Commit log
 
@@ -118,6 +120,18 @@ Current documentation baseline: `4dd26665b6424f4f96306eeecb117d42a193426e`.
 | 2026-07-16 | 58e721ee7f517f7db945bdfc5fd417abde12c530 | FI-008          | Completed and manually verified independent first-time route onboarding, Analyze Product prerequisite guidance and two-Product Review comparison guidance.                            |
 | 2026-07-16 | 2b5f5f414c97a105ff09411c2711c67f680afce8 | FI-008          | Added and manually verified the final Theme and interactive Preferences steps on the main map.                                                                                        |
 | 2026-07-16 | 0c677549963bb7ce4206fed379dd30dc8c2cc783 | FI-008 / FH-044 | Aligned main-map Steps 3-5 beside Product search and completed the verified introduction-flow phase 1 baseline.                                                                       |
+| 2026-07-16 | 805a853259b6594fe16384ae37b2e828d6de4c76 | FH-034          | Completed the Product terminology audit and added regression coverage for user-facing Product/Products copy.                                                                          |
+
+### FH-045 comprehensive frontend smoke test
+
+Status: Done
+
+- Completed on 2026-07-16 against `805a853259b6594fe16384ae37b2e828d6de4c76`.
+- Covered direct route load and reload, Main map, popup actions, Product search, filters, refresh, Product Collection, Preferences, Theme, Dashboard, Analyze, Review, onboarding, keyboard/Escape priority, notices, error handling, persisted browser state and RDP/VDI behavior.
+- Included both clean browser state and saved preference state.
+- No new frontend defects, regressions or release blockers were found.
+- The automated test suite passed with 99 tests before the manual smoke pass.
+- Keep the checklist in `frontend-release-readiness-review.md` as the regression baseline for future frontend changes and backend contract integrations.
 
 ### FH-034 user-facing Product terminology audit
 

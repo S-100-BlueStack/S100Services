@@ -1,12 +1,12 @@
 # Frontend release-readiness review
 
-Review baseline: `4dd26665b6424f4f96306eeecb117d42a193426e`
+Review baseline: `805a853259b6594fe16384ae37b2e828d6de4c76`
 
 This review focuses on Product Manager frontend readiness for controlled user testing. It identifies release risks, backend dependencies, smoke-test findings, and follow-up hardening work.
 
 ## Decision
 
-The frontend is ready for controlled user testing if the known backend-dependent limitations are communicated clearly to testers. There are no frontend P0 blockers identified in the current implemented flows.
+The frontend has passed a comprehensive smoke test and is ready for controlled user testing if the known backend-dependent limitations are communicated clearly to testers. No frontend defects or P0 blockers were identified in the tested flows.
 
 Discoverability is mitigated by hover/help text and compact replayable onboarding. The complete Main map, Dashboard, Analyze and Review introduction flows have been manually verified, including independent route state, Product prerequisites, Theme and Preferences guidance.
 
@@ -34,9 +34,11 @@ Discoverability is mitigated by hover/help text and compact replayable onboardin
 
 ## Smoke-test summary
 
-A smoke test on 2026-07-09 found no P0 blockers.
+A comprehensive smoke test was completed on 2026-07-16 against `805a853259b6594fe16384ae37b2e828d6de4c76`. It covered clean and persisted browser state, direct route loads and reloads, the Main map, popup actions, Product search, filters, refresh, Product Collection, Preferences, Theme, Dashboard, Analyze, Review, onboarding, keyboard/Escape priority, notices, error handling and RDP/VDI behavior.
 
-Key findings were either fixed or documented:
+Result: no new frontend defects, regressions or release blockers were found. The automated test suite also passed with 99 tests before the manual smoke pass.
+
+An earlier smoke pass on 2026-07-09 identified observations that were fixed or documented:
 
 - startup/routes worked without issues
 - `/aoi` load takes about 12 seconds, but data loads correctly
@@ -56,9 +58,9 @@ Key findings were either fixed or documented:
 - main map Product search was added and polished
 - hover/help tooltips were added to common clickable controls
 
-Remaining observations:
+Remaining observations are backend-dependent or deferred rather than smoke-test failures:
 
-- `/aoi` endpoint performance is a backend/performance topic
+- `/aoi` endpoint performance remains a backend/performance topic
 - `UsageBand` currently shows descriptive text; including the ID may be solved better in backend data
 - active operation visibility across sessions is not visible before the user attempts an action
 - report/validation links remain disabled until backend report metadata exists
@@ -274,13 +276,15 @@ Recommendation:
 
 ## Recommended next actions
 
-1. Park new frontend feature development for controlled user testing.
-2. Communicate backend-dependent limitations to testers and backend owners.
-3. Keep hover/help, onboarding targets and Product terminology coverage current when controls are added or changed.
+1. Keep the smoke-tested frontend baseline stable while controlled user testing begins.
+2. Define backend-visible active operation state per Product so other sessions can see running work before attempting an action.
+3. Define async job IDs, status and error semantics for long-running Export and Rollback operations.
 4. Keep report-link UI deferred until backend report contracts are known.
-5. Continue focused smoke tests on clean and persisted browser profiles.
+5. Keep hover/help, onboarding targets and Product terminology coverage current, and rerun targeted smoke tests after material changes.
 
 ## Manual smoke checklist
+
+The full checklist below was completed on 2026-07-16 against `805a853259b6594fe16384ae37b2e828d6de4c76` with no findings. Keep it as the regression checklist for future releases and backend contract changes.
 
 ### Startup and routes
 

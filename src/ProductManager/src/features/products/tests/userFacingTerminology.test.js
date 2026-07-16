@@ -363,7 +363,9 @@ function findTerminologyViolations(strings) {
 }
 
 function isTechnicalIdentifier(value) {
-  const normalizedValue = String(value).replace(/\$\{[\s\S]*?\}/g, "value").trim();
+  const normalizedValue = String(value)
+    .replace(/\$\{[\s\S]*?\}/g, "value")
+    .trim();
 
   if (!normalizedValue) {
     return true;
@@ -397,7 +399,7 @@ test("terminology scanner distinguishes UI labels from technical identifiers", (
 
   assert.deepEqual(
     violations.map(({ value }) => value),
-    ["Dataset list", "No datasets were found."],
+    ["Dataset list", "No datasets were found."]
   );
 });
 
@@ -411,7 +413,7 @@ test("terminology scanner separates template text from JavaScript expressions", 
 
   assert.deepEqual(
     violations.map(({ value }) => value),
-    ["No Datasets match "],
+    ["No Datasets match "]
   );
 });
 
@@ -426,7 +428,7 @@ test("terminology scanner ignores regular expressions containing quote character
 
   assert.deepEqual(
     violations.map(({ value }) => value),
-    ["Dataset list"],
+    ["Dataset list"]
   );
 });
 
@@ -441,15 +443,13 @@ test("user-facing Product Manager sources use Product terminology", async () => 
       : extractJavaScriptStrings(source);
 
     for (const violation of findTerminologyViolations(strings)) {
-      violations.push(
-        `${relativePath}:${violation.line}: ${JSON.stringify(violation.value)}`,
-      );
+      violations.push(`${relativePath}:${violation.line}: ${JSON.stringify(violation.value)}`);
     }
   }
 
   assert.deepEqual(
     violations,
     [],
-    `Use Product/Products in user-facing text. Technical identifiers such as datasetName may remain.\n${violations.join("\n")}`,
+    `Use Product/Products in user-facing text. Technical identifiers such as datasetName may remain.\n${violations.join("\n")}`
   );
 });
