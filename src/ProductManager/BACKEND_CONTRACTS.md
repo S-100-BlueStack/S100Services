@@ -1,8 +1,16 @@
 # Product Manager backend contracts
 
-This document is the current source of truth for Product Manager backend integration work.
+This document is a source-of-truth document for Product Manager backend integration work.
 
-Planning baseline: `fd111863c3119b611ba8649db0be61b098ffdb73`.
+Planning baseline: `6d18fae743a67cdc85864aa68c51cf6d79921d0c`.
+
+The permanent BE-101 scope corrections are recorded in:
+
+```text
+src/ProductManager/docs/backend-context-review-addendum.md
+```
+
+When scope wording conflicts, the committed BE-101 addendum takes precedence over the original BE-101 report and earlier roadmap wording.
 
 The contracts below are implementation targets. Exact controller, service, repository, DTO, and route placement must be aligned with the current backend structure before code is changed.
 
@@ -10,9 +18,9 @@ The contracts below are implementation targets. Exact controller, service, repos
 
 The following decisions are fixed unless the project owners explicitly reopen them:
 
-- Existing Windows file locking remains the authority that prevents concurrent operations on the same Product file.
-- Do not add a second Product lock, database lock table, distributed lock registry, or new Product database field for concurrency control.
-- Job state is for visibility, recovery, and frontend status. It must not replace or compete with the existing file-lock behavior.
+- `DatasetLockService` uses the existing separate Windows lock-file framework under `%ProgramData%`. It remains the authority that prevents concurrent operations on the same Product.
+- Do not add database locks, lock tables, Product lock fields, distributed locks, a second Product lock, or a replacement lock service.
+- Job state is for visibility, recovery, and frontend status. It must not replace or compete with the existing lock-file behavior.
 - Use the background-job framework already present in the backend. Do not introduce a second job framework.
 - Avoid Product database and geodatabase schema changes while database administrators are unavailable.
 - Continue using `datasetName` as the temporary Product identifier until a permanent Product ID is introduced by the database owners.
@@ -20,7 +28,9 @@ The following decisions are fixed unless the project owners explicitly reopen th
 - Product History is an audit log. It is not a mechanism for reconstructing historical map snapshots.
 - Global map timeline is a separate, deferred feature that requires a deliberate snapshot/history architecture decision.
 - Analyze continues to load one Product per request. A multi-Product Analyze endpoint is not planned.
-- User-facing Usage band labels must use the format `4 - Approach`, without the prefix `Usage band`.
+- Analyze geometry is not changed in BE-102. A structured public geometry response remains the likely long-term direction and must be handled as a separate later API-contract task.
+- Authentication and authorization remain intentionally open during development and are deferred to production-readiness work.
+- User-facing Usage Band labels must use the full form, such as `4 - Navigational Purpose Approach`, without adding a `Usage band` prefix.
 
 ## Mandatory backend context review
 
@@ -33,6 +43,12 @@ src/ProductManager/docs/backend-context-review-checklist.md
 The implementation must preserve the existing request flow, dependency injection, response wrappers, exception handling, job infrastructure, file operations, ArcGIS integration, and test conventions unless a change is explicitly approved.
 
 ## General API conventions
+
+### Development authentication status
+
+Authentication and authorization remain intentionally open during development because earlier integration work encountered authentication and CORS-related issues.
+
+Do not add authentication or authorization acceptance criteria to BE-102. API and Hangfire Dashboard protection must be addressed later as part of production readiness.
 
 ### Preserve existing routes where practical
 
@@ -98,21 +114,26 @@ Do not create an application-level lock to produce this response. Normalize the 
 
 ## Export target contract
 
+This section defines the BE-102 contract boundary. BE-102 implements only the readable ExportTarget contract and the matching frontend metadata.
+
+It does not implement Hangfire jobs, job status, recovery, lock hardening, authentication, AOI changes, Dashboard changes, geometry changes, or the underlying S100 New Update operation.
+
 ### Existing operation routes
 
-Keep the existing route concepts:
+BE-102 applies the shared target parsing and validation contract to:
 
 ```http
 POST /export/{name}/newedition
 POST /export/{name}/newupdate
-POST /export/{name}/rollback
 ```
 
-The final HTTP verb must remain aligned with the currently committed controller implementation. Do not change it from `POST`, `PUT`, or another established verb without verifying the actual current route and all consumers.
+Rollback behavior is not changed by BE-102.
+
+The HTTP verbs and route names remain aligned with the backend confirmed during BE-101.
 
 ### Readable export target
 
-Replace opaque numeric request values with a readable string enum.
+Limit the public `exportTarget` contract to the readable values `All`, `S100`, and `S57`.
 
 Preferred query parameter:
 
@@ -120,7 +141,7 @@ Preferred query parameter:
 ?exportTarget=S100
 ```
 
-Supported contract names:
+Public contract values:
 
 ```text
 All
@@ -128,34 +149,62 @@ S100
 S57
 ```
 
-The backend enum may retain numeric values internally for compatibility, but public API requests and OpenAPI documentation must present names rather than `0`, `1`, and `2`.
+The internal enum may retain numeric assignments, but public requests and OpenAPI/Swagger documentation must use the readable names.
 
-Numeric input such as the following should be rejected after compatibility impact has been checked:
+ASP.NET enum model binding may currently accept both enum names and numeric enum values. Numeric values are not part of the approved public contract after BE-102.
+
+Requests such as the following must be rejected unless consumer review identifies a verified compatibility or deployment-order requirement:
 
 ```http
 ?exportTarget=1
 ```
 
-### Current support matrix
+Temporary numeric support is permitted only with:
 
-The backend contract should understand all three target names, but current business support is restricted.
+- a verified consumer or deployment-order requirement;
+- documented deprecation;
+- a concrete removal plan.
 
-| Operation   | Target | Backend contract                                                                       | Frontend state |
-| ----------- | ------ | -------------------------------------------------------------------------------------- | -------------- |
-| New edition | `S100` | Supported                                                                              | Enabled        |
-| New edition | `All`  | Return explicit unsupported response                                                   | Disabled       |
-| New edition | `S57`  | Return explicit unsupported response                                                   | Disabled       |
-| New update  | `S100` | Contract prepared; enable only after current backend behavior is verified and approved | Disabled       |
-| New update  | `All`  | Return explicit unsupported response                                                   | Disabled       |
-| New update  | `S57`  | Return explicit unsupported response                                                   | Disabled       |
+### Shared parsing and validation
 
-The frontend must send the correct target value for every configured leaf action, even while disabled actions remain unavailable to users.
+New Edition and New Update must use the same target parsing and target validation contract.
 
-The frontend must not send requests from disabled leaves.
+The expected validation order is:
+
+1. Reject an invalid or numeric target.
+2. Reject `All` and `S57` as valid but unsupported targets.
+3. Allow a valid `S100` target to reach the operation-specific endpoint behavior.
+
+For New Update, step 3 must retain the endpoint's existing not-implemented response.
+
+If the current backend architecture makes this ordering unsuitable, implementation must not silently choose another order. The deviation must be documented as an open BE-102 question before runtime code is changed.
+
+### New Update clarification
+
+BE-102 implements only the readable ExportTarget contract.
+
+The existing New Update operation remains unimplemented. For a valid `S100` target, the endpoint must retain its current not-implemented behavior until a separate work package implements S100 Update.
+
+BE-102 must not add the underlying generation or export logic for New Update.
+
+### Expected behavior after BE-102
+
+| Operation | Target | Expected backend behavior | Frontend state |
+| --- | --- | --- | --- |
+| New Edition | `S100` | Execute the existing S100 Edition export | Enabled |
+| New Edition | `All` | Return an explicit unsupported-target error | Disabled |
+| New Edition | `S57` | Return an explicit unsupported-target error | Disabled |
+| New Edition | numeric `0`, `1`, or `2` | Reject unless consumer review documents a temporary legacy requirement | Not sent |
+| New Update | `S100` | Retain the existing not-implemented response | Disabled |
+| New Update | `All` | Return an explicit unsupported-target error | Disabled |
+| New Update | `S57` | Return an explicit unsupported-target error | Disabled |
+| New Update | numeric `0`, `1`, or `2` | Reject unless consumer review documents a temporary legacy requirement | Not sent |
+
+Only S100 Edition is operational and enabled.
 
 ### Frontend export configuration
 
-Each leaf action must have explicit metadata:
+Every export leaf must have explicit metadata, even while the leaf is disabled:
 
 ```js
 {
@@ -165,7 +214,7 @@ Each leaf action must have explicit metadata:
 }
 ```
 
-Disabled future leaves must still use their intended target and export type:
+Disabled future leaves must retain their intended metadata:
 
 ```js
 {
@@ -175,9 +224,42 @@ Disabled future leaves must still use their intended target and export type:
 }
 ```
 
-This keeps the frontend configuration ready without claiming unsupported backend behavior.
+The complete frontend leaf set is:
+
+- All Edition;
+- All Update;
+- S100 Edition;
+- S100 Update;
+- S57 Edition;
+- S57 Update.
+
+Only S100 Edition is enabled. S100 Update remains disabled because the backend operation remains unimplemented. Disabled leaves must not dispatch requests.
+
+### BE-102 acceptance boundary
+
+BE-102 requires:
+
+- readable `All`, `S100`, and `S57` target parsing;
+- explicit support validation that allows only `S100`;
+- shared parsing and validation for New Edition and New Update;
+- correct OpenAPI/Swagger documentation;
+- frontend metadata for all six leaves;
+- only S100 Edition enabled;
+- relevant backend and frontend tests.
+
+BE-102 explicitly excludes:
+
+- Hangfire or other async-job changes;
+- job-status or active-job visibility changes;
+- retry, idempotency, recovery, cleanup, or lock hardening;
+- authentication or authorization changes;
+- AOI, Dashboard, or geometry runtime changes;
+- implementation of S100 New Update;
+- Product database or geodatabase schema changes.
 
 ## Async operation and job-status contract
+
+This contract belongs to BE-104 and BE-105. It is outside BE-102.
 
 ### Goal
 
@@ -415,23 +497,28 @@ Choose one of these approaches after discovery:
 2. a versioned/paged endpoint while the existing endpoint remains temporarily available;
 3. a single breaking change only when Product Manager is confirmed as the sole consumer and backend/frontend are deployed together.
 
-## Usage band presentation
+## Usage Band presentation
 
-The API must continue to preserve both the numeric ID and the description.
+The API must continue to preserve both the numeric ID and the full description.
 
 Conceptual data:
 
 ```json
 {
   "id": 4,
-  "description": "Approach"
+  "description": "Navigational Purpose Approach"
 }
 ```
 
-The frontend-visible label must be:
+The frontend-visible labels must use the full text:
 
 ```text
-4 - Approach
+1 - Navigational Purpose Overview
+2 - Navigational Purpose General
+3 - Navigational Purpose Coastal
+4 - Navigational Purpose Approach
+5 - Navigational Purpose Harbour
+6 - Navigational Purpose Berthing
 ```
 
 The filter value should continue to use the stable ID.
@@ -477,7 +564,9 @@ Job progress updates should not become separate history events unless they repre
 
 ## Analyze geometry contract
 
-Preferred API shape:
+Analyze geometry is not changed in BE-102.
+
+The likely long-term public API shape is a structured JSON geometry value rather than a JSON-encoded string:
 
 ```json
 {
@@ -490,9 +579,9 @@ Preferred API shape:
 }
 ```
 
-Avoid returning geometry as a JSON-encoded string when the public API can return a JSON object.
+Internal ArcGIS `ToJson()` and `ImportFromJson()` use may remain unchanged. The later contract task should separate internal ArcGIS serialization from the public response DTO where practical.
 
-Do not change the current geometry serialization until the context review confirms:
+Do not change the current public geometry serialization until a separate API-contract task confirms:
 
 - why the current shape exists;
 - every backend and frontend consumer;
