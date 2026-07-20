@@ -1,7 +1,8 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using ProductManagerAPI.Data.Repositories;
+using ProductManagerAPI.Filters;
 using ProductManagerAPI.Services.Export;
 using ProductManagerAPI.Services.Locking;
 using S100FC.ProductCatalogue;
@@ -32,18 +33,21 @@ namespace ProductManagerAPI.Controllers
         /// Creates a new edition.
         /// </summary>
         /// <param name="name">The name of the dataset.</param>
-        /// <param name="exportTarget">The target format for the export(s).</param>
-        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity, "application/problem+json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
+        [ValidateExportTarget]
         [HttpPost("{name}/newedition", Name = "NewEdition")]
-        public async Task<IActionResult> NewEdition(string name, CancellationToken cancellationToken, Models.RequestTypes.ExportFormat exportTarget = Models.RequestTypes.ExportFormat.S100) {
+        public async Task<IActionResult> NewEdition(string name, CancellationToken cancellationToken) {
             var user = User?.Identity?.Name;
             _logger.LogInformation("{NewEdition} called with name: {name} by user: {user}", nameof(NewEdition), name, user);
 
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse();
+            var exportTarget = ExportTargetContract.GetValidatedTarget(HttpContext);
 
 
             var product = _electronicProductManager.ElectronicProduct(name);
@@ -127,15 +131,15 @@ namespace ProductManagerAPI.Controllers
         /// Creates a new update.
         /// </summary>
         /// <param name="name">The name of the dataset.</param>
-        /// <param name="exportTarget">The target format(s) for the export.</param>
-        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
-        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
-        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
-        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity, "application/problem+json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status501NotImplemented, "application/json")]
+        [ValidateExportTarget]
         [HttpPost("{name}/newupdate", Name = "NewUpdate")]
-        public async Task<IActionResult> NewUpdate(string name, CancellationToken cancellationToken, Models.RequestTypes.ExportFormat exportTarget = Models.RequestTypes.ExportFormat.S100) {
+        public async Task<IActionResult> NewUpdate(string name, CancellationToken cancellationToken) {
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse();
+            var exportTarget = ExportTargetContract.GetValidatedTarget(HttpContext);
 
 
 
@@ -460,3 +464,4 @@ namespace ProductManagerAPI.Controllers
 #endif
     }
 }
+

@@ -96,6 +96,8 @@ src/features/map/popups/popupActionDom.js
 src/features/map/popups/popupActionDropdown.js
 src/features/map/popups/popupExportState.js
 src/features/map/popups/popupExportConfig.js
+src/features/map/popups/popupExportContract.js
+src/features/data/domain/exportTarget.js
 ```
 
 Popup action flow is documented in:
@@ -109,9 +111,22 @@ Current popup action endpoint status:
 - `Freeze` / `Unfreeze` use the existing product freeze-state API.
 - `Send to IC-ENC` uses the existing product upload/send API.
 - `Rollback` is enabled and calls `POST /export/{name}/rollback`.
-- `Export > S100 > Edition` is enabled and calls `POST /export/{name}/newedition`.
+- `Export > S100 > Edition` is enabled and calls `POST /export/{name}/newedition?exportTarget=S100`.
 - `Export > All > Edition` and `Export > All > Update` are intentionally disabled.
 - `Export > S57 > Edition`, `Export > S57 > Update` and `Export > S100 > Update` remain disabled until the backend contract changes.
+
+BE-102 export target contract:
+
+- missing `exportTarget` defaults to `S100`;
+- parsing is case-insensitive;
+- canonical values are `All`, `S100`, and `S57`;
+- `Both`, numeric values, empty/whitespace values, and unknown text return `400` with `EXPORT_TARGET_INVALID` and `allowedTargets: ["All", "S100", "S57"]`;
+- `All` and `S57` return `422` with `EXPORT_TARGET_NOT_SUPPORTED` and `supportedTargets: ["S100"]`;
+- `GET /Lookup/exportformats` returns `[{ "Name": "All" }, { "Name": "S100" }, { "Name": "S57" }]`.
+
+The frontend contains explicit target/type metadata for all six leaves. A central dispatch guard allows only S100 Edition and runs before confirmation, loading state, and API dispatch.
+
+Deployment may be frontend-first or backend-first because missing target still defaults to `S100`; frontend-first is preferred so explicit target requests are visible before backend enforcement changes.
 
 ### Product operation state
 
@@ -318,7 +333,7 @@ Do not add endpoint wiring directly in `popupActionConfig.js`.
 Current implemented export leaf:
 
 ```txt
-Export > S100 > Edition -> POST /export/{name}/newedition
+Export > S100 > Edition -> POST /export/{name}/newedition?exportTarget=S100
 ```
 
 Current implemented rollback action:

@@ -8,6 +8,7 @@ import {
 } from "../../products/state/productOperationState.js";
 import { getPopupExportActionState, isAnyPopupExportActionRunning } from "./popupExportState.js";
 import { POPUP_EXPORT_GROUPS } from "./popupExportConfig.js";
+import { isSupportedExportAction } from "./popupExportContract.js";
 import {
   openAnalyzePage,
   openProductHistory,
@@ -155,7 +156,6 @@ function createExportGroupAction({
     icon: group.icon,
     items: group.actions.map((exportAction) =>
       createExportLeafAction({
-        group,
         exportAction,
         attributes,
         frozen,
@@ -167,7 +167,6 @@ function createExportGroupAction({
 }
 
 function createExportLeafAction({
-  group,
   exportAction,
   attributes,
   frozen,
@@ -177,13 +176,13 @@ function createExportLeafAction({
   const datasetName = getDatasetName(attributes);
   const exportState = getPopupExportActionState({
     datasetName,
-    scope: group.scope,
+    scope: exportAction.target,
     exportType: exportAction.exportType,
   });
   const availability = createProductExportAvailability({
     attributes,
     frozen,
-    implemented: exportAction.implemented,
+    implemented: isSupportedExportAction(exportAction),
     exportState,
     productHasRunningMutation: hasRunningNonExportProductOperation(productOperationState),
     productOperationDisabledReason: productOperationState.disabledReason,
@@ -199,8 +198,10 @@ function createExportLeafAction({
     onClick: async ({ anchorElement }) => {
       await triggerExport({
         datasetName,
-        scope: group.scope,
+        actionId: exportAction.id,
+        target: exportAction.target,
         exportType: exportAction.exportType,
+        implemented: exportAction.implemented,
         request: exportAction.request,
         anchorElement,
         confirm: exportAction.createConfirm?.(datasetName),

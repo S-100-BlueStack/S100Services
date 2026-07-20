@@ -42,19 +42,19 @@ These decisions apply to every work package:
 
 ## Work package status
 
-| ID     | Area                                   | Status                       | Database/geodatabase change | Primary dependency                                          |
-| ------ | -------------------------------------- | ---------------------------- | --------------------------- | ----------------------------------------------------------- |
-| BE-101 | Full backend context review            | Complete                     | No                          | Current backend source and tests                            |
-| BE-102 | Readable ExportTarget contract         | Ready after consumer review  | No                          | Verified export controller/service contract                 |
-| FE-101 | Usage band label                       | Ready after payload check    | No                          | Existing Usage band ID + description payload                |
-| BE-103 | AOI profiling and optimization         | Ready after BE-101           | No for first pass           | Measured request path                                       |
-| BE-104 | Async Export/Rollback jobs             | Planned                      | No                          | Existing background-job framework                           |
-| BE-105 | Product-level active job visibility    | Conditional                  | No                          | Existing job storage must support efficient metadata lookup |
-| BE-106 | Dashboard filtering and pagination     | Planned                      | No for first release        | Stable ordering/event key review                            |
-| BE-107 | Product History failure hardening      | Planned with validation work | No assumption               | Validation/history producer contract                        |
-| BE-108 | Report storage/content                 | Blocked                      | Unknown                     | IC-ENC and internal validation process/API                  |
-| BE-109 | Permanent Product ID                   | Blocked                      | Yes                         | Database owners                                             |
-| BE-110 | Historical global map timeline         | Deferred                     | Likely                      | Architecture and retention decision                         |
+| ID     | Area                                | Status                       | Database/geodatabase change | Primary dependency                                          |
+| ------ | ----------------------------------- | ---------------------------- | --------------------------- | ----------------------------------------------------------- |
+| BE-101 | Full backend context review         | Complete                     | No                          | Current backend source and tests                            |
+| BE-102 | Readable ExportTarget contract      | Implemented                  | No                          | Verified export controller/service contract                 |
+| FE-101 | Usage band label                    | Ready after payload check    | No                          | Existing Usage band ID + description payload                |
+| BE-103 | AOI profiling and optimization      | Ready after BE-101           | No for first pass           | Measured request path                                       |
+| BE-104 | Async Export/Rollback jobs          | Planned                      | No                          | Existing background-job framework                           |
+| BE-105 | Product-level active job visibility | Conditional                  | No                          | Existing job storage must support efficient metadata lookup |
+| BE-106 | Dashboard filtering and pagination  | Planned                      | No for first release        | Stable ordering/event key review                            |
+| BE-107 | Product History failure hardening   | Planned with validation work | No assumption               | Validation/history producer contract                        |
+| BE-108 | Report storage/content              | Blocked                      | Unknown                     | IC-ENC and internal validation process/API                  |
+| BE-109 | Permanent Product ID                | Blocked                      | Yes                         | Database owners                                             |
+| BE-110 | Historical global map timeline      | Deferred                     | Likely                      | Architecture and retention decision                         |
 
 ## Implementation order
 
@@ -134,6 +134,8 @@ Approximately 0.5-1.5 working days, depending on backend size and test setup.
 
 ### Purpose
 
+Status: Implemented against baseline `fcbcaacd85f5c802bf76d6ec3c73cb5d9097c888`.
+
 Limit the public `exportTarget` contract to the readable values `All`, `S100`, and `S57` while preparing frontend metadata for all export leaves.
 
 BE-102 changes the target contract only. It does not implement async jobs, job status, recovery, lock hardening, authentication, AOI work, Dashboard work, geometry changes, or S100 New Update generation.
@@ -149,7 +151,9 @@ Rollback runtime behavior is unchanged by BE-102.
 
 ### Contract decision
 
-Retain the public parameter name `exportTarget` unless implementation discovery identifies a verified reason to change it.
+The public parameter name remains `exportTarget`. A missing value defaults to `S100`, while an explicitly empty or whitespace-only value is invalid. Parsing is case-insensitive, and documentation uses the canonical forms `All`, `S100`, and `S57`.
+
+Consumer review found no numeric compatibility requirement. `Both`, numeric and numeric-looking values, and unknown text return `400` with `EXPORT_TARGET_INVALID`. `All` and `S57` return `422` with `EXPORT_TARGET_NOT_SUPPORTED`.
 
 Public values:
 
@@ -167,9 +171,7 @@ Preferred request:
 
 OpenAPI/Swagger must present the readable values rather than requiring API consumers to know internal enum assignments.
 
-ASP.NET may currently accept both enum names and numeric enum values. Numeric `0`, `1`, and `2` are not approved public values after BE-102.
-
-Temporary numeric support may be added only when consumer review identifies a verified consumer or deployment-order requirement. It must then include documented deprecation and a removal plan.
+ASP.NET enum model binding previously accepted enum names and numeric values. BE-102 validates the raw query value before controller execution. Numeric values and the legacy name `Both` are invalid, and consumer review found no reason to add temporary compatibility.
 
 ### New Update boundary
 
@@ -195,16 +197,16 @@ If current backend architecture makes this order unsuitable, do not change it si
 
 ### Expected behavior after BE-102
 
-| Operation | Target | Expected backend behavior | Frontend state |
-| --- | --- | --- | --- |
-| New Edition | `S100` | Execute the existing S100 Edition export | Enabled |
-| New Edition | `All` | Explicit unsupported-target error | Disabled |
-| New Edition | `S57` | Explicit unsupported-target error | Disabled |
-| New Edition | numeric `0`, `1`, or `2` | Reject unless consumer review documents temporary legacy support | Not sent |
-| New Update | `S100` | Retain the existing not-implemented response | Disabled |
-| New Update | `All` | Explicit unsupported-target error | Disabled |
-| New Update | `S57` | Explicit unsupported-target error | Disabled |
-| New Update | numeric `0`, `1`, or `2` | Reject unless consumer review documents temporary legacy support | Not sent |
+| Operation   | Target                   | Expected backend behavior                    | Frontend state |
+| ----------- | ------------------------ | -------------------------------------------- | -------------- |
+| New Edition | `S100`                   | Execute the existing S100 Edition export     | Enabled        |
+| New Edition | `All`                    | Explicit unsupported-target error            | Disabled       |
+| New Edition | `S57`                    | Explicit unsupported-target error            | Disabled       |
+| New Edition | numeric `0`, `1`, or `2` | Return `400` with `EXPORT_TARGET_INVALID`    | Not sent       |
+| New Update  | `S100`                   | Retain the existing not-implemented response | Disabled       |
+| New Update  | `All`                    | Explicit unsupported-target error            | Disabled       |
+| New Update  | `S57`                    | Explicit unsupported-target error            | Disabled       |
+| New Update  | numeric `0`, `1`, or `2` | Return `400` with `EXPORT_TARGET_INVALID`    | Not sent       |
 
 ### Backend tasks
 
@@ -213,7 +215,7 @@ If current backend architecture makes this order unsuitable, do not change it si
 3. Limit public values to `All`, `S100`, and `S57`.
 4. Allow only `S100` as a supported target.
 5. Reject `All` and `S57` with the established explicit unsupported-target response.
-6. Reject numeric targets unless consumer review approves temporary compatibility with a removal plan.
+6. Reject numeric targets and the legacy name `Both` with `EXPORT_TARGET_INVALID`.
 7. Preserve New Edition's existing S100 behavior.
 8. Preserve New Update's existing not-implemented behavior for a valid S100 target.
 9. Document the contract and examples in OpenAPI/Swagger.
@@ -266,7 +268,7 @@ EXPORT_TARGET_NOT_SUPPORTED
 - Swagger/OpenAPI shows `All`, `S100`, and `S57` as the public target values.
 - S100 New Edition continues to execute the existing export.
 - `All` and `S57` receive an explicit unsupported-target response for both New Edition and New Update.
-- Numeric `0`, `1`, and `2` are rejected unless consumer review documents temporary support, deprecation, and a removal plan.
+- Numeric `0`, `1`, and `2` and the legacy name `Both` are rejected with `EXPORT_TARGET_INVALID`.
 - New Edition and New Update use the same target parsing and validation contract.
 - S100 New Update remains unimplemented and its frontend leaf remains disabled.
 - BE-102 only applies the shared target parsing and validation contract to the New Update endpoint.

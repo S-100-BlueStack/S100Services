@@ -15,6 +15,7 @@ import {
 import { openProductHistoryPanel as dispatchProductHistoryOpen } from "../../timeline/events/productHistoryEvents.js";
 import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
 import { beginPopupExportAction, endPopupExportAction } from "./popupExportState.js";
+import { validateExportDispatch } from "./popupExportContract.js";
 
 export function openAnalyzePage(datasetName) {
   if (!datasetName) {
@@ -147,31 +148,41 @@ export async function triggerRollback(datasetName, anchorElement, { afterResult 
 
 export async function triggerExport({
   datasetName,
-  scope,
+  actionId,
+  target,
   exportType,
+  implemented,
   request,
   anchorElement,
   confirm,
   afterResult,
 }) {
+  const dispatchValidation = validateExportDispatch({
+    actionId,
+    target,
+    exportType,
+    implemented,
+    request,
+  });
+
+  if (!dispatchValidation.allowed) {
+    noticeError(
+      "Export is not available",
+      `${target ?? "Unknown"} ${exportType ?? "export"} is not an enabled export action.`
+    );
+    return createSkippedActionResult(dispatchValidation.reason);
+  }
+
   if (!datasetName) {
     noticeError("Cannot export product", "The selected feature does not have a datasetName.");
     return null;
   }
 
-  if (typeof request !== "function") {
-    noticeError(
-      "Export is not configured",
-      `${scope} ${exportType} does not have an export endpoint configured yet.`
-    );
-    return null;
-  }
-
-  const exportLabel = `${scope} ${exportType}`;
+  const exportLabel = `${target} ${exportType}`;
 
   return runConfirmedExportOperation({
     datasetName,
-    scope,
+    scope: target,
     exportType,
     exportLabel,
     request,

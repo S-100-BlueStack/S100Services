@@ -17,13 +17,13 @@ It contains documentation decisions only. It does not authorize or include runti
 
 The existing work package division is preserved:
 
-| ID | Work package |
-| --- | --- |
-| BE-102 | Readable ExportTarget contract |
-| BE-103 | AOI profiling and optimization |
-| BE-104 | Async Export/Rollback jobs |
+| ID     | Work package                        |
+| ------ | ----------------------------------- |
+| BE-102 | Readable ExportTarget contract      |
+| BE-103 | AOI profiling and optimization      |
+| BE-104 | Async Export/Rollback jobs          |
 | BE-105 | Product-level active job visibility |
-| BE-106 | Dashboard filtering and pagination |
+| BE-106 | Dashboard filtering and pagination  |
 
 BE-102 must not absorb Hangfire, job status, recovery, lock hardening, authentication, AOI, Dashboard, or geometry work.
 
@@ -99,16 +99,16 @@ Target parsing and target validation must be shared by New Edition and New Updat
 
 ## Expected behavior after BE-102
 
-| Operation | Target | Expected backend behavior | Frontend state |
-| --- | --- | --- | --- |
-| New Edition | `S100` | Execute the existing S100 Edition export | Enabled |
-| New Edition | `All` | Explicit unsupported-target error | Disabled |
-| New Edition | `S57` | Explicit unsupported-target error | Disabled |
-| New Edition | numeric `0`, `1`, or `2` | Reject unless consumer review documents temporary legacy support | Not sent |
-| New Update | `S100` | Retain the existing not-implemented response | Disabled |
-| New Update | `All` | Explicit unsupported-target error | Disabled |
-| New Update | `S57` | Explicit unsupported-target error | Disabled |
-| New Update | numeric `0`, `1`, or `2` | Reject unless consumer review documents temporary legacy support | Not sent |
+| Operation   | Target                   | Expected backend behavior                                        | Frontend state |
+| ----------- | ------------------------ | ---------------------------------------------------------------- | -------------- |
+| New Edition | `S100`                   | Execute the existing S100 Edition export                         | Enabled        |
+| New Edition | `All`                    | Explicit unsupported-target error                                | Disabled       |
+| New Edition | `S57`                    | Explicit unsupported-target error                                | Disabled       |
+| New Edition | numeric `0`, `1`, or `2` | Reject unless consumer review documents temporary legacy support | Not sent       |
+| New Update  | `S100`                   | Retain the existing not-implemented response                     | Disabled       |
+| New Update  | `All`                    | Explicit unsupported-target error                                | Disabled       |
+| New Update  | `S57`                    | Explicit unsupported-target error                                | Disabled       |
+| New Update  | numeric `0`, `1`, or `2` | Reject unless consumer review documents temporary legacy support | Not sent       |
 
 ## Target validation order
 

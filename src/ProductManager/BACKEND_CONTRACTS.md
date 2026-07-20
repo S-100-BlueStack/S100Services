@@ -118,6 +118,32 @@ This section defines the BE-102 contract boundary. BE-102 implements only the re
 
 It does not implement Hangfire jobs, job status, recovery, lock hardening, authentication, AOI changes, Dashboard changes, geometry changes, or the underlying S100 New Update operation.
 
+### BE-102 implementation status
+
+BE-102 is implemented with a targeted API action filter that validates `exportTarget` before the controller action runs.
+
+Implemented public behavior:
+
+- a missing `exportTarget` defaults to `S100`;
+- an explicitly empty or whitespace-only value is invalid;
+- names are matched case-insensitively;
+- canonical documentation and metadata use `All`, `S100`, and `S57`;
+- `Both`, numeric values, numeric-looking values, and unknown text return `400 Bad Request` with `code: EXPORT_TARGET_INVALID` and `allowedTargets: ["All", "S100", "S57"]`;
+- `All` and `S57` return `422 Unprocessable Entity` with `code: EXPORT_TARGET_NOT_SUPPORTED` and `supportedTargets: ["S100"]`;
+- validation completes before Product lookup, locking, ArcGIS/file work, attachments, and repository/history mutation;
+- `S100` New Edition preserves the existing export operation;
+- `S100` New Update preserves the existing `501 Not Implemented` `ApiResponse`.
+
+`GET /Lookup/exportformats` now returns this exact response shape:
+
+```json
+[{ "Name": "All" }, { "Name": "S100" }, { "Name": "S57" }]
+```
+
+The lookup response no longer publishes `Both` or numeric request values.
+
+Deployment is frontend-first or backend-first compatible because the current backend accepts the readable `S100` name and the implemented backend continues to default a missing target to `S100`. The frontend sends `exportTarget=S100` explicitly after BE-102.
+
 ### Existing operation routes
 
 BE-102 applies the shared target parsing and validation contract to:
@@ -151,19 +177,15 @@ S57
 
 The internal enum may retain numeric assignments, but public requests and OpenAPI/Swagger documentation must use the readable names.
 
-ASP.NET enum model binding may currently accept both enum names and numeric enum values. Numeric values are not part of the approved public contract after BE-102.
+ASP.NET enum model binding previously accepted both enum names and numeric enum values. BE-102 validates the raw query value before controller execution, so numeric values and the legacy name `Both` are not part of the public contract.
 
-Requests such as the following must be rejected unless consumer review identifies a verified compatibility or deployment-order requirement:
+Requests such as the following are rejected:
 
 ```http
 ?exportTarget=1
 ```
 
-Temporary numeric support is permitted only with:
-
-- a verified consumer or deployment-order requirement;
-- documented deprecation;
-- a concrete removal plan.
+Consumer review found no verified numeric consumer and no deployment-order requirement. Numeric legacy support is not included.
 
 ### Shared parsing and validation
 
@@ -189,16 +211,16 @@ BE-102 must not add the underlying generation or export logic for New Update.
 
 ### Expected behavior after BE-102
 
-| Operation | Target | Expected backend behavior | Frontend state |
-| --- | --- | --- | --- |
-| New Edition | `S100` | Execute the existing S100 Edition export | Enabled |
-| New Edition | `All` | Return an explicit unsupported-target error | Disabled |
-| New Edition | `S57` | Return an explicit unsupported-target error | Disabled |
-| New Edition | numeric `0`, `1`, or `2` | Reject unless consumer review documents a temporary legacy requirement | Not sent |
-| New Update | `S100` | Retain the existing not-implemented response | Disabled |
-| New Update | `All` | Return an explicit unsupported-target error | Disabled |
-| New Update | `S57` | Return an explicit unsupported-target error | Disabled |
-| New Update | numeric `0`, `1`, or `2` | Reject unless consumer review documents a temporary legacy requirement | Not sent |
+| Operation   | Target                   | Expected backend behavior                    | Frontend state |
+| ----------- | ------------------------ | -------------------------------------------- | -------------- |
+| New Edition | `S100`                   | Execute the existing S100 Edition export     | Enabled        |
+| New Edition | `All`                    | Return an explicit unsupported-target error  | Disabled       |
+| New Edition | `S57`                    | Return an explicit unsupported-target error  | Disabled       |
+| New Edition | numeric `0`, `1`, or `2` | Return `400` with `EXPORT_TARGET_INVALID`    | Not sent       |
+| New Update  | `S100`                   | Retain the existing not-implemented response | Disabled       |
+| New Update  | `All`                    | Return an explicit unsupported-target error  | Disabled       |
+| New Update  | `S57`                    | Return an explicit unsupported-target error  | Disabled       |
+| New Update  | numeric `0`, `1`, or `2` | Return `400` with `EXPORT_TARGET_INVALID`    | Not sent       |
 
 Only S100 Edition is operational and enabled.
 
