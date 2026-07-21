@@ -63,38 +63,136 @@ namespace ProductManagerAPI.Controllers
         [HttpGet("aoi")]
         public async Task<IActionResult> GetAllElectronicProductsAOI()
         {
-            var aois = await _electronicProductManager.GetDatasetAOIs();
-            var responses = new List<AOIResponse>();
+            var controllerStopwatch = Stopwatch.StartNew();
+            var geometryRetrievalStopwatch = new Stopwatch();
+            var productStateRetrievalStopwatch = new Stopwatch();
+            var mappingStopwatch = new Stopwatch();
+            var requestId = HttpContext.TraceIdentifier;
+            var correlationId = Activity.Current?.TraceId.ToString() ?? requestId;
+            var repositoryCallCount = 0;
+            var productCount = 0;
+            var geometryCount = 0;
+            var responseItemCount = 0;
+            var skippedProductCount = 0;
+            var succeeded = false;
 
-            foreach (var aoi in aois)
+            try
             {
-                var electronicProduct = _electronicProductManager.ElectronicProduct(aoi.Key);
+                Dictionary<string, string> aois;
 
-                if (electronicProduct == null)
+                geometryRetrievalStopwatch.Start();
+                try
                 {
-                    _logger.LogWarning("No electronic product found for dataset {dataset}", aoi.Key);
-                    continue;
+                    aois = await _electronicProductManager.GetDatasetAOIs();
+                }
+                finally
+                {
+                    geometryRetrievalStopwatch.Stop();
                 }
 
-                var polygon = aoi.Value;
-                var current = await _repository.GetCurrentByNameAsync(aoi.Key);
+                productCount = aois.Count;
+                geometryCount = aois.Count;
 
-                responses.Add(new AOIResponse
+                mappingStopwatch.Start();
+                var mappedProducts = new List<(string DatasetName, string Geometry, ElectronicProduct Product)>(aois.Count);
+
+                foreach (var aoi in aois)
                 {
-                    Geometry = polygon,
-                    // JsonSerializer.Deserialize(polygon),
-                    Attributes = new Attributes
-                    {
-                        DatasetName = electronicProduct.datasetName,
-                        Status = Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString()),
-                        // If no explicit state defined in JobTable, default to Ready,
-                        DisplayScale = electronicProduct.optimumDisplayScale,
-                        UsageBand = electronicProduct.specificUsage
-                    }
-                });
-            }
+                    var electronicProduct = _electronicProductManager.ElectronicProduct(aoi.Key);
 
-            return Ok(responses);
+                    if (electronicProduct == null)
+                    {
+                        skippedProductCount++;
+                        _logger.LogWarning(
+                            "No electronic product found for dataset {DatasetName}. RequestId: {RequestId}. CorrelationId: {CorrelationId}",
+                            aoi.Key,
+                            requestId,
+                            correlationId
+                        );
+                        continue;
+                    }
+
+                    mappedProducts.Add((aoi.Key, aoi.Value, electronicProduct));
+                }
+
+                mappingStopwatch.Stop();
+
+                var currentProductsByName = new Dictionary<string, ProductRecord>(StringComparer.OrdinalIgnoreCase);
+
+                if (mappedProducts.Count > 0)
+                {
+                    repositoryCallCount = 1;
+                    IEnumerable<ProductRecord> currentProducts;
+
+                    productStateRetrievalStopwatch.Start();
+                    try
+                    {
+                        currentProducts = await _repository.GetCurrentByNamesAsync(
+                            mappedProducts.Select(product => product.DatasetName)
+                        );
+                    }
+                    finally
+                    {
+                        productStateRetrievalStopwatch.Stop();
+                    }
+
+                    mappingStopwatch.Start();
+                    foreach (var currentProduct in currentProducts)
+                    {
+                        currentProductsByName[currentProduct.Name] = currentProduct;
+                    }
+                    mappingStopwatch.Stop();
+                }
+
+                var responses = new List<AOIResponse>(mappedProducts.Count);
+
+                mappingStopwatch.Start();
+                foreach (var mappedProduct in mappedProducts)
+                {
+                    currentProductsByName.TryGetValue(mappedProduct.DatasetName, out var current);
+
+                    responses.Add(new AOIResponse
+                    {
+                        Geometry = mappedProduct.Geometry,
+                        // JsonSerializer.Deserialize(polygon),
+                        Attributes = new Attributes
+                        {
+                            DatasetName = mappedProduct.Product.datasetName,
+                            Status = Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString()),
+                            // If no explicit state defined in JobTable, default to Ready,
+                            DisplayScale = mappedProduct.Product.optimumDisplayScale,
+                            UsageBand = mappedProduct.Product.specificUsage
+                        }
+                    });
+                }
+                mappingStopwatch.Stop();
+
+                responseItemCount = responses.Count;
+                succeeded = true;
+
+                return Ok(responses);
+            }
+            finally
+            {
+                controllerStopwatch.Stop();
+
+                _logger.LogInformation(
+                    "AOI controller profiling completed. RequestId: {RequestId}. CorrelationId: {CorrelationId}. Success: {Success}. ControllerDurationMs: {ControllerDurationMs}. GeometryRetrievalMs: {GeometryRetrievalMs}. ProductStateRetrievalMs: {ProductStateRetrievalMs}. MappingMs: {MappingMs}. RepositoryCallCount: {RepositoryCallCount}. ProductCount: {ProductCount}. GeometryCount: {GeometryCount}. ResponseItemCount: {ResponseItemCount}. SkippedProductCount: {SkippedProductCount}. CacheState: {CacheState}",
+                    requestId,
+                    correlationId,
+                    succeeded,
+                    controllerStopwatch.Elapsed.TotalMilliseconds,
+                    geometryRetrievalStopwatch.Elapsed.TotalMilliseconds,
+                    productStateRetrievalStopwatch.Elapsed.TotalMilliseconds,
+                    mappingStopwatch.Elapsed.TotalMilliseconds,
+                    repositoryCallCount,
+                    productCount,
+                    geometryCount,
+                    responseItemCount,
+                    skippedProductCount,
+                    "None"
+                );
+            }
         }
 
         /// <summary>

@@ -1,4 +1,4 @@
-﻿using ArcGIS.Core.Data;
+using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
 using ArcGIS.Core.Internal.Geometry;
 using S100FC.S128.ComplexAttributes;
@@ -1220,49 +1220,108 @@ namespace S100FC.ProductCatalogue
         }
 
         public async Task<Dictionary<string, string>> GetDatasetAOIs() {
-            return await this.Dispatch(() => {
-                var result = new Dictionary<string, string>();
+            var dispatchStartedAt = Stopwatch.GetTimestamp();
+            var executionStartedAt = 0L;
+            var executionCompletedAt = 0L;
+            var correlationId = Activity.Current?.TraceId.ToString() ?? "unavailable";
+            var rowsScanned = 0;
+            var rowsAccepted = 0;
+            var rowsSkippedMissingAttributes = 0;
+            var rowsSkippedMissingDatasetName = 0;
+            var rowsFailed = 0;
+            var geometryCount = 0;
+            var succeeded = false;
 
-                using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
-                using var cursor = surface.Search();
-
-                while (cursor.MoveNext()) {
-                    var feature = (ArcGIS.Core.Data.Feature)cursor.Current;
-                    var boundary = feature.GetShape();
-
-                    var attrBindings = Convert.ToString(feature["attributebindings"]) ?? string.Empty;
-
-                    if (string.IsNullOrEmpty(attrBindings))
-                        continue;
+            try {
+                var result = await this.Dispatch(() => {
+                    executionStartedAt = Stopwatch.GetTimestamp();
 
                     try {
-                        var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(attrBindings!, typeof(ElectronicProduct));
+                        var dispatchResult = new Dictionary<string, string>();
 
-                        if (electronicProduct.datasetName == null)
-                            continue;
+                        using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
+                        using var cursor = surface.Search();
 
-                        var env = boundary.Extent;
+                        while (cursor.MoveNext()) {
+                            rowsScanned++;
 
-                        // simplify coordinates
-                        var rectangle = PolygonBuilder.CreatePolygon(
-                        [
-                            new Coordinate2D(env.XMin, env.YMin),
-                            new Coordinate2D(env.XMax, env.YMin),
-                            new Coordinate2D(env.XMax, env.YMax),
-                            new Coordinate2D(env.XMin, env.YMax),
-                            new Coordinate2D(env.XMin, env.YMin)
-                        ], SpatialReferences.WGS84);
+                            var feature = (ArcGIS.Core.Data.Feature)cursor.Current;
+                            var boundary = feature.GetShape();
 
-                        result[electronicProduct.datasetName!] = rectangle.ToJson();
+                            var attrBindings = Convert.ToString(feature["attributebindings"]) ?? string.Empty;
+
+                            if (string.IsNullOrEmpty(attrBindings)) {
+                                rowsSkippedMissingAttributes++;
+                                continue;
+                            }
+
+                            try {
+                                var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(attrBindings!, typeof(ElectronicProduct));
+
+                                var datasetName = electronicProduct.datasetName;
+
+                                if (datasetName == null) {
+                                    rowsSkippedMissingDatasetName++;
+                                    continue;
+                                }
+
+                                var env = boundary.Extent;
+
+                                // The public AOI contract returns the existing extent-based rectangle.
+                                var rectangle = PolygonBuilder.CreatePolygon(
+                                [
+                                    new Coordinate2D(env.XMin, env.YMin),
+                                    new Coordinate2D(env.XMax, env.YMin),
+                                    new Coordinate2D(env.XMax, env.YMax),
+                                    new Coordinate2D(env.XMin, env.YMax),
+                                    new Coordinate2D(env.XMin, env.YMin)
+                                ], SpatialReferences.WGS84);
+
+                                dispatchResult[datasetName] = rectangle.ToJson();
+                                rowsAccepted++;
+                            }
+                            catch (Exception) {
+                                rowsFailed++;
+                                continue;
+                            }
+                        }
+
+                        geometryCount = dispatchResult.Count;
+                        return dispatchResult;
                     }
-                    catch (Exception ex) {
-                        continue;
+                    finally {
+                        executionCompletedAt = Stopwatch.GetTimestamp();
                     }
+                });
 
-                }
-
+                succeeded = true;
                 return result;
-            });
+            }
+            finally {
+                var dispatchCompletedAt = Stopwatch.GetTimestamp();
+                var queueWaitMs = executionStartedAt == 0
+                    ? 0d
+                    : Stopwatch.GetElapsedTime(dispatchStartedAt, executionStartedAt).TotalMilliseconds;
+                var executionMs = executionStartedAt == 0 || executionCompletedAt == 0
+                    ? 0d
+                    : Stopwatch.GetElapsedTime(executionStartedAt, executionCompletedAt).TotalMilliseconds;
+                var dispatchTotalMs = Stopwatch.GetElapsedTime(dispatchStartedAt, dispatchCompletedAt).TotalMilliseconds;
+
+                Log.Information(
+                    "AOI ArcGIS profiling completed. CorrelationId: {CorrelationId}. Success: {Success}. ArcGisDispatchTotalMs: {ArcGisDispatchTotalMs}. ArcGisQueueWaitMs: {ArcGisQueueWaitMs}. ArcGisExecutionMs: {ArcGisExecutionMs}. RowsScanned: {RowsScanned}. RowsAccepted: {RowsAccepted}. RowsSkippedMissingAttributes: {RowsSkippedMissingAttributes}. RowsSkippedMissingDatasetName: {RowsSkippedMissingDatasetName}. RowsFailed: {RowsFailed}. GeometryCount: {GeometryCount}",
+                    correlationId,
+                    succeeded,
+                    dispatchTotalMs,
+                    queueWaitMs,
+                    executionMs,
+                    rowsScanned,
+                    rowsAccepted,
+                    rowsSkippedMissingAttributes,
+                    rowsSkippedMissingDatasetName,
+                    rowsFailed,
+                    geometryCount
+                );
+            }
         }
 
         public async Task<string> GetDatasetBoundary(string datasetName) {

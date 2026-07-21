@@ -119,6 +119,58 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
             new { Name = name });
     }
 
+    public async Task<IEnumerable<ProductRecord>> GetCurrentByNamesAsync(IEnumerable<string> names)
+    {
+        var requestedNames = names
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (requestedNames.Length == 0)
+        {
+            return [];
+        }
+
+        using var connection = _connectionFactory.Create();
+
+        var sql = """
+            WITH RankedProducts AS (
+                SELECT
+                    id AS Id,
+                    name AS Name,
+                    state AS State,
+                    product_specification AS ProductSpecification,
+                    edition_number AS EditionNo,
+                    update_number AS UpdateNo,
+                    owner AS Owner,
+                    date_from AS Date_From,
+                    date_to AS Date_to,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY name
+                        ORDER BY date_from DESC
+                    ) AS RowNumber
+                FROM dbo.JobTable
+                WHERE name IN @Names
+            )
+            SELECT
+                Id,
+                Name,
+                State,
+                ProductSpecification,
+                EditionNo,
+                UpdateNo,
+                Owner,
+                Date_From,
+                Date_to
+            FROM RankedProducts
+            WHERE RowNumber = 1
+            """;
+
+        return await connection.QueryAsync<ProductRecord>(
+            sql,
+            new { Names = requestedNames });
+    }
+
     public async Task<DateTime?> GetLastSuccessfulRunUtcAsync(string jobName)
     {
         using var connection = _connectionFactory.Create();
@@ -311,6 +363,21 @@ public class InMemoryProductRepository : IProductRepository
             .FirstOrDefault();
 
         return Task.FromResult(product);
+    }
+
+    public Task<IEnumerable<ProductRecord>> GetCurrentByNamesAsync(IEnumerable<string> names)
+    {
+        var requestedNames = names
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var records = _products
+            .Where(product => requestedNames.Contains(product.Name))
+            .GroupBy(product => product.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(product => product.Date_From).First())
+            .AsEnumerable();
+
+        return Task.FromResult(records);
     }
 
     public Task<string[]> GetIneligbleProductsAsync()
