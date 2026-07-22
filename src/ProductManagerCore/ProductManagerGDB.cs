@@ -803,6 +803,10 @@ namespace S100FC.ProductCatalogue
                         // Only map geometry, and keep name seperate so foids remain unique
                         var geometry = name;
 
+                      //  var f = topology.matrix.Collapse;
+                        if (topology.matrix.Collapse.Contains(name))
+                            continue;
+
                         if (topology.mapper.TryGetValue(name!, out var value))
                             geometry = value;
 
@@ -848,7 +852,7 @@ namespace S100FC.ProductCatalogue
 
                             // Surface Masks
                             var topologySurface = topology.matrix.Surfaces.FirstOrDefault(e => e.Ref!.Equals(name, StringComparison.InvariantCultureIgnoreCase));
-                           
+
                             // Build comma seperated string of masks, with :1 or :2 indicating which mask it is. Should be null/omitted if empty.
                             var masks = new[] {
                                     topologySurface?.Masks1?.Select(e => $"C{e}:1"),
@@ -1295,7 +1299,7 @@ namespace S100FC.ProductCatalogue
 
                 var electronicProduct = this._electronicProducts[name.ToUpperInvariant()];
 
-                if(electronicProduct.editionNumber <= 1)
+                if (electronicProduct.editionNumber <= 1)
                     throw new InvalidOperationException($"Cannot rollback edition number below 1 for dataset {name}");
 
                 // Delete most recent attachment from attachmenttable

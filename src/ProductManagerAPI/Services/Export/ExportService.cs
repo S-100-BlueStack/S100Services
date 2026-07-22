@@ -21,7 +21,7 @@ namespace ProductManagerAPI.Services.Export
 
 
             // yaml = SetMinimumDisplayScale().Replace(yaml, "$1\r\n        Value: 19999999");
-            yaml = Regex.Replace(yaml, @"(?m)^(\s*)-\s*Name:\s*minimumDisplayScale\s*$", "$0\r\n$1  Value: 19999999");
+           // yaml = Regex.Replace(yaml, @"(?m)^(\s*)-\s*Name:\s*minimumDisplayScale\s*$", "$0\r\n$1  Value: 19999999");
 
             // Write temp YAML file for the compiler
             IO.File.WriteAllText(Path.Combine(Export.FullName, $"temp_{datasetName}.yaml"), yaml);
@@ -47,25 +47,46 @@ namespace ProductManagerAPI.Services.Export
 
             _logger.LogInformation("Starting S100 compiler for product: {product} with commandline: {commandline}", datasetName, commandline);
 
-
-            var p = new Process();
-            p.StartInfo.CreateNoWindow = true;
-            p.StartInfo.UseShellExecute = true;
-            p.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-            p.StartInfo.FileName = @"C:\Program Files\s100compiler\s100compiler.exe";
-            p.StartInfo.Arguments = commandline;
-            p.StartInfo.WorkingDirectory = Export.FullName;
-            p.EnableRaisingEvents = true;
-            p.Exited += (s, e) => {
+            var startInfo = new ProcessStartInfo {
+                FileName = @"C:\Program Files\s100compiler\s100compiler.exe",
+                Arguments = commandline,
+                WorkingDirectory = Export.FullName,
+                UseShellExecute = false,
+                CreateNoWindow = false, //true,
+                RedirectStandardOutput = false, //true,
+                RedirectStandardError = true
             };
 
-            p.Start();
-            p.WaitForExit();
+            using var process = new Process {
+                StartInfo = startInfo
+            };
 
-            if (p.ExitCode != 0) {
-                _logger.LogError("\"{filename}\" {arguments} for product: {product}", p.StartInfo.FileName, commandline, datasetName);
-                throw new ArgumentException(commandline);
+            process.Start();
+
+            var errorTask = process.StandardError.ReadToEndAsync();
+
+            process.WaitForExit();
+            var error = errorTask.GetAwaiter().GetResult();
+
+            if (!string.IsNullOrWhiteSpace(error)) {
+                _logger.LogError(
+                    "S100 compiler error output for product {Product}:{NewLine}{Error}",
+                    datasetName,
+                    Environment.NewLine,
+                    error);
             }
+
+            if (process.ExitCode != 0) {
+                throw new InvalidOperationException(
+                    $"S100 compiler failed for product '{datasetName}' with exit code {process.ExitCode}.{Environment.NewLine}{error}");
+            }
+
+            // Check if .000 is 0 bytes
+            var file = new FileInfo(Path.Combine(output, "S100_ROOT", "S-101", "DATASET_FILES", $"{datasetName}.{update}"));
+            if (file.Length == 0)
+                throw new InvalidOperationException($"S100 compiler created an empty .000 file");
+
+
 
             _logger.LogInformation("S100 compiler run succesfully! Starting cleanup for temp index and yaml files for product: {product}", datasetName);
             var index = IO.File.ReadAllText(indexFile);
@@ -79,10 +100,7 @@ namespace ProductManagerAPI.Services.Export
             IO.File.Delete(indexFile);
             IO.File.Delete(prevIndexPath);
 
-            // TODO: Check if .000 is 0 bytes
-            var file = new FileInfo(Path.Combine(output, "S100_ROOT", "S-101", "DATASET_FILES", $"{datasetName}.{update}"));
-            if (file.Length == 0)
-                throw new InvalidOperationException($"S100 compiler created an empty .000 file");
+
 
             return new(index, sign);
         }

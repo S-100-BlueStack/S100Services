@@ -45,7 +45,7 @@ namespace ProductManagerAPI.Controllers
             if (product == null)
                 return NotFound($"Could not find dataset with {datasetName}");
 
-            if (product.State != Data.Models.ProductState.Exported) {
+            if (product.State is not Data.Models.ProductState.Exported) {
                 _logger.LogWarning("Product is not in expected state. Expected: {e}. Actual {a}", Data.Models.ProductState.Exported, product.State);
                 return BadRequest($"Product is in the wrong state for uploading: {product.State}");
             }

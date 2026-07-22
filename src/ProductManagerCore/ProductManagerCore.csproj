@@ -17,12 +17,12 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="S100Framework.ArcGIS.Core" Version="3.7.1901.20" />
+	  <PackageReference Include="S100Framework.ArcGIS.Core" Version="3.7.1901.23" />
 	  <PackageReference Include="S100Framework.Catalogues" Version="3.1.14" />
 	  <PackageReference Include="S100Framework.Catalogues.ProductSpecifications" Version="3.1.10" />
 	  <PackageReference Include="S100Framework.REST" Version="1.15.0" />
-	  <PackageReference Include="S100Framework.Topology" Version="4.2.0" />
-	  <PackageReference Include="S100Framework.YAML" Version="3.7.1901.3" />
+	  <PackageReference Include="S100Framework.Topology" Version="4.3.0" />
+	  <PackageReference Include="S100Framework.YAML" Version="3.7.1901.4" />
 	</ItemGroup>
 
 	<ItemGroup>

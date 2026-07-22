@@ -65,7 +65,16 @@ namespace ProductManagerAPI.Controllers
                 return StatusCode(StatusCodes.Status409Conflict, response);
             }
 
+            // Check if eligble for new edition
+            var ps = await _productRepository.GetCurrentByNameAsync(name);
 
+            // if PS is null that means its the first action since the import. Continue as normal
+            if (ps is not null && ps.State is not Data.Models.ProductState.Idle) {
+                response.Success = false;
+                response.Message = $"A New edition could not be created now. Current product state: {ps?.State}.";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return StatusCode(StatusCodes.Status400BadRequest, response);
+            }
 
             // Create YAML Dataset
             var dataset = await _electronicProductManager.CreateNewEditionAsync(name);
@@ -153,6 +162,16 @@ namespace ProductManagerAPI.Controllers
                 response.Message = $"No electronic product with name '{name}' was found.";
                 response.DurationMs = sw.ElapsedMilliseconds;
                 return StatusCode(StatusCodes.Status404NotFound, response);
+            }
+
+            // Check if eligble for new update
+            var ps = await _productRepository.GetCurrentByNameAsync(name);
+
+            if (ps is null || ps.State is not Data.Models.ProductState.Idle) {
+                response.Success = false;
+                response.Message = $"A New update could not be created now. Current product state: {ps?.State}.";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return StatusCode(StatusCodes.Status400BadRequest, response);
             }
 
             var dirty = await _electronicProductManager.IsDirtyAsync(name);
@@ -307,6 +326,16 @@ namespace ProductManagerAPI.Controllers
                 response.Message = ($"Dataset {name} is already being processed.");
                 response.DurationMs = sw.ElapsedMilliseconds;
                 return StatusCode(StatusCodes.Status409Conflict, response);
+            }
+
+            // Check if eligble for rollback
+            var ps = await _productRepository.GetCurrentByNameAsync(name);
+
+            if (ps is null || ps.State is not (Data.Models.ProductState.Exported or Data.Models.ProductState.Frozen)) {
+                response.Success = false;
+                response.Message = $"A rollback could not be performed now. Current product state: {ps?.State}.";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return StatusCode(StatusCodes.Status400BadRequest, response);
             }
 
             uint oldEdition = (uint)product.editionNumber!.Value;

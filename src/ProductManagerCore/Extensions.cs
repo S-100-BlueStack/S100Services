@@ -166,7 +166,7 @@ namespace S100FC.ProductCatalogue
                 }
 
 
-                builder = matrix.AddNavigationalFeatures(polygons, curves);//.AddSingletonFeatures(singletons);
+                builder = matrix.AddTopologyFeatures(polygons, curves);//.AddSingletonFeatures(singletons);
             }
 
             var result = builder.BuildTopology();
@@ -233,8 +233,8 @@ namespace S100FC.ProductCatalogue
             var definitions = geodatabase.GetDefinitions<FeatureClassDefinition>();
 
 
-            //var matrix = S100FC.Topology.Matrix.CreateMatrix(interceptor);
-            var matrix = S100FC.Topology.Reloaded.CreateMatrix(interceptor);
+            //var matrix = S100FC.Topology.Matrix.CreateMatrix();
+            var matrix = S100FC.Topology.Reloaded.CreateMatrix();
 
 
             S100FC.Topology.ITopologyBuilder? builder = default;
@@ -590,7 +590,7 @@ namespace S100FC.ProductCatalogue
 #endif
                 }
 
-                builder = matrix.AddNavigationalFeatures(polygons, curves);//.AddSingletonFeatures(singletons);
+                builder = matrix.AddTopologyFeatures(polygons, curves);//.AddSingletonFeatures(singletons);
             }
 
             var result = builder.BuildTopology();
@@ -714,10 +714,7 @@ namespace S100FC.ProductCatalogue
             return files;
         }
 
-
-        private static IList<ISegmentString> NodeLineString(
-        LineString lineString,
-        INoder noder) {
+        private static IList<ISegmentString> NodeLineString(LineString lineString, INoder noder) {
             var segmentString = new NodedSegmentString(
                 lineString.Coordinates, null);
 
