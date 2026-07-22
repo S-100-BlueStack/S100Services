@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Caching.Memory;
@@ -128,11 +129,11 @@ namespace TestProductManagerAPI
             );
 
             var run = await RunFilterAsync("?exportTarget=S100", async httpContext => {
-                controller.ControllerContext = new ControllerContext(new ActionContext(
-                    httpContext,
-                    new RouteData(),
-                    new ActionDescriptor()
-                ));
+                controller.ControllerContext = new ControllerContext {
+                    HttpContext = httpContext,
+                    RouteData = new RouteData(),
+                    ActionDescriptor = new ControllerActionDescriptor()
+                };
 
                 return await controller.NewUpdate("101DK0040943E", CancellationToken.None);
             });
@@ -157,7 +158,7 @@ namespace TestProductManagerAPI
                 httpContext.Request.QueryString = new QueryString(queryString);
             }
 
-            var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
+            var actionContext = new ActionContext(httpContext, new RouteData(), new ControllerActionDescriptor());
             var filters = new List<IFilterMetadata>();
             var controller = new object();
             var executingContext = new ActionExecutingContext(

@@ -1,6 +1,8 @@
+using ArcGIS.Core.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -11,6 +13,7 @@ using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using System.Collections;
 using System.Diagnostics;
+using System.Reflection;
 using static ProductManagerAPI.Models.ResponseTypes;
 
 namespace TestProductManagerAPI
@@ -53,11 +56,11 @@ namespace TestProductManagerAPI
             var httpContext = new DefaultHttpContext {
                 TraceIdentifier = requestId,
             };
-            controller.ControllerContext = new ControllerContext(new ActionContext(
-                httpContext,
-                new RouteData(),
-                new ActionDescriptor()
-            ));
+            controller.ControllerContext = new ControllerContext {
+                HttpContext = httpContext,
+                RouteData = new RouteData(),
+                ActionDescriptor = new ControllerActionDescriptor()
+            };
 
             using var activity = new Activity("BE-103 AOI profiling test")
                 .SetIdFormat(ActivityIdFormat.W3C)
@@ -105,6 +108,44 @@ namespace TestProductManagerAPI
             Assert.True(Assert.IsType<double>(completionEntry.Properties["GeometryRetrievalMs"]) >= 0d);
             Assert.True(Assert.IsType<double>(completionEntry.Properties["ProductStateRetrievalMs"]) >= 0d);
             Assert.True(Assert.IsType<double>(completionEntry.Properties["MappingMs"]) >= 0d);
+        }
+
+        [Theory]
+        [InlineData("{\"datasetName\":\"101DK0000001E\"}", "101DK0000001E")]
+        [InlineData("{\"attributes\":{\"DatasetName\":\"101DK0000002E\"}}", "101DK0000002E")]
+        [InlineData("[{\"ignored\":true},{\"datasetName\":\"101DK0000003E\"}]", "101DK0000003E")]
+        public void DatasetNameFastPathReadsDirectAndNestedJson(
+            string attrBindings,
+            string expectedDatasetName
+        ) {
+            var method = typeof(ProductManagerGDB).GetMethod(
+                "TryReadDatasetNameFromJson",
+                BindingFlags.NonPublic | BindingFlags.Static
+            );
+            Assert.NotNull(method);
+
+            object?[] arguments = [attrBindings, null];
+            var success = Assert.IsType<bool>(method.Invoke(null, arguments));
+
+            Assert.True(success);
+            Assert.Equal(expectedDatasetName, Assert.IsType<string>(arguments[1]));
+        }
+
+        [Fact]
+        public void DatasetAoiQueryFilterRestrictsRowsAndHydratedFields() {
+            var method = typeof(ProductManagerGDB).GetMethod(
+                "CreateDatasetAoiQueryFilter",
+                BindingFlags.NonPublic | BindingFlags.Static
+            );
+            Assert.NotNull(method);
+
+            var filter = Assert.IsType<QueryFilter>(method.Invoke(null, null));
+
+            Assert.Equal(
+                "upper(ps) = 'S-128' AND code = 'ElectronicProduct'",
+                filter.WhereClause
+            );
+            Assert.Equal("attributebindings, shape", filter.SubFields);
         }
 
         [Fact]

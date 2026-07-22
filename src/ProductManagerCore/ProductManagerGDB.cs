@@ -1219,6 +1219,98 @@ namespace S100FC.ProductCatalogue
             });
         }
 
+        private static QueryFilter CreateDatasetAoiQueryFilter() {
+            return new QueryFilter {
+                WhereClause = $"upper(ps) = 'S-128' AND code = '{nameof(ElectronicProduct)}'",
+                SubFields = "attributebindings, shape",
+            };
+        }
+
+        private static string? ReadDatasetName(
+            string attrBindings,
+            out bool usedUnflattenFallback
+        ) {
+            usedUnflattenFallback = false;
+
+            if (TryReadDatasetNameFromJson(attrBindings, out var datasetName))
+                return datasetName;
+
+            usedUnflattenFallback = true;
+
+            var electronicProduct =
+                S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(
+                    attrBindings,
+                    typeof(ElectronicProduct)
+                );
+
+            return electronicProduct.datasetName;
+        }
+
+        private static bool TryReadDatasetNameFromJson(
+            string attrBindings,
+            out string? datasetName
+        ) {
+            datasetName = null;
+
+            try {
+                using var document = JsonDocument.Parse(attrBindings);
+                return TryReadDatasetNameFromJsonElement(
+                    document.RootElement,
+                    out datasetName
+                );
+            }
+            catch (JsonException) {
+                return false;
+            }
+        }
+
+        private static bool TryReadDatasetNameFromJsonElement(
+            JsonElement element,
+            out string? datasetName
+        ) {
+            datasetName = null;
+
+            if (element.ValueKind == JsonValueKind.Object) {
+                foreach (var property in element.EnumerateObject()) {
+                    if (
+                        property.Name.Equals(
+                            "datasetName",
+                            StringComparison.OrdinalIgnoreCase
+                        ) &&
+                        property.Value.ValueKind == JsonValueKind.String
+                    ) {
+                        var value = property.Value.GetString();
+
+                        if (!string.IsNullOrWhiteSpace(value)) {
+                            datasetName = value;
+                            return true;
+                        }
+                    }
+
+                    if (
+                        TryReadDatasetNameFromJsonElement(
+                            property.Value,
+                            out datasetName
+                        )
+                    ) {
+                        return true;
+                    }
+                }
+            }
+            else if (element.ValueKind == JsonValueKind.Array) {
+                foreach (var item in element.EnumerateArray()) {
+                    if (TryReadDatasetNameFromJsonElement(item, out datasetName))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static double StopwatchTicksToMilliseconds(long stopwatchTicks) {
+            return stopwatchTicks * 1000d / Stopwatch.Frequency;
+        }
+
         public async Task<Dictionary<string, string>> GetDatasetAOIs() {
             var dispatchStartedAt = Stopwatch.GetTimestamp();
             var executionStartedAt = 0L;
@@ -1230,6 +1322,14 @@ namespace S100FC.ProductCatalogue
             var rowsSkippedMissingDatasetName = 0;
             var rowsFailed = 0;
             var geometryCount = 0;
+            var datasetNameFastPathCount = 0;
+            var datasetNameUnflattenFallbackCount = 0;
+            var openAndSearchStopwatchTicks = 0L;
+            var cursorMoveNextStopwatchTicks = 0L;
+            var attributeReadStopwatchTicks = 0L;
+            var datasetNameReadStopwatchTicks = 0L;
+            var geometryReadStopwatchTicks = 0L;
+            var rectangleSerializationStopwatchTicks = 0L;
             var succeeded = false;
 
             try {
@@ -1239,16 +1339,36 @@ namespace S100FC.ProductCatalogue
                     try {
                         var dispatchResult = new Dictionary<string, string>();
 
-                        using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
-                        using var cursor = surface.Search();
+                        var openAndSearchStartedAt = Stopwatch.GetTimestamp();
+                        using var surface = this._geodatabase!.OpenDataset<FeatureClass>(
+                            this.QualifyTableName("surface")
+                        );
+                        using var cursor = surface.Search(
+                            CreateDatasetAoiQueryFilter(),
+                            true
+                        );
+                        openAndSearchStopwatchTicks +=
+                            Stopwatch.GetTimestamp() - openAndSearchStartedAt;
 
-                        while (cursor.MoveNext()) {
+                        while (true) {
+                            var moveNextStartedAt = Stopwatch.GetTimestamp();
+                            var hasNext = cursor.MoveNext();
+                            cursorMoveNextStopwatchTicks +=
+                                Stopwatch.GetTimestamp() - moveNextStartedAt;
+
+                            if (!hasNext)
+                                break;
+
                             rowsScanned++;
 
                             var feature = (ArcGIS.Core.Data.Feature)cursor.Current;
-                            var boundary = feature.GetShape();
 
-                            var attrBindings = Convert.ToString(feature["attributebindings"]) ?? string.Empty;
+                            var attributeReadStartedAt = Stopwatch.GetTimestamp();
+                            var attrBindings =
+                                Convert.ToString(feature["attributebindings"]) ??
+                                string.Empty;
+                            attributeReadStopwatchTicks +=
+                                Stopwatch.GetTimestamp() - attributeReadStartedAt;
 
                             if (string.IsNullOrEmpty(attrBindings)) {
                                 rowsSkippedMissingAttributes++;
@@ -1256,16 +1376,33 @@ namespace S100FC.ProductCatalogue
                             }
 
                             try {
-                                var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(attrBindings!, typeof(ElectronicProduct));
+                                var datasetNameReadStartedAt = Stopwatch.GetTimestamp();
+                                var datasetName = ReadDatasetName(
+                                    attrBindings,
+                                    out var usedUnflattenFallback
+                                );
+                                datasetNameReadStopwatchTicks +=
+                                    Stopwatch.GetTimestamp() -
+                                    datasetNameReadStartedAt;
 
-                                var datasetName = electronicProduct.datasetName;
+                                if (usedUnflattenFallback)
+                                    datasetNameUnflattenFallbackCount++;
+                                else
+                                    datasetNameFastPathCount++;
 
-                                if (datasetName == null) {
+                                if (string.IsNullOrWhiteSpace(datasetName)) {
                                     rowsSkippedMissingDatasetName++;
                                     continue;
                                 }
 
+                                var geometryReadStartedAt = Stopwatch.GetTimestamp();
+                                var boundary = feature.GetShape();
                                 var env = boundary.Extent;
+                                geometryReadStopwatchTicks +=
+                                    Stopwatch.GetTimestamp() - geometryReadStartedAt;
+
+                                var rectangleSerializationStartedAt =
+                                    Stopwatch.GetTimestamp();
 
                                 // The public AOI contract returns the existing extent-based rectangle.
                                 var rectangle = PolygonBuilder.CreatePolygon(
@@ -1278,6 +1415,9 @@ namespace S100FC.ProductCatalogue
                                 ], SpatialReferences.WGS84);
 
                                 dispatchResult[datasetName] = rectangle.ToJson();
+                                rectangleSerializationStopwatchTicks +=
+                                    Stopwatch.GetTimestamp() -
+                                    rectangleSerializationStartedAt;
                                 rowsAccepted++;
                             }
                             catch (Exception) {
@@ -1301,19 +1441,38 @@ namespace S100FC.ProductCatalogue
                 var dispatchCompletedAt = Stopwatch.GetTimestamp();
                 var queueWaitMs = executionStartedAt == 0
                     ? 0d
-                    : Stopwatch.GetElapsedTime(dispatchStartedAt, executionStartedAt).TotalMilliseconds;
+                    : Stopwatch.GetElapsedTime(
+                        dispatchStartedAt,
+                        executionStartedAt
+                    ).TotalMilliseconds;
                 var executionMs = executionStartedAt == 0 || executionCompletedAt == 0
                     ? 0d
-                    : Stopwatch.GetElapsedTime(executionStartedAt, executionCompletedAt).TotalMilliseconds;
-                var dispatchTotalMs = Stopwatch.GetElapsedTime(dispatchStartedAt, dispatchCompletedAt).TotalMilliseconds;
+                    : Stopwatch.GetElapsedTime(
+                        executionStartedAt,
+                        executionCompletedAt
+                    ).TotalMilliseconds;
+                var dispatchTotalMs = Stopwatch.GetElapsedTime(
+                    dispatchStartedAt,
+                    dispatchCompletedAt
+                ).TotalMilliseconds;
 
                 Log.Information(
-                    "AOI ArcGIS profiling completed. CorrelationId: {CorrelationId}. Success: {Success}. ArcGisDispatchTotalMs: {ArcGisDispatchTotalMs}. ArcGisQueueWaitMs: {ArcGisQueueWaitMs}. ArcGisExecutionMs: {ArcGisExecutionMs}. RowsScanned: {RowsScanned}. RowsAccepted: {RowsAccepted}. RowsSkippedMissingAttributes: {RowsSkippedMissingAttributes}. RowsSkippedMissingDatasetName: {RowsSkippedMissingDatasetName}. RowsFailed: {RowsFailed}. GeometryCount: {GeometryCount}",
+                    "AOI ArcGIS profiling completed. CorrelationId: {CorrelationId}. Success: {Success}. ArcGisDispatchTotalMs: {ArcGisDispatchTotalMs}. ArcGisQueueWaitMs: {ArcGisQueueWaitMs}. ArcGisExecutionMs: {ArcGisExecutionMs}. ArcGisOpenAndSearchMs: {ArcGisOpenAndSearchMs}. ArcGisCursorMoveNextMs: {ArcGisCursorMoveNextMs}. ArcGisAttributeReadMs: {ArcGisAttributeReadMs}. ArcGisDatasetNameReadMs: {ArcGisDatasetNameReadMs}. ArcGisGeometryReadMs: {ArcGisGeometryReadMs}. ArcGisRectangleSerializationMs: {ArcGisRectangleSerializationMs}. DatasetNameFastPathCount: {DatasetNameFastPathCount}. DatasetNameUnflattenFallbackCount: {DatasetNameUnflattenFallbackCount}. RowsScanned: {RowsScanned}. RowsAccepted: {RowsAccepted}. RowsSkippedMissingAttributes: {RowsSkippedMissingAttributes}. RowsSkippedMissingDatasetName: {RowsSkippedMissingDatasetName}. RowsFailed: {RowsFailed}. GeometryCount: {GeometryCount}",
                     correlationId,
                     succeeded,
                     dispatchTotalMs,
                     queueWaitMs,
                     executionMs,
+                    StopwatchTicksToMilliseconds(openAndSearchStopwatchTicks),
+                    StopwatchTicksToMilliseconds(cursorMoveNextStopwatchTicks),
+                    StopwatchTicksToMilliseconds(attributeReadStopwatchTicks),
+                    StopwatchTicksToMilliseconds(datasetNameReadStopwatchTicks),
+                    StopwatchTicksToMilliseconds(geometryReadStopwatchTicks),
+                    StopwatchTicksToMilliseconds(
+                        rectangleSerializationStopwatchTicks
+                    ),
+                    datasetNameFastPathCount,
+                    datasetNameUnflattenFallbackCount,
                     rowsScanned,
                     rowsAccepted,
                     rowsSkippedMissingAttributes,
