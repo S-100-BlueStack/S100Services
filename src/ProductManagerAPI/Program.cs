@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc; // Required for ApiVersion
 using ProductManagerAPI.Data.Database;
 using ProductManagerAPI.Data.Repositories;
 using ProductManagerAPI.Jobs;
+using ProductManagerAPI.OpenApi;
 using ProductManagerAPI.Services.Export;
 using ProductManagerAPI.Services.Graph;
 using ProductManagerAPI.Services.Locking;
@@ -99,6 +100,7 @@ namespace ProductManagerAPI
                 if (File.Exists(xmlPath))
                     options.IncludeXmlComments(xmlPath);
 
+                options.OperationFilter<ExportTargetOperationFilter>();
             });
 #if DEBUG
             builder.Services.AddCors(options => {
@@ -327,3 +329,4 @@ namespace ProductManagerAPI
         }
     }
 }
+

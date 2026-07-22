@@ -1,14 +1,14 @@
 # Frontend release-readiness review
 
-Review baseline: `674a686ab3cc2d0c4d565025234477556bda61f8`
+Review baseline: `805a853259b6594fe16384ae37b2e828d6de4c76`
 
-This review focuses on Product Manager frontend readiness for controlled user testing. It is not a code change. It identifies release risks, backend dependencies, recommended smoke tests, and follow-up hardening work.
+This review focuses on Product Manager frontend readiness for controlled user testing. It identifies release risks, backend dependencies, smoke-test findings, and follow-up hardening work.
 
 ## Decision
 
-The frontend is ready for controlled user testing if the known backend-dependent limitations are communicated clearly to testers.
+The frontend has passed a comprehensive smoke test and is ready for controlled user testing if the known backend-dependent limitations are communicated clearly to testers. No frontend defects or P0 blockers were identified in the tested flows.
 
-There are no frontend P0 blockers identified in the current implemented flows. The main release risk is not missing UI, but that some operation state and report/job behavior is still frontend-only or blocked by backend contracts.
+Discoverability is mitigated by hover/help text and compact replayable onboarding. The complete Main map, Dashboard, Analyze and Review introduction flows have been manually verified, including independent route state, Product prerequisites, Theme and Preferences guidance.
 
 ## Severity scale
 
@@ -22,56 +22,91 @@ There are no frontend P0 blockers identified in the current implemented flows. T
 
 ## Current stable areas
 
-| Area          | Status                                            | Notes                                                                                                                                                                                 |
-| ------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Main map      | Ready for controlled testing                      | Map rendering, hover, popup details, filters, Product History quick panel, Product Collection, refresh preservation, display-scale hiding, and product popup actions are implemented. |
-| Popup actions | Ready for controlled testing                      | Freeze/Unfreeze, Send to IC-ENC, Rollback, and `Export > S100 > Edition` are wired. Disabled export leaves are intentionally unavailable.                                             |
-| Dashboard     | Ready for controlled testing                      | Separate read-only route with backend activity data, Danish range builder, search, filters, actionable summaries, and route-local History panel.                                      |
-| Analyze       | Ready for controlled testing with backend caveats | Product loading, history, XML/report content, internal validation placeholder/report foundation, and shared Product picker are in place.                                              |
-| Review        | Ready for controlled testing with backend caveats | Multi-product review, content toggles, history, placeholder report sections, and shared Product picker are in place.                                                                  |
-| Documentation | Usable                                            | README and feature docs describe the current architecture and frontend-only/backend-dependent behavior.                                                                               |
+| Area          | Status                                            | Notes                                                                                                                                                                                                                                                                   |
+| ------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Main map      | Ready for controlled testing                      | Map rendering, hover, popup details, filters, Product search, Product History quick panel, Product Collection, refresh preservation, display-scale hiding, and product popup actions are implemented. Header navigation remains usable during initial map load.         |
+| Popup actions | Ready for controlled testing                      | Freeze/Unfreeze, Send to IC-ENC, Rollback, and `Export > S100 > Edition` are wired. Disabled export leaves are intentionally unavailable. Actions have textual loading states, which is important for RDP/VDI sessions where spinner animation may not render reliably. |
+| Dashboard     | Ready for controlled testing                      | Separate read-only route with backend activity data, Danish range builder, search, filters, actionable summaries, and route-local History panel.                                                                                                                        |
+| Analyze       | Ready for controlled testing with backend caveats | Product loading, history, XML/report content, internal validation placeholder/report foundation, and shared Product picker are in place. Unknown products are rejected when catalog validation is available.                                                            |
+| Review        | Ready for controlled testing with backend caveats | Multi-product review, content toggles, history, placeholder report sections, and shared Product picker are in place. Unknown products are rejected when catalog validation is available.                                                                                |
+| User guidance | Ready for controlled testing                      | Hover/help text and route-specific onboarding are implemented and manually verified on Main map, Dashboard, Analyze and Review. Analyze requires one loaded Product, and Review requires two loaded Products before dependent guidance continues.                       |
+| Documentation | Usable                                            | README, tracker and feature docs describe the current architecture and frontend-only/backend-dependent behavior.                                                                                                                                                        |
+
+## Smoke-test summary
+
+A comprehensive smoke test was completed on 2026-07-16 against `805a853259b6594fe16384ae37b2e828d6de4c76`. It covered clean and persisted browser state, direct route loads and reloads, the Main map, popup actions, Product search, filters, refresh, Product Collection, Preferences, Theme, Dashboard, Analyze, Review, onboarding, keyboard/Escape priority, notices, error handling and RDP/VDI behavior.
+
+Result: no new frontend defects, regressions or release blockers were found. The automated test suite also passed with 99 tests before the manual smoke pass.
+
+An earlier smoke pass on 2026-07-09 identified observations that were fixed or documented:
+
+- startup/routes worked without issues
+- `/aoi` load takes about 12 seconds, but data loads correctly
+- header navigation remains usable while initial main map data is loading
+- main map filters show the intended filter set
+- filter persistence works
+- popup actions work and return correctly to the frontend
+- Dashboard range builder, quick filters, History, Review and Analyze links work
+- Analyze/Review Product picker works
+- Product picker hides already-added products
+- unknown products are rejected when catalog validation is available
+- light/dark mode looks correct
+- Dashboard time input tab trap was fixed
+- Escape close behavior was hardened
+- Product History rows were changed to collapsed by default
+- Product History summaries describe edition/update changes even when status remains unchanged
+- main map Product search was added and polished
+- hover/help tooltips were added to common clickable controls
+
+Remaining observations are backend-dependent or deferred rather than smoke-test failures:
+
+- `/aoi` endpoint performance remains a backend/performance topic
+- `UsageBand` currently shows descriptive text; including the ID may be solved better in backend data
+- active operation visibility across sessions is not visible before the user attempts an action
+- report/validation links remain disabled until backend report metadata exists
+- onboarding is available, independently persisted and manually verified on Main map, Dashboard, Analyze and Review
 
 ## P0 findings
 
-No P0 frontend blockers were identified from the current implementation state and recent manual tests.
+No P0 frontend blockers were identified.
 
 ## P1 findings
 
-### RR-001: Backend operation state is still not source of truth
+### RR-001: Active operation visibility across sessions
 
-Severity: P1 / Backend blocked
+Severity: P1/P2 / Backend blocked
 
-Current frontend operation state protects the local browser tab and improves the user experience, but it does not protect against other browser tabs, other users, backend workers, or long-running server-side jobs.
+Backend already rejects conflicting export/rollback operations with `409 Conflict`. The remaining gap is visibility: another browser window/user cannot see in advance that a product currently has an active operation.
 
 Risk:
 
-- Two users can still start conflicting operations if the backend accepts them.
-- UI can look protected while the backend is not enforcing the same rule.
+- User B only discovers an active operation after attempting an action.
+- The UI can look locally available while backend correctly rejects the operation.
 
 Recommendation:
 
 - Keep the current frontend UX guard.
-- Backend should return active operation state per product when available.
-- Backend should reject conflicting operations with `409 Conflict` or an equivalent typed error.
-- Frontend should later adapt the existing product operation state to consume backend operation state instead of duplicating it in popup-specific code.
+- Keep handling `409 Conflict` as a normal user-facing conflict response.
+- Backend should later expose active operation state per product.
+- Frontend should later adapt the existing product operation state to consume backend operation state.
 
-Blocks controlled user testing: No, if testers know multi-user operation locking is not final.
+Blocks controlled user testing: No.
 
-### RR-002: Long-running export and rollback behavior still needs backend job model
+### RR-002: Long-running export and rollback behavior should stay observed
 
-Severity: P1 / Backend blocked
+Severity: P1/P2 / Backend blocked
 
-Synchronous action handling works for the current endpoint wiring, but long-running operations can still make the frontend wait on one request.
+Export/rollback requests are currently treated synchronously from the frontend perspective. The frontend shows textual loading states and blocks conflicting local actions, which is adequate for controlled testing.
 
 Risk:
 
-- Export or rollback can block the backend/API request path.
-- Users may not receive accurate progress or recoverable job status if a long operation fails after the request is accepted.
+- Long operations may make a single request wait for a long time.
+- Users do not get backend job progress or recoverable job state if the operation later becomes asynchronous.
 
 Recommendation:
 
-- Keep current synchronous flow for the current release candidate.
-- Backend should later expose async jobs with job IDs and status polling.
+- Keep current synchronous flow for controlled testing.
+- Backend should later expose async jobs with job IDs and status polling if exports/rollback become long-running enough to need it.
 - Frontend should reuse existing loading/conflict state and map job states into the existing action availability model.
 
 Blocks controlled user testing: No, unless real exports are expected to be long during user testing.
@@ -90,28 +125,45 @@ Risk:
 Recommendation:
 
 - Keep report actions disabled or placeholder-only until backend returns report metadata.
-- Define whether reports are linked to product, activity, export job, history event, or all of these.
+- Define whether reports are linked to product, activity, export job, history event, or multiple scopes.
 - Prefer metadata in summary payloads and separate detail endpoints for report content.
 
 Blocks controlled user testing: No, if reports are documented as unavailable/future scope.
 
-### RR-004: Product terminology audit remains open
+### RR-004: Product terminology audit completed
+
+Severity: Resolved
+
+The user-facing terminology audit is complete. Main map, Dashboard, Analyze, Review, Product History, Product Collection, Preferences and onboarding use `Product` / `Products` as the shared visible terms.
+
+Technical identifiers such as `datasetName`, `datasetNames`, route parameters and backend response fields remain unchanged because they belong to established API and normalized data contracts.
+
+Regression protection:
+
+- `userFacingTerminology.test.js` scans representative user-facing JavaScript and HTML sources for visible `Dataset` / `Datasets` copy.
+- Lowercase technical tokens, CSS selectors, event names and backend-aligned identifiers remain allowed.
+- New visible controls, notices, tooltips and onboarding copy should continue using `Product` / `Products`.
+
+Blocks controlled user testing: No. Resolved before broader rollout.
+
+### RR-011: User guidance/discoverability
 
 Severity: P1/P2
 
-The architecture now says user-facing UI should use `Product` / `Products`, while code may still use `datasetName` where required by backend contracts. A full UI pass is still tracked separately.
+User feedback says users do not know what all controls do. The app now has concise hover/help text for common clickable controls, icon buttons, route actions, popup actions and panel buttons.
 
-Risk:
+Remaining risk:
 
-- Mixed `Dataset` and `Product` terms can make user testing feedback harder to interpret.
-- Users may think Dataset and Product are different workflow concepts.
+- Native hover text helps discoverability, but does not proactively teach the main workflows.
+- First-time users may still not understand the intended order of work.
 
 Recommendation:
 
-- Run a UI-only terminology audit before broader rollout.
-- Do not rename backend-aligned code identifiers unless there is a separate refactor.
+- Keep maintaining tooltip coverage as new clickable controls are added.
+- Do not duplicate the visible label; explain consequence or context.
+- Keep route-specific onboarding targets and customer-facing copy current when controls or workflows change.
 
-Blocks controlled user testing: No, but it should be fixed before broader rollout if visible labels remain inconsistent.
+Blocks controlled user testing: No.
 
 ## P2 findings
 
@@ -147,11 +199,11 @@ Recommendation:
 - If activity payloads become large, add backend paging or server-side filters.
 - Do not add server-side filters until real payload sizes justify the complexity.
 
-### RR-007: Accessibility and keyboard coverage should get a final pass
+### RR-007: Accessibility and keyboard coverage should continue to be tested
 
 Severity: P2
 
-Several custom controls now exist: popup action dropdowns, Dashboard date panel, Product picker dropdown, filter rows, and Dashboard History panel.
+Recent hardening improved Escape handling and Dashboard time-control tab behavior. Continue smoke-testing custom controls after UI changes.
 
 Recommended smoke cases:
 
@@ -159,16 +211,18 @@ Recommended smoke cases:
 - Use Escape on open panels/dropdowns where supported.
 - Verify visible focus states in light and dark mode.
 - Verify Product picker keyboard behavior in Analyze and Review.
+- Verify Product search keyboard behavior on the main map.
 
 ### RR-008: Light/dark mode should be tested after recent UI additions
 
 Severity: P2
 
-Recent additions include Product picker, Dashboard date picker, Dashboard History panel polish, filter option restyling, and clear-button restyling.
+Recent additions include Product picker, Product search overlay, Dashboard date picker, Dashboard History panel polish, filter option restyling, clear-button restyling and collapsed Product History rows.
 
 Recommended smoke cases:
 
 - Main map filters in light and dark mode.
+- Main map Product search overlay in light and dark mode.
 - Dashboard date panel and History panel in light and dark mode.
 - Analyze/Review Product picker dropdown in light and dark mode.
 - Popup actions and nested export menu in light and dark mode.
@@ -183,6 +237,17 @@ Recommendation:
 
 - Include reset-state instructions in tester notes.
 - During QA, test both clean browser state and persisted state.
+
+### RR-012: Native/browser animation behavior in RDP/VDI should not carry functional meaning
+
+Severity: P2
+
+RDP/VDI environments may not render CSS animations reliably. This is acceptable as long as text, disabled state and notices communicate loading state.
+
+Recommendation:
+
+- Keep spinner animations as visual enhancement only.
+- Ensure all long-running actions also show static text such as `Exporting...`, `Rolling back...`, `Loading...` or `Refreshing...`.
 
 ## P3 findings
 
@@ -199,25 +264,27 @@ Recommendation:
 
 ## Backend-dependent work to communicate to backend owners
 
-| Topic                  | Required backend decision                                                                             |
-| ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| Operation state        | Active per-product operation state and conflict rejection.                                            |
-| Async jobs             | Job ID, status endpoint, progress/error states for export/rollback and other long-running operations. |
-| Report storage         | Whether frontend receives report IDs, URLs, or both.                                                  |
-| Report ownership       | Whether reports belong to product, activity, export job, history event, or multiple scopes.           |
-| Dashboard payload size | Whether activity endpoint needs paging/server-side filters after real data volumes are known.         |
-| Timeline               | Global map timeline database/API contract.                                                            |
+| Topic                  | Required backend decision                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Operation state        | Active per-product operation state so other sessions can see active work before attempting actions. Backend conflict rejection already exists.    |
+| Async jobs             | Job ID, status endpoint, progress/error states for export/rollback and other long-running operations if synchronous behavior proves insufficient. |
+| Report storage         | Whether frontend receives report IDs, URLs, or both.                                                                                              |
+| Report ownership       | Whether reports belong to product, activity, export job, history event, or multiple scopes.                                                       |
+| Dashboard payload size | Whether activity endpoint needs paging/server-side filters after real data volumes are known.                                                     |
+| Timeline               | Global map timeline database/API contract.                                                                                                        |
+| AOI performance        | `/aoi` currently dominates initial main map load time in smoke testing. Backend performance should be monitored.                                  |
 
 ## Recommended next actions
 
-1. Share this review with backend owners before user testing.
-2. Run the manual smoke checklist below on a clean browser profile and on an existing profile with persisted state.
-3. Fix only P0 issues immediately if any are found during smoke testing.
-4. Communicate P1 backend-dependent limitations to testers.
-5. Defer report-link UI implementation until backend report contracts are known.
-6. Consider the Product terminology audit before broader rollout.
+1. Keep the smoke-tested frontend baseline stable while controlled user testing begins.
+2. Define backend-visible active operation state per Product so other sessions can see running work before attempting an action.
+3. Define async job IDs, status and error semantics for long-running Export and Rollback operations.
+4. Keep report-link UI deferred until backend report contracts are known.
+5. Keep hover/help, onboarding targets and Product terminology coverage current, and rerun targeted smoke tests after material changes.
 
 ## Manual smoke checklist
+
+The full checklist below was completed on 2026-07-16 against `805a853259b6594fe16384ae37b2e828d6de4c76` with no findings. Keep it as the regression checklist for future releases and backend contract changes.
 
 ### Startup and routes
 
@@ -228,11 +295,15 @@ Recommendation:
 - Open `/analyze/{product}` directly.
 - Open `/review/{product}` directly.
 - Reload each route.
+- While main map is initially loading, confirm navbar links remain clickable.
 
 ### Main map
 
 - Confirm products render.
 - Confirm hover highlight works.
+- Use Product search to find a known product and open its popup.
+- Use Product search with Enter and Escape.
+- Hover Product search and common main map controls to confirm help text appears.
 - Open popup and confirm product fields are constrained to the intended layout.
 - Confirm first popup after fresh load does not show all raw attributes.
 - Test manual refresh.
@@ -243,6 +314,7 @@ Recommendation:
 - Confirm only `Display scale`, `Status`, and `Usage band` are visible.
 - Confirm Status includes all statuses from the status endpoint, including count `0` values.
 - Select a zero-count status and confirm the map/list result is empty.
+- Hover filter actions and verify help text.
 - Clear filters.
 - Reload and confirm old filter categories do not return.
 
@@ -255,6 +327,8 @@ Recommendation:
 - Test Rollback.
 - Confirm mutation actions are blocked while export is running.
 - Confirm popup refreshes after successful actions.
+- Confirm textual loading state remains clear if spinner animation does not move in RDP/VDI.
+- Hover popup actions and verify help text.
 
 ### Dashboard
 
@@ -263,7 +337,9 @@ Recommendation:
 - Test `Since yesterday` and `Last 7 days` quick actions.
 - Test search and filters.
 - Click Status summary rows and Operation summary rows.
+- Hover Dashboard controls and activity action buttons.
 - Open Dashboard History panel from an activity.
+- Expand/collapse Product History rows.
 - Close Dashboard History panel with `Close` and Escape.
 - Test Review and Analyze links.
 - Confirm report actions remain disabled/placeholders as expected.
@@ -272,7 +348,9 @@ Recommendation:
 
 - Open Analyze directly.
 - Use Product picker dropdown.
-- Use typed Product fallback.
+- Confirm already-added Products are hidden.
+- Confirm unknown Products are rejected when catalog validation is available.
+- Hover Product picker, Add, Open all and Collapse all controls.
 - Load one product.
 - Load multiple products.
 - Confirm history content loads or fails per product without breaking the page.
@@ -282,21 +360,33 @@ Recommendation:
 
 - Open Review directly.
 - Use Product picker dropdown.
-- Use typed Product fallback.
+- Confirm already-added Products are hidden.
+- Confirm unknown Products are rejected when catalog validation is available.
+- Hover Product picker and common Review controls.
 - Add/remove products.
 - Enable/disable products.
 - Toggle History, IC-ENC reports, and Internal validation content.
-- Confirm Review remains independent of Product Collection after opening.
 
-### Theme and accessibility
+## Introduction flow phase 1
 
-- Repeat key checks in light mode and dark mode.
-- Tab through Dashboard controls.
-- Tab through Product picker.
-- Tab through popup actions and nested export menu.
-- Confirm visible focus states.
-- Confirm Escape behavior for Dashboard History and popup/dropdown flows.
+A compact introduction flow is available after each route finishes loading. Main map, Dashboard, Analyze and Review offer their own first-time welcome prompt, which can be postponed or dismissed independently. Users can replay the current route introduction from Preferences.
 
-## Release recommendation
+The implementation is intentionally route-specific. The main map contains focused guidance for Product search, filters, popup behavior and actions, Product Collection, workspace navigation, Theme and Preferences. Dashboard now covers range selection, summary cards, activity filters, activity links and actionable summary panels. Analyze covers the Product picker, Product list, card controls, reports and Product History. Review covers Product selection, content configuration, side-by-side comparison and fixed-order Product content. The flow does not navigate automatically, execute Product actions, or depend on BroadcastChannel/session state.
 
-Proceed with controlled user testing after one smoke pass of the checklist above. Do not market report links, async job progress, backend operation locking, or global timeline as complete until backend contracts exist.
+Completion and dismissal are stored in separate versioned localStorage keys: `pm.onboarding.main.v2`, `pm.onboarding.dashboard.v2`, `pm.onboarding.analyze.v2` and `pm.onboarding.review.v2`. The completed legacy Main map state is preserved during migration, while the other routes begin with independent first-time state.
+
+### Onboarding UX follow-up
+
+Introduction steps no longer dim the application. The welcome and stop-confirmation dialogs retain modal dimming, while route steps use lightweight fixed outlines that do not alter the target element's stacking context. Target resolution traverses open Calcite and ArcGIS shadow roots, allowing the popup Copy and Product Collection controls to be outlined alongside the custom action bar. Product search uses true side placement when horizontal room exists, steps 3-5 retain one stable left-side card position, and workspace links are outlined above the navbar.
+
+The main-map sequence is now interactive. Step 3 waits for a Product popup and advances automatically when the user selects a Product. Step 4 requires the popup to remain open and returns to Step 3 if it closes. Step 5 waits for Product Collection state, highlights the popup action while waiting, then switches to the Collection tray and enables continuation after a Product has been collected. The progression uses explicit disabled button text and does not depend on animation.
+
+### Route-specific onboarding expansion
+
+Dashboard uses five compact steps for the activity range, summary cards, activity filters, per-activity workflow links and actionable Status/Operation panels. Analyze uses four steps for adding Products, managing the Product list, controlling Product cards and inspecting reports and Product History. Review uses four steps for adding Products, configuring included content, comparing columns and inspecting fixed-order Product content.
+
+Each route offers its introduction automatically on first use and stores completion independently. Analyze Step 1 remains beside the Product picker and waits for one loaded Product before continuing. Later Analyze steps return to the picker if the Product is removed. Review Step 1 waits for two loaded Products, after which the first two Product columns are highlighted specifically for comparison. The text avoids software implementation terminology and focuses on the user-visible Product workflow. Manual replay from Preferences remains available on every route. These route flows have been manually verified with their required empty and populated states.
+
+### Main-map completion
+
+The main-map introduction ends with Theme and Preferences. Theme remains directly usable while its control is highlighted. The final Preferences step waits for the user to open the panel, then moves the highlight to the panel, explains browser-saved map and display settings, and shows where the current route introduction can be restarted. `Finish` remains disabled until the panel is open. Steps 3-5 keep the guidance card aligned beside Product search while highlights follow the active popup and Product Collection controls. The complete main-map flow has been manually verified in light and dark mode.

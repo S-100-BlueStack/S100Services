@@ -17,6 +17,7 @@ export function createActionButton(actionConfig) {
   action.textEnabled = true;
   action.className = ["popup-action-bar__action", actionConfig.className].filter(Boolean).join(" ");
   action.dataset.popupActionId = actionConfig.id;
+  action.dataset.onboardingTarget = "popup-actions";
 
   bindVisibleFocusState(action);
 

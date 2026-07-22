@@ -10,9 +10,9 @@ const abortController = new AbortController();
 export async function loadInitialData(app) {
   const loaderProgress = createLoaderProgressSession({
     loadStartProgress: 0.03,
-    loadEndProgress: 0.36,
-    dataReceivedProgress: 0.38,
-    renderStartProgress: 0.4,
+    loadEndProgress: 0.52,
+    dataReceivedProgress: 0.54,
+    renderStartProgress: 0.56,
     renderEndProgress: 0.96,
     simulatedProgressIntervalMs: 350,
     simulatedProgressStep: 0.012,

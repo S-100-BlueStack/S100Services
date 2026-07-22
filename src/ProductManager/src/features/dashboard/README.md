@@ -29,6 +29,7 @@ Implemented scope:
 - Dashboard History panel shows selected activity context above the product timeline.
 - Dashboard highlights the activity row whose `History` action opened the panel.
 - Dashboard History panel loads product state lookups before normalizing backend history so numeric status IDs render as status names.
+- Dashboard History panel uses the shared collapsed Product History event renderer.
 - Backend activity classification maps raw product states into dashboard-oriented activity type, status, severity and title values.
 - Disabled or placeholder report actions until report URLs or report detail endpoints exist.
 
@@ -43,11 +44,9 @@ GET electronicproducts/dashboard?from=2026-07-01T08:15:00
 GET electronicproducts/dashboard?from=2026-07-01T08:15:00&to=2026-07-07T16:45:00
 ```
 
-Range query values are sent in Danish operational time.
+Range query values are sent in Danish operational time. The Dashboard header always shows `From` and optional `To` date/time fields.
 
-The Dashboard header always shows `From` and optional `To` date/time fields. `Since yesterday` and `Last 7 days` are quick actions that only fill the fields; they do not load data until the user selects `Apply`.
-
-Selecting a `From` date defaults its time to `00:00`; selecting a `To` date defaults its time to `23:59`. Leaving `To` empty keeps the range open-ended, so refresh requests continue to include the latest backend activity.
+`Since yesterday` and `Last 7 days` are quick actions that only fill the fields; they do not load data until the user selects `Apply`. Selecting a `From` date defaults its time to `00:00`; selecting a `To` date defaults its time to `23:59`. Leaving `To` empty keeps the range open-ended, so refresh requests continue to include the latest backend activity.
 
 The backend interprets offset-free datetime values as `Europe/Copenhagen` wall time, not UTC.
 
@@ -95,15 +94,7 @@ Expected payload shape:
           "Review": true,
           "Analyze": true,
           "History": true,
-          "IcEncReports": [
-            {
-              "Id": "icenc-report-123",
-              "Title": "IC-ENC validation report",
-              "Status": "Failed",
-              "GeneratedAt": "2026-07-08T07:45:00+02:00",
-              "Url": null
-            }
-          ],
+          "IcEncReports": [],
           "InternalValidationReports": []
         },
         "Details": [{ "Label": "Source state", "Value": "Rejected" }]
@@ -172,9 +163,7 @@ Summary cards, status summary and operation summary are derived from the filtere
 - Selecting an already active summary row toggles the corresponding filter off.
 - `Clear filters` resets search, filters and active summary row state.
 
-These summary panels should stay small and data-oriented.
-
-Do not reintroduce the removed `Important changes` panel unless it becomes a clearly filterable and useful activity concept.
+These summary panels should stay small and data-oriented. Do not reintroduce the removed `Important changes` panel unless it becomes a clearly filterable and useful activity concept.
 
 ## Dashboard History panel
 
@@ -199,6 +188,9 @@ Behavior:
 - The panel header/close area is sticky within the panel.
 - Loading, empty and error states stay inside the panel content area and keep the panel header available.
 - Product state lookups are loaded before history normalization so backend status IDs render as status names.
+- Product history events are collapsed by default.
+- Collapsed event rows show only the title, timestamp and short description.
+- Details such as previous status, new status and source state are revealed only when the user expands a row.
 - The Dashboard panel does not pin, auto-close on popup state, or interact with Product Collection.
 
 History panel guidance:

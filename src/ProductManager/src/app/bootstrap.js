@@ -48,7 +48,7 @@ async function bootstrapMainRoute() {
   document.title = "Product Manager";
 
   try {
-    await initUI();
+    const ui = await initUI();
     initDisplayScaleOverrideControl();
 
     const app = initMap();
@@ -70,6 +70,7 @@ async function bootstrapMainRoute() {
     app.bindMapVisibility?.();
     app.filterPanel?.refresh();
     app.refreshService.startAuto();
+    ui.onboarding.setRouteReady();
   } catch (error) {
     hideLoader();
     noticeError("Application failed to start", error.message);
@@ -79,7 +80,7 @@ async function bootstrapMainRoute() {
 
 async function bootstrapDashboardRoute(route) {
   try {
-    await initUI();
+    const ui = await initUI();
 
     showLoader("Preparing Dashboard...", {
       progress: 0.01,
@@ -97,6 +98,7 @@ async function bootstrapDashboardRoute(route) {
     initializeTheme();
     registerThemeToggle();
     hideLoader();
+    ui.onboarding.setRouteReady();
   } catch (error) {
     hideLoader();
     noticeError("Dashboard failed to start", error.message);
@@ -106,7 +108,7 @@ async function bootstrapDashboardRoute(route) {
 
 async function bootstrapAnalyzeRoute(route) {
   try {
-    await initUI();
+    const ui = await initUI();
 
     showLoader("Preparing UI components...", {
       progress: 0.01,
@@ -122,6 +124,7 @@ async function bootstrapAnalyzeRoute(route) {
     initializeTheme(app.view);
     registerThemeToggle(app.view);
     hideLoader();
+    ui.onboarding.setRouteReady();
   } catch (error) {
     hideLoader();
     noticeError("Analyze page failed to start", error.message);
@@ -131,7 +134,7 @@ async function bootstrapAnalyzeRoute(route) {
 
 async function bootstrapReviewRoute(route) {
   try {
-    await initUI();
+    const ui = await initUI();
 
     showLoader("Preparing Product Review...", {
       progress: 0.01,
@@ -147,6 +150,7 @@ async function bootstrapReviewRoute(route) {
     initializeTheme();
     registerThemeToggle();
     hideLoader();
+    ui.onboarding.setRouteReady();
   } catch (error) {
     hideLoader();
     noticeError("Product Review failed to start", error.message);

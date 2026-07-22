@@ -15,8 +15,10 @@ import {
 } from "../features/map/scale/displayScaleVisibility.js";
 import { createAttributeFilterService } from "../features/map/filters/attributeFilterService.js";
 import { initAttributeFilterPanel } from "../features/map/filters/attributeFilterPanel.js";
+import { closePopupActionDropdown } from "../features/map/popups/popupActionDropdown.js";
 import { initProductCollectionTray } from "../features/productCollection/ui/productCollectionTray.js";
 import { initProductHistoryPanel } from "../features/timeline/ui/productHistoryPanel.js";
+import { initMainMapProductSearch } from "../features/map/search/mainMapProductSearch.js";
 import { bindMapViewpointPersistence } from "../features/map/state/mapViewpointPersistence.js";
 import { initPreferencesPanel } from "../features/preferences/ui/preferencesPanel.js";
 
@@ -87,6 +89,14 @@ export function initMap() {
     view,
   });
   const productCollectionTray = initProductCollectionTray();
+  const productSearch = initMainMapProductSearch({ view });
+  const cleanupKeyboardClose = bindMainMapKeyboardClose({
+    view,
+    filterPanel,
+    preferencesPanel,
+    productHistoryPanel,
+    productSearch,
+  });
 
   bindOverlapPicker(view);
 
@@ -157,5 +167,103 @@ export function initMap() {
     updateLastUpdated,
     mapViewpointPersistence,
     preferencesPanel,
+    productSearch,
+    destroy() {
+      cleanupKeyboardClose?.();
+      productSearch?.destroy?.();
+      filterPanel?.destroy?.();
+      preferencesPanel?.destroy?.();
+      productHistoryPanel?.destroy?.();
+      productCollectionTray?.destroy?.();
+      mapViewpointPersistence?.destroy?.();
+    },
   };
+}
+
+function bindMainMapKeyboardClose({
+  view,
+  filterPanel,
+  preferencesPanel,
+  productHistoryPanel,
+  productSearch,
+}) {
+  const handleKeydown = (event) => {
+    if (event.key !== "Escape" || event.defaultPrevented) {
+      return;
+    }
+
+    if (productSearch?.close?.()) {
+      event.preventDefault();
+      return;
+    }
+
+    if (closePopupDropdownOnly()) {
+      event.preventDefault();
+      return;
+    }
+
+    if (closeNoticePanel()) {
+      event.preventDefault();
+      return;
+    }
+
+    if (hasVisibleElement("#attribute-filter-panel")) {
+      filterPanel?.close?.();
+      event.preventDefault();
+      return;
+    }
+
+    if (hasVisibleElement("#preferences-panel")) {
+      preferencesPanel?.close?.();
+      event.preventDefault();
+      return;
+    }
+
+    if (hasVisibleElement("#product-history-panel")) {
+      productHistoryPanel?.close?.();
+      event.preventDefault();
+      return;
+    }
+
+    if (view?.popup?.visible) {
+      view.popup.close();
+      event.preventDefault();
+    }
+  };
+
+  document.addEventListener("keydown", handleKeydown);
+
+  return () => {
+    document.removeEventListener("keydown", handleKeydown);
+  };
+}
+
+function closePopupDropdownOnly() {
+  if (!hasVisibleElement(".popup-action-dropdown")) {
+    return false;
+  }
+
+  closePopupActionDropdown({ restoreFocus: false });
+  return true;
+}
+
+function closeNoticePanel() {
+  const panel = document.getElementById("notice-panel");
+
+  if (!(panel instanceof HTMLElement) || panel.hasAttribute("collapsed")) {
+    return false;
+  }
+
+  panel.setAttribute("collapsed", "");
+  return true;
+}
+
+function hasVisibleElement(selector) {
+  const element = document.querySelector(selector);
+
+  if (!(element instanceof HTMLElement) || element.hidden) {
+    return false;
+  }
+
+  return element.offsetParent !== null || getComputedStyle(element).position === "fixed";
 }

@@ -1,6 +1,7 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ProductManagerAPI.Models;
+using ProductManagerAPI.Services.Export;
 
 namespace ProductManagerAPI.Controllers
 {
@@ -51,13 +52,13 @@ namespace ProductManagerAPI.Controllers
 
         [HttpGet("exportformats")]
         public IActionResult GetExportFormats() {
-            var values = Enum.GetValues<RequestTypes.ExportFormat>()
-                .Select(e => new {
-                    Id = (int)e,
-                    Name = e.ToString()
+            var values = ExportTargetContract.AllowedTargets
+                .Select(name => new {
+                    Name = name
                 });
 
             return Ok(values);
         }
     }
 }
+

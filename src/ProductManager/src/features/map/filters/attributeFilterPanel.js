@@ -637,7 +637,13 @@ export function initAttributeFilterPanel({ filterService, applyVisibility }) {
     writeFilterSnapshot(filterService);
     syncDisplayScaleFilterAutoDisable();
     applyVisibility();
-    render();
+    refreshBadge();
+
+    // Do not replace the slider DOM while Calcite is completing its own
+    // asynchronous range update. Re-rendering here can leave Calcite reading
+    // a detached/null handle. The visible range labels are already updated by
+    // calciteSliderInput, and the filter state is persisted above.
+    updateRangePreview(panel, filterService, layerId, fieldName);
   }
 
   button.addEventListener("click", (event) => {

@@ -1,5 +1,7 @@
 import "@esri/calcite-components/components/calcite-icon";
 
+let historyDetailsId = 0;
+
 export function createProductHistorySummary(history) {
   const container = document.createElement("section");
   container.className = "pm-product-history-summary";
@@ -113,37 +115,92 @@ function createProductHistoryEventItem(event) {
   const body = document.createElement("div");
   body.className = "pm-product-history-list__body";
 
-  const header = document.createElement("div");
-  header.className = "pm-product-history-list__header";
-
-  const title = document.createElement("div");
-  title.className = "pm-product-history-list__title";
-  title.textContent = event.title ?? "History event";
-
-  header.appendChild(title);
-
-  const meta = document.createElement("div");
-  meta.className = "pm-product-history-list__meta";
-  meta.textContent = createEventMetaText(event);
-
-  body.append(header, meta);
-
-  if (event.description) {
-    const description = document.createElement("p");
-    description.className = "pm-product-history-list__description";
-    description.textContent = event.description;
-    body.appendChild(description);
-  }
-
   const visibleDetails = getVisibleEventDetails(event.details ?? []);
 
   if (visibleDetails.length > 0) {
-    body.appendChild(createEventDetails(visibleDetails));
+    body.appendChild(createCollapsedEventSummary(event, visibleDetails));
+  } else {
+    body.appendChild(createStaticEventSummary(event));
   }
 
   item.append(marker, body);
 
   return item;
+}
+
+function createCollapsedEventSummary(event, visibleDetails) {
+  const detailsId = `product-history-event-details-${++historyDetailsId}`;
+  const fragment = document.createDocumentFragment();
+  const summaryButton = document.createElement("button");
+  summaryButton.type = "button";
+  summaryButton.className = "pm-product-history-list__summary";
+  summaryButton.setAttribute("aria-expanded", "false");
+  summaryButton.setAttribute("aria-controls", detailsId);
+
+  const summaryContent = createEventSummaryContent(event);
+  const chevron = document.createElement("calcite-icon");
+  chevron.icon = "chevron-down";
+  chevron.scale = "s";
+  chevron.className = "pm-product-history-list__chevron";
+  chevron.setAttribute("aria-hidden", "true");
+
+  summaryButton.append(summaryContent, chevron);
+
+  const detailsPanel = document.createElement("div");
+  detailsPanel.id = detailsId;
+  detailsPanel.className = "pm-product-history-list__details-panel";
+  detailsPanel.hidden = true;
+  detailsPanel.appendChild(createEventDetails(visibleDetails));
+
+  summaryButton.addEventListener("click", () => {
+    const isExpanded = summaryButton.getAttribute("aria-expanded") === "true";
+    const nextExpanded = !isExpanded;
+
+    // Keep every event independent so users can expand only the history rows they need.
+    summaryButton.setAttribute("aria-expanded", String(nextExpanded));
+    detailsPanel.hidden = !nextExpanded;
+    chevron.icon = nextExpanded ? "chevron-up" : "chevron-down";
+  });
+
+  fragment.append(summaryButton, detailsPanel);
+
+  return fragment;
+}
+
+function createStaticEventSummary(event) {
+  const container = document.createElement("div");
+  container.className = "pm-product-history-list__summary pm-product-history-list__summary--static";
+  container.appendChild(createEventSummaryContent(event));
+
+  return container;
+}
+
+function createEventSummaryContent(event) {
+  const content = document.createElement("span");
+  content.className = "pm-product-history-list__summary-content";
+
+  const header = document.createElement("span");
+  header.className = "pm-product-history-list__header";
+
+  const title = document.createElement("span");
+  title.className = "pm-product-history-list__title";
+  title.textContent = event.title ?? "History event";
+
+  const meta = document.createElement("span");
+  meta.className = "pm-product-history-list__meta";
+  meta.textContent = createEventMetaText(event);
+
+  header.append(title, meta);
+  content.appendChild(header);
+
+  if (event.description) {
+    const description = document.createElement("span");
+    description.className = "pm-product-history-list__description";
+    description.textContent = event.description;
+    content.appendChild(description);
+  }
+
+  return content;
 }
 
 function createEventIcon(type) {
@@ -192,25 +249,18 @@ function getEventIcon(type) {
   switch (type) {
     case "freeze":
       return "snow";
-
     case "unfreeze":
       return "brightness";
-
     case "export":
       return "upload";
-
     case "send":
       return "send";
-
     case "rollback":
       return "undo";
-
     case "analysis":
       return "magnifying-glass";
-
     case "status":
       return "information";
-
     default:
       return "clock";
   }

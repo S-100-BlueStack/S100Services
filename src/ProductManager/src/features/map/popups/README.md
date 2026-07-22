@@ -27,7 +27,11 @@ This keeps the action UI consistent with Product Manager requirements:
 - `createPopup.js`
   Renders popup content and subscribes to export-state and product-operation-state changes.
 - `popupExportConfig.js`
-  Defines popup export groups, scopes, export types, labels and endpoint wiring. Future export actions should be activated here when backend endpoints become available.
+  Defines popup export groups, canonical target/type metadata, labels and endpoint wiring. Future export actions should be activated here when backend endpoints become available.
+- `popupExportContract.js`
+  Owns the single supported-leaf rule and the direct-dispatch guard used by availability and action execution.
+- `features/data/domain/exportTarget.js`
+  Defines the canonical frontend target strings `All`, `S100`, and `S57` shared by API and popup metadata.
 
 ## Current action status
 
@@ -61,7 +65,7 @@ Export > S100 > Update
 Current implemented export endpoint:
 
 ```http
-POST /export/{name}/newedition
+POST /export/{name}/newedition?exportTarget=S100
 ```
 
 Used by:
@@ -83,6 +87,20 @@ Rollback
 ```
 
 Endpoint wiring belongs in `features/data/api/exportApi.js` and `features/map/popups/popupExportConfig.js`. Do not add export endpoint wiring directly in `popupActionConfig.js`.
+
+## BE-102 export target contract
+
+Backend parsing is case-insensitive and uses the canonical public names `All`, `S100`, and `S57`. Missing target defaults to `S100`. Explicit empty/whitespace values, `Both`, numeric values, numeric-looking values, and unknown text return `400` with `EXPORT_TARGET_INVALID`. `All` and `S57` return `422` with `EXPORT_TARGET_NOT_SUPPORTED`.
+
+`GET /Lookup/exportformats` returns:
+
+```json
+[{ "Name": "All" }, { "Name": "S100" }, { "Name": "S57" }]
+```
+
+Every popup export leaf has explicit `target` and `exportType` metadata. `popupExportContract.js` owns the single supported-leaf rule. `triggerExport` applies that guard before confirmation, export/product loading state, and request dispatch, so keyboard events, stale DOM, stale metadata, or direct action calls cannot activate disabled leaves.
+
+Frontend-first and backend-first deployment are both compatible; frontend-first is preferred. Rollback is unchanged.
 
 ## Action availability
 
