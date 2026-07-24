@@ -9,6 +9,8 @@ using ProductManagerAPI.OpenApi;
 using ProductManagerAPI.Services.Export;
 using ProductManagerAPI.Services.Graph;
 using ProductManagerAPI.Services.Locking;
+using ProductManagerAPI.Services.Jobs;
+using ProductManagerAPI.Services.Operations;
 using ProductManagerAPI.Services.MailImport;
 using ProductManagerAPI.Services.SevenCs;
 using S100FC.S128;
@@ -196,6 +198,7 @@ namespace ProductManagerAPI
                 config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
                     .UseSimpleAssemblyNameTypeSerializer()
                     .UseRecommendedSerializerSettings()
+                    .UseFilter(new ExportJobMetadataClientFilter())
                     .UseSqlServerStorage(
                         nameOrConnectionString: connectionString,
                         options: new SqlServerStorageOptions {
@@ -228,6 +231,13 @@ namespace ProductManagerAPI
             });
 
             builder.Services.AddSingleton<ISevenCsService, SevenCsService>();
+
+            builder.Services.AddSingleton(TimeProvider.System);
+            builder.Services.AddScoped<IExportOperationService, ExportOperationService>();
+            builder.Services.AddSingleton<IExportJobService, HangfireExportJobService>();
+            builder.Services.AddSingleton<IHangfireJobStorageAccessor>(_ => new HangfireJobStorageAccessor(JobStorage.Current));
+            builder.Services.AddSingleton<IJobStatusService, HangfireJobStatusService>();
+            builder.Services.AddTransient<ExportOperationJob>();
 
             // TODO: Move to service
             builder.Services.AddHangfireServer();
@@ -329,4 +339,3 @@ namespace ProductManagerAPI
         }
     }
 }
-

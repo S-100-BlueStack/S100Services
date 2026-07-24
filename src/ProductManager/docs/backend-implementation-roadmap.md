@@ -42,19 +42,19 @@ These decisions apply to every work package:
 
 ## Work package status
 
-| ID     | Area                                | Status                       | Database/geodatabase change | Primary dependency                                          |
-| ------ | ----------------------------------- | ---------------------------- | --------------------------- | ----------------------------------------------------------- |
-| BE-101 | Full backend context review         | Complete                     | No                          | Current backend source and tests                            |
-| BE-102 | Readable ExportTarget contract      | Implemented                  | No                          | Verified export controller/service contract                 |
-| FE-101 | Usage band label                    | Ready after payload check    | No                          | Existing Usage band ID + description payload                |
-| BE-103 | AOI profiling and optimization      | Ready after BE-101           | No for first pass           | Measured request path                                       |
-| BE-104 | Async Export/Rollback jobs          | Planned                      | No                          | Existing background-job framework                           |
-| BE-105 | Product-level active job visibility | Conditional                  | No                          | Existing job storage must support efficient metadata lookup |
-| BE-106 | Dashboard filtering and pagination  | Planned                      | No for first release        | Stable ordering/event key review                            |
-| BE-107 | Product History failure hardening   | Planned with validation work | No assumption               | Validation/history producer contract                        |
-| BE-108 | Report storage/content              | Blocked                      | Unknown                     | IC-ENC and internal validation process/API                  |
-| BE-109 | Permanent Product ID                | Blocked                      | Yes                         | Database owners                                             |
-| BE-110 | Historical global map timeline      | Deferred                     | Likely                      | Architecture and retention decision                         |
+| ID     | Area                                | Status                               | Database/geodatabase change | Primary dependency                                          |
+| ------ | ----------------------------------- | ------------------------------------ | --------------------------- | ----------------------------------------------------------- |
+| BE-101 | Full backend context review         | Complete                             | No                          | Current backend source and tests                            |
+| BE-102 | Readable ExportTarget contract      | Implemented                          | No                          | Verified export controller/service contract                 |
+| FE-101 | Usage band label                    | Ready after payload check            | No                          | Existing Usage band ID + description payload                |
+| BE-103 | AOI profiling and optimization      | Ready after BE-101                   | No for first pass           | Measured request path                                       |
+| BE-104 | Async Export/Rollback jobs          | BE-104A implemented; BE-104B pending | No                          | Existing Hangfire SQL storage and Windows file locking      |
+| BE-105 | Product-level active job visibility | Conditional                          | No                          | Existing job storage must support efficient metadata lookup |
+| BE-106 | Dashboard filtering and pagination  | Planned                              | No for first release        | Stable ordering/event key review                            |
+| BE-107 | Product History failure hardening   | Planned with validation work         | No assumption               | Validation/history producer contract                        |
+| BE-108 | Report storage/content              | Blocked                              | Unknown                     | IC-ENC and internal validation process/API                  |
+| BE-109 | Permanent Product ID                | Blocked                              | Yes                         | Database owners                                             |
+| BE-110 | Historical global map timeline      | Deferred                             | Likely                      | Architecture and retention decision                         |
 
 ## Implementation order
 
@@ -456,6 +456,17 @@ If measurement shows a missing index is the primary bottleneck, document:
 ---
 
 ## BE-104: Async Export/Rollback jobs
+
+### Implementation status
+
+BE-104A implements the backend-only foundation with additive start endpoints,
+application-owned Hangfire metadata, job-by-ID status, authoritative Product-version
+validation, a persistent-handle dataset lock, an execution guard and zero automatic
+retries. The implementation is rebased on
+`3015a6bbae317b4aaf0ce398a3b27b4939feb71c` and preserves the merged
+`uint`/`uint?` export and repository contracts together with the checked signed SQL
+boundary. The existing synchronous endpoints remain active. BE-104B frontend polling
+and activation are not implemented by BE-104A.
 
 ### Purpose
 
@@ -961,3 +972,10 @@ Provide:
 - manual test steps;
 - rollback notes;
 - suggested commit message.
+
+### BE-104A deployment acceptance: atomic job metadata
+
+Before BE-104A is accepted in an environment with the real Hangfire SQL storage,
+pause the worker, create a job, and immediately read `GET /jobs/{jobId}`. The response
+must be `200 Queued` with complete application-owned metadata before the worker is
+resumed. Product mutation must still be zero at that point.

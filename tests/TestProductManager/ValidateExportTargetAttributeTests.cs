@@ -20,6 +20,7 @@ namespace TestProductManagerAPI
         [Theory]
         [InlineData(nameof(ExportController.NewEdition))]
         [InlineData(nameof(ExportController.NewUpdate))]
+        [InlineData(nameof(ExportController.NewEditionJob))]
         public void ExportActionsUseTheSharedTargetValidationFilter(string methodName) {
             var method = typeof(ExportController).GetMethod(methodName)
                 ?? throw new InvalidOperationException($"Method {methodName} was not found.");
@@ -79,6 +80,42 @@ namespace TestProductManagerAPI
         [Theory]
         [InlineData("?exportTarget=All")]
         [InlineData("?exportTarget=S57")]
+        public async Task AsyncNewEditionUnsupportedTargetsUseTheExistingErrorCode(
+            string queryString
+        ) {
+            var run = await RunFilterAsync(queryString, _ => throw new InvalidOperationException(
+                "Async New Edition must not run for an unsupported target."
+            ));
+
+            Assert.False(run.NextCalled);
+            AssertProblem(
+                run.Result,
+                StatusCodes.Status422UnprocessableEntity,
+                ExportTargetContract.UnsupportedTargetCode
+            );
+        }
+
+        [Theory]
+        [InlineData("?exportTarget=0")]
+        [InlineData("?exportTarget=Unknown")]
+        public async Task AsyncNewEditionInvalidTargetsUseTheExistingErrorCode(
+            string queryString
+        ) {
+            var run = await RunFilterAsync(queryString, _ => throw new InvalidOperationException(
+                "Async New Edition must not run for an invalid target."
+            ));
+
+            Assert.False(run.NextCalled);
+            AssertProblem(
+                run.Result,
+                StatusCodes.Status400BadRequest,
+                ExportTargetContract.InvalidTargetCode
+            );
+        }
+
+        [Theory]
+        [InlineData("?exportTarget=All")]
+        [InlineData("?exportTarget=S57")]
         public async Task NewUpdateUnsupportedTargetsReturnUnprocessableEntityBeforeTheActionRuns(
             string queryString
         ) {
@@ -125,7 +162,10 @@ namespace TestProductManagerAPI
                 null!,
                 new EmptyProductManager(),
                 null!,
-                null!
+                null!,
+                null!,
+                null!,
+                TimeProvider.System
             );
 
             var run = await RunFilterAsync("?exportTarget=S100", async httpContext => {

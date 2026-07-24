@@ -612,6 +612,107 @@ namespace S100FC.ProductCatalogue
 
         ElectronicProduct? IElectronicProductManager.ElectronicProduct(string name) => this._electronicProducts.GetValueOrDefault(name.ToUpperInvariant());
 
+        async Task<ElectronicProductVersion?> IElectronicProductManager.ReadElectronicProductVersionAsync(
+            string datasetName,
+            CancellationToken cancellationToken
+        ) {
+            if (string.IsNullOrWhiteSpace(datasetName))
+                throw new ArgumentNullException(nameof(datasetName));
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return await this.Dispatch(() => {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                using var surface = this._geodatabase!.OpenDataset<FeatureClass>(
+                    this.QualifyTableName("surface")
+                );
+                using var cursor = surface.Search(
+                    CreateElectronicProductVersionQueryFilter(),
+                    true
+                );
+                var candidates = new List<ElectronicProduct>();
+                var normalizedDatasetName = NormalizeDatasetName(datasetName);
+
+                while (cursor.MoveNext()) {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var row = cursor.Current;
+                    if (row.IsNull("attributebindings"))
+                        continue;
+
+                    var attributes = Convert.ToString(row["attributebindings"]);
+                    if (string.IsNullOrWhiteSpace(attributes))
+                        continue;
+
+                    var candidateDatasetName = ReadDatasetName(
+                        attributes,
+                        out _
+                    );
+                    if (!string.Equals(
+                        NormalizeDatasetName(candidateDatasetName),
+                        normalizedDatasetName,
+                        StringComparison.OrdinalIgnoreCase
+                    )) {
+                        continue;
+                    }
+
+                    candidates.Add(S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(
+                        attributes,
+                        typeof(ElectronicProduct)
+                    ));
+                }
+
+                return SelectExactElectronicProductVersion(datasetName, candidates);
+            });
+        }
+
+        private static QueryFilter CreateElectronicProductVersionQueryFilter() => new() {
+            WhereClause = "upper(ps) = 'S-128' AND code = 'ElectronicProduct'",
+            SubFields = "attributebindings"
+        };
+
+        private static ElectronicProductVersion? SelectExactElectronicProductVersion(
+            string requestedDatasetName,
+            IEnumerable<ElectronicProduct> candidates
+        ) {
+            var normalizedDatasetName = NormalizeDatasetName(requestedDatasetName);
+            var exactMatches = candidates
+                .Where(candidate => string.Equals(
+                    NormalizeDatasetName(candidate.datasetName),
+                    normalizedDatasetName,
+                    StringComparison.OrdinalIgnoreCase
+                ))
+                .ToArray();
+
+            if (exactMatches.Length == 0)
+                return null;
+
+            if (exactMatches.Length > 1) {
+                var correlationId = Activity.Current?.TraceId.ToString();
+                Log.Error(
+                    "Multiple exact ElectronicProduct rows found. DatasetName: {DatasetName}. ExactMatchCount: {ExactMatchCount}. CorrelationId: {CorrelationId}",
+                    normalizedDatasetName,
+                    exactMatches.Length,
+                    correlationId
+                );
+                throw new ProductDataIntegrityException(
+                    normalizedDatasetName,
+                    exactMatches.Length
+                );
+            }
+
+            var match = exactMatches[0];
+            return new ElectronicProductVersion(
+                match.datasetName!.Trim(),
+                match.editionNumber,
+                match.updateNumber
+            );
+        }
+
+        private static string NormalizeDatasetName(string? datasetName) =>
+            datasetName?.Trim().ToUpperInvariant() ?? string.Empty;
+
         IEnumerator<string> IEnumerable<string>.GetEnumerator() {
             foreach (var p in this._electronicProducts)
                 yield return p.Key;
@@ -803,7 +904,7 @@ namespace S100FC.ProductCatalogue
                         // Only map geometry, and keep name seperate so foids remain unique
                         var geometry = name;
 
-                      //  var f = topology.matrix.Collapse;
+                        // var f = topology.matrix.Collapse;
                         if (topology.matrix.Collapse.Contains(name))
                             continue;
 
@@ -852,7 +953,7 @@ namespace S100FC.ProductCatalogue
 
                             // Surface Masks
                             var topologySurface = topology.matrix.Surfaces.FirstOrDefault(e => e.Ref!.Equals(name, StringComparison.InvariantCultureIgnoreCase));
-
+                           
                             // Build comma seperated string of masks, with :1 or :2 indicating which mask it is. Should be null/omitted if empty.
                             var masks = new[] {
                                     topologySurface?.Masks1?.Select(e => $"C{e}:1"),

@@ -200,6 +200,21 @@ namespace TestProductManagerAPI
                 return products.GetValueOrDefault(name);
             }
 
+            public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(
+                string datasetName,
+                CancellationToken cancellationToken = default
+            ) {
+                cancellationToken.ThrowIfCancellationRequested();
+                var product = products.GetValueOrDefault(datasetName);
+                return Task.FromResult(product == null
+                    ? null
+                    : new ElectronicProductVersion(
+                        product.datasetName ?? datasetName,
+                        product.editionNumber,
+                        product.updateNumber
+                    ));
+            }
+
             public Task<Dictionary<string, string>> GetDatasetAOIs() {
                 return Task.FromResult(new Dictionary<string, string>(aois, StringComparer.OrdinalIgnoreCase));
             }
@@ -275,8 +290,8 @@ namespace TestProductManagerAPI
                 string name,
                 ProductState state,
                 string productSpecification,
-                int editionNo,
-                int updateNo,
+                uint editionNo,
+                uint? updateNo,
                 string? owner = null,
                 byte[]? attachment = null,
                 string? attachmentFileName = null

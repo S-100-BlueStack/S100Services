@@ -679,3 +679,224 @@ For each touched endpoint:
 - avoid controller-specific ad hoc JSON objects when a shared convention already exists.
 
 Do not perform a repository-wide response rewrite as part of the first Product Manager backend task.
+
+## BE-104A asynchronous Export and Rollback contract
+
+Implementation baseline: `3015a6bbae317b4aaf0ce398a3b27b4939feb71c`.
+
+BE-104A adds a backend-only asynchronous job foundation. The existing synchronous
+New Edition and Rollback endpoints remain available and preserve their existing
+status codes, response bodies, lock behavior and business side effects. Frontend
+activation and polling remain BE-104B work.
+
+The current merged application contracts use `uint`/`uint?` for edition and update
+values at `IExportService` and `IProductRepository` boundaries. These contracts are
+preserved. `ProductRepository` performs checked conversion to signed `int` values
+before parameters reach Dapper/SQL Server. Authoritative S-128 Product versions and
+job metadata remain `int?`/`int?`; null is preserved and rejected before enqueue.
+
+### Additive endpoints
+
+```http
+POST /export/{datasetName}/newedition/jobs?exportTarget=S100
+POST /export/{datasetName}/rollback/jobs
+GET /jobs/{jobId}
+```
+
+The two start endpoints perform validation and authoritative version capture only.
+They do not acquire the dataset lock and do not mutate Product data. Successful job
+creation returns `202 Accepted`, a relative `Location: /jobs/{jobId}` header and:
+
+```json
+{
+  "jobId": "12345",
+  "datasetName": "101DK0040943E",
+  "operationType": "ExportEdition",
+  "exportTarget": "S100",
+  "status": "Queued",
+  "createdAt": "2026-07-22T09:30:00.0000000Z",
+  "correlationId": "347e48b5f3f34e538c90cb43cb324cdb",
+  "statusUrl": "/jobs/12345"
+}
+```
+
+Rollback uses `operationType: Rollback` and `exportTarget: null`.
+
+Async New Edition uses the existing BE-102 target validator and constants. Missing
+target defaults to `S100`. Invalid values return `400 EXPORT_TARGET_INVALID`.
+`All` and `S57` return `422` using
+`ExportTargetContract.UnsupportedTargetCode`, whose public value is
+`EXPORT_TARGET_NOT_SUPPORTED`.
+
+### Start failures
+
+| Condition                            | HTTP | Code                           | Safe message                                                         |
+| ------------------------------------ | ---: | ------------------------------ | -------------------------------------------------------------------- |
+| Product not found                    |  404 | `PRODUCT_NOT_FOUND`            | `The product was not found.`                                         |
+| Edition or update unavailable        |  409 | `PRODUCT_VERSION_UNAVAILABLE`  | `The product does not have a usable edition and update version.`     |
+| Multiple exact authoritative matches |  409 | `PRODUCT_DATA_INTEGRITY_ERROR` | `The product data is ambiguous and the operation cannot be started.` |
+| Hangfire creation failure            |  503 | `JOB_ENQUEUE_FAILED`           | `The operation could not be queued.`                                 |
+
+Failure responses contain no job ID or `Location` header. No Product mutation occurs.
+
+### Authoritative Product version
+
+The job request captures nullable edition and update values from the same
+ElectronicProduct/GDB source that the operation mutates. The start endpoint rejects
+null edition or update values before enqueue; null is never normalized to zero.
+
+The GDB lookup:
+
+1. normalizes the requested dataset name;
+2. queries only S-128 `ElectronicProduct` rows;
+3. requests only `attributebindings`;
+4. parses candidate ElectronicProducts;
+5. requires exact, case-insensitive `datasetName` equality.
+
+Zero exact matches means not found. One exact match returns the version. Multiple
+exact matches throw an internal `ProductDataIntegrityException`. Prefix and substring
+matches, including `101DK001` versus `101DK001A`, are not accepted as exact matches.
+
+### Application-owned Hangfire metadata
+
+An `IClientFilter.OnCreating` filter writes the following job parameters during the
+same Hangfire creation transaction as the job:
+
+```text
+ProductManagerDatasetName
+ProductManagerOperationType
+ProductManagerExportTarget
+ProductManagerExpectedEdition
+ProductManagerExpectedUpdate
+ProductManagerCorrelationId
+ProductManagerCreatedAtUtc
+```
+
+Execution writes:
+
+```text
+ProductManagerExecutionStarted
+ProductManagerResultCode
+ProductManagerResultMessage
+ProductManagerWarningCode
+ProductManagerWarningMessage
+ProductManagerErrorCode
+ProductManagerErrorMessage
+```
+
+The public status model is built only from these application-owned parameters and
+Hangfire state history. It does not parse method names or serialized job arguments.
+
+### Execution order and retry policy
+
+The job has `[AutomaticRetry(Attempts = 0)]`. The HTTP request cancellation token is
+not serialized. Hangfire supplies the execution cancellation token.
+
+The required execution order is:
+
+```text
+acquire dataset lock
+→ read ProductManagerExecutionStarted
+→ if already true, fail MANUAL_REVIEW_REQUIRED without Product read
+→ reload exact authoritative Product version
+→ compare expected edition/update
+→ validate the current Product operation state
+→ set ProductManagerExecutionStarted = true
+→ begin the first irreversible side effect
+```
+
+An existing execution flag produces terminal `MANUAL_REVIEW_REQUIRED`. A queued job
+whose Product version changed before its first execution produces
+`PRODUCT_VERSION_CHANGED`. Multiple exact matches discovered during execution produce
+terminal `PRODUCT_DATA_INTEGRITY_ERROR`, write safe metadata, set no execution flag
+and perform no mutations.
+
+The operation service performs state eligibility checks before invoking the execution
+guard callback. The callback persists `ProductManagerExecutionStarted` immediately
+before `CreateNewEditionAsync` or `RollBackAsync`, which are the first Product
+mutations. A crash after the execution flag is persisted but before the first side
+effect may require manual review. This conservative window is accepted to avoid
+possible double mutation.
+
+### Dataset lock
+
+The lock path is a persistent file. Ownership is the exclusive OS handle:
+
+```csharp
+new FileStream(
+    lockPath,
+    FileMode.OpenOrCreate,
+    FileAccess.ReadWrite,
+    FileShare.None
+);
+```
+
+After acquisition, metadata is truncated and replaced while the stream remains open
+for the full protected operation. Disposal closes the stream only. Lock files are not
+deleted, and age is never used to determine ownership. An unlocked existing file is
+immediately reusable. An active handle produces `DATASET_BUSY` for an async job.
+
+### Status contract
+
+Public states are `Queued`, `Running`, `Succeeded`, `Failed` and `Cancelled`.
+Enqueued, Scheduled and Awaiting map to Queued; Processing maps to Running; Deleted
+maps to Cancelled.
+
+`createdAt` comes from `ProductManagerCreatedAtUtc`. `startedAt` is the earliest
+Processing timestamp in the complete state history. `completedAt` is the timestamp
+of the current terminal Succeeded, Failed or Deleted state.
+
+Unknown, expired, incomplete and non-Product Manager Hangfire jobs return `404`.
+Internal exceptions, paths, SQL, compiler commands, ArcGIS paths and stack traces are
+never returned by `GET /jobs/{jobId}`.
+
+### Terminal safe errors
+
+```text
+DATASET_BUSY
+PRODUCT_NOT_FOUND
+PRODUCT_VERSION_CHANGED
+PRODUCT_DATA_INTEGRITY_ERROR
+MANUAL_REVIEW_REQUIRED
+EXPORT_FAILED
+ROLLBACK_FAILED
+JOB_FAILED
+```
+
+A successful GDB rollback with failed output cleanup remains `Succeeded` and stores:
+
+```text
+warning.code: ROLLBACK_CLEANUP_FAILED
+warning.message: Rollback completed, but old export output could not be fully removed.
+```
+
+The warning remains readable through later status requests and contains no internal
+path or exception text.
+
+### Deployment boundary
+
+BE-104A is additive and requires no database migration, Product schema change or new
+NuGet dependency. The current frontend continues to use the synchronous endpoints.
+Before application rollback to code that does not contain `ExportOperationJob`, all
+queued BE-104A jobs must be completed or explicitly removed from Hangfire storage.
+
+### BE-104A creation/status runtime acceptance
+
+The atomic creation contract must be verified against the configured Hangfire SQL
+storage, not only through client-filter unit tests:
+
+```text
+pause the Hangfire worker
+→ create an async Export or Rollback job
+→ receive 202 and a job ID
+→ immediately call GET /jobs/{jobId}
+→ verify 200 Queued with complete Product Manager metadata
+→ verify the Product is still unchanged
+→ resume the worker
+→ verify the job executes normally
+```
+
+The immediate queued response must contain `jobId`, `datasetName`, `operationType`,
+`exportTarget`, `createdAt` and `correlationId`. This proves the metadata was committed
+with job creation through `CreatingContext`; there is no separate post-enqueue
+metadata-write step.

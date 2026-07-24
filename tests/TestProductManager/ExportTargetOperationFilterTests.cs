@@ -13,6 +13,7 @@ namespace TestProductManagerAPI
         [Theory]
         [InlineData(nameof(ExportController.NewEdition))]
         [InlineData(nameof(ExportController.NewUpdate))]
+        [InlineData(nameof(ExportController.NewEditionJob))]
         public void SwaggerShowsOnlyCanonicalReadableTargetValues(string methodName) {
             var method = typeof(ExportController).GetMethod(methodName)
                 ?? throw new InvalidOperationException($"Method {methodName} was not found.");

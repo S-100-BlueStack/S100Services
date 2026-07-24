@@ -1,8 +1,23 @@
-﻿using S100FC.S128.ComplexAttributes;
+using S100FC.S128.ComplexAttributes;
 using S100FC.S128.FeatureTypes;
 
 namespace S100FC.ProductCatalogue
 {
+    public sealed record ElectronicProductVersion(
+        string DatasetName,
+        int? Edition,
+        int? Update
+    );
+
+    public sealed class ProductDataIntegrityException(
+        string datasetName,
+        int exactMatchCount
+    ) : Exception($"Multiple exact ElectronicProduct rows were found for dataset '{datasetName}'.")
+    {
+        public string DatasetName { get; } = datasetName;
+        public int ExactMatchCount { get; } = exactMatchCount;
+    }
+
     public interface INauticalProductManager
     {
     }
@@ -27,6 +42,10 @@ namespace S100FC.ProductCatalogue
         Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name);
         Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc);
         ElectronicProduct? ElectronicProduct(string name);
+        Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(
+            string datasetName,
+            CancellationToken cancellationToken = default
+        );
 
         Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition);
         Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign);

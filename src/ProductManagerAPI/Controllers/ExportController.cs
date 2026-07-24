@@ -3,8 +3,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using ProductManagerAPI.Data.Repositories;
 using ProductManagerAPI.Filters;
+using ProductManagerAPI.Jobs;
+using ProductManagerAPI.Models;
 using ProductManagerAPI.Services.Export;
 using ProductManagerAPI.Services.Locking;
+using ProductManagerAPI.Services.Jobs;
+using ProductManagerAPI.Services.Operations;
 using S100FC.ProductCatalogue;
 using S100FC.S128.SimpleAttributes;
 using S100FC.YAML;
@@ -19,7 +23,7 @@ namespace ProductManagerAPI.Controllers
     //[Authorize("productmanager:manage")]
     [ApiController]
     [Route("[controller]")]
-    public class ExportController(ILogger<ExportController> logger, IMemoryCache cache, IExportService exportService, IProductManager productManager, IProductRepository productRepository, IDatasetLockService datasetLockService) : ControllerBase
+    public class ExportController(ILogger<ExportController> logger, IMemoryCache cache, IExportService exportService, IProductManager productManager, IProductRepository productRepository, IDatasetLockService datasetLockService, IExportOperationService exportOperationService, IExportJobService exportJobService, TimeProvider timeProvider) : ControllerBase
     {
         private readonly ILogger<ExportController> _logger = logger;
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
@@ -27,6 +31,9 @@ namespace ProductManagerAPI.Controllers
         private readonly IProductRepository _productRepository = productRepository;
         private readonly IDatasetLockService _datasetLockService = datasetLockService;
         private readonly IMemoryCache _cache = cache;
+        private readonly IExportOperationService _exportOperationService = exportOperationService;
+        private readonly IExportJobService _exportJobService = exportJobService;
+        private readonly TimeProvider _timeProvider = timeProvider;
 
 
         /// <summary>
@@ -48,8 +55,6 @@ namespace ProductManagerAPI.Controllers
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse();
             var exportTarget = ExportTargetContract.GetValidatedTarget(HttpContext);
-
-
             var product = _electronicProductManager.ElectronicProduct(name);
 
             if (product == null) {
@@ -59,78 +64,61 @@ namespace ProductManagerAPI.Controllers
                 return StatusCode(StatusCodes.Status404NotFound, response);
             }
 
-            // Check if product is locked
             await using var datasetLock = await _datasetLockService.TryAcquireAsync(name, cancellationToken);
-
             if (datasetLock == null) {
                 response.Success = false;
-                response.Message = ($"Dataset {name} is already being processed.");
+                response.Message = $"Dataset {name} is already being processed.";
                 response.DurationMs = sw.ElapsedMilliseconds;
                 return StatusCode(StatusCodes.Status409Conflict, response);
             }
 
-            // Check if eligble for new edition
-            var ps = await _productRepository.GetCurrentByNameAsync(name);
-
-            // if PS is null that means its the first action since the import. Continue as normal
-            if (ps is not null && ps.State is not Data.Models.ProductState.Idle) {
+            try {
+                await _exportOperationService.ExecuteNewEditionAsync(
+                    name,
+                    exportTarget,
+                    user,
+                    cancellationToken
+                );
+            }
+            catch (ExportOperationRejectedException ex) {
                 response.Success = false;
-                response.Message = $"A New edition could not be created now. Current product state: {ps?.State}.";
+                response.Message = ex.Message;
                 response.DurationMs = sw.ElapsedMilliseconds;
                 return StatusCode(StatusCodes.Status400BadRequest, response);
             }
-
-            // Create YAML Dataset
-            var dataset = await _electronicProductManager.CreateNewEditionAsync(name);
-
-
-            var yaml = dataset.Serialize();
-
-
-            if (string.IsNullOrEmpty(yaml)) {
+            catch (ExportSourceUnavailableException) {
                 response.Success = false;
                 response.Message = $"An error occured attempting to read dataset '{name}'.";
                 response.DurationMs = sw.ElapsedMilliseconds;
                 return StatusCode(StatusCodes.Status500InternalServerError, response);
             }
 
-
-            // Create export(s)
-
-            // S-100
-            if (exportTarget is Models.RequestTypes.ExportFormat.Both or Models.RequestTypes.ExportFormat.S100) {
-                var result = _exportService.CreateS100Export(name, dataset.Edition!.Value, dataset.Update, _electronicProductManager.OutputFolder, yaml);
-
-                var exportResult = (result.Index, result.Sign);
-
-                // Store in s128 attachment table
-                await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewEdition, yaml, exportResult.Index, exportResult.Sign);
-
-                // Store in system job table.
-                await _productRepository.AppendAsync(name, Data.Models.ProductState.Exported, "S-101", dataset.Edition.Value, dataset.Update, user);
-            }
-
-
-            //// S-57
-            //if (exportTarget is Models.RequestTypes.ExportFormat.Both or Models.RequestTypes.ExportFormat.S57) {
-            //    var S57Name = product.datasetName;
-            //    var S57Edition = product.editionNumber.Value;
-            //    var S57Update = product.updateNumber.Value;
-
-            //    // TODO: Fix S-57 Exporter. For now assume it works
-            //    // _exportService.CreateS57Export(S57Name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
-
-            //    // Store in s128 attachment table. TODO: Add necessary files if needed
-            //    await _electronicProductManager.CreateS57AttachmentAsync(S57Name, ExportTypes.NewEdition, yaml);
-
-            //    // Store in system job table.
-            //    await _productRepository.AppendAsync(S57Name, Data.Models.ProductState.Exported, "S-57", S57Edition, S57Update, user);
-            //}
-
-
             response.DurationMs = sw.ElapsedMilliseconds;
             return Ok(response);
         }
+
+        /// <summary>
+        /// Queues a new S-100 edition export.
+        /// </summary>
+        /// <param name="name">The name of the dataset.</param>
+        [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
+        [ProducesResponseType(typeof(ExportJobErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+        [ProducesResponseType(typeof(ExportJobErrorResponse), StatusCodes.Status409Conflict, "application/json")]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity, "application/problem+json")]
+        [ProducesResponseType(typeof(ExportJobErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+        [ValidateExportTarget]
+        [HttpPost("{name}/newedition/jobs", Name = "NewEditionJob")]
+        public async Task<IActionResult> NewEditionJob(string name, CancellationToken cancellationToken) {
+            var exportTarget = ExportTargetContract.GetValidatedTarget(HttpContext);
+            return await QueueJobAsync(
+                name,
+                ExportOperationType.ExportEdition,
+                ExportOperationContract.ToPublicExportTarget(exportTarget),
+                cancellationToken
+            );
+        }
+
 
 
         /// <summary>
@@ -224,24 +212,24 @@ namespace ProductManagerAPI.Controllers
 
             // S-100
             if (exportTarget is Models.RequestTypes.ExportFormat.Both or Models.RequestTypes.ExportFormat.S100) {
-                var result = _exportService.CreateS100Export(name, dataset.Edition.Value, dataset.Update!, _electronicProductManager.OutputFolder, update, prevIndex);
+                var result = _exportService.CreateS100Export(name, dataset.Edition.Value, dataset.Update, _electronicProductManager.OutputFolder, update, prevIndex);
 
                 // Store in s128 attachment table
                 await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.Update, update, result.Index, result.Sign);
 
 
                 // Store in system job table.
-                await _productRepository.AppendAsync(name, Data.Models.ProductState.Exported, "S-101", dataset.Edition.Value, dataset.Update!, user);
+                await _productRepository.AppendAsync(name, Data.Models.ProductState.Exported, "S-101", dataset.Edition.Value, dataset.Update, user);
             }
 
 
             // S-57
             if (exportTarget is Models.RequestTypes.ExportFormat.Both or Models.RequestTypes.ExportFormat.S57) {
                 var S57Name = name;
-                uint S57Edition = 1;
-                uint S57Update = 1;
+                var S57Edition = 1u;
+                var S57Update = 1u;
 
-                _exportService.CreateS57Export(S57Name, dataset.Edition.Value!, dataset.Update!, _electronicProductManager.OutputFolder, latest);
+                _exportService.CreateS57Export(S57Name, dataset.Edition.Value, dataset.Update, _electronicProductManager.OutputFolder, latest);
 
                 // Store in s128 attachment table. TODO: Add necessary files if needed
                 await _electronicProductManager.CreateS57AttachmentAsync(S57Name, ExportTypes.Update, latest);
@@ -282,11 +270,9 @@ namespace ProductManagerAPI.Controllers
 
             var yaml = dataset.Serialize();
 
-
-
             var result = _exportService.CreateS100Export(name, dataset.Edition!.Value, dataset.Update, _electronicProductManager.OutputFolder, yaml);
 
-            // _exportService.CreateS57Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
+            // _exportService.CreateS57Export(name, dataset.Edition!.Value, dataset.Update!.Value, _electronicProductManager.OutputFolder, yaml);
 
             await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
             _logger.LogInformation("Exchangeset created successfully");
@@ -314,7 +300,6 @@ namespace ProductManagerAPI.Controllers
             var response = new ApiResponse();
             var product = _electronicProductManager.ElectronicProduct(name);
 
-
             if (product == null) {
                 response.Success = false;
                 response.Message = $"No electronic product with name '{name}' was found.";
@@ -323,56 +308,46 @@ namespace ProductManagerAPI.Controllers
             }
 
             await using var datasetLock = await _datasetLockService.TryAcquireAsync(name, cancellationToken);
-
-
             if (datasetLock == null) {
                 response.Success = false;
-                response.Message = ($"Dataset {name} is already being processed.");
+                response.Message = $"Dataset {name} is already being processed.";
                 response.DurationMs = sw.ElapsedMilliseconds;
                 return StatusCode(StatusCodes.Status409Conflict, response);
             }
 
-            // Check if eligble for rollback
-            var ps = await _productRepository.GetCurrentByNameAsync(name);
-
-            if (ps is null || ps.State is not (Data.Models.ProductState.Exported or Data.Models.ProductState.Frozen)) {
+            try {
+                await _exportOperationService.ExecuteRollbackAsync(
+                    name,
+                    cancellationToken
+                );
+            }
+            catch (ExportOperationRejectedException ex) {
                 response.Success = false;
-                response.Message = $"A rollback could not be performed now. Current product state: {ps?.State}.";
+                response.Message = ex.Message;
                 response.DurationMs = sw.ElapsedMilliseconds;
                 return StatusCode(StatusCodes.Status400BadRequest, response);
             }
-
-            uint oldEdition = (uint)product.editionNumber!.Value;
-            uint? oldUpdate = (uint?)product.updateNumber.GetValueOrDefault();
-
-
-            if (oldEdition <= 1) {
-                response.Success = false;
-                response.Message = $"Dataset cannot be rolled back further.";
-                response.DurationMs = sw.ElapsedMilliseconds;
-                return StatusCode(StatusCodes.Status400BadRequest, response);
-            }
-
-
-            var res = await _electronicProductManager.RollBackAsync(name);
-
-            //if (!res) {
-            //    response.Success = false;
-            //    response.Message = $"An error occured attempting to rollback dataset '{name}'.";
-            //    response.DurationMs = sw.ElapsedMilliseconds;
-            //    return StatusCode(StatusCodes.Status500InternalServerError, response);
-            //}
-
-            _exportService.DeleteExport(name, _electronicProductManager.OutputFolder, oldEdition, oldUpdate);
-
-            // Rollback in JobState
-            await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, "S-128", (uint)product.editionNumber.Value, (uint?)product.updateNumber);
-
-
-
 
             return Ok();
         }
+
+        /// <summary>
+        /// Queues a rollback operation.
+        /// </summary>
+        /// <param name="name">The name of the dataset.</param>
+        [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
+        [ProducesResponseType(typeof(ExportJobErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+        [ProducesResponseType(typeof(ExportJobErrorResponse), StatusCodes.Status409Conflict, "application/json")]
+        [ProducesResponseType(typeof(ExportJobErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+        [HttpPost("{name}/rollback/jobs", Name = "RollBackJob")]
+        public Task<IActionResult> RollBackJob(string name, CancellationToken cancellationToken) =>
+            QueueJobAsync(
+                name,
+                ExportOperationType.Rollback,
+                exportTarget: null,
+                cancellationToken
+            );
+
 
         /// <summary>
         /// Returns an analysis of the export from SevenCs analyzer.
@@ -396,6 +371,106 @@ namespace ProductManagerAPI.Controllers
             });
 
             // AOI, vld, ed, upd, etc from SevenCs analysis report
+        }
+
+
+        private async Task<IActionResult> QueueJobAsync(
+            string name,
+            ExportOperationType operationType,
+            string? exportTarget,
+            CancellationToken cancellationToken
+        ) {
+            var correlationId = Activity.Current?.TraceId.ToString();
+            if (string.IsNullOrWhiteSpace(correlationId))
+                correlationId = HttpContext.TraceIdentifier;
+
+            ElectronicProductVersion? version;
+            try {
+                version = await _electronicProductManager.ReadElectronicProductVersionAsync(
+                    name,
+                    cancellationToken
+                );
+            }
+            catch (ProductDataIntegrityException ex) {
+                _logger.LogError(
+                    ex,
+                    "Ambiguous authoritative Product data found during job creation. DatasetName: {DatasetName}. ExactMatchCount: {ExactMatchCount}. CorrelationId: {CorrelationId}",
+                    name,
+                    ex.ExactMatchCount,
+                    correlationId
+                );
+                return JobProblem(
+                    StatusCodes.Status409Conflict,
+                    "Product data integrity error",
+                    ExportJobContract.ProductDataIntegrityStartMessage,
+                    ExportJobContract.ProductDataIntegrityErrorCode
+                );
+            }
+
+            if (version == null) {
+                return JobProblem(
+                    StatusCodes.Status404NotFound,
+                    "Product not found",
+                    ExportJobContract.ProductNotFoundStartMessage,
+                    ExportJobContract.ProductNotFoundCode
+                );
+            }
+
+            if (!version.Edition.HasValue || !version.Update.HasValue) {
+                return JobProblem(
+                    StatusCodes.Status409Conflict,
+                    "Product version unavailable",
+                    ExportJobContract.ProductVersionUnavailableMessage,
+                    ExportJobContract.ProductVersionUnavailableCode
+                );
+            }
+
+            var request = new ExportOperationJobRequest(
+                version.DatasetName,
+                operationType,
+                exportTarget,
+                version.Edition,
+                version.Update,
+                correlationId,
+                _timeProvider.GetUtcNow()
+            );
+
+            try {
+                var startResponse = _exportJobService.Enqueue(request);
+                return Accepted(startResponse.StatusUrl, startResponse);
+            }
+            catch (JobEnqueueException ex) {
+                _logger.LogError(
+                    ex,
+                    "Failed to enqueue Product Manager job. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}",
+                    version.DatasetName,
+                    operationType,
+                    correlationId
+                );
+                return JobProblem(
+                    StatusCodes.Status503ServiceUnavailable,
+                    "Job enqueue failed",
+                    ExportJobContract.JobEnqueueFailedMessage,
+                    ExportJobContract.JobEnqueueFailedCode
+                );
+            }
+        }
+
+        private static ObjectResult JobProblem(
+            int status,
+            string title,
+            string detail,
+            string code
+        ) {
+            _ = title;
+            var result = new ObjectResult(new ExportJobErrorResponse {
+                Code = code,
+                Message = detail
+            }) {
+                StatusCode = status
+            };
+            result.ContentTypes.Add("application/json");
+            return result;
         }
 
 
@@ -439,10 +514,9 @@ namespace ProductManagerAPI.Controllers
 
                     var yaml = dataset.Serialize();
 
-
                     var result = _exportService.CreateS100Export(name, dataset.Edition!.Value, dataset.Update, _electronicProductManager.OutputFolder, yaml);
 
-                    // _exportService.CreateS57Export(name, (int)dataset.Edition!, (int)dataset.Update!, _electronicProductManager.OutputFolder, yaml);
+                    // _exportService.CreateS57Export(name, dataset.Edition!.Value, dataset.Update!.Value, _electronicProductManager.OutputFolder, yaml);
 
                     await _electronicProductManager.CreateAttachmentAsync(name, ExportTypes.NewDataset, yaml, result.Index, result.Sign);
                     _logger.LogInformation("Exchangeset created successfully");
@@ -478,4 +552,3 @@ namespace ProductManagerAPI.Controllers
 #endif
     }
 }
-

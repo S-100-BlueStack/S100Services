@@ -1,57 +1,96 @@
-﻿namespace ProductManagerAPI.Services.Locking
+namespace ProductManagerAPI.Services.Locking
 {
     public interface IDatasetLockService
     {
-        Task<IAsyncDisposable> TryAcquireAsync(string datasetName, CancellationToken cancellationToken = default);
+        Task<IAsyncDisposable?> TryAcquireAsync(
+            string datasetName,
+            CancellationToken cancellationToken = default
+        );
     }
 
     public sealed class DatasetLockService : IDatasetLockService
     {
         private readonly string _lockDirectory;
 
-        public DatasetLockService() {
-            _lockDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "ProductManager", "Locks");
+        public DatasetLockService()
+            : this(Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "ProductManager",
+                "Locks"
+            ))
+        {
+        }
+
+        public DatasetLockService(string lockDirectory) {
+            if (string.IsNullOrWhiteSpace(lockDirectory))
+                throw new ArgumentException("A lock directory is required.", nameof(lockDirectory));
+
+            _lockDirectory = lockDirectory;
             Directory.CreateDirectory(_lockDirectory);
         }
 
-        public async Task<IAsyncDisposable?> TryAcquireAsync(string datasetName, CancellationToken cancellationToken = default) {
-            var safeName = string.Join("_", datasetName.Split(Path.GetInvalidFileNameChars()));
-            var lockPath = Path.Combine(_lockDirectory, $"{safeName}.lock");
+        public async Task<IAsyncDisposable?> TryAcquireAsync(
+            string datasetName,
+            CancellationToken cancellationToken = default
+        ) {
+            var lockPath = Path.Combine(
+                _lockDirectory,
+                BuildSafeLockFileName(datasetName)
+            );
 
-            if (File.Exists(lockPath)) {
-                var age = DateTime.UtcNow - File.GetCreationTimeUtc(lockPath);
-
-                if (age > TimeSpan.FromMinutes(30))
-                    File.Delete(lockPath);
-            }
-
+            FileStream stream;
             try {
-                var stream = new FileStream(lockPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                await using var writer = new StreamWriter(stream, leaveOpen: true);
-
-                await writer.WriteLineAsync(DateTimeOffset.UtcNow.ToString("O").AsMemory(), cancellationToken);
-                await writer.FlushAsync(cancellationToken);
-
-                return new FileLockHandle(lockPath, stream);
+                stream = new FileStream(
+                    lockPath,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None,
+                    bufferSize: 4096,
+                    useAsync: true
+                );
             }
             catch (IOException) {
                 return null;
             }
+
+            try {
+                stream.SetLength(0);
+                stream.Position = 0;
+
+                await using (var writer = new StreamWriter(stream, leaveOpen: true)) {
+                    var metadata = $"{DateTimeOffset.UtcNow:O}|{Environment.MachineName}|{Environment.ProcessId}";
+                    await writer.WriteLineAsync(metadata.AsMemory(), cancellationToken);
+                    await writer.FlushAsync(cancellationToken);
+                }
+
+                return new FileLockHandle(stream);
+            }
+            catch {
+                await stream.DisposeAsync();
+                throw;
+            }
         }
 
-        private sealed class FileLockHandle(string lockPath, FileStream stream) : IAsyncDisposable
+        public static string BuildSafeLockFileName(string datasetName) {
+            if (string.IsNullOrWhiteSpace(datasetName))
+                throw new ArgumentException("A dataset name is required.", nameof(datasetName));
+
+            var safeName = string.Join("_", datasetName.Trim().Split(Path.GetInvalidFileNameChars()));
+            return $"{safeName}.lock";
+        }
+
+        private sealed class FileLockHandle(FileStream stream) : IAsyncDisposable
         {
-            private readonly string _lockPath = lockPath;
-            private readonly FileStream _stream = stream;
+            private FileStream? _stream = stream;
 
             public async ValueTask DisposeAsync() {
-                await _stream.DisposeAsync();
-
-                if (File.Exists(_lockPath))
-                    File.Delete(_lockPath);
+                var ownedStream = Interlocked.Exchange(ref _stream, null);
+                if (ownedStream != null)
+                    await ownedStream.DisposeAsync();
             }
         }
     }
 
-    public sealed class DatasetLockedException(string datasetName) : Exception($"Dataset '{datasetName}' is already being processed.");
+    public sealed class DatasetLockedException(string datasetName)
+        : Exception($"Dataset '{datasetName}' is already being processed.");
 }

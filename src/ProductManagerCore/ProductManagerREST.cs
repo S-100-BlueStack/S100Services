@@ -1,4 +1,4 @@
-﻿using NetTopologySuite.Geometries;
+using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 using S100FC;
 using S100FC.ProductCatalogue;
@@ -391,6 +391,76 @@ namespace ProductCatalogue
 
 
         ElectronicProduct? IElectronicProductManager.ElectronicProduct(string name) => this._electronicProducts.GetValueOrDefault(name.ToUpperInvariant());
+
+        async Task<ElectronicProductVersion?> IElectronicProductManager.ReadElectronicProductVersionAsync(
+            string datasetName,
+            CancellationToken cancellationToken
+        ) {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (string.IsNullOrWhiteSpace(datasetName))
+                throw new ArgumentNullException(nameof(datasetName));
+
+            var normalizedDatasetName = NormalizeDatasetName(datasetName);
+            var attachmentClient = await this._s128FeatureServiceClient!
+                .GetLayerClientAsync("attachment");
+            var rows = await attachmentClient.QueryAsync(new FeatureQuery() {
+                Where = "upper(ps) = 'S-128' AND code = 'ElectronicProduct'",
+                ReturnGeometry = false,
+                OutFields = ["attributebindings"]
+            }).ToListAsync();
+            var exactMatches = new List<ElectronicProduct>();
+
+            foreach (var row in rows) {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (!row.Attributes.TryGetValue("attributebindings", out var rawAttributes))
+                    continue;
+
+                var attributes = Convert.ToString(rawAttributes);
+                if (string.IsNullOrWhiteSpace(attributes))
+                    continue;
+
+                var candidate = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(
+                    attributes,
+                    typeof(ElectronicProduct)
+                );
+                if (string.Equals(
+                    NormalizeDatasetName(candidate.datasetName),
+                    normalizedDatasetName,
+                    StringComparison.OrdinalIgnoreCase
+                )) {
+                    exactMatches.Add(candidate);
+                }
+            }
+
+            if (exactMatches.Count == 0)
+                return null;
+
+            if (exactMatches.Count > 1) {
+                var correlationId = Activity.Current?.TraceId.ToString();
+                Log.Error(
+                    "Multiple exact ElectronicProduct rows found. DatasetName: {DatasetName}. ExactMatchCount: {ExactMatchCount}. CorrelationId: {CorrelationId}",
+                    normalizedDatasetName,
+                    exactMatches.Count,
+                    correlationId
+                );
+                throw new ProductDataIntegrityException(
+                    normalizedDatasetName,
+                    exactMatches.Count
+                );
+            }
+
+            var product = exactMatches[0];
+            return new ElectronicProductVersion(
+                product.datasetName!.Trim(),
+                product.editionNumber,
+                product.updateNumber
+            );
+        }
+
+        private static string NormalizeDatasetName(string? datasetName) =>
+            datasetName?.Trim().ToUpperInvariant() ?? string.Empty;
 
         IEnumerator<string> IEnumerable<string>.GetEnumerator() {
             foreach (var p in this._electronicProducts)
