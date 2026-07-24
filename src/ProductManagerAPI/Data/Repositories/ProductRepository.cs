@@ -47,8 +47,10 @@ public class ProductRepository(DbConnectionFactory connectionFactory) : IProduct
                 Name = name,
                 State = state,
                 ProductSpecification = productSpecification,
-                EditionNo = editionNo,
-                UpdateNo = updateNo ?? 0,
+                EditionNo = checked((int)editionNo),
+                UpdateNo = updateNo.HasValue
+                    ? checked((int)updateNo.Value)
+                    : 0,
                 Owner = owner,
                 DateFrom = now,
                 DateTo = MaxDate,
