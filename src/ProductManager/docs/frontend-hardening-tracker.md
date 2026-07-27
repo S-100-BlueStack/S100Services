@@ -2,7 +2,7 @@
 
 This document tracks frontend-only cleanup, hardening, and architecture improvements for Product Manager. The goal is to improve maintainability, reliability, and structure without changing the user-facing feature set unless an item explicitly tracks a feature foundation.
 
-Current documentation baseline: `805a853259b6594fe16384ae37b2e828d6de4c76`.
+Current documentation baseline: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
 
 ## Status values
 
@@ -65,16 +65,21 @@ Current documentation baseline: `805a853259b6594fe16384ae37b2e828d6de4c76`.
 | FH-043 | P1       | User guidance      | Add hover help/tooltips to clickable controls                                                  | Done     | 982d9be01f1ace939fe479494c8e05b5c347107e                                                                                                                                  | Added global hover help that applies concise native tooltips to route navigation, main map controls, Product search, filters, popup actions, Dashboard controls, Product picker actions, Product Collection actions and common icon-only controls. Also covered Dashboard activity links and Analyze Open all / Collapse all. |
 | FH-044 | P1       | User guidance      | Add introduction flow for first-time users                                                     | Done     | 0c677549963bb7ce4206fed379dd30dc8c2cc783                                                                                                                                  | Completed compact first-time and replayable onboarding with independent route preferences. Main map, Dashboard, Analyze and Review flows are manually verified, including Theme, Preferences and the interactive Product popup/Product Collection sequence.                                                                   |
 | FH-045 | P1       | Release readiness  | Run comprehensive smoke test across routes and critical workflows                              | Done     |                                                                                                                                                                           | Completed against `805a853259b6594fe16384ae37b2e828d6de4c76` with clean and persisted browser state. Main map, Dashboard, Analyze, Review, onboarding, preferences, keyboard behavior and critical Product workflows passed without new frontend findings.                                                                    |
+| FH-046 | P0       | Async operations   | Activate async Export/Rollback job tracking                                                     | Done     | 279fe6a761229fd99af437d0f8401508985afafc                                                                                                                                                | Uses async start endpoints, persisted job IDs, reload recovery, bounded status polling, terminal notices and route refresh.                                                                                                                                    |
+| FH-047 | P0       | Operation state    | Add backend-authoritative active job visibility                                                | Done     | 279fe6a761229fd99af437d0f8401508985afafc                                                                                                                                                | Popup-open reconciliation and fail-closed mutation preflight use `GET /jobs/active`; shared visibility works across tabs, profiles, users and computers.                                                                                                        |
+| FH-048 | P1       | Popup refresh      | Preserve popup, actions and dropdowns during compatible refresh                                | Done     | 69752605d935212e89ca7ad4286ca3e46ecb4abe                                                                                                                                                | Reconciles layers/graphics and popup details in place, retains Calcite action DOM and open dropdown state, and falls back to full rebuild for incompatible structural changes.                                                                                 |
 
 ## Deferred / backend-dependent notes
 
 | ID     | Area     | Item                                                   | Status                                           | Notes                                                                                                                                                                      |
 | ------ | -------- | ------------------------------------------------------ | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| BE-001 | Export   | Cross-browser/cross-user export-in-progress visibility | Blocked by backend                               | Backend rejects conflicting operations with 409, but other sessions cannot see an active operation before attempting an action.                                            |
-| BE-002 | Export   | Async export job with job-status endpoint              | Backend foundation implemented; frontend pending | BE-104A adds additive async Export/Rollback start routes and `GET /jobs/{jobId}`. The current frontend remains on synchronous routes until BE-104B polling and activation. |
+| BE-001 | Export   | Cross-browser/cross-user export-in-progress visibility | Done                                             | Backend-authoritative active-job discovery is integrated into popup state and mutation preflight.                                                                          |
+| BE-002 | Export   | Async export job with job-status endpoint              | Done                                             | New Edition and Rollback use async start endpoints, persisted polling and terminal refresh.                                                                                |
 | BE-003 | Timeline | Global map timeline data contract                      | Blocked by backend                               | Product-level history endpoint exists. Global map timeline remains deferred until API/database contract is known.                                                          |
-| BE-004 | API      | Safe timeout policy for long-running operations        | Backend foundation implemented; frontend pending | BE-104A provides job IDs and terminal status semantics. Timeout/polling behavior remains BE-104B frontend scope.                                                           |
+| BE-004 | API      | Safe timeout policy for long-running operations        | Done                                             | Job-start requests avoid unsafe client timeout; repeatable status requests use finite timeout and bounded retry.                                                           |
 | BE-005 | Reports  | Real Dashboard IC-ENC/internal validation report links | Blocked by backend                               | Requires report IDs/storage contracts before Dashboard report actions can be enabled.                                                                                      |
+| BE-006 | Jobs     | Atomic Product operation claim before enqueue          | Planned                                          | Required to eliminate the remaining near-simultaneous enqueue race and support a distributed external worker cleanly.                                                     |
+| BE-007 | Jobs     | External shared Hangfire worker migration              | Deferred / architecture review                   | Current HTTP/job contracts are reusable, but worker dependencies, queues, shared storage and ArcGIS/file access must be reviewed before migration.                         |
 
 ## Future implementation ideas
 
@@ -91,9 +96,9 @@ Current documentation baseline: `805a853259b6594fe16384ae37b2e828d6de4c76`.
 
 ## Planned order
 
-1. Keep the smoke-tested frontend baseline stable while controlled user testing begins.
-2. Coordinate backend design for active per-Product operation visibility across sessions.
-3. Define async job semantics for long-running Export and Rollback operations.
+1. Keep the tested async operation and popup-preserving refresh baseline stable.
+2. Complete BE-106A external-worker readiness before moving Product Manager jobs into the shared Hangfire API/worker application.
+3. Design BE-106B atomic Product operation ownership before adding distributed workers or relying on active-job lookup for concurrency.
 4. Keep report-link UI deferred until backend report IDs and storage contracts exist.
 5. Continue targeted regression smoke tests after frontend or backend contract changes.
 
@@ -101,6 +106,8 @@ Current documentation baseline: `805a853259b6594fe16384ae37b2e828d6de4c76`.
 
 | Date       | Commit                                   | Items           | Notes                                                                                                                                                                                 |
 | ---------- | ---------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-27 | 279fe6a761229fd99af437d0f8401508985afafc | FH-046 / FH-047 | Activated async Export/Rollback and backend-authoritative active-job visibility across browser profiles, users and computers.                                                        |
+| 2026-07-27 | 69752605d935212e89ca7ad4286ca3e46ecb4abe | FH-048          | Preserved popup, action icons and open dropdowns during compatible map and terminal-job refreshes.                                                                                   |
 | 2026-07-08 | 1656616b214cfdb914a23567d2840de5cc981c06 | FI-001          | Completed Dashboard phase 1 with endpoint integration, range presets, summary cards, activity list, status/operation summaries, Review/Analyze links, client-side search and filters. |
 | 2026-07-09 | e2fd13620edd9c1b8af8a6883c6d8348a211e701 | FI-001          | Reworked Dashboard range selection into a stable range builder with compact Dashboard-owned date picker and open-ended `To` support.                                                  |
 | 2026-07-09 | 5053d2d5eb1b1d599830e37daeb71b6d7ccddc20 | FI-001          | Made Dashboard status and operation summary rows actionable.                                                                                                                          |

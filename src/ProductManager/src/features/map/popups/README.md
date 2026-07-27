@@ -1,5 +1,7 @@
 # Popup actions
 
+Current implementation baseline: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
+
 Popup actions are implemented as a custom DOM action bar instead of Esri `view.popup.actions`.
 
 This keeps the action UI consistent with Product Manager requirements:
@@ -197,22 +199,17 @@ Direct popup actions continue to use their existing `afterResult` refresh callba
 
 Analyze product actions remain in the product popup, not in the Analyze sidebar. The sidebar is reserved for analysis details, reports, XML and history content.
 
-## BE-105 boundary
+## Visibility boundaries
 
-BE-104B can only restore jobs created by browser storage that is available to the current browser profile.
+BE-105 is implemented. Product Manager no longer depends on browser storage to discover jobs started by another user, browser profile or computer.
 
-It does not discover operations started by:
+`GET /jobs/active?datasetName={datasetName}` is the shared visibility source. Local storage and same-origin browser messaging remain latency and reload-recovery optimizations.
 
-- another user;
-- another browser profile;
-- a backend worker without a locally persisted job record.
-
-BE-105 should provide authoritative active product-operation visibility from the backend. That state should enter the UI through `productOperationState`, not through popup-specific state.
-
+The active-job lookup is not an atomic enqueue reservation. The backend dataset lock remains the execution-time authority until a future atomic Product-operation registry is explicitly designed.
 
 ## Cross-tab job synchronization
 
-Active job records are synchronized between same-origin browser tabs through local storage, `BroadcastChannel`, focus/pageshow/visibility reconciliation and a short fallback reconciliation interval. This keeps popup action availability current even when a browser drops or delays a storage event. Cross-user and cross-browser-profile visibility still requires the later backend active-operation contract.
+Active job records are synchronized between same-origin browser tabs through local storage, `BroadcastChannel`, focus/pageshow/visibility reconciliation and a short fallback reconciliation interval. This keeps popup action availability responsive when a browser drops or delays a storage event. Cross-user and cross-computer visibility comes from the backend active-job endpoint.
 
 Operation precondition failures are returned as `PRODUCT_OPERATION_REJECTED` with a backend-owned safe message, for example when New Edition is requested while the product is already `Exported`. Unexpected internal failures remain sanitized as `EXPORT_FAILED` or `ROLLBACK_FAILED`.
 
@@ -263,3 +260,9 @@ The existing full rebuild and popup restore flow remains the fallback when:
 The popup action bar is also retained during compatible refreshes. Action buttons are updated in place instead of being removed and recreated, preventing Calcite icons from flashing while still allowing real state transitions such as `Exporting...` to appear.
 
 This keeps normal auto, manual and product-job refreshes visually stable while preserving the previous behavior for structural or integrity edge cases.
+
+## Future external worker boundary
+
+The current frontend contract does not depend on the Hangfire worker running inside ProductManagerAPI. A later migration to the shared Hangfire API/worker application can retain the start, status and active-job HTTP contracts, provided the shared worker can execute the Product Manager job assembly and access the required ArcGIS, compiler, connection-file and filesystem dependencies.
+
+An external worker migration must be coordinated with the planned atomic operation-registry work. The current local dataset lock and Hangfire monitoring lookup are not sufficient as a final distributed ownership model across independently deployed workers.

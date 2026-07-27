@@ -2,7 +2,7 @@
 
 This document is a source-of-truth document for Product Manager backend integration work.
 
-Planning baseline: `6d18fae743a67cdc85864aa68c51cf6d79921d0c`.
+Current documentation baseline: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
 
 The permanent BE-101 scope corrections are recorded in:
 
@@ -18,10 +18,11 @@ The contracts below are implementation targets. Exact controller, service, repos
 
 The following decisions are fixed unless the project owners explicitly reopen them:
 
-- `DatasetLockService` uses the existing separate Windows lock-file framework under `%ProgramData%`. It remains the authority that prevents concurrent operations on the same Product.
-- Do not add database locks, lock tables, Product lock fields, distributed locks, a second Product lock, or a replacement lock service.
-- Job state is for visibility, recovery, and frontend status. It must not replace or compete with the existing lock-file behavior.
-- Use the background-job framework already present in the backend. Do not introduce a second job framework.
+- The current runtime uses `DatasetLockService` and the existing Windows lock-file framework under `%ProgramData%` as the final execution-time concurrency authority.
+- The current active-job endpoint and frontend preflight improve visibility and prevent normal duplicate starts, but they are not an atomic enqueue claim.
+- Do not add a second lock or operation registry outside an explicitly approved work package. BE-106B is the planned review boundary for a shared atomic Product-operation claim.
+- Use the background-job framework already present in the backend. Do not introduce a competing job framework inside Product Manager.
+- A future move to the shared Hangfire API/worker application is allowed, but it requires an explicit worker-readiness package covering shared assemblies, queues, ArcGIS/file dependencies, storage access and distributed concurrency.
 - Avoid Product database and geodatabase schema changes while database administrators are unavailable.
 - Continue using `datasetName` as the temporary Product identifier until a permanent Product ID is introduced by the database owners.
 - Do not implement report storage or report-content APIs until the IC-ENC and internal validation processes are defined.
@@ -680,14 +681,17 @@ For each touched endpoint:
 
 Do not perform a repository-wide response rewrite as part of the first Product Manager backend task.
 
-## BE-104A asynchronous Export and Rollback contract
+## BE-104/BE-105 asynchronous Export and Rollback contract
 
-Implementation baseline: `3015a6bbae317b4aaf0ce398a3b27b4939feb71c`.
+Backend foundation commit: `7fe500aafb5831e71dd766f07bb118b3d8e08aea`.
+Frontend activation and backend-authoritative visibility commit: `279fe6a761229fd99af437d0f8401508985afafc`.
+Current documentation baseline: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
 
-BE-104A adds a backend-only asynchronous job foundation. The existing synchronous
-New Edition and Rollback endpoints remain available and preserve their existing
-status codes, response bodies, lock behavior and business side effects. Frontend
-activation and polling remain BE-104B work.
+BE-104A added the backend asynchronous job foundation. BE-104B activated it in the
+frontend, and BE-105 added Product-level active-job visibility across browser
+profiles, users and computers. The existing synchronous New Edition and Rollback
+endpoints remain available for compatibility, but normal popup actions use the
+asynchronous endpoints.
 
 The current merged application contracts use `uint`/`uint?` for edition and update
 values at `IExportService` and `IProductRepository` boundaries. These contracts are
@@ -701,6 +705,7 @@ job metadata remain `int?`/`int?`; null is preserved and rejected before enqueue
 POST /export/{datasetName}/newedition/jobs?exportTarget=S100
 POST /export/{datasetName}/rollback/jobs
 GET /jobs/{jobId}
+GET /jobs/active?datasetName={datasetName}
 ```
 
 The two start endpoints perform validation and authoritative version capture only.
@@ -875,10 +880,15 @@ path or exception text.
 
 ### Deployment boundary
 
-BE-104A is additive and requires no database migration, Product schema change or new
-NuGet dependency. The current frontend continues to use the synchronous endpoints.
+BE-104A, BE-104B and BE-105 are additive and require no Product/geodatabase schema
+change. The frontend uses the asynchronous endpoints for normal New Edition and
+Rollback actions. The synchronous endpoints remain backend compatibility paths and
+must preserve their established behavior.
+
 Before application rollback to code that does not contain `ExportOperationJob`, all
-queued BE-104A jobs must be completed or explicitly removed from Hangfire storage.
+queued Product Manager jobs must be completed or explicitly removed from Hangfire
+storage. API and worker processes must use compatible job assemblies and Hangfire
+serialization settings.
 
 ### BE-104A creation/status runtime acceptance
 
@@ -900,3 +910,87 @@ The immediate queued response must contain `jobId`, `datasetName`, `operationTyp
 `exportTarget`, `createdAt` and `correlationId`. This proves the metadata was committed
 with job creation through `CreatingContext`; there is no separate post-enqueue
 metadata-write step.
+
+## BE-104B frontend activation
+
+Implementation commit: `279fe6a761229fd99af437d0f8401508985afafc`.
+
+The frontend:
+
+- starts New Edition and Rollback through the asynchronous job endpoints;
+- persists active job records under `productManager.activeProductJobs.v1`;
+- resumes `GET /jobs/{jobId}` polling after reload;
+- keeps conflicting Product mutations disabled through terminal status and refresh;
+- retries transient status failures with bounded backoff;
+- treats missing job status as an unavailable final result rather than silently unlocking;
+- shows safe success, warning and failure messages from the backend;
+- treats `ROLLBACK_CLEANUP_FAILED` as a successful Rollback with a warning;
+- performs a backend active-operation preflight before Product mutations and fails closed when status cannot be verified.
+
+Same-origin tabs also synchronize local job records through `localStorage`,
+`BroadcastChannel`, focus/pageshow/visibility reconciliation and a short fallback
+interval. These mechanisms are cache and responsiveness optimizations, not the shared
+source of truth.
+
+## BE-105 backend-authoritative active job visibility
+
+Implementation commit: `279fe6a761229fd99af437d0f8401508985afafc`.
+
+```http
+GET /jobs/active?datasetName={datasetName}
+```
+
+The endpoint reads Product Manager job metadata from the shared Hangfire storage and
+returns exact, case-insensitive Product matches whose public state is `Queued` or
+`Running`. Unknown Product names with no active jobs return an empty list. A missing
+or whitespace-only `datasetName` returns `400 DATASET_NAME_REQUIRED`.
+
+The frontend calls the endpoint when a Product popup opens, while the popup remains
+open, on relevant page lifecycle events and immediately before a mutation. Discovered
+jobs enter the central Product operation state and the Export leaf state. This gives
+all clients using the same backend and Hangfire storage the same visible active-job
+state across browser profiles, users and computers.
+
+The endpoint is informational. It does not atomically reserve a Product. Two near-
+simultaneous requests can still both be enqueued before either job becomes visible.
+The execution-time dataset lock prevents concurrent mutation, so one job can fail
+with `DATASET_BUSY`. Eliminating the extra queued job requires BE-106B.
+
+## Popup-preserving refresh contract
+
+Implementation commit: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
+
+Compatible main-map refreshes reconcile existing GraphicsLayer and Graphic instances
+in place by stable layer metadata and `featureKey`. The selected popup Graphic keeps
+object identity, popup details are refreshed through the popup refresh bridge, and
+existing Calcite action elements and open dropdowns are reconciled in place. This
+prevents popup, icon and dropdown flashing during auto-refresh, remote job discovery
+and terminal job refresh.
+
+The previous full layer rebuild and popup restore flow remains the mandatory fallback
+when layer structure or feature identity cannot be reconciled safely.
+
+## BE-106 future operation ownership
+
+BE-106 is documentation/planning scope only at the current baseline.
+
+### BE-106A external worker readiness
+
+Product Manager jobs may later move to the shared Hangfire API/worker application.
+The current job model is portable, but the move is not connection-string-only. The
+readiness review must cover:
+
+- shared job contract/implementation assemblies and compatible Hangfire versions;
+- a dedicated Product Manager queue and worker registration;
+- ArcGIS runtime, licenses, compiler dependencies and connection files;
+- shared input/output paths, service identity and filesystem permissions;
+- API read access to job status or a replacement application-owned status contract;
+- cutover of queued jobs and rollback compatibility;
+- removal of the Hangfire server from ProductManagerAPI only after the external worker is verified.
+
+### BE-106B atomic Product operation registry
+
+The planned registry must provide an atomic claim before enqueue and become the
+shared operation source of truth across API and worker processes. It must not be
+implemented as another local file lock. Exact persistence, recovery, expiry and
+manual-review semantics require a separate approved design package.

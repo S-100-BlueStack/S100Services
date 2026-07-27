@@ -1,5 +1,7 @@
 # Product Manager frontend
 
+Current documentation baseline: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
+
 Product Manager is an ArcGIS/Vite frontend for managing product corrections for nautical chart production. The app loads product correction data from backend APIs, renders them as ArcGIS graphics, and lets users perform product actions through a custom popup action bar.
 
 ## Technology
@@ -48,10 +50,11 @@ The following flows are implemented and considered stable frontend behavior for 
 - Rollback
 - disabled export leaves for `All`, `S57` and `S100 > Update`
 - popup export loading/conflict state
-- product operation state as a local UX guard
-- refresh after successful and failed product actions
+- backend-authoritative Product operation state with local caching and reload recovery
+- asynchronous Export/Rollback polling, terminal notices and route refresh
 - silent auto-refresh
 - manual refresh button loading
+- popup-preserving compatible refresh without popup, icon or dropdown flashing
 - display-scale hiding
 - main map filters constrained to `Display scale`, `Status` and `Usage band`
 - Product search on the main map
@@ -110,8 +113,10 @@ Current popup action endpoint status:
 
 - `Freeze` / `Unfreeze` use the existing product freeze-state API.
 - `Send to IC-ENC` uses the existing product upload/send API.
-- `Rollback` is enabled and calls `POST /export/{name}/rollback`.
-- `Export > S100 > Edition` is enabled and calls `POST /export/{name}/newedition?exportTarget=S100`.
+- `Rollback` is enabled and calls `POST /export/{name}/rollback/jobs`.
+- `Export > S100 > Edition` is enabled and calls `POST /export/{name}/newedition/jobs?exportTarget=S100`.
+- Job status uses `GET /jobs/{jobId}`.
+- Shared active-operation discovery uses `GET /jobs/active?datasetName={datasetName}`.
 - `Export > All > Edition` and `Export > All > Update` are intentionally disabled.
 - `Export > S57 > Edition`, `Export > S57 > Update` and `Export > S100 > Update` remain disabled until the backend contract changes.
 
@@ -136,7 +141,7 @@ Frontend operation state lives in:
 src/features/products/state/productOperationState.js
 ```
 
-It tracks local browser-tab operations and has a skeleton for future backend operation state. Product operation state is a UX guard only. The backend still enforces real operation conflicts with `409 Conflict`, but other sessions cannot see an active operation before attempting one until a backend active-operation state endpoint exists.
+It combines local mutations, persisted async jobs and backend-discovered active jobs. The backend active-job endpoint is the shared visibility source across browser profiles, users and computers. Local storage and `BroadcastChannel` provide fast same-browser synchronization only. The execution-time dataset lock remains authoritative, and the active-job preflight is not an atomic enqueue claim.
 
 ### Notices and API results
 
@@ -237,20 +242,19 @@ Global map timeline is not implemented yet.
 
 Some current behavior is intentionally frontend-only or placeholder-only:
 
-- popup export state
-- product operation state as local UX state
+- popup export leaf/scope presentation state
+- same-browser job cache and cross-tab synchronization
 - disabled future export leaves for `All`, `S57` and `S100 > Update`
 - Dashboard report actions until IC-ENC/internal validation report IDs or URLs exist
 
-These features prepare the UI and architecture, but they are not backend source of truth.
+The backend active-job endpoint is the source of truth for shared visibility. Frontend state remains responsible for presentation, polling and responsive local reconciliation.
 
 ## Backend-dependent work
 
 Do not implement the following fully until backend/database contracts are ready:
 
-- backend active product operation visibility across sessions
-- async export jobs
-- job-status endpoint
+- atomic Product operation claim before enqueue
+- external shared Hangfire worker migration
 - global map timeline
 - S57 export endpoints
 - S100 update export endpoint
@@ -274,15 +278,15 @@ The compact introduction flow is implemented and manually verified on Main map, 
 
 ## Refresh behavior
 
-Refresh behavior should preserve:
+Refresh behavior preserves:
 
-- selected popup location
+- selected popup location and selected Graphic identity when compatible
 - active filters
 - display-scale hiding state
 - scale-dependent visibility
-- popup action state where possible
+- popup action and open-dropdown state
 
-Manual refresh uses button loading. Auto-refresh should be silent. Refresh should not use fullscreen loader.
+Compatible refreshes reconcile existing layers and graphics in place and refresh popup details without closing the popup. The previous full rebuild/restore flow remains the fallback for structural or feature-identity changes. Manual refresh uses button loading. Auto-refresh is silent. Refresh does not use a fullscreen loader.
 
 ## Dashboard behavior
 
@@ -333,13 +337,13 @@ Do not add endpoint wiring directly in `popupActionConfig.js`.
 Current implemented export leaf:
 
 ```txt
-Export > S100 > Edition -> POST /export/{name}/newedition?exportTarget=S100
+Export > S100 > Edition -> POST /export/{name}/newedition/jobs?exportTarget=S100
 ```
 
 Current implemented rollback action:
 
 ```txt
-Rollback -> POST /export/{name}/rollback
+Rollback -> POST /export/{name}/rollback/jobs
 ```
 
 ## Adding a new map layer
@@ -391,12 +395,15 @@ Recent frontend work has focused on:
 - shared Product catalog picker for Analyze and Review
 - main map filter hardening
 - main map Product search
-- S100 Edition export activation
-- Rollback activation
+- asynchronous S100 Edition and Rollback activation
+- persisted polling and reload recovery
+- backend-authoritative active-job visibility across users and computers
+- fail-closed mutation preflight
+- popup-preserving layer, action and dropdown refresh
 - release-readiness smoke-test hardening
 - hover help/tooltips for clickable controls
 - route-specific onboarding and Preferences replay
 - user-facing Product/Products terminology audit
 - layer capability foundation
 
-The frontend is ready for controlled user testing while backend-dependent report links, async export/job state and active operation visibility continue separately.
+The frontend is ready for controlled user testing with asynchronous Export/Rollback and shared active-operation visibility. Remaining backend-dependent work includes atomic enqueue ownership, possible migration to the shared Hangfire worker application, report contracts, future export variants and the global timeline.

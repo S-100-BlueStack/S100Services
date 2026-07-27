@@ -1,6 +1,6 @@
 # Product Manager backend implementation roadmap
 
-Planning baseline: `6d18fae743a67cdc85864aa68c51cf6d79921d0c`.
+Current documentation baseline: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
 
 This roadmap converts the current backend discussions into bounded implementation packages. It exists to prevent later work from introducing new architecture assumptions, database changes, or concurrency mechanisms without an explicit decision.
 
@@ -23,12 +23,12 @@ src/ProductManager/docs/backend-context-review-checklist.md
 
 These decisions apply to every work package:
 
-1. `DatasetLockService` uses the existing separate Windows lock-file framework under `%ProgramData%` and remains the same-Product concurrency authority.
-2. Do not add database locks, lock tables, Product lock fields, distributed locks, a second Product lock, or a replacement lock service.
-3. Do not change Product database or geodatabase schema while the relevant administrators are unavailable.
-4. Use the backend framework and background-job infrastructure that already exist.
-5. Do not introduce a second background-job system.
-6. Job status is an observability and recovery feature, not the concurrency authority.
+1. The current runtime uses `DatasetLockService` and the Windows lock-file framework under `%ProgramData%` as the final execution-time concurrency authority.
+2. The implemented active-job endpoint is visibility and preflight, not an atomic enqueue claim.
+3. Do not add a second lock or operation registry outside the approved BE-106B design boundary.
+4. Do not change Product database or geodatabase schema while the relevant administrators are unavailable unless an explicitly approved operation-registry package requires separate persistence.
+5. Use the current Hangfire infrastructure until BE-106A approves migration to the shared Hangfire API/worker application.
+6. Do not introduce a competing background-job system.
 7. Keep `datasetName` until the planned permanent Product ID is introduced by the database owners.
 8. Reports remain blocked pending IC-ENC/internal validation process and API decisions.
 9. Product History is an audit log, not a historical-map reconstruction system.
@@ -42,33 +42,32 @@ These decisions apply to every work package:
 
 ## Work package status
 
-| ID     | Area                                | Status                               | Database/geodatabase change | Primary dependency                                          |
-| ------ | ----------------------------------- | ------------------------------------ | --------------------------- | ----------------------------------------------------------- |
-| BE-101 | Full backend context review         | Complete                             | No                          | Current backend source and tests                            |
-| BE-102 | Readable ExportTarget contract      | Implemented                          | No                          | Verified export controller/service contract                 |
-| FE-101 | Usage band label                    | Ready after payload check            | No                          | Existing Usage band ID + description payload                |
-| BE-103 | AOI profiling and optimization      | Ready after BE-101                   | No for first pass           | Measured request path                                       |
-| BE-104 | Async Export/Rollback jobs          | BE-104A implemented; BE-104B pending | No                          | Existing Hangfire SQL storage and Windows file locking      |
-| BE-105 | Product-level active job visibility | Conditional                          | No                          | Existing job storage must support efficient metadata lookup |
-| BE-106 | Dashboard filtering and pagination  | Planned                              | No for first release        | Stable ordering/event key review                            |
-| BE-107 | Product History failure hardening   | Planned with validation work         | No assumption               | Validation/history producer contract                        |
-| BE-108 | Report storage/content              | Blocked                              | Unknown                     | IC-ENC and internal validation process/API                  |
-| BE-109 | Permanent Product ID                | Blocked                              | Yes                         | Database owners                                             |
-| BE-110 | Historical global map timeline      | Deferred                             | Likely                      | Architecture and retention decision                         |
+| ID      | Area                                      | Status      | Database/geodatabase change | Primary dependency                                      |
+| ------- | ----------------------------------------- | ----------- | --------------------------- | ------------------------------------------------------- |
+| BE-101  | Full backend context review               | Complete    | No                          | Current backend source and tests                        |
+| BE-102  | Readable ExportTarget contract            | Complete    | No                          | Verified export controller/service contract             |
+| FE-101  | Usage band label                          | Complete    | No                          | Existing Usage band ID + description payload            |
+| BE-103  | AOI profiling and optimization            | Complete    | No                          | Measured request path                                   |
+| BE-104  | Async Export/Rollback jobs                | Complete    | No                          | Existing Hangfire SQL storage and Product operation code |
+| BE-105  | Backend-authoritative active job visibility | Complete  | No                          | Product Manager Hangfire metadata and monitoring API    |
+| BE-106A | External shared worker readiness          | Planned     | No                          | Shared Hangfire API/worker deployment decisions         |
+| BE-106B | Atomic Product operation registry         | Planned     | Expected separate persistence | Approved distributed ownership/recovery design        |
+| BE-107  | Dashboard filtering and pagination        | Planned     | No for first release        | Stable ordering/event key review                        |
+| BE-108  | Product History failure hardening         | Planned     | No assumption               | Validation/history producer contract                    |
+| BE-109  | Report storage/content                    | Blocked     | Unknown                     | IC-ENC and internal validation process/API              |
+| BE-110  | Permanent Product ID                      | Blocked     | Yes                         | Database owners                                         |
+| BE-111  | Historical global map timeline            | Deferred    | Likely                      | Architecture and retention decision                     |
 
 ## Implementation order
 
 Recommended order:
 
-1. BE-101: Full backend context review and implementation map.
-2. BE-102: Readable ExportTarget contract and prepared frontend export configuration.
-3. FE-101: Usage band ID and description presentation.
-4. BE-103: AOI performance instrumentation and low-risk optimization.
-5. BE-104: Async Export/Rollback jobs using the existing job framework.
-6. BE-105: Product-level active job visibility.
-7. BE-106: Dashboard filtering and pagination.
-8. BE-107: Product History failure/event contract hardening when backend validation work begins.
-9. Deferred: reports, permanent Product ID, and global map timeline.
+1. BE-101 through BE-105 are complete at the current baseline.
+2. BE-106A: verify portability to the shared Hangfire API/worker application before changing deployment ownership.
+3. BE-106B: design and implement atomic Product-operation ownership before relying on distributed workers.
+4. BE-107: Dashboard filtering and pagination when payload growth justifies it.
+5. BE-108: Product History failure/event contract hardening when backend validation work begins.
+6. Deferred: reports, permanent Product ID, and global map timeline.
 
 The small frontend Usage band task may be completed in parallel with backend work after the current payload shape is confirmed.
 
@@ -459,14 +458,9 @@ If measurement shows a missing index is the primary bottleneck, document:
 
 ### Implementation status
 
-BE-104A implements the backend-only foundation with additive start endpoints,
-application-owned Hangfire metadata, job-by-ID status, authoritative Product-version
-validation, a persistent-handle dataset lock, an execution guard and zero automatic
-retries. The implementation is rebased on
-`3015a6bbae317b4aaf0ce398a3b27b4939feb71c` and preserves the merged
-`uint`/`uint?` export and repository contracts together with the checked signed SQL
-boundary. The existing synchronous endpoints remain active. BE-104B frontend polling
-and activation are not implemented by BE-104A.
+BE-104 is complete. BE-104A backend work is committed at `7fe500aafb5831e71dd766f07bb118b3d8e08aea`. BE-104B frontend activation and the related BE-105 visibility integration are committed at `279fe6a761229fd99af437d0f8401508985afafc`. Popup-preserving terminal refresh is committed at `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
+
+The implementation provides additive async start endpoints, application-owned Hangfire metadata, job-by-ID status, authoritative Product-version validation, a persistent-handle dataset lock, an execution guard, zero automatic retries, persisted frontend polling, reload recovery and terminal route refresh. The existing synchronous endpoints remain available for compatibility, but normal popup Export/Rollback actions use the async contract.
 
 ### Purpose
 
@@ -603,74 +597,88 @@ Approximately 3-6 working days after the context review, depending on current jo
 
 ## BE-105: Product-level active job visibility
 
-### Purpose
+### Status
 
-Let another browser/user see that an Export or Rollback job is queued or running before attempting an action, when this can be implemented inside the existing job framework without Product schema changes.
+Complete at `279fe6a761229fd99af437d0f8401508985afafc`.
 
-### Important limitation
+### Implemented contract
 
-This is visibility only.
+```http
+GET /jobs/active?datasetName={datasetName}
+```
 
-The response can become stale immediately. The existing file lock remains the final concurrency control.
+The endpoint returns active Product Manager jobs for one exact, case-insensitive Product name when public status is `Queued` or `Running`. It uses application-owned job metadata from the shared Hangfire storage.
 
-### Phase 1 requirement
+The frontend reconciles this state when a popup opens, while it remains open, on relevant browser lifecycle events and before any Product mutation. Local storage and `BroadcastChannel` remain same-browser optimizations. Backend state provides shared visibility across users and computers.
 
-Job-by-ID status from BE-104 must exist first.
+### Remaining limitation
 
-### Discovery questions
+The lookup is not atomic with enqueue. Two near-simultaneous clients can both pass preflight before either job is visible. The dataset lock prevents simultaneous execution, but an extra job may be queued and later fail with `DATASET_BUSY`.
 
-- Does the current job framework support custom job parameters or metadata?
-- Can active jobs be indexed by `datasetName` without scanning all jobs?
-- Can the mapping live in the existing job storage without schema changes?
-- How are stale mappings cleaned after success, failure, deletion, or worker crash?
-- Is the current monitoring API appropriate for application use, or should an application-owned index be maintained in existing job storage?
+This limitation is accepted until BE-106B.
 
-### Allowed implementation
+### Acceptance status
 
-A lightweight Product-to-job status index may use the existing job storage when supported.
-
-It must:
-
-- store only status/lookup metadata;
-- never acquire or represent a lock;
-- be rebuildable from authoritative job data where possible;
-- clean up terminal/stale entries;
-- include job ID, Product, operation type, state, and timestamps.
-
-### Fallback
-
-If efficient Product lookup requires a new database table or Product schema change, defer this work.
-
-Keep:
-
-- job-by-ID recovery;
-- local frontend operation state;
-- normal handling of file-lock conflict responses.
-
-### Frontend tasks
-
-1. Read active job state when a Product popup opens or refreshes.
-2. Optionally batch-read status for visible/selected Products if the backend supports it efficiently.
-3. Merge backend job state into the existing central action-availability model.
-4. Mark the state as informational.
-5. Recheck on manual refresh and terminal polling events.
-6. Preserve conflict handling because status can race.
-
-### Acceptance criteria
-
-- Another browser can see queued/running state when the optional endpoint is supported.
-- A stale status cannot permanently disable actions.
-- Terminal jobs disappear from active state.
-- No application-level Product lock is introduced.
-- File-lock conflicts remain correctly surfaced even when active-state lookup said no job was running.
-
-### Estimated effort
-
-Approximately 1-3 working days after BE-104 when the existing job storage supports the required lookup cleanly.
+- Cross-tab visibility: verified.
+- Cross-browser-profile/user/computer visibility: verified against shared backend storage.
+- Reload recovery and terminal polling: verified.
+- Fail-closed preflight when active-job status is unavailable: implemented.
+- Stable popup/action/dropdown refresh: verified at `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
 
 ---
 
-## BE-106: Dashboard filtering and pagination
+## BE-106A: External shared worker readiness
+
+### Purpose
+
+Prepare a later move from the ProductManagerAPI-hosted Hangfire server to the shared Hangfire API/worker application without changing Product Manager runtime now.
+
+### Required decisions
+
+- Which application owns Hangfire storage and schema lifecycle.
+- Whether ProductManagerAPI remains a Hangfire client/status reader or calls the shared job API.
+- Location of Product Manager job contracts and implementation assemblies.
+- Dedicated queue name and worker registration.
+- ArcGIS runtime/licensing, compiler, connection-file and filesystem access on the worker host.
+- Service identity and permissions.
+- Compatible Hangfire versions and serialization settings.
+- Cutover strategy for queued jobs and rollback compatibility.
+- Whether active status remains Hangfire-monitoring based or moves to an application-owned registry.
+
+### Boundary
+
+No runtime move is included. The current endpoints and frontend job model should remain stable so the worker can move behind the contract later.
+
+---
+
+## BE-106B: Atomic Product operation registry
+
+### Purpose
+
+Atomically claim a Product operation before enqueue so only one active mutation job can be created for a Product across API instances and workers.
+
+### Required properties
+
+- shared persistence available to every API/worker instance;
+- atomic claim keyed by normalized `datasetName`;
+- operation type, job ID, expected version, timestamps and correlation ID;
+- explicit queued, running, terminal and manual-review states;
+- recovery rules for enqueue failure, worker crash and deployment restart;
+- no local-machine-only ownership assumption;
+- no replacement of the execution guard or authoritative Product-version check;
+- migration path from the current Hangfire-monitoring active-job endpoint.
+
+### Architecture rule
+
+The registry is operation ownership, not a second ad hoc file lock. The current dataset lock may remain as execution-time protection during migration, but the final relationship must be decided explicitly for distributed workers.
+
+### Status
+
+Planned. Do not implement until BE-106A establishes the target worker/storage architecture.
+
+---
+
+## BE-107: Dashboard filtering and pagination
 
 ### Purpose
 
@@ -777,7 +785,7 @@ Approximately 5-9 working days including backend, frontend, compatibility handli
 
 ---
 
-## BE-107: Product History failure/event hardening
+## BE-108: Product History failure/event hardening
 
 ### Purpose
 
@@ -973,9 +981,10 @@ Provide:
 - rollback notes;
 - suggested commit message.
 
-### BE-104A deployment acceptance: atomic job metadata
+### BE-104/BE-105 deployment acceptance
 
-Before BE-104A is accepted in an environment with the real Hangfire SQL storage,
-pause the worker, create a job, and immediately read `GET /jobs/{jobId}`. The response
-must be `200 Queued` with complete application-owned metadata before the worker is
-resumed. Product mutation must still be zero at that point.
+The paused-worker metadata acceptance remains required: create a job, immediately read `GET /jobs/{jobId}`, verify complete `Queued` metadata and verify zero Product mutation before the worker resumes.
+
+Also verify `GET /jobs/active?datasetName={datasetName}` from a second browser profile or computer while a job is queued/running, and verify that mutation preflight sends no mutation when active status cannot be read.
+
+Before an external worker migration, repeat the complete acceptance matrix with ProductManagerAPI acting only as client/status API and the shared worker processing the dedicated Product Manager queue.
