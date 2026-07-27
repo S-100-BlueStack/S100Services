@@ -63,8 +63,5 @@ test("local export state remains authoritative in the initiating tab", () => {
     exportType: "Edition",
   });
 
-  assert.equal(
-    mergeProductExportStates(localState, externalState),
-    localState,
-  );
+  assert.equal(mergeProductExportStates(localState, externalState), localState);
 });

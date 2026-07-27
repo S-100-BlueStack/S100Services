@@ -3,11 +3,11 @@ import { getStatusName } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { attributesSupportLayerCapability } from "../config/layerDefinitions.js";
 import { applyGraphicAttributes } from "../state/featureState.js";
-import { createPopupActionBar } from "./popupActionBar.js";
-import { closePopupActionDropdown } from "./popupActionDropdown.js";
+import { createPopupActionBar, updatePopupActionBar } from "./popupActionBar.js";
 import { onPopupExportStateChanged } from "./popupExportState.js";
 import { onProductOperationStateChanged } from "../../products/state/productOperationState.js";
 import { watchActiveProductJobs } from "../../products/services/productJobService.js";
+import { registerPopupRefreshHandler } from "./popupRefreshBridge.js";
 
 const GENERIC_POPUP_EXCLUDED_FIELDS = new Set([
   "featureKey",
@@ -86,6 +86,13 @@ export function createPopup() {
         return true;
       }
 
+      const stopRefreshingPopup =
+        shouldRenderProductContent(currentAttributes) && popupDatasetName
+          ? registerPopupRefreshHandler({
+              datasetName: popupDatasetName,
+              refresh: refreshAndRender,
+            })
+          : null;
       const unsubscribeFromExportState = onPopupExportStateChanged(({ datasetName }) => {
         rerenderWhenDatasetMatches(datasetName);
       });
@@ -101,6 +108,7 @@ export function createPopup() {
           unsubscribeFromExportState,
           unsubscribeFromProductOperationState,
           stopWatchingActiveJobs,
+          stopRefreshingPopup,
         ),
       );
 
@@ -112,7 +120,6 @@ export function createPopup() {
           return;
         }
 
-        closePopupActionDropdown();
         render();
       }
 
@@ -134,20 +141,30 @@ export function createPopup() {
 }
 
 function renderPopupContent(container, attributes, { refreshAndRender }) {
-  container.replaceChildren();
-
-  const actionBar = createPopupActionBar({
-    attributes,
-    refreshAndRender,
-  });
+  const section = getOrCreatePopupSection(container);
+  const actionBar = getDirectChildByClass(container, "popup-action-bar");
 
   if (actionBar) {
-    container.appendChild(actionBar);
+    const actionBarUpdate = updatePopupActionBar(actionBar, {
+      attributes,
+      refreshAndRender,
+    });
+
+    if (!actionBarUpdate.supported) {
+      actionBar.remove();
+    }
+  } else {
+    const nextActionBar = createPopupActionBar({
+      attributes,
+      refreshAndRender,
+    });
+
+    if (nextActionBar) {
+      container.insertBefore(nextActionBar, section);
+    }
   }
 
-  const section = document.createElement("div");
-  section.className = "popup-section";
-  container.appendChild(section);
+  section.replaceChildren();
 
   if (shouldRenderProductContent(attributes)) {
     renderProductRows(section, attributes);
@@ -155,6 +172,26 @@ function renderPopupContent(container, attributes, { refreshAndRender }) {
   }
 
   renderGenericRows(section, attributes);
+}
+
+function getOrCreatePopupSection(container) {
+  const existingSection = getDirectChildByClass(container, "popup-section");
+
+  if (existingSection) {
+    return existingSection;
+  }
+
+  const section = document.createElement("div");
+  section.className = "popup-section";
+  container.appendChild(section);
+
+  return section;
+}
+
+function getDirectChildByClass(container, className) {
+  return Array.from(container.children).find((child) => {
+    return child.classList.contains(className);
+  });
 }
 
 function renderProductRows(section, attributes) {

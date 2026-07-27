@@ -6,11 +6,7 @@ export function hasRunningProductExportOperation(productOperationState) {
   return getExportOperations(productOperationState).length > 0;
 }
 
-export function getExternalProductExportState({
-  productOperationState,
-  target,
-  exportType,
-} = {}) {
+export function getExternalProductExportState({ productOperationState, target, exportType } = {}) {
   const candidateTarget = normalizeText(target);
   const candidateExportType = normalizeText(exportType);
 
@@ -36,10 +32,7 @@ export function getExternalProductExportState({
   }
 
   const conflict = exportOperations.find((operation) => {
-    return exportScopesOverlap(
-      candidateTarget,
-      normalizeText(operation.exportTarget),
-    );
+    return exportScopesOverlap(candidateTarget, normalizeText(operation.exportTarget));
   });
 
   if (conflict) {
@@ -69,9 +62,7 @@ function getExportOperations(productOperationState) {
       ? [productOperationState.operation]
       : [];
 
-  return operations.filter(
-    (operation) => operation?.type === PRODUCT_OPERATION_TYPE.EXPORT,
-  );
+  return operations.filter((operation) => operation?.type === PRODUCT_OPERATION_TYPE.EXPORT);
 }
 
 function exportScopesOverlap(candidateTarget, runningTarget) {
@@ -102,5 +93,7 @@ function createAvailableState() {
 }
 
 function normalizeText(value) {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }

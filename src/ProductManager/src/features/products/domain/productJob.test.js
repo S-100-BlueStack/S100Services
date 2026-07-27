@@ -41,10 +41,7 @@ test("accepted job response is normalized for persistent tracking", () => {
 
 test("invalid stored jobs are ignored", () => {
   assert.equal(normalizeStoredProductJob(null), null);
-  assert.equal(
-    normalizeStoredProductJob({ datasetName: "101DK0040943E" }),
-    null,
-  );
+  assert.equal(normalizeStoredProductJob({ datasetName: "101DK0040943E" }), null);
 });
 
 test("terminal status detection is case insensitive", () => {
@@ -84,10 +81,7 @@ test("failed job response exposes the safe backend error", () => {
 
   assert.equal(result.success, false);
   assert.equal(result.data.code, "PRODUCT_VERSION_CHANGED");
-  assert.equal(
-    result.data.message,
-    "The product version changed before the operation started.",
-  );
+  assert.equal(result.data.message, "The product version changed before the operation started.");
 });
 
 test("operation rejection exposes the backend-owned safe message", () => {
@@ -96,8 +90,7 @@ test("operation rejection exposes the backend-owned safe message", () => {
     status: "Failed",
     error: {
       code: "PRODUCT_OPERATION_REJECTED",
-      message:
-        "A New edition could not be created now. Current product state: Exported.",
+      message: "A New edition could not be created now. Current product state: Exported.",
     },
   });
 
@@ -105,6 +98,6 @@ test("operation rejection exposes the backend-owned safe message", () => {
   assert.equal(result.data.code, "PRODUCT_OPERATION_REJECTED");
   assert.equal(
     result.data.message,
-    "A New edition could not be created now. Current product state: Exported.",
+    "A New edition could not be created now. Current product state: Exported."
   );
 });

@@ -14,13 +14,7 @@ export async function exportNewEdition(datasetName) {
     exportTarget: EXPORT_TARGET.S100,
     label: "Exporting S100 Edition",
     startJob: () =>
-      startProductJob(
-        buildExportRequestPath(
-          datasetName,
-          "newedition",
-          EXPORT_TARGET.S100,
-        ),
-      ),
+      startProductJob(buildExportRequestPath(datasetName, "newedition", EXPORT_TARGET.S100)),
   });
 }
 
@@ -33,16 +27,11 @@ export async function exportRollback(datasetName) {
     datasetName,
     operationType: PRODUCT_JOB_OPERATION.ROLLBACK,
     label: "Rolling back",
-    startJob: () =>
-      startProductJob(buildExportRequestPath(datasetName, "rollback")),
+    startJob: () => startProductJob(buildExportRequestPath(datasetName, "rollback")),
   });
 }
 
-export function buildExportRequestPath(
-  datasetName,
-  action,
-  exportTarget = null,
-) {
+export function buildExportRequestPath(datasetName, action, exportTarget = null) {
   const path = `export/${encodeURIComponent(datasetName)}/${action}/jobs`;
 
   if (!exportTarget) {

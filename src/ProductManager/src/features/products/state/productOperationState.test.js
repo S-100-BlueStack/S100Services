@@ -17,9 +17,7 @@ function installDomEventGlobals() {
 test("identical external operation replacement does not emit another state change", async () => {
   installDomEventGlobals();
 
-  const state = await import(
-    `./productOperationState.js?test=${Date.now()}-${Math.random()}`
-  );
+  const state = await import(`./productOperationState.js?test=${Date.now()}-${Math.random()}`);
   let changeCount = 0;
   const unsubscribe = state.onProductOperationStateChanged(() => {
     changeCount += 1;

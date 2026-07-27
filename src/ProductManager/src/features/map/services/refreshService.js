@@ -1,6 +1,8 @@
 import { findFeature } from "../core/featureAdapter.js";
 import { getAllLayers, getLayer } from "../core/layerRegistry.js";
+import { reconcileGraphicsLayers } from "../core/reconcileGraphicsLayers.js";
 import { rebuildLayers } from "../core/rebuildLayers.js";
+import { refreshOpenProductPopup } from "../popups/popupRefreshBridge.js";
 import { runWithRetry } from "../../../shared/utils/retryRunner.js";
 
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
@@ -29,6 +31,7 @@ export function createRefreshService({
 
     return {
       selectedFeatureKey: selectedFeature?.attributes?.featureKey,
+      selectedDatasetName: readDatasetName(selectedFeature?.attributes),
       selectedLayerId: selectedFeature?.layer?.customId,
       popupVisible: view.popup.visible,
       popupLocation,
@@ -58,6 +61,36 @@ export function createRefreshService({
 
       if (graphic && graphic.visible !== false) {
         hoverManager.setLockedFeature(graphic);
+      }
+    }
+  }
+
+  function synchronizeReconciledState(state) {
+    if (!state) {
+      return;
+    }
+
+    if (state.popupVisible && state.selectedFeatureKey && state.selectedLayerId) {
+      const graphic = findFeatureForRestore(state.selectedLayerId, state.selectedFeatureKey);
+
+      if (!graphic || graphic.visible === false) {
+        view.popup.close();
+      } else if (view.popup.selectedFeature !== graphic) {
+        // Matching graphics normally retain object identity during reconciliation.
+        // Reopen only as a defensive fallback if an external ArcGIS lifecycle
+        // replaced the selected feature reference.
+        view.popup.open({
+          features: [graphic],
+          location: state.popupLocation ?? getPopupLocation(graphic),
+        });
+      }
+    }
+
+    if (state.lockedFeatureKey && state.lockedLayerId) {
+      const graphic = findFeatureForRestore(state.lockedLayerId, state.lockedFeatureKey);
+
+      if (!graphic || graphic.visible === false) {
+        hoverManager.clearLockedFeature?.();
       }
     }
   }
@@ -115,20 +148,41 @@ export function createRefreshService({
         backoffFactor: 2,
       });
 
-      const layers = normalizeLayers(result);
+      const layerConfigs = normalizeLayers(result);
+      const reconciliation = await tryReconcileLayers(layerConfigs);
 
-      const createdLayers = await rebuildLayers({
-        map,
-        hoverManager,
-        layerConfigs: layers,
-        createLayer,
-      });
+      let activeLayers;
+      let refreshStrategy;
+      let reconciliationReason = null;
 
-      await onLayersRebuilt?.(createdLayers);
-      await restoreState(state);
+      if (reconciliation.success) {
+        activeLayers = reconciliation.layers;
+        refreshStrategy = "reconciled";
+
+        await onLayersRebuilt?.(activeLayers);
+        synchronizeReconciledState(state);
+
+        if (state.popupVisible && state.selectedDatasetName && view.popup.visible) {
+          await refreshOpenProductPopup(state.selectedDatasetName, {
+            showFailureNotice: false,
+          });
+        }
+      } else {
+        reconciliationReason = reconciliation.reason;
+        refreshStrategy = "rebuilt";
+        activeLayers = await rebuildLayers({
+          map,
+          hoverManager,
+          layerConfigs,
+          createLayer,
+        });
+
+        await onLayersRebuilt?.(activeLayers);
+        await restoreState(state);
+      }
 
       const finishedAt = new Date();
-      const graphicsCount = getTotalGraphics(createdLayers);
+      const graphicsCount = getTotalGraphics(activeLayers);
 
       const refreshResult = {
         success: true,
@@ -137,8 +191,10 @@ export function createRefreshService({
         startedAt,
         finishedAt,
         durationMs: finishedAt.getTime() - startedAt.getTime(),
-        layerCount: createdLayers.length,
+        layerCount: activeLayers.length,
         graphicsCount,
+        strategy: refreshStrategy,
+        reconciliationReason,
       };
 
       onRefreshSuccess?.(refreshResult);
@@ -160,6 +216,39 @@ export function createRefreshService({
       return refreshResult;
     } finally {
       isRefreshing = false;
+    }
+  }
+
+  async function tryReconcileLayers(layerConfigs) {
+    const currentLayers = getAllLayers();
+
+    if (currentLayers.length === 0) {
+      return createReconciliationFailure("no-current-layers");
+    }
+
+    const candidateLayers = [];
+    const stagingMap = {
+      add() {},
+    };
+
+    try {
+      for (const layerConfig of layerConfigs) {
+        const candidateLayer = await createLayer(stagingMap, layerConfig);
+
+        if (candidateLayer) {
+          candidateLayers.push(candidateLayer);
+        }
+      }
+
+      return reconcileGraphicsLayers({
+        currentLayers,
+        candidateLayers,
+      });
+    } catch (error) {
+      console.warn("[Refresh] In-place reconciliation unavailable; using full rebuild.", error);
+      return createReconciliationFailure("candidate-layer-creation-failed");
+    } finally {
+      destroyCandidateLayers(candidateLayers);
     }
   }
 
@@ -250,4 +339,29 @@ function getPopupLocation(graphic) {
 
 function cloneGeometry(geometry) {
   return geometry?.clone?.() ?? geometry ?? null;
+}
+
+function readDatasetName(attributes) {
+  return (
+    attributes?.datasetName ?? attributes?.DatasetName ?? attributes?.datasetname ?? null
+  );
+}
+
+function destroyCandidateLayers(layers) {
+  for (const layer of layers) {
+    try {
+      layer.removeAll?.();
+      layer.destroy?.();
+    } catch (error) {
+      console.debug("[Refresh] Candidate layer cleanup failed.", error);
+    }
+  }
+}
+
+function createReconciliationFailure(reason) {
+  return {
+    success: false,
+    strategy: "rebuild-required",
+    reason,
+  };
 }

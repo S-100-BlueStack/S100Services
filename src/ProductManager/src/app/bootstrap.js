@@ -17,11 +17,7 @@ import { initDisplayScaleOverrideControl } from "../features/map/scale/displaySc
 import { waitForCalciteComponents } from "../shared/ui/calciteComponentReady.js";
 import { getCurrentRoute } from "./routing/appRoute.js";
 
-const REQUIRED_CALCITE_COMPONENTS = [
-  "calcite-shell",
-  "calcite-shell-panel",
-  "calcite-panel",
-];
+const REQUIRED_CALCITE_COMPONENTS = ["calcite-shell", "calcite-shell-panel", "calcite-panel"];
 
 async function waitForCalcite() {
   await waitForCalciteComponents(REQUIRED_CALCITE_COMPONENTS);

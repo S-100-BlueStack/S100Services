@@ -147,9 +147,7 @@ export function replaceExternalProductOperations(datasetName, operations = []) {
     }
   }
 
-  const currentOperations = activeExternalOperationsByDatasetName.get(
-    normalizedDatasetName,
-  );
+  const currentOperations = activeExternalOperationsByDatasetName.get(normalizedDatasetName);
 
   if (areOperationMapsEqual(currentOperations, nextOperations)) {
     return;

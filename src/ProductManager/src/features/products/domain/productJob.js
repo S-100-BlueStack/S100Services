@@ -25,8 +25,7 @@ export function createProductJobRecord({
   label,
 }) {
   const jobId = normalizeText(response?.jobId);
-  const normalizedDatasetName =
-    normalizeText(response?.datasetName) || normalizeText(datasetName);
+  const normalizedDatasetName = normalizeText(response?.datasetName) || normalizeText(datasetName);
   const normalizedOperationType =
     normalizeText(response?.operationType) || normalizeText(operationType);
 
@@ -39,8 +38,7 @@ export function createProductJobRecord({
     datasetName: normalizedDatasetName,
     operationType: normalizedOperationType,
     exportTarget: normalizeNullableText(response?.exportTarget ?? exportTarget),
-    label:
-      normalizeText(label) || createProductJobLabel(normalizedOperationType),
+    label: normalizeText(label) || createProductJobLabel(normalizedOperationType),
     createdAt: normalizeText(response?.createdAt) || new Date().toISOString(),
     correlationId: normalizeNullableText(response?.correlationId),
     statusUrl: normalizeNullableText(response?.statusUrl),
@@ -94,15 +92,11 @@ export function createProductJobActionResult(statusResponse) {
 }
 
 export function createProductJobLabel(operationType) {
-  return isRollbackOperation(operationType)
-    ? "Rolling back"
-    : "Exporting S100 Edition";
+  return isRollbackOperation(operationType) ? "Rolling back" : "Exporting S100 Edition";
 }
 
 export function createProductJobCompletionTitle(record, statusResponse) {
-  const action = isRollbackOperation(record?.operationType)
-    ? "Rollback"
-    : "Export";
+  const action = isRollbackOperation(record?.operationType) ? "Rollback" : "Export";
   const status = normalizeText(statusResponse?.status);
 
   if (status.toLowerCase() === PRODUCT_JOB_STATUS.SUCCEEDED.toLowerCase()) {
@@ -118,8 +112,7 @@ export function getProductJobFailureMessage(statusResponse) {
 
 export function isRollbackOperation(operationType) {
   return (
-    normalizeText(operationType).toLowerCase() ===
-    PRODUCT_JOB_OPERATION.ROLLBACK.toLowerCase()
+    normalizeText(operationType).toLowerCase() === PRODUCT_JOB_OPERATION.ROLLBACK.toLowerCase()
   );
 }
 

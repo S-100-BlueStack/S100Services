@@ -191,10 +191,7 @@ function createExportLeafAction({
     target: exportAction.target,
     exportType: exportAction.exportType,
   });
-  const exportState = mergeProductExportStates(
-    localExportState,
-    externalExportState,
-  );
+  const exportState = mergeProductExportStates(localExportState, externalExportState);
   const availability = createProductExportAvailability({
     attributes,
     frozen,

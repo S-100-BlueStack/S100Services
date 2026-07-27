@@ -69,7 +69,6 @@ User-facing UI should use `Product` and `Products`, not `Dataset` or `Datasets`.
 
 Code can keep technical identifiers such as `datasetName` where required by backend contracts or normalized product attributes.
 
-
 ## Cross-tab job synchronization
 
 Active job records are synchronized between same-origin browser tabs through local storage, `BroadcastChannel`, focus/pageshow/visibility reconciliation and a short fallback reconciliation interval. This keeps popup action availability current even when a browser drops or delays a storage event. Cross-user and cross-browser-profile visibility still requires the later backend active-operation contract.

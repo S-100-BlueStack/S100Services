@@ -2,11 +2,7 @@ import {
   getActiveProductJobs as fetchActiveProductJobs,
   getProductJobStatus,
 } from "../../data/api/productJobApi.js";
-import {
-  noticeError,
-  noticeSuccess,
-  noticeWarning,
-} from "../../notices/services/noticeService.js";
+import { noticeError, noticeSuccess, noticeWarning } from "../../notices/services/noticeService.js";
 import {
   createProductJobActionResult,
   createProductJobCompletionTitle,
@@ -126,9 +122,7 @@ export async function synchronizeActiveProductJobs(datasetName) {
 
   const responses = Array.isArray(result.data) ? result.data : [];
   const currentRecords = getStoredProductJobs();
-  const currentByJobId = new Map(
-    currentRecords.map((record) => [record.jobId, record]),
-  );
+  const currentByJobId = new Map(currentRecords.map((record) => [record.jobId, record]));
   const remoteRecords = responses
     .map((response) => {
       const record = createProductJobRecord({
@@ -167,9 +161,7 @@ export async function synchronizeActiveProductJobs(datasetName) {
   });
 
   for (const record of remoteRecords) {
-    const existingIndex = nextRecords.findIndex(
-      (candidate) => candidate.jobId === record.jobId,
-    );
+    const existingIndex = nextRecords.findIndex((candidate) => candidate.jobId === record.jobId);
 
     if (existingIndex >= 0) {
       nextRecords[existingIndex] = record;
@@ -293,9 +285,7 @@ async function pollProductJob(record) {
         success: false,
         status: result.status,
         data: {
-          ...(result.data && typeof result.data === "object"
-            ? result.data
-            : {}),
+          ...(result.data && typeof result.data === "object" ? result.data : {}),
           code: result.data?.code ?? "JOB_NOT_FOUND",
           message:
             result.data?.message ??
@@ -309,7 +299,7 @@ async function pollProductJob(record) {
     // operation and retry with a bounded backoff.
     pollDelayMs = Math.min(
       pollDelayMs > 0 ? pollDelayMs * 2 : POLL_INTERVAL_MS,
-      MAX_POLL_INTERVAL_MS,
+      MAX_POLL_INTERVAL_MS
     );
   }
 }
@@ -323,23 +313,21 @@ function announceRestoredTerminal(record, result) {
       noticeWarning(
         `${createProductJobCompletionTitle(record, result.data)} with a warning`,
         warning.message,
-        { dedupeKey },
+        { dedupeKey }
       );
       return;
     }
 
-    noticeSuccess(
-      createProductJobCompletionTitle(record, result.data),
-      result.data?.message,
-      { dedupeKey },
-    );
+    noticeSuccess(createProductJobCompletionTitle(record, result.data), result.data?.message, {
+      dedupeKey,
+    });
     return;
   }
 
   noticeError(
     createProductJobCompletionTitle(record, result.data),
     getProductJobFailureMessage(result.data),
-    { dedupeKey },
+    { dedupeKey }
   );
 }
 
@@ -375,7 +363,7 @@ function syncExternalProductOperations() {
   for (const [key, group] of grouped.entries()) {
     replaceExternalProductOperations(
       group.datasetName,
-      group.records.map(createExternalProductOperation),
+      group.records.map(createExternalProductOperation)
     );
     syncedDatasetNames.add(key);
   }
@@ -426,17 +414,13 @@ function getStoredProductJobs() {
 }
 
 function upsertStoredJob(record) {
-  const records = getStoredProductJobs().filter(
-    (candidate) => candidate.jobId !== record.jobId,
-  );
+  const records = getStoredProductJobs().filter((candidate) => candidate.jobId !== record.jobId);
   records.push(record);
   writeStoredProductJobsIfChanged(records);
 }
 
 function removeStoredJob(jobId) {
-  const records = getStoredProductJobs().filter(
-    (record) => record.jobId !== jobId,
-  );
+  const records = getStoredProductJobs().filter((record) => record.jobId !== jobId);
   writeStoredProductJobsIfChanged(records);
 }
 
@@ -495,10 +479,7 @@ function releaseRemoteWatch(normalizedDatasetName) {
     return;
   }
 
-  if (
-    watch.intervalId !== null &&
-    typeof globalThis.clearInterval === "function"
-  ) {
+  if (watch.intervalId !== null && typeof globalThis.clearInterval === "function") {
     globalThis.clearInterval(watch.intervalId);
   }
 
@@ -569,17 +550,11 @@ function registerWindowReconciliation() {
 }
 
 function registerReconcileInterval() {
-  if (
-    reconcileIntervalId !== null ||
-    typeof globalThis.setInterval !== "function"
-  ) {
+  if (reconcileIntervalId !== null || typeof globalThis.setInterval !== "function") {
     return;
   }
 
-  reconcileIntervalId = globalThis.setInterval(
-    reconcileStoredProductJobs,
-    RECONCILE_INTERVAL_MS,
-  );
+  reconcileIntervalId = globalThis.setInterval(reconcileStoredProductJobs, RECONCILE_INTERVAL_MS);
 }
 
 function publishStoredJobsChanged() {
@@ -603,7 +578,9 @@ function getStorage() {
 }
 
 function normalizeDatasetKey(datasetName) {
-  return String(datasetName ?? "").trim().toLowerCase();
+  return String(datasetName ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 function delay(milliseconds) {

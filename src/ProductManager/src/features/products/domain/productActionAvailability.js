@@ -1,10 +1,7 @@
-const MISSING_DATASET_NAME_REASON =
-  "The selected feature does not have a datasetName.";
+const MISSING_DATASET_NAME_REASON = "The selected feature does not have a datasetName.";
 const EXPORT_RUNNING_REASON = "Wait until the current export finishes.";
-const PRODUCT_OPERATION_RUNNING_REASON =
-  "Wait until the current product operation finishes.";
-const EXPORT_STATE_REASON =
-  "New Edition is only available when product status is Idle.";
+const PRODUCT_OPERATION_RUNNING_REASON = "Wait until the current product operation finishes.";
+const EXPORT_STATE_REASON = "New Edition is only available when product status is Idle.";
 const ROLLBACK_STATE_REASON =
   "Rollback is only available when product status is Exported or Frozen.";
 
@@ -213,11 +210,7 @@ function getDatasetName(attributes) {
 
 function getProductState(attributes) {
   const rawState =
-    attributes?.status ??
-    attributes?.Status ??
-    attributes?.state ??
-    attributes?.State ??
-    null;
+    attributes?.status ?? attributes?.Status ?? attributes?.state ?? attributes?.State ?? null;
 
   if (rawState === null || rawState === undefined || rawState === "") {
     return { known: false, id: null, name: null };
@@ -240,9 +233,7 @@ function getProductState(attributes) {
 }
 
 function isIdleState(productState) {
-  return (
-    productState.id === PRODUCT_STATE_ID.IDLE || productState.name === "idle"
-  );
+  return productState.id === PRODUCT_STATE_ID.IDLE || productState.name === "idle";
 }
 
 function isRollbackState(productState) {

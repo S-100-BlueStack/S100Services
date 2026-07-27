@@ -6,10 +6,7 @@ import {
   noticeApiSuccess,
   noticeUnexpectedApiError,
 } from "../../notices/services/apiNoticeService.js";
-import {
-  noticeError,
-  noticeWarning,
-} from "../../notices/services/noticeService.js";
+import { noticeError, noticeWarning } from "../../notices/services/noticeService.js";
 import {
   PRODUCT_OPERATION_TYPE,
   beginProductOperation,
@@ -20,9 +17,7 @@ import {
   synchronizeActiveProductJobs,
   synchronizeProductJobTracking,
 } from "../../products/services/productJobService.js";
-import {
-  openProductHistoryPanel as dispatchProductHistoryOpen,
-} from "../../timeline/events/productHistoryEvents.js";
+import { openProductHistoryPanel as dispatchProductHistoryOpen } from "../../timeline/events/productHistoryEvents.js";
 import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
 import { beginPopupExportAction, endPopupExportAction } from "./popupExportState.js";
 import { validateExportDispatch } from "./popupExportContract.js";
@@ -54,16 +49,11 @@ export function openProductHistory(datasetName) {
 
 export async function triggerFreeze(datasetName, state, anchorElement, { afterResult } = {}) {
   if (!datasetName) {
-    noticeError(
-      "Cannot change freeze state",
-      "The selected feature does not have a datasetName."
-    );
+    noticeError("Cannot change freeze state", "The selected feature does not have a datasetName.");
     return null;
   }
 
-  const operationType = state
-    ? PRODUCT_OPERATION_TYPE.FREEZE
-    : PRODUCT_OPERATION_TYPE.UNFREEZE;
+  const operationType = state ? PRODUCT_OPERATION_TYPE.FREEZE : PRODUCT_OPERATION_TYPE.UNFREEZE;
   const operationLabel = state ? "Freezing" : "Unfreezing";
   const actionLabel = state ? "freezing" : "unfreezing";
 
@@ -156,10 +146,7 @@ export async function triggerRollback(datasetName, anchorElement, { afterResult 
       const warning = result.data?.warning;
 
       if (warning) {
-        noticeWarning(
-          `Product ${datasetName} rolled back with a warning`,
-          warning.message,
-        );
+        noticeWarning(`Product ${datasetName} rolled back with a warning`, warning.message);
         return;
       }
 
@@ -245,8 +232,7 @@ async function runConfirmedProductOperation({
       return null;
     }
 
-    const operationStateAvailable =
-      await synchronizeBackendOperationStateOrNotify(datasetName);
+    const operationStateAvailable = await synchronizeBackendOperationStateOrNotify(datasetName);
     if (!operationStateAvailable) {
       return createSkippedActionResult("operation-status-unavailable");
     }
@@ -315,8 +301,7 @@ async function runConfirmedExportOperation({
       return null;
     }
 
-    const operationStateAvailable =
-      await synchronizeBackendOperationStateOrNotify(datasetName);
+    const operationStateAvailable = await synchronizeBackendOperationStateOrNotify(datasetName);
     if (!operationStateAvailable) {
       return createSkippedActionResult("operation-status-unavailable");
     }
@@ -403,7 +388,6 @@ async function runConfirmedExportOperation({
   }
 }
 
-
 async function synchronizeBackendOperationStateOrNotify(datasetName) {
   const result = await synchronizeActiveProductJobs(datasetName);
   if (result?.success) {
@@ -414,7 +398,7 @@ async function synchronizeBackendOperationStateOrNotify(datasetName) {
     "Product operation status unavailable",
     result?.errorMessage ??
       result?.data?.message ??
-      "The current product operation state could not be verified. Try again.",
+      "The current product operation state could not be verified. Try again."
   );
 
   return false;

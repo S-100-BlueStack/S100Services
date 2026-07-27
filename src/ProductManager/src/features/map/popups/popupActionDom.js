@@ -1,52 +1,25 @@
 import { closePopupActionDropdown, togglePopupActionDropdown } from "./popupActionDropdown.js";
 import { bindVisibleFocusState } from "../../../shared/ui/focus/visibleFocus.js";
+import { createActionConfigSignature } from "./popupActionConfigSignature.js";
+
+const actionStates = new WeakMap();
 
 export function createActionButton(actionConfig) {
   const action = document.createElement("calcite-action");
-  const hasDropdown = Array.isArray(actionConfig.items) && actionConfig.items.length > 0;
-  const showsLoading = Boolean(actionConfig.loading);
-  const blocksClickWhileLoading = showsLoading && !hasDropdown;
+  const state = {
+    config: actionConfig,
+    signature: null,
+    localBusy: false,
+    configuredClassNames: [],
+  };
 
-  action.icon = actionConfig.icon;
-  action.text = actionConfig.label;
-  action.title = actionConfig.disabledReason ?? actionConfig.label;
-  action.scale = "m";
-  action.appearance = "transparent";
-  action.disabled = Boolean(actionConfig.disabled);
-  action.loading = showsLoading;
-  action.textEnabled = true;
-  action.className = ["popup-action-bar__action", actionConfig.className].filter(Boolean).join(" ");
-  action.dataset.popupActionId = actionConfig.id;
-  action.dataset.onboardingTarget = "popup-actions";
-
+  actionStates.set(action, state);
   bindVisibleFocusState(action);
 
-  if (hasDropdown) {
-    action.setAttribute("aria-haspopup", "menu");
-    action.setAttribute("aria-expanded", "false");
-  }
-
-  // Calcite upgrades custom elements asynchronously, so set attributes as well
-  // as properties to keep first render and upgraded render aligned.
-  action.setAttribute("text", actionConfig.label);
-  action.setAttribute("title", actionConfig.disabledReason ?? actionConfig.label);
-  action.setAttribute("text-enabled", "");
-
-  if (actionConfig.disabled) {
-    action.setAttribute("disabled", "");
-    action.setAttribute("aria-disabled", "true");
-  }
-
-  if (showsLoading) {
-    action.setAttribute("loading", "");
-    action.setAttribute("aria-busy", "true");
-  }
-
-  if (blocksClickWhileLoading) {
-    action.dataset.busy = "true";
-  }
-
   action.addEventListener("keydown", (event) => {
+    const currentConfig = state.config;
+    const hasDropdown = hasActionDropdown(currentConfig);
+
     if (!hasDropdown || event.key !== "ArrowDown") {
       return;
     }
@@ -60,7 +33,7 @@ export function createActionButton(actionConfig) {
 
     togglePopupActionDropdown({
       anchorElement: action,
-      items: actionConfig.items,
+      items: currentConfig.items,
       focusFirstItem: true,
       restoreFocusOnClose: true,
     });
@@ -69,6 +42,9 @@ export function createActionButton(actionConfig) {
   action.addEventListener("click", async (event) => {
     event.preventDefault();
     event.stopPropagation();
+
+    const currentConfig = state.config;
+    const hasDropdown = hasActionDropdown(currentConfig);
 
     if (action.disabled || action.dataset.busy === "true") {
       return;
@@ -79,7 +55,7 @@ export function createActionButton(actionConfig) {
 
       togglePopupActionDropdown({
         anchorElement: action,
-        items: actionConfig.items,
+        items: currentConfig.items,
         focusFirstItem,
         restoreFocusOnClose: focusFirstItem,
       });
@@ -88,42 +64,194 @@ export function createActionButton(actionConfig) {
 
     closePopupActionDropdown();
 
-    await runActionWithBusyState(action, async () => {
-      await actionConfig.onClick?.({
+    await runActionWithBusyState(action, state, async () => {
+      await state.config.onClick?.({
         anchorElement: action,
       });
     });
   });
 
+  updateActionButton(action, actionConfig, {
+    force: true,
+  });
+
   return action;
 }
 
-async function runActionWithBusyState(action, runAction) {
-  const wasDisabled = Boolean(action.disabled);
+export function updateActionButton(action, actionConfig, { force = false } = {}) {
+  const state = actionStates.get(action);
 
-  setActionBusy(action, true);
+  if (!state) {
+    throw new Error("Popup action button was not created by createActionButton().");
+  }
+
+  const nextSignature = createActionConfigSignature(actionConfig);
+  const changed = force || state.signature !== nextSignature;
+  const openDropdownState = changed ? captureOpenDropdownState(action) : null;
+
+  state.config = actionConfig;
+  state.signature = nextSignature;
+
+  if (changed) {
+    applyActionConfig(action, state);
+    refreshOpenDropdown(action, actionConfig, openDropdownState);
+  }
+
+  return changed;
+}
+
+function applyActionConfig(action, state) {
+  const actionConfig = state.config;
+  const hasDropdown = hasActionDropdown(actionConfig);
+  const showsLoading = Boolean(actionConfig.loading);
+  const blocksClickWhileLoading = showsLoading && !hasDropdown;
+  const disabled = Boolean(actionConfig.disabled) || state.localBusy;
+  const busy = state.localBusy || blocksClickWhileLoading;
+  const title = actionConfig.disabledReason ?? actionConfig.label;
+
+  action.icon = actionConfig.icon;
+  action.text = actionConfig.label;
+  action.title = title;
+  action.scale = "m";
+  action.appearance = "transparent";
+  action.disabled = disabled;
+  action.loading = showsLoading;
+  action.textEnabled = true;
+  applyConfiguredClasses(action, state, [
+    "popup-action-bar__action",
+    ...splitClassNames(actionConfig.className),
+  ]);
+  action.dataset.popupActionId = actionConfig.id;
+  action.dataset.onboardingTarget = "popup-actions";
+  action.dataset.busy = String(Boolean(busy));
+
+  action.setAttribute("text", actionConfig.label);
+  action.setAttribute("title", title);
+  action.setAttribute("text-enabled", "");
+  action.toggleAttribute("disabled", disabled);
+  setBooleanAriaAttribute(action, "aria-disabled", disabled);
+  action.toggleAttribute("loading", showsLoading);
+  setBooleanAriaAttribute(action, "aria-busy", showsLoading || state.localBusy);
+
+  if (hasDropdown) {
+    action.setAttribute("aria-haspopup", "menu");
+
+    if (!action.hasAttribute("aria-expanded")) {
+      action.setAttribute("aria-expanded", "false");
+    }
+  } else {
+    action.removeAttribute("aria-haspopup");
+    action.removeAttribute("aria-expanded");
+  }
+}
+
+async function runActionWithBusyState(action, state, runAction) {
+  state.localBusy = true;
+  applyActionConfig(action, state);
 
   try {
     await runAction();
   } finally {
-    setActionBusy(action, false, {
-      disabled: wasDisabled,
-    });
+    state.localBusy = false;
+    applyActionConfig(action, state);
   }
 }
 
-function setActionBusy(action, busy, { disabled = true } = {}) {
-  action.dataset.busy = String(Boolean(busy));
-  action.toggleAttribute("aria-busy", Boolean(busy));
+function applyConfiguredClasses(action, state, classNames) {
+  for (const className of state.configuredClassNames) {
+    action.classList.remove(className);
+  }
 
-  if (busy || disabled) {
-    action.disabled = true;
-    action.setAttribute("disabled", "");
-    action.setAttribute("aria-disabled", "true");
+  for (const className of classNames) {
+    action.classList.add(className);
+  }
+
+  state.configuredClassNames = classNames;
+}
+
+function splitClassNames(value) {
+  return String(value ?? "")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function setBooleanAriaAttribute(element, name, enabled) {
+  if (enabled) {
+    element.setAttribute(name, "true");
     return;
   }
 
-  action.disabled = false;
-  action.removeAttribute("disabled");
-  action.removeAttribute("aria-disabled");
+  element.removeAttribute(name);
+}
+
+function hasActionDropdown(actionConfig) {
+  return Array.isArray(actionConfig?.items) && actionConfig.items.length > 0;
+}
+
+function captureOpenDropdownState(action) {
+  if (action.getAttribute("aria-expanded") !== "true") {
+    return null;
+  }
+
+  const dropdownId = action.getAttribute("aria-controls");
+  const dropdown = dropdownId ? document.getElementById(dropdownId) : null;
+  const activeElement = document.activeElement;
+  const focusedActionId = dropdown?.contains(activeElement)
+    ? activeElement?.dataset?.dropdownActionId ?? null
+    : null;
+
+  return {
+    focusedActionId,
+    hadDropdownFocus: Boolean(dropdown?.contains(activeElement)),
+  };
+}
+
+function refreshOpenDropdown(action, actionConfig, openDropdownState) {
+  if (!openDropdownState) {
+    return;
+  }
+
+  closePopupActionDropdown();
+
+  if (!hasActionDropdown(actionConfig)) {
+    return;
+  }
+
+  togglePopupActionDropdown({
+    anchorElement: action,
+    items: actionConfig.items,
+    focusFirstItem: false,
+    restoreFocusOnClose: openDropdownState.hadDropdownFocus,
+  });
+
+  if (!openDropdownState.hadDropdownFocus) {
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    restoreDropdownFocus(action, openDropdownState.focusedActionId);
+  });
+}
+
+function restoreDropdownFocus(action, focusedActionId) {
+  const dropdownId = action.getAttribute("aria-controls");
+  const dropdown = dropdownId ? document.getElementById(dropdownId) : null;
+
+  if (!dropdown) {
+    return;
+  }
+
+  const items = Array.from(dropdown.querySelectorAll("[data-dropdown-action-id]"));
+  const preferredItem = focusedActionId
+    ? items.find((item) => item.dataset.dropdownActionId === focusedActionId)
+    : null;
+  const target = isEnabledDropdownItem(preferredItem)
+    ? preferredItem
+    : items.find(isEnabledDropdownItem);
+
+  target?.focus?.();
+}
+
+function isEnabledDropdownItem(item) {
+  return Boolean(item) && !item.disabled && item.dataset.busy !== "true";
 }

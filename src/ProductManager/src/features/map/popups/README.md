@@ -173,14 +173,14 @@ ROLLBACK_CLEANUP_FAILED
 
 The frontend treats this as a successful operation and shows a warning notice with the safe backend message.
 
-## Popup re-rendering
+## Popup action reconciliation
 
 Open popups listen for:
 
 - export-state changes via `onPopupExportStateChanged`;
 - product-operation-state changes via `onProductOperationStateChanged`.
 
-When relevant state changes, the popup closes any open dropdown and re-renders the action bar. Subscriptions must be cleaned up when popup DOM is disconnected.
+When relevant state changes, the popup reconciles the existing action buttons in place. Stable `calcite-action` elements retain their DOM identity while label, icon, loading, disabled state and dropdown configuration are updated. If a dropdown is already open, it is synchronously refreshed on the same anchor so remote job start and terminal refreshes do not collapse the menu. Keyboard focus is restored to the same enabled leaf when possible. The dropdown closes only when its action is removed or no longer exposes menu items. Subscriptions must be cleaned up when popup DOM is disconnected.
 
 ## Route refresh behavior
 
@@ -238,3 +238,28 @@ Popup behavior:
 Local storage, storage events and `BroadcastChannel` remain same-browser performance optimizations. They are not the source of truth. The backend active-job endpoint provides visibility across browser profiles, users and computers that share the same Product Manager backend and Hangfire storage.
 
 Before any product mutation is dispatched, `popupProductActions.js` performs a backend reconciliation. If active-operation status cannot be verified, the action fails closed and no mutation request is sent.
+
+## Popup-preserving map refresh
+
+The main map refresh service now attempts an in-place GraphicsLayer reconciliation before using the full rebuild flow.
+
+For structurally compatible refreshes:
+
+- existing GraphicsLayer instances are retained;
+- matching Graphic instances are retained by `featureKey`;
+- geometry, attributes and symbols are updated in place;
+- new graphics are added and removed graphics are deleted;
+- the selected popup Graphic keeps object identity;
+- the popup refreshes its product details through `popupRefreshBridge.js` without closing and reopening.
+
+The existing full rebuild and popup restore flow remains the fallback when:
+
+- the layer set or layer metadata changes;
+- a layer index is invalid;
+- a feature is missing a stable `featureKey`;
+- duplicate feature identities are detected;
+- candidate layer creation cannot use the in-place path.
+
+The popup action bar is also retained during compatible refreshes. Action buttons are updated in place instead of being removed and recreated, preventing Calcite icons from flashing while still allowing real state transitions such as `Exporting...` to appear.
+
+This keeps normal auto, manual and product-job refreshes visually stable while preserving the previous behavior for structural or integrity edge cases.
