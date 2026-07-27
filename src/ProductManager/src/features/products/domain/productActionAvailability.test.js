@@ -20,11 +20,11 @@ test("product actions are disabled when datasetName is missing", () => {
   assert.equal(availability.exportRoot.disabled, true);
   assert.equal(
     availability.freeze.disabledReason,
-    "The selected feature does not have a datasetName."
+    "The selected feature does not have a datasetName.",
   );
 });
 
-test("product actions are available when datasetName exists and no operation is running", () => {
+test("product actions are available when state is not supplied", () => {
   const availability = createProductActionAvailability({
     attributes: {
       datasetName: "DK_TEST_PRODUCT",
@@ -52,7 +52,10 @@ test("send immediately is disabled when the product is frozen", () => {
   assert.equal(availability.freeze.disabled, false);
   assert.equal(availability.unfreeze.disabled, false);
   assert.equal(availability.sendImmediately.disabled, true);
-  assert.equal(availability.sendImmediately.disabledReason, "Unfreeze the product before sending.");
+  assert.equal(
+    availability.sendImmediately.disabledReason,
+    "Unfreeze the product before sending.",
+  );
 });
 
 test("mutation actions are disabled while an export is running", () => {
@@ -68,10 +71,10 @@ test("mutation actions are disabled while an export is running", () => {
   assert.equal(availability.unfreeze.disabled, true);
   assert.equal(availability.sendImmediately.disabled, true);
   assert.equal(availability.rollback.disabled, true);
-  assert.equal(availability.freeze.disabledReason, "Wait until the current export finishes.");
-
-  // The root export action must remain openable so users can inspect which
-  // leaf action is running and why other export options are blocked.
+  assert.equal(
+    availability.freeze.disabledReason,
+    "Wait until the current export finishes.",
+  );
   assert.equal(availability.exportRoot.disabled, false);
   assert.equal(availability.exportRoot.loading, true);
   assert.equal(availability.exportRoot.label, "Exporting...");
@@ -94,14 +97,41 @@ test("all product actions are disabled while a product mutation is running", () 
   assert.equal(availability.exportRoot.disabled, true);
   assert.equal(
     availability.freeze.disabledReason,
-    "Wait until the current product operation finishes."
+    "Wait until the current product operation finishes.",
   );
+});
+
+test("rollback is disabled when product status is Idle", () => {
+  const availability = createProductActionAvailability({
+    attributes: {
+      datasetName: "DK_TEST_PRODUCT",
+      status: 1,
+    },
+  });
+
+  assert.equal(availability.rollback.disabled, true);
+  assert.equal(
+    availability.rollback.disabledReason,
+    "Rollback is only available when product status is Exported or Frozen.",
+  );
+});
+
+test("rollback is available when product status is Exported", () => {
+  const availability = createProductActionAvailability({
+    attributes: {
+      datasetName: "DK_TEST_PRODUCT",
+      status: "Exported",
+    },
+  });
+
+  assert.equal(availability.rollback.disabled, false);
 });
 
 test("export leaf action is disabled when export is not implemented", () => {
   const availability = createProductExportAvailability({
     attributes: {
       datasetName: "DK_TEST_PRODUCT",
+      status: 2,
     },
     frozen: false,
     implemented: false,
@@ -115,13 +145,54 @@ test("export leaf action is disabled when product is frozen", () => {
   const availability = createProductExportAvailability({
     attributes: {
       datasetName: "DK_TEST_PRODUCT",
+      status: 5,
     },
     frozen: true,
     implemented: true,
   });
 
   assert.equal(availability.disabled, true);
-  assert.equal(availability.disabledReason, "Unfreeze the product before exporting.");
+  assert.equal(
+    availability.disabledReason,
+    "Unfreeze the product before exporting.",
+  );
+});
+
+test("implemented New Edition is disabled when status is Exported", () => {
+  const availability = createProductExportAvailability({
+    attributes: {
+      datasetName: "DK_TEST_PRODUCT",
+      status: "Exported",
+    },
+    frozen: false,
+    implemented: true,
+  });
+
+  assert.equal(availability.disabled, true);
+  assert.equal(
+    availability.disabledReason,
+    "New Edition is only available when product status is Idle.",
+  );
+});
+
+test("implemented New Edition is available when status is Idle", () => {
+  const availability = createProductExportAvailability({
+    attributes: {
+      datasetName: "DK_TEST_PRODUCT",
+      status: 1,
+    },
+    frozen: false,
+    implemented: true,
+    exportState: {
+      running: false,
+      blocked: false,
+      disabledReason: null,
+    },
+  });
+
+  assert.equal(availability.disabled, false);
+  assert.equal(availability.loading, false);
+  assert.equal(availability.disabledReason, null);
 });
 
 test("export leaf action exposes loading state when that export is running", () => {
@@ -140,7 +211,10 @@ test("export leaf action exposes loading state when that export is running", () 
   assert.equal(availability.disabled, true);
   assert.equal(availability.loading, true);
   assert.equal(availability.label, "Exporting...");
-  assert.equal(availability.disabledReason, "All edition is already running for DK_TEST_PRODUCT.");
+  assert.equal(
+    availability.disabledReason,
+    "All edition is already running for DK_TEST_PRODUCT.",
+  );
 });
 
 test("export leaf action is blocked by conflicting export state", () => {
@@ -159,24 +233,8 @@ test("export leaf action is blocked by conflicting export state", () => {
 
   assert.equal(availability.disabled, true);
   assert.equal(availability.loading, false);
-  assert.equal(availability.disabledReason, "All update is already running for DK_TEST_PRODUCT.");
-});
-
-test("export leaf action is available when implemented and no blocker exists", () => {
-  const availability = createProductExportAvailability({
-    attributes: {
-      datasetName: "DK_TEST_PRODUCT",
-    },
-    frozen: false,
-    implemented: true,
-    exportState: {
-      running: false,
-      blocked: false,
-      disabledReason: null,
-    },
-  });
-
-  assert.equal(availability.disabled, false);
-  assert.equal(availability.loading, false);
-  assert.equal(availability.disabledReason, null);
+  assert.equal(
+    availability.disabledReason,
+    "All update is already running for DK_TEST_PRODUCT.",
+  );
 });

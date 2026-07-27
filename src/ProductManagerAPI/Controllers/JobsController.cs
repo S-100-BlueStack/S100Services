@@ -13,6 +13,23 @@ namespace ProductManagerAPI.Controllers
     {
         private readonly IJobStatusService _jobStatusService = jobStatusService;
 
+        [HttpGet("active", Name = "GetActiveProductManagerJobs")]
+        [ProducesResponseType(typeof(IReadOnlyList<ExportJobStatusResponse>), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ExportJobErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+        public IActionResult GetActiveJobs([FromQuery] string? datasetName) {
+            if (string.IsNullOrWhiteSpace(datasetName)) {
+                return new ObjectResult(new ExportJobErrorResponse {
+                    Code = ExportJobContract.DatasetNameRequiredCode,
+                    Message = ExportJobContract.DatasetNameRequiredMessage
+                }) {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    ContentTypes = { "application/json" }
+                };
+            }
+
+            return Ok(_jobStatusService.GetActiveJobs(datasetName));
+        }
+
         [HttpGet("{jobId}", Name = "GetProductManagerJob")]
         [ProducesResponseType(typeof(ExportJobStatusResponse), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ExportJobErrorResponse), StatusCodes.Status404NotFound, "application/json")]

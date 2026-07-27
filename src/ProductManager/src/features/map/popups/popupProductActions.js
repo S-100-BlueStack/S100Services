@@ -6,13 +6,23 @@ import {
   noticeApiSuccess,
   noticeUnexpectedApiError,
 } from "../../notices/services/apiNoticeService.js";
-import { noticeError } from "../../notices/services/noticeService.js";
+import {
+  noticeError,
+  noticeWarning,
+} from "../../notices/services/noticeService.js";
 import {
   PRODUCT_OPERATION_TYPE,
   beginProductOperation,
   endProductOperation,
+  getProductOperationState,
 } from "../../products/state/productOperationState.js";
-import { openProductHistoryPanel as dispatchProductHistoryOpen } from "../../timeline/events/productHistoryEvents.js";
+import {
+  synchronizeActiveProductJobs,
+  synchronizeProductJobTracking,
+} from "../../products/services/productJobService.js";
+import {
+  openProductHistoryPanel as dispatchProductHistoryOpen,
+} from "../../timeline/events/productHistoryEvents.js";
 import { confirmAction } from "../../../shared/ui/confirm/services/confirmService.js";
 import { beginPopupExportAction, endPopupExportAction } from "./popupExportState.js";
 import { validateExportDispatch } from "./popupExportContract.js";
@@ -44,11 +54,16 @@ export function openProductHistory(datasetName) {
 
 export async function triggerFreeze(datasetName, state, anchorElement, { afterResult } = {}) {
   if (!datasetName) {
-    noticeError("Cannot change freeze state", "The selected feature does not have a datasetName.");
+    noticeError(
+      "Cannot change freeze state",
+      "The selected feature does not have a datasetName."
+    );
     return null;
   }
 
-  const operationType = state ? PRODUCT_OPERATION_TYPE.FREEZE : PRODUCT_OPERATION_TYPE.UNFREEZE;
+  const operationType = state
+    ? PRODUCT_OPERATION_TYPE.FREEZE
+    : PRODUCT_OPERATION_TYPE.UNFREEZE;
   const operationLabel = state ? "Freezing" : "Unfreezing";
   const actionLabel = state ? "freezing" : "unfreezing";
 
@@ -92,7 +107,8 @@ export async function sendImmediately(datasetName, anchorElement, { afterResult 
       title: `Send ${datasetName}`,
       message:
         `Are you sure you want to send ${datasetName} immediately? ` +
-        "This will upload the product to IC-ENC immediately without waiting for the automated upload.",
+        "This will upload the product to IC-ENC immediately without waiting for " +
+        "the automated upload.",
       confirmText: "Send",
       cancelText: "Cancel",
       anchorElement,
@@ -124,7 +140,9 @@ export async function triggerRollback(datasetName, anchorElement, { afterResult 
     datasetName,
     confirm: {
       title: `Rollback ${datasetName}`,
-      message: `Are you sure you want to rollback ${datasetName}? This will call the rollback endpoint for the selected product.`,
+      message:
+        `Are you sure you want to rollback ${datasetName}? ` +
+        "The operation will continue in the background until it succeeds or fails.",
       confirmText: "Rollback",
       cancelText: "Cancel",
       anchorElement,
@@ -134,7 +152,17 @@ export async function triggerRollback(datasetName, anchorElement, { afterResult 
       label: "Rolling back",
     },
     execute: () => exportRollback(datasetName),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      const warning = result.data?.warning;
+
+      if (warning) {
+        noticeWarning(
+          `Product ${datasetName} rolled back with a warning`,
+          warning.message,
+        );
+        return;
+      }
+
       noticeApiSuccess(`Product ${datasetName} rolled back successfully`);
     },
     failureNotice: {
@@ -213,10 +241,17 @@ async function runConfirmedProductOperation({
 
   try {
     const confirmed = await confirmAction(confirm);
-
     if (!confirmed) {
       return null;
     }
+
+    const operationStateAvailable =
+      await synchronizeBackendOperationStateOrNotify(datasetName);
+    if (!operationStateAvailable) {
+      return createSkippedActionResult("operation-status-unavailable");
+    }
+
+    synchronizeProductJobTracking();
 
     runningOperation = beginProductOperation({
       datasetName,
@@ -276,9 +311,26 @@ async function runConfirmedExportOperation({
 
   try {
     const confirmed = await confirmAction(confirm);
-
     if (!confirmed) {
       return null;
+    }
+
+    const operationStateAvailable =
+      await synchronizeBackendOperationStateOrNotify(datasetName);
+    if (!operationStateAvailable) {
+      return createSkippedActionResult("operation-status-unavailable");
+    }
+
+    synchronizeProductJobTracking();
+
+    const operationState = getProductOperationState(datasetName);
+    if (operationState.externalOperations.length > 0) {
+      noticeError(
+        "Product operation is already running",
+        operationState.disabledReason ??
+          `Another product operation is already running for ${datasetName}.`
+      );
+      return createSkippedActionResult("already-running");
     }
 
     runningExport = beginPopupExportAction({
@@ -306,6 +358,7 @@ async function runConfirmedExportOperation({
     if (!runningOperation.started) {
       endPopupExportAction(runningExport.key);
       runningExport = null;
+
       noticeError(
         "Product operation is already running",
         runningOperation.reason ??
@@ -317,7 +370,7 @@ async function runConfirmedExportOperation({
     const result = await request(datasetName);
 
     if (result.success) {
-      noticeApiSuccess(`Export request sent for ${datasetName}`, exportLabel);
+      noticeApiSuccess(`Export completed for ${datasetName}`, exportLabel);
     } else {
       noticeApiFailure(result, {
         networkTitle: `Network error while exporting ${datasetName}`,
@@ -348,6 +401,23 @@ async function runConfirmedExportOperation({
       endPopupExportAction(runningExport.key);
     }
   }
+}
+
+
+async function synchronizeBackendOperationStateOrNotify(datasetName) {
+  const result = await synchronizeActiveProductJobs(datasetName);
+  if (result?.success) {
+    return true;
+  }
+
+  noticeError(
+    "Product operation status unavailable",
+    result?.errorMessage ??
+      result?.data?.message ??
+      "The current product operation state could not be verified. Try again.",
+  );
+
+  return false;
 }
 
 async function finishProductActionResult(result, afterResult) {

@@ -7,6 +7,7 @@ import { createPopupActionBar } from "./popupActionBar.js";
 import { closePopupActionDropdown } from "./popupActionDropdown.js";
 import { onPopupExportStateChanged } from "./popupExportState.js";
 import { onProductOperationStateChanged } from "../../products/state/productOperationState.js";
+import { watchActiveProductJobs } from "../../products/services/productJobService.js";
 
 const GENERIC_POPUP_EXCLUDED_FIELDS = new Set([
   "featureKey",
@@ -37,6 +38,12 @@ export function createPopup() {
         ...(graphic.attributes ?? {}),
       };
       let latestRefreshId = 0;
+      const popupDatasetName =
+        readDatasetName(currentAttributes) ?? readDatasetName(graphic?.attributes);
+      const stopWatchingActiveJobs =
+        shouldRenderProductContent(currentAttributes) && popupDatasetName
+          ? watchActiveProductJobs(popupDatasetName)
+          : null;
 
       function render() {
         renderPopupContent(container, currentAttributes, {
@@ -90,7 +97,11 @@ export function createPopup() {
 
       cleanupWhenDisconnected(
         container,
-        combineCleanups(unsubscribeFromExportState, unsubscribeFromProductOperationState)
+        combineCleanups(
+          unsubscribeFromExportState,
+          unsubscribeFromProductOperationState,
+          stopWatchingActiveJobs,
+        ),
       );
 
       function rerenderWhenDatasetMatches(datasetName) {

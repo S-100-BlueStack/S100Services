@@ -40,6 +40,7 @@ namespace ProductManagerAPI.Jobs
         public const string ManualReviewRequiredMessage = "The job may already have started and was not executed again.";
         public const string DatasetBusyCode = "DATASET_BUSY";
         public const string DatasetBusyMessage = "The product is already being processed.";
+        public const string ProductOperationRejectedCode = "PRODUCT_OPERATION_REJECTED";
         public const string ExportFailedCode = "EXPORT_FAILED";
         public const string ExportFailedMessage = "The export could not be completed.";
         public const string RollbackFailedCode = "ROLLBACK_FAILED";
@@ -50,5 +51,7 @@ namespace ProductManagerAPI.Jobs
         public const string JobEnqueueFailedMessage = "The operation could not be queued.";
         public const string JobNotFoundCode = "JOB_NOT_FOUND";
         public const string JobNotFoundMessage = "The job was not found.";
+        public const string DatasetNameRequiredCode = "DATASET_NAME_REQUIRED";
+        public const string DatasetNameRequiredMessage = "A datasetName query parameter is required.";
     }
 }

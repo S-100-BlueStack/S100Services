@@ -89,7 +89,6 @@ namespace ProductManagerAPI.Jobs
                     request.OperationType,
                     request.CorrelationId
                 );
-                
                 throw CreateSafeFailure(
                     context,
                     ExportJobContract.ManualReviewRequiredCode,
@@ -202,6 +201,30 @@ namespace ProductManagerAPI.Jobs
                     request.CorrelationId,
                     result.Code,
                     result.Warning?.Code
+                );
+            }
+            catch (ExportOperationRejectedException ex) {
+                context.SetJobParameter(
+                    ExportJobParameterNames.ErrorCode,
+                    ExportJobContract.ProductOperationRejectedCode
+                );
+                context.SetJobParameter(
+                    ExportJobParameterNames.ErrorMessage,
+                    ex.Message
+                );
+
+                _logger.LogWarning(
+                    "Product Manager job was rejected by an operation precondition. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. Reason: {Reason}",
+                    context.JobId,
+                    request.DatasetName,
+                    request.OperationType,
+                    request.CorrelationId,
+                    ex.Message
+                );
+
+                throw new ExportOperationJobException(
+                    ExportJobContract.ProductOperationRejectedCode,
+                    ex.Message
                 );
             }
             catch (Exception ex) {

@@ -198,12 +198,23 @@ namespace TestProductManagerAPI
                 operations
             );
 
-            await Assert.ThrowsAsync<ExportOperationRejectedException>(() =>
+            var exception = await Assert.ThrowsAsync<ExportOperationJobException>(() =>
                 job.ExecuteAsync(Request(), context, CancellationToken.None)
             );
 
             Assert.False(context.Contains(ExportJobParameterNames.ExecutionStarted));
-            Assert.Equal(ExportJobContract.ExportFailedCode, context.Get<string>(ExportJobParameterNames.ErrorCode));
+            Assert.Equal(
+                ExportJobContract.ProductOperationRejectedCode,
+                context.Get<string>(ExportJobParameterNames.ErrorCode)
+            );
+            Assert.Equal(
+                "Operation precondition failed.",
+                context.Get<string>(ExportJobParameterNames.ErrorMessage)
+            );
+            Assert.Equal(
+                ExportJobContract.ProductOperationRejectedCode,
+                exception.Code
+            );
         }
 
         [Fact]

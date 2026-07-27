@@ -147,6 +147,14 @@ export function replaceExternalProductOperations(datasetName, operations = []) {
     }
   }
 
+  const currentOperations = activeExternalOperationsByDatasetName.get(
+    normalizedDatasetName,
+  );
+
+  if (areOperationMapsEqual(currentOperations, nextOperations)) {
+    return;
+  }
+
   if (nextOperations.size > 0) {
     activeExternalOperationsByDatasetName.set(normalizedDatasetName, nextOperations);
   } else {
@@ -280,7 +288,43 @@ function normalizeExternalOperation(operationInput, { datasetName, normalizedDat
     startedAt,
     startedAtText,
     startedBy: normalizeText(operationInput?.startedBy),
+    exportTarget: normalizeText(operationInput?.exportTarget),
+    exportType: normalizeText(operationInput?.exportType),
+    status: normalizeText(operationInput?.status),
   };
+}
+
+function areOperationMapsEqual(currentOperations, nextOperations) {
+  const current = currentOperations ?? new Map();
+
+  if (current.size !== nextOperations.size) {
+    return false;
+  }
+
+  for (const [key, nextOperation] of nextOperations.entries()) {
+    const currentOperation = current.get(key);
+
+    if (!currentOperation || !areOperationsEqual(currentOperation, nextOperation)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areOperationsEqual(left, right) {
+  return (
+    left.key === right.key &&
+    left.datasetName === right.datasetName &&
+    left.type === right.type &&
+    left.label === right.label &&
+    left.source === right.source &&
+    left.startedAtText === right.startedAtText &&
+    left.startedBy === right.startedBy &&
+    left.exportTarget === right.exportTarget &&
+    left.exportType === right.exportType &&
+    left.status === right.status
+  );
 }
 
 function createOperationKey({ normalizedDatasetName, type, operationId, source }) {

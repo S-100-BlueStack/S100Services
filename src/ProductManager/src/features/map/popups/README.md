@@ -12,26 +12,19 @@ This keeps the action UI consistent with Product Manager requirements:
 
 ## File responsibilities
 
-- `popupActionConfig.js`
-  Defines which actions are shown in the popup and maps product state to UI action config.
-- `productActionAvailability.js`
-  Contains product action availability rules. This is the domain-level source of truth for whether actions are disabled.
-- `popupProductActions.js`
-  Executes product actions. This file owns confirmation dialogs, API calls, notices, operation lifecycle and post-action refresh.
-- `popupExportState.js`
-  Tracks long-running export leaf actions and emits state change events so open popups can re-render.
-- `popupActionDom.js`
-  Creates the top-level action button DOM.
-- `popupActionDropdown.js`
-  Creates nested dropdown UI for grouped actions such as export.
-- `createPopup.js`
-  Renders popup content and subscribes to export-state and product-operation-state changes.
-- `popupExportConfig.js`
-  Defines popup export groups, canonical target/type metadata, labels and endpoint wiring. Future export actions should be activated here when backend endpoints become available.
-- `popupExportContract.js`
-  Owns the single supported-leaf rule and the direct-dispatch guard used by availability and action execution.
-- `features/data/domain/exportTarget.js`
-  Defines the canonical frontend target strings `All`, `S100`, and `S57` shared by API and popup metadata.
+- `popupActionConfig.js` defines the actions shown in the popup and maps product state to UI action config.
+- `productActionAvailability.js` is the domain-level source of truth for action availability.
+- `popupProductActions.js` owns confirmation, API calls, notices, operation lifecycle and post-action refresh.
+- `popupExportState.js` tracks the active export leaf while the current page remains open.
+- `popupActionDom.js` creates top-level action button DOM.
+- `popupActionDropdown.js` creates nested dropdown UI.
+- `createPopup.js` renders popup content and subscribes to export and product-operation state.
+- `popupExportConfig.js` defines canonical export target/type metadata and request wiring.
+- `popupExportContract.js` owns the supported-leaf rule and direct-dispatch guard.
+- `features/data/api/exportApi.js` starts asynchronous Export and Rollback jobs.
+- `features/data/api/productJobApi.js` calls the job start and status endpoints.
+- `features/products/services/productJobService.js` persists, resumes and polls active jobs.
+- `features/products/state/productOperationState.js` combines local operations with restored backend jobs.
 
 ## Current action status
 
@@ -42,15 +35,15 @@ Implemented product mutations:
 - `Send to IC-ENC`
 - `Rollback`
 
-Implemented export leaves:
+Implemented export leaf:
 
-```txt
+```text
 Export > S100 > Edition
 ```
 
 Disabled export leaves:
 
-```txt
+```text
 Export > All > Edition
 Export > All > Update
 Export > S57 > Edition
@@ -58,191 +51,190 @@ Export > S57 > Update
 Export > S100 > Update
 ```
 
-`Export > All` is intentionally disabled even though earlier frontend versions wired `All > Edition` and `All > Update`. The current workflow only exposes `S100 > Edition`.
+`Export > All` remains intentionally disabled. The current workflow only exposes `S100 > Edition`.
 
 ## Current endpoint wiring
 
-Current implemented export endpoint:
+New Edition export and Rollback use the asynchronous BE-104 job contract:
 
-```http
-POST /export/{name}/newedition?exportTarget=S100
+```text
+POST /export/{name}/newedition/jobs?exportTarget=S100
+POST /export/{name}/rollback/jobs
+GET /jobs/{jobId}
 ```
 
-Used by:
+The existing synchronous backend endpoints remain available for compatibility, but the frontend does not use them for normal popup actions.
 
-```txt
-Export > S100 > Edition
-```
-
-Current implemented rollback endpoint:
-
-```http
-POST /export/{name}/rollback
-```
-
-Used by:
-
-```txt
-Rollback
-```
-
-Endpoint wiring belongs in `features/data/api/exportApi.js` and `features/map/popups/popupExportConfig.js`. Do not add export endpoint wiring directly in `popupActionConfig.js`.
+Endpoint wiring belongs in `features/data/api/exportApi.js` and `popupExportConfig.js`. Do not add endpoint wiring directly in `popupActionConfig.js`.
 
 ## BE-102 export target contract
 
-Backend parsing is case-insensitive and uses the canonical public names `All`, `S100`, and `S57`. Missing target defaults to `S100`. Explicit empty/whitespace values, `Both`, numeric values, numeric-looking values, and unknown text return `400` with `EXPORT_TARGET_INVALID`. `All` and `S57` return `422` with `EXPORT_TARGET_NOT_SUPPORTED`.
+Backend parsing is case-insensitive and uses the canonical public names `All`, `S100`, and `S57`.
 
-`GET /Lookup/exportformats` returns:
+- Missing target defaults to `S100`.
+- Explicit empty or whitespace values are invalid.
+- `Both`, numeric values, numeric-looking values and unknown text return `400 EXPORT_TARGET_INVALID`.
+- `All` and `S57` return `422 EXPORT_TARGET_NOT_SUPPORTED`.
 
-```json
-[{ "Name": "All" }, { "Name": "S100" }, { "Name": "S57" }]
-```
-
-Every popup export leaf has explicit `target` and `exportType` metadata. `popupExportContract.js` owns the single supported-leaf rule. `triggerExport` applies that guard before confirmation, export/product loading state, and request dispatch, so keyboard events, stale DOM, stale metadata, or direct action calls cannot activate disabled leaves.
-
-Frontend-first and backend-first deployment are both compatible; frontend-first is preferred. Rollback is unchanged.
-
-## Action availability
-
-Availability rules should stay in `productActionAvailability.js`.
-
-Do not duplicate business rules directly in popup UI files. UI files should only translate availability into action properties such as:
-
-- `disabled`
-- `disabledReason`
-- `loading`
-- `label`
+Every export leaf has explicit `target` and `exportType` metadata. `popupExportContract.js` owns the single supported-leaf rule. `triggerExport` applies that guard before confirmation, loading state and request dispatch.
 
 ## Product action lifecycle
 
-`popupProductActions.js` owns the action execution lifecycle.
+`popupProductActions.js` owns action execution.
 
-Expected flow:
+For synchronous mutations such as Freeze, Unfreeze and Send:
 
-```txt
-User clicks action -> confirmation dialog opens -> user confirms -> product operation starts -> API request runs -> success/failure notice is shown -> selected product is refreshed -> popup re-renders with fresh attributes -> product operation ends
+```text
+confirm
+-> start local product operation
+-> call API
+-> show notice
+-> refresh selected product
+-> end local product operation
 ```
 
-Product operations must stay active until post-action refresh is complete. This prevents stale intermediate UI states.
+For asynchronous Export and Rollback:
 
-For example, after a successful freeze response, the popup should keep showing `Freezing...` until the refreshed product attributes arrive and the action changes to `Unfreeze`.
+```text
+confirm
+-> start local product operation
+-> enqueue backend job
+-> persist job metadata
+-> project job into external product-operation state
+-> poll GET /jobs/{jobId}
+-> receive terminal status
+-> remove persisted job
+-> show success, warning or failure notice
+-> refresh affected product data
+-> end local product operation
+```
 
-Rollback follows the same lifecycle and should keep showing rollback loading state until the selected product refresh has completed.
+Product operations remain active until post-action refresh completes. This prevents stale intermediate UI states.
 
-Do not move post-action refresh back into `popupActionConfig.js`. Action config should describe UI actions; action execution should own the full lifecycle.
+## Persistent job tracking
+
+Active Product Manager jobs are stored under a versioned local-storage key.
+
+On application startup, the job service:
+
+1. reads persisted job metadata;
+2. projects each job into `productOperationState` as an external operation;
+3. resumes status polling;
+4. keeps conflicting product actions disabled;
+5. shows the terminal notice when the job finishes;
+6. refreshes the active route data.
+
+A transient polling failure does not remove the stored job. Status polling retries with bounded backoff because the backend operation may still be running.
+
+A `404 JOB_NOT_FOUND` response clears the local record and reports that the final result is unavailable.
+
+The job start request deliberately has no frontend timeout. Timing out after the backend has enqueued a job could leave the browser without its `jobId`. Status requests use a finite timeout and are safe to retry.
 
 ## Product operation state
 
-`productOperationState.js` tracks product-level operations currently running in this browser tab.
+`productOperationState.js` combines:
+
+- local operations started in the current page;
+- external operations restored from persisted backend jobs.
 
 It is used to:
 
-- show loading labels such as `Freezing...`, `Unfreezing...`, `Sending...`, `Rolling back...` and export labels
-- block conflicting product mutations while an operation runs
-- keep operation state active until refresh completes
-- provide a future adapter point for backend operation state
+- show loading labels such as `Freezing...`, `Sending...`, `Rolling back...` and export labels;
+- block conflicting product mutations;
+- keep state active through post-action refresh;
+- re-render an open popup when operation state changes.
 
-This state is a UX guard only. The backend must still enforce real operation rules and conflicts.
+This state remains a UX guard. The backend still owns authoritative locking, version checks and execution guards.
 
 ## Export state
 
-Exports have additional leaf-level state and conflict rules.
+Exports are tracked in two systems for different purposes:
 
-`popupExportState.js` stores currently running exports by:
+- `productOperationState.js` tracks that the product has an export operation running;
+- `popupExportState.js` tracks the active export leaf and scope conflicts on the current page.
 
-- dataset name
-- export scope
-- export type
+Do not move export scope-conflict logic into product-level operation state unless a future backend contract replaces both systems.
 
-The export root action stays open while an export is running. This allows the user to inspect which export is running and which export actions are blocked. Leaf actions show the actual export loading/conflict state.
+Export scope conflicts remain:
 
-## Relationship between product operation state and export state
+- `All` conflicts with every export scope;
+- a specific scope conflicts with itself and `All`;
+- specific scopes do not conflict with each other.
 
-Export is tracked in both systems for different reasons:
+Only `S100 > Edition` is currently enabled.
 
-- `productOperationState.js` tracks that the product has an export operation running.
-- `popupExportState.js` tracks which export leaf action is running or blocked.
+## Rollback warnings
 
-Do not move export scope-conflict logic into `productOperationState.js` unless backend operation state later replaces both systems.
+A successful Rollback can return a warning, currently including:
 
-## Export scope conflicts
-
-Export locking is scope-based:
-
-- `All` conflicts with every other export scope.
-- Any specific scope conflicts with itself and `All`.
-- Specific scopes do not conflict with each other.
-
-Examples:
-
-- Running `All Edition` blocks `All`, `S57`, and `S100`.
-- Running `S57 Edition` blocks `S57` and `All`.
-- Running `S57 Edition` does not block `S100`, if `S100` is implemented.
-- Running `S100 Edition` blocks `S100` and `All`.
-
-This keeps the model extensible when more export formats are added, even though only `S100 > Edition` is currently implemented.
-
-## Export configuration
-
-Popup export structure is defined in `popupExportConfig.js`.
-
-To activate a future export leaf action:
-
-1. Add the backend request function in `features/data/api/exportApi.js`.
-2. Import that request in `popupExportConfig.js`.
-3. Set the leaf action to `implemented: true`.
-4. Assign the request function.
-5. Add a confirm message if the default wording is not specific enough.
-
-Do not add export endpoint wiring directly in `popupActionConfig.js`. That file should build UI actions from export config, not define export formats.
-
-## Product mutations during export
-
-While an export is running for a product, other product mutation actions are disabled:
-
-- Freeze
-- Unfreeze
-- Send to IC-ENC
-- Rollback
-
-This avoids conflicting backend operations while export is processing. The export root remains openable during export so users can inspect export leaf state.
-
-## Rollback during other operations
-
-Rollback is treated as a product mutation. It should be blocked while another local product operation or export operation is running for the same product.
-
-Rollback currently calls:
-
-```http
-POST /export/{name}/rollback
+```text
+ROLLBACK_CLEANUP_FAILED
 ```
 
-If rollback later becomes an async backend job, it should enter the same backend operation state model as export/send/freeze.
+The frontend treats this as a successful operation and shows a warning notice with the safe backend message.
 
 ## Popup re-rendering
 
 Open popups listen for:
 
-- export-state changes via `onPopupExportStateChanged`
-- product-operation-state changes via `onProductOperationStateChanged`
+- export-state changes via `onPopupExportStateChanged`;
+- product-operation-state changes via `onProductOperationStateChanged`.
 
-When relevant state changes, the popup closes any open dropdown and re-renders the action bar. Subscriptions must be cleaned up when popup DOM content is disconnected.
+When relevant state changes, the popup closes any open dropdown and re-renders the action bar. Subscriptions must be cleaned up when popup DOM is disconnected.
+
+## Route refresh behavior
+
+When a restored job reaches a terminal state:
+
+- the main map uses the existing refresh service;
+- Analyze reloads the current Analyze product set without a fullscreen loader;
+- Dashboard refreshes the current range;
+- Review reloads the current Review product set.
+
+Direct popup actions continue to use their existing `afterResult` refresh callback.
 
 ## Analyze page
 
-Analyze product actions should remain in the product popup, not in the Analyze sidebar.
+Analyze product actions remain in the product popup, not in the Analyze sidebar. The sidebar is reserved for analysis details, reports, XML and history content.
 
-The Analyze sidebar is for analysis details, reports, XML, and history content. The popup action bar should remain the consistent place for product mutations.
+## BE-105 boundary
 
-## Backend operation state
+BE-104B can only restore jobs created by browser storage that is available to the current browser profile.
 
-Popup export state and product operation state are currently frontend-only and scoped to the current browser tab.
+It does not discover operations started by:
 
-They do not protect against:
+- another user;
+- another browser profile;
+- a backend worker without a locally persisted job record.
 
-- other browser tabs
-- other users
-- backend workers
-- long-running server-side jobs
+BE-105 should provide authoritative active product-operation visibility from the backend. That state should enter the UI through `productOperationState`, not through popup-specific state.
 
-Backend operation state or async export jobs should later become the source of truth. When that happens, backend state should enter the UI through the product operation state adapter, not through direct popup-specific API calls.
+
+## Cross-tab job synchronization
+
+Active job records are synchronized between same-origin browser tabs through local storage, `BroadcastChannel`, focus/pageshow/visibility reconciliation and a short fallback reconciliation interval. This keeps popup action availability current even when a browser drops or delays a storage event. Cross-user and cross-browser-profile visibility still requires the later backend active-operation contract.
+
+Operation precondition failures are returned as `PRODUCT_OPERATION_REJECTED` with a backend-owned safe message, for example when New Edition is requested while the product is already `Exported`. Unexpected internal failures remain sanitized as `EXPORT_FAILED` or `ROLLBACK_FAILED`.
+
+## Backend-authoritative active job visibility
+
+Active Export and Rollback jobs are now discovered from the shared backend with:
+
+```text
+GET /jobs/active?datasetName={datasetName}
+```
+
+The endpoint reads active Product Manager jobs from the existing Hangfire storage and returns only exact, case-insensitive product matches whose public status is `Queued` or `Running`.
+
+Popup behavior:
+
+1. opening a product popup starts an immediate backend reconciliation;
+2. the popup repeats reconciliation while it remains open;
+3. discovered jobs enter `productOperationState` as backend operations;
+4. Export jobs are also projected into export leaf state;
+5. conflicting actions remain disabled until the job is terminal;
+6. normal `GET /jobs/{jobId}` polling owns terminal completion and notices.
+
+Local storage, storage events and `BroadcastChannel` remain same-browser performance optimizations. They are not the source of truth. The backend active-job endpoint provides visibility across browser profiles, users and computers that share the same Product Manager backend and Hangfire storage.
+
+Before any product mutation is dispatched, `popupProductActions.js` performs a backend reconciliation. If active-operation status cannot be verified, the action fails closed and no mutation request is sent.

@@ -16,10 +16,13 @@ namespace ProductManagerAPI.Services.Jobs
     public interface IHangfireJobStorageAccessor
     {
         HangfireJobSnapshot? ReadJob(string jobId);
+        IReadOnlyList<string> ReadActiveJobIds();
     }
 
     public sealed class HangfireJobStorageAccessor : IHangfireJobStorageAccessor
     {
+        private const int PageSize = 100;
+
         private static readonly string[] ParameterNames = [
             ExportJobParameterNames.DatasetName,
             ExportJobParameterNames.OperationType,
@@ -71,6 +74,61 @@ namespace ProductManagerAPI.Services.Jobs
 
             return new HangfireJobSnapshot(parameters, history);
         }
+
+        public IReadOnlyList<string> ReadActiveJobIds() {
+            var monitoring = _jobStorage.GetMonitoringApi();
+            var jobIds = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var queue in monitoring.Queues()) {
+                AddPagedJobIds(
+                    jobIds,
+                    monitoring.EnqueuedCount(queue.Name),
+                    (from, count) => monitoring.EnqueuedJobs(queue.Name, from, count)
+                );
+                AddPagedJobIds(
+                    jobIds,
+                    monitoring.FetchedCount(queue.Name),
+                    (from, count) => monitoring.FetchedJobs(queue.Name, from, count)
+                );
+            }
+
+            AddPagedJobIds(
+                jobIds,
+                monitoring.ProcessingCount(),
+                (from, count) => monitoring.ProcessingJobs(from, count)
+            );
+            AddPagedJobIds(
+                jobIds,
+                monitoring.ScheduledCount(),
+                (from, count) => monitoring.ScheduledJobs(from, count)
+            );
+
+            return jobIds.ToArray();
+        }
+
+        private static void AddPagedJobIds<T>(
+            HashSet<string> jobIds,
+            long totalCount,
+            Func<int, int, IEnumerable<KeyValuePair<string, T>>> readPage
+        ) {
+            var from = 0;
+
+            while ((long)from < totalCount) {
+                var remaining = totalCount - from;
+                var count = (int)Math.Min(PageSize, remaining);
+                var page = readPage(from, count).ToArray();
+
+                if (page.Length == 0)
+                    break;
+
+                foreach (var job in page) {
+                    if (!string.IsNullOrWhiteSpace(job.Key))
+                        jobIds.Add(job.Key);
+                }
+
+                from += count;
+            }
+        }
     }
 
     public sealed class HangfireJobStatusService(
@@ -84,129 +142,9 @@ namespace ProductManagerAPI.Services.Jobs
         public ExportJobStatusResponse? GetJob(string jobId) {
             try {
                 var snapshot = _storageAccessor.ReadJob(jobId);
-                if (snapshot == null)
-                    return null;
-                var datasetName = ReadRequired<string>(
-                    snapshot,
-                    ExportJobParameterNames.DatasetName
-                );
-                var operationType = ReadRequired<string>(
-                    snapshot,
-                    ExportJobParameterNames.OperationType
-                );
-                var correlationId = ReadRequired<string>(
-                    snapshot,
-                    ExportJobParameterNames.CorrelationId
-                );
-                var createdAtRaw = ReadRequired<string>(
-                    snapshot,
-                    ExportJobParameterNames.CreatedAtUtc
-                );
-
-                // These values are internal metadata, but they are required to
-                // distinguish Product Manager jobs from incomplete/other jobs.
-                var expectedEdition = ReadRequired<int?>(
-                    snapshot,
-                    ExportJobParameterNames.ExpectedEdition
-                );
-                var expectedUpdate = ReadRequired<int?>(
-                    snapshot,
-                    ExportJobParameterNames.ExpectedUpdate
-                );
-                if (!expectedEdition.HasValue || !expectedUpdate.HasValue)
-                    return null;
-
-                if (!DateTimeOffset.TryParse(
-                    createdAtRaw,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                    out var createdAt
-                ))
-                    return null;
-
-                if (string.IsNullOrWhiteSpace(datasetName) ||
-                    string.IsNullOrWhiteSpace(correlationId) ||
-                    operationType is not ("ExportEdition" or "Rollback"))
-                    return null;
-
-                var exportTarget = ReadOptional<string>(
-                    snapshot,
-                    ExportJobParameterNames.ExportTarget
-                );
-                if (operationType == "ExportEdition" &&
-                    !string.Equals(exportTarget, "S100", StringComparison.Ordinal))
-                    return null;
-                if (operationType == "Rollback" && exportTarget != null)
-                    return null;
-
-                var currentState = snapshot.History
-                    .OrderByDescending(state => state.CreatedAtUtc)
-                    .FirstOrDefault();
-                if (currentState == null)
-                    return null;
-
-                var publicStatus = MapStatus(currentState.StateName);
-                var startedAt = snapshot.History
-                    .Where(state => string.Equals(
-                        state.StateName,
-                        "Processing",
-                        StringComparison.OrdinalIgnoreCase
-                    ))
-                    .OrderBy(state => state.CreatedAtUtc)
-                    .Select(state => (DateTimeOffset?)new DateTimeOffset(state.CreatedAtUtc))
-                    .FirstOrDefault();
-                DateTimeOffset? completedAt = IsTerminalState(currentState.StateName)
-                    ? new DateTimeOffset(currentState.CreatedAtUtc)
-                    : null;
-
-                var resultCode = ReadOptional<string>(snapshot, ExportJobParameterNames.ResultCode);
-                var resultMessage = ReadOptional<string>(snapshot, ExportJobParameterNames.ResultMessage);
-                var warningCode = ReadOptional<string>(snapshot, ExportJobParameterNames.WarningCode);
-                var warningMessage = ReadOptional<string>(snapshot, ExportJobParameterNames.WarningMessage);
-                var errorCode = ReadOptional<string>(snapshot, ExportJobParameterNames.ErrorCode);
-                var errorMessage = ReadOptional<string>(snapshot, ExportJobParameterNames.ErrorMessage);
-
-                ExportJobWarningResponse? warning = null;
-                if (publicStatus == ExportJobContract.SucceededStatus &&
-                    operationType == "Rollback" &&
-                    !string.IsNullOrWhiteSpace(warningCode) &&
-                    !string.IsNullOrWhiteSpace(warningMessage)) {
-                    warning = new ExportJobWarningResponse {
-                        Code = warningCode,
-                        Message = warningMessage
-                    };
-                }
-
-                ExportJobErrorResponse? error = null;
-                if (publicStatus == ExportJobContract.FailedStatus) {
-                    error = new ExportJobErrorResponse {
-                        Code = string.IsNullOrWhiteSpace(errorCode)
-                            ? ExportJobContract.JobFailedCode
-                            : errorCode,
-                        Message = string.IsNullOrWhiteSpace(errorMessage)
-                            ? ExportJobContract.JobFailedMessage
-                            : errorMessage
-                    };
-                }
-
-                var message = error?.Message;
-                if (publicStatus == ExportJobContract.SucceededStatus)
-                    message = resultMessage;
-
-                return new ExportJobStatusResponse {
-                    JobId = jobId,
-                    DatasetName = datasetName,
-                    OperationType = operationType,
-                    ExportTarget = exportTarget,
-                    Status = publicStatus,
-                    CreatedAt = createdAt,
-                    StartedAt = startedAt,
-                    CompletedAt = completedAt,
-                    Message = message,
-                    CorrelationId = correlationId,
-                    Warning = warning,
-                    Error = error
-                };
+                return snapshot == null
+                    ? null
+                    : CreateResponse(jobId, snapshot);
             }
             catch (Exception ex) {
                 _logger.LogWarning(
@@ -217,6 +155,158 @@ namespace ProductManagerAPI.Services.Jobs
                 return null;
             }
         }
+
+        public IReadOnlyList<ExportJobStatusResponse> GetActiveJobs(string datasetName) {
+            if (string.IsNullOrWhiteSpace(datasetName))
+                return [];
+
+            return _storageAccessor.ReadActiveJobIds()
+                .Select(GetJob)
+                .Where(response =>
+                    response != null &&
+                    string.Equals(
+                        response.DatasetName,
+                        datasetName.Trim(),
+                        StringComparison.OrdinalIgnoreCase
+                    ) &&
+                    IsActivePublicStatus(response.Status)
+                )
+                .Select(response => response!)
+                .OrderBy(response => response.CreatedAt)
+                .ThenBy(response => response.JobId, StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        private static ExportJobStatusResponse? CreateResponse(
+            string jobId,
+            HangfireJobSnapshot snapshot
+        ) {
+            var datasetName = ReadRequired<string>(
+                snapshot,
+                ExportJobParameterNames.DatasetName
+            );
+            var operationType = ReadRequired<string>(
+                snapshot,
+                ExportJobParameterNames.OperationType
+            );
+            var correlationId = ReadRequired<string>(
+                snapshot,
+                ExportJobParameterNames.CorrelationId
+            );
+            var createdAtRaw = ReadRequired<string>(
+                snapshot,
+                ExportJobParameterNames.CreatedAtUtc
+            );
+
+            // These values are internal metadata, but they are required to
+            // distinguish Product Manager jobs from incomplete/other jobs.
+            var expectedEdition = ReadRequired<int?>(
+                snapshot,
+                ExportJobParameterNames.ExpectedEdition
+            );
+            var expectedUpdate = ReadRequired<int?>(
+                snapshot,
+                ExportJobParameterNames.ExpectedUpdate
+            );
+            if (!expectedEdition.HasValue || !expectedUpdate.HasValue)
+                return null;
+
+            if (!DateTimeOffset.TryParse(
+                createdAtRaw,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var createdAt
+            ))
+                return null;
+
+            if (string.IsNullOrWhiteSpace(datasetName) ||
+                string.IsNullOrWhiteSpace(correlationId) ||
+                operationType is not ("ExportEdition" or "Rollback"))
+                return null;
+
+            var exportTarget = ReadOptional<string>(
+                snapshot,
+                ExportJobParameterNames.ExportTarget
+            );
+            if (operationType == "ExportEdition" &&
+                !string.Equals(exportTarget, "S100", StringComparison.Ordinal))
+                return null;
+            if (operationType == "Rollback" && exportTarget != null)
+                return null;
+
+            var currentState = snapshot.History
+                .OrderByDescending(state => state.CreatedAtUtc)
+                .FirstOrDefault();
+            if (currentState == null)
+                return null;
+
+            var publicStatus = MapStatus(currentState.StateName);
+            var startedAt = snapshot.History
+                .Where(state => string.Equals(
+                    state.StateName,
+                    "Processing",
+                    StringComparison.OrdinalIgnoreCase
+                ))
+                .OrderBy(state => state.CreatedAtUtc)
+                .Select(state => (DateTimeOffset?)new DateTimeOffset(state.CreatedAtUtc))
+                .FirstOrDefault();
+            DateTimeOffset? completedAt = IsTerminalState(currentState.StateName)
+                ? new DateTimeOffset(currentState.CreatedAtUtc)
+                : null;
+
+            var resultCode = ReadOptional<string>(snapshot, ExportJobParameterNames.ResultCode);
+            var resultMessage = ReadOptional<string>(snapshot, ExportJobParameterNames.ResultMessage);
+            var warningCode = ReadOptional<string>(snapshot, ExportJobParameterNames.WarningCode);
+            var warningMessage = ReadOptional<string>(snapshot, ExportJobParameterNames.WarningMessage);
+            var errorCode = ReadOptional<string>(snapshot, ExportJobParameterNames.ErrorCode);
+            var errorMessage = ReadOptional<string>(snapshot, ExportJobParameterNames.ErrorMessage);
+
+            ExportJobWarningResponse? warning = null;
+            if (publicStatus == ExportJobContract.SucceededStatus &&
+                operationType == "Rollback" &&
+                !string.IsNullOrWhiteSpace(warningCode) &&
+                !string.IsNullOrWhiteSpace(warningMessage)) {
+                warning = new ExportJobWarningResponse {
+                    Code = warningCode,
+                    Message = warningMessage
+                };
+            }
+
+            ExportJobErrorResponse? error = null;
+            if (publicStatus == ExportJobContract.FailedStatus) {
+                error = new ExportJobErrorResponse {
+                    Code = string.IsNullOrWhiteSpace(errorCode)
+                        ? ExportJobContract.JobFailedCode
+                        : errorCode,
+                    Message = string.IsNullOrWhiteSpace(errorMessage)
+                        ? ExportJobContract.JobFailedMessage
+                        : errorMessage
+                };
+            }
+
+            var message = error?.Message;
+            if (publicStatus == ExportJobContract.SucceededStatus)
+                message = resultMessage;
+
+            return new ExportJobStatusResponse {
+                JobId = jobId,
+                DatasetName = datasetName,
+                OperationType = operationType,
+                ExportTarget = exportTarget,
+                Status = publicStatus,
+                CreatedAt = createdAt,
+                StartedAt = startedAt,
+                CompletedAt = completedAt,
+                Message = message,
+                CorrelationId = correlationId,
+                Warning = warning,
+                Error = error
+            };
+        }
+
+        private static bool IsActivePublicStatus(string status) =>
+            string.Equals(status, ExportJobContract.QueuedStatus, StringComparison.Ordinal) ||
+            string.Equals(status, ExportJobContract.RunningStatus, StringComparison.Ordinal);
 
         private static string MapStatus(string stateName) {
             if (string.Equals(stateName, "Processing", StringComparison.OrdinalIgnoreCase))

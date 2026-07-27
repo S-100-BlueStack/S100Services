@@ -90,6 +90,31 @@ namespace TestProductManagerAPI
         }
 
         [Fact]
+        public void ProductOperationRejectionReturnsSpecificSafeMessage() {
+            var parameters = RequiredParameters();
+            parameters[ExportJobParameterNames.ErrorCode] = Json(
+                ExportJobContract.ProductOperationRejectedCode
+            );
+            parameters[ExportJobParameterNames.ErrorMessage] = Json(
+                "A New edition could not be created now. Current product state: Exported."
+            );
+
+            var response = Service(new HangfireJobSnapshot(
+                parameters,
+                [new HangfireStateSnapshot("Failed", Utc(10, 5))]
+            )).GetJob("job-1");
+
+            Assert.Equal(
+                ExportJobContract.ProductOperationRejectedCode,
+                response!.Error!.Code
+            );
+            Assert.Equal(
+                "A New edition could not be created now. Current product state: Exported.",
+                response.Error.Message
+            );
+        }
+
+        [Fact]
         public void FailedJobWithoutSafeMetadataUsesGenericFallback() {
             var response = Service(Snapshot("Failed")).GetJob("job-1");
 
@@ -110,6 +135,48 @@ namespace TestProductManagerAPI
             Assert.Null(response);
         }
 
+
+
+        [Fact]
+        public void ActiveJobsReturnOnlyMatchingQueuedAndRunningJobs() {
+            var snapshots = new Dictionary<string, HangfireJobSnapshot>(StringComparer.Ordinal) {
+                ["job-1"] = Snapshot("Enqueued"),
+                ["job-2"] = Snapshot("Processing"),
+                ["job-3"] = new HangfireJobSnapshot(
+                    RequiredParameters(datasetName: "101DK999"),
+                    [new HangfireStateSnapshot("Processing", Utc(10, 1))]
+                ),
+                ["job-4"] = Snapshot("Failed")
+            };
+            var service = Service(new MultiFakeAccessor(snapshots));
+
+            var active = service.GetActiveJobs("101dk001");
+
+            Assert.Equal(new[] { "job-1", "job-2" }, active.Select(job => job.JobId).ToArray());
+            Assert.All(active, job => Assert.Contains(job.Status, new[] { "Queued", "Running" }));
+        }
+
+        [Fact]
+        public void ActiveJobsControllerReturnsEmptyListWhenNoJobIsActive() {
+            var controller = new JobsController(new NullJobStatusService());
+
+            var result = controller.GetActiveJobs("101DK001");
+
+            var ok = Assert.IsType<OkObjectResult>(result);
+            Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<ExportJobStatusResponse>>(ok.Value));
+        }
+
+        [Fact]
+        public void ActiveJobsControllerRequiresDatasetName() {
+            var controller = new JobsController(new NullJobStatusService());
+
+            var result = controller.GetActiveJobs(" ");
+
+            var objectResult = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(StatusCodes.Status400BadRequest, objectResult.StatusCode);
+            var error = Assert.IsType<ExportJobErrorResponse>(objectResult.Value);
+            Assert.Equal(ExportJobContract.DatasetNameRequiredCode, error.Code);
+        }
 
         [Fact]
         public void UnknownJobControllerResponseUsesSafeCodeAndMessage() {
@@ -136,8 +203,11 @@ namespace TestProductManagerAPI
             Assert.Null(Service(incomplete).GetJob("other-job"));
         }
 
-        private static HangfireJobStatusService Service(HangfireJobSnapshot? snapshot) => new(
-            new FakeAccessor(snapshot),
+        private static HangfireJobStatusService Service(HangfireJobSnapshot? snapshot) =>
+            Service(new FakeAccessor(snapshot));
+
+        private static HangfireJobStatusService Service(IHangfireJobStorageAccessor accessor) => new(
+            accessor,
             NullLogger<HangfireJobStatusService>.Instance
         );
 
@@ -154,9 +224,10 @@ namespace TestProductManagerAPI
 
         private static Dictionary<string, string?> RequiredParameters(
             string operationType = "ExportEdition",
-            string? exportTarget = "S100"
+            string? exportTarget = "S100",
+            string datasetName = "101DK001"
         ) => new(StringComparer.Ordinal) {
-            [ExportJobParameterNames.DatasetName] = Json("101DK001"),
+            [ExportJobParameterNames.DatasetName] = Json(datasetName),
             [ExportJobParameterNames.OperationType] = Json(operationType),
             [ExportJobParameterNames.ExportTarget] = Json(exportTarget),
             [ExportJobParameterNames.ExpectedEdition] = Json(4),
@@ -181,11 +252,23 @@ namespace TestProductManagerAPI
         private sealed class NullJobStatusService : IJobStatusService
         {
             public ExportJobStatusResponse? GetJob(string jobId) => null;
+            public IReadOnlyList<ExportJobStatusResponse> GetActiveJobs(string datasetName) => [];
         }
 
         private sealed class FakeAccessor(HangfireJobSnapshot? snapshot) : IHangfireJobStorageAccessor
         {
             public HangfireJobSnapshot? ReadJob(string jobId) => snapshot;
+            public IReadOnlyList<string> ReadActiveJobIds() => snapshot == null ? [] : ["job-1"];
+        }
+
+        private sealed class MultiFakeAccessor(
+            IReadOnlyDictionary<string, HangfireJobSnapshot> snapshots
+        ) : IHangfireJobStorageAccessor
+        {
+            public HangfireJobSnapshot? ReadJob(string jobId) =>
+                snapshots.TryGetValue(jobId, out var snapshot) ? snapshot : null;
+
+            public IReadOnlyList<string> ReadActiveJobIds() => snapshots.Keys.ToArray();
         }
     }
 }

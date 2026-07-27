@@ -3,6 +3,11 @@ import {
   createProductExportAvailability,
 } from "../../products/domain/productActionAvailability.js";
 import {
+  getExternalProductExportState,
+  hasRunningProductExportOperation,
+  mergeProductExportStates,
+} from "../../products/domain/productExternalExportState.js";
+import {
   PRODUCT_OPERATION_TYPE,
   getProductOperationState,
 } from "../../products/state/productOperationState.js";
@@ -26,7 +31,9 @@ export function createPopupActionGroups({ attributes, frozen, refreshAndRender }
   const availability = createProductActionAvailability({
     attributes,
     frozen,
-    exportHasRunningAction: isAnyPopupExportActionRunning(datasetName),
+    exportHasRunningAction:
+      isAnyPopupExportActionRunning(datasetName) ||
+      hasRunningProductExportOperation(productOperationState),
     productHasRunningMutation: productHasRunningNonExportMutation,
     productOperationDisabledReason: productOperationState.disabledReason,
   });
@@ -174,11 +181,20 @@ function createExportLeafAction({
   refreshAndRender,
 }) {
   const datasetName = getDatasetName(attributes);
-  const exportState = getPopupExportActionState({
+  const localExportState = getPopupExportActionState({
     datasetName,
     scope: exportAction.target,
     exportType: exportAction.exportType,
   });
+  const externalExportState = getExternalProductExportState({
+    productOperationState,
+    target: exportAction.target,
+    exportType: exportAction.exportType,
+  });
+  const exportState = mergeProductExportStates(
+    localExportState,
+    externalExportState,
+  );
   const availability = createProductExportAvailability({
     attributes,
     frozen,

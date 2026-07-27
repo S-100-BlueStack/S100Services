@@ -5,6 +5,7 @@ import { createDashboardDocumentTitle } from "../features/dashboard/routing/dash
 import { initReviewPage } from "../features/review/core/initReviewPage.js";
 import { createReviewDocumentTitle } from "../features/review/routing/reviewRoute.js";
 import { noticeError } from "../features/notices/services/noticeService.js";
+import { initializeProductJobTracking } from "../features/products/services/productJobService.js";
 import { hideLoader, setLoaderText, showLoader } from "../shared/ui/loader.js";
 import { initMap } from "./initMap.js";
 import { initRefreshControls } from "./initRefreshControls.js";
@@ -16,7 +17,11 @@ import { initDisplayScaleOverrideControl } from "../features/map/scale/displaySc
 import { waitForCalciteComponents } from "../shared/ui/calciteComponentReady.js";
 import { getCurrentRoute } from "./routing/appRoute.js";
 
-const REQUIRED_CALCITE_COMPONENTS = ["calcite-shell", "calcite-shell-panel", "calcite-panel"];
+const REQUIRED_CALCITE_COMPONENTS = [
+  "calcite-shell",
+  "calcite-shell-panel",
+  "calcite-panel",
+];
 
 async function waitForCalcite() {
   await waitForCalciteComponents(REQUIRED_CALCITE_COMPONENTS);
@@ -52,7 +57,6 @@ async function bootstrapMainRoute() {
     initDisplayScaleOverrideControl();
 
     const app = initMap();
-
     initRefreshControls(app);
     initializeTheme(app.view);
     registerThemeToggle(app.view);
@@ -60,12 +64,17 @@ async function bootstrapMainRoute() {
     showLoader("Preparing UI components...", {
       progress: 0.01,
     });
-
     await waitForNextPaint();
     await waitForCalcite();
 
     setLoaderText("Loading data...");
     await loadInitialData(app);
+
+    initializeProductJobTracking({
+      onRestoredTerminal: async () => {
+        await app.refreshService.refresh({ source: "product-job" });
+      },
+    });
 
     app.bindMapVisibility?.();
     app.filterPanel?.refresh();
@@ -85,14 +94,19 @@ async function bootstrapDashboardRoute(route) {
     showLoader("Preparing Dashboard...", {
       progress: 0.01,
     });
-
     await waitForNextPaint();
     await waitForCalcite();
 
-    await initDashboardPage({
+    const app = await initDashboardPage({
       rangePreset: route.rangePreset,
       from: route.from,
       to: route.to,
+    });
+
+    initializeProductJobTracking({
+      onRestoredTerminal: async () => {
+        await app.refresh();
+      },
     });
 
     initializeTheme();
@@ -113,12 +127,21 @@ async function bootstrapAnalyzeRoute(route) {
     showLoader("Preparing UI components...", {
       progress: 0.01,
     });
-
     await waitForNextPaint();
     await waitForCalcite();
 
     const app = await initAnalyzePage({
       datasetNames: route.datasetNames,
+    });
+
+    initializeProductJobTracking({
+      onRestoredTerminal: async () => {
+        const currentRoute = getCurrentRoute();
+        await app.loadAnalyzeDatasetNames(currentRoute.datasetNames, {
+          updateUrl: false,
+          showLoader: false,
+        });
+      },
     });
 
     initializeTheme(app.view);
@@ -139,12 +162,20 @@ async function bootstrapReviewRoute(route) {
     showLoader("Preparing Product Review...", {
       progress: 0.01,
     });
-
     await waitForNextPaint();
     await waitForCalcite();
 
-    await initReviewPage({
+    const app = await initReviewPage({
       datasetNames: route.datasetNames,
+    });
+
+    initializeProductJobTracking({
+      onRestoredTerminal: async () => {
+        const currentRoute = getCurrentRoute();
+        await app.loadReviewDatasetNames(currentRoute.datasetNames, {
+          updateUrl: false,
+        });
+      },
     });
 
     initializeTheme();
