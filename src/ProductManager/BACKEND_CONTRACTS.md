@@ -2,7 +2,7 @@
 
 This document is a source-of-truth document for Product Manager backend integration work.
 
-Current documentation baseline: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
+Current reviewed runtime baseline: `785567b4440129ea192798f0199d44a5cee94289`.
 
 The permanent BE-101 scope corrections are recorded in:
 
@@ -20,9 +20,9 @@ The following decisions are fixed unless the project owners explicitly reopen th
 
 - The current runtime uses `DatasetLockService` and the existing Windows lock-file framework under `%ProgramData%` as the final execution-time concurrency authority.
 - The current active-job endpoint and frontend preflight improve visibility and prevent normal duplicate starts, but they are not an atomic enqueue claim.
-- Do not add a second lock or operation registry outside an explicitly approved work package. BE-106B is the planned review boundary for a shared atomic Product-operation claim.
+- Do not add a second lock or operation registry without a separately approved distributed-ownership design package. BE-106 documents the requirement but does not authorize implementation.
 - Use the background-job framework already present in the backend. Do not introduce a competing job framework inside Product Manager.
-- A future move to the shared Hangfire API/worker application is allowed, but it requires an explicit worker-readiness package covering shared assemblies, queues, ArcGIS/file dependencies, storage access and distributed concurrency.
+- BE-106 confirms that ProductManagerAPI remains the public API/enqueue/status owner while Hangfire Server/worker hosting may later move to JobPlatform. The move is deferred until JobPlatform is ready and requires shared assemblies, queues, ArcGIS/file dependencies, storage access and distributed concurrency to be resolved.
 - Avoid Product database and geodatabase schema changes while database administrators are unavailable.
 - Continue using `datasetName` as the temporary Product identifier until a permanent Product ID is introduced by the database owners.
 - Do not implement report storage or report-content APIs until the IC-ENC and internal validation processes are defined.
@@ -685,7 +685,7 @@ Do not perform a repository-wide response rewrite as part of the first Product M
 
 Backend foundation commit: `7fe500aafb5831e71dd766f07bb118b3d8e08aea`.
 Frontend activation and backend-authoritative visibility commit: `279fe6a761229fd99af437d0f8401508985afafc`.
-Current documentation baseline: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
+Current reviewed runtime baseline: `785567b4440129ea192798f0199d44a5cee94289`.
 
 BE-104A added the backend asynchronous job foundation. BE-104B activated it in the
 frontend, and BE-105 added Product-level active-job visibility across browser
@@ -954,7 +954,7 @@ state across browser profiles, users and computers.
 The endpoint is informational. It does not atomically reserve a Product. Two near-
 simultaneous requests can still both be enqueued before either job becomes visible.
 The execution-time dataset lock prevents concurrent mutation, so one job can fail
-with `DATASET_BUSY`. Eliminating the extra queued job requires BE-106B.
+with `DATASET_BUSY`. Eliminating the extra queued job requires a separately approved atomic Product-operation ownership package.
 
 ## Popup-preserving refresh contract
 
@@ -970,27 +970,59 @@ and terminal job refresh.
 The previous full layer rebuild and popup restore flow remains the mandatory fallback
 when layer structure or feature identity cannot be reconciled safely.
 
-## BE-106 future operation ownership
+## BE-106 external worker readiness review
 
-BE-106 is documentation/planning scope only at the current baseline.
+Review baseline: `785567b4440129ea192798f0199d44a5cee94289`.
 
-### BE-106A external worker readiness
+Detailed readiness report:
 
-Product Manager jobs may later move to the shared Hangfire API/worker application.
-The current job model is portable, but the move is not connection-string-only. The
-readiness review must cover:
+```text
+src/ProductManager/docs/be-106-external-worker-readiness.md
+```
 
-- shared job contract/implementation assemblies and compatible Hangfire versions;
-- a dedicated Product Manager queue and worker registration;
-- ArcGIS runtime, licenses, compiler dependencies and connection files;
-- shared input/output paths, service identity and filesystem permissions;
-- API read access to job status or a replacement application-owned status contract;
-- cutover of queued jobs and rollback compatibility;
-- removal of the Hangfire server from ProductManagerAPI only after the external worker is verified.
+BE-106 is complete as documentation only. It introduces no runtime behavior.
 
-### BE-106B atomic Product operation registry
+### Fixed future deployment direction
 
-The planned registry must provide an atomic claim before enqueue and become the
-shared operation source of truth across API and worker processes. It must not be
-implemented as another local file lock. Exact persistence, recovery, expiry and
-manual-review semantics require a separate approved design package.
+- ProductManagerAPI remains the Product Manager HTTP API.
+- ProductManagerAPI keeps request validation, enqueue and the public job/status contract.
+- `JobPlatform.Worker` is the intended later host for Product Manager job execution.
+- Scheduled tasks are evaluated individually and do not move implicitly with Export/Rollback.
+- The frontend must remain unaware of the worker host.
+
+### Portability boundary
+
+The current job request DTO and application-owned Hangfire metadata are portable, but the job implementation is not self-contained. External execution requires:
+
+- compatible Hangfire storage, versions and serializer settings;
+- compatible Product Manager job type/method identity;
+- ProductManagerCore and Product Manager job/service registrations;
+- Windows/x64 and ArcGIS Core/CoreHost runtime/licensing;
+- Product Manager system/S-128/database access;
+- compiler/export assets, catalogues and connection files;
+- output/artifact paths and service-account filesystem permissions;
+- logging and operational recovery support.
+
+### Concurrency boundary
+
+The current dataset lock is an exclusive file handle under local `%ProgramData%`. It must not be assumed to coordinate different machines. Worker extraction must avoid simultaneous Product Manager execution on old and new hosts. Distributed or multi-worker execution requires a separately approved atomic ownership design while preserving the execution guard and authoritative Product-version check.
+
+### Status ownership
+
+ProductManagerAPI may continue reading Product Manager job state from shared Hangfire storage after worker extraction. A later application-owned operation registry may replace active-job discovery, but no registry persistence or runtime contract is approved by BE-106.
+
+### Scheduled-task boundary
+
+`DetectProductChangesJob` remains in the current application until separately reviewed and migrated. It directly performs ArcGIS/Product mutation, export, validation, attachment and repository work and does not currently share the complete interactive-job execution boundary. Disabled/commented mail-import jobs are not migration candidates.
+
+### Implementation prohibition
+
+Until JobPlatform is ready and a later implementation package is approved, do not:
+
+- remove `AddHangfireServer()` from ProductManagerAPI;
+- change Hangfire storage ownership;
+- add or activate a Product Manager queue;
+- move job classes or recurring-job registration;
+- add cross-project references to JobPlatform;
+- introduce an atomic operation registry;
+- enable dual-host Product Manager execution.

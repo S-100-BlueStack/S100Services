@@ -2,7 +2,11 @@
 
 This document tracks frontend-only cleanup, hardening, and architecture improvements for Product Manager. The goal is to improve maintainability, reliability, and structure without changing the user-facing feature set unless an item explicitly tracks a feature foundation.
 
-Current documentation baseline: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
+Current reviewed runtime baseline: `785567b4440129ea192798f0199d44a5cee94289`.
+
+## Backend worker-readiness note
+
+BE-106 is documentation-only. It confirms that ProductManagerAPI remains the public API/enqueue/status owner while worker execution may later move to JobPlatform. No frontend runtime change is required, and no shared-worker implementation should begin until JobPlatform is ready.
 
 ## Status values
 
@@ -97,10 +101,11 @@ Current documentation baseline: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
 ## Planned order
 
 1. Keep the tested async operation and popup-preserving refresh baseline stable.
-2. Complete BE-106A external-worker readiness before moving Product Manager jobs into the shared Hangfire API/worker application.
-3. Design BE-106B atomic Product operation ownership before adding distributed workers or relying on active-job lookup for concurrency.
-4. Keep report-link UI deferred until backend report IDs and storage contracts exist.
-5. Continue targeted regression smoke tests after frontend or backend contract changes.
+2. Use the completed BE-106 external-worker readiness review as the implementation gate; do not move Product Manager jobs until JobPlatform is ready.
+3. Keep atomic Product-operation ownership deferred until its persistence owner, recovery contract and distributed-worker boundary are approved.
+4. Continue with BE-107 Dashboard filtering and pagination, then BE-108 Product History failure hardening.
+5. Keep report-link UI deferred until backend report IDs and storage contracts exist.
+6. Continue targeted regression smoke tests after frontend or backend contract changes.
 
 ## Commit log
 

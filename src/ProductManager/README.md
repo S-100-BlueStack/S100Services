@@ -1,6 +1,6 @@
 # Product Manager frontend
 
-Current documentation baseline: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
+Current reviewed runtime baseline: `785567b4440129ea192798f0199d44a5cee94289`.
 
 Product Manager is an ArcGIS/Vite frontend for managing product corrections for nautical chart production. The app loads product correction data from backend APIs, renders them as ArcGIS graphics, and lets users perform product actions through a custom popup action bar.
 
@@ -346,6 +346,24 @@ Current implemented rollback action:
 Rollback -> POST /export/{name}/rollback/jobs
 ```
 
+## Background job deployment direction
+
+ProductManagerAPI currently hosts both the Product Manager HTTP API and the Hangfire Server that executes Product Manager jobs.
+
+BE-106 confirms the future direction without changing runtime:
+
+- ProductManagerAPI remains the Product Manager API, enqueue and job-status owner;
+- Product Manager worker execution may later move to `JobPlatform.Worker`;
+- the frontend continues using the same ProductManagerAPI routes;
+- scheduled tasks are reviewed and migrated separately;
+- no worker move, queue change or shared operation registry is currently implemented.
+
+Read the readiness review before changing worker hosting:
+
+```text
+src/ProductManager/docs/be-106-external-worker-readiness.md
+```
+
 ## Adding a new map layer
 
 When adding a new logical map layer:
@@ -406,4 +424,4 @@ Recent frontend work has focused on:
 - user-facing Product/Products terminology audit
 - layer capability foundation
 
-The frontend is ready for controlled user testing with asynchronous Export/Rollback and shared active-operation visibility. Remaining backend-dependent work includes atomic enqueue ownership, possible migration to the shared Hangfire worker application, report contracts, future export variants and the global timeline.
+The frontend is ready for controlled user testing with asynchronous Export/Rollback and shared active-operation visibility. BE-106 documents—but does not implement—the future move of worker execution to JobPlatform. Remaining backend-dependent work includes atomic enqueue ownership, any later shared-worker implementation, report contracts, future export variants and the global timeline.

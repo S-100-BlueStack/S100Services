@@ -1,6 +1,6 @@
 # Product Manager backend implementation roadmap
 
-Current documentation baseline: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
+Current reviewed runtime baseline: `785567b4440129ea192798f0199d44a5cee94289`.
 
 This roadmap converts the current backend discussions into bounded implementation packages. It exists to prevent later work from introducing new architecture assumptions, database changes, or concurrency mechanisms without an explicit decision.
 
@@ -23,11 +23,11 @@ src/ProductManager/docs/backend-context-review-checklist.md
 
 These decisions apply to every work package:
 
-1. The current runtime uses `DatasetLockService` and the Windows lock-file framework under `%ProgramData%` as the final execution-time concurrency authority.
+1. The current runtime uses `DatasetLockService` and the Windows lock-file framework under `%ProgramData%` as the final execution-time concurrency authority on the current single execution host.
 2. The implemented active-job endpoint is visibility and preflight, not an atomic enqueue claim.
-3. Do not add a second lock or operation registry outside the approved BE-106B design boundary.
+3. Do not add a second lock or operation registry without a separately approved distributed-ownership design package.
 4. Do not change Product database or geodatabase schema while the relevant administrators are unavailable unless an explicitly approved operation-registry package requires separate persistence.
-5. Use the current Hangfire infrastructure until BE-106A approves migration to the shared Hangfire API/worker application.
+5. BE-106 confirms that ProductManagerAPI remains the public API/enqueue/status owner while worker hosting may later move to JobPlatform. No runtime move is approved by BE-106.
 6. Do not introduce a competing background-job system.
 7. Keep `datasetName` until the planned permanent Product ID is introduced by the database owners.
 8. Reports remain blocked pending IC-ENC/internal validation process and API decisions.
@@ -50,8 +50,7 @@ These decisions apply to every work package:
 | BE-103  | AOI profiling and optimization            | Complete    | No                          | Measured request path                                   |
 | BE-104  | Async Export/Rollback jobs                | Complete    | No                          | Existing Hangfire SQL storage and Product operation code |
 | BE-105  | Backend-authoritative active job visibility | Complete  | No                          | Product Manager Hangfire metadata and monitoring API    |
-| BE-106A | External shared worker readiness          | Planned     | No                          | Shared Hangfire API/worker deployment decisions         |
-| BE-106B | Atomic Product operation registry         | Planned     | Expected separate persistence | Approved distributed ownership/recovery design        |
+| BE-106  | External shared worker readiness review   | Complete    | No                          | Product Manager baseline and JobPlatform target direction |
 | BE-107  | Dashboard filtering and pagination        | Planned     | No for first release        | Stable ordering/event key review                        |
 | BE-108  | Product History failure hardening         | Planned     | No assumption               | Validation/history producer contract                    |
 | BE-109  | Report storage/content                    | Blocked     | Unknown                     | IC-ENC and internal validation process/API              |
@@ -62,12 +61,12 @@ These decisions apply to every work package:
 
 Recommended order:
 
-1. BE-101 through BE-105 are complete at the current baseline.
-2. BE-106A: verify portability to the shared Hangfire API/worker application before changing deployment ownership.
-3. BE-106B: design and implement atomic Product-operation ownership before relying on distributed workers.
-4. BE-107: Dashboard filtering and pagination when payload growth justifies it.
-5. BE-108: Product History failure/event contract hardening when backend validation work begins.
-6. Deferred: reports, permanent Product ID, and global map timeline.
+1. BE-101 through BE-106 are complete at the current reviewed baseline.
+2. BE-107: Dashboard filtering and pagination when payload growth justifies it.
+3. BE-108: Product History failure/event contract hardening when backend validation work begins.
+4. Deferred: reports, permanent Product ID, global map timeline, shared-worker implementation and atomic Product-operation ownership.
+
+Worker extraction is not the next runtime package. It remains deferred until JobPlatform is ready and a separate implementation package is explicitly approved.
 
 The small frontend Usage band task may be completed in parallel with backend work after the current payload shape is confirmed.
 
@@ -615,7 +614,7 @@ The frontend reconciles this state when a popup opens, while it remains open, on
 
 The lookup is not atomic with enqueue. Two near-simultaneous clients can both pass preflight before either job is visible. The dataset lock prevents simultaneous execution, but an extra job may be queued and later fail with `DATASET_BUSY`.
 
-This limitation is accepted until BE-106B.
+This limitation is accepted until a separately approved atomic Product-operation ownership package defines persistence, recovery and ownership semantics.
 
 ### Acceptance status
 
@@ -627,54 +626,50 @@ This limitation is accepted until BE-106B.
 
 ---
 
-## BE-106A: External shared worker readiness
-
-### Purpose
-
-Prepare a later move from the ProductManagerAPI-hosted Hangfire server to the shared Hangfire API/worker application without changing Product Manager runtime now.
-
-### Required decisions
-
-- Which application owns Hangfire storage and schema lifecycle.
-- Whether ProductManagerAPI remains a Hangfire client/status reader or calls the shared job API.
-- Location of Product Manager job contracts and implementation assemblies.
-- Dedicated queue name and worker registration.
-- ArcGIS runtime/licensing, compiler, connection-file and filesystem access on the worker host.
-- Service identity and permissions.
-- Compatible Hangfire versions and serialization settings.
-- Cutover strategy for queued jobs and rollback compatibility.
-- Whether active status remains Hangfire-monitoring based or moves to an application-owned registry.
-
-### Boundary
-
-No runtime move is included. The current endpoints and frontend job model should remain stable so the worker can move behind the contract later.
-
----
-
-## BE-106B: Atomic Product operation registry
-
-### Purpose
-
-Atomically claim a Product operation before enqueue so only one active mutation job can be created for a Product across API instances and workers.
-
-### Required properties
-
-- shared persistence available to every API/worker instance;
-- atomic claim keyed by normalized `datasetName`;
-- operation type, job ID, expected version, timestamps and correlation ID;
-- explicit queued, running, terminal and manual-review states;
-- recovery rules for enqueue failure, worker crash and deployment restart;
-- no local-machine-only ownership assumption;
-- no replacement of the execution guard or authoritative Product-version check;
-- migration path from the current Hangfire-monitoring active-job endpoint.
-
-### Architecture rule
-
-The registry is operation ownership, not a second ad hoc file lock. The current dataset lock may remain as execution-time protection during migration, but the final relationship must be decided explicitly for distributed workers.
+## BE-106: External worker readiness review
 
 ### Status
 
-Planned. Do not implement until BE-106A establishes the target worker/storage architecture.
+Complete as documentation/readiness analysis against Product Manager baseline `785567b4440129ea192798f0199d44a5cee94289`.
+
+Detailed review:
+
+```text
+src/ProductManager/docs/be-106-external-worker-readiness.md
+```
+
+### Confirmed direction
+
+- ProductManagerAPI remains the Product Manager HTTP API.
+- ProductManagerAPI continues to own enqueue validation and public job/status responses.
+- Hangfire Server/worker execution may later move to `JobPlatform.Worker`.
+- Selected scheduled tasks may later move, but each task requires an explicit migration decision.
+- BE-106 makes no runtime, queue, project-reference, storage or scheduled-task changes.
+
+### Primary findings
+
+1. The async Export/Rollback API contract can remain unchanged when worker hosting moves.
+2. The current strongly typed Hangfire job requires compatible type/method identity, serializer settings and assemblies in the future worker.
+3. Product Manager execution depends on Windows/x64, ArcGIS Core/CoreHost, ProductManagerCore, Product Manager databases, compiler/export assets, connection files and shared filesystem access.
+4. The current `%ProgramData%` dataset lock is machine-local unless all executions use the same lock namespace. Dual-host or multi-worker Product mutations require an approved shared ownership design.
+5. `DetectProductChangesJob` is a high-risk scheduled-task candidate and must not be moved automatically with initial worker extraction.
+6. The current JobPlatform separation is a suitable future host pattern, but its implementation baseline and final module/queue design must be recorded when the platform is ready.
+
+### Boundary
+
+No worker extraction is approved. Do not remove `AddHangfireServer()`, add a Product Manager queue, move jobs, change Hangfire storage, add an operation registry or modify scheduled-task registration under BE-106.
+
+### Future implementation gate
+
+A later shared-worker package may begin only after:
+
+- JobPlatform has a stable recorded deployment baseline;
+- the external host can run Product Manager's ArcGIS and native dependencies;
+- shared storage, serialization, queue and service-identity decisions are approved;
+- dataset ownership/concurrency is safe across hosts;
+- queue drain, cutover and rollback procedures are defined.
+
+Atomic Product-operation ownership remains deferred and unnumbered until its persistence owner and recovery contract are approved.
 
 ---
 
