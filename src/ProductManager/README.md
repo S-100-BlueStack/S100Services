@@ -1,6 +1,6 @@
 # Product Manager frontend
 
-Current reviewed runtime baseline: `785567b4440129ea192798f0199d44a5cee94289`.
+Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
 
 Product Manager is an ArcGIS/Vite frontend for managing product corrections for nautical chart production. The app loads product correction data from backend APIs, renders them as ArcGIS graphics, and lets users perform product actions through a custom popup action bar.
 
@@ -63,7 +63,7 @@ The following flows are implemented and considered stable frontend behavior for 
 - Analyze page
 - Review workspace
 - shared Product catalog picker for Analyze and Review
-- Dashboard page with backend-driven activity data, Danish range builder, client-side search, client-side filters, actionable summary panels, polished Dashboard History panel, collapsed product history events, domain-oriented backend activity classification, summary cards and activity links
+- Dashboard page with backend-driven activity data, Danish range builder, debounced server-side search, server-side filters, cursor pagination, actionable summary panels, polished Dashboard History panel, collapsed product history events, domain-oriented backend activity classification, summary cards and activity links
 - release-readiness keyboard hardening for route/panel close behavior
 - hover help/tooltips for common clickable controls and icon-only actions
 
@@ -202,7 +202,7 @@ Dashboard documentation:
 src/features/dashboard/README.md
 ```
 
-Dashboard is a read-only operational activity route. It loads activity data from `/electronicproducts/dashboard`, applies local search and filters to the loaded payload, opens a route-local Product History panel from activity rows, and links users onward to Review or Analyze. Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
+Dashboard is a read-only operational activity route. It loads bounded activity pages from `/electronicproducts/dashboard`, sends search and filters to the backend, opens a route-local Product History panel from activity rows, and links users onward to Review or Analyze. Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
 
 ### Analyze and Review
 
@@ -300,15 +300,17 @@ Dashboard can show:
 - compact activity list
 - status summary
 - operation summary
-- client-side search
-- client-side filters
+- debounced server-side search
+- server-side filters
+- cursor pagination with a fixed frontend page size of 50
+- stale-request suppression and last-successful-result retention
 - actionable status/operation summary rows that apply matching filters
 - Dashboard History panel opened from activity-row `History`
 - collapsed Product History event rows inside the Dashboard History panel
 - onward links to Review and Analyze
 - disabled or placeholder report actions until report endpoints exist
 
-Dashboard filters run on the loaded activity payload. Summary cards, status summary and operation summary should stay derived from the same filtered activity set as the visible list.
+Dashboard filters run in the backend before summary calculation and cursor page selection. Summary cards, status summary, operation summary and total counts represent the complete filtered result, while the activity list contains only the current page. Filter or range changes reset cursor history.
 
 Dashboard History panel is route-local. It replaces the right summary column while open, closes with `Close` or `Escape`, shows selected activity context, highlights the selected activity row, and reuses the shared product history API/renderers without interacting with main map popup state or Product Collection state.
 
@@ -410,6 +412,7 @@ Recent frontend work has focused on:
 - Dashboard phase 1 foundation
 - Dashboard range builder, actionable summary panels and polished Dashboard History panel
 - Dashboard backend activity classification
+- BE-107 Dashboard server-side filtering and cursor pagination, manually verified at `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`
 - shared Product catalog picker for Analyze and Review
 - main map filter hardening
 - main map Product search
@@ -424,4 +427,4 @@ Recent frontend work has focused on:
 - user-facing Product/Products terminology audit
 - layer capability foundation
 
-The frontend is ready for controlled user testing with asynchronous Export/Rollback and shared active-operation visibility. BE-106 documents—but does not implement—the future move of worker execution to JobPlatform. Remaining backend-dependent work includes atomic enqueue ownership, any later shared-worker implementation, report contracts, future export variants and the global timeline.
+The frontend is ready for controlled user testing with asynchronous Export/Rollback, shared active-operation visibility and the manually verified BE-107 Dashboard pagination baseline `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`. BE-106 documents—but does not implement—the future move of worker execution to JobPlatform. The next planned backend package is BE-108 Product History failure hardening when its producer contract is ready. Remaining backend-dependent work includes atomic enqueue ownership, any later shared-worker implementation, report contracts, future export variants and the global timeline.

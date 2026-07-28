@@ -2,7 +2,7 @@
 
 This document is a source-of-truth document for Product Manager backend integration work.
 
-Current reviewed runtime baseline: `0e79bf9fd95b606256160fe98d1daaa6011ceb7c`.
+Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
 
 The permanent BE-101 scope corrections are recorded in:
 
@@ -459,7 +459,7 @@ The frontend already supports progressive rendering patterns and should preserve
 
 ### BE-107 implementation status
 
-BE-107 is implemented against baseline `0e79bf9fd95b606256160fe98d1daaa6011ceb7c` without a database or geodatabase schema change.
+BE-107 is implemented and manually verified against baseline `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd` without a database or geodatabase schema change.
 
 The existing endpoint remains:
 
@@ -574,6 +574,20 @@ The Product Manager Dashboard:
 - keeps the last successful response visible while loading or after an individual request failure;
 - uses Previous/Next navigation with a client-side stack of opaque backend cursors;
 - preserves Dashboard History and direct range URL/reload behavior.
+
+### Verification status
+
+Automated BE-107 coverage includes:
+
+- filtering before page selection and complete filtered totals;
+- backward-compatible full results when `pageSize` is omitted;
+- complete-result summaries and filter options;
+- deterministic equal-timestamp cursor ordering without duplicates between consecutive pages;
+- case-insensitive search, Product and importance filtering;
+- report filtering, empty results and invalid query validation;
+- frontend query serialization, paging normalization, cursor history and search-value preservation.
+
+Manual Dashboard verification by the project owner confirmed that pagination works as intended at commit `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`. BE-107 is complete at this baseline.
 
 ## Usage Band presentation
 
@@ -740,7 +754,7 @@ Do not perform a repository-wide response rewrite as part of the first Product M
 
 Backend foundation commit: `7fe500aafb5831e71dd766f07bb118b3d8e08aea`.
 Frontend activation and backend-authoritative visibility commit: `279fe6a761229fd99af437d0f8401508985afafc`.
-Current reviewed runtime baseline: `0e79bf9fd95b606256160fe98d1daaa6011ceb7c`.
+Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
 
 BE-104A added the backend asynchronous job foundation. BE-104B activated it in the
 frontend, and BE-105 added Product-level active-job visibility across browser

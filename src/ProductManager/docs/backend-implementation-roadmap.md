@@ -1,6 +1,6 @@
 # Product Manager backend implementation roadmap
 
-Current reviewed runtime baseline: `0e79bf9fd95b606256160fe98d1daaa6011ceb7c`.
+Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
 
 This roadmap converts the current backend discussions into bounded implementation packages. It exists to prevent later work from introducing new architecture assumptions, database changes, or concurrency mechanisms without an explicit decision.
 
@@ -61,7 +61,7 @@ These decisions apply to every work package:
 
 Recommended order:
 
-1. BE-101 through BE-107 are complete at the current implementation baseline.
+1. BE-101 through BE-107 are complete at the current implementation baseline `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
 2. BE-108: Product History failure/event contract hardening when backend validation work begins.
 3. Deferred: reports, permanent Product ID, global map timeline, shared-worker implementation and atomic Product-operation ownership.
 
@@ -674,7 +674,7 @@ Atomic Product-operation ownership remains deferred and unnumbered until its per
 
 ## BE-107: Dashboard filtering and pagination
 
-Status: Complete against baseline `0e79bf9fd95b606256160fe98d1daaa6011ceb7c`.
+Status: Complete and manually verified against baseline `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
 
 ### Implemented contract
 
@@ -719,6 +719,7 @@ The endpoint now logs source/filtered/returned counts and repository, mapping, f
 - Filter options remain available from the complete date-bounded source.
 - Frontend requests prevent stale results, and rapid search edits remain silent to the user.
 - Empty results, legacy full results, invalid paging, stable equal-timestamp ordering, report filters, and paging normalization have automated coverage.
+- Manual Dashboard verification confirmed that pagination works as intended at commit `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
 - No Product database or geodatabase schema change is included.
 
 ### Deferred Dashboard enhancements

@@ -2,7 +2,7 @@
 
 This document tracks frontend-only cleanup, hardening, and architecture improvements for Product Manager. The goal is to improve maintainability, reliability, and structure without changing the user-facing feature set unless an item explicitly tracks a feature foundation.
 
-Current reviewed runtime baseline: `0e79bf9fd95b606256160fe98d1daaa6011ceb7c`.
+Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
 
 ## Backend worker-readiness note
 
@@ -72,7 +72,7 @@ BE-106 is documentation-only. It confirms that ProductManagerAPI remains the pub
 | FH-046 | P0       | Async operations   | Activate async Export/Rollback job tracking                                                    | Done     | 279fe6a761229fd99af437d0f8401508985afafc                                                                                                                                  | Uses async start endpoints, persisted job IDs, reload recovery, bounded status polling, terminal notices and route refresh.                                                                                                                                                                                                   |
 | FH-047 | P0       | Operation state    | Add backend-authoritative active job visibility                                                | Done     | 279fe6a761229fd99af437d0f8401508985afafc                                                                                                                                  | Popup-open reconciliation and fail-closed mutation preflight use `GET /jobs/active`; shared visibility works across tabs, profiles, users and computers.                                                                                                                                                                      |
 | FH-048 | P1       | Popup refresh      | Preserve popup, actions and dropdowns during compatible refresh                                | Done     | 69752605d935212e89ca7ad4286ca3e46ecb4abe                                                                                                                                  | Reconciles layers/graphics and popup details in place, retains Calcite action DOM and open dropdown state, and falls back to full rebuild for incompatible structural changes.                                                                                                                                                |
-| FH-049 | P1       | Dashboard          | Move Dashboard filtering and activity paging to the backend                                    | Done     |                                                                                                                                                                           | Added additive server filters, 50-row cursor pages, complete-result summaries, preserved search casing, stale-result suppression, last-successful-result retention, compact Previous/Next controls and encoding-safe calendar navigation symbols.                                                                             |
+| FH-049 | P1       | Dashboard          | Move Dashboard filtering and activity paging to the backend                                    | Done     | 7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd                                                                                                                                  | Added additive server filters, 50-row cursor pages, complete-result summaries, stale-result suppression, last-successful-result retention and compact Previous/Next controls. Manual Dashboard pagination verification passed at `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.                                                  |
 
 ## Deferred / backend-dependent notes
 
@@ -106,7 +106,7 @@ BE-106 is documentation-only. It confirms that ProductManagerAPI remains the pub
 1. Keep the tested async operation and popup-preserving refresh baseline stable.
 2. Use the completed BE-106 external-worker readiness review as the implementation gate; do not move Product Manager jobs until JobPlatform is ready.
 3. Keep atomic Product-operation ownership deferred until its persistence owner, recovery contract and distributed-worker boundary are approved.
-4. BE-107 Dashboard filtering and pagination is complete; continue with BE-108 Product History failure hardening when its producer contract is ready.
+4. BE-107 Dashboard filtering and pagination is complete and manually verified at `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`; continue with BE-108 Product History failure hardening when its producer contract is ready.
 5. Keep report-link UI deferred until backend report IDs and storage contracts exist.
 6. Continue targeted regression smoke tests after frontend or backend contract changes.
 
@@ -114,6 +114,7 @@ BE-106 is documentation-only. It confirms that ProductManagerAPI remains the pub
 
 | Date       | Commit                                   | Items           | Notes                                                                                                                                                                                 |
 | ---------- | ---------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-28 | 7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd | FH-049 / BE-107 | Added Dashboard server-side filtering and cursor pagination; manual pagination verification passed.                                                                                   |
 | 2026-07-27 | 279fe6a761229fd99af437d0f8401508985afafc | FH-046 / FH-047 | Activated async Export/Rollback and backend-authoritative active-job visibility across browser profiles, users and computers.                                                         |
 | 2026-07-27 | 69752605d935212e89ca7ad4286ca3e46ecb4abe | FH-048          | Preserved popup, action icons and open dropdowns during compatible map and terminal-job refreshes.                                                                                    |
 | 2026-07-08 | 1656616b214cfdb914a23567d2840de5cc981c06 | FI-001          | Completed Dashboard phase 1 with endpoint integration, range presets, summary cards, activity list, status/operation summaries, Review/Analyze links, client-side search and filters. |

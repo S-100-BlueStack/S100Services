@@ -1,10 +1,12 @@
 # Dashboard
 
+Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+
 FI-001 introduces a separate read-only Dashboard route at `/dashboard`. The Dashboard is intentionally isolated from the main map, Product Collection, Analyze and Review state. It summarizes operational activity for a selected range and links users onward to product-level Review or Analyze pages.
 
 ## Current status
 
-FI-001 and BE-107 are implemented. BE-107 adds bounded server-side filtering and cursor pagination without changing the route or the existing range semantics.
+FI-001 and BE-107 are complete and manually verified at `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`. BE-107 adds bounded server-side filtering and cursor pagination without changing the route or the existing range semantics.
 
 Implemented scope:
 
@@ -184,13 +186,19 @@ The active filters are:
 - reports
 - product
 
-Search is debounced by 300 ms. Every new range, search or filter request cancels the previous in-flight request. Filter and range changes reset pagination to the first page. Previous/Next navigation keeps a client-side cursor stack, while the cursor values themselves remain backend-owned and opaque.
+Search is debounced by 300 ms. Debounced search edits supersede older responses through request identity checks without routinely aborting the previous browser request. Immediate range, select-filter, page and manual-refresh actions abort stale in-flight requests. Filter and range changes reset pagination to the first page. Previous/Next navigation keeps a client-side cursor stack, while the cursor values themselves remain backend-owned and opaque.
 
 Summary cards, status summary and operation summary always represent the complete filtered result. They are never calculated from only the visible page. `Paging.Total` is the complete filtered activity count; `Paging.Returned` is the number of rows on the current page.
 
 The backend currently obtains the complete date-bounded JobTable history through `GetHistoryAsync`, maps and filters it in the API process, and returns only the requested page. This bounds network payload and browser work without a schema change. Repository-level SQL filtering/index work remains evidence-driven and must be based on measured query plans and volume.
 
-The Dashboard keeps the last successful result visible while a request loads. If a refresh/filter request fails, the existing result stays visible with a compact error banner. The failed request does not silently switch to demo data.
+The Dashboard keeps the last successful result visible while a request loads. If a refresh/filter request fails, the existing result stays visible with a compact error banner. The failed request does not silently switch to demo data. A failed page request restores the prior cursor state so the page controls remain consistent with the visible result.
+
+## Verification
+
+Automated coverage includes backend filtering/paging semantics, complete-result summaries, filter options, backward-compatible unpaged requests, stable equal-timestamp ordering, report filters, empty results, query validation, frontend query serialization, cursor history, paging normalization and search-value preservation.
+
+Manual verification by the project owner confirmed that Dashboard pagination works as intended at commit `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
 
 ## Actionable summaries
 
