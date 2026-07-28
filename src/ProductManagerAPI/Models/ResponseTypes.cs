@@ -63,7 +63,31 @@ namespace ProductManagerAPI.Models
             public DashboardSummaryResponse Summary { get; set; } = new();
             public List<DashboardStatusSummaryItemResponse> StatusSummary { get; set; } = [];
             public List<DashboardOperationSummaryItemResponse> OperationSummary { get; set; } = [];
+            public DashboardPagingResponse Paging { get; set; } = new();
+            public DashboardFilterOptionsResponse FilterOptions { get; set; } = new();
             public List<DashboardActivityResponse> Activities { get; set; } = [];
+        }
+
+        public class DashboardPagingResponse
+        {
+            public int? PageSize { get; set; }
+            public int Returned { get; set; }
+            public int Total { get; set; }
+            public bool HasMore { get; set; }
+            public string? NextCursor { get; set; }
+        }
+
+        public class DashboardFilterOptionsResponse
+        {
+            public List<DashboardFilterOptionResponse> Types { get; set; } = [];
+            public List<DashboardFilterOptionResponse> Statuses { get; set; } = [];
+            public List<DashboardFilterOptionResponse> Products { get; set; } = [];
+        }
+
+        public class DashboardFilterOptionResponse
+        {
+            public required string Value { get; set; }
+            public required string Label { get; set; }
         }
 
         public class DashboardRangeResponse

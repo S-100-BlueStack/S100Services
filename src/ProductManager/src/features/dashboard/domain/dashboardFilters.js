@@ -19,7 +19,6 @@ export const DASHBOARD_SUMMARY_FILTER_KEYS = {
   status: "status",
   operation: "type",
 };
-
 const FAILED_STATUSES = new Set(["failed", "error", "rejected"]);
 const SEARCH_FIELDS_SEPARATOR = " ";
 
@@ -36,7 +35,6 @@ export function createDefaultDashboardFilters() {
 
 export function buildDashboardFilterOptions(activities) {
   const normalizedActivities = normalizeActivities(activities);
-
   return {
     types: buildTokenOptions(normalizedActivities.map((activity) => activity.type)),
     statuses: buildTokenOptions(normalizedActivities.map((activity) => activity.status)),
@@ -48,7 +46,7 @@ export function normalizeDashboardFilters(filters, options = null) {
   const defaults = createDefaultDashboardFilters();
   const source = isPlainObject(filters) ? filters : {};
   const normalized = {
-    search: normalizeSearchText(source.search),
+    search: normalizeSearchQuery(source.search),
     type: normalizeTokenFilter(source.type, defaults.type),
     status: normalizeTokenFilter(source.status, defaults.status),
     importance: normalizeTokenFilter(source.importance, defaults.importance),
@@ -75,7 +73,6 @@ export function normalizeDashboardFilters(filters, options = null) {
 
 export function hasActiveDashboardFilters(filters) {
   const normalized = normalizeDashboardFilters(filters);
-
   return (
     Boolean(normalized.search) ||
     normalized.type !== DASHBOARD_FILTER_ANY ||
@@ -89,12 +86,10 @@ export function hasActiveDashboardFilters(filters) {
 export function filterDashboardActivities(activities, filters) {
   const normalizedActivities = normalizeActivities(activities);
   const normalizedFilters = normalizeDashboardFilters(filters);
+  const normalizedSearch = normalizeSearchComparisonText(normalizedFilters.search);
 
   return normalizedActivities.filter((activity) => {
-    if (
-      normalizedFilters.search &&
-      !createActivitySearchText(activity).includes(normalizedFilters.search)
-    ) {
+    if (normalizedSearch && !createActivitySearchText(activity).includes(normalizedSearch)) {
       return false;
     }
 
@@ -176,7 +171,6 @@ export function createFilteredDashboardView(dashboard, filters) {
 
 function normalizeSummaryFilterKey(filterKey) {
   const normalizedKey = String(filterKey ?? "").trim();
-
   if (
     normalizedKey === DASHBOARD_SUMMARY_FILTER_KEYS.status ||
     normalizedKey === DASHBOARD_SUMMARY_FILTER_KEYS.operation
@@ -281,7 +275,7 @@ function createActivitySearchText(activity) {
     ? activity.details.map((item) => `${item.label} ${item.value}`).join(SEARCH_FIELDS_SEPARATOR)
     : "";
 
-  return normalizeSearchText(
+  return normalizeSearchComparisonText(
     [
       activity.timestamp,
       activity.datasetName,
@@ -301,7 +295,6 @@ function normalizeTokenFilter(value, fallbackValue = DASHBOARD_FILTER_ANY) {
   const normalizedValue = String(value ?? "")
     .trim()
     .toLowerCase();
-
   return normalizedValue || fallbackValue;
 }
 
@@ -310,10 +303,12 @@ function normalizeProductFilter(value, fallbackValue = DASHBOARD_FILTER_ANY) {
   return normalizedValue || fallbackValue;
 }
 
-function normalizeSearchText(value) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
+function normalizeSearchQuery(value) {
+  return String(value ?? "").trim();
+}
+
+function normalizeSearchComparisonText(value) {
+  return normalizeSearchQuery(value).toLowerCase();
 }
 
 function toTitleCase(value) {

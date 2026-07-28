@@ -108,8 +108,8 @@ export function createPopup() {
           unsubscribeFromExportState,
           unsubscribeFromProductOperationState,
           stopWatchingActiveJobs,
-          stopRefreshingPopup,
-        ),
+          stopRefreshingPopup
+        )
       );
 
       function rerenderWhenDatasetMatches(datasetName) {

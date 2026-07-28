@@ -197,7 +197,7 @@ function captureOpenDropdownState(action) {
   const dropdown = dropdownId ? document.getElementById(dropdownId) : null;
   const activeElement = document.activeElement;
   const focusedActionId = dropdown?.contains(activeElement)
-    ? activeElement?.dataset?.dropdownActionId ?? null
+    ? (activeElement?.dataset?.dropdownActionId ?? null)
     : null;
 
   return {

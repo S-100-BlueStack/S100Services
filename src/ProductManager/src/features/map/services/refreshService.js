@@ -342,9 +342,7 @@ function cloneGeometry(geometry) {
 }
 
 function readDatasetName(attributes) {
-  return (
-    attributes?.datasetName ?? attributes?.DatasetName ?? attributes?.datasetname ?? null
-  );
+  return attributes?.datasetName ?? attributes?.DatasetName ?? attributes?.datasetname ?? null;
 }
 
 function destroyCandidateLayers(layers) {

@@ -26,6 +26,11 @@ export function normalizeDashboardPayload(
     }),
     statusSummary: normalizeSummaryRows(data.statusSummary ?? data.StatusSummary, "status"),
     operationSummary: normalizeSummaryRows(data.operationSummary ?? data.OperationSummary, "type"),
+    paging: normalizeDashboardPaging(data.paging ?? data.Paging, activities),
+    filterOptions: normalizeDashboardFilterOptions(
+      data.filterOptions ?? data.FilterOptions,
+      activities
+    ),
     importantChanges: activities.filter((activity) => activity.isImportant),
     activities,
     isDemo,
@@ -262,8 +267,14 @@ function normalizeSummaryRows(value, labelKey) {
 function compareActivitiesByTimestampDesc(left, right) {
   const leftTime = Date.parse(left.timestamp ?? "");
   const rightTime = Date.parse(right.timestamp ?? "");
+  const timestampDifference =
+    (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
 
-  return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+  if (timestampDifference !== 0) {
+    return timestampDifference;
+  }
+
+  return String(right.id ?? "").localeCompare(String(left.id ?? ""));
 }
 
 function unwrapDashboardPayload(payload) {
@@ -335,6 +346,85 @@ function toTitleCase(value) {
 function toPascalCase(value) {
   const text = String(value ?? "");
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+}
+
+function normalizeDashboardPaging(value, activities) {
+  const source = isPlainObject(value) ? value : {};
+  const returned = normalizeNonNegativeInteger(
+    readFirstDefined(source, ["returned", "Returned"]),
+    activities.length
+  );
+  const total = normalizeNonNegativeInteger(readFirstDefined(source, ["total", "Total"]), returned);
+  const pageSizeValue = readFirstDefined(source, ["pageSize", "PageSize"]);
+  const pageSize =
+    pageSizeValue === null || pageSizeValue === undefined
+      ? null
+      : normalizeNonNegativeInteger(pageSizeValue, null);
+
+  return {
+    pageSize,
+    returned,
+    total,
+    hasMore: Boolean(readFirstDefined(source, ["hasMore", "HasMore"])),
+    nextCursor: normalizeText(readFirstDefined(source, ["nextCursor", "NextCursor"])) || null,
+  };
+}
+
+function normalizeDashboardFilterOptions(value, activities) {
+  const source = isPlainObject(value) ? value : {};
+
+  return {
+    types: normalizeFilterOptionList(source.types ?? source.Types, activities, "type"),
+    statuses: normalizeFilterOptionList(source.statuses ?? source.Statuses, activities, "status"),
+    products: normalizeFilterOptionList(
+      source.products ?? source.Products,
+      activities,
+      "datasetName",
+      { preserveCase: true }
+    ),
+  };
+}
+
+function normalizeFilterOptionList(value, activities, fallbackKey, { preserveCase = false } = {}) {
+  const suppliedOptions = Array.isArray(value)
+    ? value.map(normalizeFilterOption).filter(Boolean)
+    : [];
+
+  if (suppliedOptions.length > 0) {
+    return suppliedOptions;
+  }
+
+  return [
+    ...new Set(
+      activities.map((activity) => String(activity?.[fallbackKey] ?? "").trim()).filter(Boolean)
+    ),
+  ]
+    .sort((left, right) => left.localeCompare(right))
+    .map((optionValue) => ({
+      value: preserveCase ? optionValue : optionValue.toLowerCase(),
+      label: preserveCase ? optionValue : toTitleCase(optionValue),
+    }));
+}
+
+function normalizeFilterOption(value) {
+  if (!isPlainObject(value)) {
+    return null;
+  }
+
+  const optionValue = normalizeText(value.value ?? value.Value);
+  if (!optionValue) {
+    return null;
+  }
+
+  return {
+    value: optionValue,
+    label: normalizeText(value.label ?? value.Label) || optionValue,
+  };
+}
+
+function normalizeNonNegativeInteger(value, fallbackValue) {
+  const numericValue = Number(value);
+  return Number.isInteger(numericValue) && numericValue >= 0 ? numericValue : fallbackValue;
 }
 
 function isPlainObject(value) {

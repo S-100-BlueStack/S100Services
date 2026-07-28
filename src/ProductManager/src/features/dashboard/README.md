@@ -2,9 +2,9 @@
 
 FI-001 introduces a separate read-only Dashboard route at `/dashboard`. The Dashboard is intentionally isolated from the main map, Product Collection, Analyze and Review state. It summarizes operational activity for a selected range and links users onward to product-level Review or Analyze pages.
 
-## Phase 1 status
+## Current status
 
-Phase 1 is implemented and committed.
+FI-001 and BE-107 are implemented. BE-107 adds bounded server-side filtering and cursor pagination without changing the route or the existing range semantics.
 
 Implemented scope:
 
@@ -19,8 +19,11 @@ Implemented scope:
 - `Refresh` reloads the currently applied range.
 - Summary cards for operational activity counts.
 - Compact activity list with product links.
-- Client-side search.
-- Client-side filters for type, status, importance, reports and product.
+- Debounced server-side search.
+- Server-side filters for type, status, importance, reports and product.
+- Cursor-paginated activity rows with a default page size of 50.
+- Request cancellation so stale filter/search responses cannot replace newer results.
+- Last-successful-result retention during refresh and request failures.
 - Status and operation breakdowns.
 - Actionable status and operation summary rows that apply matching activity filters.
 - Review and Analyze links from activity rows.
@@ -42,6 +45,8 @@ GET electronicproducts/dashboard?from=2026-07-07
 GET electronicproducts/dashboard?from=2026-07-01
 GET electronicproducts/dashboard?from=2026-07-01T08:15:00
 GET electronicproducts/dashboard?from=2026-07-01T08:15:00&to=2026-07-07T16:45:00
+GET electronicproducts/dashboard?from=2026-07-01&search=failed&type=export&pageSize=50
+GET electronicproducts/dashboard?from=2026-07-01&pageSize=50&cursor={continuationToken}
 ```
 
 Range query values are sent in Danish operational time. The Dashboard header always shows `From` and optional `To` date/time fields.
@@ -49,6 +54,21 @@ Range query values are sent in Danish operational time. The Dashboard header alw
 `Since yesterday` and `Last 7 days` are quick actions that only fill the fields; they do not load data until the user selects `Apply`. Selecting a `From` date defaults its time to `00:00`; selecting a `To` date defaults its time to `23:59`. Leaving `To` empty keeps the range open-ended, so refresh requests continue to include the latest backend activity.
 
 The backend interprets offset-free datetime values as `Europe/Copenhagen` wall time, not UTC.
+
+Supported additive query parameters:
+
+- `search`
+- `product`
+- `type`
+- `status`
+- `importance`: `all`, `important`, or `failed`
+- `reports`: `all`, `any`, `ic-enc`, or `internal-validation`
+- `pageSize`: 1-200
+- `cursor`: opaque continuation token returned by the previous response
+
+The frontend uses `pageSize=50`. Omitting `pageSize` preserves the legacy full-list response behavior for existing consumers. A cursor is valid only together with `pageSize`.
+
+Ordering is deterministic: `Timestamp DESC`, then immutable activity `Id DESC`. The current activity ID uses the persisted `ProductRecord.Id` GUID when available. The cursor is opaque to consumers and represents the final sort key on the returned page.
 
 Expected payload shape:
 
@@ -78,6 +98,18 @@ Expected payload shape:
       { "Type": "export", "Count": 12, "Failed": 1 },
       { "Type": "freeze", "Count": 4, "Failed": 0 }
     ],
+    "Paging": {
+      "PageSize": 50,
+      "Returned": 50,
+      "Total": 142,
+      "HasMore": true,
+      "NextCursor": "opaque-token"
+    },
+    "FilterOptions": {
+      "Types": [{ "Value": "export", "Label": "Export" }],
+      "Statuses": [{ "Value": "failed", "Label": "Failed" }],
+      "Products": [{ "Value": "101DK0040943E", "Label": "101DK0040943E" }]
+    },
     "Activities": [
       {
         "Id": "activity-123",
@@ -139,11 +171,11 @@ Behavior:
 - `Refresh` reloads the currently applied range.
 - The custom date picker is Dashboard-owned and should stay compact because it lives in the route header.
 
-## Client-side filters
+## Server-side filtering and cursor paging
 
-Dashboard filters run on the loaded activity payload. They intentionally do not change the backend query contract.
+Dashboard filters are request parameters. The backend applies all filters before it calculates summary values or selects the visible page.
 
-The current client-side filters are:
+The active filters are:
 
 - free-text search
 - type
@@ -152,7 +184,13 @@ The current client-side filters are:
 - reports
 - product
 
-Summary cards, status summary and operation summary are derived from the filtered activity set so the visible counts always match the activity list. The filter state is local to the Dashboard page render lifecycle and is applied to whichever range payload is currently loaded.
+Search is debounced by 300 ms. Every new range, search or filter request cancels the previous in-flight request. Filter and range changes reset pagination to the first page. Previous/Next navigation keeps a client-side cursor stack, while the cursor values themselves remain backend-owned and opaque.
+
+Summary cards, status summary and operation summary always represent the complete filtered result. They are never calculated from only the visible page. `Paging.Total` is the complete filtered activity count; `Paging.Returned` is the number of rows on the current page.
+
+The backend currently obtains the complete date-bounded JobTable history through `GetHistoryAsync`, maps and filters it in the API process, and returns only the requested page. This bounds network payload and browser work without a schema change. Repository-level SQL filtering/index work remains evidence-driven and must be based on measured query plans and volume.
+
+The Dashboard keeps the last successful result visible while a request loads. If a refresh/filter request fails, the existing result stays visible with a compact error banner. The failed request does not silently switch to demo data.
 
 ## Actionable summaries
 
@@ -213,5 +251,4 @@ The following work remains intentionally outside phase 1:
 - Add real IC-ENC report links when backend report IDs/storage contract exists.
 - Add real internal validation report links when backend report IDs/storage contract exists.
 - Improve important-change classification only if it becomes useful as a filterable activity concept.
-- Consider server-side filtering only if dashboard payload becomes large.
 - Consider richer dashboard charts only if they remain compact and data-oriented.

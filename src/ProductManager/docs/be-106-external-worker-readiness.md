@@ -117,25 +117,25 @@ The status API must continue to hide raw Hangfire arguments, implementation type
 
 `ExportOperationJob` currently requires:
 
-| Dependency | Purpose | Worker requirement |
-| --- | --- | --- |
-| `IProductManager` | Authoritative Product/version and ArcGIS-backed operations | Must be registered and operational in the external worker |
-| `IDatasetLockService` | Execution-time per-dataset exclusion | Must be replaced or made genuinely shared before multi-host execution |
-| `IExportOperationService` | New Edition and Rollback orchestration | Must be registered with all transitive dependencies |
-| `ILogger<ExportOperationJob>` | Structured job logging | Must route into JobPlatform logging/operations |
-| Hangfire `PerformContext` | Job ID and persisted job parameters | Requires compatible Hangfire runtime and storage |
-| Hangfire cancellation token | Cooperative cancellation checks | Worker must preserve current execution-token behavior |
+| Dependency                    | Purpose                                                    | Worker requirement                                                    |
+| ----------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------- |
+| `IProductManager`             | Authoritative Product/version and ArcGIS-backed operations | Must be registered and operational in the external worker             |
+| `IDatasetLockService`         | Execution-time per-dataset exclusion                       | Must be replaced or made genuinely shared before multi-host execution |
+| `IExportOperationService`     | New Edition and Rollback orchestration                     | Must be registered with all transitive dependencies                   |
+| `ILogger<ExportOperationJob>` | Structured job logging                                     | Must route into JobPlatform logging/operations                        |
+| Hangfire `PerformContext`     | Job ID and persisted job parameters                        | Requires compatible Hangfire runtime and storage                      |
+| Hangfire cancellation token   | Cooperative cancellation checks                            | Worker must preserve current execution-token behavior                 |
 
 ### 4.2 Operation-service dependencies
 
 `ExportOperationService` requires:
 
-| Dependency | Purpose | Portability concern |
-| --- | --- | --- |
-| `IProductManager` / `IElectronicProductManager` | Product mutation, attachment writes, output folder | ArcGIS runtime, ProductManagerCore and environment configuration |
-| `IExportService` | S-100 export creation and output cleanup | Compiler/export binaries, artifacts path and filesystem permissions |
-| `IProductRepository` | Product state and audit persistence | Product Manager system database connection and schema access |
-| YAML/catalogue libraries | Serialization and Product processing | Compatible package versions and deployment assets |
+| Dependency                                      | Purpose                                            | Portability concern                                                 |
+| ----------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------- |
+| `IProductManager` / `IElectronicProductManager` | Product mutation, attachment writes, output folder | ArcGIS runtime, ProductManagerCore and environment configuration    |
+| `IExportService`                                | S-100 export creation and output cleanup           | Compiler/export binaries, artifacts path and filesystem permissions |
+| `IProductRepository`                            | Product state and audit persistence                | Product Manager system database connection and schema access        |
+| YAML/catalogue libraries                        | Serialization and Product processing               | Compatible package versions and deployment assets                   |
 
 ### 4.3 Build and platform dependencies
 
@@ -316,20 +316,20 @@ Any additional scheduled task considered for JobPlatform must receive its own in
 
 Worker extraction must not begin until all items below are resolved.
 
-| Gate | Required evidence |
-| --- | --- |
-| JobPlatform ready | Stable API/worker deployment and recorded clean commit |
-| Host compatibility | Windows/x64 host with verified ArcGIS runtime/licensing |
-| Dependency registration | Product Manager job and transitive services resolve in worker DI |
-| Shared storage | API and worker can access the selected Hangfire SQL storage |
-| Serializer compatibility | Existing and newly created jobs can be read and executed |
-| Queue isolation | Dedicated queue configured and only compatible workers consume it |
-| Filesystem access | Output, artifacts, connections and tools are reachable with correct permissions |
-| Database access | Product Manager/S-128/system DB connectivity verified under worker identity |
-| Concurrency decision | No dual-host execution with unrelated local locks; shared ownership design approved |
-| Status compatibility | Existing frontend routes return unchanged public state across worker cutover |
-| Cutover procedure | Queue drain, deployment sequence and rollback steps rehearsed |
-| Scheduled-task decision | Each recurring task explicitly stays or moves; no implicit migration |
+| Gate                     | Required evidence                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------------- |
+| JobPlatform ready        | Stable API/worker deployment and recorded clean commit                              |
+| Host compatibility       | Windows/x64 host with verified ArcGIS runtime/licensing                             |
+| Dependency registration  | Product Manager job and transitive services resolve in worker DI                    |
+| Shared storage           | API and worker can access the selected Hangfire SQL storage                         |
+| Serializer compatibility | Existing and newly created jobs can be read and executed                            |
+| Queue isolation          | Dedicated queue configured and only compatible workers consume it                   |
+| Filesystem access        | Output, artifacts, connections and tools are reachable with correct permissions     |
+| Database access          | Product Manager/S-128/system DB connectivity verified under worker identity         |
+| Concurrency decision     | No dual-host execution with unrelated local locks; shared ownership design approved |
+| Status compatibility     | Existing frontend routes return unchanged public state across worker cutover        |
+| Cutover procedure        | Queue drain, deployment sequence and rollback steps rehearsed                       |
+| Scheduled-task decision  | Each recurring task explicitly stays or moves; no implicit migration                |
 
 ## 12. Recommended later cutover sequence
 

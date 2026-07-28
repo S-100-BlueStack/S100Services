@@ -194,7 +194,7 @@ namespace TestProductManagerAPI
 
         [Fact]
         public void UnknownOrIncompleteJobReturnsNull() {
-            Assert.Null(Service(null).GetJob("missing"));
+            Assert.Null(Service((HangfireJobSnapshot?)null).GetJob("missing"));
 
             var incomplete = new HangfireJobSnapshot(
                 new Dictionary<string, string?>(),

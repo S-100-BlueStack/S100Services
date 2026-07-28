@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  refreshOpenProductPopup,
-  registerPopupRefreshHandler,
-} from "./popupRefreshBridge.js";
+import { refreshOpenProductPopup, registerPopupRefreshHandler } from "./popupRefreshBridge.js";
 
 test("refreshOpenProductPopup refreshes only matching product popups", async () => {
   const calls = [];

@@ -10,10 +10,8 @@ import {
   createProductHistorySummary,
 } from "../../timeline/ui/productHistoryRenderers.js";
 import {
-  buildDashboardFilterOptions,
   createDashboardSummaryRowFilterPatch,
   createDefaultDashboardFilters,
-  createFilteredDashboardView,
   hasActiveDashboardFilters,
   isDashboardSummaryRowFilterActive,
   normalizeDashboardFilters,
@@ -73,16 +71,34 @@ let dashboardHistoryKeyboardHandlersRegistered = false;
 let dashboardHistoryLookupLoadPromise = null;
 let lastRenderArgs = null;
 
-export function renderDashboardPage({ range, dashboard, loading = false, error = null }) {
+export function renderDashboardPage({
+  range,
+  dashboard,
+  filters = createDefaultDashboardFilters(),
+  loading = false,
+  error = null,
+  pageNumber = 1,
+  canGoPrevious = false,
+}) {
   ensureDashboardHistoryKeyboardHandlers();
-  lastRenderArgs = { range, dashboard, loading, error };
+  const focusState = captureDashboardControlFocus();
+  dashboardFilters = normalizeDashboardFilters(filters, dashboard?.filterOptions);
+  lastRenderArgs = {
+    range,
+    dashboard,
+    filters: dashboardFilters,
+    loading,
+    error,
+    pageNumber,
+    canGoPrevious,
+  };
 
   const page = getOrCreateDashboardPage();
-
   page.replaceChildren(
     createHeader({ range, dashboard, loading }),
-    createBody({ range, dashboard, loading, error })
+    createBody({ range, dashboard, loading, error, pageNumber, canGoPrevious })
   );
+  restoreDashboardControlFocus(focusState);
 }
 
 function getOrCreateDashboardPage() {
@@ -212,7 +228,6 @@ function createRangeDateTimeField({ idPrefix, label, dateKey, timeKey, defaultTi
     label,
     dateKey,
     timeKey,
-    defaultTime,
     required,
   });
 
@@ -250,7 +265,7 @@ function createRangeDateTimeField({ idPrefix, label, dateKey, timeKey, defaultTi
   return field;
 }
 
-function createRangeDatePicker({ id, label, dateKey, timeKey, defaultTime, required }) {
+function createRangeDatePicker({ id, label, dateKey, timeKey, required }) {
   ensureDashboardDatePickerDismissHandlers();
 
   const root = document.createElement("div");
@@ -434,7 +449,7 @@ function renderDashboardDatePickerPanel({ root, panel, onSelect }) {
   const header = document.createElement("div");
   header.className = "pm-dashboard-date-picker__header";
 
-  const previousButton = createDashboardDatePickerNavButton("Previous month", "‹");
+  const previousButton = createDashboardDatePickerNavButton("Previous month", "\u2039");
   previousButton.addEventListener("click", () => {
     shiftDashboardDatePickerMonth({ root, panel, delta: -1, onSelect });
   });
@@ -443,7 +458,7 @@ function renderDashboardDatePickerPanel({ root, panel, onSelect }) {
   title.className = "pm-dashboard-date-picker__title";
   title.textContent = formatDashboardCalendarMonthTitle(view);
 
-  const nextButton = createDashboardDatePickerNavButton("Next month", "›");
+  const nextButton = createDashboardDatePickerNavButton("Next month", "\u203a");
   nextButton.addEventListener("click", () => {
     shiftDashboardDatePickerMonth({ root, panel, delta: 1, onSelect });
   });
@@ -806,7 +821,7 @@ function createRefreshButton(loading) {
   return button;
 }
 
-function createBody({ range, dashboard, loading, error }) {
+function createBody({ range, dashboard, loading, error, pageNumber, canGoPrevious }) {
   const body = document.createElement("section");
   body.className = "pm-dashboard-body";
 
@@ -814,7 +829,7 @@ function createBody({ range, dashboard, loading, error }) {
     body.appendChild(createDemoBanner(dashboard));
   }
 
-  if (error) {
+  if (error && !dashboard) {
     body.appendChild(createStateMessage("Dashboard could not be loaded", error));
     return body;
   }
@@ -829,18 +844,23 @@ function createBody({ range, dashboard, loading, error }) {
     return body;
   }
 
-  const filterOptions = buildDashboardFilterOptions(dashboard.activities);
+  if (error) {
+    body.appendChild(createDashboardRequestError(error));
+  }
+
+  const filterOptions = dashboard.filterOptions ?? { types: [], statuses: [], products: [] };
   dashboardFilters = normalizeDashboardFilters(dashboardFilters, filterOptions);
-  const filteredDashboard = createFilteredDashboardView(dashboard, dashboardFilters);
 
   body.append(
-    createSummaryCards(filteredDashboard.summary),
+    createSummaryCards(dashboard.summary),
     createDashboardGrid({
-      dashboard: filteredDashboard,
-      sourceActivityCount: dashboard.activities.length,
+      dashboard,
+      sourceActivityCount: dashboard.paging?.total ?? dashboard.activities.length,
       loading,
       filters: dashboardFilters,
       filterOptions,
+      pageNumber,
+      canGoPrevious,
     })
   );
 
@@ -861,6 +881,20 @@ function createDemoBanner(dashboard) {
     : " Backend endpoint is not available yet.";
 
   banner.append(title, message);
+  return banner;
+}
+
+function createDashboardRequestError(message) {
+  const banner = document.createElement("section");
+  banner.className = "pm-dashboard-request-error";
+  banner.setAttribute("role", "status");
+
+  const title = document.createElement("strong");
+  title.textContent = "Dashboard refresh failed";
+  const text = document.createElement("span");
+  text.textContent = ` ${message} Showing the last successful result.`;
+
+  banner.append(title, text);
   return banner;
 }
 
@@ -906,7 +940,15 @@ function createSummaryCards(summary) {
   return cards;
 }
 
-function createDashboardGrid({ dashboard, sourceActivityCount, loading, filters, filterOptions }) {
+function createDashboardGrid({
+  dashboard,
+  sourceActivityCount,
+  loading,
+  filters,
+  filterOptions,
+  pageNumber,
+  canGoPrevious,
+}) {
   const grid = document.createElement("section");
   grid.className = "pm-dashboard-grid";
 
@@ -919,6 +961,9 @@ function createDashboardGrid({ dashboard, sourceActivityCount, loading, filters,
       filters,
       filterOptions,
       sourceActivityCount,
+      paging: dashboard.paging,
+      pageNumber,
+      canGoPrevious,
     })
   );
 
@@ -952,7 +997,7 @@ function createActivityList(
   activities,
   loading,
   timeZone,
-  { filters, filterOptions, sourceActivityCount }
+  { filters, filterOptions, sourceActivityCount, paging, pageNumber, canGoPrevious }
 ) {
   const section = document.createElement("section");
   section.className = "pm-dashboard-panel pm-dashboard-activity";
@@ -960,7 +1005,10 @@ function createActivityList(
   const hasFilters = hasActiveDashboardFilters(filters);
   const header = createPanelHeader({
     title: "Activity list",
-    count: hasFilters ? `${activities.length} / ${sourceActivityCount}` : activities.length,
+    count:
+      sourceActivityCount !== activities.length
+        ? `${activities.length} / ${sourceActivityCount}`
+        : activities.length,
     status: loading ? "Refreshing" : null,
   });
 
@@ -979,7 +1027,8 @@ function createActivityList(
   section.append(
     header,
     createActivityFilterBar({ filters, filterOptions, hasFilters }),
-    tableWrapper
+    tableWrapper,
+    createActivityPagination({ paging, pageNumber, canGoPrevious, loading })
   );
   return section;
 }
@@ -1039,7 +1088,9 @@ function createSearchFilter(value) {
   input.spellcheck = false;
   input.dataset.dashboardFilterKey = "search";
   input.setAttribute("aria-label", "Search dashboard activity");
-  input.addEventListener("input", () => updateDashboardFilters({ search: input.value }));
+  input.addEventListener("input", () =>
+    updateDashboardFilters({ search: input.value }, { debounce: true })
+  );
 
   wrapper.appendChild(input);
   return wrapper;
@@ -1086,17 +1137,19 @@ function createClearFiltersButton(hasFilters) {
   button.textContent = "Clear filters";
   button.disabled = !hasFilters;
   button.addEventListener("click", () => {
-    dashboardFilters = createDefaultDashboardFilters();
-    rerenderDashboardPage();
+    updateDashboardFilters(createDefaultDashboardFilters());
   });
 
   return button;
 }
 
-function updateDashboardFilters(partialFilters) {
-  const focusState = captureDashboardControlFocus();
+function updateDashboardFilters(partialFilters, { debounce = false } = {}) {
   dashboardFilters = normalizeDashboardFilters({ ...dashboardFilters, ...partialFilters });
-  rerenderDashboardPage(focusState);
+  document.dispatchEvent(
+    new CustomEvent("pm-dashboard-filter-change", {
+      detail: { filters: dashboardFilters, debounce },
+    })
+  );
 }
 
 function rerenderDashboardPage(focusState = null) {
@@ -1106,6 +1159,46 @@ function rerenderDashboardPage(focusState = null) {
 
   renderDashboardPage(lastRenderArgs);
   restoreDashboardControlFocus(focusState);
+}
+
+function createActivityPagination({ paging, pageNumber, canGoPrevious, loading }) {
+  const footer = document.createElement("footer");
+  footer.className = "pm-dashboard-pagination";
+
+  const total = Number(paging?.total) || 0;
+  const returned = Number(paging?.returned) || 0;
+  const pageSize = Number(paging?.pageSize) || returned || 1;
+  const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
+
+  const firstRow = total > 0 ? (pageNumber - 1) * pageSize + 1 : 0;
+  const lastRow = total > 0 ? Math.min(firstRow + returned - 1, total) : 0;
+  const rowRange = firstRow === lastRow ? String(firstRow) : `${firstRow}-${lastRow}`;
+
+  const meta = document.createElement("span");
+  meta.className = "pm-dashboard-pagination__meta";
+  meta.textContent = `Page ${pageNumber} of ${totalPages} \u00b7 ${rowRange} of ${total}`;
+
+  const actions = document.createElement("div");
+  actions.className = "pm-dashboard-pagination__actions";
+  actions.append(
+    createPaginationButton("Previous", "previous", loading || !canGoPrevious),
+    createPaginationButton("Next", "next", loading || !paging?.hasMore)
+  );
+
+  footer.append(meta, actions);
+  return footer;
+}
+
+function createPaginationButton(label, direction, disabled) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "pm-dashboard-pagination__button";
+  button.textContent = label;
+  button.disabled = disabled;
+  button.addEventListener("click", () => {
+    document.dispatchEvent(new CustomEvent("pm-dashboard-page-change", { detail: { direction } }));
+  });
+  return button;
 }
 
 function createActivityTable(activities, timeZone) {
@@ -1588,7 +1681,7 @@ function createDashboardHistoryActivityMeta(activity) {
     items.push(activity.actor);
   }
 
-  return items.length ? items.join(" · ") : "No activity details available";
+  return items.length ? items.join(" \u00b7 ") : "No activity details available";
 }
 
 function normalizeDashboardDatasetName(datasetName) {

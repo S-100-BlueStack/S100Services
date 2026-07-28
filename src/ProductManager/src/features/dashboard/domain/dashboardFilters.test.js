@@ -142,7 +142,7 @@ describe("dashboardFilters", () => {
       { value: "send", label: "Send" },
       { value: "validation", label: "Validation" },
     ]);
-    assert.equal(normalized.search, "export");
+    assert.equal(normalized.search, "EXPORT");
     assert.equal(normalized.type, "all");
     assert.equal(normalized.status, "failed");
     assert.equal(normalized.product, "all");

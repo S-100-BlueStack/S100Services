@@ -2,7 +2,7 @@
 
 This document is a source-of-truth document for Product Manager backend integration work.
 
-Current reviewed runtime baseline: `785567b4440129ea192798f0199d44a5cee94289`.
+Current reviewed runtime baseline: `0e79bf9fd95b606256160fe98d1daaa6011ceb7c`.
 
 The permanent BE-101 scope corrections are recorded in:
 
@@ -455,70 +455,125 @@ Possible designs must be selected only after the data source is understood:
 
 The frontend already supports progressive rendering patterns and should preserve map viewpoint, filters, popup state where possible, and a clear progress model.
 
-## Dashboard paging and server-side filtering
+## Dashboard filtering and cursor pagination
 
-### Goal
+### BE-107 implementation status
 
-Prepare the Dashboard for a larger audit-log volume before activity growth becomes a user-visible problem.
+BE-107 is implemented against baseline `0e79bf9fd95b606256160fe98d1daaa6011ceb7c` without a database or geodatabase schema change.
 
-### Required behavior
+The existing endpoint remains:
 
-The backend must support:
-
-- date range;
-- search text;
-- Product filter;
-- activity/operation type;
-- status/outcome;
-- important-only filter;
-- report availability filter when report metadata exists;
-- deterministic descending ordering;
-- bounded page size;
-- continuation information;
-- summary values calculated across the complete filtered result, not only the returned page.
-
-### Paging strategy decision
-
-Use cursor paging when the current activity source has a stable immutable tie-breaker such as an event ID.
-
-If no stable event ID exists yet, use deterministic offset/page paging temporarily and document its limitations. Do not invent the future permanent Product ID as an activity tie-breaker.
-
-The context review must identify:
-
-- the current activity source;
-- the current ordering fields;
-- whether events have a stable unique ID;
-- whether summaries are computed in SQL, repository code, or application memory;
-- all current consumers of `/electronicproducts/dashboard`.
-
-### Conceptual paged response
-
-```json
-{
-  "items": [],
-  "page": {
-    "limit": 100,
-    "nextCursor": null,
-    "hasMore": false,
-    "total": 0
-  },
-  "summary": {},
-  "statusSummary": [],
-  "operationSummary": []
-}
+```http
+GET /electronicproducts/dashboard
 ```
 
-The exact wrapper and property casing must match the backend's established conventions.
+The original `from` and optional `to` parameters remain unchanged. The following additive query parameters are supported:
+
+```text
+search
+product
+type
+status
+importance
+reports
+pageSize
+cursor
+```
+
+Allowed filter values:
+
+- `importance`: `all`, `important`, or `failed`;
+- `reports`: `all`, `any`, `ic-enc`, or `internal-validation`.
+
+`pageSize` must be between `1` and `200`. `cursor` is an opaque continuation token and is valid only when `pageSize` is present.
 
 ### Backward compatibility
 
-Do not change the response shape of the current Dashboard endpoint until all consumers are known.
+Omitting `pageSize` preserves the previous complete filtered activity-list behavior for existing consumers. The Product Manager Dashboard sends `pageSize=50`.
 
-Choose one of these approaches after discovery:
+The response envelope remains additive. Existing summary and activity properties remain, while the response now also exposes:
 
-1. additive optional paging parameters with a coordinated frontend migration;
-2. a versioned/paged endpoint while the existing endpoint remains temporarily available;
-3. a single breaking change only when Product Manager is confirmed as the sole consumer and backend/frontend are deployed together.
+```json
+{
+  "Paging": {
+    "PageSize": 50,
+    "Returned": 50,
+    "Total": 142,
+    "HasMore": true,
+    "NextCursor": "opaque-token"
+  },
+  "FilterOptions": {
+    "Types": [{ "Value": "export", "Label": "Export" }],
+    "Statuses": [{ "Value": "failed", "Label": "Failed" }],
+    "Products": [{ "Value": "101DK0040943E", "Label": "101DK0040943E" }]
+  }
+}
+```
+
+### Filtering and summary semantics
+
+The backend applies search, Product, type, status, importance, and report filters before calculating any summary or selecting the visible page.
+
+The following values always represent the complete filtered result, not only the visible page:
+
+- `Summary`;
+- `StatusSummary`;
+- `OperationSummary`;
+- `Paging.Total`;
+- `TotalHits`.
+
+`Paging.Returned` and `Activities` represent only the current page.
+
+Filter options are calculated from the complete date-bounded source before active filters are applied. This keeps type, status, and Product selections available while another filter is active.
+
+### Ordering and cursor contract
+
+Ordering is deterministic:
+
+```text
+Timestamp DESC
+Id DESC
+```
+
+The persisted `ProductRecord.Id` GUID is used as the activity ID when available. The cursor encodes the final timestamp/ID sort key and must be treated as opaque by consumers.
+
+Normal next-page navigation must not duplicate an activity already returned on the previous page. Filter or range changes require the consumer to discard existing cursors and restart at the first page.
+
+### Current execution boundary
+
+The first release continues to load the complete date-bounded JobTable history through `IProductRepository.GetHistoryAsync`. Mapping, filtering, complete-result summaries, and cursor page selection run in the API process.
+
+This deliberately provides:
+
+- bounded API response size;
+- bounded browser rendering work;
+- cancellation of stale frontend requests;
+- no database/schema/index change.
+
+It does not yet reduce the number of date-bounded rows materialized by the repository. Repository-level predicate pushdown or indexes require measured query plans, activity volume, and administrator review before implementation.
+
+The controller logs source, filtered, and returned row counts plus repository, mapping, filtering/paging, and total durations to support that later evidence-based decision.
+
+### Validation failures
+
+Invalid Dashboard query parameters return `400 Bad Request` using the existing `ApiResponse` convention. Examples include:
+
+- `pageSize` outside `1-200`;
+- a cursor without `pageSize`;
+- a malformed cursor;
+- unsupported `importance` or `reports` values.
+
+### Frontend request behavior
+
+The Product Manager Dashboard:
+
+- sends all active filters to the endpoint;
+- debounces search by 300 ms;
+- aborts stale requests;
+- resets cursor history when the range or filters change;
+- keeps the last successful response visible while loading or after an individual request failure;
+- uses Previous/Next navigation with a client-side stack of opaque backend cursors;
+- preserves Dashboard History and direct range URL/reload behavior.
 
 ## Usage Band presentation
 
@@ -685,7 +740,7 @@ Do not perform a repository-wide response rewrite as part of the first Product M
 
 Backend foundation commit: `7fe500aafb5831e71dd766f07bb118b3d8e08aea`.
 Frontend activation and backend-authoritative visibility commit: `279fe6a761229fd99af437d0f8401508985afafc`.
-Current reviewed runtime baseline: `785567b4440129ea192798f0199d44a5cee94289`.
+Current reviewed runtime baseline: `0e79bf9fd95b606256160fe98d1daaa6011ceb7c`.
 
 BE-104A added the backend asynchronous job foundation. BE-104B activated it in the
 frontend, and BE-105 added Product-level active-job visibility across browser
@@ -972,7 +1027,7 @@ when layer structure or feature identity cannot be reconciled safely.
 
 ## BE-106 external worker readiness review
 
-Review baseline: `785567b4440129ea192798f0199d44a5cee94289`.
+Review baseline: `0e79bf9fd95b606256160fe98d1daaa6011ceb7c`.
 
 Detailed readiness report:
 

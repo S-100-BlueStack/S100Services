@@ -8,6 +8,7 @@ using NetTopologySuite.IO;
 using ProductManagerAPI.Data.Models;
 using ProductManagerAPI.Data.Repositories;
 using ProductManagerAPI.Models;
+using ProductManagerAPI.Services.Dashboard;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using S100FC.S128.SimpleAttributes;
@@ -378,9 +379,17 @@ namespace ProductManagerAPI.Controllers
         [HttpGet("dashboard", Name = "GetElectronicProductsDashboard")]
         public async Task<IActionResult> GetElectronicProductsDashboard(
             [FromQuery] string? from,
-            [FromQuery] string? to = null)
+            [FromQuery] string? to = null,
+            [FromQuery] string? search = null,
+            [FromQuery] string? product = null,
+            [FromQuery] string? type = null,
+            [FromQuery] string? status = null,
+            [FromQuery] string? importance = null,
+            [FromQuery] string? reports = null,
+            [FromQuery] int? pageSize = null,
+            [FromQuery] string? cursor = null)
         {
-            var sw = Stopwatch.StartNew();
+            var totalStopwatch = Stopwatch.StartNew();
 
             if (!TryCreateDashboardRange(
                 from,
@@ -395,20 +404,65 @@ namespace ProductManagerAPI.Controllers
                 {
                     Success = false,
                     Message = validationMessage,
-                    DurationMs = sw.ElapsedMilliseconds
+                    DurationMs = totalStopwatch.ElapsedMilliseconds
                 });
             }
 
+            if (!DashboardQueryOptions.TryCreate(
+                search,
+                product,
+                type,
+                status,
+                importance,
+                reports,
+                pageSize,
+                cursor,
+                out var queryOptions,
+                out validationMessage))
+            {
+                return BadRequest(new ApiResponse
+                {
+                    Success = false,
+                    Message = validationMessage,
+                    DurationMs = totalStopwatch.ElapsedMilliseconds
+                });
+            }
+
+            var repositoryStopwatch = Stopwatch.StartNew();
             var rows = (await _repository.GetHistoryAsync(fromDatabaseTime, toDatabaseTime)).ToArray();
-            var activities = rows.Select(ToDashboardActivity).ToList();
-            var responseData = CreateDashboardResponse(fromDanishTime, toDanishTime, activities);
+            repositoryStopwatch.Stop();
+
+            var mappingStopwatch = Stopwatch.StartNew();
+            var sourceActivities = rows.Select(ToDashboardActivity).ToArray();
+            mappingStopwatch.Stop();
+
+            var filteringStopwatch = Stopwatch.StartNew();
+            var queryResult = DashboardQueryProcessor.Execute(sourceActivities, queryOptions);
+            filteringStopwatch.Stop();
+
+            var responseData = DashboardQueryProcessor.CreateResponse(
+                fromDanishTime,
+                toDanishTime,
+                GetDashboardNow(),
+                queryResult,
+                DashboardTimeZoneId);
 
             var response = new ApiResponse<DashboardResponse>
             {
                 Data = responseData,
-                TotalHits = activities.Count,
-                DurationMs = sw.ElapsedMilliseconds
+                TotalHits = queryResult.FilteredActivities.Count,
+                DurationMs = totalStopwatch.ElapsedMilliseconds
             };
+
+            _logger.LogInformation(
+                "Dashboard query completed. SourceRows: {SourceRows}. FilteredRows: {FilteredRows}. ReturnedRows: {ReturnedRows}. RepositoryMs: {RepositoryMs}. MappingMs: {MappingMs}. FilteringAndPagingMs: {FilteringAndPagingMs}. TotalMs: {TotalMs}.",
+                rows.Length,
+                queryResult.FilteredActivities.Count,
+                queryResult.PageActivities.Count,
+                repositoryStopwatch.Elapsed.TotalMilliseconds,
+                mappingStopwatch.Elapsed.TotalMilliseconds,
+                filteringStopwatch.Elapsed.TotalMilliseconds,
+                totalStopwatch.Elapsed.TotalMilliseconds);
 
             return Ok(response);
         }
@@ -454,59 +508,6 @@ namespace ProductManagerAPI.Controllers
             response.DurationMs = sw.ElapsedMilliseconds;
 
             return this.Ok(response);
-        }
-
-        private static DashboardResponse CreateDashboardResponse(
-            DateTimeOffset fromDanishTime,
-            DateTimeOffset toDanishTime,
-            IReadOnlyCollection<DashboardActivityResponse> activities)
-        {
-            return new DashboardResponse
-            {
-                GeneratedAt = GetDashboardNow(),
-                Range = new DashboardRangeResponse
-                {
-                    From = fromDanishTime,
-                    To = toDanishTime,
-                    TimeZone = DashboardTimeZoneId
-                },
-                Summary = new DashboardSummaryResponse
-                {
-                    TotalActivities = activities.Count,
-                    ProductsTouched = activities
-                        .Select(activity => activity.DatasetName)
-                        .Where(name => !string.IsNullOrWhiteSpace(name))
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .Count(),
-                    ImportantChanges = activities.Count(IsImportantDashboardActivity),
-                    FailedOperations = activities.Count(activity => activity.Status == "failed"),
-                    ReportsAvailable = activities.Sum(activity =>
-                        activity.Links.IcEncReports.Count + activity.Links.InternalValidationReports.Count)
-                },
-                StatusSummary = [
-                    .. activities
-                        .GroupBy(activity => activity.Status)
-                        .OrderBy(group => GetDashboardStatusSortOrder(group.Key))
-                        .ThenBy(group => group.Key)
-                        .Select(group => new DashboardStatusSummaryItemResponse
-                        {
-                            Status = group.Key,
-                            Count = group.Count()
-                        })
-                ],
-                OperationSummary = [
-                    .. activities
-                        .GroupBy(activity => activity.Type)
-                        .OrderBy(group => group.Key)
-                        .Select(group => new DashboardOperationSummaryItemResponse
-                        {
-                            Type = group.Key,
-                            Count = group.Count(),
-                            Failed = group.Count(activity => activity.Status == "failed")
-                        })
-                ],
-                Activities = [.. activities.OrderByDescending(activity => activity.Timestamp)]
-            };
         }
 
         private static DashboardActivityResponse ToDashboardActivity(ProductRecord record)
@@ -606,24 +607,6 @@ namespace ProductManagerAPI.Controllers
                     Title: "Product activity recorded",
                     Description: "A product state change was recorded.")
             };
-        }
-
-        private static int GetDashboardStatusSortOrder(string status)
-        {
-            return status switch
-            {
-                "failed" => 0,
-                "active" => 1,
-                "completed" => 2,
-                "idle" => 3,
-                _ => 4
-            };
-        }
-
-        private static bool IsImportantDashboardActivity(DashboardActivityResponse activity)
-        {
-            return activity.Severity is "important" or "critical" or "warning"
-                || activity.Status is "failed" or "error" or "rejected";
         }
 
         private static string CreateDashboardActivityId(ProductRecord record)

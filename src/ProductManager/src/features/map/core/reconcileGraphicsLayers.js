@@ -182,7 +182,10 @@ function areLayersCompatible(currentLayer, candidateLayer) {
 }
 
 function copyGraphicState(currentGraphic, candidateGraphic) {
-  const attributesChanged = !areEquivalent(currentGraphic?.attributes, candidateGraphic?.attributes);
+  const attributesChanged = !areEquivalent(
+    currentGraphic?.attributes,
+    candidateGraphic?.attributes
+  );
   const geometryChanged = !areEquivalent(currentGraphic?.geometry, candidateGraphic?.geometry);
   const symbolChanged = !areEquivalent(currentGraphic?.symbol, candidateGraphic?.symbol);
 

@@ -1,6 +1,6 @@
 # Product Manager backend implementation roadmap
 
-Current reviewed runtime baseline: `785567b4440129ea192798f0199d44a5cee94289`.
+Current reviewed runtime baseline: `0e79bf9fd95b606256160fe98d1daaa6011ceb7c`.
 
 This roadmap converts the current backend discussions into bounded implementation packages. It exists to prevent later work from introducing new architecture assumptions, database changes, or concurrency mechanisms without an explicit decision.
 
@@ -42,29 +42,28 @@ These decisions apply to every work package:
 
 ## Work package status
 
-| ID      | Area                                      | Status      | Database/geodatabase change | Primary dependency                                      |
-| ------- | ----------------------------------------- | ----------- | --------------------------- | ------------------------------------------------------- |
-| BE-101  | Full backend context review               | Complete    | No                          | Current backend source and tests                        |
-| BE-102  | Readable ExportTarget contract            | Complete    | No                          | Verified export controller/service contract             |
-| FE-101  | Usage band label                          | Complete    | No                          | Existing Usage band ID + description payload            |
-| BE-103  | AOI profiling and optimization            | Complete    | No                          | Measured request path                                   |
-| BE-104  | Async Export/Rollback jobs                | Complete    | No                          | Existing Hangfire SQL storage and Product operation code |
-| BE-105  | Backend-authoritative active job visibility | Complete  | No                          | Product Manager Hangfire metadata and monitoring API    |
-| BE-106  | External shared worker readiness review   | Complete    | No                          | Product Manager baseline and JobPlatform target direction |
-| BE-107  | Dashboard filtering and pagination        | Planned     | No for first release        | Stable ordering/event key review                        |
-| BE-108  | Product History failure hardening         | Planned     | No assumption               | Validation/history producer contract                    |
-| BE-109  | Report storage/content                    | Blocked     | Unknown                     | IC-ENC and internal validation process/API              |
-| BE-110  | Permanent Product ID                      | Blocked     | Yes                         | Database owners                                         |
-| BE-111  | Historical global map timeline            | Deferred    | Likely                      | Architecture and retention decision                     |
+| ID     | Area                                        | Status   | Database/geodatabase change | Primary dependency                                        |
+| ------ | ------------------------------------------- | -------- | --------------------------- | --------------------------------------------------------- |
+| BE-101 | Full backend context review                 | Complete | No                          | Current backend source and tests                          |
+| BE-102 | Readable ExportTarget contract              | Complete | No                          | Verified export controller/service contract               |
+| FE-101 | Usage band label                            | Complete | No                          | Existing Usage band ID + description payload              |
+| BE-103 | AOI profiling and optimization              | Complete | No                          | Measured request path                                     |
+| BE-104 | Async Export/Rollback jobs                  | Complete | No                          | Existing Hangfire SQL storage and Product operation code  |
+| BE-105 | Backend-authoritative active job visibility | Complete | No                          | Product Manager Hangfire metadata and monitoring API      |
+| BE-106 | External shared worker readiness review     | Complete | No                          | Product Manager baseline and JobPlatform target direction |
+| BE-107 | Dashboard filtering and pagination          | Complete | No                          | Existing JobTable history and stable activity ID          |
+| BE-108 | Product History failure hardening           | Planned  | No assumption               | Validation/history producer contract                      |
+| BE-109 | Report storage/content                      | Blocked  | Unknown                     | IC-ENC and internal validation process/API                |
+| BE-110 | Permanent Product ID                        | Blocked  | Yes                         | Database owners                                           |
+| BE-111 | Historical global map timeline              | Deferred | Likely                      | Architecture and retention decision                       |
 
 ## Implementation order
 
 Recommended order:
 
-1. BE-101 through BE-106 are complete at the current reviewed baseline.
-2. BE-107: Dashboard filtering and pagination when payload growth justifies it.
-3. BE-108: Product History failure/event contract hardening when backend validation work begins.
-4. Deferred: reports, permanent Product ID, global map timeline, shared-worker implementation and atomic Product-operation ownership.
+1. BE-101 through BE-107 are complete at the current implementation baseline.
+2. BE-108: Product History failure/event contract hardening when backend validation work begins.
+3. Deferred: reports, permanent Product ID, global map timeline, shared-worker implementation and atomic Product-operation ownership.
 
 Worker extraction is not the next runtime package. It remains deferred until JobPlatform is ready and a separate implementation package is explicitly approved.
 
@@ -630,7 +629,7 @@ This limitation is accepted until a separately approved atomic Product-operation
 
 ### Status
 
-Complete as documentation/readiness analysis against Product Manager baseline `785567b4440129ea192798f0199d44a5cee94289`.
+Complete as documentation/readiness analysis against Product Manager baseline `0e79bf9fd95b606256160fe98d1daaa6011ceb7c`.
 
 Detailed review:
 
@@ -675,108 +674,59 @@ Atomic Product-operation ownership remains deferred and unnumbered until its per
 
 ## BE-107: Dashboard filtering and pagination
 
-### Purpose
+Status: Complete against baseline `0e79bf9fd95b606256160fe98d1daaa6011ceb7c`.
 
-Prepare the Dashboard for growing audit-log volume before 50+ users create enough history to make the current full-payload client filtering expensive.
+### Implemented contract
 
-### Phase 1: Source and ordering review
+The existing `GET /electronicproducts/dashboard` endpoint now accepts additive server-side filters for search, Product, type, status, importance, and reports plus optional cursor paging.
 
-Document:
+The Product Manager frontend uses `pageSize=50`; the backend accepts `1-200`. Omitting `pageSize` preserves the complete filtered activity list for existing consumers. A cursor is opaque and valid only together with `pageSize`.
 
-- current Dashboard endpoint path and consumers;
-- current activity source and query;
-- current date/time semantics;
-- current stable unique event key, if any;
-- current sort order;
-- current summary calculation;
-- current filter classification logic;
-- current maximum/typical payload size;
-- current query duration and serialization duration.
+Filtering is applied before summaries and page selection. Summary cards, status summary, operation summary, `TotalHits`, and `Paging.Total` represent the complete filtered result. Only `Activities` and `Paging.Returned` are page-bounded.
 
-### Contract capabilities
+Ordering is deterministic:
 
-Server-side request should support the existing frontend filters:
+```text
+Timestamp DESC
+Activity Id DESC
+```
 
-- From and optional To;
-- search;
-- Product;
-- activity type;
-- status/outcome;
-- important-only;
-- report availability when real report metadata exists;
-- page size;
-- continuation token or page number.
+The persisted `ProductRecord.Id` GUID is used as the stable activity key when available.
 
-### Paging choice
+### Frontend behavior
 
-Preferred:
+- Search requests are debounced by 300 ms.
+- Search text preserves the user's casing while backend matching remains case-insensitive.
+- Rapid search edits supersede stale responses without routinely aborting requests in the browser Network panel.
+- Immediate range, select-filter, page and manual-refresh requests abort stale in-flight requests.
+- Filter and range changes reset cursor history.
+- Previous/Next navigation uses an in-memory stack of opaque backend cursors.
+- The last successful result stays visible during loading and individual request failures.
+- Dashboard History and direct URL/reload range behavior are preserved.
 
-- cursor paging with stable ordering `OccurredAt DESC, EventId DESC` when a stable immutable event ID exists.
+### Current repository boundary
 
-Temporary fallback:
+The first release keeps the existing date-bounded `GetHistoryAsync` repository query and performs mapping, filtering, summaries, and page selection in the API process. This bounds response size and browser work without a schema change, but it does not yet reduce repository row materialization.
 
-- offset/page paging with deterministic ordering when no stable ID exists yet.
+The endpoint now logs source/filtered/returned counts and repository, mapping, filtering/paging, and total durations. SQL predicate pushdown or indexes remain evidence-driven follow-up work only if measured volume/query plans justify it.
 
-Do not use the future permanent Product ID as a substitute for an activity event ID.
+### Acceptance status
 
-### Summary semantics
+- Paging requests are bounded to at most 200 activities.
+- Legacy requests without `pageSize` remain compatible.
+- Ordering and cursor boundaries are deterministic.
+- Summary values use the complete filtered result.
+- Filter options remain available from the complete date-bounded source.
+- Frontend requests prevent stale results, and rapid search edits remain silent to the user.
+- Empty results, legacy full results, invalid paging, stable equal-timestamp ordering, report filters, and paging normalization have automated coverage.
+- No Product database or geodatabase schema change is included.
 
-Summary cards, status summary, and operation summary must represent the complete filtered result.
+### Deferred Dashboard enhancements
 
-They must not be calculated from only the visible page.
+The following improvements are recorded for later work and are not part of BE-107 acceptance:
 
-The backend may return:
-
-- page items;
-- total/continuation metadata;
-- summary;
-- status summary;
-- operation summary;
-- available filter options when useful.
-
-### Backward compatibility
-
-Before changing the current response envelope:
-
-1. identify all consumers;
-2. decide additive parameters versus a versioned endpoint;
-3. coordinate frontend/backend deployment;
-4. preserve the current date handling in Europe/Copenhagen;
-5. keep an explicit migration/removal plan for the legacy full-payload path.
-
-### Frontend migration
-
-1. Move filter state into request parameters.
-2. Debounce search requests.
-3. Cancel stale requests.
-4. Keep the last successful result visible while a new page/filter request loads when appropriate.
-5. Reset pagination when filters or range change.
-6. Load more or paginate without duplicate events.
-7. Keep summary and visible list synchronized with the same filter snapshot.
-8. Preserve Dashboard History panel behavior.
-9. Preserve direct URL/reload range behavior.
-10. Add unavailable/error states for individual request failures.
-
-### Indexes and administrator dependency
-
-Implement against current schema first.
-
-If query plans show indexes are needed, document the proposed index and measured evidence for administrators. Do not silently add schema/index changes during this work package while owners are unavailable.
-
-### Acceptance criteria
-
-- The endpoint never returns an unbounded activity list when paging is requested.
-- Ordering is deterministic.
-- No duplicates or missing events occur during normal next-page loading for the selected strategy.
-- Summary values reflect all filtered events.
-- Search/filter requests cancel stale in-flight requests.
-- Current small datasets still feel immediate.
-- Backend and frontend tests cover range, filters, empty results, page boundaries, invalid cursors/pages, and stable ordering.
-- No schema change is required for the first release.
-
-### Estimated effort
-
-Approximately 5-9 working days including backend, frontend, compatibility handling, and tests.
+- user-selectable page size; the backend already accepts `1-200`, while the frontend intentionally remains fixed at `50`;
+- sortable activity columns; this requires an explicit server-side sort contract and cursor semantics tied to the selected sort.
 
 ---
 
