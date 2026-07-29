@@ -67,6 +67,8 @@ GET /jobs/{jobId}
 
 The existing synchronous backend endpoints remain available for compatibility, but the frontend does not use them for normal popup actions.
 
+BE-108A Product History integration is documentation-only at baseline `8caf5f771f1a6721398007589afbe875d553615d`. The current popup job lifecycle and terminal notices are unchanged.
+
 Endpoint wiring belongs in `features/data/api/exportApi.js` and `popupExportConfig.js`. Do not add endpoint wiring directly in `popupActionConfig.js`.
 
 ## BE-102 export target contract
@@ -260,6 +262,87 @@ The existing full rebuild and popup restore flow remains the fallback when:
 The popup action bar is also retained during compatible refreshes. Action buttons are updated in place instead of being removed and recreated, preventing Calcite icons from flashing while still allowing real state transitions such as `Exporting...` to appear.
 
 This keeps normal auto, manual and product-job refreshes visually stable while preserving the previous behavior for structural or integrity edge cases.
+
+## Planned BE-108A Product History integration
+
+BE-108A does not change popup action runtime at this baseline. The approved design is recorded in:
+
+```text
+src/ProductManager/docs/be-108a-product-history-event-design.md
+```
+
+### Batch 1 boundary
+
+The later foundation batch prepares:
+
+- application-owned `OperationId`;
+- endpoint-specific Product History responses;
+- additive explicit event normalization;
+- deterministic `StateRecordId` association.
+
+It does not connect terminal popup jobs to the audit lifecycle.
+
+### Batch 2 boundary
+
+The later producer/recovery batch connects Export and Rollback jobs to one public audit event per logical operation.
+
+Canonical outcomes:
+
+```text
+Succeeded
+Failed
+SucceededWithWarning
+RequiresManualReview
+```
+
+A terminal popup notice and a Product History event are separate concerns:
+
+- popup polling owns immediate current-session feedback and route refresh;
+- Product History owns durable audit visibility;
+- an audit finalization failure after business success must not turn the popup job into `Failed`;
+- reconciliation later completes the pending audit event.
+
+### Identity
+
+The future flow preserves:
+
+```text
+OperationId
+JobId
+CorrelationId
+StateRecordId
+```
+
+`StateRecordId` participates in deterministic association, but an ID match alone is insufficient. A legacy entry is suppressed only for matching Export/Export or Rollback/Rollback types when the explicit outcome is `Succeeded` or `SucceededWithWarning`; failure/manual-review outcomes, missing or mismatched IDs, different operation types, and status/note entries remain separate. Frontend timestamp-based deduplication is prohibited.
+
+### Execution and audit failure policy
+
+Before irreversible side effects in Batch 2:
+
+```text
+pending audit event exists
+→ ProductManagerExecutionStarted is set
+→ audit ExecutionStartedAtUtc is persisted
+→ business side effects begin
+```
+
+Pending audit creation failure stops the job before execution with a distinct safe audit-unavailable result. If the audit execution checkpoint fails after the Hangfire execution flag is set, business execution does not begin and the event is treated conservatively as `RequiresManualReview`.
+
+Audit persistence must not replace the dataset lock, active-job visibility, or any future operation ownership registry.
+
+### Reconciliation ownership
+
+Planned Batch 2 configuration:
+
+```text
+Recurring job ID: product-history-reconciliation
+Initial schedule: every 15 minutes
+Dedicated queue: productmanager-maintenance
+Initial host: ProductManagerAPI Hangfire Server
+Future host: shared worker
+```
+
+Unknown Hangfire states remain pending and are logged; they are not automatically mapped to failures.
 
 ## Future external worker boundary
 

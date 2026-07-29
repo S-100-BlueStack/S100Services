@@ -3,6 +3,7 @@
 This document tracks frontend-only cleanup, hardening, and architecture improvements for Product Manager. The goal is to improve maintainability, reliability, and structure without changing the user-facing feature set unless an item explicitly tracks a feature foundation.
 
 Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+BE-108A documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`.
 
 ## Backend worker-readiness note
 
@@ -85,6 +86,7 @@ BE-106 is documentation-only. It confirms that ProductManagerAPI remains the pub
 | BE-005 | Reports  | Real Dashboard IC-ENC/internal validation report links | Blocked by backend             | Requires report IDs/storage contracts before Dashboard report actions can be enabled.                                                              |
 | BE-006 | Jobs     | Atomic Product operation claim before enqueue          | Planned                        | Required to eliminate the remaining near-simultaneous enqueue race and support a distributed external worker cleanly.                              |
 | BE-007 | Jobs     | External shared Hangfire worker migration              | Deferred / architecture review | Current HTTP/job contracts are reusable, but worker dependencies, queues, shared storage and ArcGIS/file access must be reviewed before migration. |
+| BE-008 | Timeline | Product History audit event hardening                  | Design approved / implementation pending | BE-108A is split into foundation and producer/recovery batches. Legacy state history remains; runtime and SQL implementation have not started. |
 
 ## Future implementation ideas
 
@@ -106,9 +108,11 @@ BE-106 is documentation-only. It confirms that ProductManagerAPI remains the pub
 1. Keep the tested async operation and popup-preserving refresh baseline stable.
 2. Use the completed BE-106 external-worker readiness review as the implementation gate; do not move Product Manager jobs until JobPlatform is ready.
 3. Keep atomic Product-operation ownership deferred until its persistence owner, recovery contract and distributed-worker boundary are approved.
-4. BE-107 Dashboard filtering and pagination is complete and manually verified at `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`; continue with BE-108 Product History failure hardening when its producer contract is ready.
-5. Keep report-link UI deferred until backend report IDs and storage contracts exist.
-6. Continue targeted regression smoke tests after frontend or backend contract changes.
+4. BE-107 Dashboard filtering and pagination is complete and manually verified at `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+5. BE-108A design is approved at documentation baseline `8caf5f771f1a6721398007589afbe875d553615d`; the next runtime package is Batch 1 foundation only after explicit implementation approval.
+6. Keep Batch 2 producer/recovery work separate until Batch 1 is built, tested, and reviewed.
+7. Keep report-link UI and deferred producers blocked until backend report IDs, storage, and producer contracts exist.
+8. Continue targeted regression smoke tests after frontend or backend contract changes.
 
 ## Commit log
 

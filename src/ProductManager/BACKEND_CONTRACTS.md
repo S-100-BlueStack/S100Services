@@ -3,6 +3,7 @@
 This document is a source-of-truth document for Product Manager backend integration work.
 
 Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+BE-108A documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`.
 
 The permanent BE-101 scope corrections are recorded in:
 
@@ -619,40 +620,215 @@ This is expected to be a frontend formatting change unless the current endpoint 
 
 ## Product History contract
 
-Product History is an audit log for one Product.
+Product History is an audit log for one Product. It is not a historical-map reconstruction system and it must remain separate from the deferred global map timeline.
 
-It must answer:
+The approved BE-108A design is documented in:
 
-- what happened;
-- when it happened;
-- who or what initiated it;
-- whether it succeeded or failed;
-- why it failed when that information is useful and safe to expose.
-
-Conceptual event:
-
-```json
-{
-  "eventId": "event-123",
-  "datasetName": "101DK0040943E",
-  "eventType": "InternalValidation",
-  "outcome": "Failed",
-  "occurredAt": "2026-07-17T08:30:00Z",
-  "actor": "DOMAIN\\user",
-  "title": "Internal validation failed",
-  "description": "The Product did not pass internal validation.",
-  "reason": "Invalid feature association",
-  "correlationId": "correlation-456",
-  "jobId": null,
-  "reportId": null
-}
+```text
+src/ProductManager/docs/be-108a-product-history-event-design.md
 ```
 
-Failed Validation, Export, Rollback, report processing, and similar operationally important events must be representable.
+BE-108A is documentation-approved but not implemented at this baseline. It is split into two later implementation batches.
 
-The backend may also record lower-priority failures such as Freeze failures. The frontend decides how prominently each event is displayed; the persistence model should not prevent useful diagnostics.
+### Batch 1 - Foundation
 
-Job progress updates should not become separate history events unless they represent meaningful milestones. Final success or failure should be recorded.
+Planned responsibilities:
+
+- dedicated Product History event persistence;
+- repository and lifecycle service;
+- endpoint-specific history response;
+- additive `Events`, `EventTotalHits`, and legacy state `Id`;
+- `AppendAsync` returning `Guid`;
+- application-owned `OperationId`;
+- deterministic `StateRecordId` association;
+- frontend legacy/explicit event normalization.
+
+### Batch 2 - Producers and recovery
+
+Planned responsibilities:
+
+- Export producer lifecycle;
+- Rollback producer lifecycle;
+- canonical outcomes `Succeeded`, `Failed`, `SucceededWithWarning`, and `RequiresManualReview`;
+- audit failure handling;
+- reconciliation;
+- dedicated maintenance queue;
+- worker restart/requeue recovery.
+
+### Authoritative migration mechanism
+
+The approved mechanism for the future additive audit table is:
+
+```text
+Repository-owned versioned SQL Server scripts
+Database-owner executed
+Database-first deployment
+No automatic startup migration
+No EF Core introduction
+Additive audit table retained during application rollback
+```
+
+The future scripts must use explicit `[dbo]` schema, `SET XACT_ABORT ON`, transactions for additive schema changes, strict idempotency, and `THROW` on incompatible tables, columns, constraints, or indexes. Verification must fail on any missing or incompatible schema element; informative result sets alone are not sufficient.
+
+No SQL script is included by this documentation package.
+
+### Outcome model
+
+Canonical outcomes are:
+
+```text
+Succeeded
+Failed
+SucceededWithWarning
+RequiresManualReview
+```
+
+`RequiresManualReview` is required when irreversible side effects have begun and the final business state cannot be proven. It must not be represented as `Failed`.
+
+Do not add speculative event-type values for producers that do not yet exist. Frontend unknown-value fallback must preserve future compatibility.
+
+### Identity and association
+
+The future contract must preserve these identities independently:
+
+```text
+OperationId
+JobId
+CorrelationId
+StateRecordId
+```
+
+There is one public audit event per logical operation. An inferred legacy entry may be suppressed only when all of these conditions are true:
+
+```text
+Explicit event type is Export or Rollback
+Explicit outcome is Succeeded or SucceededWithWarning
+Explicit StateRecordId is present and matches the legacy state row Id
+Normalized legacy event type matches the explicit event type
+```
+
+A matching `StateRecordId` alone is insufficient. `Failed`, `RequiresManualReview`, missing/mismatched IDs, different operation types, and legacy status/note or other non-matching entries remain separate timeline elements. Timestamp-based or heuristic deduplication is prohibited.
+
+### Persistence storage validation
+
+Batch 1 must define one central validated persistence model containing at least:
+
+```text
+DatasetName
+EventType
+Outcome
+Code
+SafeMessage
+CorrelationId
+JobId
+OperationId
+StateRecordId
+ExportTarget
+structured operation metadata
+```
+
+Before repository access, the service/contract boundary must trim and canonicalize relevant values, validate identity and contract fields, enforce the database limits selected with the table design, and apply deterministic handling for overlong safe messages. The same maximum lengths must be shared by migration definitions, service validation, repository assumptions, and tests.
+
+The repository receives an already validated persistence model. SQL Server errors must not be used as normal contract validation. Raw exception messages, stack traces, internal paths, compiler/SQL details, credentials, connection information, and raw report payloads must never be accepted as `SafeMessage`. Safe messages must come from an approved mapping/catalog boundary.
+
+### DatasetName matching
+
+Event persistence preserves exact, case-insensitive `DatasetName` semantics through shared application canonicalization at both write and query boundaries:
+
+```text
+trim surrounding whitespace
+→ invariant uppercase
+→ validate
+→ exact persist/query value
+```
+
+Repository queries use exact equality against the canonical value. Prefix, substring, wildcard, culture-sensitive, or database-default-collation-dependent matching is prohibited. Batch 1 must include SQL Server integration verification; an in-memory case-insensitive test alone is not sufficient. Because the approved model is canonicalization-based rather than collation-based, the verify script checks the approved column definition but does not claim database collation as the source of case-insensitive behavior.
+
+### Audit lifecycle policy
+
+- A pending audit event must exist before irreversible side effects begin.
+- Failure to create the pending event stops the operation before execution and uses a safe audit-unavailable error such as `PRODUCT_HISTORY_UNAVAILABLE`.
+- Audit finalization failure after a successful business operation must not change the business operation or Hangfire job to `Failed`.
+- Pending events are completed later by reconciliation.
+- Event persistence is audit lifecycle storage only. It must not be used as a distributed lock, enqueue claim, or operation ownership registry.
+
+### Public history endpoint
+
+The existing route remains:
+
+```http
+GET /electronicproducts/{datasetName}/history
+```
+
+A future endpoint-specific response type must preserve:
+
+```text
+Data: ProductHistoryResponse[]
+TotalHits: legacy state count
+```
+
+and add:
+
+```text
+Events: ProductHistoryEventResponse[]
+EventTotalHits: explicit event count
+```
+
+The global generic `ApiResponse` must not be changed to implement this endpoint contract.
+
+The central persisted event model must include at least:
+
+```text
+DatasetName
+EventType
+Outcome
+Code
+SafeMessage
+CorrelationId
+JobId
+OperationId
+StateRecordId
+ExportTarget
+structured operation metadata
+```
+
+Titles should normally be derived by the API or frontend from `EventType` and `Outcome`, rather than being mandatory persisted fields.
+
+### Planned reconciliation
+
+The later Batch 2 reconciliation design is:
+
+```text
+Recurring job ID: product-history-reconciliation
+Initial schedule: every 15 minutes
+Dedicated queue: productmanager-maintenance
+Initial host: ProductManagerAPI Hangfire Server
+Future host: shared worker
+```
+
+Reconciliation must classify Hangfire states explicitly:
+
+- non-terminal: leave pending;
+- succeeded: finalize from application-owned safe metadata;
+- terminal non-success: `Failed` when execution never started, otherwise `RequiresManualReview`;
+- unknown: leave pending and log.
+
+Unknown states must never be automatically finalized as failures.
+
+### Deferred producers and integrations
+
+The following are outside BE-108A:
+
+```text
+Internal validation
+IC-ENC report processing
+Send to IC-ENC
+report content/storage
+Dashboard event-source integration
+external worker extraction
+```
+
+Job polling/progress updates and low-level attempts must not become public Product History events. The contract records one meaningful final audit event per logical operation.
 
 ## Analyze geometry contract
 
