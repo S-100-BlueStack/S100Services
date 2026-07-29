@@ -792,7 +792,7 @@ namespace S100FC.ProductCatalogue
             return await this.Dispatch(() => {
                 using var connection = this.OpenGeodatabase(uri);
                 var topology = connection.BuildTopology(filter)!;
-
+                
                 //  InformationTypes
                 //try {
                 //    using var informationType = connection.OpenDataset<Table>(this.QualifyTableName("informationtype"));
@@ -908,7 +908,11 @@ namespace S100FC.ProductCatalogue
                         if (topology.matrix.Collapse.Contains(name))
                             continue;
 
-                        if (topology.mapper.TryGetValue(name!, out var value))
+
+                        //if (topology.mapper.TryGetValue(name!, out var value))
+                        //    geometry = value;
+
+                        if (topology.matrix.MappingFOID.TryGetValue(name!, out var value))
                             geometry = value;
 
                         var shapetype = def.GetShapeType();
