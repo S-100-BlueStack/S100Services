@@ -66,19 +66,15 @@ namespace ProductManagerAPI.Services.Export
             var errorTask = process.StandardError.ReadToEndAsync();
 
             process.WaitForExit();
-            var error = errorTask.GetAwaiter().GetResult();
-
-            if (!string.IsNullOrWhiteSpace(error)) {
-                _logger.LogError(
-                    "S100 compiler error output for product {Product}:{NewLine}{Error}",
-                    datasetName,
-                    Environment.NewLine,
-                    error);
-            }
-
+            
             if (process.ExitCode != 0) {
-                throw new InvalidOperationException(
-                    $"S100 compiler failed for product '{datasetName}' with exit code {process.ExitCode}.{Environment.NewLine}{error}");
+                var error = errorTask.GetAwaiter().GetResult();
+
+                if (!string.IsNullOrWhiteSpace(error)) {
+                    _logger.LogError("S100 compiler error output for product {Product}:{NewLine}{Error}", datasetName, Environment.NewLine, error);
+                }
+
+                throw new InvalidOperationException($"S100 compiler failed for product '{datasetName}' with exit code {process.ExitCode}.{Environment.NewLine}{error}");
             }
 
             // Check if .000 is 0 bytes

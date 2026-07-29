@@ -1,4 +1,5 @@
 using ArcGIS.Core.Data;
+using ArcGIS.Core.Data.UtilityNetwork.Trace;
 using ArcGIS.Core.Geometry;
 using ArcGIS.Core.Internal.Geometry;
 using S100FC.S128.ComplexAttributes;
@@ -792,7 +793,7 @@ namespace S100FC.ProductCatalogue
             return await this.Dispatch(() => {
                 using var connection = this.OpenGeodatabase(uri);
                 var topology = connection.BuildTopology(filter)!;
-                
+
                 //  InformationTypes
                 //try {
                 //    using var informationType = connection.OpenDataset<Table>(this.QualifyTableName("informationtype"));
@@ -895,176 +896,195 @@ namespace S100FC.ProductCatalogue
                         continue;
                     }
 
+                    var hashSet = new HashSet<long>();
+
                     using var fc = connection.OpenDataset<FeatureClass>(def.GetName());
                     using var featureCursor = fc.Search(filter, true);
                     while (featureCursor.MoveNext()) {
                         var current = (ArcGIS.Core.Data.Feature)featureCursor.Current;
                         var name = current["UID"].ToString()!;  //$"{current.UID()}";
 
-                        // Only map geometry, and keep name seperate so foids remain unique
-                        var geometry = name;
 
-                        // var f = topology.matrix.Collapse;
-                        if (topology.matrix.Collapse.Contains(name))
-                            continue;
+                        // TODO: Necessary?
+                        var oid = current.GetObjectID();
+                        if (hashSet.Contains(oid)) continue;
+                        hashSet.Add(oid);
+
+                        var _uid = Convert.ToString(current["UID"])!;
+
+                        if (topology.matrix.Collapse.Contains(_uid)) continue;
+
+                        string[] features = [_uid];
+
+                        if (topology.mapper.Values.Contains(_uid)) {
+                            features = [.. topology.mapper.Where(e => e.Value.Equals(_uid)).Select(e => e.Key)];
+                        }
+
+                        foreach (var uid in features) {
+
+                            // Only map geometry, and keep name seperate so foids remain unique
+                            var geometry = name;
 
 
-                        //if (topology.mapper.TryGetValue(name!, out var value))
-                        //    geometry = value;
+                            //if (topology.mapper.TryGetValue(name!, out var value))
+                            //    geometry = value;
 
-                        if (topology.matrix.MappingFOID.TryGetValue(name!, out var value))
-                            geometry = value;
+                            if (topology.matrix.MappingFOID.TryGetValue(name!, out var value))
+                                geometry = value;
 
-                        var shapetype = def.GetShapeType();
+                            var shapetype = def.GetShapeType();
 
-                        var code = Convert.ToString(current["code"]);
+                            var code = Convert.ToString(current["code"]);
 
-                        var foid = $"110:{name.Substring(1)}:1";       // Geodatastyrelsen: 110
+                            var foid = $"110:{name.Substring(1)}:1";       // Geodatastyrelsen: 110
 
-                        var prim = shapetype switch {
-                            GeometryType.Point => Primitive.Point,
-                            GeometryType.Multipoint => Primitive.Point,
-                            GeometryType.Polyline => Primitive.Curve,
-                            GeometryType.Polygon => Primitive.Surface,
-                            _ => throw new InvalidOperationException(),
-                        };
+                            var prim = shapetype switch {
+                                GeometryType.Point => Primitive.Point,
+                                GeometryType.Multipoint => Primitive.Point,
+                                GeometryType.Polyline => Primitive.Curve,
+                                GeometryType.Polygon => Primitive.Surface,
+                                _ => throw new InvalidOperationException(),
+                            };
 
-                        try {
-                            var type = featureCatalogue.Assembly?.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", false) ?? default;
+                            try {
+                                var type = featureCatalogue.Assembly?.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", false) ?? default;
 
-                            if (type == default) {
-                                Log.Error("Could not get type: {type} for feature: {name}. In product: {product}", code, name, electronicProduct.datasetName);
-                                continue;
-                            }
-                            // var flatten = current["attributebindings"].ToString()!;
-                            var flatten =
-                                current.FindField("attributebindings") != -1 &&
-                                current["attributebindings"] != null &&
-                                current["attributebindings"] != DBNull.Value
-                                ? current["attributebindings"].ToString()
-                                : string.Empty;
-
-                            var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
-
-                            var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
-
-                            foreach (var filename in filenames) {
-                                if (!supportFiles.Contains(filename)) {
-                                    supportFiles.Add(filename);
+                                if (type == default) {
+                                    Log.Error("Could not get type: {type} for feature: {name}. In product: {product}", code, name, electronicProduct.datasetName);
+                                    continue;
                                 }
-                            }
+                                // var flatten = current["attributebindings"].ToString()!;
+                                var flatten =
+                                    current.FindField("attributebindings") != -1 &&
+                                    current["attributebindings"] != null &&
+                                    current["attributebindings"] != DBNull.Value
+                                    ? current["attributebindings"].ToString()
+                                    : string.Empty;
+
+                                var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
+
+                                var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
+
+                                foreach (var filename in filenames) {
+                                    if (!supportFiles.Contains(filename)) {
+                                        supportFiles.Add(filename);
+                                    }
+                                }
 
 
-                            // Surface Masks
-                            var topologySurface = topology.matrix.Surfaces.FirstOrDefault(e => e.Ref!.Equals(name, StringComparison.InvariantCultureIgnoreCase));
-                           
-                            // Build comma seperated string of masks, with :1 or :2 indicating which mask it is. Should be null/omitted if empty.
-                            var masks = new[] {
+                                // Surface Masks
+                                var topologySurface = topology.matrix.Surfaces.FirstOrDefault(e => e.Ref!.Equals(name, StringComparison.InvariantCultureIgnoreCase));
+
+                                // Build comma seperated string of masks, with :1 or :2 indicating which mask it is. Should be null/omitted if empty.
+                                var masks = new[] {
                                     topologySurface?.Masks1?.Select(e => $"C{e}:1"),
                                     topologySurface?.Masks2?.Select(e => $"C{e}:2")
                                 }.Where(m => m != null).SelectMany(m => m!);
 
-                            var feature = new YAML.Feature {
-                                Name = code,
-                                Foid = foid,
-                                Prim = prim,
-                                Geometry = geometry,
-                                Masks = masks.Any() ? string.Join(",", masks) : null,
-                                Attributes = instance?.attributeBindings.Length > 0 ? instance : null,
-                            };
+                                var feature = new YAML.Feature {
+                                    Name = code,
+                                    Foid = foid,
+                                    Prim = prim,
+                                    Geometry = geometry,
+                                    Masks = masks.Any() ? string.Join(",", masks) : null,
+                                    Attributes = instance?.attributeBindings.Length > 0 ? instance : null,
+                                };
 
-                            //// Information Associations
-                            //if (!current.IsNull("informationbindings")) {
-                            //    try {
-                            //        var informationBindings = System.Text.Json.JsonSerializer.Deserialize<informationBinding[]>(Convert.ToString(current["informationbindings"])!, this.jsonSerializerOptionsS101);
+                                //// Information Associations
+                                //if (!current.IsNull("informationbindings")) {
+                                //    try {
+                                //        var informationBindings = System.Text.Json.JsonSerializer.Deserialize<informationBinding[]>(Convert.ToString(current["informationbindings"])!, this.jsonSerializerOptionsS101);
 
-                            //        if (informationBindings != default && informationBindings.Length != 0) {
-                            //            foreach (var binding in informationBindings) {
+                                //        if (informationBindings != default && informationBindings.Length != 0) {
+                                //            foreach (var binding in informationBindings) {
 
-                            //                var isValid = binding.Validate();
+                                //                var isValid = binding.Validate();
 
-                            //                if (!isValid)
-                            //                    continue;
+                                //                if (!isValid)
+                                //                    continue;
 
-                            //                var asso = new YAML.Association {
-                            //                    Name = binding.informationType!, // binding.GetType().GenericTypeArguments[0].Name,
-                            //                    Role = binding.role,
-                            //                    To = binding.informationId
-                            //                };
+                                //                var asso = new YAML.Association {
+                                //                    Name = binding.informationType!, // binding.GetType().GenericTypeArguments[0].Name,
+                                //                    Role = binding.role,
+                                //                    To = binding.informationId
+                                //                };
 
-                            //                if (!informationsTypesAdded.Contains(binding.informationId!)) {
-                            //                    dataset!.AddInformation(informationTypes.Single(e => e.ID!.Equals(binding.informationId!)));
-                            //                    informationsTypesAdded.Add(binding.informationId!);
-                            //                }
+                                //                if (!informationsTypesAdded.Contains(binding.informationId!)) {
+                                //                    dataset!.AddInformation(informationTypes.Single(e => e.ID!.Equals(binding.informationId!)));
+                                //                    informationsTypesAdded.Add(binding.informationId!);
+                                //                }
 
 
-                            //                // Special case for SpatialAssociation. Add to dictionary for later processing.
-                            //                if (prim != Primitive.Surface && asso.Name.Equals("SpatialAssociation", StringComparison.CurrentCultureIgnoreCase))
-                            //                    spatialAssociations.TryAdd(geometry, asso);
-                            //                else
-                            //                    feature?.AddAssociation(asso);
-                            //            }
-                            //        }
-                            //    }
-                            //    catch (Exception ex) {
-                            //        Log.Warning(ex, "Error deserializing informationbindings for feature {name}: {message}", name, ex.Message);
-                            //    }
-                            //}
+                                //                // Special case for SpatialAssociation. Add to dictionary for later processing.
+                                //                if (prim != Primitive.Surface && asso.Name.Equals("SpatialAssociation", StringComparison.CurrentCultureIgnoreCase))
+                                //                    spatialAssociations.TryAdd(geometry, asso);
+                                //                else
+                                //                    feature?.AddAssociation(asso);
+                                //            }
+                                //        }
+                                //    }
+                                //    catch (Exception ex) {
+                                //        Log.Warning(ex, "Error deserializing informationbindings for feature {name}: {message}", name, ex.Message);
+                                //    }
+                                //}
 
-                            //// Feature Associations
-                            //if (!current.IsNull("featurebindings")) {
-                            //    try {
-                            //        var featureBindings = System.Text.Json.JsonSerializer.Deserialize<featureBinding[]>(Convert.ToString(current["featurebindings"])!, this.jsonSerializerOptionsS101);
+                                //// Feature Associations
+                                //if (!current.IsNull("featurebindings")) {
+                                //    try {
+                                //        var featureBindings = System.Text.Json.JsonSerializer.Deserialize<featureBinding[]>(Convert.ToString(current["featurebindings"])!, this.jsonSerializerOptionsS101);
 
-                            //        if (featureBindings != default && featureBindings.Length != 0) {
-                            //            foreach (var binding in featureBindings) {
+                                //        if (featureBindings != default && featureBindings.Length != 0) {
+                                //            foreach (var binding in featureBindings) {
 
-                            //                // check if valid
-                            //                var isValid = binding.Validate();
+                                //                // check if valid
+                                //                var isValid = binding.Validate();
 
-                            //                if (!isValid)
-                            //                    continue;
+                                //                if (!isValid)
+                                //                    continue;
 
-                            //                var roleType = binding.roleType;
+                                //                var roleType = binding.roleType;
 
-                            //                // Skip association roleType
-                            //                if (roleType == "association")
-                            //                    continue;
+                                //                // Skip association roleType
+                                //                if (roleType == "association")
+                                //                    continue;
 
-                            //                var asso = new YAML.Association {
-                            //                    Name = binding.featureType!, // binding.GetType().GenericTypeArguments[0].Name,
-                            //                    Role = binding.role,
-                            //                    To = $"110:{binding!.featureId!.Substring(1)}:1"
-                            //                };
+                                //                var asso = new YAML.Association {
+                                //                    Name = binding.featureType!, // binding.GetType().GenericTypeArguments[0].Name,
+                                //                    Role = binding.role,
+                                //                    To = $"110:{binding!.featureId!.Substring(1)}:1"
+                                //                };
 
-                            //                feature?.AddFeatureAssociation(asso);
+                                //                feature?.AddFeatureAssociation(asso);
 
-                            //                var noGeometry = featureTypes.SingleOrDefault(e => e.Foid.Equals($"110:{binding.featureId.Substring(1)}:1"));
-                            //                if (noGeometry != null && !featureTypesAdded.Contains(binding.featureId)) {
-                            //                    featureTypesAdded.Add(binding.featureId);
-                            //                    dataset?.AddFeature(noGeometry);
-                            //                }
-                            //            }
-                            //        }
+                                //                var noGeometry = featureTypes.SingleOrDefault(e => e.Foid.Equals($"110:{binding.featureId.Substring(1)}:1"));
+                                //                if (noGeometry != null && !featureTypesAdded.Contains(binding.featureId)) {
+                                //                    featureTypesAdded.Add(binding.featureId);
+                                //                    dataset?.AddFeature(noGeometry);
+                                //                }
+                                //            }
+                                //        }
 
-                            //    }
-                            //    catch (Exception ex) {
-                            //        Log.Warning(ex, "Error deserializing featurebindings for feature {name}: {message}", name, ex.Message);
-                            //    }
-                            //}
+                                //    }
+                                //    catch (Exception ex) {
+                                //        Log.Warning(ex, "Error deserializing featurebindings for feature {name}: {message}", name, ex.Message);
+                                //    }
+                                //}
 
-                            dataset?.AddFeature(feature!);
+                                dataset?.AddFeature(feature!);
 
-                            var geometrytype = code!.ToLower() switch {
-                                "sounding" => MultipointBuilderEx.CreateMultipoint(current.GetShape() as MapPoint),
-                                _ => current.GetShape()
-                            };
+                                var geometrytype = code!.ToLower() switch {
+                                    "sounding" => MultipointBuilderEx.CreateMultipoint(current.GetShape() as MapPoint),
+                                    _ => current.GetShape()
+                                };
 
-                            geometries.Add(new(geometrytype, name!));
-                        }
-                        catch (Exception ex) {
-                            Log.Error(ex, ex.Message);
-                            throw;
+                                geometries.Add(new(geometrytype, geometry!));
+
+
+                            }
+                            catch (Exception ex) {
+                                Log.Error(ex, ex.Message);
+                                throw;
+                            }
                         }
                     }
                 }
