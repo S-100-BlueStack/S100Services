@@ -1,0 +1,616 @@
+/* =========================================================
+   Product Review page
+   ========================================================= */
+
+body.pc-review-route {
+  overflow: hidden;
+}
+
+body.pc-review-route #viewDiv,
+body.pc-review-route #filter-button,
+body.pc-review-route #filter-count,
+body.pc-review-route #refresh-button,
+body.pc-review-route #display-scale-toggle,
+body.pc-review-route #display-scale-toggle-wrapper,
+body.pc-review-route #last-updated {
+  display: none;
+}
+
+.pc-review-page {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  color: var(--pc-text);
+  background: var(--pc-surface);
+}
+
+.pc-review-sidebar {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 14px;
+  background: var(--pc-surface);
+  border-right: 1px solid var(--pc-border);
+}
+
+.pc-review-sidebar__header {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pc-review-sidebar__eyebrow {
+  color: var(--pc-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pc-review-sidebar__title {
+  margin: 0;
+  color: var(--pc-text);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.pc-review-sidebar__description,
+.pc-review-product-form__help,
+.pc-review-product-list__empty {
+  margin: 0;
+  color: var(--pc-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.pc-review-product-form {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  background: var(--pc-surface-alt);
+  border: 1px solid var(--pc-border);
+}
+
+.pc-review-product-form__label {
+  color: var(--pc-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pc-review-product-form__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.pc-review-product-form__input {
+  min-width: 0;
+  padding: 7px 9px;
+  color: var(--pc-text);
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
+  border-radius: 0;
+  font: inherit;
+  font-size: 13px;
+}
+
+.pc-review-product-form__button,
+.pc-review-product-list__remove-button,
+.pc-review-content-card__action-button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.pc-review-product-form__button {
+  padding: 7px 12px;
+  color: #ffffff;
+  background: #0079c1;
+  border: 1px solid #0079c1;
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pc-review-product-form__button:hover {
+  background: #00619b;
+  border-color: #00619b;
+}
+
+.pc-review-product-form__button:focus-visible,
+.pc-review-product-form__input:focus-visible,
+.pc-review-product-list__remove-button:focus-visible,
+.pc-review-content-card__action-button:focus-visible {
+  outline: 2px solid var(--pc-focus-ring);
+  outline-offset: 2px;
+}
+
+.pc-review-product-list {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  min-height: 0;
+  min-width: 0;
+  padding: 12px;
+  background: var(--pc-surface-alt);
+  border: 1px solid var(--pc-border);
+}
+
+.pc-review-product-list__header,
+.pc-review-product-list__item-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.pc-review-product-list__title {
+  margin: 0;
+  color: var(--pc-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pc-review-product-list__count {
+  color: var(--pc-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pc-review-product-list__items {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.pc-review-product-list__item {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 8px;
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
+}
+
+.pc-review-product-list__item.is-disabled {
+  opacity: 0.62;
+}
+
+.pc-review-product-list__toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.pc-review-product-list__toggle > input {
+  margin-top: 2px;
+}
+
+.pc-review-product-list__item-content {
+  display: grid;
+  min-width: 0;
+}
+
+.pc-review-product-list__item-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--pc-text);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-review-product-list__content-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding-left: 22px;
+}
+
+.pc-review-product-list__content-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  color: var(--pc-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.pc-review-product-list__content-type > input {
+  margin: 0;
+}
+
+.pc-review-product-list__content-type:has(input:checked) {
+  color: var(--pc-text);
+}
+
+.pc-review-product-list__remove-button {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--pc-button-secondary-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.pc-review-product-list__remove-button::before {
+  content: "\00d7";
+}
+
+.pc-review-product-list__remove-button:hover {
+  color: var(--pc-text);
+  background: var(--pc-button-secondary-bg-hover);
+  border-color: var(--pc-button-secondary-border);
+}
+
+.pc-review-board {
+  --pc-review-history-card-height: 500px;
+
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px;
+  background: var(--pc-surface-alt);
+}
+
+.pc-review-board > .pc-product-history-state {
+  max-width: 520px;
+}
+
+.pc-review-board__columns {
+  display: grid;
+  grid-auto-columns: minmax(340px, 400px);
+  grid-auto-flow: column;
+  align-items: stretch;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
+}
+
+.pc-review-column {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
+}
+
+.pc-review-column__header {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--pc-border);
+}
+
+.pc-review-column__title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--pc-text);
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-review-column__meta {
+  overflow: hidden;
+  color: var(--pc-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pc-review-column__content {
+  display: grid;
+  align-content: start;
+  gap: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 0 8px;
+}
+
+.pc-review-content-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  max-height: 500px;
+  background: var(--pc-surface);
+  border-bottom: 1px solid var(--pc-border);
+}
+
+.pc-review-content-card--history {
+  height: var(--pc-review-history-card-height);
+  min-height: var(--pc-review-history-card-height);
+  max-height: var(--pc-review-history-card-height);
+}
+
+.pc-review-content-card__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 10px;
+  background: var(--pc-surface);
+  border-bottom: 1px solid var(--pc-border);
+}
+
+.pc-review-content-card__title {
+  margin: 0;
+  color: var(--pc-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pc-review-content-card__status {
+  color: var(--pc-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pc-review-content-card__actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.pc-review-content-card__action-button {
+  padding: 3px 6px;
+  color: var(--pc-button-secondary-text);
+  background: transparent;
+  border: 1px solid var(--pc-button-secondary-border);
+  border-radius: 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.pc-review-content-card__action-button:hover {
+  color: var(--pc-text);
+  background: var(--pc-button-secondary-bg-hover);
+}
+
+.pc-review-content-card__body {
+  min-height: 0;
+  overflow: auto;
+  padding: 0;
+}
+
+.pc-review-history-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pc-review-history-list__item {
+  min-width: 0;
+}
+
+.pc-review-history-event {
+  min-width: 0;
+  background: transparent;
+  border-bottom: 1px solid color-mix(in srgb, var(--pc-border) 72%, transparent);
+}
+
+.pc-review-history-event[open] {
+  background: color-mix(in srgb, var(--pc-surface-alt) 56%, transparent);
+}
+
+.pc-review-history-event__summary {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+  padding: 3px 8px;
+  color: var(--pc-text);
+  cursor: pointer;
+  list-style: none;
+}
+
+.pc-review-history-event__summary::-webkit-details-marker {
+  display: none;
+}
+
+.pc-review-history-event__marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--calcite-color-brand, #0079c1);
+  background: transparent;
+}
+
+.pc-review-history-event__marker calcite-icon {
+  display: block;
+  color: currentColor;
+  background: transparent;
+  --calcite-ui-icon-color: currentColor;
+}
+
+.pc-review-history-event__title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--pc-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-review-history-event__meta {
+  color: var(--pc-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.pc-review-history-event__body {
+  display: grid;
+  gap: 8px;
+  padding: 4px 8px 8px 33px;
+}
+
+.pc-review-history-event__description {
+  margin: 0;
+  color: var(--pc-text);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.pc-review-history-event__details {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 0;
+  padding-top: 7px;
+  border-top: 1px solid var(--pc-border);
+  font-size: 11px;
+}
+
+.pc-review-history-event__details dt {
+  color: var(--pc-text-muted);
+  font-weight: 700;
+}
+
+.pc-review-history-event__details dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--pc-text);
+  word-break: break-word;
+}
+
+.pc-review-history-list__item--freeze .pc-review-history-event__marker {
+  color: #3b82f6;
+}
+
+.pc-review-history-list__item--unfreeze .pc-review-history-event__marker {
+  color: #f59e0b;
+}
+
+.pc-review-history-list__item--export .pc-review-history-event__marker {
+  color: #8b5cf6;
+}
+
+.pc-review-history-list__item--send .pc-review-history-event__marker {
+  color: #10b981;
+}
+
+.pc-review-history-list__item--rollback .pc-review-history-event__marker {
+  color: #ef4444;
+}
+
+.pc-review-history-list__item--analysis .pc-review-history-event__marker {
+  color: #6366f1;
+}
+
+.pc-review-history-list__item--status .pc-review-history-event__marker {
+  color: var(--calcite-color-brand, #0079c1);
+}
+
+.pc-review-board__columns,
+.pc-review-column__content,
+.pc-review-content-card__body,
+.pc-review-product-list__items,
+.pc-review-sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--pc-text-muted) 38%, transparent) transparent;
+}
+
+.pc-review-board__columns::-webkit-scrollbar,
+.pc-review-column__content::-webkit-scrollbar,
+.pc-review-content-card__body::-webkit-scrollbar,
+.pc-review-product-list__items::-webkit-scrollbar,
+.pc-review-sidebar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.pc-review-board__columns::-webkit-scrollbar-track,
+.pc-review-column__content::-webkit-scrollbar-track,
+.pc-review-content-card__body::-webkit-scrollbar-track,
+.pc-review-product-list__items::-webkit-scrollbar-track,
+.pc-review-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pc-review-board__columns::-webkit-scrollbar-thumb,
+.pc-review-column__content::-webkit-scrollbar-thumb,
+.pc-review-content-card__body::-webkit-scrollbar-thumb,
+.pc-review-product-list__items::-webkit-scrollbar-thumb,
+.pc-review-sidebar::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--pc-text-muted) 34%, transparent);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.pc-review-board__columns::-webkit-scrollbar-thumb:hover,
+.pc-review-column__content::-webkit-scrollbar-thumb:hover,
+.pc-review-content-card__body::-webkit-scrollbar-thumb:hover,
+.pc-review-product-list__items::-webkit-scrollbar-thumb:hover,
+.pc-review-sidebar::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--pc-text-muted) 52%, transparent);
+  background-clip: content-box;
+}
+
+@media (max-width: 900px) {
+  .pc-review-page {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .pc-review-sidebar {
+    grid-template-rows: auto auto auto;
+    max-height: 42dvh;
+    overflow: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--pc-border);
+  }
+
+  .pc-review-product-list__items {
+    max-height: 160px;
+  }
+
+  .pc-review-board__columns {
+    grid-auto-columns: minmax(300px, calc(100vw - 28px));
+  }
+}

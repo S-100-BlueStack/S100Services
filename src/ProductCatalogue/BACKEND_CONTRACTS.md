@@ -1,0 +1,1273 @@
+# Product Catalogue backend contracts
+
+This document is a source-of-truth document for Product Catalogue backend integration work.
+
+Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+BE-108A documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`.
+
+The permanent BE-101 scope corrections are recorded in:
+
+```text
+src/ProductCatalogue/docs/backend-context-review-addendum.md
+```
+
+When scope wording conflicts, the committed BE-101 addendum takes precedence over the original BE-101 report and earlier roadmap wording.
+
+The contracts below are implementation targets. Exact controller, service, repository, DTO, and route placement must be aligned with the current backend structure before code is changed.
+
+## Confirmed constraints
+
+The following decisions are fixed unless the project owners explicitly reopen them:
+
+- The current runtime uses `DatasetLockService` and the existing Windows lock-file framework under `%ProgramData%` as the final execution-time concurrency authority.
+- The current active-job endpoint and frontend preflight improve visibility and prevent normal duplicate starts, but they are not an atomic enqueue claim.
+- Do not add a second lock or operation registry without a separately approved distributed-ownership design package. BE-106 documents the requirement but does not authorize implementation.
+- Use the background-job framework already present in the backend. Do not introduce a competing job framework inside Product Catalogue.
+- BE-106 confirms that ProductManagerAPI remains the public API/enqueue/status owner while Hangfire Server/worker hosting may later move to JobPlatform. The move is deferred until JobPlatform is ready and requires shared assemblies, queues, ArcGIS/file dependencies, storage access and distributed concurrency to be resolved.
+- Avoid Product database and geodatabase schema changes while database administrators are unavailable.
+- Continue using `datasetName` as the temporary Product identifier until a permanent Product ID is introduced by the database owners.
+- Do not implement report storage or report-content APIs until the IC-ENC and internal validation processes are defined.
+- Product History is an audit log. It is not a mechanism for reconstructing historical map snapshots.
+- Global map timeline is a separate, deferred feature that requires a deliberate snapshot/history architecture decision.
+- Analyze continues to load one Product per request. A multi-Product Analyze endpoint is not planned.
+- Analyze geometry is not changed in BE-102. A structured public geometry response remains the likely long-term direction and must be handled as a separate later API-contract task.
+- Authentication and authorization remain intentionally open during development and are deferred to production-readiness work.
+- User-facing Usage Band labels must use the full form, such as `4 - Navigational Purpose Approach`, without adding a `Usage band` prefix.
+
+## Mandatory backend context review
+
+Before implementing any contract in this document, complete the checklist in:
+
+```text
+src/ProductCatalogue/docs/backend-context-review-checklist.md
+```
+
+The implementation must preserve the existing request flow, dependency injection, response wrappers, exception handling, job infrastructure, file operations, ArcGIS integration, and test conventions unless a change is explicitly approved.
+
+## General API conventions
+
+### Development authentication status
+
+Authentication and authorization remain intentionally open during development because earlier integration work encountered authentication and CORS-related issues.
+
+Do not add authentication or authorization acceptance criteria to BE-102. API and Hangfire Dashboard protection must be addressed later as part of production readiness.
+
+### Preserve existing routes where practical
+
+Prefer additive changes to existing endpoints over parallel replacement endpoints when the existing route already represents the correct operation.
+
+Do not rename or move an endpoint before all current consumers have been identified.
+
+### Success responses
+
+Use the backend's established typed response convention. Do not introduce a second global response envelope only for Product Catalogue.
+
+For newly asynchronous operations, the response must expose at least:
+
+```json
+{
+  "jobId": "12345",
+  "datasetName": "101DK0040943E",
+  "operationType": "ExportEdition",
+  "status": "Queued",
+  "statusUrl": "/api/jobs/12345"
+}
+```
+
+The actual casing and wrapper must match the established backend convention after the context review.
+
+### Error responses
+
+Touched endpoints must return a stable machine-readable error code in addition to a user-readable message.
+
+Preferred HTTP semantics:
+
+- `400 Bad Request`: malformed or invalid input.
+- `404 Not Found`: Product or job does not exist.
+- `409 Conflict`: the requested operation cannot proceed because the Product file is already in use or the operation conflicts with current Product state.
+- `422 Unprocessable Entity`: the request is valid, but the requested export target or operation variant is not supported yet.
+- `500 Internal Server Error`: unexpected backend failure.
+
+Example unsupported-target problem:
+
+```json
+{
+  "title": "Export target is not supported",
+  "status": 422,
+  "code": "EXPORT_TARGET_NOT_SUPPORTED",
+  "detail": "Only S100 exports are currently available.",
+  "supportedTargets": ["S100"]
+}
+```
+
+Example file-in-use conflict:
+
+```json
+{
+  "title": "Product is currently in use",
+  "status": 409,
+  "code": "PRODUCT_FILE_IN_USE",
+  "detail": "Another Product operation is using 101DK0040943E. Try again when the current operation has completed.",
+  "datasetName": "101DK0040943E"
+}
+```
+
+Do not create an application-level lock to produce this response. Normalize the existing file-lock failure when the backend can identify it reliably.
+
+## Export target contract
+
+This section defines the BE-102 contract boundary. BE-102 implements only the readable ExportTarget contract and the matching frontend metadata.
+
+It does not implement Hangfire jobs, job status, recovery, lock hardening, authentication, AOI changes, Dashboard changes, geometry changes, or the underlying S100 New Update operation.
+
+### BE-102 implementation status
+
+BE-102 is implemented with a targeted API action filter that validates `exportTarget` before the controller action runs.
+
+Implemented public behavior:
+
+- a missing `exportTarget` defaults to `S100`;
+- an explicitly empty or whitespace-only value is invalid;
+- names are matched case-insensitively;
+- canonical documentation and metadata use `All`, `S100`, and `S57`;
+- `Both`, numeric values, numeric-looking values, and unknown text return `400 Bad Request` with `code: EXPORT_TARGET_INVALID` and `allowedTargets: ["All", "S100", "S57"]`;
+- `All` and `S57` return `422 Unprocessable Entity` with `code: EXPORT_TARGET_NOT_SUPPORTED` and `supportedTargets: ["S100"]`;
+- validation completes before Product lookup, locking, ArcGIS/file work, attachments, and repository/history mutation;
+- `S100` New Edition preserves the existing export operation;
+- `S100` New Update preserves the existing `501 Not Implemented` `ApiResponse`.
+
+`GET /Lookup/exportformats` now returns this exact response shape:
+
+```json
+[{ "Name": "All" }, { "Name": "S100" }, { "Name": "S57" }]
+```
+
+The lookup response no longer publishes `Both` or numeric request values.
+
+Deployment is frontend-first or backend-first compatible because the current backend accepts the readable `S100` name and the implemented backend continues to default a missing target to `S100`. The frontend sends `exportTarget=S100` explicitly after BE-102.
+
+### Existing operation routes
+
+BE-102 applies the shared target parsing and validation contract to:
+
+```http
+POST /export/{name}/newedition
+POST /export/{name}/newupdate
+```
+
+Rollback behavior is not changed by BE-102.
+
+The HTTP verbs and route names remain aligned with the backend confirmed during BE-101.
+
+### Readable export target
+
+Limit the public `exportTarget` contract to the readable values `All`, `S100`, and `S57`.
+
+Preferred query parameter:
+
+```http
+?exportTarget=S100
+```
+
+Public contract values:
+
+```text
+All
+S100
+S57
+```
+
+The internal enum may retain numeric assignments, but public requests and OpenAPI/Swagger documentation must use the readable names.
+
+ASP.NET enum model binding previously accepted both enum names and numeric enum values. BE-102 validates the raw query value before controller execution, so numeric values and the legacy name `Both` are not part of the public contract.
+
+Requests such as the following are rejected:
+
+```http
+?exportTarget=1
+```
+
+Consumer review found no verified numeric consumer and no deployment-order requirement. Numeric legacy support is not included.
+
+### Shared parsing and validation
+
+New Edition and New Update must use the same target parsing and target validation contract.
+
+The expected validation order is:
+
+1. Reject an invalid or numeric target.
+2. Reject `All` and `S57` as valid but unsupported targets.
+3. Allow a valid `S100` target to reach the operation-specific endpoint behavior.
+
+For New Update, step 3 must retain the endpoint's existing not-implemented response.
+
+If the current backend architecture makes this ordering unsuitable, implementation must not silently choose another order. The deviation must be documented as an open BE-102 question before runtime code is changed.
+
+### New Update clarification
+
+BE-102 implements only the readable ExportTarget contract.
+
+The existing New Update operation remains unimplemented. For a valid `S100` target, the endpoint must retain its current not-implemented behavior until a separate work package implements S100 Update.
+
+BE-102 must not add the underlying generation or export logic for New Update.
+
+### Expected behavior after BE-102
+
+| Operation   | Target                   | Expected backend behavior                    | Frontend state |
+| ----------- | ------------------------ | -------------------------------------------- | -------------- |
+| New Edition | `S100`                   | Execute the existing S100 Edition export     | Enabled        |
+| New Edition | `All`                    | Return an explicit unsupported-target error  | Disabled       |
+| New Edition | `S57`                    | Return an explicit unsupported-target error  | Disabled       |
+| New Edition | numeric `0`, `1`, or `2` | Return `400` with `EXPORT_TARGET_INVALID`    | Not sent       |
+| New Update  | `S100`                   | Retain the existing not-implemented response | Disabled       |
+| New Update  | `All`                    | Return an explicit unsupported-target error  | Disabled       |
+| New Update  | `S57`                    | Return an explicit unsupported-target error  | Disabled       |
+| New Update  | numeric `0`, `1`, or `2` | Return `400` with `EXPORT_TARGET_INVALID`    | Not sent       |
+
+Only S100 Edition is operational and enabled.
+
+### Frontend export configuration
+
+Every export leaf must have explicit metadata, even while the leaf is disabled:
+
+```js
+{
+  target: "S100",
+  exportType: "Edition",
+  implemented: true,
+}
+```
+
+Disabled future leaves must retain their intended metadata:
+
+```js
+{
+  target: "S57",
+  exportType: "Update",
+  implemented: false,
+}
+```
+
+The complete frontend leaf set is:
+
+- All Edition;
+- All Update;
+- S100 Edition;
+- S100 Update;
+- S57 Edition;
+- S57 Update.
+
+Only S100 Edition is enabled. S100 Update remains disabled because the backend operation remains unimplemented. Disabled leaves must not dispatch requests.
+
+### BE-102 acceptance boundary
+
+BE-102 requires:
+
+- readable `All`, `S100`, and `S57` target parsing;
+- explicit support validation that allows only `S100`;
+- shared parsing and validation for New Edition and New Update;
+- correct OpenAPI/Swagger documentation;
+- frontend metadata for all six leaves;
+- only S100 Edition enabled;
+- relevant backend and frontend tests.
+
+BE-102 explicitly excludes:
+
+- Hangfire or other async-job changes;
+- job-status or active-job visibility changes;
+- retry, idempotency, recovery, cleanup, or lock hardening;
+- authentication or authorization changes;
+- AOI, Dashboard, or geometry runtime changes;
+- implementation of S100 New Update;
+- Product database or geodatabase schema changes.
+
+## Async operation and job-status contract
+
+This contract belongs to BE-104 and BE-105. It is outside BE-102.
+
+### Goal
+
+Long-running Export and Rollback operations should be moved into the backend's existing background-job framework when the current synchronous behavior is no longer acceptable.
+
+The first goal is reliable job visibility and recovery, not a new concurrency system.
+
+### Non-goals
+
+Do not:
+
+- add a Product lock table;
+- add lock fields to Product records;
+- replace Windows file locking;
+- introduce a second background-job framework;
+- fabricate progress percentages when the underlying operation has no measurable stages;
+- enable automatic retries before idempotency and partial-output behavior are understood.
+
+### Start response
+
+The existing operation endpoint may become asynchronous and return:
+
+```http
+202 Accepted
+```
+
+Minimum response data:
+
+```json
+{
+  "jobId": "12345",
+  "datasetName": "101DK0040943E",
+  "operationType": "ExportEdition",
+  "exportTarget": "S100",
+  "status": "Queued",
+  "createdAt": "2026-07-17T08:30:00Z",
+  "statusUrl": "/api/jobs/12345"
+}
+```
+
+Rollback uses the same model without `exportTarget`.
+
+### Job status
+
+A status endpoint must return at least:
+
+```text
+Queued
+Running
+Succeeded
+Failed
+Cancelled
+```
+
+Minimum response data:
+
+```json
+{
+  "jobId": "12345",
+  "datasetName": "101DK0040943E",
+  "operationType": "ExportEdition",
+  "exportTarget": "S100",
+  "status": "Running",
+  "createdAt": "2026-07-17T08:30:00Z",
+  "startedAt": "2026-07-17T08:30:03Z",
+  "completedAt": null,
+  "message": "Export is running.",
+  "error": null
+}
+```
+
+A failed job must expose a safe user-facing message and a correlation identifier. Internal stack traces must remain in backend logs.
+
+### Progress
+
+Progress is optional.
+
+Only add progress when the current export/rollback implementation has real, stable stages or measurable units. Valid progress examples include:
+
+```json
+{
+  "current": 2,
+  "total": 5,
+  "label": "Creating S-100 package"
+}
+```
+
+Do not return arbitrary percentages based only on elapsed time.
+
+### Product-level active status
+
+A Product-level active-job endpoint is useful but is phase 2 of the job work.
+
+It may be implemented only when the existing job framework can expose or index Product metadata without a Product database schema change.
+
+Conceptual response:
+
+```json
+{
+  "datasetName": "101DK0040943E",
+  "activeJobs": [
+    {
+      "jobId": "12345",
+      "operationType": "ExportEdition",
+      "exportTarget": "S100",
+      "status": "Running",
+      "startedAt": "2026-07-17T08:30:03Z"
+    }
+  ]
+}
+```
+
+This endpoint is informational. It must not be treated as the concurrency authority. A race can still occur between reading status and starting an operation, and the existing file-lock behavior remains decisive.
+
+If the current job framework cannot support efficient Product lookup without new persistence, retain job-by-ID status first and defer cross-user pre-visibility.
+
+### Retry policy
+
+Export and Rollback jobs must not use automatic retries until all of the following are confirmed:
+
+- the operation is idempotent, or a retry-safe operation key exists;
+- partial files are cleaned up safely;
+- a repeated ArcGIS operation cannot corrupt or duplicate output;
+- the current backend can distinguish transient failures from business failures.
+
+Until then, configure the operation according to existing backend conventions with automatic retry disabled or explicitly limited.
+
+## AOI endpoint performance contract
+
+### Current goal
+
+Reduce time to first usable map state without changing Product or geodatabase schema.
+
+### Required measurement
+
+Before optimization, instrument the current request path and capture timings for:
+
+- controller entry to response completion;
+- AOI/geometric data retrieval;
+- Product state retrieval;
+- per-Product mapping and normalization;
+- ArcGIS or file-based dispatch;
+- JSON serialization;
+- payload size before and after compression.
+
+### Optimization order
+
+Apply changes in this order:
+
+1. Confirm whether a sequential per-Product lookup or other N+1 pattern exists in the current committed backend.
+2. Replace confirmed N+1 reads with an existing or new batch repository method that uses the current schema.
+3. Remove duplicate mapping, parsing, and serialization work.
+4. Confirm response compression for the actual hosting path.
+5. Evaluate short-lived caching only for data whose freshness rules are understood.
+6. Re-measure.
+7. Consider incremental loading or pagination only if the measured source can produce real subsets without first loading the complete result.
+
+Do not implement fake pagination that loads the full dataset before applying `Skip`/`Take`; it reduces response size but not backend latency.
+
+### Incremental loading
+
+Incremental loading is valuable when it improves time to first rendered Products.
+
+Possible designs must be selected only after the data source is understood:
+
+- metadata-first response followed by geometry pages;
+- true source-level paging;
+- server-side cached result with page retrieval;
+- streaming/chunked response if compatible with the hosting and frontend stack.
+
+The frontend already supports progressive rendering patterns and should preserve map viewpoint, filters, popup state where possible, and a clear progress model.
+
+## Dashboard filtering and cursor pagination
+
+### BE-107 implementation status
+
+BE-107 is implemented and manually verified against baseline `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd` without a database or geodatabase schema change.
+
+The existing endpoint remains:
+
+```http
+GET /electronicproducts/dashboard
+```
+
+The original `from` and optional `to` parameters remain unchanged. The following additive query parameters are supported:
+
+```text
+search
+product
+type
+status
+importance
+reports
+pageSize
+cursor
+```
+
+Allowed filter values:
+
+- `importance`: `all`, `important`, or `failed`;
+- `reports`: `all`, `any`, `ic-enc`, or `internal-validation`.
+
+`pageSize` must be between `1` and `200`. `cursor` is an opaque continuation token and is valid only when `pageSize` is present.
+
+### Backward compatibility
+
+Omitting `pageSize` preserves the previous complete filtered activity-list behavior for existing consumers. The Product Catalogue Dashboard sends `pageSize=50`.
+
+The response envelope remains additive. Existing summary and activity properties remain, while the response now also exposes:
+
+```json
+{
+  "Paging": {
+    "PageSize": 50,
+    "Returned": 50,
+    "Total": 142,
+    "HasMore": true,
+    "NextCursor": "opaque-token"
+  },
+  "FilterOptions": {
+    "Types": [{ "Value": "export", "Label": "Export" }],
+    "Statuses": [{ "Value": "failed", "Label": "Failed" }],
+    "Products": [{ "Value": "101DK0040943E", "Label": "101DK0040943E" }]
+  }
+}
+```
+
+### Filtering and summary semantics
+
+The backend applies search, Product, type, status, importance, and report filters before calculating any summary or selecting the visible page.
+
+The following values always represent the complete filtered result, not only the visible page:
+
+- `Summary`;
+- `StatusSummary`;
+- `OperationSummary`;
+- `Paging.Total`;
+- `TotalHits`.
+
+`Paging.Returned` and `Activities` represent only the current page.
+
+Filter options are calculated from the complete date-bounded source before active filters are applied. This keeps type, status, and Product selections available while another filter is active.
+
+### Ordering and cursor contract
+
+Ordering is deterministic:
+
+```text
+Timestamp DESC
+Id DESC
+```
+
+The persisted `ProductRecord.Id` GUID is used as the activity ID when available. The cursor encodes the final timestamp/ID sort key and must be treated as opaque by consumers.
+
+Normal next-page navigation must not duplicate an activity already returned on the previous page. Filter or range changes require the consumer to discard existing cursors and restart at the first page.
+
+### Current execution boundary
+
+The first release continues to load the complete date-bounded JobTable history through `IProductRepository.GetHistoryAsync`. Mapping, filtering, complete-result summaries, and cursor page selection run in the API process.
+
+This deliberately provides:
+
+- bounded API response size;
+- bounded browser rendering work;
+- cancellation of stale frontend requests;
+- no database/schema/index change.
+
+It does not yet reduce the number of date-bounded rows materialized by the repository. Repository-level predicate pushdown or indexes require measured query plans, activity volume, and administrator review before implementation.
+
+The controller logs source, filtered, and returned row counts plus repository, mapping, filtering/paging, and total durations to support that later evidence-based decision.
+
+### Validation failures
+
+Invalid Dashboard query parameters return `400 Bad Request` using the existing `ApiResponse` convention. Examples include:
+
+- `pageSize` outside `1-200`;
+- a cursor without `pageSize`;
+- a malformed cursor;
+- unsupported `importance` or `reports` values.
+
+### Frontend request behavior
+
+The Product Catalogue Dashboard:
+
+- sends all active filters to the endpoint;
+- debounces search by 300 ms;
+- aborts stale requests;
+- resets cursor history when the range or filters change;
+- keeps the last successful response visible while loading or after an individual request failure;
+- uses Previous/Next navigation with a client-side stack of opaque backend cursors;
+- preserves Dashboard History and direct range URL/reload behavior.
+
+### Verification status
+
+Automated BE-107 coverage includes:
+
+- filtering before page selection and complete filtered totals;
+- backward-compatible full results when `pageSize` is omitted;
+- complete-result summaries and filter options;
+- deterministic equal-timestamp cursor ordering without duplicates between consecutive pages;
+- case-insensitive search, Product and importance filtering;
+- report filtering, empty results and invalid query validation;
+- frontend query serialization, paging normalization, cursor history and search-value preservation.
+
+Manual Dashboard verification by the project owner confirmed that pagination works as intended at commit `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`. BE-107 is complete at this baseline.
+
+## Usage Band presentation
+
+The API must continue to preserve both the numeric ID and the full description.
+
+Conceptual data:
+
+```json
+{
+  "id": 4,
+  "description": "Navigational Purpose Approach"
+}
+```
+
+The frontend-visible labels must use the full text:
+
+```text
+1 - Navigational Purpose Overview
+2 - Navigational Purpose General
+3 - Navigational Purpose Coastal
+4 - Navigational Purpose Approach
+5 - Navigational Purpose Harbour
+6 - Navigational Purpose Berthing
+```
+
+The filter value should continue to use the stable ID.
+
+This is expected to be a frontend formatting change unless the current endpoint drops either field.
+
+## Product History contract
+
+Product History is an audit log for one Product. It is not a historical-map reconstruction system and it must remain separate from the deferred global map timeline.
+
+The approved BE-108A design is documented in:
+
+```text
+src/ProductCatalogue/docs/be-108a-product-history-event-design.md
+```
+
+BE-108A is documentation-approved but not implemented at this baseline. It is split into two later implementation batches.
+
+### Batch 1 - Foundation
+
+Planned responsibilities:
+
+- dedicated Product History event persistence;
+- repository and lifecycle service;
+- endpoint-specific history response;
+- additive `Events`, `EventTotalHits`, and legacy state `Id`;
+- `AppendAsync` returning `Guid`;
+- application-owned `OperationId`;
+- deterministic `StateRecordId` association;
+- frontend legacy/explicit event normalization.
+
+### Batch 2 - Producers and recovery
+
+Planned responsibilities:
+
+- Export producer lifecycle;
+- Rollback producer lifecycle;
+- canonical outcomes `Succeeded`, `Failed`, `SucceededWithWarning`, and `RequiresManualReview`;
+- audit failure handling;
+- reconciliation;
+- dedicated maintenance queue;
+- worker restart/requeue recovery.
+
+### Authoritative migration mechanism
+
+The approved mechanism for the future additive audit table is:
+
+```text
+Repository-owned versioned SQL Server scripts
+Database-owner executed
+Database-first deployment
+No automatic startup migration
+No EF Core introduction
+Additive audit table retained during application rollback
+```
+
+The future scripts must use explicit `[dbo]` schema, `SET XACT_ABORT ON`, transactions for additive schema changes, strict idempotency, and `THROW` on incompatible tables, columns, constraints, or indexes. Verification must fail on any missing or incompatible schema element; informative result sets alone are not sufficient.
+
+No SQL script is included by this documentation package.
+
+### Outcome model
+
+Canonical outcomes are:
+
+```text
+Succeeded
+Failed
+SucceededWithWarning
+RequiresManualReview
+```
+
+`RequiresManualReview` is required when irreversible side effects have begun and the final business state cannot be proven. It must not be represented as `Failed`.
+
+Do not add speculative event-type values for producers that do not yet exist. Frontend unknown-value fallback must preserve future compatibility.
+
+### Identity and association
+
+The future contract must preserve these identities independently:
+
+```text
+OperationId
+JobId
+CorrelationId
+StateRecordId
+```
+
+There is one public audit event per logical operation. An inferred legacy entry may be suppressed only when all of these conditions are true:
+
+```text
+Explicit event type is Export or Rollback
+Explicit outcome is Succeeded or SucceededWithWarning
+Explicit StateRecordId is present and matches the legacy state row Id
+Normalized legacy event type matches the explicit event type
+```
+
+A matching `StateRecordId` alone is insufficient. `Failed`, `RequiresManualReview`, missing/mismatched IDs, different operation types, and legacy status/note or other non-matching entries remain separate timeline elements. Timestamp-based or heuristic deduplication is prohibited.
+
+### Persistence storage validation
+
+Batch 1 must define one central validated persistence model containing at least:
+
+```text
+DatasetName
+EventType
+Outcome
+Code
+SafeMessage
+CorrelationId
+JobId
+OperationId
+StateRecordId
+ExportTarget
+structured operation metadata
+```
+
+Before repository access, the service/contract boundary must trim and canonicalize relevant values, validate identity and contract fields, enforce the database limits selected with the table design, and apply deterministic handling for overlong safe messages. The same maximum lengths must be shared by migration definitions, service validation, repository assumptions, and tests.
+
+The repository receives an already validated persistence model. SQL Server errors must not be used as normal contract validation. Raw exception messages, stack traces, internal paths, compiler/SQL details, credentials, connection information, and raw report payloads must never be accepted as `SafeMessage`. Safe messages must come from an approved mapping/catalog boundary.
+
+### DatasetName matching
+
+Event persistence preserves exact, case-insensitive `DatasetName` semantics through shared application canonicalization at both write and query boundaries:
+
+```text
+trim surrounding whitespace
+→ invariant uppercase
+→ validate
+→ exact persist/query value
+```
+
+Repository queries use exact equality against the canonical value. Prefix, substring, wildcard, culture-sensitive, or database-default-collation-dependent matching is prohibited. Batch 1 must include SQL Server integration verification; an in-memory case-insensitive test alone is not sufficient. Because the approved model is canonicalization-based rather than collation-based, the verify script checks the approved column definition but does not claim database collation as the source of case-insensitive behavior.
+
+### Audit lifecycle policy
+
+- A pending audit event must exist before irreversible side effects begin.
+- Failure to create the pending event stops the operation before execution and uses a safe audit-unavailable error such as `PRODUCT_HISTORY_UNAVAILABLE`.
+- Audit finalization failure after a successful business operation must not change the business operation or Hangfire job to `Failed`.
+- Pending events are completed later by reconciliation.
+- Event persistence is audit lifecycle storage only. It must not be used as a distributed lock, enqueue claim, or operation ownership registry.
+
+### Public history endpoint
+
+The existing route remains:
+
+```http
+GET /electronicproducts/{datasetName}/history
+```
+
+A future endpoint-specific response type must preserve:
+
+```text
+Data: ProductHistoryResponse[]
+TotalHits: legacy state count
+```
+
+and add:
+
+```text
+Events: ProductHistoryEventResponse[]
+EventTotalHits: explicit event count
+```
+
+The global generic `ApiResponse` must not be changed to implement this endpoint contract.
+
+The central persisted event model must include at least:
+
+```text
+DatasetName
+EventType
+Outcome
+Code
+SafeMessage
+CorrelationId
+JobId
+OperationId
+StateRecordId
+ExportTarget
+structured operation metadata
+```
+
+Titles should normally be derived by the API or frontend from `EventType` and `Outcome`, rather than being mandatory persisted fields.
+
+### Planned reconciliation
+
+The later Batch 2 reconciliation design is:
+
+```text
+Recurring job ID: product-history-reconciliation
+Initial schedule: every 15 minutes
+Dedicated queue: productmanager-maintenance
+Initial host: ProductManagerAPI Hangfire Server
+Future host: shared worker
+```
+
+Reconciliation must classify Hangfire states explicitly:
+
+- non-terminal: leave pending;
+- succeeded: finalize from application-owned safe metadata;
+- terminal non-success: `Failed` when execution never started, otherwise `RequiresManualReview`;
+- unknown: leave pending and log.
+
+Unknown states must never be automatically finalized as failures.
+
+### Deferred producers and integrations
+
+The following are outside BE-108A:
+
+```text
+Internal validation
+IC-ENC report processing
+Send to IC-ENC
+report content/storage
+Dashboard event-source integration
+external worker extraction
+```
+
+Job polling/progress updates and low-level attempts must not become public Product History events. The contract records one meaningful final audit event per logical operation.
+
+## Analyze geometry contract
+
+Analyze geometry is not changed in BE-102.
+
+The likely long-term public API shape is a structured JSON geometry value rather than a JSON-encoded string:
+
+```json
+{
+  "aoiGeometry": {
+    "rings": [],
+    "spatialReference": {
+      "wkid": 4326
+    }
+  }
+}
+```
+
+Internal ArcGIS `ToJson()` and `ImportFromJson()` use may remain unchanged. The later contract task should separate internal ArcGIS serialization from the public response DTO where practical.
+
+Do not change the current public geometry serialization until a separate API-contract task confirms:
+
+- why the current shape exists;
+- every backend and frontend consumer;
+- whether the same DTO is reused elsewhere;
+- whether ArcGIS or file integrations require the string representation;
+- whether a dedicated response DTO can improve the Product Catalogue contract without changing internal models.
+
+Analyze continues to perform one Product lookup per request.
+
+## Reports
+
+Report implementation is blocked pending IC-ENC and internal validation process decisions.
+
+Do not build permanent report storage, report IDs, or report-content endpoints yet.
+
+Keep the future contract requirements documented:
+
+- report identifier;
+- report type;
+- Product reference;
+- job/history/activity references where applicable;
+- generation status;
+- generated timestamp;
+- safe error details;
+- content or download URL.
+
+Frontend report actions remain disabled or unavailable until real metadata exists.
+
+## Global map timeline
+
+The desired feature is historical map reconstruction, for example:
+
+```text
+Show how the map looked on 13 July at 12:00.
+```
+
+This cannot be derived reliably from the current Product audit log unless every spatial and attribute change is reconstructable.
+
+Potential architectures include:
+
+- periodic full snapshots;
+- database temporal history plus a reconstruction layer;
+- ArcGIS/geodatabase archiving;
+- event sourcing with complete spatial deltas.
+
+This is not considered out-of-the-box functionality for the current application. It requires an architecture and data-retention decision by the relevant owners and may require database or geodatabase administration.
+
+Status: deferred, very nice to have.
+
+## Permanent Product ID
+
+A permanent Product ID is planned but depends on database readiness.
+
+Until then:
+
+- keep `datasetName` as the API and frontend key;
+- do not invent a frontend-only permanent ID;
+- do not add a replacement ID field as part of unrelated backend work;
+- design new DTOs so a future `productId` can be added without removing `datasetName` immediately.
+
+## Standardization across backend developers
+
+Standardization must be incremental and must use the current backend framework.
+
+For each touched endpoint:
+
+- use the established success wrapper or typed response convention;
+- use one established error mechanism;
+- include stable machine-readable error codes;
+- include correlation IDs for unexpected and job failures;
+- document request and response DTOs in OpenAPI;
+- add tests for validation, unsupported variants, conflicts, and unexpected failures;
+- avoid controller-specific ad hoc JSON objects when a shared convention already exists.
+
+Do not perform a repository-wide response rewrite as part of the first Product Catalogue backend task.
+
+## BE-104/BE-105 asynchronous Export and Rollback contract
+
+Backend foundation commit: `7fe500aafb5831e71dd766f07bb118b3d8e08aea`.
+Frontend activation and backend-authoritative visibility commit: `279fe6a761229fd99af437d0f8401508985afafc`.
+Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+
+BE-104A added the backend asynchronous job foundation. BE-104B activated it in the
+frontend, and BE-105 added Product-level active-job visibility across browser
+profiles, users and computers. The existing synchronous New Edition and Rollback
+endpoints remain available for compatibility, but normal popup actions use the
+asynchronous endpoints.
+
+The current merged application contracts use `uint`/`uint?` for edition and update
+values at `IExportService` and `IProductRepository` boundaries. These contracts are
+preserved. `ProductRepository` performs checked conversion to signed `int` values
+before parameters reach Dapper/SQL Server. Authoritative S-128 Product versions and
+job metadata remain `int?`/`int?`; null is preserved and rejected before enqueue.
+
+### Additive endpoints
+
+```http
+POST /export/{datasetName}/newedition/jobs?exportTarget=S100
+POST /export/{datasetName}/rollback/jobs
+GET /jobs/{jobId}
+GET /jobs/active?datasetName={datasetName}
+```
+
+The two start endpoints perform validation and authoritative version capture only.
+They do not acquire the dataset lock and do not mutate Product data. Successful job
+creation returns `202 Accepted`, a relative `Location: /jobs/{jobId}` header and:
+
+```json
+{
+  "jobId": "12345",
+  "datasetName": "101DK0040943E",
+  "operationType": "ExportEdition",
+  "exportTarget": "S100",
+  "status": "Queued",
+  "createdAt": "2026-07-22T09:30:00.0000000Z",
+  "correlationId": "347e48b5f3f34e538c90cb43cb324cdb",
+  "statusUrl": "/jobs/12345"
+}
+```
+
+Rollback uses `operationType: Rollback` and `exportTarget: null`.
+
+Async New Edition uses the existing BE-102 target validator and constants. Missing
+target defaults to `S100`. Invalid values return `400 EXPORT_TARGET_INVALID`.
+`All` and `S57` return `422` using
+`ExportTargetContract.UnsupportedTargetCode`, whose public value is
+`EXPORT_TARGET_NOT_SUPPORTED`.
+
+### Start failures
+
+| Condition                            | HTTP | Code                           | Safe message                                                         |
+| ------------------------------------ | ---: | ------------------------------ | -------------------------------------------------------------------- |
+| Product not found                    |  404 | `PRODUCT_NOT_FOUND`            | `The product was not found.`                                         |
+| Edition or update unavailable        |  409 | `PRODUCT_VERSION_UNAVAILABLE`  | `The product does not have a usable edition and update version.`     |
+| Multiple exact authoritative matches |  409 | `PRODUCT_DATA_INTEGRITY_ERROR` | `The product data is ambiguous and the operation cannot be started.` |
+| Hangfire creation failure            |  503 | `JOB_ENQUEUE_FAILED`           | `The operation could not be queued.`                                 |
+
+Failure responses contain no job ID or `Location` header. No Product mutation occurs.
+
+### Authoritative Product version
+
+The job request captures nullable edition and update values from the same
+ElectronicProduct/GDB source that the operation mutates. The start endpoint rejects
+null edition or update values before enqueue; null is never normalized to zero.
+
+The GDB lookup:
+
+1. normalizes the requested dataset name;
+2. queries only S-128 `ElectronicProduct` rows;
+3. requests only `attributebindings`;
+4. parses candidate ElectronicProducts;
+5. requires exact, case-insensitive `datasetName` equality.
+
+Zero exact matches means not found. One exact match returns the version. Multiple
+exact matches throw an internal `ProductDataIntegrityException`. Prefix and substring
+matches, including `101DK001` versus `101DK001A`, are not accepted as exact matches.
+
+### Application-owned Hangfire metadata
+
+An `IClientFilter.OnCreating` filter writes the following job parameters during the
+same Hangfire creation transaction as the job:
+
+```text
+ProductManagerDatasetName
+ProductManagerOperationType
+ProductManagerExportTarget
+ProductManagerExpectedEdition
+ProductManagerExpectedUpdate
+ProductManagerCorrelationId
+ProductManagerCreatedAtUtc
+```
+
+Execution writes:
+
+```text
+ProductManagerExecutionStarted
+ProductManagerResultCode
+ProductManagerResultMessage
+ProductManagerWarningCode
+ProductManagerWarningMessage
+ProductManagerErrorCode
+ProductManagerErrorMessage
+```
+
+The public status model is built only from these application-owned parameters and
+Hangfire state history. It does not parse method names or serialized job arguments.
+
+### Execution order and retry policy
+
+The job has `[AutomaticRetry(Attempts = 0)]`. The HTTP request cancellation token is
+not serialized. Hangfire supplies the execution cancellation token.
+
+The required execution order is:
+
+```text
+acquire dataset lock
+→ read ProductManagerExecutionStarted
+→ if already true, fail MANUAL_REVIEW_REQUIRED without Product read
+→ reload exact authoritative Product version
+→ compare expected edition/update
+→ validate the current Product operation state
+→ set ProductManagerExecutionStarted = true
+→ begin the first irreversible side effect
+```
+
+An existing execution flag produces terminal `MANUAL_REVIEW_REQUIRED`. A queued job
+whose Product version changed before its first execution produces
+`PRODUCT_VERSION_CHANGED`. Multiple exact matches discovered during execution produce
+terminal `PRODUCT_DATA_INTEGRITY_ERROR`, write safe metadata, set no execution flag
+and perform no mutations.
+
+The operation service performs state eligibility checks before invoking the execution
+guard callback. The callback persists `ProductManagerExecutionStarted` immediately
+before `CreateNewEditionAsync` or `RollBackAsync`, which are the first Product
+mutations. A crash after the execution flag is persisted but before the first side
+effect may require manual review. This conservative window is accepted to avoid
+possible double mutation.
+
+### Dataset lock
+
+The lock path is a persistent file. Ownership is the exclusive OS handle:
+
+```csharp
+new FileStream(
+    lockPath,
+    FileMode.OpenOrCreate,
+    FileAccess.ReadWrite,
+    FileShare.None
+);
+```
+
+After acquisition, metadata is truncated and replaced while the stream remains open
+for the full protected operation. Disposal closes the stream only. Lock files are not
+deleted, and age is never used to determine ownership. An unlocked existing file is
+immediately reusable. An active handle produces `DATASET_BUSY` for an async job.
+
+### Status contract
+
+Public states are `Queued`, `Running`, `Succeeded`, `Failed` and `Cancelled`.
+Enqueued, Scheduled and Awaiting map to Queued; Processing maps to Running; Deleted
+maps to Cancelled.
+
+`createdAt` comes from `ProductManagerCreatedAtUtc`. `startedAt` is the earliest
+Processing timestamp in the complete state history. `completedAt` is the timestamp
+of the current terminal Succeeded, Failed or Deleted state.
+
+Unknown, expired, incomplete and non-Product Catalogue Hangfire jobs return `404`.
+Internal exceptions, paths, SQL, compiler commands, ArcGIS paths and stack traces are
+never returned by `GET /jobs/{jobId}`.
+
+### Terminal safe errors
+
+```text
+DATASET_BUSY
+PRODUCT_NOT_FOUND
+PRODUCT_VERSION_CHANGED
+PRODUCT_DATA_INTEGRITY_ERROR
+MANUAL_REVIEW_REQUIRED
+EXPORT_FAILED
+ROLLBACK_FAILED
+JOB_FAILED
+```
+
+A successful GDB rollback with failed output cleanup remains `Succeeded` and stores:
+
+```text
+warning.code: ROLLBACK_CLEANUP_FAILED
+warning.message: Rollback completed, but old export output could not be fully removed.
+```
+
+The warning remains readable through later status requests and contains no internal
+path or exception text.
+
+### Deployment boundary
+
+BE-104A, BE-104B and BE-105 are additive and require no Product/geodatabase schema
+change. The frontend uses the asynchronous endpoints for normal New Edition and
+Rollback actions. The synchronous endpoints remain backend compatibility paths and
+must preserve their established behavior.
+
+Before application rollback to code that does not contain `ExportOperationJob`, all
+queued Product Catalogue jobs must be completed or explicitly removed from Hangfire
+storage. API and worker processes must use compatible job assemblies and Hangfire
+serialization settings.
+
+### BE-104A creation/status runtime acceptance
+
+The atomic creation contract must be verified against the configured Hangfire SQL
+storage, not only through client-filter unit tests:
+
+```text
+pause the Hangfire worker
+→ create an async Export or Rollback job
+→ receive 202 and a job ID
+→ immediately call GET /jobs/{jobId}
+→ verify 200 Queued with complete Product Catalogue metadata
+→ verify the Product is still unchanged
+→ resume the worker
+→ verify the job executes normally
+```
+
+The immediate queued response must contain `jobId`, `datasetName`, `operationType`,
+`exportTarget`, `createdAt` and `correlationId`. This proves the metadata was committed
+with job creation through `CreatingContext`; there is no separate post-enqueue
+metadata-write step.
+
+## BE-104B frontend activation
+
+Implementation commit: `279fe6a761229fd99af437d0f8401508985afafc`.
+
+The frontend:
+
+- starts New Edition and Rollback through the asynchronous job endpoints;
+- persists active job records under `productCatalogue.activeProductJobs.v1`;
+- resumes `GET /jobs/{jobId}` polling after reload;
+- keeps conflicting Product mutations disabled through terminal status and refresh;
+- retries transient status failures with bounded backoff;
+- treats missing job status as an unavailable final result rather than silently unlocking;
+- shows safe success, warning and failure messages from the backend;
+- treats `ROLLBACK_CLEANUP_FAILED` as a successful Rollback with a warning;
+- performs a backend active-operation preflight before Product mutations and fails closed when status cannot be verified.
+
+Same-origin tabs also synchronize local job records through `localStorage`,
+`BroadcastChannel`, focus/pageshow/visibility reconciliation and a short fallback
+interval. These mechanisms are cache and responsiveness optimizations, not the shared
+source of truth.
+
+## BE-105 backend-authoritative active job visibility
+
+Implementation commit: `279fe6a761229fd99af437d0f8401508985afafc`.
+
+```http
+GET /jobs/active?datasetName={datasetName}
+```
+
+The endpoint reads Product Catalogue job metadata from the shared Hangfire storage and
+returns exact, case-insensitive Product matches whose public state is `Queued` or
+`Running`. Unknown Product names with no active jobs return an empty list. A missing
+or whitespace-only `datasetName` returns `400 DATASET_NAME_REQUIRED`.
+
+The frontend calls the endpoint when a Product popup opens, while the popup remains
+open, on relevant page lifecycle events and immediately before a mutation. Discovered
+jobs enter the central Product operation state and the Export leaf state. This gives
+all clients using the same backend and Hangfire storage the same visible active-job
+state across browser profiles, users and computers.
+
+The endpoint is informational. It does not atomically reserve a Product. Two near-
+simultaneous requests can still both be enqueued before either job becomes visible.
+The execution-time dataset lock prevents concurrent mutation, so one job can fail
+with `DATASET_BUSY`. Eliminating the extra queued job requires a separately approved atomic Product-operation ownership package.
+
+## Popup-preserving refresh contract
+
+Implementation commit: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
+
+Compatible main-map refreshes reconcile existing GraphicsLayer and Graphic instances
+in place by stable layer metadata and `featureKey`. The selected popup Graphic keeps
+object identity, popup details are refreshed through the popup refresh bridge, and
+existing Calcite action elements and open dropdowns are reconciled in place. This
+prevents popup, icon and dropdown flashing during auto-refresh, remote job discovery
+and terminal job refresh.
+
+The previous full layer rebuild and popup restore flow remains the mandatory fallback
+when layer structure or feature identity cannot be reconciled safely.
+
+## BE-106 external worker readiness review
+
+Review baseline: `0e79bf9fd95b606256160fe98d1daaa6011ceb7c`.
+
+Detailed readiness report:
+
+```text
+src/ProductCatalogue/docs/be-106-external-worker-readiness.md
+```
+
+BE-106 is complete as documentation only. It introduces no runtime behavior.
+
+### Fixed future deployment direction
+
+- ProductManagerAPI remains the Product Catalogue HTTP API.
+- ProductManagerAPI keeps request validation, enqueue and the public job/status contract.
+- `JobPlatform.Worker` is the intended later host for Product Catalogue job execution.
+- Scheduled tasks are evaluated individually and do not move implicitly with Export/Rollback.
+- The frontend must remain unaware of the worker host.
+
+### Portability boundary
+
+The current job request DTO and application-owned Hangfire metadata are portable, but the job implementation is not self-contained. External execution requires:
+
+- compatible Hangfire storage, versions and serializer settings;
+- compatible Product Catalogue job type/method identity;
+- ProductManagerCore and Product Catalogue job/service registrations;
+- Windows/x64 and ArcGIS Core/CoreHost runtime/licensing;
+- Product Catalogue system/S-128/database access;
+- compiler/export assets, catalogues and connection files;
+- output/artifact paths and service-account filesystem permissions;
+- logging and operational recovery support.
+
+### Concurrency boundary
+
+The current dataset lock is an exclusive file handle under local `%ProgramData%`. It must not be assumed to coordinate different machines. Worker extraction must avoid simultaneous Product Catalogue execution on old and new hosts. Distributed or multi-worker execution requires a separately approved atomic ownership design while preserving the execution guard and authoritative Product-version check.
+
+### Status ownership
+
+ProductManagerAPI may continue reading Product Catalogue job state from shared Hangfire storage after worker extraction. A later application-owned operation registry may replace active-job discovery, but no registry persistence or runtime contract is approved by BE-106.
+
+### Scheduled-task boundary
+
+`DetectProductChangesJob` remains in the current application until separately reviewed and migrated. It directly performs ArcGIS/Product mutation, export, validation, attachment and repository work and does not currently share the complete interactive-job execution boundary. Disabled/commented mail-import jobs are not migration candidates.
+
+### Implementation prohibition
+
+Until JobPlatform is ready and a later implementation package is approved, do not:
+
+- remove `AddHangfireServer()` from ProductManagerAPI;
+- change Hangfire storage ownership;
+- add or activate a Product Catalogue queue;
+- move job classes or recurring-job registration;
+- add cross-project references to JobPlatform;
+- introduce an atomic operation registry;
+- enable dual-host Product Catalogue execution.

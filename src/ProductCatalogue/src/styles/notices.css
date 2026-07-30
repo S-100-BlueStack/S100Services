@@ -1,0 +1,71 @@
+﻿/* =========================================================
+   Notice center / notifications
+   ========================================================= */
+
+.notice-row {
+  display: grid;
+  grid-template-columns: 70px 1fr 70px;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--pc-border);
+}
+
+.notice-type {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.notice-time {
+  font-size: 11px;
+  text-align: right;
+  color: var(--pc-text-muted);
+}
+
+.notice-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.notice-title {
+  font-weight: 600;
+}
+
+.notice-message {
+  flex: 1;
+  font-size: 12px;
+  color: var(--pc-text-muted);
+}
+
+/* Severity styling in panel rows */
+.notice-success {
+  border-left: 4px solid #2ecc71;
+}
+
+.notice-error {
+  border-left: 4px solid #e74c3c;
+  background: var(--pc-notice-error-bg);
+}
+
+.notice-warning {
+  border-left: 4px solid #f39c12;
+  background: var(--pc-notice-warning-bg);
+}
+
+.notice-info {
+  border-left: 4px solid #3498db;
+}
+
+.notification-widget button {
+  padding: 6px 10px;
+  font-size: 14px;
+  cursor: pointer;
+  background: var(--pc-surface);
+  color: var(--pc-text);
+  border: 1px solid var(--pc-border);
+}
+
+.notification-widget span {
+  margin-left: 4px;
+  font-weight: 600;
+}

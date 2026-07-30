@@ -1,0 +1,90 @@
+<div id="header" slot="header">
+  <div class="header-left">
+    <img alt="GST" width="42" height="42" src="/images/logo96.png" />
+  </div>
+
+  <div class="header-center">
+    <a href="#" class="navbar-title-link" data-nav-home-link>Product Catalogue</a>
+    <a href="#" class="navbar-title-link" data-nav-dashboard-link>Dashboard</a>
+    <a href="#" class="navbar-title-link" data-nav-analyze-link>Analyze</a>
+    <a href="#" class="navbar-title-link" data-nav-review-link>Review</a>
+  </div>
+  <div class="header-right">
+    <!-- Display Scale Visiblity Toggle -->
+    <div class="navbar-switch-control" id="display-scale-toggle-wrapper">
+      <span id="display-scale-toggle-label" class="navbar-switch-control__label">
+        Scale hiding
+      </span>
+      <calcite-switch
+        id="display-scale-toggle"
+        checked
+        scale="s"
+        aria-labelledby="display-scale-toggle-label"
+      ></calcite-switch>
+    </div>
+
+    <!-- Filter panel -->
+    <div class="filter-wrapper">
+      <calcite-action
+        id="filter-button"
+        icon="filter"
+        text="Filters"
+        title="Filters"
+        aria-label="Filters"
+      ></calcite-action>
+      <span id="filter-count" hidden>0</span>
+    </div>
+
+    <!-- Last updated -->
+    <span
+      id="last-updated"
+      class="ms-2 text-muted"
+      style="font-size: 12px; color: white !important"
+    >
+      Updated: -
+    </span>
+
+    <!-- Refresh button -->
+    <calcite-action
+      id="refresh-button"
+      icon="refresh"
+      text="Refresh data"
+      scale="m"
+    ></calcite-action>
+
+    <!-- Auto refresh toggle -->
+    <!-- <div class="d-flex align-items-center">
+      <calcite-switch id="auto-refresh-switch" checked></calcite-switch>
+
+      <calcite-tooltip reference-element="auto-refresh-switch" style="z-index: 9999">
+        Automatically refreshes every 10 minutes
+      </calcite-tooltip>
+    </div> -->
+
+    <calcite-action
+      id="theme-toggle"
+      icon="moon"
+      text="Theme"
+      label="Switch to dark mode"
+      title="Switch to dark mode"
+      scale="m"
+    ></calcite-action>
+
+    <div class="notification-wrapper">
+      <calcite-action
+        id="notification-button"
+        icon="bell"
+        text="Notifications"
+        scale="m"
+      ></calcite-action>
+      <span id="notification-count"></span>
+    </div>
+
+    <calcite-action
+      id="documentation-button"
+      icon="question"
+      text="Documentation"
+      scale="m"
+    ></calcite-action>
+  </div>
+</div>
