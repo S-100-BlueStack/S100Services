@@ -1752,43 +1752,43 @@ Rejected as a finding. The repeated `electronicproducts` condition is redundant 
 
 # Contract drift matrix
 
-| Contract | Backend source and wire shape | Frontend consumer | Result |
-| --- | --- | --- | --- |
-| AOI list | Raw `AOIResponse[]` | Accepts raw arrays | Runtime aligned; OpenAPI mismatch in PC-002-API-004 |
-| S-101 topology output | `topology.mapper` + `MappingFOID` to generated YAML | External compiler and downstream consumers | Split-feature mapping is incorrect in PC-002-BE-001 |
-| Product details | `ApiResponse<ProductResponse>` | Wrapper-aware normalization | Aligned |
-| Product History | Legacy `ApiResponse<ProductHistoryResponse[]>` | Legacy adjacent-row inference | Aligned for current baseline; explicit events deferred |
-| Dashboard | `ApiResponse<DashboardResponse>` with paging/filter options | Server-filter and cursor consumer | Aligned |
-| Async job start | `ExportJobStartResponse`, 202 and Location | Persistent job normalization | Aligned |
-| Job status | `ExportJobStatusResponse` | Polling and terminal normalization | Shape aligned; availability semantics finding PC-002-API-003 |
-| Active jobs | Raw status array | Expects array and reconciles external state | Aligned on success; exception semantics depend on PC-002-API-001 |
-| Export target | `All`, `S100`, `S57`; only S100 supported | Sends readable S100 | Aligned |
-| Freeze/Unfreeze | Empty success and ad hoc string errors | Generic API result handling | Compatible but not strongly typed |
-| Send | HTTP 200 enqueue string and stub background job | Interpreted as completed delivery | Misaligned; PC-002-API-002 |
-| Global exception | ProblemDetails body with intended status | HTTP status determines success | Misaligned; PC-002-API-001 |
+| Contract              | Backend source and wire shape                               | Frontend consumer                           | Result                                                           |
+| --------------------- | ----------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------- |
+| AOI list              | Raw `AOIResponse[]`                                         | Accepts raw arrays                          | Runtime aligned; OpenAPI mismatch in PC-002-API-004              |
+| S-101 topology output | `topology.mapper` + `MappingFOID` to generated YAML         | External compiler and downstream consumers  | Split-feature mapping is incorrect in PC-002-BE-001              |
+| Product details       | `ApiResponse<ProductResponse>`                              | Wrapper-aware normalization                 | Aligned                                                          |
+| Product History       | Legacy `ApiResponse<ProductHistoryResponse[]>`              | Legacy adjacent-row inference               | Aligned for current baseline; explicit events deferred           |
+| Dashboard             | `ApiResponse<DashboardResponse>` with paging/filter options | Server-filter and cursor consumer           | Aligned                                                          |
+| Async job start       | `ExportJobStartResponse`, 202 and Location                  | Persistent job normalization                | Aligned                                                          |
+| Job status            | `ExportJobStatusResponse`                                   | Polling and terminal normalization          | Shape aligned; availability semantics finding PC-002-API-003     |
+| Active jobs           | Raw status array                                            | Expects array and reconciles external state | Aligned on success; exception semantics depend on PC-002-API-001 |
+| Export target         | `All`, `S100`, `S57`; only S100 supported                   | Sends readable S100                         | Aligned                                                          |
+| Freeze/Unfreeze       | Empty success and ad hoc string errors                      | Generic API result handling                 | Compatible but not strongly typed                                |
+| Send                  | HTTP 200 enqueue string and stub background job             | Interpreted as completed delivery           | Misaligned; PC-002-API-002                                       |
+| Global exception      | ProblemDetails body with intended status                    | HTTP status determines success              | Misaligned; PC-002-API-001                                       |
 
 # Test and verification coverage map
 
-| Flow | Unit tested | Integration tested | Manual only | Environment-dependent | Not covered / material gap |
-| --- | --- | --- | --- | --- | --- |
-| Initial AOI load | Controller profiling/query-filter tests | No full HTTP/ArcGIS integration in supplied suite | Existing smoke coverage | ArcGIS and S-128 | Per-row failure behavior |
-| Manual/auto refresh | Layer reconciliation and popup bridge tests | No browser E2E | Smoke-tested | ArcGIS browser runtime | Full overlapping refresh lifecycle E2E |
-| Popup Product selection | Product graphic search tests | No browser E2E | Smoke-tested | ArcGIS popup runtime | None promoted |
-| Freeze/Unfreeze | Action availability only | None found | Smoke-tested | SQL/ArcGIS app | Controller/repository contract |
-| Send to IC-ENC | Action availability only | None found | Existing UI smoke only | Hangfire and future IC-ENC | Controller, job, state, terminal outcome |
-| Async New Edition | Controller, metadata, job, operation service, target tests | Paused-worker SQL acceptance is documented, not represented in supplied test suite | Previously verified | Hangfire SQL, ArcGIS, compiler, files | Post-mutation failure classification |
-| Split-feature topology Export | None found for mapper/FOID/YAML association | None | Required | ArcGIS, topology package, compiler, representative Product | Generated ID is ignored in current loop |
-| Async Rollback | Controller, job, operation service, warning tests | Same limitation | Previously verified | Hangfire SQL, ArcGIS, files | Post-mutation failure classification |
-| Job status | Mapping/controller unit tests | No storage-outage integration | Previously verified | Hangfire SQL | Storage exception semantics |
-| Active jobs | Service/controller unit tests | Cross-profile behavior manually verified | Yes | Shared Hangfire storage | Volume/performance |
-| Dashboard | Query processor and frontend query/paging tests | No SQL query-plan integration | Paging manually verified | SQL data volume | Ambiguous DST hour and large-volume evidence remain unpromoted |
-| Product History | No dedicated backend controller test found | None found | Existing UI smoke | SQL history data | Failure/outcome representation intentionally deferred |
-| Analyze | Domain normalizers and onboarding tests | None | Smoke-tested | ArcGIS and backend | DOM-injection regression |
-| Review | Product-list and onboarding tests | None | Smoke-tested | Backend | DOM-injection regression |
-| Startup | None found | None found | Normal startup observed | ArcGIS, files, SQL | Mandatory dependency failure |
-| Compiler process | No timeout/process-runner tests | None | Real export exercised | Windows compiler | Hang/cancellation/process cleanup |
-| Frontend rename | Terminology and onboarding tests updated | No deployment-path integration test | Rename manually applied | Hosting/rewrite environment | Generated-output ignore boundary |
-| Accessibility | Some interaction/domain coverage | No automated accessibility suite | Smoke-tested | Browser/Calcite/ArcGIS | Notice announcement and injected-content safety |
+| Flow                          | Unit tested                                                | Integration tested                                                                 | Manual only              | Environment-dependent                                      | Not covered / material gap                                     |
+| ----------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------- | -------------------------------------------------------------- |
+| Initial AOI load              | Controller profiling/query-filter tests                    | No full HTTP/ArcGIS integration in supplied suite                                  | Existing smoke coverage  | ArcGIS and S-128                                           | Per-row failure behavior                                       |
+| Manual/auto refresh           | Layer reconciliation and popup bridge tests                | No browser E2E                                                                     | Smoke-tested             | ArcGIS browser runtime                                     | Full overlapping refresh lifecycle E2E                         |
+| Popup Product selection       | Product graphic search tests                               | No browser E2E                                                                     | Smoke-tested             | ArcGIS popup runtime                                       | None promoted                                                  |
+| Freeze/Unfreeze               | Action availability only                                   | None found                                                                         | Smoke-tested             | SQL/ArcGIS app                                             | Controller/repository contract                                 |
+| Send to IC-ENC                | Action availability only                                   | None found                                                                         | Existing UI smoke only   | Hangfire and future IC-ENC                                 | Controller, job, state, terminal outcome                       |
+| Async New Edition             | Controller, metadata, job, operation service, target tests | Paused-worker SQL acceptance is documented, not represented in supplied test suite | Previously verified      | Hangfire SQL, ArcGIS, compiler, files                      | Post-mutation failure classification                           |
+| Split-feature topology Export | None found for mapper/FOID/YAML association                | None                                                                               | Required                 | ArcGIS, topology package, compiler, representative Product | Generated ID is ignored in current loop                        |
+| Async Rollback                | Controller, job, operation service, warning tests          | Same limitation                                                                    | Previously verified      | Hangfire SQL, ArcGIS, files                                | Post-mutation failure classification                           |
+| Job status                    | Mapping/controller unit tests                              | No storage-outage integration                                                      | Previously verified      | Hangfire SQL                                               | Storage exception semantics                                    |
+| Active jobs                   | Service/controller unit tests                              | Cross-profile behavior manually verified                                           | Yes                      | Shared Hangfire storage                                    | Volume/performance                                             |
+| Dashboard                     | Query processor and frontend query/paging tests            | No SQL query-plan integration                                                      | Paging manually verified | SQL data volume                                            | Ambiguous DST hour and large-volume evidence remain unpromoted |
+| Product History               | No dedicated backend controller test found                 | None found                                                                         | Existing UI smoke        | SQL history data                                           | Failure/outcome representation intentionally deferred          |
+| Analyze                       | Domain normalizers and onboarding tests                    | None                                                                               | Smoke-tested             | ArcGIS and backend                                         | DOM-injection regression                                       |
+| Review                        | Product-list and onboarding tests                          | None                                                                               | Smoke-tested             | Backend                                                    | DOM-injection regression                                       |
+| Startup                       | None found                                                 | None found                                                                         | Normal startup observed  | ArcGIS, files, SQL                                         | Mandatory dependency failure                                   |
+| Compiler process              | No timeout/process-runner tests                            | None                                                                               | Real export exercised    | Windows compiler                                           | Hang/cancellation/process cleanup                              |
+| Frontend rename               | Terminology and onboarding tests updated                   | No deployment-path integration test                                                | Rename manually applied  | Hosting/rewrite environment                                | Generated-output ignore boundary                               |
+| Accessibility                 | Some interaction/domain coverage                           | No automated accessibility suite                                                   | Smoke-tested             | Browser/Calcite/ArcGIS                                     | Notice announcement and injected-content safety                |
 
 # Recommended implementation packages
 

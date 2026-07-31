@@ -914,37 +914,30 @@ namespace S100FC.ProductCatalogue
 
                         if (topology.matrix.Collapse.Contains(_uid)) continue;
 
-                        string[] features = [_uid];
+                        var shapetype = def.GetShapeType();
 
-                        if (topology.mapper.Values.Contains(_uid)) {
-                            features = [.. topology.mapper.Where(e => e.Value.Equals(_uid)).Select(e => e.Key)];
-                        }
+                        var prim = shapetype switch {
+                            GeometryType.Point => Primitive.Point,
+                            GeometryType.Multipoint => Primitive.Point,
+                            GeometryType.Polyline => Primitive.Curve,
+                            GeometryType.Polygon => Primitive.Surface,
+                            _ => throw new InvalidOperationException(),
+                        };
 
-                        foreach (var uid in features) {
-
-                            // Only map geometry, and keep name seperate so foids remain unique
-                            var geometry = name;
-
-
-                            //if (topology.mapper.TryGetValue(name!, out var value))
-                            //    geometry = value;
-
-                            if (topology.matrix.MappingFOID.TryGetValue(name!, out var value))
-                                geometry = value;
-
-                            var shapetype = def.GetShapeType();
+                        var featureMappings = TopologyFeatureMapping.Resolve(
+                            _uid,
+                            prim,
+                            topology.mapper,
+                            topology.matrix.MappingFOID,
+                            topology.matrix.Surfaces);
+                        if (_uid == "F10101043166" ||_uid == "F10101043168" || _uid == "F10101043804")
+                            Console.WriteLine("!!");
+                        foreach (var featureMapping in featureMappings) {
+                            var geometry = featureMapping.Geometry;
 
                             var code = Convert.ToString(current["code"]);
 
-                            var foid = $"110:{name.Substring(1)}:1";       // Geodatastyrelsen: 110
-
-                            var prim = shapetype switch {
-                                GeometryType.Point => Primitive.Point,
-                                GeometryType.Multipoint => Primitive.Point,
-                                GeometryType.Polyline => Primitive.Curve,
-                                GeometryType.Polygon => Primitive.Surface,
-                                _ => throw new InvalidOperationException(),
-                            };
+                            var foid = featureMapping.Foid;
 
                             try {
                                 var type = featureCatalogue.Assembly?.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", false) ?? default;
@@ -972,21 +965,12 @@ namespace S100FC.ProductCatalogue
                                 }
 
 
-                                // Surface Masks
-                                var topologySurface = topology.matrix.Surfaces.FirstOrDefault(e => e.Ref!.Equals(name, StringComparison.InvariantCultureIgnoreCase));
-
-                                // Build comma seperated string of masks, with :1 or :2 indicating which mask it is. Should be null/omitted if empty.
-                                var masks = new[] {
-                                    topologySurface?.Masks1?.Select(e => $"C{e}:1"),
-                                    topologySurface?.Masks2?.Select(e => $"C{e}:2")
-                                }.Where(m => m != null).SelectMany(m => m!);
-
                                 var feature = new YAML.Feature {
                                     Name = code,
                                     Foid = foid,
                                     Prim = prim,
                                     Geometry = geometry,
-                                    Masks = masks.Any() ? string.Join(",", masks) : null,
+                                    Masks = featureMapping.Masks,
                                     Attributes = instance?.attributeBindings.Length > 0 ? instance : null,
                                 };
 
