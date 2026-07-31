@@ -15,6 +15,7 @@ using System.Diagnostics;
 using System.Reflection.Metadata;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using IO = System.IO;
@@ -131,9 +132,25 @@ namespace S100FC.ProductCatalogue
 
                         if (code.Equals(nameof(S100FC.S128.FeatureTypes.ElectronicProduct))) {
                             var json = c["attributebindings"];
-
+                          
                             var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(json.ToString(), typeof(ElectronicProduct));
-                            this._electronicProducts.GetOrAdd(electronicProduct.datasetName!.ToUpperInvariant(), electronicProduct);
+
+                            var featurebindings = c["featurebindings"].ToString() ?? string.Empty;
+                            var cat1 = JsonNode.Parse(featurebindings)?
+                                .AsArray()
+                                .Any(item =>
+                                    item?["featureType"]?.GetValue<string>() == "ElectronicProduct" &&
+                                    item?["association"]?["code"]?.GetValue<string>() == "ProductMapping" &&
+                                    item?["association"]?["attributes"]?
+                                        .AsArray()
+                                        .Any(attr =>
+                                            attr?["code"]?.GetValue<string>() == "categoryOfProductMapping" &&
+                                            attr?["value"]?.GetValue<int>() == 1) == true
+                                ) == true;
+
+                            if (!cat1) {
+                                _electronicProducts.GetOrAdd(electronicProduct.datasetName!.ToUpperInvariant(), electronicProduct);
+                            }
                         }
                     }
                 }
