@@ -132,7 +132,7 @@ namespace S100FC.ProductCatalogue
 
                         if (code.Equals(nameof(S100FC.S128.FeatureTypes.ElectronicProduct))) {
                             var json = c["attributebindings"];
-                          
+
                             var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(json.ToString(), typeof(ElectronicProduct));
 
                             var featurebindings = c["featurebindings"].ToString() ?? string.Empty;
@@ -947,8 +947,7 @@ namespace S100FC.ProductCatalogue
                             topology.mapper,
                             topology.matrix.MappingFOID,
                             topology.matrix.Surfaces);
-                        if (_uid == "F10101043166" ||_uid == "F10101043168" || _uid == "F10101043804")
-                            Console.WriteLine("!!");
+
                         foreach (var featureMapping in featureMappings) {
                             var geometry = featureMapping.Geometry;
 
