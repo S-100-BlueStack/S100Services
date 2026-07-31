@@ -1,6 +1,6 @@
 using Serilog;
 
-namespace OpenApiDemo.Api.Configuration;
+namespace DataCatalague.Api.Configuration;
 
 /// <summary>
 /// Registers Serilog as the logging provider for the application.

@@ -3,7 +3,7 @@ using Asp.Versioning.ApiExplorer;
 using Scalar.AspNetCore;
 using Serilog;
 
-namespace OpenApiDemo.Api.Configuration;
+namespace DataCatalague.Api.Configuration;
 
 /// <summary>
 /// Builds the HTTP request pipeline, including both documentation user interfaces.

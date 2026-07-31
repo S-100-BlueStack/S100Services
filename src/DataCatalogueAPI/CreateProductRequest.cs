@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace OpenApiDemo.Api.Models.V2;
+namespace DataCatalague.Api.Models.V2;
 
 /// <summary>
 /// The payload used to create a product through version 2.0 of the API.

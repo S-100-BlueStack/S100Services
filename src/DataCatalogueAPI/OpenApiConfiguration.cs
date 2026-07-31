@@ -1,6 +1,6 @@
-using OpenApiDemo.Api.OpenApi;
+using DataCatalague.Api.OpenApi;
 
-namespace OpenApiDemo.Api.Configuration;
+namespace DataCatalague.Api.Configuration;
 
 /// <summary>
 /// Registers one OpenAPI document per supported API version.

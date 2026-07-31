@@ -1,11 +1,11 @@
 using System.ComponentModel.DataAnnotations;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
-using OpenApiDemo.Api.Configuration;
-using OpenApiDemo.Api.Models.V2;
-using OpenApiDemo.Api.Services;
+using DataCatalague.Api.Configuration;
+using DataCatalague.Api.Models.V2;
+using DataCatalague.Api.Services;
 
-namespace OpenApiDemo.Api.Controllers.V2;
+namespace DataCatalague.Api.Controllers.V2;
 
 /// <summary>
 /// Access to the product catalogue, with paging and full product details.

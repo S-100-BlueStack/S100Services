@@ -2,7 +2,7 @@ using Asp.Versioning.ApiExplorer;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
-namespace OpenApiDemo.Api.OpenApi;
+namespace DataCatalague.Api.OpenApi;
 
 /// <summary>
 /// Enriches each generated OpenAPI document with metadata taken from the API version

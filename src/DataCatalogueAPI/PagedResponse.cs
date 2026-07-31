@@ -1,4 +1,4 @@
-namespace OpenApiDemo.Api.Models.V2;
+namespace DataCatalague.Api.Models.V2;
 
 /// <summary>
 /// A page of results together with the paging metadata needed to fetch the rest.

@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
-using OpenApiDemo.Api.Services;
+using DataCatalague.Api.Services;
 
-namespace OpenApiDemo.Api.Configuration;
+namespace DataCatalague.Api.Configuration;
 
 /// <summary>
 /// Registers the application's own services and the MVC infrastructure.

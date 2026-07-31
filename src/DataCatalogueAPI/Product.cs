@@ -1,4 +1,4 @@
-namespace OpenApiDemo.Api.Domain;
+namespace DataCatalague.Api.Domain;
 
 /// <summary>
 /// A product held by the catalogue. This is the internal representation; each API

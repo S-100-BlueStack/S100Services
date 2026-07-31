@@ -1,6 +1,6 @@
 using Asp.Versioning;
 
-namespace OpenApiDemo.Api.Configuration;
+namespace DataCatalague.Api.Configuration;
 
 /// <summary>
 /// Single source of truth for the API versions exposed by this service.

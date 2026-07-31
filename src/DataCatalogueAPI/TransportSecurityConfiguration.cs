@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.HttpsPolicy;
 
-namespace OpenApiDemo.Api.Configuration;
+namespace DataCatalague.Api.Configuration;
 
 /// <summary>
 /// Configures transport security: HTTPS redirection and HTTP Strict Transport Security.

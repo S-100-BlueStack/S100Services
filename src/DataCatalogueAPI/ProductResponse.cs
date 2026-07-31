@@ -1,4 +1,4 @@
-namespace OpenApiDemo.Api.Models.V2;
+namespace DataCatalague.Api.Models.V2;
 
 /// <summary>
 /// A product as returned by version 2.0 of the API. Compared with version 1.0 this

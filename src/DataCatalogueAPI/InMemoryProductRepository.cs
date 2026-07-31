@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using OpenApiDemo.Api.Domain;
+using DataCatalague.Api.Domain;
 
-namespace OpenApiDemo.Api.Services;
+namespace DataCatalague.Api.Services;
 
 /// <summary>
 /// An in-memory <see cref="IProductRepository"/> used to keep the sample self-contained.

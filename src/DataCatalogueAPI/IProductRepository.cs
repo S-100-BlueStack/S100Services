@@ -1,6 +1,6 @@
-using OpenApiDemo.Api.Domain;
+using DataCatalague.Api.Domain;
 
-namespace OpenApiDemo.Api.Services;
+namespace DataCatalague.Api.Services;
 
 /// <summary>
 /// Provides access to the product catalogue.

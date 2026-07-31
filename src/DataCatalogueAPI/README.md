@@ -7,7 +7,7 @@ Serilog logging, HTTPS, and two browsable documentation UIs (Swagger UI and Scal
 
 ```bash
 dotnet dev-certs https --trust     # once per machine
-dotnet run --project src/OpenApiDemo.Api
+dotnet run --project src/DataCatalague.Api
 ```
 
 | Purpose            | URL                                            |

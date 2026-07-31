@@ -1,7 +1,7 @@
-using OpenApiDemo.Api.Configuration;
+using DataCatalague.Api.Configuration;
 using Serilog;
 
-namespace OpenApiDemo.Api;
+namespace DataCatalague.Api;
 
 /// <summary>
 /// Hosts the application entry point.

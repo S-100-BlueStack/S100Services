@@ -1,6 +1,6 @@
 using Asp.Versioning;
 
-namespace OpenApiDemo.Api.Configuration;
+namespace DataCatalague.Api.Configuration;
 
 /// <summary>
 /// Configures API versioning for controller-based endpoints.
