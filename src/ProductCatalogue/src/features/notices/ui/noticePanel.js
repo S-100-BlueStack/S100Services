@@ -1,4 +1,4 @@
-import { subscribeToNotices, getNotices } from "../state/noticeStore";
+import { subscribeToNotices, getNotices } from "../state/noticeStore.js";
 
 let container;
 
@@ -7,33 +7,48 @@ export function initNoticePanel() {
 
   render(getNotices());
 
-  subscribeToNotices((notice, notices) => {
+  subscribeToNotices((_notice, notices) => {
     render(notices);
   });
 }
 
 function render(notices) {
-  container.innerHTML = "";
+  container.replaceChildren();
 
   for (const notice of notices) {
     const row = document.createElement("div");
-
     row.className = `notice-row notice-${notice.type}`;
 
-    row.innerHTML = `
-<span class="notice-type">${getIcon(notice.type)}</span>
+    const type = document.createElement("span");
+    type.className = "notice-type";
+    type.textContent = getIcon(notice.type);
 
-<span class="notice-content">
-  <div class="notice-title">${notice.title ?? ""}</div>
-  ${notice.message ? `<div class="notice-message">${notice.message}</div>` : ""}
-</span>
+    const content = document.createElement("span");
+    content.className = "notice-content";
 
-<span class="notice-time">${notice.timestamp?.toLocaleTimeString()}</span>
-`;
+    const title = document.createElement("div");
+    title.className = "notice-title";
+    title.textContent = notice.title ?? "";
+    content.appendChild(title);
 
+    if (notice.message) {
+      const message = document.createElement("div");
+      message.className = "notice-message";
+      message.textContent = notice.message;
+      content.appendChild(message);
+    }
+
+    const time = document.createElement("span");
+    time.className = "notice-time";
+    time.textContent = String(notice.timestamp?.toLocaleTimeString());
+
+    row.appendChild(type);
+    row.appendChild(content);
+    row.appendChild(time);
     container.appendChild(row);
   }
 }
+
 function getIcon(type) {
   switch (type) {
     case "success":
