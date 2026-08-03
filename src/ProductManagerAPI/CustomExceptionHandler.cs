@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using ProductManagerAPI.Services.Locking;
 
@@ -6,6 +6,7 @@ namespace ProductManagerAPI
 {
     public class CustomExceptionHandler(ILogger<CustomExceptionHandler> logger) : IExceptionHandler
     {
+        private const string ProblemDetailsContentType = "application/problem+json";
         private readonly ILogger<CustomExceptionHandler> _logger = logger;
 
         public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken) {
@@ -16,7 +17,6 @@ namespace ProductManagerAPI
 
                 _ => StatusCodes.Status500InternalServerError
             };
-
             this._logger.LogError(exception, "An exception occurred. Message: {Message}", exception.Message);
 
             var problemDetails = new ProblemDetails {
@@ -25,7 +25,13 @@ namespace ProductManagerAPI
                 Instance = httpContext.Request.Path,
             };
 
-            await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
+            httpContext.Response.StatusCode = statusCode;
+            await httpContext.Response.WriteAsJsonAsync(
+                problemDetails,
+                options: null,
+                contentType: ProblemDetailsContentType,
+                cancellationToken: cancellationToken
+            );
 
             return true;
         }
