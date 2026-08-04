@@ -1,13 +1,22 @@
 import { apiRequest } from "../../../shared/api/apiClient.js";
 import { getApiResultErrorMessage } from "../../../shared/api/apiResult.js";
+import { PRODUCT_JOB_OPERATION } from "../../products/domain/productJob.js";
+import { runProductJob } from "../../products/services/productJobService.js";
 import { normalizeProductExportMetadata } from "../normalizers/productExportMetadata.js";
 
 const PRODUCT_MUTATION_TIMEOUT_MS = 30 * 1000;
 const SELECTED_PRODUCT_REFRESH_TIMEOUT_MS = 15 * 1000;
 
-export async function uploadProduct(datasetName) {
-  return apiRequest(`upload/${encodeURIComponent(datasetName)}`, {
-    method: "PUT",
+export async function uploadProduct(datasetName, { onAccepted } = {}) {
+  return runProductJob({
+    datasetName,
+    operationType: PRODUCT_JOB_OPERATION.SEND_TO_ICENC,
+    label: "Simulating IC-ENC send",
+    onAccepted,
+    startJob: () =>
+      apiRequest(`upload/${encodeURIComponent(datasetName)}`, {
+        method: "PUT",
+      }),
   });
 }
 
@@ -40,7 +49,6 @@ export async function fetchProductPropertiesByDatasetName(datasetName) {
       Pragma: "no-cache",
     },
   });
-
   if (!result.success) {
     return {
       ...result,
@@ -59,7 +67,6 @@ function normalizeElectronicProductResponse(data) {
   if (!product) {
     return {};
   }
-
   return {
     datasetName: readFirstDefined(product, ["datasetName", "DatasetName", "name", "Name"]),
     edition: readFirstDefined(product, ["edition", "Edition"]),
@@ -85,19 +92,15 @@ function findElectronicProductPayload(value) {
   if (!value) {
     return null;
   }
-
   if (Array.isArray(value)) {
     return value.map(findElectronicProductPayload).find(Boolean) ?? null;
   }
-
   if (typeof value !== "object") {
     return null;
   }
-
   if (hasProductPayloadShape(value)) {
     return value;
   }
-
   return (
     findElectronicProductPayload(value.data) ??
     findElectronicProductPayload(value.Data) ??
@@ -118,7 +121,6 @@ function hasProductPayloadShape(value) {
   if (!value || typeof value !== "object") {
     return false;
   }
-
   return (
     Object.hasOwn(value, "datasetName") ||
     Object.hasOwn(value, "DatasetName") ||

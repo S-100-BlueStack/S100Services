@@ -1,16 +1,41 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using ProductManagerAPI.Options;
+using ProductManagerAPI.Jobs;
 using ProductManagerAPI.Models;
 using ProductManagerAPI.Services.Export;
 
 namespace ProductManagerAPI.Controllers
 {
     [AllowAnonymous]
-   // [Authorize("productmanager:access")]
+    // [Authorize("productmanager:access")]
     [ApiController]
     [Route("[controller]")]
-    public class LookupController : ControllerBase
+    public class LookupController(IOptionsMonitor<SendToIcEncOptions> sendToIcEncOptions) : ControllerBase
     {
+        private readonly IOptionsMonitor<SendToIcEncOptions> _sendToIcEncOptions = sendToIcEncOptions;
+
+        [HttpGet("capabilities")]
+        [ProducesResponseType(typeof(ProductCatalogueCapabilitiesResponse), StatusCodes.Status200OK)]
+        public IActionResult GetCapabilities() {
+            var mode = _sendToIcEncOptions.CurrentValue.Mode;
+            var available = mode == SendToIcEncMode.Simulation;
+            var reason = mode switch {
+                SendToIcEncMode.Simulation => null,
+                SendToIcEncMode.Disabled => SendToIcEncContract.DisabledMessage,
+                _ => SendToIcEncContract.UnsupportedModeMessage
+            };
+
+            return Ok(new ProductCatalogueCapabilitiesResponse {
+                SendToIcEnc = new SendToIcEncCapabilityResponse {
+                    Mode = mode.ToString(),
+                    Available = available,
+                    Reason = reason
+                }
+            });
+        }
+
         [HttpGet("productstates")]
         public IActionResult GetProductStates() {
             var values = Enum.GetValues<ResponseTypes.ProductStatus>()

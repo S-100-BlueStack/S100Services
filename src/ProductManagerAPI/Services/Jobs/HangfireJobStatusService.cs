@@ -32,6 +32,9 @@ namespace ProductManagerAPI.Services.Jobs
             ExportJobParameterNames.CorrelationId,
             ExportJobParameterNames.CreatedAtUtc,
             ExportJobParameterNames.ExecutionStarted,
+            ExportJobParameterNames.Mode,
+            ExportJobParameterNames.OperationOutcome,
+            ExportJobParameterNames.DeliveryStatus,
             ExportJobParameterNames.ResultCode,
             ExportJobParameterNames.ResultMessage,
             ExportJobParameterNames.WarningCode,
@@ -221,7 +224,7 @@ namespace ProductManagerAPI.Services.Jobs
 
             if (string.IsNullOrWhiteSpace(datasetName) ||
                 string.IsNullOrWhiteSpace(correlationId) ||
-                operationType is not ("ExportEdition" or "Rollback"))
+                operationType is not ("ExportEdition" or "Rollback" or "SendToIcEnc"))
                 return null;
 
             var exportTarget = ReadOptional<string>(
@@ -231,7 +234,19 @@ namespace ProductManagerAPI.Services.Jobs
             if (operationType == "ExportEdition" &&
                 !string.Equals(exportTarget, "S100", StringComparison.Ordinal))
                 return null;
-            if (operationType == "Rollback" && exportTarget != null)
+            if ((operationType == "Rollback" || operationType == SendToIcEncContract.OperationType) &&
+                exportTarget != null)
+                return null;
+
+            var mode = ReadOptional<string>(snapshot, ExportJobParameterNames.Mode);
+            var operationOutcome = ReadOptional<string>(snapshot, ExportJobParameterNames.OperationOutcome);
+            var deliveryStatus = ReadOptional<string>(snapshot, ExportJobParameterNames.DeliveryStatus);
+            if (operationType == SendToIcEncContract.OperationType &&
+                (!string.Equals(mode, SendToIcEncContract.SimulationMode, StringComparison.Ordinal) ||
+                 !string.Equals(deliveryStatus, SendToIcEncContract.NotDeliveredStatus, StringComparison.Ordinal)))
+                return null;
+            if (operationType != SendToIcEncContract.OperationType &&
+                (mode != null || operationOutcome != null || deliveryStatus != null))
                 return null;
 
             var currentState = snapshot.History
@@ -284,9 +299,20 @@ namespace ProductManagerAPI.Services.Jobs
                 };
             }
 
+            if (operationType == SendToIcEncContract.OperationType &&
+                publicStatus == ExportJobContract.SucceededStatus &&
+                (!string.Equals(operationOutcome, SendToIcEncContract.SimulationCompletedOutcome, StringComparison.Ordinal) ||
+                 !string.Equals(resultCode, SendToIcEncContract.CompletedCode, StringComparison.Ordinal) ||
+                 !string.Equals(resultMessage, SendToIcEncContract.CompletedMessage, StringComparison.Ordinal)))
+                return null;
+
             var message = error?.Message;
             if (publicStatus == ExportJobContract.SucceededStatus)
                 message = resultMessage;
+
+            var publicOperationOutcome = publicStatus == ExportJobContract.SucceededStatus
+                ? operationOutcome
+                : null;
 
             return new ExportJobStatusResponse {
                 JobId = jobId,
@@ -298,6 +324,9 @@ namespace ProductManagerAPI.Services.Jobs
                 StartedAt = startedAt,
                 CompletedAt = completedAt,
                 Message = message,
+                Mode = mode,
+                OperationOutcome = publicOperationOutcome,
+                DeliveryStatus = deliveryStatus,
                 CorrelationId = correlationId,
                 Warning = warning,
                 Error = error

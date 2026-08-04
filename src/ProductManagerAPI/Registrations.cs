@@ -1,4 +1,7 @@
-﻿using ArcGIS.Core.Data;
+using ArcGIS.Core.Data;
+using ProductManagerAPI.Options;
+using ProductManagerAPI.Jobs;
+using ProductManagerAPI.Services.Jobs;
 using Serilog;
 
 namespace ProductManagerAPI
@@ -6,11 +9,18 @@ namespace ProductManagerAPI
     public static class Registrations
     {
         public static async Task AddS100ProductManager(this IServiceCollection services, ConfigurationManager configuration) {
+            services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<SendToIcEncOptions>, SendToIcEncOptionsValidator>();
+            services
+                .AddOptions<SendToIcEncOptions>()
+                .Bind(configuration.GetSection(SendToIcEncOptions.SectionName))
+                .ValidateOnStart();
+            services.AddSingleton<ISendToIcEncJobService, HangfireSendToIcEncJobService>();
+            services.AddTransient<UploadSingularProductJob>();
+
             try {
                 // Setup ArcGIS and ProductManager
                 ArcGIS.Core.Hosting.Host.Initialize(ArcGIS.Core.Hosting.Host.LicenseProductCode.ArcGISPro);
                 Log.Information("ArcGIS Core Host Initialized");
-
                 // Connect to gdb/sde
                 var path = configuration.GetSection("Connections")["S128Connection"];
 
@@ -18,16 +28,14 @@ namespace ProductManagerAPI
                     throw new InvalidOperationException($"S128:ConnectionFile is either not configured or the system has insufficient access to the file: {path}");
 
                 Log.Information("Connecting to S128-Database: {path}", path);
-
                 var productManager = await S100FC.ProductCatalogue.ProductManagerGDB.CreateInstanceAsync(() => {
                     if (".sde".Equals(System.IO.Path.GetExtension(path), StringComparison.OrdinalIgnoreCase)) {
                         var connectionFile = new DatabaseConnectionFile(new Uri(System.IO.Path.GetFullPath(path)));
-                        
+
                         return new Geodatabase(connectionFile);
                     }
                     else if (".gdb".Equals(System.IO.Path.GetExtension(path), StringComparison.OrdinalIgnoreCase)) {
                         var connectionFile = new FileGeodatabaseConnectionPath(new Uri(Path.GetFullPath(path)));
-
                         return new Geodatabase(connectionFile);
                     }
                     else {

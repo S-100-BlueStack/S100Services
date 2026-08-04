@@ -10,6 +10,9 @@ namespace ProductManagerAPI.Jobs
         public const string CorrelationId = "ProductManagerCorrelationId";
         public const string CreatedAtUtc = "ProductManagerCreatedAtUtc";
         public const string ExecutionStarted = "ProductManagerExecutionStarted";
+        public const string Mode = "ProductManagerMode";
+        public const string OperationOutcome = "ProductManagerOperationOutcome";
+        public const string DeliveryStatus = "ProductManagerDeliveryStatus";
         public const string ResultCode = "ProductManagerResultCode";
         public const string ResultMessage = "ProductManagerResultMessage";
         public const string WarningCode = "ProductManagerWarningCode";
@@ -25,7 +28,6 @@ namespace ProductManagerAPI.Jobs
         public const string SucceededStatus = "Succeeded";
         public const string FailedStatus = "Failed";
         public const string CancelledStatus = "Cancelled";
-
         public const string ProductNotFoundCode = "PRODUCT_NOT_FOUND";
         public const string ProductNotFoundStartMessage = "The product was not found.";
         public const string ProductNoLongerAvailableMessage = "The product is no longer available.";
@@ -53,5 +55,29 @@ namespace ProductManagerAPI.Jobs
         public const string JobNotFoundMessage = "The job was not found.";
         public const string DatasetNameRequiredCode = "DATASET_NAME_REQUIRED";
         public const string DatasetNameRequiredMessage = "A datasetName query parameter is required.";
+    }
+
+    public static class SendToIcEncContract
+    {
+        public const string OperationType = "SendToIcEnc";
+        public const string DisabledCode = "SEND_TO_ICENC_DISABLED";
+        public const string DisabledMessage = "Send to IC-ENC is disabled.";
+        public const string UnsupportedModeCode = "SEND_TO_ICENC_MODE_UNAVAILABLE";
+        public const string UnsupportedModeMessage = "The configured Send to IC-ENC mode is unavailable.";
+        public const string SimulationMode = "Simulation";
+        public const string SimulationCompletedOutcome = "SimulationCompleted";
+        public const string NotDeliveredStatus = "NotDelivered";
+        public const string AcceptedMessage = "IC-ENC send simulation was accepted. No data will be delivered.";
+        public const string CompletedCode = "SEND_SIMULATION_COMPLETED";
+        public const string CompletedMessage = "Simulation completed. No data was sent to IC-ENC.";
+        public const string ConfigurationChangedCode = "SEND_TO_ICENC_CONFIGURATION_CHANGED";
+        public const string ConfigurationChangedMessage = "The Send to IC-ENC configuration changed before the simulation started.";
+        public const string InvalidStateCode = "SEND_TO_ICENC_PRODUCT_STATE_INVALID";
+        public const string InvalidStateStartMessage = "The product must be Exported before an IC-ENC send simulation can start.";
+        public const string InvalidStateJobMessage = "The product state changed before the IC-ENC send simulation started.";
+        public const string SetupFailedCode = "SEND_SIMULATION_SETUP_FAILED";
+        public const string SetupFailedMessage = "The IC-ENC send simulation could not be prepared.";
+        public const string FailedCode = "SEND_SIMULATION_FAILED";
+        public const string FailedMessage = "The IC-ENC send simulation could not be completed.";
     }
 }

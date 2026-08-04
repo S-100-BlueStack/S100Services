@@ -9,6 +9,7 @@ import {
   createProductJobRecord,
   getProductJobFailureMessage,
   isRollbackOperation,
+  isSendToIcEncOperation,
   isTerminalProductJobStatus,
   normalizeStoredProductJob,
 } from "../domain/productJob.js";
@@ -29,7 +30,6 @@ const REMOTE_DISCOVERY_GRACE_MS = 15_000;
 const activePolls = new Map();
 const syncedDatasetNames = new Set();
 const activeRemoteWatches = new Map();
-
 let initialized = false;
 let restoredTerminalHandler = null;
 let syncChannel = null;
@@ -41,6 +41,7 @@ export async function runProductJob({
   exportTarget = null,
   label,
   startJob,
+  onAccepted,
 }) {
   if (!datasetName) {
     return {
@@ -48,7 +49,6 @@ export async function runProductJob({
       errorMessage: "Cannot start a product job without a datasetName.",
     };
   }
-
   if (typeof startJob !== "function") {
     return {
       success: false,
@@ -68,7 +68,6 @@ export async function runProductJob({
     exportTarget,
     label,
   });
-
   if (!record) {
     return {
       success: false,
@@ -82,8 +81,22 @@ export async function runProductJob({
 
   upsertStoredJob(record);
   syncExternalProductOperations();
+  invokeAcceptedHandler(onAccepted, startResult.data, record);
 
   return trackProductJob(record, { restored: false });
+}
+
+function invokeAcceptedHandler(handler, response, record) {
+  if (typeof handler !== "function") {
+    return;
+  }
+
+  try {
+    handler(response, record);
+  } catch (error) {
+    // Accepted-job tracking must continue even when optional UI feedback fails.
+    console.error("Failed to handle accepted product job.", error);
+  }
 }
 
 export function initializeProductJobTracking({ onRestoredTerminal } = {}) {
@@ -119,7 +132,6 @@ export async function synchronizeActiveProductJobs(datasetName) {
   if (!result?.success) {
     return result;
   }
-
   const responses = Array.isArray(result.data) ? result.data : [];
   const currentRecords = getStoredProductJobs();
   const currentByJobId = new Map(currentRecords.map((record) => [record.jobId, record]));
@@ -135,7 +147,6 @@ export async function synchronizeActiveProductJobs(datasetName) {
       if (!record) {
         return null;
       }
-
       return {
         ...(currentByJobId.get(record.jobId) ?? {}),
         ...record,
@@ -152,7 +163,6 @@ export async function synchronizeActiveProductJobs(datasetName) {
     if (remoteJobIds.has(record.jobId)) {
       return false;
     }
-
     if (activePolls.has(record.jobId)) {
       return true;
     }
@@ -173,7 +183,6 @@ export async function synchronizeActiveProductJobs(datasetName) {
   writeStoredProductJobsIfChanged(nextRecords);
   syncExternalProductOperations();
   resumeStoredProductJobs();
-
   return {
     ...result,
     data: remoteRecords,
@@ -192,7 +201,6 @@ export function watchActiveProductJobs(datasetName) {
     void synchronizeActiveProductJobs(existing.datasetName);
     return () => releaseRemoteWatch(normalizedDatasetName);
   }
-
   const watch = {
     datasetName,
     refCount: 1,
@@ -250,7 +258,6 @@ function trackProductJob(record, { restored }) {
     .finally(() => {
       activePolls.delete(record.jobId);
     });
-
   activePolls.set(record.jobId, poll);
   return poll;
 }
@@ -271,16 +278,16 @@ async function pollProductJob(record) {
       if (!isTerminalProductJobStatus(result.data?.status)) {
         continue;
       }
-
       removeStoredJob(record.jobId);
       syncExternalProductOperations();
-      return createProductJobActionResult(result.data);
+      return createProductJobActionResult(result.data, {
+        expectedOperationType: record.operationType,
+      });
     }
 
     if (result?.status === 404) {
       removeStoredJob(record.jobId);
       syncExternalProductOperations();
-
       return {
         success: false,
         status: result.status,
@@ -306,7 +313,6 @@ async function pollProductJob(record) {
 
 function announceRestoredTerminal(record, result) {
   const dedupeKey = `product-job:${record.jobId}:terminal`;
-
   if (result.success) {
     const warning = result.data?.warning;
     if (warning) {
@@ -323,7 +329,6 @@ function announceRestoredTerminal(record, result) {
     });
     return;
   }
-
   noticeError(
     createProductJobCompletionTitle(record, result.data),
     getProductJobFailureMessage(result.data),
@@ -359,7 +364,6 @@ function syncExternalProductOperations() {
   }
 
   const nextDatasetNames = new Set(grouped.keys());
-
   for (const [key, group] of grouped.entries()) {
     replaceExternalProductOperations(
       group.datasetName,
@@ -379,18 +383,23 @@ function syncExternalProductOperations() {
 }
 
 function createExternalProductOperation(record) {
+  const sendOperation = isSendToIcEncOperation(record.operationType);
+  const rollbackOperation = isRollbackOperation(record.operationType);
+
   return {
     id: record.jobId,
     operationId: record.jobId,
     datasetName: record.datasetName,
-    type: isRollbackOperation(record.operationType)
-      ? PRODUCT_OPERATION_TYPE.ROLLBACK
-      : PRODUCT_OPERATION_TYPE.EXPORT,
+    type: sendOperation
+      ? PRODUCT_OPERATION_TYPE.SEND
+      : rollbackOperation
+        ? PRODUCT_OPERATION_TYPE.ROLLBACK
+        : PRODUCT_OPERATION_TYPE.EXPORT,
     label: record.label,
     source: "backend",
     startedAt: record.createdAt,
     exportTarget: record.exportTarget,
-    exportType: isRollbackOperation(record.operationType) ? null : "Edition",
+    exportType: sendOperation || rollbackOperation ? null : "Edition",
     status: record.status ?? null,
   };
 }
@@ -439,7 +448,6 @@ function writeStoredProductJobs(records) {
   if (!storage) {
     return;
   }
-
   try {
     storage.setItem(STORAGE_KEY, JSON.stringify(records));
     publishStoredJobsChanged();
@@ -456,7 +464,6 @@ function areStoredJobListsEqual(left, right) {
 
   const leftValues = normalize(left);
   const rightValues = normalize(right);
-
   return (
     leftValues.length === rightValues.length &&
     leftValues.every((value, index) => value === rightValues[index])
@@ -473,7 +480,6 @@ function releaseRemoteWatch(normalizedDatasetName) {
   if (!watch) {
     return;
   }
-
   watch.refCount -= 1;
   if (watch.refCount > 0) {
     return;
@@ -511,7 +517,6 @@ function registerBroadcastChannel() {
   if (typeof globalThis.BroadcastChannel !== "function") {
     return;
   }
-
   try {
     syncChannel = new globalThis.BroadcastChannel(SYNC_CHANNEL_NAME);
     syncChannel.addEventListener("message", (event) => {
@@ -538,7 +543,6 @@ function registerWindowReconciliation() {
       reconcileRemoteWatchedJobs();
     });
   }
-
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {

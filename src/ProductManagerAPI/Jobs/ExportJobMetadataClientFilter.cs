@@ -1,5 +1,6 @@
 using Hangfire.Client;
 using Hangfire.Common;
+using ProductManagerAPI.Options;
 using ProductManagerAPI.Services.Operations;
 using System.Globalization;
 
@@ -8,17 +9,26 @@ namespace ProductManagerAPI.Jobs
     public sealed class ExportJobMetadataClientFilter : JobFilterAttribute, IClientFilter
     {
         public void OnCreating(CreatingContext context) {
-            if (context.Job.Type != typeof(ExportOperationJob))
+            IReadOnlyDictionary<string, object?>? parameters = context.Job.Type switch {
+                var type when type == typeof(ExportOperationJob) => CreateParameters(
+                    context.Job.Args.OfType<ExportOperationJobRequest>().SingleOrDefault()
+                        ?? throw new InvalidOperationException(
+                            "The ExportOperationJob request is missing or malformed."
+                        )
+                ),
+                var type when type == typeof(UploadSingularProductJob) => CreateParameters(
+                    context.Job.Args.OfType<SendToIcEncJobRequest>().SingleOrDefault()
+                        ?? throw new InvalidOperationException(
+                            "The UploadSingularProductJob request is missing or malformed."
+                        )
+                ),
+                _ => null
+            };
+
+            if (parameters == null)
                 return;
 
-            var request = context.Job.Args
-                .OfType<ExportOperationJobRequest>()
-                .SingleOrDefault();
-
-            if (request == null)
-                throw new InvalidOperationException("The ExportOperationJob request is missing or malformed.");
-
-            foreach (var parameter in CreateParameters(request))
+            foreach (var parameter in parameters)
                 context.SetJobParameter(parameter.Key, parameter.Value!);
         }
 
@@ -28,25 +38,60 @@ namespace ProductManagerAPI.Jobs
             ArgumentNullException.ThrowIfNull(request);
             ValidateRequest(request);
 
-            return new Dictionary<string, object?>(StringComparer.Ordinal) {
-                [ExportJobParameterNames.DatasetName] = request.DatasetName,
-                [ExportJobParameterNames.OperationType] = ExportOperationContract.ToPublicValue(request.OperationType),
-                [ExportJobParameterNames.ExportTarget] = request.ExportTarget,
-                [ExportJobParameterNames.ExpectedEdition] = request.ExpectedEdition,
-                [ExportJobParameterNames.ExpectedUpdate] = request.ExpectedUpdate,
-                [ExportJobParameterNames.CorrelationId] = request.CorrelationId,
-                [ExportJobParameterNames.CreatedAtUtc] = request.CreatedAtUtc
-                    .ToUniversalTime()
-                    .ToString("O", CultureInfo.InvariantCulture)
-            };
+            return CreateSharedParameters(
+                request.DatasetName,
+                ExportOperationContract.ToPublicValue(request.OperationType),
+                request.ExportTarget,
+                request.ExpectedEdition,
+                request.ExpectedUpdate,
+                request.CorrelationId,
+                request.CreatedAtUtc
+            );
         }
 
+        public static IReadOnlyDictionary<string, object?> CreateParameters(
+            SendToIcEncJobRequest request
+        ) {
+            ArgumentNullException.ThrowIfNull(request);
+            ValidateRequest(request);
+
+            var parameters = CreateSharedParameters(
+                request.DatasetName,
+                SendToIcEncContract.OperationType,
+                exportTarget: null,
+                request.ExpectedEdition,
+                request.ExpectedUpdate,
+                request.CorrelationId,
+                request.CreatedAtUtc
+            ).ToDictionary(parameter => parameter.Key, parameter => parameter.Value, StringComparer.Ordinal);
+            parameters[ExportJobParameterNames.Mode] = SendToIcEncContract.SimulationMode;
+            parameters[ExportJobParameterNames.DeliveryStatus] = SendToIcEncContract.NotDeliveredStatus;
+
+            return parameters;
+        }
+
+        private static IReadOnlyDictionary<string, object?> CreateSharedParameters(
+            string datasetName,
+            string operationType,
+            string? exportTarget,
+            int? expectedEdition,
+            int? expectedUpdate,
+            string correlationId,
+            DateTimeOffset createdAtUtc
+        ) => new Dictionary<string, object?>(StringComparer.Ordinal) {
+            [ExportJobParameterNames.DatasetName] = datasetName,
+            [ExportJobParameterNames.OperationType] = operationType,
+            [ExportJobParameterNames.ExportTarget] = exportTarget,
+            [ExportJobParameterNames.ExpectedEdition] = expectedEdition,
+            [ExportJobParameterNames.ExpectedUpdate] = expectedUpdate,
+            [ExportJobParameterNames.CorrelationId] = correlationId,
+            [ExportJobParameterNames.CreatedAtUtc] = createdAtUtc
+                .ToUniversalTime()
+                .ToString("O", CultureInfo.InvariantCulture)
+        };
 
         private static void ValidateRequest(ExportOperationJobRequest request) {
-            if (string.IsNullOrWhiteSpace(request.DatasetName))
-                throw new InvalidOperationException("The Product Manager dataset name is missing.");
-            if (string.IsNullOrWhiteSpace(request.CorrelationId))
-                throw new InvalidOperationException("The Product Manager correlation ID is missing.");
+            ValidateSharedRequest(request.DatasetName, request.CorrelationId);
 
             if (request.OperationType == ExportOperationType.ExportEdition &&
                 !string.Equals(request.ExportTarget, "S100", StringComparison.Ordinal)) {
@@ -61,6 +106,23 @@ namespace ProductManagerAPI.Jobs
                     "Rollback jobs must not include an export target."
                 );
             }
+        }
+
+        private static void ValidateRequest(SendToIcEncJobRequest request) {
+            ValidateSharedRequest(request.DatasetName, request.CorrelationId);
+
+            if (request.Mode != SendToIcEncMode.Simulation) {
+                throw new InvalidOperationException(
+                    "Send to IC-ENC jobs must use the Simulation mode."
+                );
+            }
+        }
+
+        private static void ValidateSharedRequest(string datasetName, string correlationId) {
+            if (string.IsNullOrWhiteSpace(datasetName))
+                throw new InvalidOperationException("The Product Manager dataset name is missing.");
+            if (string.IsNullOrWhiteSpace(correlationId))
+                throw new InvalidOperationException("The Product Manager correlation ID is missing.");
         }
 
         public void OnCreated(CreatedContext context) {

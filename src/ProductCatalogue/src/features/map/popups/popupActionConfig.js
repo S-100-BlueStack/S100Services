@@ -1,3 +1,4 @@
+import { getSendToIcEncCapability } from "../../data/stores/capabilityStore.js";
 import {
   createProductActionAvailability,
   createProductExportAvailability,
@@ -36,8 +37,8 @@ export function createPopupActionGroups({ attributes, frozen, refreshAndRender }
       hasRunningProductExportOperation(productOperationState),
     productHasRunningMutation: productHasRunningNonExportMutation,
     productOperationDisabledReason: productOperationState.disabledReason,
+    sendToIcEncCapability: getSendToIcEncCapability(),
   });
-
   return [
     [
       createFreezeAction({
@@ -83,7 +84,6 @@ function createFreezeAction({
   const operationType = frozen ? PRODUCT_OPERATION_TYPE.UNFREEZE : PRODUCT_OPERATION_TYPE.FREEZE;
   const operationIsRunning = isOperationTypeRunning(productOperationState, operationType);
   const actionAvailability = frozen ? availability.unfreeze : availability.freeze;
-
   return {
     id: frozen ? "unfreeze-feature" : "freeze-feature",
     label: getFreezeActionLabel({ frozen, operationIsRunning }),
@@ -106,10 +106,9 @@ function createSendAction({ attributes, availability, productOperationState, ref
     productOperationState,
     PRODUCT_OPERATION_TYPE.SEND
   );
-
   return {
     id: "send-immediately",
-    label: operationIsRunning ? "Sending..." : "Send to IC-ENC",
+    label: availability.sendImmediately.label ?? "Send to IC-ENC",
     icon: "send",
     loading: operationIsRunning,
     disabled: availability.sendImmediately.disabled,
@@ -200,7 +199,6 @@ function createExportLeafAction({
     productHasRunningMutation: hasRunningNonExportProductOperation(productOperationState),
     productOperationDisabledReason: productOperationState.disabledReason,
   });
-
   return {
     id: exportAction.id,
     label: availability.label ?? exportAction.label,
@@ -234,7 +232,6 @@ function createRollbackAction({
     productOperationState,
     PRODUCT_OPERATION_TYPE.ROLLBACK
   );
-
   return {
     id: "rollback",
     label: operationIsRunning ? "Rolling back..." : "Rollback",
@@ -273,7 +270,6 @@ function createToolsAction({ attributes }) {
       },
     });
   }
-
   return {
     id: "tools",
     label: "Tools",

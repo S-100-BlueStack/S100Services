@@ -1,12 +1,19 @@
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
 import { changeFreezeState, uploadProduct } from "../../data/api/productApi.js";
 import { exportRollback } from "../../data/api/exportApi.js";
+import { getSendToIcEncCapability } from "../../data/stores/capabilityStore.js";
 import {
   noticeApiFailure,
   noticeApiSuccess,
   noticeUnexpectedApiError,
 } from "../../notices/services/apiNoticeService.js";
-import { noticeError, noticeWarning } from "../../notices/services/noticeService.js";
+import {
+  noticeError,
+  noticeInfo,
+  noticeSuccess,
+  noticeWarning,
+} from "../../notices/services/noticeService.js";
+import { createSendToIcEncCapabilityAvailability } from "../../products/domain/productActionAvailability.js";
 import {
   PRODUCT_OPERATION_TYPE,
   beginProductOperation,
@@ -52,18 +59,16 @@ export async function triggerFreeze(datasetName, state, anchorElement, { afterRe
     noticeError("Cannot change freeze state", "The selected feature does not have a datasetName.");
     return null;
   }
-
   const operationType = state ? PRODUCT_OPERATION_TYPE.FREEZE : PRODUCT_OPERATION_TYPE.UNFREEZE;
   const operationLabel = state ? "Freezing" : "Unfreezing";
   const actionLabel = state ? "freezing" : "unfreezing";
-
   return runConfirmedProductOperation({
     datasetName,
     confirm: {
       title: `${state ? "Freeze" : "Unfreeze"} ${datasetName}`,
       message:
         `Are you sure you want to ${state ? "freeze" : "unfreeze"} ${datasetName}? ` +
-        "Freezing a product will prevent it from being sent to IC-ENC until it is unfrozen.",
+        "Freezing a product will prevent IC-ENC send actions until it is unfrozen.",
       confirmText: "Confirm",
       cancelText: "Cancel",
       anchorElement,
@@ -87,35 +92,51 @@ export async function triggerFreeze(datasetName, state, anchorElement, { afterRe
 
 export async function sendImmediately(datasetName, anchorElement, { afterResult } = {}) {
   if (!datasetName) {
-    noticeError("Cannot send product", "The selected feature does not have a datasetName.");
+    noticeError("Cannot simulate IC-ENC send", "The selected feature does not have a datasetName.");
     return null;
+  }
+
+  const capabilityAvailability = createSendToIcEncCapabilityAvailability(
+    getSendToIcEncCapability()
+  );
+  if (capabilityAvailability.disabled) {
+    noticeError("IC-ENC send unavailable", capabilityAvailability.disabledReason);
+    return createSkippedActionResult("send-to-icenc-disabled");
   }
 
   return runConfirmedProductOperation({
     datasetName,
     confirm: {
-      title: `Send ${datasetName}`,
+      title: `Simulate IC-ENC send for ${datasetName}`,
       message:
-        `Are you sure you want to send ${datasetName} immediately? ` +
-        "This will upload the product to IC-ENC immediately without waiting for " +
-        "the automated upload.",
-      confirmText: "Send",
+        `Run the IC-ENC send simulation for ${datasetName}? ` +
+        "The normal background-job flow will be tested, but no data will be sent to IC-ENC " +
+        "and the Product state will not change.",
+      confirmText: "Start simulation",
       cancelText: "Cancel",
       anchorElement,
     },
     operation: {
       type: PRODUCT_OPERATION_TYPE.SEND,
-      label: "Sending",
+      label: "Simulating IC-ENC send",
     },
-    execute: () => uploadProduct(datasetName),
-    onSuccess: () => {
-      noticeApiSuccess(`Product ${datasetName} sent successfully`);
+    execute: () =>
+      uploadProduct(datasetName, {
+        onAccepted: () => {
+          noticeInfo("IC-ENC send simulation started.", "No data will be delivered.");
+        },
+      }),
+    onSuccess: (result) => {
+      noticeSuccess(
+        "IC-ENC send simulation completed",
+        result.data?.message ?? "Simulation completed. No data was sent to IC-ENC."
+      );
     },
     failureNotice: {
-      networkTitle: `Network error while sending ${datasetName}`,
-      failureTitle: `Failed to send ${datasetName}`,
+      networkTitle: `Network error while simulating IC-ENC send for ${datasetName}`,
+      failureTitle: `IC-ENC send simulation failed for ${datasetName}`,
     },
-    unexpectedErrorTitle: `Unexpected error while sending ${datasetName}`,
+    unexpectedErrorTitle: `Unexpected error during IC-ENC send simulation for ${datasetName}`,
     afterResult,
   });
 }
@@ -125,7 +146,6 @@ export async function triggerRollback(datasetName, anchorElement, { afterResult 
     noticeError("Cannot rollback product", "The selected feature does not have a datasetName.");
     return null;
   }
-
   return runConfirmedProductOperation({
     datasetName,
     confirm: {
@@ -144,7 +164,6 @@ export async function triggerRollback(datasetName, anchorElement, { afterResult 
     execute: () => exportRollback(datasetName),
     onSuccess: (result) => {
       const warning = result.data?.warning;
-
       if (warning) {
         noticeWarning(`Product ${datasetName} rolled back with a warning`, warning.message);
         return;
@@ -179,7 +198,6 @@ export async function triggerExport({
     implemented,
     request,
   });
-
   if (!dispatchValidation.allowed) {
     noticeError(
       "Export is not available",
@@ -194,7 +212,6 @@ export async function triggerExport({
   }
 
   const exportLabel = `${target} ${exportType}`;
-
   return runConfirmedExportOperation({
     datasetName,
     scope: target,
@@ -231,7 +248,6 @@ async function runConfirmedProductOperation({
     if (!confirmed) {
       return null;
     }
-
     const operationStateAvailable = await synchronizeBackendOperationStateOrNotify(datasetName);
     if (!operationStateAvailable) {
       return createSkippedActionResult("operation-status-unavailable");
@@ -246,7 +262,6 @@ async function runConfirmedProductOperation({
       operationId: operation.operationId,
       allowConcurrentSameType: operation.allowConcurrentSameType,
     });
-
     if (!runningOperation.started) {
       noticeError(
         "Product operation is already running",
@@ -262,7 +277,6 @@ async function runConfirmedProductOperation({
     } else {
       noticeApiFailure(result, failureNotice);
     }
-
     return await finishProductActionResult(result, afterResult);
   } catch (error) {
     noticeUnexpectedApiError(error, {
@@ -300,14 +314,12 @@ async function runConfirmedExportOperation({
     if (!confirmed) {
       return null;
     }
-
     const operationStateAvailable = await synchronizeBackendOperationStateOrNotify(datasetName);
     if (!operationStateAvailable) {
       return createSkippedActionResult("operation-status-unavailable");
     }
 
     synchronizeProductJobTracking();
-
     const operationState = getProductOperationState(datasetName);
     if (operationState.externalOperations.length > 0) {
       noticeError(
@@ -323,7 +335,6 @@ async function runConfirmedExportOperation({
       scope,
       exportType,
     });
-
     if (!runningExport.started) {
       noticeError(
         "Export is already running",
@@ -339,7 +350,6 @@ async function runConfirmedExportOperation({
       operationId: `${scope}:${exportType}`,
       allowConcurrentSameType: true,
     });
-
     if (!runningOperation.started) {
       endPopupExportAction(runningExport.key);
       runningExport = null;
@@ -353,7 +363,6 @@ async function runConfirmedExportOperation({
     }
 
     const result = await request(datasetName);
-
     if (result.success) {
       noticeApiSuccess(`Export completed for ${datasetName}`, exportLabel);
     } else {
@@ -363,7 +372,6 @@ async function runConfirmedExportOperation({
         fallbackMessage: exportLabel,
       });
     }
-
     return await finishProductActionResult(result, afterResult);
   } catch (error) {
     noticeUnexpectedApiError(error, {
@@ -381,7 +389,6 @@ async function runConfirmedExportOperation({
     if (runningOperation?.started) {
       endProductOperation(runningOperation.key);
     }
-
     if (runningExport?.started) {
       endPopupExportAction(runningExport.key);
     }

@@ -27,6 +27,15 @@ namespace ProductManagerAPI.Models
 
         [JsonPropertyName("statusUrl")]
         public required string StatusUrl { get; init; }
+
+        [JsonPropertyName("mode")]
+        public string? Mode { get; init; }
+
+        [JsonPropertyName("deliveryStatus")]
+        public string? DeliveryStatus { get; init; }
+
+        [JsonPropertyName("message")]
+        public string? Message { get; init; }
     }
 
     public sealed class ExportJobStatusResponse
@@ -57,6 +66,15 @@ namespace ProductManagerAPI.Models
 
         [JsonPropertyName("message")]
         public string? Message { get; init; }
+
+        [JsonPropertyName("mode")]
+        public string? Mode { get; init; }
+
+        [JsonPropertyName("operationOutcome")]
+        public string? OperationOutcome { get; init; }
+
+        [JsonPropertyName("deliveryStatus")]
+        public string? DeliveryStatus { get; init; }
 
         [JsonPropertyName("correlationId")]
         public required string CorrelationId { get; init; }
