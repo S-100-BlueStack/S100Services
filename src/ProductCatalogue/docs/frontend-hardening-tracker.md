@@ -2,7 +2,7 @@
 
 This document tracks frontend-only cleanup, hardening, and architecture improvements for Product Catalogue. The goal is to improve maintainability, reliability, and structure without changing the user-facing feature set unless an item explicitly tracks a feature foundation.
 
-Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+Current reviewed repository baseline: `20a0cab4c64aea42c9ac10aced95f6b592d14280`.
 BE-108A documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`.
 
 ## Backend worker-readiness note
@@ -102,6 +102,8 @@ BE-106 is documentation-only. It confirms that ProductManagerAPI remains the pub
 | FI-008 | Introduction flow                | Add compact first-time and replayable route guidance                   | Done                              | Completed and manually verified at `0c677549963bb7ce4206fed379dd30dc8c2cc783`. Each route has independent first-time state and replay from Preferences. Main map includes Product search, filters, interactive popup/Product Collection guidance, workspace navigation, Theme and Preferences. Dashboard, Analyze and Review use compact route-specific flows with Product prerequisites where needed. |
 | FI-009 | Dashboard                        | Add user-selectable Dashboard page size                                | Todo                              | Backend paging already accepts `1-200`; define compact frontend options, persistence and reset behavior before enabling it.                                                                                                                                                                                                                                                                            |
 | FI-010 | Dashboard                        | Add sortable Dashboard activity columns                                | Todo                              | Define supported server-side sort fields, direction, stable tie-break ordering and cursor compatibility before adding sortable headers.                                                                                                                                                                                                                                                                |
+| FI-011 | Main map / Data sources          | Add configurable Product data sources and source-aware workflows       | Todo                              | Add frontend-configured `ENC Products`, `Paper Charts`, and `S-102` sources with persisted enablement, lazy loading, independent filter sections, active-source Product search, source-aware popup/export capabilities, development-only mock endpoints, reset behavior, and updated Main map guidance.                                                                                                |
+| FI-012 | Main map / Location search       | Add Denmark and Greenland map locator                                  | Todo                              | Add a compact ArcGIS Search component opened from a binoculars button beside Product search. Search addresses and populated places in Denmark and Greenland only, navigate without a marker or popup, keep Product state unchanged, and prepare configuration for later API-backed custom search sources.                                                                                              |
 
 ## Planned order
 
@@ -113,6 +115,446 @@ BE-106 is documentation-only. It confirms that ProductManagerAPI remains the pub
 6. Keep Batch 2 producer/recovery work separate until Batch 1 is built, tested, and reviewed.
 7. Keep report-link UI and deferred producers blocked until backend report IDs, storage, and producer contracts exist.
 8. Continue targeted regression smoke tests after frontend or backend contract changes.
+9. When the new Main map feature work begins, implement FI-011 before FI-012 so source identity, capabilities, filters, Product search, and popup behavior have a stable multi-source foundation.
+10. Keep FI-011 implementation reviewable in focused slices: source registry/state and loading first; map/filter/search integration second; popup/export/shared-workspace integration third; guidance and final regression coverage last.
+11. Implement FI-012 after FI-011 is stable. Keep geographic place search independent from Product selection and Product search even when custom database-backed locator sources are added later.
+
+## FI-011 configurable Product data sources and source-aware workflows
+
+Status: Todo  
+Documentation baseline: `20a0cab4c64aea42c9ac10aced95f6b592d14280`  
+Implementation order: before FI-012
+
+### Goal
+
+Extend the Main map from one hardcoded Product source to a frontend-configured set of independently enabled Product data sources. The first implementation must support:
+
+- `ENC Products`
+- `Paper Charts`
+- `S-102`
+
+`ENC Products` remains the primary source, but all three sources are optional at runtime. The design must allow additional Product sources without duplicating map, popup, filter, search, Product Collection, Analyze, Review, History, or export orchestration.
+
+This item is frontend-focused. The only backend change allowed in the first implementation package is the explicitly scoped development-only mock endpoint extension described below.
+
+### Static configuration and runtime state
+
+Introduce a dedicated data-source definition boundary instead of adding source-specific conditionals throughout existing map features. Static source availability and runtime source enablement must remain separate concepts.
+
+Each configured source must have a stable source ID and include, directly or through referenced adapters:
+
+- user-facing label;
+- availability flag;
+- default enabled state;
+- data loader and response normalizer;
+- one or more owned logical layer definitions;
+- source capabilities for popup, filters, Product search, Product Collection, Analyze, Review, History, Product mutations, rollback, and export;
+- source-specific export profile;
+- source-specific filter metadata;
+- source-specific Product search provider;
+- stable Product identity extraction.
+
+Initial definitions:
+
+| Source ID      | UI label       | Available | Default enabled |
+| -------------- | -------------- | --------- | --------------- |
+| `enc-products` | `ENC Products` | Yes       | Yes             |
+| `paper-charts` | `Paper Charts` | Yes       | No              |
+| `s102`         | `S-102`        | Yes       | No              |
+
+The runtime contract must not assume that a source owns exactly one ArcGIS layer. The MVP may create one layer per source, but source ownership and cleanup must accept a collection of layers so later sources can add geometry- or purpose-specific layers without redesigning the source state model.
+
+Product identity must be source-aware. Cross-feature state such as popup restore, hover state, Product Collection entries, Product search results, operation state, and refresh reconciliation must use a stable identity equivalent to `{ sourceId, productKey }`. `datasetName` may remain the Product key where it matches the API contract, but it must not be treated as globally unique across every future source.
+
+### Main map Data sources control
+
+Add an icon-only `Data sources` action to the existing navbar control group. Use the Calcite `data` icon and the same compact, square, tooltip, focus, active-state, Escape, and click-outside behavior as the existing navbar actions.
+
+The action opens a compact popover containing one switch per available source:
+
+```text
+ENC Products    On
+Paper Charts    Off
+S-102           Off
+```
+
+Requirements:
+
+- all three sources can be disabled, including `ENC Products`;
+- the popover must expose per-source loading and failure states without using the fullscreen loader;
+- a source switch is not considered enabled until its first load or reactivation load succeeds;
+- if loading fails, the switch returns to off, no partial source layers remain visible, and the existing notice infrastructure reports the failure;
+- concurrent toggles and stale responses must not allow an older request to overwrite newer source state;
+- disabling one source must not disable or reload unrelated sources.
+
+### Persistence and reset
+
+Persist enabled source IDs in versioned `localStorage` state.
+
+Defaults:
+
+```text
+ENC Products = enabled
+Paper Charts = disabled
+S-102 = disabled
+```
+
+Reset must be available in both places:
+
+- a local `Reset to defaults` action in the Data sources popover;
+- the existing Preferences reset flow.
+
+Reset restores the default enabled sources and clears source-owned transient state and source-specific saved filter state. It must not reset unrelated route preferences unless the existing Preferences action is explicitly the broader reset action selected by the user.
+
+### Loading, caching, and refresh lifecycle
+
+Use lazy loading:
+
+- initial Main map load fetches only sources enabled by persisted state, with `ENC Products` enabled by default;
+- a source is first fetched when it becomes enabled;
+- successfully loaded layers and normalized data may remain cached in memory when the source is disabled;
+- disabled sources do not participate in scheduled auto-refresh or manual refresh API requests;
+- re-enabling a previously loaded source performs a fresh request before showing the source again, then replaces its cached data;
+- while a reactivation request is pending, stale cached graphics remain hidden;
+- if reactivation fails, the source remains disabled and stale cached data must not become visible.
+
+Existing refresh guarantees must be preserved independently for every active source:
+
+- silent auto-refresh;
+- manual refresh button loading without a fullscreen loader;
+- compatible in-place layer/graphic reconciliation;
+- popup preservation only when the selected Product still exists with compatible identity;
+- active filter preservation;
+- display-scale hiding preservation;
+- stale-request suppression.
+
+A source-specific load or refresh failure must retain the source's last successful visible data when the source was already active, following the existing last-successful-state principle. Initial activation failure is different: the source remains disabled because it has no accepted active state yet.
+
+### Source deactivation behavior
+
+Disabling a source is a Main map reset for that source. It must:
+
+- hide every ArcGIS layer owned by the source;
+- cancel or invalidate source-owned in-flight read requests;
+- clear source-owned hover and selected-feature state;
+- close an open popup when its selected Product belongs to the source;
+- close the Main map Product History quick panel when it belongs to the source, including a pinned panel;
+- remove every Product from that source from Product Collection;
+- clear that source's filter selections and filter counts;
+- remove that source from Product search suggestions/results;
+- close source-owned popup action menus and confirmation UI.
+
+Disabling a source must not attempt to cancel an already accepted backend job. Such a job continues outside the visible source state and must be reconciled if the source is enabled again.
+
+Already open Analyze or Review tabs/windows remain independent and are not remotely closed or rewritten when a Main map source is disabled. New Analyze/Review sessions opened from the Main map can only receive Products from currently active sources.
+
+### Filters
+
+Keep one shared filter panel, but preserve the existing source-separated model. Each active source owns its own filter section and filter state under a source header. A filter selected for one source must not filter another source.
+
+Initial source sections use the shared operational filter concepts where the normalized source data supports them:
+
+- `Display scale`
+- `Status`
+- `Usage band`
+
+Requirements:
+
+- only active sources appear as filter sections;
+- filter options and counts are calculated per source;
+- inactive sources do not affect another source's counts or visible total;
+- missing source attributes produce an unavailable or omitted filter rather than an invalid cross-source fallback;
+- the filter panel's existing local reset and Preferences reset behavior must include all active and persisted source-specific filters;
+- disabling a source clears that source's filter state as part of source reset.
+
+### Product search
+
+Keep Product search separate from the Locator introduced by FI-012.
+
+Product search must aggregate searchable Products from every active source. It must not remain hardcoded to the `ENC Products` catalog endpoint.
+
+Each source definition provides a Product search provider. For the first mock-backed implementation:
+
+- `ENC Products` continues using the existing lightweight Product catalog endpoint and rendered-graphic matching;
+- `Paper Charts` and `S-102` may build their searchable Product index from their successfully normalized mock payloads;
+- future production sources can replace the mock search provider with a source-specific lightweight API endpoint without changing Product search UI orchestration.
+
+Suggestions must identify the source when names could otherwise be ambiguous. Selecting a result follows the existing Product search workflow: locate the active source graphic, navigate to it, and open its Product popup. Disabled sources are not searchable.
+
+### Map, popup, Product Collection, Analyze, Review, and History capabilities
+
+The multi-source foundation must support the following shared surfaces for all three configured sources:
+
+| Capability         | ENC Products                                           | Paper Charts MVP                                | S-102 MVP                                       |
+| ------------------ | ------------------------------------------------------ | ----------------------------------------------- | ----------------------------------------------- |
+| Map rendering      | Enabled                                                | Enabled                                         | Enabled                                         |
+| Hover highlight    | Enabled                                                | Enabled                                         | Enabled                                         |
+| Product popup      | Enabled                                                | Enabled                                         | Enabled                                         |
+| Source filters     | Enabled                                                | Enabled when attributes exist                   | Enabled when attributes exist                   |
+| Product search     | Enabled                                                | Enabled                                         | Enabled                                         |
+| Product Collection | Enabled                                                | Enabled                                         | Enabled                                         |
+| Analyze entry      | Enabled                                                | Enabled with unavailable backend content states | Enabled with unavailable backend content states |
+| Review entry       | Enabled                                                | Enabled with unavailable backend content states | Enabled with unavailable backend content states |
+| Product History    | Enabled                                                | Unavailable until endpoint exists               | Unavailable until endpoint exists               |
+| Freeze / Unfreeze  | Enabled                                                | Disabled                                        | Disabled                                        |
+| Send to IC-ENC     | Enabled according to current truthful capability state | Disabled                                        | Disabled                                        |
+| Rollback           | Enabled for the current supported ENC contract         | Disabled                                        | Disabled                                        |
+| Export requests    | Current ENC support only                               | Disabled placeholders                           | Disabled placeholders                           |
+
+Capabilities must be checked centrally. Shared UI must not infer support merely because normalized attributes resemble an ENC Product.
+
+Analyze, Review, and History must render an explicit unavailable state for missing source-specific backend contracts. They must not call ENC-only endpoints with a Paper Chart or S-102 identifier.
+
+### Source-aware Export menu
+
+The selected Product's source and Product/export profile determine the exact popup Export menu. Do not build the menu from the union of every globally enabled source.
+
+Required menus:
+
+```text
+ENC Product
+  Export...
+    All
+      Edition
+      Update
+    S57
+      Edition
+      Update
+    S100
+      Edition
+      Update
+```
+
+```text
+Paper Chart Product
+  Export...
+    Paper Charts
+      Edition
+      Update
+```
+
+```text
+S-102 Product
+  Export...
+    S-102
+      Edition
+      Update
+```
+
+Rules:
+
+- irrelevant source groups must not be rendered in another source's popup;
+- keep the existing `All` label because it remains scoped exclusively to the combined S57/S100 ENC export and never includes Paper Charts or S-102;
+- preserve the current implemented/disabled state of ENC export leaves;
+- both `Paper Charts` leaves and both `S-102` leaves start as disabled placeholders;
+- source configuration must define export groups and leaves, while endpoint functions remain in the existing export API boundary;
+- future enablement requires an explicit backend contract and capability change, not UI-only activation;
+- local loading/conflict state must be keyed by source-aware Product identity and export leaf;
+- a future operation for one Product/source must not lock unrelated Products or sources;
+- the backend may still require a broader authoritative operation key later if Product identifiers are not globally unique.
+
+### Development-only mock endpoints
+
+The first implementation may make a narrowly scoped change to `src/ProductManagerAPI/Program.cs` inside the existing Development-only mock block.
+
+Preserve the existing `/mock/products` route for compatibility and add:
+
+```text
+GET /mock/paper-charts -> mock/some_products.geojson
+GET /mock/s102         -> mock/products.geojson
+```
+
+The small mock payload represents `Paper Charts`; the larger mock payload represents `S-102`.
+
+These routes are development fixtures only. They are not production API contracts and must not determine the final response shape. Frontend adapters may normalize the current mock GeoJSON into the existing stable lowercase Product attribute shape. Production endpoint paths, schemas, paging, freshness rules, and lightweight Product catalogs remain explicit follow-up contracts.
+
+### Guidance, accessibility, and visual requirements
+
+Update the versioned Main map introduction to explain:
+
+- how to open Data sources;
+- that sources can be enabled independently;
+- that only enabled sources appear on the map, in filters, and in Product search;
+- that reset restores `ENC Products` only.
+
+Bump only the Main map introduction version. Existing users see the updated Main map introduction once; Dashboard, Analyze, and Review onboarding completion remains unchanged. The flow remains replayable from Preferences.
+
+The new control and popover must include English UI text, tooltip/hover help, keyboard access, focus restoration, Escape handling, light/dark support, compact square styling, and RDP/VDI-safe loading/error indicators that do not depend only on animation.
+
+### Acceptance criteria
+
+FI-011 is complete only when:
+
+1. The three configured sources appear in the Data sources popover with the agreed defaults.
+2. Every source can be independently enabled and disabled, including an all-off state.
+3. Source choices survive reload and reset correctly from both reset entry points.
+4. Paper Charts and S-102 lazy-load from the development-only mock endpoints.
+5. Initial activation failure returns the switch to off and renders no partial data.
+6. Active-source refresh and source reactivation follow the documented freshness rules.
+7. Disabling a source performs the documented source reset, including Product Collection removal.
+8. The filter panel shows independent source sections and never applies one source's filters to another.
+9. Product search searches only active sources and opens the correct source Product popup.
+10. Popup, hover, Product Collection, Analyze, and Review accept source-aware Product identity.
+11. Missing History/report/mutation contracts render disabled or unavailable states without calling ENC-only endpoints.
+12. Popup Export renders only the selected Product type's groups; `All` remains ENC-only.
+13. Paper Charts and S-102 Edition/Update leaves are visible only on their own Product types and are disabled placeholders.
+14. Existing ENC behavior, async operation state, popup-preserving refresh, notices, and keyboard behavior remain regression-tested.
+15. The updated Main map introduction and hover help explain the new control.
+16. Light and dark mode manual verification passes.
+17. `cd src/ProductCatalogue && npm run check` passes.
+
+### Out of scope for the first implementation
+
+- production Paper Charts and S-102 endpoints;
+- production schemas or paging contracts;
+- source-specific History and report endpoints;
+- Paper Charts or S-102 mutation endpoints;
+- Paper Charts or S-102 export execution;
+- backend cancellation when a source is disabled;
+- a global timeline across sources;
+- unrelated Dashboard paging or sorting work.
+
+## FI-012 Denmark and Greenland map locator
+
+Status: Todo  
+Documentation baseline: `20a0cab4c64aea42c9ac10aced95f6b592d14280`  
+Implementation order: after FI-011
+
+### Goal
+
+Add a compact geographic Locator to the Main map so users can quickly navigate to an address, city, or geographic place in Denmark or Greenland while working with Product corrections. The Locator is navigation assistance only and must remain independent from Product search, Product selection, popup state, filters, and source enablement.
+
+### ArcGIS component choice
+
+Use the ArcGIS Maps SDK Search web component (`arcgis-search`) supported by the current 5.x SDK. Do not introduce the deprecated `@arcgis/core/widgets/Search` widget.
+
+Use an explicit source configuration rather than relying on unrestricted default sources. The initial source configuration uses an approved ArcGIS locator/geocoding service and must be replaceable without changing the Locator UI controller.
+
+Before runtime implementation, confirm and document:
+
+- the organization-approved locator URL;
+- ArcGIS Online, Enterprise, API key, user authentication, or other token strategy;
+- where non-secret locator configuration is supplied;
+- how credentials are kept out of committed frontend source;
+- the verified country restriction mechanism for Denmark and Greenland.
+
+The functional requirement is fixed even if the service configuration differs: return results from Denmark and Greenland only and exclude the Faroe Islands. A valid implementation may use one locator request supporting multiple source countries or two configured `LocatorSearchSource` instances searched together. The final choice must be verified against the approved service rather than assumed from the public service defaults.
+
+### UI placement and behavior
+
+Add an icon-only Locator button directly beside the existing Main map Product search control. Use the Calcite `binoculars` icon to match the established ArcGIS Locator metaphor.
+
+The button opens a simple compact Locator overlay containing the Search component. The first version should reuse the existing Product search overlay's compact positioning and interaction conventions where practical, without merging the two search experiences.
+
+Required behavior:
+
+- tooltip and `aria-label`: `Locator`;
+- clicking the button toggles the Locator overlay;
+- Escape and click-outside close the overlay and restore focus to the button;
+- opening Locator may close Product search if both overlays would conflict spatially;
+- Product search remains a separate control and retains its existing behavior;
+- no permanent large search panel is added to the map;
+- the first implementation may be visually iterated later without changing the search contract.
+
+### Search scope
+
+Initial geographic results are limited to:
+
+- addresses;
+- populated places and administrative place names;
+- postal locations when supported by the approved locator.
+
+General business and point-of-interest discovery is not part of the first version.
+
+Country scope:
+
+- Denmark: included;
+- Greenland: included;
+- Faroe Islands: excluded;
+- all other countries: excluded.
+
+The source should use explicit category filters equivalent to `Address`, `Populated Place`, and `Postal` where supported. Category and country values must be verified against the selected locator service and must not silently fall back to unrestricted worldwide search.
+
+### Result behavior
+
+Selecting a result must:
+
+- navigate the existing `MapView` to the result extent or locator-provided scale;
+- use a configured fallback zoom scale only when the locator does not return a useful extent;
+- not render a result marker or retained result graphic;
+- not open a locator popup;
+- not open, close, or replace a Product popup solely because a location result was selected;
+- not change selected Product identity, hover highlight, Product Collection, filters, enabled data sources, or operation state.
+
+Clearing or closing Locator clears its search UI but does not restore the previous map viewpoint. A later Product interaction continues using the normal Product popup and selection lifecycle.
+
+### Extensible search-source configuration
+
+Create a small Locator search-source registry or factory. The UI controller must consume configured Search sources rather than hardcoding the public World Geocoding Service directly.
+
+The first release contains only geographic locator sources. The architecture must allow later custom ArcGIS `SearchSource` entries backed by Product Catalogue APIs.
+
+A later database-backed source may search configured Product or related-data attributes and return suggestions/results with a geometry or extent. Because current Product layers are client-side GraphicsLayers, do not assume ArcGIS `LayerSearchSource` can query them. Future attribute search should use an API-backed custom source with explicit `getSuggestions` and `getResults` behavior or a future searchable service layer.
+
+Future source additions must not blur the current workflow boundaries:
+
+- Product search remains the dedicated quick Product lookup that opens Product popups across active Product sources;
+- Locator remains map navigation and multi-source geographic/domain search;
+- any future duplicated search domain must be reviewed before being enabled in both controls.
+
+### Failure and loading behavior
+
+The Search component owns normal suggestion/result loading. Integrate failures with existing notices only when the component does not already provide a clear local error or when configuration/authentication fails.
+
+Requirements:
+
+- no fullscreen loader;
+- no unhandled promise rejection for locator/auth/network failure;
+- no stale result navigation after the user closes or replaces a search;
+- failed search must leave the current map viewpoint and Product state unchanged;
+- missing locator configuration disables the Locator button with a useful tooltip/notice in development rather than silently enabling worldwide defaults.
+
+### Guidance, accessibility, and visual requirements
+
+Update the versioned Main map introduction added under FI-011 to explain:
+
+- Locator searches geographic places and addresses;
+- Product search searches Products;
+- selecting a Locator result moves the map without selecting a Product.
+
+If FI-012 is implemented in a later package than FI-011, bump the Main map onboarding version again or add the Locator step before FI-011 is committed. Do not reset Dashboard, Analyze, or Review onboarding state.
+
+The Locator button and overlay must support keyboard navigation, focus restoration, English UI text, light/dark mode, compact square styling, tooltips, and static loading/error cues suitable for RDP/VDI.
+
+### Acceptance criteria
+
+FI-012 is complete only when:
+
+1. A binoculars Locator button is positioned beside Product search.
+2. The button opens and closes a compact Search component overlay with correct keyboard and focus behavior.
+3. Searches such as `Køge`, `Fredericia`, `Aalborg`, a valid Danish address, and a valid Greenlandic place navigate to the correct area.
+4. Results outside Denmark and Greenland are not returned.
+5. Faroe Islands results are not returned.
+6. Business/POI-only searches are excluded from the first version where category filtering supports that distinction.
+7. Selecting a result navigates without a marker or locator popup.
+8. Locator use does not mutate Product popup, selection, hover, filters, Product Collection, data-source, or operation state.
+9. Product search continues to work independently across active Product sources.
+10. Missing or invalid locator authentication/configuration fails closed instead of enabling unrestricted defaults.
+11. The source registry can accept a future custom API-backed Search source without rewriting the Locator UI.
+12. Main map onboarding and hover help explain Locator versus Product search.
+13. Light and dark mode manual verification passes.
+14. `cd src/ProductCatalogue && npm run check` passes.
+
+### Out of scope for the first implementation
+
+- search in Product Catalogue database attributes;
+- search in connected/related records;
+- client-side GraphicsLayer `LayerSearchSource` integration;
+- reverse geocoding from map clicks;
+- result markers or locator popups;
+- general businesses and points of interest;
+- Faroe Islands or worldwide results;
+- changes to Product search behavior beyond FI-011 active-source aggregation.
 
 ## Commit log
 
