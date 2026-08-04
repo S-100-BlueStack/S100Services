@@ -39,13 +39,13 @@ public sealed class ApiVersionDocumentTransformer(IApiVersionDescriptionProvider
 
         var info = document.Info;
 
-        info.Title = "OpenApiDemo API";
+        info.Title = "OpenApiDataCatalogue API";
         info.Version = description?.ApiVersion.ToString() ?? context.DocumentName;
         info.Description = BuildDescription(description);
         info.Contact = new OpenApiContact
         {
-            Name = "OpenApiDemo API team",
-            Email = "api@example.com",
+            Name = "Geodatastyrelsen",
+            Email = "jesoe@gst.dk",
         };
         info.License = new OpenApiLicense
         {

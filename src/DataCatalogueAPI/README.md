@@ -1,4 +1,4 @@
-# OpenApiDemo
+# OpenApiDataCatalogue
 
 A .NET 10 controller-based REST API with API versioning, OpenAPI document generation,
 Serilog logging, HTTPS, and two browsable documentation UIs (Swagger UI and Scalar).

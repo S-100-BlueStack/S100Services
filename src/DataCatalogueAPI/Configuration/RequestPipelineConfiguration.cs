@@ -92,7 +92,7 @@ public static class RequestPipelineConfiguration
         // is handled by Microsoft.AspNetCore.OpenApi.
         app.UseSwaggerUI(options =>
         {
-            options.DocumentTitle = "OpenApiDemo API";
+            options.DocumentTitle = "OpenApiDataCatalogue API";
             options.RoutePrefix = "swagger";
             options.DisplayRequestDuration();
 
@@ -107,7 +107,7 @@ public static class RequestPipelineConfiguration
         // Scalar at /scalar, with a per-version document picker.
         app.MapScalarApiReference(options =>
         {
-            options.WithTitle("OpenApiDemo API");
+            options.WithTitle("OpenApiDataCatalogue API");
             options.WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
 
             for (var index = 0; index < descriptions.Count; index++)

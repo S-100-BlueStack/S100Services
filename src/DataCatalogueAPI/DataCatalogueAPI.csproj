@@ -16,6 +16,7 @@
       generated OpenAPI documents.
     -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Platforms>x64</Platforms>
   </PropertyGroup>
 
   <ItemGroup>
@@ -39,6 +40,10 @@
 
     <!-- Logging. Console, Debug and File sinks come along transitively. -->
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="logs\" />
   </ItemGroup>
 
 </Project>
