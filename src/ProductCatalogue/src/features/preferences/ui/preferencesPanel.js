@@ -42,12 +42,21 @@ const PREFERENCE_ITEMS = [
     resetLabel: "Reset",
   },
 ];
-
 let activePanel = null;
 
-export function initPreferencesPanel({ view, filterPanel, onStartIntroduction } = {}) {
+export function initPreferencesPanel({
+  view,
+  filterPanel,
+  dataSourceController,
+  onStartIntroduction,
+} = {}) {
   if (activePanel) {
-    activePanel.updateContext({ view, filterPanel, onStartIntroduction });
+    activePanel.updateContext({
+      view,
+      filterPanel,
+      dataSourceController,
+      onStartIntroduction,
+    });
     return activePanel.api;
   }
 
@@ -56,7 +65,6 @@ export function initPreferencesPanel({ view, filterPanel, onStartIntroduction } 
   if (!button) {
     return createEmptyApi();
   }
-
   const panel = document.createElement("section");
   panel.id = "preferences-panel";
   panel.className = "pc-preferences-panel";
@@ -67,11 +75,11 @@ export function initPreferencesPanel({ view, filterPanel, onStartIntroduction } 
   const context = {
     view: null,
     filterPanel: null,
+    dataSourceController: null,
     onStartIntroduction: null,
   };
 
   const isOpen = () => !panel.hidden;
-
   const render = () => {
     const persistenceState = getPreferencePersistenceState();
     const availableItems = PREFERENCE_ITEMS.filter(
@@ -85,7 +93,6 @@ export function initPreferencesPanel({ view, filterPanel, onStartIntroduction } 
           <p>Manage saved frontend preferences for this browser.</p>
         </div>
       </div>
-
       <div class="pc-preferences-panel__content">
         <button
           type="button"
@@ -97,7 +104,6 @@ export function initPreferencesPanel({ view, filterPanel, onStartIntroduction } 
         </button>
 
         ${availableItems.map((item) => renderPreferenceItem(item, persistenceState)).join("")}
-
         <button
           type="button"
           class="pc-preferences-panel__reset-all"
@@ -148,6 +154,9 @@ export function initPreferencesPanel({ view, filterPanel, onStartIntroduction } 
           await resetMapViewpoint(context.view);
           context.filterPanel?.clearAllFilters?.();
           resetDisplayScaleHidingPreference();
+          await context.dataSourceController?.resetToDefaults?.({
+            reason: "preferences-reset",
+          });
         }
         resetThemePreference(context.view);
         syncThemeToggle();
@@ -181,12 +190,13 @@ export function initPreferencesPanel({ view, filterPanel, onStartIntroduction } 
       switchElement.checked
     );
     if (!didChange) return;
-
     const item = PREFERENCE_ITEMS.find(
       (entry) => entry.key === switchElement.dataset.preferencePersistenceKey
     );
     noticeSuccess(
-      `${item?.title ?? "Preference"} persistence ${switchElement.checked ? "enabled" : "disabled"}`,
+      `${item?.title ?? "Preference"} persistence ${
+        switchElement.checked ? "enabled" : "disabled"
+      }`,
       null,
       { countAsUnread: false }
     );
@@ -197,7 +207,6 @@ export function initPreferencesPanel({ view, filterPanel, onStartIntroduction } 
     if (!target || panel.hidden || panel.contains(target) || button.contains(target)) return;
     setOpen(false);
   };
-
   const handleResize = () => {
     if (isOpen()) positionPanel(button, panel);
   };
@@ -215,14 +224,17 @@ export function initPreferencesPanel({ view, filterPanel, onStartIntroduction } 
       activePanel = null;
     },
   };
-
   activePanel = {
     api,
     updateContext(nextContext = {}) {
-      if (Object.prototype.hasOwnProperty.call(nextContext, "view"))
+      if (Object.prototype.hasOwnProperty.call(nextContext, "view")) {
         context.view = nextContext.view;
+      }
       if (Object.prototype.hasOwnProperty.call(nextContext, "filterPanel")) {
         context.filterPanel = nextContext.filterPanel;
+      }
+      if (Object.prototype.hasOwnProperty.call(nextContext, "dataSourceController")) {
+        context.dataSourceController = nextContext.dataSourceController;
       }
       if (typeof nextContext.onStartIntroduction === "function") {
         context.onStartIntroduction = nextContext.onStartIntroduction;
@@ -230,8 +242,12 @@ export function initPreferencesPanel({ view, filterPanel, onStartIntroduction } 
       if (isOpen()) render();
     },
   };
-
-  activePanel.updateContext({ view, filterPanel, onStartIntroduction });
+  activePanel.updateContext({
+    view,
+    filterPanel,
+    dataSourceController,
+    onStartIntroduction,
+  });
   render();
   return api;
 }
@@ -266,7 +282,6 @@ function ensurePreferencesButton() {
   const container =
     document.querySelector("#header .header-right") ?? document.getElementById("navbar");
   if (!container) return null;
-
   const button = document.createElement("calcite-action");
   button.id = "preferences-button";
   button.icon = "gear";

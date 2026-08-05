@@ -8,7 +8,6 @@
 		<NoWarn>$(NoWarn);1591</NoWarn>
 		<Platforms>AnyCPU;x64</Platforms>
 	</PropertyGroup>
-
 	<ItemGroup>
 		<Compile Remove="exports\**" />
 		<Compile Remove="logs\**" />
@@ -25,7 +24,6 @@
 		<Page Remove="logs\**" />
 		<PRIResource Remove="logs\**" />
 	</ItemGroup>
-
 	<ItemGroup>
 		<None Remove="101_Feature_Catalogue_2.0.0.xml" />
 		<None Remove="bootstrap.log" />
@@ -33,7 +31,6 @@
 		<None Remove="products.geojson" />
 		<None Remove="s100edX.gdb.zip" />
 	</ItemGroup>
-
 	<ItemGroup>
 		<Content Include="101_Feature_Catalogue_2.0.0.xml">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -41,12 +38,14 @@
 		<Content Include="mock\products.geojson">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
+		<Content Include="mock\some_products.geojson">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
 	</ItemGroup>
 
 	<ItemGroup>
 	  <None Include="Properties\PublishProfiles\ModelOffice.pubxml.user" />
 	</ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.72" />
     <PackageReference Include="FluentFTP" Version="54.1.2" />
@@ -59,7 +58,6 @@
     <PackageReference Include="SharpZipLib" Version="1.4.2" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="8.1.4" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\ProductManagerCore\ProductManagerCore.csproj" />
   </ItemGroup>
@@ -72,7 +70,6 @@
 	    <HintPath>..\..\..\..\..\..\..\..\Program Files\ArcGIS\Pro\bin\ArcGIS.CoreHost.dll</HintPath>
 	  </Reference>
 	</ItemGroup>
-
 	<ItemGroup>
 		<None Update="s100ed9.gdb.zip">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

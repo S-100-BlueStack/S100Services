@@ -2,7 +2,6 @@
   <div class="header-left">
     <img alt="GST" width="42" height="42" src="/images/logo96.png" />
   </div>
-
   <div class="header-center">
     <a href="#" class="navbar-title-link" data-nav-home-link>Product Catalogue</a>
     <a href="#" class="navbar-title-link" data-nav-dashboard-link>Dashboard</a>
@@ -10,7 +9,7 @@
     <a href="#" class="navbar-title-link" data-nav-review-link>Review</a>
   </div>
   <div class="header-right">
-    <!-- Display Scale Visiblity Toggle -->
+    <!-- Display Scale Visibility Toggle -->
     <div class="navbar-switch-control" id="display-scale-toggle-wrapper">
       <span id="display-scale-toggle-label" class="navbar-switch-control__label">
         Scale hiding
@@ -22,6 +21,18 @@
         aria-labelledby="display-scale-toggle-label"
       ></calcite-switch>
     </div>
+
+    <!-- Runtime data sources -->
+    <calcite-action
+      id="data-sources-button"
+      hidden
+      icon="data"
+      text="Data sources"
+      label="Data sources"
+      title="Data sources"
+      aria-label="Data sources"
+      scale="m"
+    ></calcite-action>
 
     <!-- Filter panel -->
     <div class="filter-wrapper">
@@ -43,7 +54,6 @@
     >
       Updated: -
     </span>
-
     <!-- Refresh button -->
     <calcite-action
       id="refresh-button"
@@ -60,7 +70,6 @@
         Automatically refreshes every 10 minutes
       </calcite-tooltip>
     </div> -->
-
     <calcite-action
       id="theme-toggle"
       icon="moon"
@@ -79,7 +88,6 @@
       ></calcite-action>
       <span id="notification-count"></span>
     </div>
-
     <calcite-action
       id="documentation-button"
       icon="question"

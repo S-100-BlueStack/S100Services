@@ -1,8 +1,15 @@
-import { clearLayers, registerLayer } from "./layerRegistry.js";
+import { clearLayers, getAllLayers, registerLayer } from "./layerRegistry.js";
 
 export async function rebuildLayers({ map, hoverManager, layerConfigs, createLayer, onProgress }) {
-  hoverManager.clear();
-  clearLayers(map);
+  const targetLayerIds = new Set(layerConfigs.map((layerConfig) => layerConfig.id).filter(Boolean));
+  const layersToReplace = getAllLayers().filter((layer) => targetLayerIds.has(layer.customId));
+
+  for (const layer of layersToReplace) {
+    hoverManager.unregisterLayer?.(layer);
+  }
+  clearLayers(map, {
+    predicate: (layer) => targetLayerIds.has(layer.customId),
+  });
 
   const createdLayers = [];
   const layerViewPromises = [];
@@ -10,7 +17,6 @@ export async function rebuildLayers({ map, hoverManager, layerConfigs, createLay
 
   for (let layerIndex = 0; layerIndex < layerCount; layerIndex += 1) {
     const layerConfig = layerConfigs[layerIndex];
-
     const layer = await createLayer(map, layerConfig, {
       onProgress: ({ progress = 0, stage, layerTitle } = {}) => {
         const layerProgress = clamp(progress, 0, 1);
@@ -29,7 +35,6 @@ export async function rebuildLayers({ map, hoverManager, layerConfigs, createLay
     if (!layer) {
       continue;
     }
-
     registerLayer(layer);
     createdLayers.push(layer);
     layerViewPromises.push(hoverManager.registerLayer(layer));

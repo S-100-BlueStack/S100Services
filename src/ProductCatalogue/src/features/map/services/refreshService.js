@@ -28,7 +28,6 @@ export function createRefreshService({
   function captureState() {
     const selectedFeature = view.popup.selectedFeature;
     const popupLocation = cloneGeometry(view.popup.location);
-
     return {
       selectedFeatureKey: selectedFeature?.attributes?.featureKey,
       selectedDatasetName: readDatasetName(selectedFeature?.attributes),
@@ -44,7 +43,6 @@ export function createRefreshService({
     if (!state) {
       return;
     }
-
     if (state.popupVisible && state.selectedFeatureKey && state.selectedLayerId) {
       const graphic = findFeatureForRestore(state.selectedLayerId, state.selectedFeatureKey);
 
@@ -55,7 +53,6 @@ export function createRefreshService({
         });
       }
     }
-
     if (state.lockedFeatureKey && state.lockedLayerId) {
       const graphic = findFeatureForRestore(state.lockedLayerId, state.lockedFeatureKey);
 
@@ -69,10 +66,8 @@ export function createRefreshService({
     if (!state) {
       return;
     }
-
     if (state.popupVisible && state.selectedFeatureKey && state.selectedLayerId) {
       const graphic = findFeatureForRestore(state.selectedLayerId, state.selectedFeatureKey);
-
       if (!graphic || graphic.visible === false) {
         view.popup.close();
       } else if (view.popup.selectedFeature !== graphic) {
@@ -85,7 +80,6 @@ export function createRefreshService({
         });
       }
     }
-
     if (state.lockedFeatureKey && state.lockedLayerId) {
       const graphic = findFeatureForRestore(state.lockedLayerId, state.lockedFeatureKey);
 
@@ -102,7 +96,6 @@ export function createRefreshService({
     if (preferredGraphic) {
       return preferredGraphic;
     }
-
     // Layer ids can change later when multiple product layers are introduced.
     // Falling back to all registered layers keeps popup restore resilient.
     for (const layer of getAllLayers()) {
@@ -130,7 +123,6 @@ export function createRefreshService({
     }
 
     isRefreshing = true;
-
     const startedAt = new Date();
 
     try {
@@ -140,7 +132,6 @@ export function createRefreshService({
         source,
         startedAt,
       });
-
       const result = await runWithRetry(loadAppData, {
         maxRetries: source === "manual" ? MANUAL_REFRESH_MAX_RETRIES : AUTO_REFRESH_MAX_RETRIES,
         baseDelay: 1000,
@@ -154,14 +145,12 @@ export function createRefreshService({
       let activeLayers;
       let refreshStrategy;
       let reconciliationReason = null;
-
       if (reconciliation.success) {
         activeLayers = reconciliation.layers;
         refreshStrategy = "reconciled";
 
         await onLayersRebuilt?.(activeLayers);
         synchronizeReconciledState(state);
-
         if (state.popupVisible && state.selectedDatasetName && view.popup.visible) {
           await refreshOpenProductPopup(state.selectedDatasetName, {
             showFailureNotice: false,
@@ -176,14 +165,12 @@ export function createRefreshService({
           layerConfigs,
           createLayer,
         });
-
         await onLayersRebuilt?.(activeLayers);
         await restoreState(state);
       }
 
       const finishedAt = new Date();
       const graphicsCount = getTotalGraphics(activeLayers);
-
       const refreshResult = {
         success: true,
         skipped: false,
@@ -201,7 +188,6 @@ export function createRefreshService({
       return refreshResult;
     } catch (error) {
       const finishedAt = new Date();
-
       const refreshResult = {
         success: false,
         skipped: false,
@@ -220,8 +206,8 @@ export function createRefreshService({
   }
 
   async function tryReconcileLayers(layerConfigs) {
-    const currentLayers = getAllLayers();
-
+    const requestedLayerIds = new Set(layerConfigs.map((layerConfig) => layerConfig.id));
+    const currentLayers = getAllLayers().filter((layer) => requestedLayerIds.has(layer.customId));
     if (currentLayers.length === 0) {
       return createReconciliationFailure("no-current-layers");
     }
@@ -239,7 +225,6 @@ export function createRefreshService({
           candidateLayers.push(candidateLayer);
         }
       }
-
       return reconcileGraphicsLayers({
         currentLayers,
         candidateLayers,
@@ -254,7 +239,6 @@ export function createRefreshService({
 
   function startAuto() {
     stopAuto();
-
     intervalId = window.setInterval(() => {
       if (autoRefreshEnabled) {
         void refresh({ source: "auto" });
@@ -305,7 +289,6 @@ function normalizeLayers(result) {
   }
 
   const layers = result.layers.filter(Boolean);
-
   if (layers.length === 0) {
     throw new Error("No layers were returned from the data loader.");
   }
@@ -333,7 +316,6 @@ function getPopupLocation(graphic) {
   if (geometry.extent) {
     return geometry.extent.center;
   }
-
   return null;
 }
 

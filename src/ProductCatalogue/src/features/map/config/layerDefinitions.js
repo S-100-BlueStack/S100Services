@@ -1,9 +1,12 @@
 import { PRODUCT_CORRECTIONS_LAYER_ID } from "../../../shared/config/layerIds.js";
+import { DATA_SOURCE_LAYER_IDS } from "../../dataSources/config/dataSourceRegistry.js";
 
 export { PRODUCT_CORRECTIONS_LAYER_ID };
 
 export const LAYER_KINDS = Object.freeze({
   PRODUCT_CORRECTIONS: "product-corrections",
+  PAPER_CHART_PRODUCTS: "paper-chart-products",
+  S102_PRODUCTS: "s102-products",
 });
 
 const DEFAULT_LAYER_CAPABILITIES = Object.freeze({
@@ -14,8 +17,8 @@ const DEFAULT_LAYER_CAPABILITIES = Object.freeze({
   supportsAttributeFilters: false,
   supportsProductHistory: false,
   supportsOverlapPicker: false,
+  supportsProductSearch: false,
 });
-
 const KNOWN_LAYER_CAPABILITIES = new Set(Object.keys(DEFAULT_LAYER_CAPABILITIES));
 
 export const layerDefinitions = Object.freeze([
@@ -32,10 +35,30 @@ export const layerDefinitions = Object.freeze([
       supportsAttributeFilters: true,
       supportsProductHistory: true,
       supportsOverlapPicker: true,
+      supportsProductSearch: true,
+    }),
+  }),
+  Object.freeze({
+    id: DATA_SOURCE_LAYER_IDS.PAPER_CHARTS_PRODUCTS,
+    layerKind: LAYER_KINDS.PAPER_CHART_PRODUCTS,
+    displayName: "Paper Charts",
+    capabilities: Object.freeze({
+      ...DEFAULT_LAYER_CAPABILITIES,
+      supportsPopup: true,
+      supportsOverlapPicker: true,
+    }),
+  }),
+  Object.freeze({
+    id: DATA_SOURCE_LAYER_IDS.S102_PRODUCTS,
+    layerKind: LAYER_KINDS.S102_PRODUCTS,
+    displayName: "S-102",
+    capabilities: Object.freeze({
+      ...DEFAULT_LAYER_CAPABILITIES,
+      supportsPopup: true,
+      supportsOverlapPicker: true,
     }),
   }),
 ]);
-
 const definitionsById = new Map(layerDefinitions.map((definition) => [definition.id, definition]));
 
 export function getLayerDefinition(layerId) {
@@ -46,7 +69,6 @@ export function resolveLayerId(source) {
   if (typeof source === "string") {
     return normalizeLayerId(source);
   }
-
   return normalizeLayerId(
     source?.appLayerId ??
       source?.customId ??
@@ -62,7 +84,6 @@ export function resolveLayerKind(source) {
   if (typeof source === "string") {
     return getLayerDefinition(source)?.layerKind ?? null;
   }
-
   return (
     source?.appLayerKind ??
     source?.layerKind ??
@@ -79,6 +100,7 @@ export function resolveLayerCapabilities(source) {
   return {
     ...DEFAULT_LAYER_CAPABILITIES,
     ...(definition?.capabilities ?? {}),
+    ...(source?.layer?.appLayerCapabilities ?? source?.layer?.capabilities ?? {}),
     ...(source?.appLayerCapabilities ?? source?.capabilities ?? {}),
   };
 }
@@ -109,13 +131,13 @@ function getFallbackDefinitionForAttributes(source) {
     return null;
   }
 
-  // Existing product graphics should have `layerId`, but this fallback keeps
-  // popup actions stable if refreshed API attributes omit frontend metadata.
+  // Existing compatibility graphics should have `layerId`, but this fallback
+  // keeps current popup actions stable if refreshed AOI attributes omit metadata.
   return getLayerDefinition(PRODUCT_CORRECTIONS_LAYER_ID);
 }
 
 function looksLikeProductCorrectionAttributes(source) {
-  if (!source || typeof source !== "object") {
+  if (!source || typeof source !== "object" || source.sourceId) {
     return false;
   }
 
@@ -131,10 +153,9 @@ function looksLikeProductCorrectionAttributes(source) {
 }
 
 function warnUnknownLayerCapability(capabilityName) {
-  if (!import.meta.env.DEV) {
+  if (!import.meta.env?.DEV) {
     return;
   }
-
   console.warn("[Layer definitions] Unknown layer capability", {
     capabilityName,
     knownCapabilities: getKnownLayerCapabilities(),

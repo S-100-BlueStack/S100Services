@@ -1,4 +1,6 @@
 import { loadAppData } from "../features/data/services/dataLoader.js";
+import { createDataSourceRuntime } from "../features/dataSources/core/createDataSourceRuntime.js";
+import { createDataSourceRefreshCoordinator } from "../features/dataSources/services/dataSourceRefreshCoordinator.js";
 import { createRefreshService } from "../features/map/services/refreshService.js";
 import { noticeError, noticeSuccess } from "../features/notices/services/noticeService.js";
 import { cancelActiveConfirmPopover } from "../shared/ui/confirm/services/confirmService.js";
@@ -57,11 +59,11 @@ export function initMap() {
   const mapViewpointPersistence = bindMapViewpointPersistence(view);
   const hoverManager = createHoverManager(view);
   let previousLastUpdatedStatus = "";
+  let filterPanel = null;
 
   registerPopupHoverSync(view, hoverManager);
 
   const filterService = createAttributeFilterService();
-
   const isGraphicAllowed = (graphic, layer) => {
     return filterService.matchesGraphic(graphic, layer);
   };
@@ -77,13 +79,25 @@ export function initMap() {
     });
   };
 
-  const filterPanel = initAttributeFilterPanel({
+  const dataSourceRuntime = createDataSourceRuntime({
+    map,
+    view,
+    hoverManager,
+    createLayer,
+    onLayersChanged: () => {
+      applyMapVisibility();
+      filterPanel?.refresh?.();
+    },
+  });
+
+  filterPanel = initAttributeFilterPanel({
     filterService,
     applyVisibility: applyMapVisibility,
   });
   const preferencesPanel = initPreferencesPanel({
     view,
     filterPanel,
+    dataSourceController: dataSourceRuntime.controller,
   });
   const productHistoryPanel = initProductHistoryPanel({
     view,
@@ -92,15 +106,15 @@ export function initMap() {
   const productSearch = initMainMapProductSearch({ view });
   const cleanupKeyboardClose = bindMainMapKeyboardClose({
     view,
+    dataSourcePanel: dataSourceRuntime.panel,
     filterPanel,
     preferencesPanel,
     productHistoryPanel,
     productSearch,
   });
-
   bindOverlapPicker(view);
 
-  const refreshService = createRefreshService({
+  const compatibilityRefreshService = createRefreshService({
     map,
     view,
     hoverManager,
@@ -117,7 +131,6 @@ export function initMap() {
       if (source !== "manual") {
         return;
       }
-
       cancelActiveConfirmPopover({
         restoreFocus: false,
       });
@@ -126,7 +139,6 @@ export function initMap() {
     },
     onRefreshSuccess: ({ source, graphicsCount, finishedAt }) => {
       updateLastUpdated(finishedAt);
-
       if (source === "manual") {
         noticeSuccess(`Data refreshed (${graphicsCount} graphics rendered)`, null, {
           countAsUnread: false,
@@ -142,7 +154,6 @@ export function initMap() {
         noticeError("Refresh failed", error.message);
         return;
       }
-
       console.warn("[Refresh] Auto refresh failed", error);
     },
     onRefreshSkipped: ({ source, reason }) => {
@@ -151,12 +162,20 @@ export function initMap() {
       }
     },
   });
+  const refreshService = createDataSourceRefreshCoordinator({
+    compatibilityRefreshService,
+    dataSourceController: dataSourceRuntime.controller,
+  });
 
   return {
     map,
     view,
     hoverManager,
     refreshService,
+    compatibilityRefreshService,
+    dataSourceController: dataSourceRuntime.controller,
+    dataSourcePanel: dataSourceRuntime.panel,
+    dataSourceRegistry: dataSourceRuntime.registry,
     filterService,
     filterPanel,
     productHistoryPanel,
@@ -170,6 +189,8 @@ export function initMap() {
     productSearch,
     destroy() {
       cleanupKeyboardClose?.();
+      refreshService.destroy?.();
+      dataSourceRuntime.destroy();
       productSearch?.destroy?.();
       filterPanel?.destroy?.();
       preferencesPanel?.destroy?.();
@@ -182,6 +203,7 @@ export function initMap() {
 
 function bindMainMapKeyboardClose({
   view,
+  dataSourcePanel,
   filterPanel,
   preferencesPanel,
   productHistoryPanel,
@@ -203,6 +225,11 @@ function bindMainMapKeyboardClose({
     }
 
     if (closeNoticePanel()) {
+      event.preventDefault();
+      return;
+    }
+
+    if (dataSourcePanel?.close?.({ restoreFocus: true })) {
       event.preventDefault();
       return;
     }

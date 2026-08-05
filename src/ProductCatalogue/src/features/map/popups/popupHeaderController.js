@@ -7,6 +7,11 @@ import {
   subscribeProductCollection,
 } from "../../productCollection/state/productCollectionStore.js";
 
+import {
+  mutatePopupHeaderCollection,
+  reconcilePopupHeaderCollectionAction,
+} from "./popupHeaderCollectionAction.js";
+
 let currentFeatureId = null;
 let headerMode = "default";
 
@@ -68,7 +73,7 @@ function waitForFeatureHeader(view, featureId, remainingFrames = 20) {
     header.dataset.statusColor = color;
   }
 
-  ensureCollectionButton(header, attr);
+  ensureCollectionButton(header, feature, view);
   ensureCopyButton(header, attr.datasetName);
 }
 
@@ -119,7 +124,6 @@ function getPopupHeader(view) {
 
 function isOverlapPickerPopup(view) {
   const content = view.popup.content;
-
   return content instanceof Element && content.classList.contains("overlap-picker");
 }
 
@@ -211,82 +215,91 @@ function ensureCopyButton(header, datasetName) {
   btn.dataset.datasetName = datasetName;
 }
 
-function ensureCollectionButton(header, attributes) {
-  if (isReviewOrAnalyzeRoute()) {
-    removeCollectionButton(header);
-    return;
-  }
+function ensureCollectionButton(header, feature, view) {
+  reconcilePopupHeaderCollectionAction({
+    feature,
+    isReviewOrAnalyzeRoute: isReviewOrAnalyzeRoute(),
+    onUnsupported: () => removeCollectionButton(header),
+    onSupported: ({ datasetName }) => {
+      const actions = getHeaderActions(header);
 
-  const datasetName = attributes?.datasetName;
-  const actions = getHeaderActions(header);
-
-  if (!actions || !datasetName) {
-    return;
-  }
-
-  let btn = actions.querySelector(".popup-product-collection-btn");
-
-  if (!btn) {
-    btn = document.createElement("calcite-action");
-    btn.className = "popup-product-collection-btn";
-    btn.scale = "m";
-    btn.appearance = "transparent";
-
-    actions.prepend(btn);
-
-    btn.addEventListener("click", () => {
-      const datasetName = btn.dataset.datasetName;
-      const isSelected = hasProductCollectionProduct(datasetName);
-
-      if (isSelected) {
-        removeProductCollectionProduct(datasetName);
-
-        addNotice({
-          type: "info",
-          message: `${datasetName} removed from collection`,
-          duration: 2200,
-          storeInCenter: false,
-        });
-
-        syncCollectionButtonState(btn);
+      if (!actions) {
+        removeCollectionButton(header);
         return;
       }
 
-      const result = addProductCollectionProduct({ datasetName });
+      let btn = actions.querySelector(".popup-product-collection-btn");
 
-      if (result.added) {
-        addNotice({
-          type: "success",
-          message: `${datasetName} added to collection`,
-          duration: 2200,
-          storeInCenter: false,
+      if (!btn) {
+        btn = document.createElement("calcite-action");
+        btn.className = "popup-product-collection-btn";
+        btn.scale = "m";
+        btn.appearance = "transparent";
+
+        actions.prepend(btn);
+
+        btn.addEventListener("click", () => {
+          const result = mutatePopupHeaderCollection({
+            feature: view.popup.selectedFeature,
+            expectedDatasetName: btn.dataset.datasetName,
+            isReviewOrAnalyzeRoute: isReviewOrAnalyzeRoute(),
+            hasProduct: hasProductCollectionProduct,
+            addProduct: addProductCollectionProduct,
+            removeProduct: removeProductCollectionProduct,
+          });
+
+          if (!result.handled) {
+            removeCollectionButton(header);
+            return;
+          }
+
+          if (result.removed) {
+            addNotice({
+              type: "info",
+              message: `${result.datasetName} removed from collection`,
+              duration: 2200,
+              storeInCenter: false,
+            });
+
+            syncCollectionButtonState(btn);
+            return;
+          }
+
+          if (result.addResult?.added) {
+            addNotice({
+              type: "success",
+              message: `${result.datasetName} added to collection`,
+              duration: 2200,
+              storeInCenter: false,
+            });
+          } else if (result.addResult?.reason === "already-added") {
+            addNotice({
+              type: "info",
+              message: `${result.datasetName} is already in the collection`,
+              duration: 2200,
+              storeInCenter: false,
+            });
+          } else {
+            addNotice({
+              type: "danger",
+              message: "Selected product could not be added to collection",
+              duration: 3000,
+              storeInCenter: false,
+            });
+          }
+
+          syncCollectionButtonState(btn);
         });
-      } else if (result.reason === "already-added") {
-        addNotice({
-          type: "info",
-          message: `${datasetName} is already in the collection`,
-          duration: 2200,
-          storeInCenter: false,
-        });
-      } else {
-        addNotice({
-          type: "danger",
-          message: "Selected product could not be added to collection",
-          duration: 3000,
-          storeInCenter: false,
+
+        btn.cleanup = subscribeProductCollection(() => {
+          syncCollectionButtonState(btn);
         });
       }
 
+      btn.dataset.datasetName = datasetName;
       syncCollectionButtonState(btn);
-    });
-
-    btn.cleanup = subscribeProductCollection(() => {
-      syncCollectionButtonState(btn);
-    });
-  }
-
-  btn.dataset.datasetName = datasetName;
-  syncCollectionButtonState(btn);
+    },
+  });
 }
 
 function syncCollectionButtonState(btn) {

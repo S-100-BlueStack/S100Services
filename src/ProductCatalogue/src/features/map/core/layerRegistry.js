@@ -1,7 +1,27 @@
 const registry = new Map();
 
 export function registerLayer(layer) {
-  registry.set(layer.customId, layer);
+  const layerId = layer?.customId;
+  if (!layerId) {
+    throw new Error("A runtime layer requires customId before registration.");
+  }
+
+  registry.set(layerId, layer);
+  return layer;
+}
+
+export function unregisterLayer(layerOrId) {
+  const layerId = typeof layerOrId === "string" ? layerOrId : layerOrId?.customId;
+  if (!layerId) {
+    return false;
+  }
+
+  const registeredLayer = registry.get(layerId);
+  if (typeof layerOrId === "object" && registeredLayer !== layerOrId) {
+    return false;
+  }
+
+  return registry.delete(layerId);
 }
 
 export function getLayer(layerId) {
@@ -12,10 +32,19 @@ export function getAllLayers() {
   return Array.from(registry.values());
 }
 
-export function clearLayers(map) {
-  for (const layer of registry.values()) {
-    map.remove(layer);
-  }
+export function getLayersBySourceId(sourceId) {
+  return getAllLayers().filter((layer) => {
+    return layer?.appSourceId === sourceId || layer?.dataSourceId === sourceId;
+  });
+}
 
-  registry.clear();
+export function clearLayers(map, { predicate = () => true } = {}) {
+  for (const [layerId, layer] of registry.entries()) {
+    if (!predicate(layer)) {
+      continue;
+    }
+
+    map.remove(layer);
+    registry.delete(layerId);
+  }
 }
