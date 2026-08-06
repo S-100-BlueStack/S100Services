@@ -1,35 +1,17 @@
-import { fetchProductCatalog } from "../../products/api/productCatalogApi.js";
-import {
-  filterProductCatalog,
-  findProductCatalogMatch,
-  normalizeProductCatalog,
-} from "../../products/domain/productCatalog.js";
 import { noticeError, noticeWarning } from "../../notices/services/noticeService.js";
-import { getAllLayers } from "../core/layerRegistry.js";
 import {
   createProductGraphicViewTarget,
   createProductPopupLocation,
-  findProductGraphic,
 } from "./productGraphicSearch.js";
 
 const PRODUCT_SEARCH_RESULT_LIMIT = 10;
 const PRODUCT_SEARCH_CONTAINER_ID = "main-map-product-search";
 
-export function initMainMapProductSearch({ view }) {
+export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
   const host = ensureProductSearchHost();
-
-  if (!host) {
-    return createNoopSearch();
-  }
+  if (!host || !productSearchIndex) return createNoopSearch();
 
   const cleanupPosition = bindProductSearchPosition(host);
-
-  let products = [];
-  let loading = true;
-  let error = null;
-  let isOpen = false;
-  let destroyed = false;
-
   const form = document.createElement("form");
   form.className = "main-map-product-search__form";
   form.setAttribute("role", "search");
@@ -54,114 +36,127 @@ export function initMainMapProductSearch({ view }) {
   host.replaceChildren(form);
   host.hidden = false;
 
-  const renderResults = () => {
+  let isOpen = false;
+  let selectedResultId = null;
+  let destroyed = false;
+
+  function renderResults() {
     results.replaceChildren();
-
-    if (loading) {
-      results.appendChild(createStateMessage("Loading products..."));
-      return;
-    }
-
-    const matches = filterProductCatalog(products, input.value, {
+    const matches = productSearchIndex.search(input.value, {
       limit: PRODUCT_SEARCH_RESULT_LIMIT,
     });
 
     if (matches.length === 0) {
       results.appendChild(
         createStateMessage(
-          error
-            ? "Product catalog unavailable. Type an exact loaded product name."
+          productSearchIndex.getEntries().length === 0
+            ? "No active products are loaded."
             : "No matching products."
         )
       );
       return;
     }
 
-    for (const product of matches) {
+    const duplicateLabels = getDuplicateLabels(matches);
+    for (const match of matches) {
       results.appendChild(
-        createProductOption(product.name, () => {
-          void focusProduct(product.name);
-        })
+        createProductOption(
+          match,
+          () => {
+            void focusProduct(match.id);
+          },
+          { showSource: duplicateLabels.has(normalizeResultLabel(match.label)) }
+        )
       );
     }
-  };
+  }
 
-  const openResults = () => {
+  function openResults() {
     renderResults();
     results.hidden = false;
     isOpen = true;
     input.setAttribute("aria-expanded", "true");
-  };
+  }
 
-  const closeResults = () => {
-    if (!isOpen) {
-      return false;
-    }
-
+  function closeResults() {
+    if (!isOpen) return false;
     results.hidden = true;
     isOpen = false;
     input.setAttribute("aria-expanded", "false");
     return true;
-  };
+  }
 
-  const focusProduct = async (productName) => {
-    const selectedProductName = resolveSelectedProductName(products, productName) ?? productName;
-    input.value = selectedProductName;
+  async function focusProduct(resultId) {
+    const result = productSearchIndex.resolve(resultId);
+    if (!result) {
+      selectedResultId = null;
+      noticeWarning(
+        "Product no longer available",
+        "The selected product is no longer loaded from an active data source."
+      );
+      input.focus();
+      openResults();
+      return;
+    }
+
+    selectedResultId = result.id;
+    input.value = result.label;
     closeResults();
     input.blur();
 
-    const graphic = findProductGraphic(getAllLayers(), selectedProductName);
-
+    let graphic = result.graphic;
     if (!graphic) {
+      selectedResultId = null;
       noticeWarning(
         "Product not visible on map",
-        `${selectedProductName} exists in the product catalog, but no matching map feature is currently loaded.`
+        `${result.label} is no longer available in the loaded map representation.`
       );
       input.focus();
       return;
     }
 
-    const target = createProductGraphicViewTarget(graphic);
-    const location = createProductPopupLocation(graphic);
+    await navigateToGraphic(view, graphic, { duration: 450 });
+    await waitForAnimationFrame();
 
-    try {
-      if (target) {
-        await view.goTo(target, { duration: 450 });
-      }
-    } catch (goToError) {
-      console.warn("[Product search] Failed to navigate to product", goToError);
+    const currentResult = productSearchIndex.resolve(result.id);
+    if (!currentResult?.graphic) {
+      selectedResultId = null;
+      noticeWarning(
+        "Product no longer available",
+        "The selected product was removed before its popup could be opened."
+      );
+      return;
     }
 
-    // Wait one frame after navigation before opening the popup. In some ArcGIS
-    // render cycles the view is still settling after goTo, which can otherwise
-    // make a search feel like it only zoomed without opening the feature popup.
-    await waitForAnimationFrame();
-    openProductPopup(view, graphic, location);
-  };
+    if (currentResult.graphic !== graphic) {
+      // Refresh can replace the ArcGIS Graphic while navigation is running. Resolve
+      // again so the popup and selected-Graphic flow use the committed representation.
+      graphic = currentResult.graphic;
+      await navigateToGraphic(view, graphic, { duration: 0 });
+    }
 
-  input.addEventListener("focus", openResults);
-  input.addEventListener("input", openResults);
-  input.addEventListener("keydown", (event) => {
+    const location = createProductPopupLocation(graphic);
+    openProductPopup(view, graphic, location);
+  }
+
+  function handleInputKeydown(event) {
     if (event.key === "Escape") {
       const closed = closeResults();
       input.blur();
-
       if (closed) {
         event.preventDefault();
         event.stopPropagation();
       }
-
       return;
     }
 
     if (event.key === "ArrowDown" && !results.hidden) {
-      const firstOption = results.querySelector(".main-map-product-search__option");
-      firstOption?.focus();
+      results.querySelector(".main-map-product-search__option")?.focus();
       event.preventDefault();
     }
-  });
+  }
 
-  results.addEventListener("keydown", (event) => {
+  function handleResultsKeydown(event) {
     if (event.key === "Escape") {
       closeResults();
       input.blur();
@@ -170,184 +165,179 @@ export function initMainMapProductSearch({ view }) {
       return;
     }
 
+    const options = getResultOptions(results);
+    const currentIndex = options.indexOf(document.activeElement);
     if (event.key === "ArrowUp") {
-      const options = getResultOptions(results);
-      const currentIndex = options.indexOf(document.activeElement);
       const previous = options[currentIndex - 1];
-
-      if (previous) {
-        previous.focus();
-      } else {
-        input.focus();
-      }
-
+      if (previous) previous.focus();
+      else input.focus();
       event.preventDefault();
-      return;
-    }
-
-    if (event.key === "ArrowDown") {
-      const options = getResultOptions(results);
-      const currentIndex = options.indexOf(document.activeElement);
-      const next = options[currentIndex + 1];
-      next?.focus();
+    } else if (event.key === "ArrowDown") {
+      options[currentIndex + 1]?.focus();
       event.preventDefault();
     }
-  });
+  }
 
-  form.addEventListener("focusout", () => {
-    window.setTimeout(() => {
-      if (!form.contains(document.activeElement)) {
-        closeResults();
-      }
-    }, 0);
-  });
-
-  form.addEventListener("submit", (event) => {
+  function handleSubmit(event) {
     event.preventDefault();
-
-    const typedProductName = input.value.trim();
-
-    if (!typedProductName) {
+    const query = input.value.trim();
+    if (!query) {
       input.focus();
       openResults();
       return;
     }
 
-    const match = resolveSelectedProductName(products, typedProductName);
-
-    if (!match && !error) {
-      noticeError("Product not found", `${typedProductName} was not found in the product catalog.`);
+    const exactMatches = productSearchIndex
+      .search(query, { limit: Number.MAX_SAFE_INTEGER })
+      .filter(
+        (entry) => entry.label.localeCompare(query, undefined, { sensitivity: "base" }) === 0
+      );
+    if (exactMatches.length === 0) {
+      noticeError("Product not found", `${query} was not found in the active loaded data sources.`);
+      input.focus();
+      openResults();
+      return;
+    }
+    if (exactMatches.length > 1) {
+      noticeWarning(
+        "Choose a product",
+        "More than one active result has that name. Choose the intended source-aware result."
+      );
       input.focus();
       openResults();
       return;
     }
 
-    void focusProduct(match ?? typedProductName);
+    void focusProduct(exactMatches[0].id);
+  }
+
+  input.addEventListener("focus", openResults);
+  input.addEventListener("input", openResults);
+  input.addEventListener("keydown", handleInputKeydown);
+  results.addEventListener("keydown", handleResultsKeydown);
+  form.addEventListener("submit", handleSubmit);
+  form.addEventListener("focusout", handleFocusOut);
+
+  function handleFocusOut() {
+    window.setTimeout(() => {
+      if (!form.contains(document.activeElement)) closeResults();
+    }, 0);
+  }
+
+  const unsubscribe = productSearchIndex.subscribe(() => {
+    if (destroyed) return;
+    if (selectedResultId && !productSearchIndex.resolve(selectedResultId)) {
+      selectedResultId = null;
+      input.value = "";
+    }
+    if (isOpen) renderResults();
   });
-
-  void loadCatalog();
 
   return {
     close: closeResults,
+    clearSelection() {
+      selectedResultId = null;
+      input.value = "";
+      closeResults();
+    },
     destroy() {
       destroyed = true;
+      unsubscribe();
       cleanupPosition?.();
+      input.removeEventListener("focus", openResults);
+      input.removeEventListener("input", openResults);
+      input.removeEventListener("keydown", handleInputKeydown);
+      results.removeEventListener("keydown", handleResultsKeydown);
+      form.removeEventListener("submit", handleSubmit);
+      form.removeEventListener("focusout", handleFocusOut);
       host.replaceChildren();
       host.remove();
     },
   };
+}
 
-  async function loadCatalog() {
-    loading = true;
-    error = null;
-    renderResultsIfOpen();
-
-    try {
-      products = normalizeProductCatalog(await fetchProductCatalog());
-    } catch (catalogError) {
-      products = [];
-      error =
-        catalogError instanceof Error ? catalogError.message : "Unknown product catalog error.";
-      console.warn("[Product search] Product catalog could not be loaded", catalogError);
-    } finally {
-      loading = false;
-
-      if (!destroyed) {
-        renderResultsIfOpen();
-      }
-    }
+async function navigateToGraphic(view, graphic, { duration } = {}) {
+  const target = createProductGraphicViewTarget(graphic);
+  if (!target) {
+    return;
   }
 
-  function renderResultsIfOpen() {
-    if (isOpen) {
-      renderResults();
-    }
+  try {
+    await view.goTo(target, { duration });
+  } catch (error) {
+    console.warn("[Product search] Failed to navigate to product", error);
   }
 }
 
 function openProductPopup(view, graphic, location) {
-  const popupOptions = {
-    features: [graphic],
-    location,
-  };
-
-  if (typeof view?.openPopup === "function") {
-    view.openPopup(popupOptions);
-    return;
-  }
-
-  view?.popup?.open?.(popupOptions);
+  const options = { features: [graphic], location };
+  if (typeof view?.openPopup === "function") view.openPopup(options);
+  else view?.popup?.open?.(options);
 }
 
 function waitForAnimationFrame() {
-  return new Promise((resolve) => {
-    window.requestAnimationFrame(() => resolve());
-  });
+  return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
 }
 
 function ensureProductSearchHost() {
   const existingHost = document.getElementById(PRODUCT_SEARCH_CONTAINER_ID);
-
-  if (existingHost instanceof HTMLElement) {
-    return existingHost;
-  }
+  if (existingHost instanceof HTMLElement) return existingHost;
 
   const header = document.getElementById("header");
-
-  if (!header || !document.body) {
-    return null;
-  }
+  if (!header || !document.body) return null;
 
   const host = document.createElement("div");
   host.id = PRODUCT_SEARCH_CONTAINER_ID;
   host.className = "main-map-product-search";
-
-  // Keep the search out of the navbar. The navbar already contains route
-  // navigation and operational actions, so the map search behaves better as a
-  // map overlay on narrow screens.
+  // Search remains a map overlay rather than competing for compact navbar space.
   document.body.appendChild(host);
-
   return host;
 }
 
 function bindProductSearchPosition(host) {
   const updatePosition = () => {
-    const header = document.getElementById("header");
-    const headerBottom = header?.getBoundingClientRect().bottom ?? 0;
-
+    const headerBottom = document.getElementById("header")?.getBoundingClientRect().bottom ?? 0;
     host.style.setProperty("--main-map-product-search-top", `${Math.max(8, headerBottom + 10)}px`);
   };
-
   updatePosition();
   window.addEventListener("resize", updatePosition);
-
-  return () => {
-    window.removeEventListener("resize", updatePosition);
-  };
+  return () => window.removeEventListener("resize", updatePosition);
 }
 
-function createProductOption(productName, onClick) {
+function createProductOption(result, onClick, { showSource = false } = {}) {
   const option = document.createElement("button");
   option.type = "button";
   option.className = "main-map-product-search__option";
   option.setAttribute("role", "option");
-  option.textContent = productName;
-  option.title = `Open ${productName} on map`;
-  option.addEventListener("click", onClick);
-
+  option.dataset.searchResultId = result.id;
+  const sourceSuffix = result.sourceLabel ? ` from ${result.sourceLabel}` : "";
+  option.textContent =
+    showSource && result.sourceLabel ? `${result.label} · ${result.sourceLabel}` : result.label;
+  option.title = `Open ${result.label}${sourceSuffix} on map`;
+  option.addEventListener("click", onClick, { once: true });
   return option;
+}
+
+function getDuplicateLabels(results) {
+  const counts = new Map();
+  for (const result of results) {
+    const key = normalizeResultLabel(result.label);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return new Set([...counts].filter(([, count]) => count > 1).map(([key]) => key));
+}
+
+function normalizeResultLabel(value) {
+  return String(value ?? "")
+    .trim()
+    .toLocaleLowerCase();
 }
 
 function createStateMessage(message) {
   const state = document.createElement("div");
   state.className = "main-map-product-search__state";
   state.textContent = message;
-
   return state;
-}
-
-function resolveSelectedProductName(products, productName) {
-  return findProductCatalogMatch(products, productName)?.name ?? null;
 }
 
 function getResultOptions(container) {
@@ -356,9 +346,8 @@ function getResultOptions(container) {
 
 function createNoopSearch() {
   return {
-    close() {
-      return false;
-    },
+    close: () => false,
+    clearSelection() {},
     destroy() {},
   };
 }

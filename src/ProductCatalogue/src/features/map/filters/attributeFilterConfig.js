@@ -1,3 +1,5 @@
+import { PRODUCT_CORRECTIONS_LAYER_ID } from "../../../shared/config/layerIds.js";
+
 export const ATTRIBUTE_FILTER_FIELD_DEFINITIONS = Object.freeze([
   Object.freeze({
     fieldName: "displayScale",
@@ -20,22 +22,35 @@ export const ATTRIBUTE_FILTER_FIELD_DEFINITIONS = Object.freeze([
   }),
 ]);
 
-export const ATTRIBUTE_FILTER_CONFIG = {
+export const ATTRIBUTE_FILTER_CONFIG = Object.freeze({
   storageKey: "pc.attributeFilters.v3",
-
-  global: {
-    rangeFilterFields: new Set(["displayScale"]),
-
-    defaultExcludedValues: [
-      {
+  stateVersion: 2,
+  compatibilityProvider: Object.freeze({
+    // Version 1 persisted only this compatibility layer/provider identity.
+    legacySnapshotProviderId: PRODUCT_CORRECTIONS_LAYER_ID,
+    filterDefinitions: Object.freeze(["status", "displayScale", "usageBand"]),
+    useLookupOptions: true,
+    // Preserve the established compatibility default until FI-016 supplies an
+    // authoritative semantic classification of Product error states.
+    defaultExcludedValues: Object.freeze([
+      Object.freeze({
         fieldName: "status",
-        values: ["1"],
-      },
-    ],
-  },
-
-  layers: {},
-};
+        values: Object.freeze(["1"]),
+      }),
+    ]),
+    errorOnlyStatusClassifier: null,
+  }),
+  global: Object.freeze({
+    rangeFilterFields: new Set(["displayScale"]),
+    defaultExcludedValues: Object.freeze([
+      Object.freeze({
+        fieldName: "status",
+        values: Object.freeze(["1"]),
+      }),
+    ]),
+  }),
+  layers: Object.freeze({}),
+});
 
 const definitionsByKey = new Map(
   ATTRIBUTE_FILTER_FIELD_DEFINITIONS.map((definition) => [
@@ -43,7 +58,6 @@ const definitionsByKey = new Map(
     definition,
   ])
 );
-
 for (const definition of ATTRIBUTE_FILTER_FIELD_DEFINITIONS) {
   for (const alias of definition.aliases ?? []) {
     definitionsByKey.set(normalizeAttributeFilterFieldKey(alias), definition);

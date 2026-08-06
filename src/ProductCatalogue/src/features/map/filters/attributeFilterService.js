@@ -1,393 +1,594 @@
 import { getAllStatuses } from "../../data/stores/statusStore.js";
 import { getAllUsages } from "../../data/stores/usageStore.js";
-import { getAllLayers } from "../core/layerRegistry.js";
-import { layerSupportsCapability } from "../config/layerDefinitions.js";
 import {
+  ATTRIBUTE_FILTER_CONFIG,
   getAttributeFilterFieldDefinition,
-  getAttributeFilterFieldDefinitions,
   getCanonicalAttributeFilterFieldName,
-  isConfiguredAttributeFilterField,
   normalizeAttributeFilterFieldKey,
 } from "./attributeFilterConfig.js";
 
 const EMPTY_FILTER_VALUE = "__pm_empty_value__";
-const FILTER_MODE = {
+const FILTER_MODE = Object.freeze({
   VALUES: "values",
   RANGE: "range",
-};
-
+});
 const DISPLAY_SCALE_FIELD_KEY = "displayscale";
 
-function getLayerId(layer) {
-  return layer?.appLayerId ?? layer?.customId ?? layer?.id ?? layer?.title ?? null;
-}
+export function createAttributeFilterService({
+  getStatuses = getAllStatuses,
+  getUsages = getAllUsages,
+  legacyCompatibilityProviderId = ATTRIBUTE_FILTER_CONFIG.compatibilityProvider
+    .legacySnapshotProviderId,
+} = {}) {
+  const providers = new Map();
+  const filtersByProvider = new Map();
+  const pendingSnapshotFilters = new Map();
+  const snapshotProviderIds = new Set();
+  const layerToProviderId = new WeakMap();
+  const listeners = new Set();
+  const latestGenerationByProvider = new Map();
+  let snapshotApplied = false;
+  const compatibilityProviderId = requireText(
+    legacyCompatibilityProviderId,
+    "legacyCompatibilityProviderId"
+  );
 
-function getLayerGraphics(layer) {
-  return layer?.graphics?.toArray?.() ?? [];
-}
+  function replaceProvider({
+    providerId,
+    sourceId = null,
+    label,
+    generation = 0,
+    layers = [],
+    filterDefinitions = [],
+    defaultExcludedValues = [],
+    useLookupOptions = false,
+    order = 0,
+  } = {}) {
+    const id = requireText(providerId, "providerId");
+    const nextGeneration = normalizeGeneration(generation);
+    const current = providers.get(id);
+    const latestGeneration = latestGenerationByProvider.get(id);
 
-function normalizeFilterValue(value) {
-  if (value === null || value === undefined || value === "") {
-    return EMPTY_FILTER_VALUE;
-  }
-
-  return String(value);
-}
-
-function toFiniteNumber(value) {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-
-  const number = Number(value);
-
-  return Number.isFinite(number) ? number : null;
-}
-
-function compareValues(a, b) {
-  if (Number.isFinite(a.sortIndex) && Number.isFinite(b.sortIndex)) {
-    return a.sortIndex - b.sortIndex;
-  }
-
-  if (Number.isFinite(a.sortIndex)) {
-    return -1;
-  }
-
-  if (Number.isFinite(b.sortIndex)) {
-    return 1;
-  }
-
-  const aNumber = Number(a.value);
-  const bNumber = Number(b.value);
-
-  if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
-    return aNumber - bNumber;
-  }
-
-  return a.label.localeCompare(b.label);
-}
-
-function normalizeFieldKey(fieldName) {
-  return normalizeAttributeFilterFieldKey(fieldName);
-}
-
-function getSourceLayers(layerId) {
-  return getAllLayers().filter((layer) => {
-    return getLayerId(layer) === layerId && isLayerFilterable(layer);
-  });
-}
-
-function isLayerFilterable(layer) {
-  return layerSupportsCapability(layer, "supportsAttributeFilters");
-}
-
-function isFilterableField(fieldName) {
-  return isConfiguredAttributeFilterField(fieldName);
-}
-
-export function createAttributeFilterService() {
-  const filtersByLayer = new Map();
-
-  function ensureLayerFilters(layerId) {
-    let layerFilters = filtersByLayer.get(layerId);
-
-    if (!layerFilters) {
-      layerFilters = new Map();
-      filtersByLayer.set(layerId, layerFilters);
+    if (
+      (latestGeneration !== undefined && nextGeneration < latestGeneration) ||
+      (!current && latestGeneration !== undefined && nextGeneration === latestGeneration)
+    ) {
+      return { published: false, stale: true };
     }
 
-    return layerFilters;
-  }
-
-  function cleanupLayerFilters(layerId, layerFilters) {
-    if (layerFilters.size === 0) {
-      filtersByLayer.delete(layerId);
-    }
-  }
-
-  function getFilterSnapshot() {
-    const layers = [];
-
-    for (const [layerId, layerFilters] of filtersByLayer.entries()) {
-      const fields = [];
-
-      for (const [fieldName, filter] of layerFilters.entries()) {
-        if (filter.mode === FILTER_MODE.RANGE) {
-          fields.push({
-            fieldName,
-            mode: FILTER_MODE.RANGE,
-            min: filter.min,
-            max: filter.max,
-          });
-          continue;
-        }
-
-        fields.push({
-          fieldName,
-          mode: FILTER_MODE.VALUES,
-          values: Array.from(filter.values),
-        });
-      }
-
-      if (fields.length) {
-        layers.push({ layerId, fields });
-      }
-    }
-
-    return {
-      version: 1,
-      layers,
+    const definitions = normalizeProviderDefinitions(filterDefinitions);
+    const providerLayers = Array.isArray(layers) ? [...layers] : [];
+    const provider = {
+      id,
+      sourceId: optionalText(sourceId),
+      label: optionalText(label) ?? id,
+      generation: nextGeneration,
+      layers: providerLayers,
+      definitions,
+      facets: buildFacets({
+        layers: providerLayers,
+        definitions,
+        useLookupOptions,
+        getStatuses,
+        getUsages,
+      }),
+      order: Number(order) || 0,
     };
+
+    providers.set(id, provider);
+    latestGenerationByProvider.set(id, nextGeneration);
+    for (const layer of providerLayers) {
+      if (layer && typeof layer === "object") {
+        layerToProviderId.set(layer, id);
+      }
+    }
+
+    if (!current) {
+      if (pendingSnapshotFilters.has(id)) {
+        const pending = pendingSnapshotFilters.get(id);
+        pendingSnapshotFilters.delete(id);
+        filtersByProvider.set(id, cloneFilterMap(pending));
+      } else if (snapshotApplied && snapshotProviderIds.has(id)) {
+        filtersByProvider.delete(id);
+      } else {
+        applyDefaultExcludedValues(id, defaultExcludedValues);
+      }
+    }
+
+    sanitizeProviderFilters(id);
+    emit({
+      type: current ? "provider-replaced" : "provider-added",
+      providerId: id,
+      generation: nextGeneration,
+    });
+    return { published: true, stale: false };
   }
 
-  function applyFilterSnapshot(snapshot) {
-    filtersByLayer.clear();
+  function removeProvider(providerId, { generation } = {}) {
+    const id = optionalText(providerId);
+    if (!id) {
+      return { removed: false, stale: false };
+    }
 
-    if (!snapshot || snapshot.version !== 1 || !Array.isArray(snapshot.layers)) {
+    const current = providers.get(id);
+    const nextGeneration =
+      generation == null
+        ? (latestGenerationByProvider.get(id) ?? current?.generation ?? 0) + 1
+        : normalizeGeneration(generation);
+    const latestGeneration = latestGenerationByProvider.get(id) ?? current?.generation ?? 0;
+    if (nextGeneration < latestGeneration) {
+      return { removed: false, stale: true };
+    }
+
+    latestGenerationByProvider.set(id, nextGeneration);
+    const removedProvider = providers.delete(id);
+    const removedFilterState = clearProviderFilterState(id, {
+      retainSnapshotIntent: false,
+    });
+    const removed = removedProvider || removedFilterState;
+
+    if (removed) {
+      emit({ type: "provider-removed", providerId: id, generation: nextGeneration });
+    }
+    return { removed, stale: false };
+  }
+
+  function suspendProvider(providerId, { generation } = {}) {
+    const id = optionalText(providerId);
+    if (!id) {
+      return { suspended: false, stale: false };
+    }
+
+    const current = providers.get(id);
+    const nextGeneration =
+      generation == null
+        ? (latestGenerationByProvider.get(id) ?? current?.generation ?? 0) + 1
+        : normalizeGeneration(generation);
+    const latestGeneration = latestGenerationByProvider.get(id) ?? current?.generation ?? 0;
+    if (nextGeneration < latestGeneration) {
+      return { suspended: false, stale: true };
+    }
+
+    latestGenerationByProvider.set(id, nextGeneration);
+    if (!current) {
+      return { suspended: false, stale: false };
+    }
+
+    const retainedFilters = cloneFilterMap(filtersByProvider.get(id) ?? new Map());
+    providers.delete(id);
+    filtersByProvider.delete(id);
+    pendingSnapshotFilters.set(id, retainedFilters);
+    snapshotProviderIds.add(id);
+    emit({ type: "provider-suspended", providerId: id, generation: nextGeneration });
+    return { suspended: true, stale: false };
+  }
+
+  function setFilter(providerId, fieldName, selectedValues, totalValuesCount) {
+    const id = optionalText(providerId);
+    const canonicalFieldName = canonicalField(fieldName);
+    if (!id || !providers.has(id) || !canonicalFieldName) {
       return false;
     }
 
-    for (const layerEntry of snapshot.layers) {
-      if (!layerEntry?.layerId || !Array.isArray(layerEntry.fields)) {
-        continue;
-      }
+    const selected = new Set(Array.from(selectedValues ?? []).map(normalizeFilterValue));
+    const total = Math.max(0, Number(totalValuesCount) || 0);
+    const providerFilters = ensureProviderFilters(id);
 
-      const layerFilters = ensureLayerFilters(layerEntry.layerId);
-
-      for (const fieldEntry of layerEntry.fields) {
-        const canonicalFieldName = getCanonicalAttributeFilterFieldName(fieldEntry?.fieldName);
-
-        if (!canonicalFieldName) {
-          continue;
-        }
-
-        if (fieldEntry.mode === FILTER_MODE.RANGE) {
-          const min = toFiniteNumber(fieldEntry.min);
-          const max = toFiniteNumber(fieldEntry.max);
-
-          if (min === null || max === null) {
-            continue;
-          }
-
-          layerFilters.set(canonicalFieldName, {
-            mode: FILTER_MODE.RANGE,
-            min: Math.min(min, max),
-            max: Math.max(min, max),
-          });
-          continue;
-        }
-
-        if (fieldEntry.mode === FILTER_MODE.VALUES && Array.isArray(fieldEntry.values)) {
-          layerFilters.set(canonicalFieldName, {
-            mode: FILTER_MODE.VALUES,
-            values: new Set(fieldEntry.values.map(normalizeFilterValue)),
-          });
-        }
-      }
-
-      cleanupLayerFilters(layerEntry.layerId, layerFilters);
-    }
-
-    return true;
-  }
-
-  function setFilter(layerId, fieldName, selectedValues, totalValuesCount) {
-    const canonicalFieldName = getCanonicalAttributeFilterFieldName(fieldName) ?? fieldName;
-    const normalizedValues = new Set(Array.from(selectedValues ?? []).map(normalizeFilterValue));
-    const layerFilters = ensureLayerFilters(layerId);
-
-    if (normalizedValues.size === totalValuesCount) {
-      layerFilters.delete(canonicalFieldName);
+    if (selected.size === total) {
+      providerFilters.delete(canonicalFieldName);
     } else {
-      layerFilters.set(canonicalFieldName, {
+      providerFilters.set(canonicalFieldName, {
         mode: FILTER_MODE.VALUES,
-        values: normalizedValues,
+        values: selected,
       });
     }
 
-    cleanupLayerFilters(layerId, layerFilters);
+    cleanupProviderFilters(id, providerFilters);
+    emit({ type: "filter-changed", providerId: id });
+    return true;
   }
 
-  function setRangeFilter(layerId, fieldName, minValue, maxValue, fullMinValue, fullMaxValue) {
-    const canonicalFieldName = getCanonicalAttributeFilterFieldName(fieldName) ?? fieldName;
-    const minNumber = toFiniteNumber(minValue);
-    const maxNumber = toFiniteNumber(maxValue);
-    const fullMinNumber = toFiniteNumber(fullMinValue);
-    const fullMaxNumber = toFiniteNumber(fullMaxValue);
-
-    if (
-      minNumber === null ||
-      maxNumber === null ||
-      fullMinNumber === null ||
-      fullMaxNumber === null
-    ) {
-      clearFilter(layerId, canonicalFieldName);
-      return;
+  function setRangeFilter(providerId, fieldName, minValue, maxValue, fullMinValue, fullMaxValue) {
+    const id = optionalText(providerId);
+    const canonicalFieldName = canonicalField(fieldName);
+    if (!id || !providers.has(id) || !canonicalFieldName) {
+      return false;
     }
 
-    const normalizedMin = Math.min(minNumber, maxNumber);
-    const normalizedMax = Math.max(minNumber, maxNumber);
-    const layerFilters = ensureLayerFilters(layerId);
+    const min = toFiniteNumber(minValue);
+    const max = toFiniteNumber(maxValue);
+    const fullMin = toFiniteNumber(fullMinValue);
+    const fullMax = toFiniteNumber(fullMaxValue);
+    if (min === null || max === null || fullMin === null || fullMax === null) {
+      return clearFilter(id, canonicalFieldName);
+    }
 
-    if (normalizedMin <= fullMinNumber && normalizedMax >= fullMaxNumber) {
-      layerFilters.delete(canonicalFieldName);
+    const normalizedMin = Math.min(min, max);
+    const normalizedMax = Math.max(min, max);
+    const providerFilters = ensureProviderFilters(id);
+
+    if (normalizedMin <= fullMin && normalizedMax >= fullMax) {
+      providerFilters.delete(canonicalFieldName);
     } else {
-      layerFilters.set(canonicalFieldName, {
+      providerFilters.set(canonicalFieldName, {
         mode: FILTER_MODE.RANGE,
         min: normalizedMin,
         max: normalizedMax,
       });
     }
 
-    cleanupLayerFilters(layerId, layerFilters);
+    cleanupProviderFilters(id, providerFilters);
+    emit({ type: "filter-changed", providerId: id });
+    return true;
   }
 
-  function clearFilter(layerId, fieldName) {
-    const canonicalFieldName = getCanonicalAttributeFilterFieldName(fieldName) ?? fieldName;
-    const layerFilters = filtersByLayer.get(layerId);
-
-    if (!layerFilters) {
-      return;
+  function clearFilter(providerId, fieldName) {
+    const id = optionalText(providerId);
+    const canonicalFieldName = canonicalField(fieldName);
+    const providerFilters = id ? filtersByProvider.get(id) : null;
+    if (!providerFilters || !canonicalFieldName) {
+      return false;
     }
 
-    layerFilters.delete(canonicalFieldName);
-    cleanupLayerFilters(layerId, layerFilters);
+    const removed = providerFilters.delete(canonicalFieldName);
+    cleanupProviderFilters(id, providerFilters);
+    if (removed) {
+      emit({ type: "filter-changed", providerId: id });
+    }
+    return removed;
+  }
+
+  function clearProvider(providerId) {
+    const id = optionalText(providerId);
+    const removed = id ? filtersByProvider.delete(id) : false;
+    if (removed) {
+      emit({ type: "filter-changed", providerId: id });
+    }
+    return removed;
   }
 
   function clearAll() {
-    filtersByLayer.clear();
-  }
+    const knownProviderIds = new Set([
+      ...providers.keys(),
+      ...filtersByProvider.keys(),
+      ...pendingSnapshotFilters.keys(),
+      ...snapshotProviderIds,
+    ]);
+    let changed = false;
 
-  function getSelectedValues(layerId, fieldName) {
-    const canonicalFieldName = getCanonicalAttributeFilterFieldName(fieldName) ?? fieldName;
-    const filter = filtersByLayer.get(layerId)?.get(canonicalFieldName);
-
-    return filter?.mode === FILTER_MODE.VALUES ? filter.values : null;
-  }
-
-  function getRangeFilter(layerId, fieldName) {
-    const canonicalFieldName = getCanonicalAttributeFilterFieldName(fieldName) ?? fieldName;
-    const filter = filtersByLayer.get(layerId)?.get(canonicalFieldName);
-
-    return filter?.mode === FILTER_MODE.RANGE ? filter : null;
-  }
-
-  function getActiveFilterCount() {
-    let count = 0;
-
-    for (const layerFilters of filtersByLayer.values()) {
-      count += layerFilters.size;
+    for (const providerId of knownProviderIds) {
+      changed = clearProviderFilterState(providerId, { retainSnapshotIntent: true }) || changed;
     }
 
+    if (knownProviderIds.size > 0) {
+      snapshotApplied = true;
+    }
+
+    if (!changed) {
+      return false;
+    }
+
+    emit({ type: "filters-cleared", providerId: null });
+    return true;
+  }
+
+  function getSelectedValues(providerId, fieldName) {
+    const filter = filtersByProvider.get(optionalText(providerId))?.get(canonicalField(fieldName));
+    return filter?.mode === FILTER_MODE.VALUES ? new Set(filter.values) : null;
+  }
+
+  function getRangeFilter(providerId, fieldName) {
+    const filter = filtersByProvider.get(optionalText(providerId))?.get(canonicalField(fieldName));
+    return filter?.mode === FILTER_MODE.RANGE ? { ...filter } : null;
+  }
+
+  function getActiveFilterCount(providerId = null) {
+    const id = optionalText(providerId);
+    if (id) {
+      return filtersByProvider.get(id)?.size ?? 0;
+    }
+
+    let count = 0;
+    for (const providerFilters of filtersByProvider.values()) {
+      count += providerFilters.size;
+    }
     return count;
   }
 
   function hasActiveDisplayScaleFilter() {
-    for (const layerFilters of filtersByLayer.values()) {
-      for (const fieldName of layerFilters.keys()) {
-        if (normalizeFieldKey(fieldName) === DISPLAY_SCALE_FIELD_KEY) {
+    for (const providerFilters of filtersByProvider.values()) {
+      for (const fieldName of providerFilters.keys()) {
+        if (normalizeAttributeFilterFieldKey(fieldName) === DISPLAY_SCALE_FIELD_KEY) {
           return true;
         }
       }
     }
-
     return false;
   }
 
   function getLayerIds() {
-    const layerIds = new Set();
-
-    for (const layer of getAllLayers()) {
-      if (!isLayerFilterable(layer)) {
-        continue;
-      }
-
-      const layerId = getLayerId(layer);
-
-      if (layerId) {
-        layerIds.add(layerId);
-      }
-    }
-
-    return Array.from(layerIds).sort();
+    return [...providers.values()]
+      .sort((left, right) => left.order - right.order || left.label.localeCompare(right.label))
+      .map((provider) => provider.id);
   }
 
-  function getFilterableFields(layerId) {
-    const availableFieldKeys = collectAvailableFieldKeys(layerId);
+  function getLayerMetadata(providerId) {
+    const provider = providers.get(optionalText(providerId));
+    if (!provider) {
+      return null;
+    }
 
-    return getAttributeFilterFieldDefinitions()
-      .filter((definition) => {
-        if (availableFieldKeys.has(normalizeFieldKey(definition.fieldName))) {
-          return true;
-        }
+    return {
+      providerId: provider.id,
+      sourceId: provider.sourceId,
+      label: provider.label,
+      generation: provider.generation,
+      totalCount: countProviderGraphics(provider),
+      visibleCount: countMatchingProviderGraphics(provider),
+    };
+  }
 
-        // Status is authoritative metadata from the lookup endpoint. Show the
-        // full status list even when no visible feature currently uses a value.
-        return definition.optionSource === "productStates" && getAllStatuses().length > 0;
-      })
+  function getFilterableFields(providerId) {
+    const provider = providers.get(optionalText(providerId));
+    if (!provider) {
+      return [];
+    }
+
+    return provider.definitions
+      .filter((definition) => provider.facets.has(definition.fieldName))
       .map((definition) => definition.fieldName);
   }
 
-  function getValuesForField(layerId, fieldName) {
-    const definition = getAttributeFilterFieldDefinition(fieldName);
-    const values = createLookupOptionEntries(definition);
-
-    for (const layer of getSourceLayers(layerId)) {
-      for (const graphic of getLayerGraphics(layer)) {
-        const value = normalizeFilterValue(readAttributeValue(graphic, fieldName));
-        const entry = values.get(value) ?? {
-          value,
-          label: createFallbackValueLabel(value),
-          count: 0,
-        };
-
-        entry.count += 1;
-        values.set(value, entry);
-      }
-    }
-
-    return Array.from(values.values()).sort(compareValues);
+  function getValuesForField(providerId, fieldName) {
+    const provider = providers.get(optionalText(providerId));
+    const values = provider?.facets.get(canonicalField(fieldName));
+    return values ? values.map((entry) => ({ ...entry })) : [];
   }
 
   function matchesGraphic(graphic, layer) {
-    const sourceLayer = layer ?? graphic?.layer;
-
-    if (!isLayerFilterable(sourceLayer)) {
+    const providerId = resolveProviderId(graphic, layer);
+    const providerFilters = providerId ? filtersByProvider.get(providerId) : null;
+    if (!providerFilters) {
       return true;
     }
 
-    const layerId = getLayerId(sourceLayer);
-    const layerFilters = filtersByLayer.get(layerId);
-
-    if (!layerFilters) {
-      return true;
-    }
-
-    for (const [fieldName, filter] of layerFilters.entries()) {
+    for (const [fieldName, filter] of providerFilters.entries()) {
       const rawValue = readAttributeValue(graphic, fieldName);
-
       if (filter.mode === FILTER_MODE.RANGE) {
         const numberValue = toFiniteNumber(rawValue);
-
-        // Missing or non-numeric values should not match an active numeric range.
         if (numberValue === null || numberValue < filter.min || numberValue > filter.max) {
           return false;
         }
-
         continue;
       }
 
-      const value = normalizeFilterValue(rawValue);
-
-      if (!filter.values.has(value)) {
+      if (!filter.values.has(normalizeFilterValue(rawValue))) {
         return false;
       }
     }
-
     return true;
   }
 
+  function getFilterSnapshot() {
+    return {
+      version: 2,
+      sources: getSnapshotProviderIds().map((providerId) => ({
+        providerId,
+        fields: serializeFilterMap(
+          filtersByProvider.get(providerId) ?? pendingSnapshotFilters.get(providerId) ?? new Map()
+        ),
+      })),
+    };
+  }
+
+  function applyFilterSnapshot(snapshot) {
+    const normalizedSnapshot = normalizeFilterSnapshot(snapshot, {
+      compatibilityProviderId,
+    });
+    if (!normalizedSnapshot) {
+      return false;
+    }
+
+    pendingSnapshotFilters.clear();
+    snapshotProviderIds.clear();
+
+    if (normalizedSnapshot.version === 2) {
+      filtersByProvider.clear();
+    } else {
+      // Version 1 only owned the compatibility filter track. Preserve defaults
+      // already applied to newer providers regardless of startup order.
+      filtersByProvider.delete(compatibilityProviderId);
+    }
+
+    snapshotApplied = true;
+
+    for (const entry of normalizedSnapshot.entries) {
+      snapshotProviderIds.add(entry.providerId);
+      const filters = deserializeFilterEntries(entry.fields);
+      if (providers.has(entry.providerId)) {
+        if (filters.size > 0) {
+          filtersByProvider.set(entry.providerId, filters);
+        }
+        sanitizeProviderFilters(entry.providerId);
+      } else {
+        pendingSnapshotFilters.set(entry.providerId, filters);
+      }
+    }
+
+    emit({ type: "snapshot-applied", providerId: null });
+    return true;
+  }
+
+  function getSnapshotProviderIds() {
+    const activeProviderIds = getLayerIds();
+    const pendingProviderIds = [...pendingSnapshotFilters.keys()]
+      .filter((providerId) => !providers.has(providerId))
+      .sort((left, right) => left.localeCompare(right));
+
+    return [...activeProviderIds, ...pendingProviderIds];
+  }
+
+  function getProviderGeneration(providerId) {
+    const id = optionalText(providerId);
+    return id
+      ? (latestGenerationByProvider.get(id) ?? providers.get(id)?.generation ?? null)
+      : null;
+  }
+
+  function subscribe(listener) {
+    if (typeof listener !== "function") {
+      return () => {};
+    }
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  }
+
+  function emit(detail) {
+    for (const listener of listeners) {
+      listener(detail);
+    }
+  }
+
+  function ensureProviderFilters(providerId) {
+    let providerFilters = filtersByProvider.get(providerId);
+    if (!providerFilters) {
+      providerFilters = new Map();
+      filtersByProvider.set(providerId, providerFilters);
+    }
+    return providerFilters;
+  }
+
+  function cleanupProviderFilters(providerId, providerFilters) {
+    if (providerFilters.size === 0) {
+      filtersByProvider.delete(providerId);
+    }
+  }
+
+  function clearProviderFilterState(providerId, { retainSnapshotIntent }) {
+    const hasActiveFilters = filtersByProvider.has(providerId);
+    const pendingFilters = pendingSnapshotFilters.get(providerId);
+    const hasPendingFilters = pendingSnapshotFilters.has(providerId);
+    let changed = false;
+
+    if (hasActiveFilters) {
+      filtersByProvider.delete(providerId);
+      changed = true;
+    }
+
+    if (retainSnapshotIntent) {
+      if (!snapshotProviderIds.has(providerId)) {
+        snapshotProviderIds.add(providerId);
+        changed = true;
+      }
+
+      if (providers.has(providerId)) {
+        if (hasPendingFilters) {
+          pendingSnapshotFilters.delete(providerId);
+          changed = true;
+        }
+      } else if (!hasPendingFilters || pendingFilters.size > 0) {
+        pendingSnapshotFilters.set(providerId, new Map());
+        changed = true;
+      }
+
+      return changed;
+    }
+
+    if (hasPendingFilters) {
+      pendingSnapshotFilters.delete(providerId);
+      changed = true;
+    }
+    if (snapshotProviderIds.delete(providerId)) {
+      changed = true;
+    }
+
+    return changed;
+  }
+
+  function resolveProviderId(graphic, layer) {
+    const sourceLayer = layer ?? graphic?.layer;
+    if (sourceLayer && typeof sourceLayer === "object") {
+      const directProviderId = layerToProviderId.get(sourceLayer);
+      if (directProviderId) {
+        return directProviderId;
+      }
+    }
+
+    const sourceId = optionalText(
+      graphic?.attributes?.sourceId ??
+        sourceLayer?.appSourceId ??
+        sourceLayer?.dataSourceId ??
+        sourceLayer?.sourceId
+    );
+    if (!sourceId) {
+      return null;
+    }
+
+    return [...providers.values()].find((provider) => provider.sourceId === sourceId)?.id ?? null;
+  }
+
+  function sanitizeProviderFilters(providerId) {
+    const provider = providers.get(providerId);
+    const providerFilters = filtersByProvider.get(providerId);
+    if (!provider || !providerFilters) {
+      return;
+    }
+
+    const supportedFields = new Set(
+      provider.definitions
+        .filter((definition) => provider.facets.has(definition.fieldName))
+        .map((definition) => definition.fieldName)
+    );
+    for (const fieldName of providerFilters.keys()) {
+      if (!supportedFields.has(fieldName)) {
+        providerFilters.delete(fieldName);
+      }
+    }
+    cleanupProviderFilters(providerId, providerFilters);
+  }
+
+  function applyDefaultExcludedValues(providerId, defaults) {
+    const provider = providers.get(providerId);
+    if (!provider || !Array.isArray(defaults)) {
+      return;
+    }
+
+    for (const defaultFilter of defaults) {
+      const fieldName = canonicalField(defaultFilter?.fieldName);
+      const values = provider.facets.get(fieldName);
+      if (!fieldName || !values?.length) {
+        continue;
+      }
+
+      const excluded = new Set((defaultFilter.values ?? []).map(normalizeFilterValue));
+      const selectedValues = values
+        .map((entry) => entry.value)
+        .filter((value) => !excluded.has(normalizeFilterValue(value)));
+      setFilter(providerId, fieldName, selectedValues, values.length);
+    }
+  }
+
+  function countProviderGraphics(provider) {
+    return provider.layers.reduce((total, layer) => total + getLayerGraphics(layer).length, 0);
+  }
+
+  function countMatchingProviderGraphics(provider) {
+    let count = 0;
+    for (const layer of provider.layers) {
+      for (const graphic of getLayerGraphics(layer)) {
+        if (matchesGraphic(graphic, layer)) {
+          count += 1;
+        }
+      }
+    }
+    return count;
+  }
+
   return {
+    replaceProvider,
+    removeProvider,
+    suspendProvider,
+    clearProvider,
     setFilter,
     setRangeFilter,
     clearFilter,
@@ -397,93 +598,324 @@ export function createAttributeFilterService() {
     getActiveFilterCount,
     hasActiveDisplayScaleFilter,
     getLayerIds,
+    getLayerMetadata,
     getFilterableFields,
     getValuesForField,
     matchesGraphic,
     getFilterSnapshot,
     applyFilterSnapshot,
+    getProviderGeneration,
+    subscribe,
   };
 }
 
-function collectAvailableFieldKeys(layerId) {
-  const fieldKeys = new Set();
+function buildFacets({ layers, definitions, useLookupOptions, getStatuses, getUsages }) {
+  const facets = new Map();
 
-  for (const layer of getSourceLayers(layerId)) {
-    for (const graphic of getLayerGraphics(layer)) {
-      for (const fieldName of Object.keys(graphic.attributes ?? {})) {
-        if (!isFilterableField(fieldName)) {
-          continue;
-        }
+  for (const definition of definitions) {
+    const values = createLookupOptionEntries({
+      definition,
+      useLookupOptions,
+      getStatuses,
+      getUsages,
+    });
+    let hasConfiguredAttribute = false;
+    const graphics = layers.flatMap(getLayerGraphics);
 
-        fieldKeys.add(normalizeFieldKey(fieldName));
+    for (const graphic of graphics) {
+      const rawValue = readAttributeValue(graphic, definition.fieldName);
+      if (!isEmptyAttributeValue(rawValue)) {
+        hasConfiguredAttribute = true;
       }
     }
+
+    if (!hasConfiguredAttribute && values.size === 0) {
+      continue;
+    }
+
+    for (const graphic of graphics) {
+      const value = normalizeFilterValue(readAttributeValue(graphic, definition.fieldName));
+      const entry = values.get(value) ?? {
+        value,
+        label: createFallbackValueLabel(value),
+        count: 0,
+      };
+      entry.count += 1;
+      values.set(value, entry);
+    }
+
+    facets.set(definition.fieldName, [...values.values()].sort(compareValues));
   }
 
-  return fieldKeys;
+  return facets;
 }
 
-function createLookupOptionEntries(definition) {
+function createLookupOptionEntries({ definition, useLookupOptions, getStatuses, getUsages }) {
   const values = new Map();
-
-  if (definition?.optionSource === "productStates") {
-    addLookupEntries(values, getAllStatuses());
+  if (!useLookupOptions) {
+    return values;
   }
 
-  if (definition?.optionSource === "specificUsages") {
-    addLookupEntries(values, getAllUsages());
+  if (definition.optionSource === "productStates") {
+    addLookupEntries(values, getStatuses());
   }
-
+  if (definition.optionSource === "specificUsages") {
+    addLookupEntries(values, getUsages());
+  }
   return values;
 }
 
 function addLookupEntries(values, entries) {
-  entries.forEach((entry, index) => {
-    const value = normalizeFilterValue(entry.Id);
+  for (const [index, entry] of (Array.isArray(entries) ? entries : []).entries()) {
+    const value = normalizeFilterValue(entry?.Id);
     values.set(value, {
       value,
-      label: String(entry.Name ?? entry.Id ?? ""),
+      label: String(entry?.Name ?? entry?.Id ?? ""),
       count: 0,
       sortIndex: index,
     });
+  }
+}
+
+function normalizeProviderDefinitions(definitions) {
+  const result = [];
+  for (const item of Array.isArray(definitions) ? definitions : []) {
+    const requestedFieldName = typeof item === "string" ? item : item?.fieldName;
+    const fieldName = canonicalField(requestedFieldName);
+    if (!fieldName || result.some((definition) => definition.fieldName === fieldName)) {
+      continue;
+    }
+
+    result.push({
+      ...getAttributeFilterFieldDefinition(fieldName),
+      ...(typeof item === "object" ? item : {}),
+      fieldName,
+    });
+  }
+  return result;
+}
+
+function normalizeFilterSnapshot(snapshot, { compatibilityProviderId }) {
+  if (snapshot?.version === 2 && Array.isArray(snapshot.sources)) {
+    const providerIds = new Set();
+    const entries = [];
+
+    for (const entry of snapshot.sources) {
+      const providerId = optionalText(entry?.providerId);
+      if (
+        !providerId ||
+        providerIds.has(providerId) ||
+        !isValidSnapshotFieldEntries(entry?.fields)
+      ) {
+        return null;
+      }
+
+      providerIds.add(providerId);
+      entries.push({ providerId, fields: entry.fields });
+    }
+
+    return { version: 2, entries };
+  }
+
+  if (snapshot?.version === 1 && Array.isArray(snapshot.layers)) {
+    const compatibilityFields = [];
+
+    for (const entry of snapshot.layers) {
+      const layerId = optionalText(entry?.layerId);
+      if (layerId !== compatibilityProviderId || !isValidSnapshotFieldEntries(entry?.fields)) {
+        return null;
+      }
+
+      compatibilityFields.push(...entry.fields);
+    }
+
+    // Version 1 serialized only active layer filters. An empty layers array was
+    // therefore an explicit Clear all and must suppress compatibility defaults.
+    return {
+      version: 1,
+      entries: [
+        {
+          providerId: compatibilityProviderId,
+          fields: compatibilityFields,
+        },
+      ],
+    };
+  }
+
+  return null;
+}
+
+function isValidSnapshotFieldEntries(fields) {
+  if (!Array.isArray(fields)) {
+    return false;
+  }
+
+  return fields.every((entry) => {
+    if (!canonicalField(entry?.fieldName)) {
+      return false;
+    }
+
+    if (entry.mode === FILTER_MODE.VALUES) {
+      return Array.isArray(entry.values);
+    }
+
+    if (entry.mode === FILTER_MODE.RANGE) {
+      return toFiniteNumber(entry.min) !== null && toFiniteNumber(entry.max) !== null;
+    }
+
+    return false;
   });
 }
 
+function serializeFilterMap(filterMap) {
+  const fields = [];
+  for (const [fieldName, filter] of filterMap.entries()) {
+    fields.push(
+      filter.mode === FILTER_MODE.RANGE
+        ? { fieldName, mode: FILTER_MODE.RANGE, min: filter.min, max: filter.max }
+        : { fieldName, mode: FILTER_MODE.VALUES, values: [...filter.values] }
+    );
+  }
+  return fields;
+}
+
+function deserializeFilterEntries(fields) {
+  const result = new Map();
+  for (const entry of Array.isArray(fields) ? fields : []) {
+    const fieldName = canonicalField(entry?.fieldName);
+    if (!fieldName) {
+      continue;
+    }
+
+    if (entry.mode === FILTER_MODE.RANGE) {
+      const min = toFiniteNumber(entry.min);
+      const max = toFiniteNumber(entry.max);
+      if (min !== null && max !== null) {
+        result.set(fieldName, {
+          mode: FILTER_MODE.RANGE,
+          min: Math.min(min, max),
+          max: Math.max(min, max),
+        });
+      }
+      continue;
+    }
+
+    if (entry.mode === FILTER_MODE.VALUES && Array.isArray(entry.values)) {
+      result.set(fieldName, {
+        mode: FILTER_MODE.VALUES,
+        values: new Set(entry.values.map(normalizeFilterValue)),
+      });
+    }
+  }
+  return result;
+}
+
+function cloneFilterMap(filterMap) {
+  const clone = new Map();
+  for (const [fieldName, filter] of filterMap.entries()) {
+    clone.set(
+      fieldName,
+      filter.mode === FILTER_MODE.RANGE
+        ? { ...filter }
+        : { mode: FILTER_MODE.VALUES, values: new Set(filter.values) }
+    );
+  }
+  return clone;
+}
+
+function getLayerGraphics(layer) {
+  const graphics = layer?.graphics;
+  if (typeof graphics?.toArray === "function") {
+    return graphics.toArray();
+  }
+  if (Array.isArray(graphics)) {
+    return graphics;
+  }
+
+  const result = [];
+  graphics?.forEach?.((graphic) => result.push(graphic));
+  return result;
+}
+
 function readAttributeValue(graphic, fieldName) {
-  const attributes = graphic.attributes ?? {};
+  const attributes = graphic?.attributes ?? {};
   const definition = getAttributeFilterFieldDefinition(fieldName);
-  const candidateFieldNames = [
-    fieldName,
-    definition?.fieldName,
-    ...(definition?.aliases ?? []),
-  ].filter(Boolean);
+  const candidateNames = [fieldName, definition?.fieldName, ...(definition?.aliases ?? [])].filter(
+    Boolean
+  );
 
-  for (const candidateName of candidateFieldNames) {
-    const exactValue = attributes[candidateName];
-
-    if (!isEmptyAttributeValue(exactValue)) {
-      return exactValue;
+  for (const candidateName of candidateNames) {
+    if (Object.prototype.hasOwnProperty.call(attributes, candidateName)) {
+      return attributes[candidateName];
     }
   }
 
-  const normalizedFieldName = normalizeFieldKey(fieldName);
-
+  const normalizedFieldName = normalizeAttributeFilterFieldKey(fieldName);
   for (const [candidateName, candidateValue] of Object.entries(attributes)) {
-    if (
-      normalizeFieldKey(candidateName) === normalizedFieldName &&
-      !isEmptyAttributeValue(candidateValue)
-    ) {
+    if (normalizeAttributeFilterFieldKey(candidateName) === normalizedFieldName) {
       return candidateValue;
     }
   }
+  return undefined;
+}
 
-  return attributes[fieldName];
+function normalizeFilterValue(value) {
+  return isEmptyAttributeValue(value) ? EMPTY_FILTER_VALUE : String(value);
+}
+
+function toFiniteNumber(value) {
+  if (isEmptyAttributeValue(value)) {
+    return null;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function compareValues(left, right) {
+  if (Number.isFinite(left.sortIndex) && Number.isFinite(right.sortIndex)) {
+    return left.sortIndex - right.sortIndex;
+  }
+  if (Number.isFinite(left.sortIndex)) {
+    return -1;
+  }
+  if (Number.isFinite(right.sortIndex)) {
+    return 1;
+  }
+
+  const leftNumber = Number(left.value);
+  const rightNumber = Number(right.value);
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+    return leftNumber - rightNumber;
+  }
+  return left.label.localeCompare(right.label, undefined, { numeric: true });
+}
+
+function canonicalField(fieldName) {
+  return getCanonicalAttributeFilterFieldName(fieldName) ?? null;
 }
 
 function createFallbackValueLabel(value) {
-  return value === EMPTY_FILTER_VALUE ? "(empty)" : value;
+  return value === EMPTY_FILTER_VALUE ? "(empty)" : String(value);
 }
 
 function isEmptyAttributeValue(value) {
   return value === null || value === undefined || value === "";
+}
+
+function normalizeGeneration(value) {
+  const generation = Number(value);
+  return Number.isFinite(generation) && generation >= 0 ? generation : 0;
+}
+
+function requireText(value, name) {
+  const normalized = optionalText(value);
+  if (!normalized) {
+    throw new Error(`${name} is required.`);
+  }
+  return normalized;
+}
+
+function optionalText(value) {
+  const normalized = String(value ?? "").trim();
+  return normalized || null;
 }

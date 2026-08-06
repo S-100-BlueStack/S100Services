@@ -136,6 +136,7 @@ export function createDataSourceController({
       lifecycle?.emit?.(wasEnabled ? "refreshed" : "activated", {
         sourceId: source.id,
         source,
+        reason,
         generation: operation.generation,
         layers: commitResult.layers,
       });

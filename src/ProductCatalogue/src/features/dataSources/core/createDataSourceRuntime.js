@@ -3,6 +3,7 @@ import { createDataSourceRegistry } from "../config/dataSourceRegistry.js";
 import { createDataSourcePersistence } from "../domain/dataSourcePersistence.js";
 import { createDataSourceMapAdapter } from "../map/dataSourceMapAdapter.js";
 import { createDataSourceController } from "../services/dataSourceController.js";
+import { createDataSourceDerivedStateCoordinator } from "../services/dataSourceDerivedStateCoordinator.js";
 import { createDataSourceLifecycle } from "../services/dataSourceLifecycle.js";
 import { createDataSourceLoader } from "../services/dataSourceLoader.js";
 import { normalizeDataSourcePayload } from "../services/dataSourceNormalizer.js";
@@ -14,6 +15,9 @@ export function createDataSourceRuntime({
   hoverManager,
   createLayer,
   onLayersChanged,
+  navbarPopoverCoordinator,
+  filterService,
+  productSearchIndex,
 } = {}) {
   const registry = createDataSourceRegistry();
   const persistence = createDataSourcePersistence();
@@ -40,9 +44,15 @@ export function createDataSourceRuntime({
       hoverManager,
     });
   });
+  const derivedStateCoordinator = createDataSourceDerivedStateCoordinator({
+    lifecycle,
+    filterService,
+    productSearchIndex,
+  });
   const panel = initDataSourcePanel({
     registry,
     controller,
+    navbarPopoverCoordinator,
   });
 
   return {
@@ -54,6 +64,7 @@ export function createDataSourceRuntime({
     panel,
     destroy() {
       unsubscribeInteractionCleanup();
+      derivedStateCoordinator.destroy();
       panel.destroy();
       controller.destroy();
       lifecycle.clear();
@@ -65,7 +76,6 @@ function clearSourceInteractionState({ sourceId, view, hoverManager }) {
   const selectedGraphic = view?.popup?.selectedFeature;
   const selectedSourceId =
     selectedGraphic?.attributes?.sourceId ?? selectedGraphic?.layer?.appSourceId ?? null;
-
   if (selectedSourceId === sourceId) {
     view.popup.close();
   }

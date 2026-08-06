@@ -1,18 +1,17 @@
 import { getRuntimeSelectableDataSources } from "../config/dataSourceRegistry.js";
 
-export function initDataSourcePanel({ registry, controller } = {}) {
+const POPOVER_ID = "data-sources";
+
+export function initDataSourcePanel({ registry, controller, navbarPopoverCoordinator } = {}) {
   const button = document.getElementById("data-sources-button");
   const sources = getRuntimeSelectableDataSources(registry);
 
   if (!button || sources.length === 0) {
-    if (button) {
-      button.hidden = true;
-    }
+    if (button) button.hidden = true;
     return createEmptyApi();
   }
 
   button.hidden = false;
-
   const panel = document.createElement("section");
   panel.id = "data-source-panel";
   panel.className = "pc-data-source-panel";
@@ -35,7 +34,6 @@ export function initDataSourcePanel({ registry, controller } = {}) {
   document.body.append(panel);
 
   const list = panel.querySelector("[data-data-source-list]");
-  const resetButton = panel.querySelector("[data-data-source-reset]");
   const isOpen = () => !panel.hidden;
 
   function render() {
@@ -47,7 +45,7 @@ export function initDataSourcePanel({ registry, controller } = {}) {
     );
   }
 
-  function setOpen(open, { restoreFocus = false } = {}) {
+  function setOpen(open, { restoreFocus = false, focusInitial = true } = {}) {
     const nextOpen = Boolean(open);
     panel.hidden = !nextOpen;
     button.toggleAttribute("active", nextOpen);
@@ -56,44 +54,42 @@ export function initDataSourcePanel({ registry, controller } = {}) {
     if (nextOpen) {
       render();
       positionPanel(button, panel);
-      panel.querySelector("calcite-switch")?.focus?.();
+      if (focusInitial) panel.querySelector("calcite-switch")?.focus?.();
     } else if (restoreFocus) {
       button.focus();
     }
-
     return true;
   }
 
-  function close(options = {}) {
-    if (!isOpen()) {
-      return false;
-    }
-    return setOpen(false, options);
-  }
+  const unregisterPopover = navbarPopoverCoordinator?.register?.(POPOVER_ID, {
+    open: (options) => setOpen(true, options),
+    close: (options) => setOpen(false, options),
+    isOpen,
+    containsTarget: (target) =>
+      target instanceof Node && (panel.contains(target) || button.contains(target)),
+  });
 
-  button.setAttribute("aria-haspopup", "dialog");
-  button.setAttribute("aria-controls", panel.id);
-  button.setAttribute("aria-expanded", "false");
-  button.addEventListener("click", handleButtonClick);
-  panel.addEventListener("click", handlePanelClick);
-  panel.addEventListener("calciteSwitchChange", handleSwitchChange);
-  document.addEventListener("click", handleDocumentClick);
-  document.addEventListener("keydown", handleKeydown, true);
-  window.addEventListener("resize", handleResize);
-  const unsubscribe = controller.subscribe(() => render());
+  function close(options = {}) {
+    if (!isOpen()) return false;
+    return navbarPopoverCoordinator
+      ? navbarPopoverCoordinator.close(POPOVER_ID, options)
+      : setOpen(false, options);
+  }
 
   function handleButtonClick(event) {
     event.stopPropagation();
-    setOpen(!isOpen());
+    if (navbarPopoverCoordinator) {
+      navbarPopoverCoordinator.toggle(POPOVER_ID);
+    } else {
+      setOpen(!isOpen());
+    }
   }
 
   function handlePanelClick(event) {
     event.stopPropagation();
     const target = event.target instanceof Element ? event.target : null;
     if (target?.closest("[data-data-source-reset]")) {
-      void controller.resetToDefaults({
-        reason: "data-source-panel-reset",
-      });
+      void controller.resetToDefaults({ reason: "data-source-panel-reset" });
     }
   }
 
@@ -103,9 +99,7 @@ export function initDataSourcePanel({ registry, controller } = {}) {
       event.target instanceof Element
         ? event.target.closest("calcite-switch[data-source-id]")
         : null;
-    if (!switchElement) {
-      return;
-    }
+    if (!switchElement) return;
 
     void controller.setSourceEnabled(switchElement.dataset.sourceId, switchElement.checked, {
       reason: "data-source-panel",
@@ -114,44 +108,49 @@ export function initDataSourcePanel({ registry, controller } = {}) {
 
   function handleDocumentClick(event) {
     const target = event.target instanceof Element ? event.target : null;
-    if (!target || !isOpen() || panel.contains(target) || button.contains(target)) {
-      return;
-    }
-
-    close();
+    if (!target || !isOpen() || panel.contains(target) || button.contains(target)) return;
+    setOpen(false);
   }
 
   function handleKeydown(event) {
-    if (event.key !== "Escape" || event.defaultPrevented || !isOpen()) {
-      return;
-    }
-
-    close({ restoreFocus: true });
+    if (event.key !== "Escape" || event.defaultPrevented || !isOpen()) return;
+    setOpen(false, { restoreFocus: true });
     event.preventDefault();
     event.stopPropagation();
   }
 
   function handleResize() {
-    if (isOpen()) {
-      positionPanel(button, panel);
-    }
+    if (isOpen()) positionPanel(button, panel);
   }
 
+  button.setAttribute("aria-haspopup", "dialog");
+  button.setAttribute("aria-controls", panel.id);
+  button.setAttribute("aria-expanded", "false");
+  button.addEventListener("click", handleButtonClick);
+  panel.addEventListener("click", handlePanelClick);
+  panel.addEventListener("calciteSwitchChange", handleSwitchChange);
+  if (!navbarPopoverCoordinator) {
+    document.addEventListener("click", handleDocumentClick);
+    document.addEventListener("keydown", handleKeydown, true);
+  }
+  window.addEventListener("resize", handleResize);
+  const unsubscribe = controller.subscribe(render);
   render();
+
   return {
     isOpen,
     close,
-    resetToDefaults: () =>
-      controller.resetToDefaults({
-        reason: "data-source-panel-reset",
-      }),
+    resetToDefaults: () => controller.resetToDefaults({ reason: "data-source-panel-reset" }),
     destroy() {
       unsubscribe();
+      unregisterPopover?.();
       button.removeEventListener("click", handleButtonClick);
       panel.removeEventListener("click", handlePanelClick);
       panel.removeEventListener("calciteSwitchChange", handleSwitchChange);
-      document.removeEventListener("click", handleDocumentClick);
-      document.removeEventListener("keydown", handleKeydown, true);
+      if (!navbarPopoverCoordinator) {
+        document.removeEventListener("click", handleDocumentClick);
+        document.removeEventListener("keydown", handleKeydown, true);
+      }
       window.removeEventListener("resize", handleResize);
       panel.remove();
       button.toggleAttribute("active", false);
@@ -167,12 +166,9 @@ function createSourceRow(source, state) {
 
   const copy = document.createElement("div");
   copy.className = "pc-data-source-panel__copy";
-
   const label = document.createElement("span");
   label.className = "pc-data-source-panel__label";
   label.textContent = source.label;
-  copy.append(label);
-
   const status = document.createElement("span");
   status.className = "pc-data-source-panel__status";
   status.setAttribute("aria-live", "polite");
@@ -181,7 +177,7 @@ function createSourceRow(source, state) {
     status.classList.add("pc-data-source-panel__status--error");
     status.title = state.error;
   }
-  copy.append(status);
+  copy.append(label, status);
 
   const switchElement = document.createElement("calcite-switch");
   switchElement.scale = "s";
@@ -189,18 +185,13 @@ function createSourceRow(source, state) {
   switchElement.dataset.sourceId = source.id;
   switchElement.label = `${state?.requestedEnabled ? "Disable" : "Enable"} ${source.label}`;
   switchElement.setAttribute("aria-label", switchElement.label);
-
   row.append(copy, switchElement);
   return row;
 }
 
 function createStatusText(state) {
-  if (state?.loading) {
-    return state.enabled ? "Refreshing..." : "Loading...";
-  }
-  if (state?.error) {
-    return "Error";
-  }
+  if (state?.loading) return state.enabled ? "Refreshing..." : "Loading...";
+  if (state?.error) return "Error";
   return state?.enabled ? "Enabled" : "Disabled";
 }
 

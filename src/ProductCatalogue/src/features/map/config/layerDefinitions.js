@@ -45,7 +45,9 @@ export const layerDefinitions = Object.freeze([
     capabilities: Object.freeze({
       ...DEFAULT_LAYER_CAPABILITIES,
       supportsPopup: true,
+      supportsAttributeFilters: true,
       supportsOverlapPicker: true,
+      supportsProductSearch: true,
     }),
   }),
   Object.freeze({
@@ -55,10 +57,13 @@ export const layerDefinitions = Object.freeze([
     capabilities: Object.freeze({
       ...DEFAULT_LAYER_CAPABILITIES,
       supportsPopup: true,
+      supportsAttributeFilters: true,
       supportsOverlapPicker: true,
+      supportsProductSearch: true,
     }),
   }),
 ]);
+
 const definitionsById = new Map(layerDefinitions.map((definition) => [definition.id, definition]));
 
 export function getLayerDefinition(layerId) {
@@ -69,6 +74,7 @@ export function resolveLayerId(source) {
   if (typeof source === "string") {
     return normalizeLayerId(source);
   }
+
   return normalizeLayerId(
     source?.appLayerId ??
       source?.customId ??
@@ -84,6 +90,7 @@ export function resolveLayerKind(source) {
   if (typeof source === "string") {
     return getLayerDefinition(source)?.layerKind ?? null;
   }
+
   return (
     source?.appLayerKind ??
     source?.layerKind ??
@@ -131,8 +138,8 @@ function getFallbackDefinitionForAttributes(source) {
     return null;
   }
 
-  // Existing compatibility graphics should have `layerId`, but this fallback
-  // keeps current popup actions stable if refreshed AOI attributes omit metadata.
+  // Compatibility graphics should carry layer metadata, but this fallback keeps
+  // existing Product workflows stable while the combined AOI adapter remains.
   return getLayerDefinition(PRODUCT_CORRECTIONS_LAYER_ID);
 }
 
@@ -156,6 +163,7 @@ function warnUnknownLayerCapability(capabilityName) {
   if (!import.meta.env?.DEV) {
     return;
   }
+
   console.warn("[Layer definitions] Unknown layer capability", {
     capabilityName,
     knownCapabilities: getKnownLayerCapabilities(),

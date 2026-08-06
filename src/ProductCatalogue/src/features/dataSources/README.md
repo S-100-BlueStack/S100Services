@@ -1,72 +1,75 @@
 # Configurable Product data sources
 
-This feature area contains the FI-011A generic data-source foundation for the Product Catalogue
-Main map.
+This feature area owns the FI-011 configurable Product data-source foundation for the Product
+Catalogue Main map.
 
-FI-011 is not complete. This foundation deliberately keeps the existing combined AOI flow outside
-the permanent source registry until the backend exposes authoritative S-57 and S-101 read
-contracts or an explicit discriminator.
+FI-011A established the source registry, persisted activation state, independent loading, guarded
+layer commits, and source-aware identity. FI-011B adds source-aware filters, loaded-feature Product
+search, and shared navbar-popover coordination. FI-011 remains incomplete because source-aware
+Product workflows and authoritative S-57/S-101 transport are still deferred.
 
 ## Logical source model
 
-The target registry contains these independent Product sources:
+The permanent registry contains these independent Product sources:
 
-| Source ID      | Label          | FI-011A runtime availability | Loader                                      |
-| -------------- | -------------- | ---------------------------- | ------------------------------------------- |
-| `s57`          | `S-57`         | Unavailable                  | Pending authoritative backend read contract |
-| `s101`         | `S-101`        | Unavailable                  | Pending authoritative backend read contract |
-| `paper-charts` | `Paper Charts` | Development only             | `GET /mock/paper-charts`                    |
-| `s102`         | `S-102`        | Development only             | `GET /mock/s102`                            |
+| Source ID      | Label          | Runtime availability | Loader                                      |
+| -------------- | -------------- | -------------------- | ------------------------------------------- |
+| `s57`          | `S-57`         | Unavailable          | Pending authoritative backend read contract |
+| `s101`         | `S-101`        | Unavailable          | Pending authoritative backend read contract |
+| `paper-charts` | `Paper Charts` | Development only     | `GET /mock/paper-charts`                    |
+| `s102`         | `S-102`        | Development only     | `GET /mock/s102`                            |
 
-There is no permanent `enc`, `enc-products`, or `ENC Products` runtime source, toggle, identity,
-or storage entry. The combined AOI endpoint remains a temporary compatibility path and must not be
-used to infer or duplicate S-57 and S-101 Products.
+There is no permanent combined ENC source, toggle, identity, or storage entry. The existing combined
+AOI flow remains a temporary compatibility path and must not be used to infer or duplicate S-57 and
+S-101 Products.
 
-The inspected AOI frontend contract normalizes `datasetName`, `displayScale`, `usageBand`, and
-`status`, but it does not expose an authoritative Product-standard discriminator. Client-side
-S-57/S-101 separation is therefore intentionally not implemented.
+The inspected compatibility payload exposes normalized Product attributes but no authoritative
+Product-standard discriminator. A client-side S-57/S-101 split is therefore intentionally absent.
 
-## Registry
+## Registry and capabilities
 
-`config/dataSourceRegistry.js` is the declarative source boundary. A source definition contains:
+`config/dataSourceRegistry.js` is the declarative source boundary. Each source definition contains:
 
-- stable `id` and user-facing `label`;
-- `enabledByConfiguration`, `availability`, and `userSelectable` state;
-- first-visit `defaultEnabled` policy;
-- loader and normalizer descriptors;
-- source-aware identity strategy;
-- one or more owned logical layer definitions;
+- stable identity and user-facing label;
+- configuration, availability, selection, and first-visit defaults;
+- loader, normalizer, and source-aware Product identity contracts;
+- source-owned layer definitions;
 - conservative source and layer capabilities;
-- Product type metadata;
-- active-only refresh strategy.
+- source-specific filtering definitions;
+- source-specific loaded-feature search fields;
+- Product type and active-only refresh strategy.
 
-UI and workflow code should consume registry metadata and capabilities rather than adding scattered
-source-ID conditionals. A future source such as S-122 should be added through the registry and the
-corresponding provider/normalizer contract.
+Filtering and search integrations consume registry and layer metadata. Feature modules must not add
+source-ID conditionals for Paper Charts, S-102, or future sources. A future source participates by
+supplying declarative capabilities and provider metadata.
 
-## Compatibility AOI boundary
+The FI-011B mock-source configuration is intentionally limited to attributes present in the current
+fixtures:
 
-The current `loadAppData -> bindDataToMap` flow remains responsible for the existing combined AOI
-representation and current Product workflows. It is not registered in the FI-011 source registry and
-has no data-source preference key.
+| Source       | Filter dimensions                   | Loaded-feature search |
+| ------------ | ----------------------------------- | --------------------- |
+| Paper Charts | Status, Display scale, Usage band   | Yes                   |
+| S-102        | Status                              | Yes                   |
+| S-57 / S-101 | Deferred with authoritative loaders | Deferred              |
 
-FI-011A changes compatibility refresh only where required to keep the boundary safe: in-place
-reconciliation and fallback rebuild select the requested compatibility layer IDs instead of treating
-all registered source layers as one structure. This prevents compatibility refresh from deleting or
-rebuilding Paper Charts or S-102 layers.
+Missing optional attributes omit only the unsupported facet; they do not fail source loading or
+filtering.
 
-When independent S-57 and S-101 backend reads are available, a later FI-011 package can replace the
-compatibility loader with source-owned providers without changing the generic controller contract.
+## Compatibility AOI adapter
 
-Main-map startup begins compatibility AOI loading and runtime-source initialization as independent
-settled tasks. Runtime sources can therefore load, update the Data sources panel, and retain their
-layers while the compatibility request is retrying or has failed permanently. The compatibility
-pipeline remains the sole owner of the existing fullscreen startup progress and failure state;
-source-specific failures remain owned by the source controller and notice infrastructure. The
-existing bootstrap starts the shared automatic refresh coordinator only after startup has settled,
-and the coordinator keeps at most one active timer.
+The current `loadAppData -> bindDataToMap` path remains responsible for the combined AOI
+representation and established Product workflows. It is not registered as a user-selectable FI-011
+source and has no data-source preference key.
 
-## Lifecycle and concurrency
+`features/map/services/compatibilityDerivedStateAdapter.js` adapts the committed compatibility layer
+to the shared filter and Product-search provider contracts. It uses the logical Product-corrections
+layer metadata rather than introducing a permanent combined source identifier.
+
+Compatibility refresh continues to preserve popup, filter, and scale behavior. Reconciliation is
+limited to compatibility layer IDs, so runtime-source layers are not removed or rebuilt by the AOI
+refresh path.
+
+## Lifecycle and guarded derived state
 
 Each runtime source owns a monotonic operation generation and an `AbortController`.
 
@@ -78,20 +81,115 @@ fetch
 -> prepare hidden candidate layers off-map
 -> validate source generation
 -> guarded synchronous map/registry commit
--> publish enabled/loaded/persisted state
+-> publish in-memory enabled/loaded state
+-> emit committed source lifecycle event
+-> atomically publish source filter facets and search entries
+-> persist selected source state
 ```
 
-Disable and reset increment the source generation before removing runtime state. Older activation or
-refresh work cannot publish graphics, visibility, enabled state, persisted state, or errors after it
-has been superseded.
+`services/dataSourceDerivedStateCoordinator.js` subscribes to committed `activated`, `refreshed`, and
+`deactivating` lifecycle events. It updates only layers whose metadata declares the corresponding
+filter or search capability.
 
-Candidate layers are always destroyed when they are stale, invalid, fail commit, or are replaced.
-A failed first activation leaves that source disabled with no partial layer. A failed refresh of an
-already active source retains the previous successful representation.
+The filter service and search index maintain their own latest generation per provider. A stale
+refresh cannot republish old facets or search entries after a newer refresh, disable, reset, or
+reactivation. Provider replacement is atomic, so the UI never combines old and new entries for one
+source.
+
+A failed first activation leaves that source disabled with no partial layer. Its `activation-failed`
+lifecycle event invalidates transient derived-state generations and removes any incomplete search
+provider, but preserves pending filter snapshot intent. A later successful retry therefore reapplies
+the saved provider filters regardless of whether persistence loaded before or after the failure.
+
+A failed refresh of an active source emits no deactivation event and retains its last successful
+representation, filters, and search index. Candidate layers are destroyed when stale, invalid,
+failed, or superseded.
+
+## Activation and deactivation effects
+
+Activation or successful refresh:
+
+- commits fresh source-owned layers;
+- rebuilds only that source's filter facets;
+- replaces only that source's Product-search entries;
+- preserves all other source filter and search state;
+- publishes no duplicate search suggestions.
+
+Authoritative deactivation or reset:
+
+- invalidates pending source work before cleanup;
+- removes active and pending filter state plus persisted provider intent for that source;
+- removes source-owned layers;
+- closes a popup owned by the source;
+- clears selected and hover highlight state owned by the source;
+- removes the source's runtime filter section and filter state;
+- removes the source's Product-search entries and stale result selection;
+- leaves other sources unchanged.
+
+Reactivation fetches fresh data and begins with the source's configured filter defaults. Runtime
+filter state from a disabled source is not retained.
+
+## Source-aware filters
+
+The Main map keeps one compact filter popover with independent sections per active provider.
+`features/map/filters/attributeFilterService.js` owns provider facets, selected values, range state,
+per-source counts, matching, persistence snapshots, and generation guards.
+
+The compatibility AOI provider keeps its established default exclusion and lookup-backed status
+options. FI-011B does not invent an error-state list. The authoritative error-only first-visit preset
+remains blocked by FI-016. `ATTRIBUTE_FILTER_CONFIG.compatibilityProvider.errorOnlyStatusClassifier`
+is the explicit integration point and remains `null`.
+
+Filter persistence is a separate versioned user-state contract from source activation persistence:
+
+```text
+pc.attributeFilters.v3
+```
+
+The filter snapshot schema is version 2 and stores provider-specific fields, including explicit empty
+provider state. Version 1 knew only the compatibility filter path, so even `{ layers: [] }` migrates
+to an explicit unfiltered compatibility provider. Migration is canonicalized before delayed AOI
+publication, while newer source providers continue to use their own declarative defaults. Existing
+valid user filter state takes precedence over compatibility defaults.
+
+See `features/map/filters/README.md` for the provider and persistence contract.
+
+## Loaded-feature Product search
+
+`features/map/search/sourceAwareProductSearchIndex.js` indexes only graphics currently committed for
+active providers. Results are keyed by provider plus logical Product key, so multiple source-owned
+layers cannot create duplicate suggestions for one Product. Layer identity remains deterministic
+navigation metadata and refresh replaces the current representative Graphic atomically. It does not
+query connected data, the Product catalog endpoint, or a backend search
+endpoint.
+
+Each result retains provider ID, source ID, stable Product key, generation, the representative layer
+ID, and the exact Graphic reference. The logical result ID is the serialized tuple
+`[providerId, productKey]`. `layerId` is only deterministic navigation metadata for the current
+representative Graphic, so identical visible labels cannot resolve to the wrong Product.
+
+Selecting a result reuses the existing map navigation, selected-Graphic, and popup flow. Search never
+enables a disabled source. A stale result that disappears before selection is handled without a
+runtime error or source activation.
+
+See `features/map/search/README.md` for the index and selection contract.
+
+## Navbar popover coordination
+
+Filters and Data sources register with the shared coordinator in
+`shared/ui/navbarPopoverCoordinator.js`. Only one registered overlapping navbar popover can be open.
+The coordinator owns one document click listener and one document keydown listener for its full
+lifetime.
+
+Opening one participant closes the active participant first. Trigger toggling, outside click, Escape,
+keyboard behavior, ARIA state, and focus restoration remain participant-owned through the shared
+lifecycle contract. Non-navbar panels are not registered and are unaffected.
+
+See `shared/ui/README.md` for the coordinator contract.
 
 ## Persistence
 
-Data-source selection uses this versioned browser key:
+Data-source activation uses this independent versioned browser key:
 
 ```text
 productCatalogue.dataSources.v1
@@ -110,25 +208,20 @@ Schema:
 Rules:
 
 - only currently selectable sources can become active runtime sources;
-- a deployment with zero runtime-selectable sources does not create or rewrite an initialized empty
-  state, so a later deployment with real loaders remains eligible for first-visit defaults;
-- first visit with at least one choice uses all configured and available deployment defaults;
-- a valid persisted state, including an explicit all-off choice made while choices existed, wins over
-  defaults;
-- an existing valid state does not silently enable later registry entries;
-- known selection intent is preserved while a source is temporarily unavailable, but unavailable
-  IDs are never treated as active in the current deployment;
-- unknown, removed, invalid, or duplicate IDs are ignored and can be sanitized when a deployment
-  again has selectable sources;
-- invalid JSON, invalid shape, storage errors, and unsupported versions fail safely to current
-  deployment defaults without creating false state when no choices exist;
-- local `Reset to defaults` and global Preferences reset both use the same controller contract and do
-  not create initialized state in a zero-choice deployment;
-- no migration copies a combined AOI boolean into S-57 and S-101.
+- zero selectable sources do not create a false initialized empty state;
+- first visit with choices uses all configured and available deployment defaults;
+- an explicit persisted all-off choice wins over defaults;
+- valid existing state does not silently enable later registry entries;
+- unavailable known IDs preserve user intent but are not active in the current deployment;
+- unknown, invalid, duplicate, or removed IDs are sanitized safely;
+- local and global reset use the same controller defaults contract;
+- no migration copies a combined AOI preference into S-57 and S-101.
+
+Source activation state and source-specific filter state remain separate contracts and versions.
 
 ## Product identity
 
-Every normalized Product has an internal source-aware identity equivalent to:
+Every normalized runtime Product has an internal source-aware identity equivalent to:
 
 ```js
 {
@@ -137,97 +230,57 @@ Every normalized Product has an internal source-aware identity equivalent to:
 }
 ```
 
-The deterministic serialized representation is a JSON tuple such as:
+The Product key resolves from a stable source-declared field. Array position is never an identity
+fallback. Missing or duplicate stable identity rejects the source payload before candidate commit.
+The same Product key may exist in different sources without colliding, even though the current domain
+contract states that dataset names are globally unique.
 
-```text
-["paper-charts","DK-PAPER-001"]
-```
+## Capabilities and Product Collection boundary
 
-`productKey` resolves from a stable field declared by the source strategy, currently:
-
-1. `productKey`;
-2. `datasetName`;
-3. `productName`;
-4. `OBJECTID`;
-5. stable `id` property;
-6. stable GeoJSON `feature.id`.
-
-Property-name matching is case-insensitive and separator-insensitive. Array position is never an
-identity fallback. Missing stable identity or duplicate identity inside one source rejects the full
-source payload before candidate preparation. The same Product key in two sources remains distinct.
-Dataset names are globally unique by the current domain contract, but runtime state remains
-source-aware.
-
-## Refresh semantics
-
-The refresh coordinator owns the single automatic refresh timer for the Main map:
-
-- the compatibility AOI refresh continues to run with its established popup/filter/scale behavior;
-- only enabled FI-011 runtime sources are refreshed;
-- disabled sources are not fetched in the background;
-- reactivation always fetches fresh data;
-- source refreshes run independently so one mock failure does not prevent other sources or the
-  compatibility AOI flow from completing;
-- automatic source refresh failures are silent except for console diagnostics;
-- manual failures use the existing notice infrastructure;
-- refresh does not use the fullscreen startup loader.
-
-## Capabilities
-
-Paper Charts and S-102 are visualization-only mock sources in FI-011A. They use a safe fields popup
-and do not expose custom Product actions. Their source and layer capabilities disable:
+Paper Charts and S-102 remain visualization-only mock sources. Their safe field popups expose no
+custom Product actions. Their capabilities keep these workflows disabled:
 
 - Freeze and Unfreeze;
 - Send to IC-ENC;
 - Cancel Export / legacy Rollback dispatch;
-- History;
-- IC-ENC reports;
-- internal validation;
+- History and reports;
 - Edition and Update export execution;
-- Product Collection, Product search, Analyze, and Review integration.
+- Product Collection;
+- Analyze and Review.
 
-The popup-header Product Collection action resolves `supportsPopupActions` from the selected Graphic
-and its ArcGIS layer metadata. Unsupported sources remove any stale collection action and fail closed
-again when the action is invoked. `Copy dataset name` remains independent from this capability.
+FI-011B enables only loaded-feature Product search and source-specific filtering for these sources.
+Search selection opens the same capability-gated popup and cannot create Product Collection or action
+UI.
 
-Do not enable a capability until its source-specific backend and workflow contract exists. Existing
-combined AOI Products continue using the current compatibility capabilities and endpoints.
-
-## Deactivation hooks
-
-`services/dataSourceLifecycle.js` provides a central subscription boundary. FI-011A uses the
-`deactivating` hook to clear source-related popup, hover, selected-highlight, and locked-highlight
-state without making the Data sources panel import map feature modules directly.
-
-Later FI-011 packages can subscribe Product Collection, search, filters, Analyze, Review, History,
-and operation-state cleanup to the same lifecycle boundary.
+Existing compatibility AOI Products keep their established Product Collection, popup actions,
+Analyze, Review, History, and operation workflows.
 
 ## Development-only mocks
 
-ProductManagerAPI registers these routes only when `app.Environment.IsDevelopment()` is true:
+ProductManagerAPI registers these routes only in Development:
 
 ```text
 GET /mock/paper-charts -> mock/some_products.geojson
 GET /mock/s102         -> mock/products.geojson
 ```
 
-The fixtures verify the generic multi-source runtime only. They are not production API contracts and
-must not be used as evidence for future Paper Charts or S-102 backend shapes.
+The fixtures validate the generic multi-source frontend. They are not production API contracts and
+must not define future Paper Charts or S-102 backend schemas.
 
-## Deferred to later FI-011 packages
+## Deferred to FI-011C and later packages
 
-FI-011A does not implement:
+FI-011B does not implement:
 
-- independent S-57 or S-101 transport;
-- a heuristic split of the current combined AOI response;
-- source-specific filters;
-- Product search aggregation;
-- Product Collection cleanup or propagation;
-- Analyze/Review source propagation;
-- History/report unavailable states;
-- source-specific popup action and export dispatch;
+- authoritative separate production S-57 or S-101 reads;
+- a heuristic split of the compatibility AOI response;
+- Product Collection propagation for runtime sources;
+- Analyze or Review integration for runtime sources;
+- History, IC-ENC report, or internal-validation integration for runtime sources;
+- source-specific Product actions or Export dispatch;
 - related Products;
-- canonical source-aware route migration;
-- final all-source onboarding and full FI-011 regression acceptance.
+- route/session identity migration;
+- the final error-only filter preset and status palette;
+- connected-data, Product-catalog, Locator, or backend Product search;
+- final onboarding and all-source workflow regression completion.
 
-These remain gated by FI-011B and later slices plus the required backend contracts.
+Do not enable a deferred capability until its source-specific backend and workflow contract exists.

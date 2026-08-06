@@ -31,6 +31,11 @@ const DISABLED_OPERATION_CAPABILITIES = Object.freeze({
   review: false,
 });
 
+const SEARCHABLE_VISUALIZATION_CAPABILITIES = Object.freeze({
+  ...DISABLED_OPERATION_CAPABILITIES,
+  productSearch: true,
+});
+
 const ACTIVE_ONLY_REFRESH = Object.freeze({
   mode: "active-only",
   reloadOnReactivate: true,
@@ -46,6 +51,11 @@ const SOURCE_AWARE_IDENTITY = Object.freeze({
 
 const GEOJSON_PRODUCT_NORMALIZER = Object.freeze({
   type: "geojson-products",
+});
+
+const DEFAULT_PRODUCT_SEARCH = Object.freeze({
+  supported: true,
+  fields: Object.freeze(["datasetName", "productName", "productKey"]),
 });
 
 export function createDataSourceRegistry({
@@ -75,6 +85,7 @@ export function createDataSourceRegistry({
       endpoint: "mock/paper-charts",
       layerId: DATA_SOURCE_LAYER_IDS.PAPER_CHARTS_PRODUCTS,
       layerKind: "paper-chart-products",
+      filterDefinitions: ["status", "displayScale", "usageBand"],
       isDevelopment,
       configuredIds,
     }),
@@ -85,6 +96,7 @@ export function createDataSourceRegistry({
       endpoint: "mock/s102",
       layerId: DATA_SOURCE_LAYER_IDS.S102_PRODUCTS,
       layerKind: "s102-products",
+      filterDefinitions: ["status"],
       isDevelopment,
       configuredIds,
     }),
@@ -132,6 +144,16 @@ function createUnavailableSource({ id, label, productType, configuredIds, reason
     identityStrategy: SOURCE_AWARE_IDENTITY,
     layerDefinitions: [],
     capabilities: DISABLED_OPERATION_CAPABILITIES,
+    filtering: {
+      supported: false,
+      definitions: [],
+      defaultExcludedValues: [],
+      useLookupOptions: false,
+    },
+    search: {
+      supported: false,
+      fields: DEFAULT_PRODUCT_SEARCH.fields,
+    },
     productType,
     refreshStrategy: ACTIVE_ONLY_REFRESH,
   };
@@ -144,6 +166,7 @@ function createDevelopmentMockSource({
   endpoint,
   layerId,
   layerKind,
+  filterDefinitions,
   isDevelopment,
   configuredIds,
 }) {
@@ -185,14 +208,21 @@ function createDevelopmentMockSource({
           supportsPopupActions: false,
           supportsProductActions: false,
           supportsDisplayScale: false,
-          supportsAttributeFilters: false,
+          supportsAttributeFilters: true,
           supportsProductHistory: false,
           supportsOverlapPicker: true,
-          supportsProductSearch: false,
+          supportsProductSearch: true,
         },
       },
     ],
-    capabilities: DISABLED_OPERATION_CAPABILITIES,
+    capabilities: SEARCHABLE_VISUALIZATION_CAPABILITIES,
+    filtering: {
+      supported: true,
+      definitions: filterDefinitions,
+      defaultExcludedValues: [],
+      useLookupOptions: false,
+    },
+    search: DEFAULT_PRODUCT_SEARCH,
     productType,
     refreshStrategy: ACTIVE_ONLY_REFRESH,
   };
@@ -216,7 +246,6 @@ function deepFreeze(value) {
   for (const nestedValue of Object.values(value)) {
     deepFreeze(nestedValue);
   }
-
   return Object.freeze(value);
 }
 

@@ -90,29 +90,29 @@ BE-106 is documentation-only. It confirms that ProductManagerAPI remains the pub
 
 ## Future implementation ideas
 
-| ID     | Area                             | Idea                                                                     | Status                                    | Notes                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ------ | -------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| FI-001 | Dashboard                        | Add operational activity dashboard                                       | Done                                      | Added `/dashboard` with Danish operational time, compact range builder, summaries, activity list, actionable status/operation rows, Dashboard History, Review/Analyze links, server-side search/filtering, cursor pagination, stale-request cancellation and last-successful-result retention. Real report links remain blocked by backend report IDs/storage contracts.                               |
-| FI-002 | Product review / Product history | Add Product Review workspace for multiple histories and report content   | Implemented (MVP)                         | Added a dedicated Product Review workspace that opens in a separate tab/window and allows users to compare multiple products.                                                                                                                                                                                                                                                                          |
-| FI-003 | Analyze                          | Show internal validation reports in Analyze                              | Done/Semi-done (Missing endpoint)         | Add internal validation reports to the Analyze page near the IC-ENC XML/report area.                                                                                                                                                                                                                                                                                                                   |
-| FI-004 | Analyze                          | Improve Analyze product name management                                  | Done                                      | Replaced manual URL/query separator management with a structured product list UI.                                                                                                                                                                                                                                                                                                                      |
-| FI-005 | Analyze                          | Add product collection tray for Analyze from map                         | Done                                      | Added a main-map workflow for collecting products before opening Analyze or Review.                                                                                                                                                                                                                                                                                                                    |
-| FI-006 | Analyze / Review                 | Add shared product catalog picker for direct Analyze/Review access       | Done                                      | Uses the lightweight `GET /electronicproducts` endpoint to power a shared searchable Product picker reused by Analyze and Review.                                                                                                                                                                                                                                                                      |
-| FI-007 | Main map                         | Add main page Product search                                             | Done                                      | Added a compact Product search overlay that suggests catalog products and opens the selected Product popup on the main map.                                                                                                                                                                                                                                                                            |
-| FI-008 | Introduction flow                | Add compact first-time and replayable route guidance                     | Done                                      | Completed and manually verified at `0c677549963bb7ce4206fed379dd30dc8c2cc783`. Each route has independent first-time state and replay from Preferences. Main map includes Product search, filters, interactive popup/Product Collection guidance, workspace navigation, Theme and Preferences. Dashboard, Analyze and Review use compact route-specific flows with Product prerequisites where needed. |
-| FI-009 | Dashboard                        | Add user-selectable Dashboard page size                                  | Todo                                      | Backend paging already accepts `1-200`; define compact frontend options, persistence and reset behavior before enabling it.                                                                                                                                                                                                                                                                            |
-| FI-010 | Dashboard                        | Add sortable Dashboard activity columns                                  | Todo                                      | Define supported server-side sort fields, direction, stable tie-break ordering and cursor compatibility before adding sortable headers.                                                                                                                                                                                                                                                                |
-| FI-011 | Main map / Data sources          | Add independent Product-standard data sources and source-aware workflows | Design revised / backend contract pending | Final logical sources are `S-57`, `S-101`, `Paper Charts`, and `S-102`; `S-122` is a future source. Do not persist or expose a combined `ENC Products` source as the final boundary. The generic concurrency, lifecycle, capability, and source-aware identity foundation remains valid, but the concrete registry and defaults must be revised after the S-57/S-101 backend contract is agreed.       |
-| FI-012 | Main map / Location search       | Add Denmark and Greenland map locator                                    | Todo                                      | Add a compact ArcGIS Search component opened from a binoculars button beside Product search. Search addresses and populated places in Denmark and Greenland only, navigate without a marker or popup, keep Product state unchanged, and prepare configuration for later API-backed custom search sources.                                                                                              |
-| FI-013 | Product terminology              | Rename Product Catalogue S100 terminology to S-101                       | Todo                                      | Use `S-101` for the ENC Product specification in live UI/domain copy. Preserve legitimate generic `S-100` standard references and isolate any legacy `S100` API/wire value behind an adapter until backend contracts are renamed.                                                                                                                                                                      |
-| FI-014 | Popup actions                    | Rename Rollback to Cancel Export and replace its icon                    | Todo                                      | Update live UI copy, confirmation, notices, availability reasons, guidance, and tests to `Cancel Export`. Use a cancellation icon rather than an undo/rollback metaphor; keep any legacy endpoint/action identifier internal until backend contracts change.                                                                                                                                           |
-| FI-015 | Product Collection               | Use graph-bar for Add to collection                                      | Todo                                      | Replace the popup Add to collection icon with Calcite `graph-bar`, preserving tooltip, active state, accessibility, and existing collection behavior.                                                                                                                                                                                                                                                  |
-| FI-016 | Main map / Symbology             | Define a new Product AOI status palette                                  | Blocked by backend                        | Wait for the authoritative backend status definition and error classification. Then define centralized, accessible light/dark symbology with stable status semantics across independently rendered sources.                                                                                                                                                                                            |
-| FI-017 | Branding / Deployment            | Make application logo environment-configurable                           | Todo                                      | Load the deployment logo from non-secret environment configuration with a generic non-GST static fallback. A missing or failed custom logo must not break layout or startup.                                                                                                                                                                                                                           |
-| FI-018 | Open source readiness            | Remove organization-specific deployment assumptions                      | Future review                             | Audit branding, configuration, URLs, authentication assumptions, documentation, sample data, secrets, licenses, and deployment defaults so a third party can deploy the application without editing GST-specific source code.                                                                                                                                                                          |
-| FI-019 | Analyze / Review routing         | Replace path-concatenated Product URLs with canonical query routes       | Todo / source-aware format decision       | Move Analyze and Review away from `/route/ProductA&ProductB`. Use query parameters and canonical URL encoding. Bare `Datasets=` is only safe if Product keys are globally unique; the final route payload must preserve source-aware identity.                                                                                                                                                         |
-| FI-020 | Popup / Related Products         | Navigate backend-linked Products across data sources                     | Blocked by backend contract               | Render dynamic backend-provided Product relationships, initially including S-101/S-57 links, without hardcoding source pairs. Linked targets must carry stable source-aware identity and support future Paper Charts, S-102, S-122, and other source relationships.                                                                                                                                    |
-| FI-021 | Product Collection               | Explore modifier-click collection shortcuts                              | Nice to have / design exploration         | Investigate a discoverable keyboard-and-mouse shortcut for adding/removing map Products from Product Collection. Prefer Ctrl/Cmd-click exploration; do not assign Shift-click until range/selection semantics and conflicts with map navigation are defined.                                                                                                                                           |
+| ID     | Area                             | Idea                                                                     | Status                                   | Notes                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------ | -------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FI-001 | Dashboard                        | Add operational activity dashboard                                       | Done                                     | Added `/dashboard` with Danish operational time, compact range builder, summaries, activity list, actionable status/operation rows, Dashboard History, Review/Analyze links, server-side search/filtering, cursor pagination, stale-request cancellation and last-successful-result retention. Real report links remain blocked by backend report IDs/storage contracts.                               |
+| FI-002 | Product review / Product history | Add Product Review workspace for multiple histories and report content   | Implemented (MVP)                        | Added a dedicated Product Review workspace that opens in a separate tab/window and allows users to compare multiple products.                                                                                                                                                                                                                                                                          |
+| FI-003 | Analyze                          | Show internal validation reports in Analyze                              | Done/Semi-done (Missing endpoint)        | Add internal validation reports to the Analyze page near the IC-ENC XML/report area.                                                                                                                                                                                                                                                                                                                   |
+| FI-004 | Analyze                          | Improve Analyze product name management                                  | Done                                     | Replaced manual URL/query separator management with a structured product list UI.                                                                                                                                                                                                                                                                                                                      |
+| FI-005 | Analyze                          | Add product collection tray for Analyze from map                         | Done                                     | Added a main-map workflow for collecting products before opening Analyze or Review.                                                                                                                                                                                                                                                                                                                    |
+| FI-006 | Analyze / Review                 | Add shared product catalog picker for direct Analyze/Review access       | Done                                     | Uses the lightweight `GET /electronicproducts` endpoint to power a shared searchable Product picker reused by Analyze and Review.                                                                                                                                                                                                                                                                      |
+| FI-007 | Main map                         | Add main page Product search                                             | Done                                     | Added a compact Product search overlay that suggests catalog products and opens the selected Product popup on the main map.                                                                                                                                                                                                                                                                            |
+| FI-008 | Introduction flow                | Add compact first-time and replayable route guidance                     | Done                                     | Completed and manually verified at `0c677549963bb7ce4206fed379dd30dc8c2cc783`. Each route has independent first-time state and replay from Preferences. Main map includes Product search, filters, interactive popup/Product Collection guidance, workspace navigation, Theme and Preferences. Dashboard, Analyze and Review use compact route-specific flows with Product prerequisites where needed. |
+| FI-009 | Dashboard                        | Add user-selectable Dashboard page size                                  | Todo                                     | Backend paging already accepts `1-200`; define compact frontend options, persistence and reset behavior before enabling it.                                                                                                                                                                                                                                                                            |
+| FI-010 | Dashboard                        | Add sortable Dashboard activity columns                                  | Todo                                     | Define supported server-side sort fields, direction, stable tie-break ordering and cursor compatibility before adding sortable headers.                                                                                                                                                                                                                                                                |
+| FI-011 | Main map / Data sources          | Add independent Product-standard data sources and source-aware workflows | In progress (FI-011A/B implemented)      | FI-011A is committed and manually accepted at `8f678480c08e17d7911d6019a44542c6a52ef09f`. FI-011B adds source-aware filters, loaded-feature Product search, and generic navbar-popover coordination. S-57/S-101 transport and FI-011C Product workflows remain pending.                                                                                                                                |
+| FI-012 | Main map / Location search       | Add Denmark and Greenland map locator                                    | Todo                                     | Add a compact ArcGIS Search component opened from a binoculars button beside Product search. Search addresses and populated places in Denmark and Greenland only, navigate without a marker or popup, keep Product state unchanged, and prepare configuration for later API-backed custom search sources.                                                                                              |
+| FI-013 | Product terminology              | Rename Product Catalogue S100 terminology to S-101                       | Todo                                     | Use `S-101` for the ENC Product specification in live UI/domain copy. Preserve legitimate generic `S-100` standard references and isolate any legacy `S100` API/wire value behind an adapter until backend contracts are renamed.                                                                                                                                                                      |
+| FI-014 | Popup actions                    | Rename Rollback to Cancel Export and replace its icon                    | Todo                                     | Update live UI copy, confirmation, notices, availability reasons, guidance, and tests to `Cancel Export`. Use a cancellation icon rather than an undo/rollback metaphor; keep any legacy endpoint/action identifier internal until backend contracts change.                                                                                                                                           |
+| FI-015 | Product Collection               | Use graph-bar for Add to collection                                      | Todo                                     | Replace the popup Add to collection icon with Calcite `graph-bar`, preserving tooltip, active state, accessibility, and existing collection behavior.                                                                                                                                                                                                                                                  |
+| FI-016 | Main map / Symbology             | Define a new Product AOI status palette                                  | Blocked by backend                       | Wait for the authoritative backend status definition and error classification. Then define centralized, accessible light/dark symbology with stable status semantics across independently rendered sources.                                                                                                                                                                                            |
+| FI-017 | Branding / Deployment            | Make application logo environment-configurable                           | Todo                                     | Load the deployment logo from non-secret environment configuration with a generic non-GST static fallback. A missing or failed custom logo must not break layout or startup.                                                                                                                                                                                                                           |
+| FI-018 | Open source readiness            | Remove organization-specific deployment assumptions                      | Future review                            | Audit branding, configuration, URLs, authentication assumptions, documentation, sample data, secrets, licenses, and deployment defaults so a third party can deploy the application without editing GST-specific source code.                                                                                                                                                                          |
+| FI-019 | Analyze / Review routing         | Replace path-concatenated Product URLs with canonical query routes       | Ready / canonical contract fixed         | Use `/Analyze?Datasets=ProductA,ProductB` and `/Review?Datasets=ProductA,ProductB`. Dataset names are globally unique across current and future sources, while internal runtime state remains source-aware.                                                                                                                                                                                            |
+| FI-020 | Popup / Related Products         | Navigate backend-linked Products across data sources                     | Blocked by backend relationship contract | Render only explicit backend/database-provided Product relationships. No source pair or relationship may be inferred; authoritative target identity, relation type, and display text must support any current or future source.                                                                                                                                                                        |
+| FI-021 | Product Collection               | Explore modifier-click collection shortcuts                              | Nice to have / design exploration        | Investigate a discoverable keyboard-and-mouse shortcut for adding/removing map Products from Product Collection. Prefer Ctrl/Cmd-click exploration; do not assign Shift-click until range/selection semantics and conflicts with map navigation are defined.                                                                                                                                           |
 
 ## Planned order
 
@@ -124,265 +124,216 @@ BE-106 is documentation-only. It confirms that ProductManagerAPI remains the pub
 6. Keep Batch 2 producer/recovery work separate until Batch 1 is built, tested, and reviewed.
 7. Keep report-link UI and deferred producers blocked until backend report IDs, storage, and producer contracts exist.
 8. Continue targeted regression smoke tests after frontend or backend contract changes.
-9. Pause FI-011 runtime acceptance until the backend contract defines independent S-57 and S-101 Products, stable identities, source discrimination, status values, relationships, and operation capabilities. Do not fake the split by duplicating or inferring from the current combined AOI payload.
-10. Rework FI-011A from the committed baseline after the contract is known. Preserve the reviewed concurrency, prepared-candidate commit, fail-closed identity, capability, and source-owned layer concepts, but replace the combined `enc-products` registry/storage boundary.
-11. FI-012 Locator and the independent UI/documentation items FI-013 through FI-017 and FI-019 may be implemented while the FI-011 backend contract is pending, subject to their own dependencies.
-12. Implement FI-011 in focused slices: generic source foundation and migration; S-57/S-101 transport integration; Paper Charts/S-102 mocks; filters/search/collection/workspaces; popup/export/related Products; guidance and final regression coverage.
-13. Complete FI-016 only after the backend status list identifies authoritative error states and display semantics.
-14. Treat FI-018 as a later cross-repository release-readiness review after configurable branding and deployment settings are established.
+9. Keep FI-011A as the committed generic source foundation at `8f678480c08e17d7911d6019a44542c6a52ef09f`; do not introduce a permanent combined ENC source or infer an S-57/S-101 split from the compatibility AOI payload.
+10. Implement FI-011B as source-aware Filters, loaded-feature Product search, navbar-popover coordination, and generation-safe derived-state cleanup.
+11. Keep FI-011C focused on Product Collection, Analyze, Review, History/report integration, and source-aware Product workflows without enabling unsupported mock-source actions.
+12. Keep authoritative production S-57/S-101 transport blocked until the backend supplies separate read contracts and source discrimination.
+13. FI-012 Locator and the independent UI/documentation items FI-013 through FI-017 and FI-019 may proceed subject to their own dependencies.
+14. Complete FI-016 only after the backend status list identifies authoritative error states and display semantics, then activate the final FI-011 error-only first-visit filter preset.
+15. Treat FI-018 as a later cross-repository release-readiness review after configurable branding and deployment settings are established.
 
 ## FI-011 independent Product-standard data sources and source-aware workflows
 
-Status: Design revised / implementation paused pending backend contract  
-Architecture revision baseline: `a723a567f23847a6bdfde413f373a25bef02ff1a`  
-Superseded candidate SHA-256: `779cebfbff02efc4e02c51af183e9f29401df7947c0ed63a6b1efdbb401e7ee6`
+Status: In progress — FI-011A implemented and accepted; FI-011B implementation package prepared  
+Committed foundation baseline: `8f678480c08e17d7911d6019a44542c6a52ef09f`
 
-### Architecture revision
+### Current implementation state
 
-The corrected FI-011A candidate is not approved for commit in its current form because it establishes `enc-products` / `ENC Products` as one public logical source with a combined ENC export profile. The agreed target model requires S-57 and S-101 to be independent Product sources, even when their AOIs overlap spatially or a backend implementation shares transport infrastructure.
+FI-011A provides the generic, generation-safe source runtime and has been manually accepted. The
+permanent registry contains `S-57`, `S-101`, `Paper Charts`, and `S-102`. S-57 and S-101 remain
+runtime-unavailable because authoritative independent backend read contracts do not exist. The
+combined AOI flow remains a temporary compatibility adapter and is not a registry source, toggle, or
+storage value.
 
-The following candidate concepts remain approved and must be preserved in the reworked implementation:
+FI-011B integrates the current source model with:
 
-- a central declarative source registry;
-- source-owned one-or-more-layer lifecycle;
-- requested versus confirmed enablement;
-- versioned persistence and reset boundaries;
-- prepared hidden candidates followed by a generation-guarded synchronous commit;
-- stale activation/refresh/reset suppression;
-- independent source loading, error, and refresh state;
-- fail-closed stable Product identity;
-- source-aware identity equivalent to `{ sourceId, productKey }`;
-- centralized capabilities that prevent calls to unsupported source endpoints;
-- Development-only Paper Charts and S-102 fixtures.
+- a generic shared navbar-popover coordinator for Data sources, Filters, and future participants;
+- independent source filter providers, facets, selected state, and counts;
+- a source-aware Product-search index over currently loaded frontend Graphics;
+- committed lifecycle publication and generation guards for derived filter/search state;
+- deactivation cleanup for source filter sections, search entries, popup, selection, and hover state.
 
-Do not reuse the candidate ZIP as an uncontrolled source of truth. Rebuild the implementation from the committed baseline after the backend contract below is resolved, applying only reviewed concepts and intentional FI-011 changes.
+FI-011 remains incomplete. Product Collection and workspace propagation, source-specific Product
+workflows, separate production S-57/S-101 transport, related Products, final status defaults, and
+final onboarding/regression work remain deferred.
 
-### Goal and logical source taxonomy
+### Logical source taxonomy
 
-Extend the Main map from one hardcoded combined AOI flow to independently enabled logical Product sources:
-
-| Source ID      | UI label       | First implementation     | Notes                                                 |
-| -------------- | -------------- | ------------------------ | ----------------------------------------------------- |
-| `s57`          | `S-57`         | Backend contract pending | Independent Product/action/filter/export track.       |
-| `s101`         | `S-101`        | Backend contract pending | Replaces current Product-specific `S100` terminology. |
-| `paper-charts` | `Paper Charts` | Development mock first   | Production endpoint and capabilities remain pending.  |
-| `s102`         | `S-102`        | Development mock first   | Production endpoint and capabilities remain pending.  |
-
-`S-122` is a known future source but is not part of the current implementation scope. The registry must permit it later without redesign.
-
-`ENC Products` may be used as a generic explanatory category in documentation when useful, but it must not be the permanent runtime source ID, toggle, persisted state key, Product identity, or export profile for S-57 and S-101.
-
-S-57 and S-101 may have identical or overlapping AOI geometry. They remain separate Products with separate identity, selection, popup, filters, Product Collection entries, actions, operation state, History, and exports. Spatial equality must never merge them.
-
-### Mandatory backend contract gate
-
-Do not implement or simulate the user-facing S-57/S-101 split until the backend contract explicitly defines:
-
-1. whether loading uses separate endpoints or a shared endpoint with an authoritative source/product discriminator;
-2. the canonical wire values for S-57 and S-101, including whether legacy `S100` values remain temporarily;
-3. a stable Product key within each source and the server-side operation identity used for mutation conflict handling;
-4. geometry/AOI representation and whether multiple records can share the same geometry;
-5. the authoritative status enumeration and which statuses count as errors;
-6. source-specific availability for Freeze, Unfreeze, Send to IC-ENC, Cancel Export, Edition export, Update export, History, reports, Analyze, and Review;
-7. source-specific API routes or request fields for reads, actions, exports, cancellation, History, and report lookup;
-8. the relationship payload linking Products across sources, including source ID, target key, relation type, display label, and missing/deleted target behavior;
-9. freshness, paging, batch, and selected-Product lookup behavior;
-10. whether the current combined AOI endpoint remains temporarily supported and how it is retired.
-
-The frontend must consume explicit backend source identity. It must not infer S-57 versus S-101 from export availability, matching names, shared geometry, attribute guesses, or related-record assumptions.
-
-### Source registry and transport separation
-
-The source registry is the logical Product boundary. It must support a source referencing a loader/provider that may be shared with another source without merging their runtime state.
-
-Each source definition must include, directly or through adapters:
-
-- stable source ID and user-facing label;
-- configuration availability;
-- first-visit initialization policy and migration policy;
-- loader/provider reference and response partitioning contract;
-- response normalizer and stable Product key strategy;
-- one or more owned logical layers;
-- renderer and filter metadata;
-- Product search provider;
-- source capabilities;
-- export leaves (`Edition`, `Update`);
-- source-aware route/session serialization;
-- related-Product support metadata.
-
-If one backend request returns more than one logical source, the provider may fetch once, but it must partition records by an authoritative server field before normalization and commit. Each logical source still owns independent state, layers, filters, visibility, refresh results, and failure handling.
-
-### First visit, persistence, migration, and reset
-
-The final split-source default view is:
+The final logical Product sources are independent:
 
 ```text
-S-57 = enabled
-S-101 = enabled
-Paper Charts = enabled
-S-102 = enabled
-Status filters = error-only per active source
+S-57
+S-101
+Paper Charts
+S-102
 ```
 
-This seed applies only when no valid Product-source/filter preference state exists for the user.
+S-122 is a future source and is not part of the current implementation. Do not expose or persist a
+combined public ENC source. Do not duplicate the compatibility AOI payload or infer source standard
+from geometry, names, status, or current operation fields.
 
-After initialization:
+The current source availability is:
 
-- versioned `localStorage` owns each user's source and filter choices;
-- reload restores the exact saved source/filter state;
-- adding a later source such as S-122 must not silently enable it for an existing user merely because its registry default is enabled;
-- storage migration must distinguish a true first visit from an existing-state migration;
-- a valid existing user state missing a newly introduced source keeps that source disabled unless a specific migration is approved;
-- replacing legacy `enc-products` state requires a new schema version and explicit migration; it must not copy one combined boolean into both S-57 and S-101 without an approved rule.
+| Source       | Runtime availability | Notes                                   |
+| ------------ | -------------------- | --------------------------------------- |
+| S-57         | Unavailable          | Separate backend read contract required |
+| S-101        | Unavailable          | Separate backend read contract required |
+| Paper Charts | Development only     | Visualization/filter/search mock source |
+| S-102        | Development only     | Visualization/filter/search mock source |
 
-Both local Data sources reset and the broader Preferences reset restore the current deployment defaults: every configured source enabled and each source's status filter set to the authoritative error-only preset. Exact error statuses remain blocked by FI-016/backend status definitions.
+### Registry, identity, and capability boundary
 
-### Data sources control and lifecycle
+The registry is the declarative integration point for source availability, loader, normalizer,
+source-owned layers, stable identity, refresh strategy, filtering metadata, search fields, and
+capabilities. Feature code must not branch on Paper Charts or S-102 IDs to implement filtering or
+search.
 
-Keep the compact icon-only `Data sources` navbar action using Calcite `data`. The popover renders one switch per configured and available logical source.
-
-Requirements:
-
-- every source can be independently enabled and disabled, including all-off;
-- first activation and reactivation complete fetch, normalize, candidate preparation, generation validation, commit, visibility, and persistence atomically from the user's perspective;
-- source loading/error state is independent;
-- a stale operation cannot mutate a newer map representation or persisted state;
-- failed initial activation returns only that source to off and leaves no partial layer;
-- failed refresh of an already active source retains its last successful representation;
-- disabling a source invalidates its reads, hides all owned layers, closes source popup/History/action UI, clears hover and selection, clears source filters, removes source Products from Product Collection and Product search, and does not cancel an already accepted backend job;
-- reactivation always fetches fresh data before revealing cached graphics;
-- only active sources participate in manual and automatic refresh.
-
-A source may own one or more ArcGIS layers. Do not add extra layers without a concrete geometry or rendering reason.
-
-### Filters and initial error-only view
-
-Keep one shared filter panel with independent sections and state per source. A filter selected under one source must never affect another source.
-
-When a user has no valid saved filter state, each active source starts with its authoritative error statuses selected so the initial map view shows Products requiring attention. Do not hardcode guessed status names before the backend status contract is approved.
-
-Requirements:
-
-- only active sources appear;
-- options and counts are computed per source;
-- source sections may expose Display scale, Status, Usage band, or future source-specific fields when supported;
-- missing attributes omit or mark only that source's filter unavailable;
-- source disable clears its runtime filter state;
-- saved user filters take precedence over first-visit defaults;
-- reset restores the error-only preset.
-
-### Product search, popup, collection, workspaces, and History
-
-All shared Product surfaces use `{ sourceId, productKey }` identity and operate only on active sources where applicable.
-
-The intended shared support is:
-
-| Capability             | S-57                         | S-101                        | Paper Charts MVP                      | S-102 MVP                             |
-| ---------------------- | ---------------------------- | ---------------------------- | ------------------------------------- | ------------------------------------- |
-| Map rendering          | Yes after contract           | Yes after contract           | Yes                                   | Yes                                   |
-| Hover highlight        | Yes                          | Yes                          | Yes                                   | Yes                                   |
-| Product popup          | Yes                          | Yes                          | Yes                                   | Yes                                   |
-| Source filters         | Yes                          | Yes                          | When attributes exist                 | When attributes exist                 |
-| Product search         | Yes                          | Yes                          | Yes                                   | Yes                                   |
-| Product Collection     | Yes                          | Yes                          | Yes                                   | Yes                                   |
-| Analyze / Review entry | Yes                          | Yes                          | Yes with unavailable backend sections | Yes with unavailable backend sections |
-| History / reports      | Contract required            | Contract required            | Unavailable until endpoint            | Unavailable until endpoint            |
-| Mutations              | Contract required per source | Contract required per source | Disabled                              | Disabled                              |
-| Export execution       | Contract required            | Contract required            | Disabled placeholder                  | Disabled placeholder                  |
-
-Product search aggregates active source providers and labels ambiguous results with their source. Product Collection may contain Products with equal Product keys from different sources. Analyze, Review, History, export state, popup restore, and route/session data must preserve source identity.
-
-### Popup Export contract
-
-The selected Product source already supplies the export context. The popup Export dropdown must therefore show only leaf actions:
+Runtime identity remains equivalent to:
 
 ```text
-Export...
-  Edition
-  Update
+{ sourceId, productKey }
 ```
 
-Do not render `All`, `S57`, `S100`, `S101`, `Paper Charts`, `S-102`, or other source/type submenus inside a Product popup.
+Missing or duplicate stable source identity rejects the full source payload before layer commit. A
+stale operation cannot publish newer map, filter, search, persistence, loading, or error state.
 
-Rules:
+Paper Charts and S-102 remain visualization-only sources. FI-011B enables their declared filters and
+loaded-feature Product search, but Product Collection, Product actions, Analyze, Review, History,
+reports, mutations, and Export execution remain disabled. Search selection reuses the normal popup
+flow and cannot bypass capability gating.
 
-- Edition and Update visibility/availability comes from the selected source capability/profile;
-- unsupported leaves may be disabled placeholders only when useful to communicate planned support;
-- Paper Charts and S-102 start without real export execution;
-- operation/loading/conflict state is keyed by source-aware Product identity and leaf;
-- an operation on one Product/source must not lock an unrelated Product/source;
-- API dispatch must be source-aware before any new capability is enabled.
+### Shared navbar-popover coordination
 
-### Cancel Export terminology
+Data sources and Filters register with one generic coordinator. Only one registered overlapping
+navbar popover may be open. Opening one closes the active participant without direct feature-module
+imports.
 
-The existing Product action known as `Rollback` represents cancellation of an export and must become `Cancel Export` in live UI. FI-014 owns the focused terminology/icon implementation, but FI-011 capabilities and documentation must use the new semantic name. A legacy API endpoint or internal adapter may retain `rollback` temporarily; it must not leak into user-facing copy or be treated as a generic data rollback operation.
+The coordinator preserves:
 
-### Related Products across sources
+- trigger toggle behavior;
+- outside-click closure;
+- Escape closure;
+- keyboard navigation and ARIA state;
+- focus restoration to the correct trigger;
+- light/dark styling owned by existing panels;
+- one global document click listener and one global keydown listener for the coordinator lifetime.
 
-The popup must be able to show backend-provided related Products, initially including S-101 to S-57 and S-57 to S-101. The implementation must be data-driven and support Paper Charts, S-102, S-122, and future sources without adding hardcoded source-pair UI.
+Non-navbar surfaces are not registered and keep their existing close priority.
 
-The frontend requires an explicit relationship target containing at least:
+### Source-aware filters and initial defaults
 
-```text
-sourceId
-productKey
-relationType
-displayLabel
-```
+The shared filter panel renders independent sections only for active providers. State, facets,
+selected values, counts, and Graphic matching are isolated by provider. Source replacement rebuilds
+only that source's facets; source removal clears only that source's runtime filter state.
 
-Optional geometry/extent may be supplied, but target navigation should prefer loading the authoritative target Product from its source. Do not infer relationships from equal dataset names or overlapping geometry.
+Current declared filter dimensions are limited to actual normalized data:
 
-Before implementation, decide and document the disabled-target behavior: either offer explicit activation or activate/load the target source as part of navigation. Failure must retain the current Product context and show a notice. Missing/deleted targets render a safe unavailable state.
+| Provider      | Status | Display scale | Usage band |
+| ------------- | ------ | ------------- | ---------- |
+| Compatibility | Yes    | Yes           | Yes        |
+| Paper Charts  | Yes    | Yes           | Yes        |
+| S-102         | Yes    | No            | No         |
+
+Missing optional attributes omit only that facet and do not fail filtering. Layer/source metadata,
+not titles or DOM state, determines participation.
+
+Filter persistence is a separate versioned user-state contract from data-source activation. The
+source-aware filter snapshot uses version 2 and migrates the established version 1 compatibility
+state. Existing valid user state is never overwritten by first-visit defaults.
+
+The final error-only first-visit preset is not enabled in FI-011B. There is no authoritative central
+classification of Product error statuses. FI-011B preserves the current compatibility default and
+adds an explicit configuration point. FI-016 must define the authoritative error classification
+before the final preset is activated.
+
+### Loaded-feature Product search
+
+Product search aggregates only currently committed Graphics from active providers. Compatibility AOI,
+Paper Charts, and S-102 can participate when loaded and active. Disabled or failed-first-activation
+sources publish no entries.
+
+Each search entry retains provider, source, layer, stable Product key, generation, and exact Graphic.
+Provider replacement is atomic, source removal deletes all source entries, and generation tombstones
+prevent a stale refresh from restoring removed or older suggestions. Duplicate labels remain
+source-aware and cannot resolve to the wrong Graphic.
+
+Selection navigates to the current Graphic, updates the established selected-Graphic flow, and opens
+the existing popup. Search does not activate disabled sources. Locator/FI-012 remains a separate
+geographic workflow, and FI-011B does not add backend or connected-data search.
+
+### Source lifecycle and cleanup
+
+Activation and successful refresh publish filter/search state only after the guarded map commit.
+Deactivation invalidates pending work before cleanup and removes source layers, derived filters, and
+search entries while clearing popup, selected Graphic, and hover state owned by that source. Other
+sources remain unchanged.
+
+A failed refresh of an active source retains the last successful representation and derived state. A
+failed first activation leaves no partial layers, facets, or suggestions. Reactivation fetches fresh
+data and uses the configured default filter state.
+
+### Existing workflow compatibility
+
+The temporary AOI adapter must preserve existing compatibility behavior for popup selection and
+restoration, hover, refresh, Product Collection, Analyze, Review, Product History, exports, Freeze,
+Unfreeze, Send to IC-ENC, Rollback, notices, and loader progress.
+
+Compatibility filter/search integration uses logical layer metadata without creating permanent
+source preferences. Runtime source refresh and compatibility refresh remain independent.
 
 ### Development mocks
 
-Paper Charts and S-102 may continue using Development-only fixtures:
+Paper Charts and S-102 continue to use Development-only fixtures:
 
 ```text
 GET /mock/paper-charts -> mock/some_products.geojson
 GET /mock/s102         -> mock/products.geojson
 ```
 
-They are not production contracts. Do not create fake S-57 and S-101 mock sources from the current combined AOI payload unless the backend developer supplies an authoritative fixture with explicit logical source identity.
+They are not production contracts and must not define future backend fields or capabilities.
 
-### Implementation slicing
+### Remaining FI-011 packages
 
-Recommended packages after the backend contract is recorded:
-
-1. **FI-011A revised foundation** — generic registry/controller/map lifecycle, storage migration policy, source-aware identity, mock endpoints, and no permanent combined source.
-2. **FI-011B S-57/S-101 transport integration** — authoritative source partitioning/loading and independent layers/state.
-3. **FI-011C shared workflows** — filters, Product search, Product Collection, Analyze, Review, History unavailable states, and source-aware routing.
-4. **FI-011D popup/export/relationships** — leaf-only Export menu, source-aware actions, related Products, Cancel Export integration, and conflict keys.
-5. **FI-011E defaults/guidance/regression** — first-visit all-on/error-only initialization, storage migration, onboarding, accessibility, and full regression pass.
+1. **FI-011A — Configurable source foundation:** implemented and manually accepted at the committed
+   baseline.
+2. **FI-011B — Source-aware Filters, Search and Navbar Coordination:** current implementation
+   package; does not complete FI-011.
+3. **FI-011C — Source-aware Product workflows:** Product Collection propagation, Analyze, Review,
+   History/report unavailable states, and approved source-aware workflow integration.
+4. **Production transport package:** authoritative separate S-57/S-101 reads when the backend
+   contract exists; no fake client split.
+5. **Final status/guidance/regression package:** error-only default after FI-016, onboarding,
+   accessibility, and full end-to-end migration regression.
 
 ### Acceptance criteria
 
 FI-011 is complete only when:
 
-1. S-57, S-101, Paper Charts, and S-102 are separate logical sources and no public combined `ENC Products` source remains.
-2. S-57 and S-101 can have equal geometry and Product names without identity, popup, filter, collection, or operation collisions.
-3. The backend contract supplies authoritative source identity; the frontend performs no heuristic split.
-4. A true first visit starts with all configured sources active and error-only filters.
-5. Existing valid user storage is restored without silently enabling newly added sources.
-6. Reset restores the current all-on/error-only defaults.
-7. Every source can be independently activated, refreshed, disabled, and reactivated with generation-safe lifecycle behavior.
-8. Paper Charts and S-102 work from Development-only mocks without calling S-57/S-101 endpoints.
-9. Filters remain source-separated and Product search aggregates only active sources.
-10. Popup, hover, Product Collection, Analyze, Review, History, routes, and operation state use source-aware identity.
-11. Export shows only Edition and Update for the selected Product source.
-12. Unsupported actions and reports fail closed without cross-source API calls.
-13. Backend-provided related Products render dynamically without hardcoded source pairs.
-14. Live UI uses S-101 rather than Product-specific S100 terminology and uses Cancel Export rather than Rollback.
-15. Main map onboarding explains independent sources, first-visit defaults, filters, Product search, and related Product navigation.
-16. Light/dark, keyboard, focus, notices, RDP/VDI, and existing ENC behavior pass regression testing through the migration period.
-17. `cd src/ProductCatalogue && npm run check` passes.
+1. S-57, S-101, Paper Charts, and S-102 are independent logical sources with no public combined ENC
+   source.
+2. The backend supplies authoritative S-57/S-101 source identity and separate read behavior.
+3. First visit enables all available sources and uses an authoritative error-only filter preset.
+4. Existing source and filter user state is restored without silently enabling later sources.
+5. Every available source supports independent generation-safe activate, refresh, disable, and
+   reactivate behavior.
+6. Filters and counts remain source-isolated, and Product search includes active sources only.
+7. Popup, hover, Product Collection, Analyze, Review, History, routes, and operation state preserve
+   source-aware identity where supported.
+8. Unsupported source workflows fail closed without cross-source API calls.
+9. Related Products and source-specific actions use backend-provided, data-driven contracts.
+10. Light/dark, keyboard, focus, notices, RDP/VDI, local/global reset, refresh, and existing
+    compatibility AOI workflows pass final regression testing.
+11. `cd src/ProductCatalogue && npm run check` passes in the repository environment.
 
 ### Out of scope until separately approved
 
 - production Paper Charts, S-102, or S-122 endpoint contracts;
-- heuristic splitting of the current combined AOI response;
-- enabling S-57/S-101 actions before backend capability/operation contracts;
-- the final AOI status palette before FI-016;
+- heuristic S-57/S-101 splitting of the combined AOI response;
+- Product Collection, Analyze, Review, History, or Export integration for mock sources in FI-011B;
+- source-specific Product actions without backend contracts;
+- connected-data or backend Product search;
+- Locator/FI-012;
+- the final status palette and error-only preset before FI-016;
 - global timeline work;
 - modifier-click Product Collection shortcuts from FI-021;
 - open-source readiness review from FI-018.
@@ -627,7 +578,7 @@ The default experience must be neutral rather than GST-branded, while deployment
 
 ## FI-019 canonical Analyze and Review query routes
 
-Status: Todo / source-aware format decision required
+Status: Ready / canonical URL contract fixed
 
 Replace path-concatenated routes such as:
 
@@ -636,45 +587,53 @@ Replace path-concatenated routes such as:
 /Review/ProductA&ProductB
 ```
 
-with canonical query-based routes.
-
-The requested readable shape is:
+with the canonical query routes:
 
 ```text
 /Analyze?Datasets=ProductA,ProductB
 /Review?Datasets=ProductA,ProductB
 ```
 
-However, FI-011 permits equal Product keys across sources. Bare dataset names are therefore only valid if the backend/domain contract guarantees global uniqueness. Before implementation, choose and document one source-aware canonical representation, for example:
-
-```text
-/Analyze?Products=s101:ProductA,s57:ProductA
-/Review?Products=s101:ProductA,s57:ProductA
-```
-
-or another encoded structure that preserves `{ sourceId, productKey }` unambiguously.
+Dataset names are authoritatively guaranteed to be globally unique across S-57, S-101, Paper
+Charts, S-102, and future data sources. Source ID is therefore not part of the public route payload.
+Internal collections, loaded Graphics, and other runtime state remain source-aware.
 
 Requirements:
 
-- use `URL` / `URLSearchParams`, not manual separator concatenation;
-- encode every value safely;
-- preserve stable ordering and deduplicate exact source-aware identities;
-- direct load, reload, bookmarking, and separate-window opening must work;
-- accept the legacy path form temporarily when practical and canonicalize it with `history.replaceState`;
-- invalid entries produce a clear partial/unavailable state rather than breaking the page;
-- Product picker additions/removals update the canonical URL consistently.
+- construct and parse routes with `URL` and `URLSearchParams`, not manual separator
+  concatenation;
+- URL-encode every dataset name;
+- use stable ordering and deduplicate dataset names before serializing;
+- support direct load, reload, bookmarking, copied links, and separate-window opening;
+- accept the legacy path form temporarily when practical and canonicalize it with
+  `history.replaceState`;
+- invalid or unavailable entries produce a clear partial state rather than breaking the page;
+- Product picker additions and removals update the canonical URL consistently;
+- keep source-aware runtime identity even though the canonical URL only needs globally unique
+  dataset names.
 
 ## FI-020 backend-linked related Products
 
 Status: Blocked by backend relationship contract
 
-Add a dynamic popup surface for Products related across data sources. The first expected relationship is between corresponding S-101 and S-57 Products, but no source pair may be hardcoded in the UI.
+Add a generic popup surface for explicit Product relationships supplied by the backend/database.
+No source pair is privileged or hardcoded. The contract must be able to link any Product from any
+current or future source to any other Product.
 
-The backend relationship contract must provide stable target source and Product identity plus relation type and display text. The UI must support multiple relations and future Paper Charts, S-102, S-122, or other source targets.
+The authoritative relationship payload must provide:
 
-Open decision before implementation: when the target source is disabled, either require explicit user activation or activate/load it as part of link navigation. Whichever behavior is selected must be consistent, keyboard accessible, loading-safe, and preserve the current popup if target loading fails.
+- stable target Product identity;
+- target source identity when required by runtime loading and navigation;
+- relation type;
+- display text.
 
-Do not infer links from equal names, equal geometry, export mappings, or array position.
+Do not infer relationships from Product names, geometry, overlap, export mappings, data type, array
+position, or assumed S-57/S-101 correspondence.
+
+Open decision before implementation: when the target source is disabled, either require explicit
+user activation or activate/load it as part of link navigation. Whichever behavior is selected must
+be consistent, keyboard accessible, loading-safe, and preserve the current popup if target loading
+fails.
 
 ## FI-021 modifier-click Product Collection exploration
 

@@ -76,12 +76,17 @@ capabilities: {
   supportsPopupActions: false,
   supportsProductActions: false,
   supportsDisplayScale: false,
-  supportsAttributeFilters: false,
+  supportsAttributeFilters: true,
   supportsProductHistory: false,
   supportsOverlapPicker: true,
-  supportsProductSearch: false,
+  supportsProductSearch: true,
 }
 ```
+
+Filters and Product search are client-side functions over the source's currently committed Graphics.
+Enabling these capabilities does not enable mutations, History, exports, Product Collection, Analyze,
+or Review. All backend-dependent Product workflows remain disabled until an authoritative
+source-specific backend contract exists.
 
 Their popup is a safe fields-only popup. The popup-header Product Collection action also resolves
 `supportsPopupActions` from the selected Graphic and nested layer metadata, while `Copy dataset name`
