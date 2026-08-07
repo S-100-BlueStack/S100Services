@@ -1,16 +1,22 @@
-import { layerSupportsCapability } from "../config/layerDefinitions.js";
-
-const PRODUCT_COLLECTION_CAPABILITY = "supportsPopupActions";
+import {
+  PRODUCT_OPERATION_CAPABILITY,
+  productContextSupportsCapability,
+  resolveProductContext,
+} from "../../products/domain/productContext.js";
 
 export function resolvePopupHeaderCollectionAvailability(
   feature,
   { isReviewOrAnalyzeRoute = false } = {}
 ) {
   const datasetName = normalizeDatasetName(feature?.attributes?.datasetName);
+  const productContext = resolveProductContext({ graphic: feature });
   const supported = Boolean(
     datasetName &&
     !isReviewOrAnalyzeRoute &&
-    layerSupportsCapability(feature, PRODUCT_COLLECTION_CAPABILITY)
+    productContextSupportsCapability(
+      productContext,
+      PRODUCT_OPERATION_CAPABILITY.PRODUCT_COLLECTION
+    )
   );
 
   return {
@@ -46,11 +52,12 @@ export function mutatePopupHeaderCollection({
   addProduct,
   removeProduct,
 } = {}) {
+  // Re-resolve the currently selected Graphic at click time. This prevents a
+  // stale header button from mutating Product Collection after selection changes.
   const availability = resolvePopupHeaderCollectionAvailability(feature, {
     isReviewOrAnalyzeRoute,
   });
   const expectedName = normalizeDatasetName(expectedDatasetName);
-
   if (!availability.supported || availability.datasetName !== expectedName) {
     return {
       handled: false,

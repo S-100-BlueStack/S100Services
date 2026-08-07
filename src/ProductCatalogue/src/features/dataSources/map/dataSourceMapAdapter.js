@@ -1,4 +1,6 @@
 import { getLayer, registerLayer, unregisterLayer } from "../../map/core/layerRegistry.js";
+import { clearPopupExportUiState } from "../../map/popups/popupExportState.js";
+import { createDataSourcePopupTemplate } from "./createDataSourcePopup.js";
 
 export function createDataSourceMapAdapter({
   map,
@@ -29,7 +31,6 @@ export function createDataSourceMapAdapter({
           ...layerDefinition,
           data: normalizedLayer.data,
         });
-
         if (!layer) {
           throw new Error(
             `Data source "${source.label}" did not create layer "${layerDefinition.id}".`
@@ -62,7 +63,6 @@ export function createDataSourceMapAdapter({
     if (!candidate || candidate.discarded || candidate.committed) {
       return { committed: false, reason: "invalid-candidate" };
     }
-
     if (!isCurrent?.()) {
       return { committed: false, reason: "stale-candidate" };
     }
@@ -88,7 +88,6 @@ export function createDataSourceMapAdapter({
       for (const layer of candidate.layers) {
         layer.visible = true;
       }
-
       sourceLayers.set(candidate.sourceId, [...candidate.layers]);
       const hoverReady = Promise.allSettled(
         candidate.layers.map((layer) => hoverManager?.registerLayer?.(layer))
@@ -100,8 +99,8 @@ export function createDataSourceMapAdapter({
         map.remove(previousLayer);
       }
       destroyLayers(previousLayers);
-
       candidate.committed = true;
+
       return {
         committed: true,
         layers: [...candidate.layers],
@@ -116,6 +115,7 @@ export function createDataSourceMapAdapter({
   function removeSource(sourceId) {
     const layers = sourceLayers.get(sourceId) ?? [];
     sourceLayers.delete(sourceId);
+    clearPopupExportUiState({ sourceId });
 
     for (const layer of layers) {
       hoverManager?.unregisterLayer?.(layer);
@@ -179,7 +179,6 @@ export function createDataSourceMapAdapter({
           rollbackError ??= error;
         }
       }
-
       sourceLayers.set(candidate.sourceId, [...previousLayers]);
     } finally {
       // Candidate cleanup must not depend on successful rollback bookkeeping.
@@ -203,7 +202,12 @@ export function createDataSourceMapAdapter({
 }
 
 function applySourceMetadata(layer, source) {
+  layer.appSourceDefinition = source;
   layer.appSourceId = source.id;
+  layer.appSourceLabel = source.label;
+  layer.appSourceCapabilities = source.capabilities;
+  layer.appProductType = source.productType;
+  layer.appExportConfiguration = source.exportConfiguration ?? null;
   layer.dataSourceId = source.id;
   layer.sourceId = source.id;
   layer.visible = false;
@@ -214,30 +218,10 @@ function applySourceMetadata(layer, source) {
   );
 
   if (layer.popupEnabled) {
-    layer.popupTemplate = createSafeSourcePopupTemplate(source);
+    layer.popupTemplate = createDataSourcePopupTemplate(source);
   } else {
     layer.popupTemplate = null;
   }
-}
-
-function createSafeSourcePopupTemplate(source) {
-  return {
-    title: `${source.label}: {datasetName}`,
-    outFields: ["*"],
-    content: [
-      {
-        type: "fields",
-        fieldInfos: [
-          { fieldName: "sourceLabel", label: "Source" },
-          { fieldName: "datasetName", label: "Product" },
-          { fieldName: "edition", label: "Edition" },
-          { fieldName: "update", label: "Update" },
-          { fieldName: "status", label: "Status" },
-          { fieldName: "displayScale", label: "Display scale" },
-        ],
-      },
-    ],
-  };
 }
 
 function validateCandidateLayer(layer, source) {

@@ -1,3 +1,9 @@
+import {
+  PRODUCT_OPERATION_CAPABILITY,
+  getProductContextCapabilityReason,
+  productContextSupportsCapability,
+} from "./productContext.js";
+
 const MISSING_DATASET_NAME_REASON = "The selected feature does not have a datasetName.";
 const EXPORT_RUNNING_REASON = "Wait until the current export finishes.";
 const PRODUCT_OPERATION_RUNNING_REASON = "Wait until the current product operation finishes.";
@@ -5,6 +11,7 @@ const SEND_CAPABILITY_UNAVAILABLE_REASON = "Send to IC-ENC availability could no
 const EXPORT_STATE_REASON = "New Edition is only available when product status is Idle.";
 const ROLLBACK_STATE_REASON =
   "Rollback is only available when product status is Exported or Frozen.";
+
 const PRODUCT_STATE_ID = Object.freeze({
   IDLE: 1,
   EXPORTED: 2,
@@ -13,6 +20,7 @@ const PRODUCT_STATE_ID = Object.freeze({
 
 export function createProductActionAvailability({
   attributes,
+  productContext,
   frozen = false,
   exportHasRunningAction = false,
   productHasRunningMutation = false,
@@ -36,24 +44,47 @@ export function createProductActionAvailability({
     frozen: productIsFrozen,
     exportHasRunningAction,
     productHasRunningMutation,
-    freeze: createMutationAvailability(mutationContext),
-    unfreeze: createMutationAvailability(mutationContext),
-    sendImmediately: createSendAvailability({
-      ...mutationContext,
-      frozen: productIsFrozen,
-      productState,
-      capability: sendToIcEncCapability,
-    }),
-    rollback: createRollbackAvailability({
-      ...mutationContext,
-      productState,
-    }),
-    exportRoot: createExportRootAvailability(mutationContext),
+    freeze: capabilityAvailability(
+      productContext,
+      PRODUCT_OPERATION_CAPABILITY.FREEZE,
+      createMutationAvailability(mutationContext)
+    ),
+    unfreeze: capabilityAvailability(
+      productContext,
+      PRODUCT_OPERATION_CAPABILITY.UNFREEZE,
+      createMutationAvailability(mutationContext)
+    ),
+    sendImmediately: capabilityAvailability(
+      productContext,
+      PRODUCT_OPERATION_CAPABILITY.SEND_TO_IC_ENC,
+      createSendAvailability({
+        ...mutationContext,
+        frozen: productIsFrozen,
+        productState,
+        capability: sendToIcEncCapability,
+      })
+    ),
+    rollback: capabilityAvailability(
+      productContext,
+      PRODUCT_OPERATION_CAPABILITY.CANCEL_EXPORT,
+      createRollbackAvailability({
+        ...mutationContext,
+        productState,
+      })
+    ),
+    exportRoot: capabilityAvailability(
+      productContext,
+      PRODUCT_OPERATION_CAPABILITY.POPUP_EXPORT,
+      createExportRootAvailability(mutationContext)
+    ),
   };
 }
 
 export function createProductExportAvailability({
   attributes,
+  productContext,
+  capabilityName,
+  availabilityReason,
   frozen = false,
   implemented,
   exportState,
@@ -64,9 +95,19 @@ export function createProductExportAvailability({
   const hasDatasetName = Boolean(datasetName);
   const productIsFrozen = Boolean(frozen);
   const productState = getProductState(attributes);
+  const capabilitySupported = supportsCapability(productContext, capabilityName);
 
   if (!hasDatasetName) {
     return unavailable(MISSING_DATASET_NAME_REASON);
+  }
+  if (!capabilitySupported || implemented !== true) {
+    return unavailable(
+      normalizeText(availabilityReason) ||
+        (productContext === undefined
+          ? null
+          : getProductContextCapabilityReason(productContext, capabilityName)) ||
+        "Feature is not available yet."
+    );
   }
   if (exportState?.running) {
     return unavailable(exportState.disabledReason, {
@@ -82,9 +123,6 @@ export function createProductExportAvailability({
   }
   if (productIsFrozen) {
     return unavailable("Unfreeze the product before exporting.");
-  }
-  if (!implemented) {
-    return unavailable("Feature is not available yet.");
   }
   if (productState.known && !isIdleState(productState)) {
     return unavailable(EXPORT_STATE_REASON);
@@ -179,16 +217,42 @@ function createExportRootAvailability({
     return unavailable(productOperationDisabledReason);
   }
 
-  // Keep the root export action openable while an export runs. The leaf
-  // actions explain which export is running and which actions are blocked.
+  // The root remains openable while a real export runs so leaf-level state can explain the block.
   return available({
     label: exportHasRunningAction ? "Exporting..." : "Export...",
     loading: exportHasRunningAction,
   });
 }
 
+function capabilityAvailability(productContext, capabilityName, actionAvailability) {
+  if (productContext === undefined) {
+    // Preserve the domain API for existing compatibility-only unit callers.
+    return actionAvailability;
+  }
+  if (!productContextSupportsCapability(productContext, capabilityName)) {
+    return hidden(getProductContextCapabilityReason(productContext, capabilityName));
+  }
+
+  return {
+    ...actionAvailability,
+    visible: true,
+  };
+}
+
+function supportsCapability(productContext, capabilityName) {
+  if (productContext === undefined) {
+    return true;
+  }
+  if (!capabilityName) {
+    return false;
+  }
+
+  return productContextSupportsCapability(productContext, capabilityName);
+}
+
 function available(extra = {}) {
   return {
+    visible: true,
     disabled: false,
     disabledReason: null,
     loading: false,
@@ -199,11 +263,22 @@ function available(extra = {}) {
 
 function unavailable(disabledReason, extra = {}) {
   return {
+    visible: true,
     disabled: true,
     disabledReason,
     loading: false,
     label: null,
     ...extra,
+  };
+}
+
+function hidden(disabledReason) {
+  return {
+    visible: false,
+    disabled: true,
+    disabledReason,
+    loading: false,
+    label: null,
   };
 }
 

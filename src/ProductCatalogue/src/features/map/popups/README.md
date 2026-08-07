@@ -1,171 +1,226 @@
 # Popup actions
 
-Current implementation baseline: `69752605d935212e89ca7ad4286ca3e46ecb4abe`.
+Current implementation baseline: `60e4854389ab16d3bd280f653998ea10eaa0b6ab`.
 
 Popup actions are implemented as a custom DOM action bar instead of Esri `view.popup.actions`.
+FI-011C keeps the established action lifecycle while resolving every selected Product through a
+source-aware Product context before rendering or dispatching an action.
 
-This keeps the action UI consistent with Product Catalogue requirements:
+The action UI provides:
 
-- two action rows
-- nested export dropdowns
-- leaf-level export loading state
-- action-specific disabled reasons
-- shared action availability rules
+- capability-specific action visibility;
+- a flat `Export...` menu with `Edition` and `Update` leaves;
+- leaf-level export loading state for implemented operations;
+- visible disabled placeholders with action-specific availability reasons;
+- shared action availability rules and backend-authoritative Product-operation blocking.
 
 ## File responsibilities
 
-- `popupActionConfig.js` defines the actions shown in the popup and maps product state to UI action config.
-- `productActionAvailability.js` is the domain-level source of truth for action availability.
-- `popupProductActions.js` owns confirmation, API calls, notices, operation lifecycle and post-action refresh.
-- `popupExportState.js` tracks the active export leaf while the current page remains open.
-- `popupActionDom.js` creates top-level action button DOM.
-- `popupActionDropdown.js` creates nested dropdown UI.
-- `createPopup.js` renders popup content and subscribes to export and product-operation state.
-- `popupExportConfig.js` defines canonical export target/type metadata and request wiring.
-- `popupExportContract.js` owns the supported-leaf rule and direct-dispatch guard.
+- `features/products/domain/productContext.js` resolves a Graphic into the central source-aware
+  Product context and owns the explicit compatibility-AOI adapter.
+- `popupActionConfig.js` creates action descriptors from Product context, Product state, active jobs,
+  and export state.
+- `features/products/domain/productActionAvailability.js` is the domain-level source of truth for
+  action visibility and availability.
+- `popupProductActions.js` owns confirmation, API calls, notices, operation lifecycle, and post-action
+  refresh for implemented compatibility operations.
+- `popupExportState.js` tracks popup-local export leaf state by deterministic Product identity.
+- `popupActionDom.js` creates and reconciles top-level action button DOM.
+- `popupActionDropdown.js` creates the dropdown, disabled tooltip, keyboard, focus, Escape, and
+  outside-click behavior.
+- `createPopup.js` renders compatibility Product popup content and subscribes to export and
+  Product-operation state.
+- `features/dataSources/map/createDataSourcePopup.js` renders registry-backed source popups without
+  compatibility API refresh or job subscriptions.
+- `popupExportConfig.js` creates declarative Edition/Update leaves from Product context.
+- `popupExportContract.js` owns the implemented compatibility dispatch guard.
 - `features/data/api/exportApi.js` starts asynchronous Export and Rollback jobs.
 - `features/data/api/productJobApi.js` calls the job start and status endpoints.
-- `features/products/services/productJobService.js` persists, resumes and polls active jobs.
-- `features/products/state/productOperationState.js` combines local operations with restored backend jobs.
+- `features/products/services/productJobService.js` persists, resumes, and polls active jobs.
+- `features/products/state/productOperationState.js` combines local operations with restored backend
+  jobs.
+
+## Product context resolution
+
+The popup and action layers consume a resolved Product context equivalent to:
+
+```js
+{
+  sourceId,
+  productKey,
+  identityKey,
+  datasetName,
+  productType,
+  layerId,
+  capabilities,
+  exportConfiguration,
+  graphic,
+}
+```
+
+Registry-backed Products must carry matching Graphic attributes and layer metadata installed by the
+data-source map adapter. Attribute-only or stale source metadata fails closed. UI code must not infer
+a source from layer title, popup DOM, or dataset-name patterns.
+
+The combined AOI path participates through the internal `compatibility-aoi` adapter. This adapter ID
+is not a registry source, user toggle, or persisted source value. It may be removed when authoritative
+separate S-57 and S-101 Product/read contracts exist.
 
 ## Current action status
 
-Implemented product mutations:
+Compatibility AOI retains the established actions:
 
-- `Freeze`
-- `Unfreeze`
-- `Send to IC-ENC`
-- `Rollback`
+- `Freeze` / `Unfreeze`;
+- `Send to IC-ENC`;
+- `Rollback`;
+- `Analyze` and `History` through `Tools`;
+- `Export...`.
 
-Implemented export leaf:
+Paper Charts and S-102 expose only the configured `Export...` root with disabled placeholders. Their
+layer capability `supportsPopupActions: true` permits that safe action-bar content without granting
+backend Product workflows. Product Collection is independently gated by the resolved Product
+context's `productCollection` capability, which is `false` for both mock sources. They do not expose
+Freeze, Unfreeze, Send to IC-ENC, Rollback, History, reports, Analyze, Review, or Product Collection
+actions.
+
+The popup-header collection action re-resolves the currently selected Graphic through Product context
+before every add/remove mutation. Selection changes therefore remove stale buttons, and a stale AOI
+button cannot mutate Product Collection after the selected feature becomes a mock Product. `Copy
+dataset name` remains independent from Product Collection capability.
+
+Unknown Product context or unknown capability fails closed and renders no backend-dependent action.
+Product-search selection uses the same resolution and availability path and cannot bypass these
+checks.
+
+## Simplified Export menu
+
+The visible popup structure is:
 
 ```text
-Export > S100 > Edition
+Export...
+  Edition
+  Update
 ```
 
-Disabled export leaves:
+There are no visible `All`, `S57`, `S100`, `S101`, `Paper Charts`, or `S-102` menu groups. Backend
+wire targets remain independent from labels and operation kinds.
 
-```text
-Export > All > Edition
-Export > All > Update
-Export > S57 > Edition
-Export > S57 > Update
-Export > S100 > Update
-```
+### Compatibility AOI
 
-`Export > All` remains intentionally disabled. The current workflow only exposes `S100 > Edition`.
-
-## Current endpoint wiring
-
-New Edition export and Rollback use the asynchronous BE-104 job contract:
+`Edition` remains the only implemented compatibility export. It keeps the baseline backend behavior:
 
 ```text
 POST /export/{name}/newedition/jobs?exportTarget=S100
-POST /export/{name}/rollback/jobs
-GET /jobs/{jobId}
 ```
 
-The existing synchronous backend endpoints remain available for compatibility, but the frontend does not use them for normal popup actions.
+The generic `Edition` label is a UI simplification only. FI-011C does not change the wire target to
+`All`, S-57, or S-101, and it does not invent a source split. `Update` remains a disabled placeholder
+because no implemented frontend/backend Update contract exists on the baseline.
 
-BE-108A Product History integration is documentation-only at baseline `8caf5f771f1a6721398007589afbe875d553615d`. The current popup job lifecycle and terminal notices are unchanged.
+Separate source-correct S-57 and S-101 targets require authoritative independent Product/read
+contracts and are deferred.
 
-Endpoint wiring belongs in `features/data/api/exportApi.js` and `popupExportConfig.js`. Do not add endpoint wiring directly in `popupActionConfig.js`.
+### Paper Charts and S-102
 
-## BE-102 export target contract
+Both sources declare visible `Edition` and `Update` leaves with:
 
-Backend parsing is case-insensitive and uses the canonical public names `All`, `S100`, and `S57`.
+- `implemented: false`;
+- no backend target;
+- no handler;
+- source-specific availability text.
 
-- Missing target defaults to `S100`.
-- Explicit empty or whitespace values are invalid.
-- `Both`, numeric values, numeric-looking values and unknown text return `400 EXPORT_TARGET_INVALID`.
-- `All` and `S57` return `422 EXPORT_TARGET_NOT_SUPPORTED`.
+The dropdown renders these leaves disabled. They cannot enter loading state, dispatch an API request,
+create a notice, or block an unrelated Product. A future source can activate a leaf by supplying its
+capability, handler ID, and backend target without changing popup DOM construction.
 
-Every export leaf has explicit `target` and `exportType` metadata. `popupExportContract.js` owns the single supported-leaf rule. `triggerExport` applies that guard before confirmation, loading state and request dispatch.
+## Declarative Export contract
+
+Export leaves keep these concerns separate:
+
+```js
+{
+  id,
+  label,
+  operationKind,
+  capability,
+  visible,
+  implemented,
+  backendTarget,
+  availabilityReason,
+  handlerId,
+}
+```
+
+`popupExportConfig.js` resolves the handler registry and creates UI descriptors. UI code does not map
+source IDs to endpoints. `popupExportContract.js` remains a final direct-dispatch guard and currently
+allows only the established compatibility Edition operation with the S100 wire target.
 
 ## Product action lifecycle
 
-`popupProductActions.js` owns action execution.
+`popupProductActions.js` owns implemented action execution.
 
-For synchronous mutations such as Freeze, Unfreeze and Send:
+For synchronous mutations such as Freeze, Unfreeze, and Send:
 
 ```text
 confirm
--> start local product operation
+-> start local Product operation
 -> call API
 -> show notice
--> refresh selected product
--> end local product operation
+-> refresh selected Product
+-> end local Product operation
 ```
 
 For asynchronous Export and Rollback:
 
 ```text
 confirm
--> start local product operation
+-> reconcile backend-authoritative active jobs
+-> start popup-local export state where applicable
 -> enqueue backend job
 -> persist job metadata
--> project job into external product-operation state
+-> project job into external Product-operation state
 -> poll GET /jobs/{jobId}
 -> receive terminal status
 -> remove persisted job
--> show success, warning or failure notice
--> refresh affected product data
--> end local product operation
+-> show success, warning, or failure notice
+-> refresh affected Product data
+-> end local Product operation
 ```
 
-Product operations remain active until post-action refresh completes. This prevents stale intermediate UI states.
+Product operations remain active until post-action refresh completes. This prevents stale
+intermediate UI states.
 
 ## Persistent job tracking
 
-Active Product Catalogue jobs are stored under a versioned local-storage key.
-
-On application startup, the job service:
-
-1. reads persisted job metadata;
-2. projects each job into `productOperationState` as an external operation;
-3. resumes status polling;
-4. keeps conflicting product actions disabled;
-5. shows the terminal notice when the job finishes;
-6. refreshes the active route data.
-
-A transient polling failure does not remove the stored job. Status polling retries with bounded backoff because the backend operation may still be running.
-
-A `404 JOB_NOT_FOUND` response clears the local record and reports that the final result is unavailable.
-
-The job start request deliberately has no frontend timeout. Timing out after the backend has enqueued a job could leave the browser without its `jobId`. Status requests use a finite timeout and are safe to retry.
+Active Product Catalogue jobs are stored under the established versioned local-storage key. On
+application startup, the job service restores and polls persisted jobs, keeps conflicting actions
+disabled, publishes terminal notices, and refreshes active route data. Backend active-job lookup
+remains authoritative across users and computers.
 
 ## Product operation state
 
-`productOperationState.js` combines:
-
-- local operations started in the current page;
-- external operations restored from persisted backend jobs.
-
-It is used to:
-
-- show loading labels such as `Freezing...`, `Sending...`, `Rolling back...` and export labels;
-- block conflicting product mutations;
-- keep state active through post-action refresh;
-- re-render an open popup when operation state changes.
-
-This state remains a UX guard. The backend still owns authoritative locking, version checks and execution guards.
+`productOperationState.js` combines local operations and external operations restored or discovered
+from backend jobs. FI-011C does not change backend job identity, endpoint contracts, locking, version
+checks, or execution guards.
 
 ## Export state
 
-Exports are tracked in two systems for different purposes:
+Exports remain represented by two systems:
 
-- `productOperationState.js` tracks that the product has an export operation running;
-- `popupExportState.js` tracks the active export leaf and scope conflicts on the current page.
+- `productOperationState.js` tracks a running Product export and backend-authoritative active job;
+- `popupExportState.js` tracks popup-local leaf loading and scope conflicts.
 
-Do not move export scope-conflict logic into product-level operation state unless a future backend contract replaces both systems.
+The popup state API accepts Product context, source-aware identity, or the established dataset name.
+Dataset names remain globally unique on the current contract, so dataset-based callers retain their
+existing key. Source-aware identity is used when no dataset name exists. Loading is isolated by
+Product, scope, and operation kind.
 
-Export scope conflicts remain:
+The existing scope-conflict model remains available for backend compatibility. The simplified UI no
+longer exposes scope groups, but the `All` overlap rule is retained internally until backend contracts
+replace it.
 
-- `All` conflicts with every export scope;
-- a specific scope conflicts with itself and `All`;
-- specific scopes do not conflict with each other.
-
-Only `S100 > Edition` is currently enabled.
+Source deactivation clears only popup-local UI state for that source. It does not cancel or delete a
+backend-authoritative job.
 
 ## Rollback warnings
 

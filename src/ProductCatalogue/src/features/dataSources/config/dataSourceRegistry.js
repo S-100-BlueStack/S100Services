@@ -25,14 +25,17 @@ const DISABLED_OPERATION_CAPABILITIES = Object.freeze({
   internalValidation: false,
   exportEdition: false,
   exportUpdate: false,
+  popupExport: false,
   productCollection: false,
   productSearch: false,
   analyze: false,
   review: false,
+  backendProductRefresh: false,
 });
 
 const SEARCHABLE_VISUALIZATION_CAPABILITIES = Object.freeze({
   ...DISABLED_OPERATION_CAPABILITIES,
+  popupExport: true,
   productSearch: true,
 });
 
@@ -144,6 +147,7 @@ function createUnavailableSource({ id, label, productType, configuredIds, reason
     identityStrategy: SOURCE_AWARE_IDENTITY,
     layerDefinitions: [],
     capabilities: DISABLED_OPERATION_CAPABILITIES,
+    exportConfiguration: null,
     filtering: {
       supported: false,
       definitions: [],
@@ -171,6 +175,7 @@ function createDevelopmentMockSource({
   configuredIds,
 }) {
   const enabledByConfiguration = isConfigured(id, configuredIds) && isDevelopment;
+  const exportUnavailableReason = `${label} export is not available yet.`;
 
   return {
     id,
@@ -205,7 +210,7 @@ function createDevelopmentMockSource({
         layerKind,
         capabilities: {
           supportsPopup: true,
-          supportsPopupActions: false,
+          supportsPopupActions: true,
           supportsProductActions: false,
           supportsDisplayScale: false,
           supportsAttributeFilters: true,
@@ -216,6 +221,7 @@ function createDevelopmentMockSource({
       },
     ],
     capabilities: SEARCHABLE_VISUALIZATION_CAPABILITIES,
+    exportConfiguration: createUnavailableExportConfiguration(exportUnavailableReason),
     filtering: {
       supported: true,
       definitions: filterDefinitions,
@@ -225,6 +231,36 @@ function createDevelopmentMockSource({
     search: DEFAULT_PRODUCT_SEARCH,
     productType,
     refreshStrategy: ACTIVE_ONLY_REFRESH,
+  };
+}
+
+function createUnavailableExportConfiguration(availabilityReason) {
+  return {
+    visible: true,
+    leaves: [
+      {
+        id: "export-edition",
+        label: "Edition",
+        operationKind: "Edition",
+        capability: "exportEdition",
+        visible: true,
+        implemented: false,
+        backendTarget: null,
+        handlerId: null,
+        availabilityReason,
+      },
+      {
+        id: "export-update",
+        label: "Update",
+        operationKind: "Update",
+        capability: "exportUpdate",
+        visible: true,
+        implemented: false,
+        backendTarget: null,
+        handlerId: null,
+        availabilityReason,
+      },
+    ],
   };
 }
 
@@ -246,6 +282,7 @@ function deepFreeze(value) {
   for (const nestedValue of Object.values(value)) {
     deepFreeze(nestedValue);
   }
+
   return Object.freeze(value);
 }
 

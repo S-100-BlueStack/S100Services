@@ -10,7 +10,6 @@ async function readPopupFile(fileName) {
 
 test("popup header controller reconciles Product Collection through the central capability helper", async () => {
   const controller = await readPopupFile("popupHeaderController.js");
-
   assert.match(
     controller,
     /import \{[\s\S]*?mutatePopupHeaderCollection,[\s\S]*?reconcilePopupHeaderCollectionAction,[\s\S]*?\} from "\.\/popupHeaderCollectionAction\.js";/
@@ -32,12 +31,31 @@ test("Copy dataset name remains independent from Product Collection capability",
   assert.match(controller, /btn\.title = "Copy dataset name";/);
 });
 
-test("popup action bar still fails closed through central Product action capability resolution", async () => {
-  const actionBar = await readPopupFile("popupActionBar.js");
+test("popup action bar fails closed through central Product context and action resolution", async () => {
+  const [actionBar, actionConfig, collectionAction] = await Promise.all([
+    readPopupFile("popupActionBar.js"),
+    readPopupFile("popupActionConfig.js"),
+    readPopupFile("popupHeaderCollectionAction.js"),
+  ]);
 
   assert.match(
     actionBar,
-    /attributesSupportLayerCapability\(attributes, "supportsProductActions"\)/
+    /import \{ resolveProductContext \} from "\.\.\/\.\.\/products\/domain\/productContext\.js";/
+  );
+  assert.match(actionBar, /const context = productContext \?\? resolveProductContext\(/);
+  assert.match(actionBar, /if \(!context\) \{\s*return \[\];\s*\}/);
+  assert.match(actionBar, /createPopupActionGroups\(\{[\s\S]*?productContext: context,/);
+  assert.match(actionConfig, /createProductActionAvailability\(/);
+  assert.match(actionConfig, /PRODUCT_OPERATION_CAPABILITY/);
+
+  assert.doesNotMatch(
+    actionBar,
+    /attributesSupportLayerCapability|supportsPopupActions|supportsProductActions/
   );
   assert.doesNotMatch(actionBar, /paper-charts|s102-products|sourceId\s*===/);
+  assert.doesNotMatch(actionConfig, /paper-charts|s102-products|sourceId\s*===/);
+
+  assert.match(collectionAction, /PRODUCT_OPERATION_CAPABILITY\.PRODUCT_COLLECTION/);
+  assert.match(collectionAction, /productContextSupportsCapability\(/);
+  assert.doesNotMatch(collectionAction, /supportsPopupActions/);
 });

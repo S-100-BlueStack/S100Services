@@ -19,6 +19,7 @@ const DEFAULT_LAYER_CAPABILITIES = Object.freeze({
   supportsOverlapPicker: false,
   supportsProductSearch: false,
 });
+
 const KNOWN_LAYER_CAPABILITIES = new Set(Object.keys(DEFAULT_LAYER_CAPABILITIES));
 
 export const layerDefinitions = Object.freeze([
@@ -45,6 +46,7 @@ export const layerDefinitions = Object.freeze([
     capabilities: Object.freeze({
       ...DEFAULT_LAYER_CAPABILITIES,
       supportsPopup: true,
+      supportsPopupActions: true,
       supportsAttributeFilters: true,
       supportsOverlapPicker: true,
       supportsProductSearch: true,
@@ -57,6 +59,7 @@ export const layerDefinitions = Object.freeze([
     capabilities: Object.freeze({
       ...DEFAULT_LAYER_CAPABILITIES,
       supportsPopup: true,
+      supportsPopupActions: true,
       supportsAttributeFilters: true,
       supportsOverlapPicker: true,
       supportsProductSearch: true,
@@ -138,8 +141,8 @@ function getFallbackDefinitionForAttributes(source) {
     return null;
   }
 
-  // Compatibility graphics should carry layer metadata, but this fallback keeps
-  // existing Product workflows stable while the combined AOI adapter remains.
+  // Legacy attribute-only callers are retained until every compatibility Graphic
+  // carries explicit layer metadata. Product context resolution itself does not use this fallback.
   return getLayerDefinition(PRODUCT_CORRECTIONS_LAYER_ID);
 }
 

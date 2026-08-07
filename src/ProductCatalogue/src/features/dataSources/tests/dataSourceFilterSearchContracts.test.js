@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
-
 import {
   DATA_SOURCE_IDS,
   createDataSourceRegistry,
@@ -12,27 +11,84 @@ import { createAttributeFilterService } from "../../map/filters/attributeFilterS
 import { createSourceAwareProductSearchIndex } from "../../map/search/sourceAwareProductSearchIndex.js";
 import { PRODUCT_CORRECTIONS_LAYER_ID } from "../../../shared/config/layerIds.js";
 import { createDataSourceDerivedStateCoordinator } from "../services/dataSourceDerivedStateCoordinator.js";
-
 const projectRoot = new URL("../../../..", import.meta.url);
 
+const MOCK_LAYER_CAPABILITIES = Object.freeze({
+  supportsPopup: true,
+  supportsPopupActions: true,
+  supportsProductActions: false,
+  supportsAttributeFilters: true,
+  supportsProductHistory: false,
+  supportsOverlapPicker: true,
+  supportsProductSearch: true,
+});
+
+const DISABLED_BACKEND_PRODUCT_CAPABILITIES = Object.freeze([
+  "productCollection",
+  "analyze",
+  "review",
+  "history",
+  "exportEdition",
+  "exportUpdate",
+]);
+
 describe("FI-011B data source integration contracts", () => {
-  it("declares source-specific filter dimensions and searchable mock capabilities", () => {
+  it("separates safe client-side mock capabilities from backend Product workflows", () => {
     const registry = createDataSourceRegistry({ isDevelopment: true });
     const paper = getDataSourceDefinition(registry, DATA_SOURCE_IDS.PAPER_CHARTS);
     const s102 = getDataSourceDefinition(registry, DATA_SOURCE_IDS.S102);
 
     assert.deepEqual(paper.filtering.definitions, ["status", "displayScale", "usageBand"]);
     assert.deepEqual(s102.filtering.definitions, ["status"]);
-    assert.equal(paper.search.supported, true);
-    assert.equal(s102.search.supported, true);
-    assert.equal(paper.capabilities.productSearch, true);
-    assert.equal(s102.capabilities.productSearch, true);
-    assert.equal(paper.capabilities.productCollection, false);
-    assert.equal(s102.capabilities.productCollection, false);
-    assert.equal(paper.layerDefinitions[0].capabilities.supportsPopupActions, false);
-    assert.equal(s102.layerDefinitions[0].capabilities.supportsProductActions, false);
-  });
 
+    for (const source of [paper, s102]) {
+      const layerCapabilities = source.layerDefinitions[0].capabilities;
+
+      assert.equal(source.search.supported, true);
+      assert.equal(source.capabilities.productSearch, true);
+      assert.equal(source.capabilities.popupExport, true);
+      assert.deepEqual(
+        {
+          supportsPopup: layerCapabilities.supportsPopup,
+          supportsPopupActions: layerCapabilities.supportsPopupActions,
+          supportsProductActions: layerCapabilities.supportsProductActions,
+          supportsAttributeFilters: layerCapabilities.supportsAttributeFilters,
+          supportsProductHistory: layerCapabilities.supportsProductHistory,
+          supportsOverlapPicker: layerCapabilities.supportsOverlapPicker,
+          supportsProductSearch: layerCapabilities.supportsProductSearch,
+        },
+        MOCK_LAYER_CAPABILITIES
+      );
+
+      for (const capabilityName of DISABLED_BACKEND_PRODUCT_CAPABILITIES) {
+        assert.equal(source.capabilities[capabilityName], false);
+      }
+
+      assert.equal(source.exportConfiguration.visible, true);
+      assert.deepEqual(
+        source.exportConfiguration.leaves.map((leaf) => ({
+          label: leaf.label,
+          implemented: leaf.implemented,
+          backendTarget: leaf.backendTarget,
+          handlerId: leaf.handlerId,
+        })),
+        [
+          {
+            label: "Edition",
+            implemented: false,
+            backendTarget: null,
+            handlerId: null,
+          },
+          {
+            label: "Update",
+            implemented: false,
+            backendTarget: null,
+            handlerId: null,
+          },
+        ]
+      );
+    }
+  });
   it("keeps error-only default behind the authoritative FI-016 classification point", () => {
     assert.equal(ATTRIBUTE_FILTER_CONFIG.stateVersion, 2);
     assert.equal(
@@ -44,7 +100,6 @@ describe("FI-011B data source integration contracts", () => {
       { fieldName: "status", values: ["1"] },
     ]);
   });
-
   it("does not introduce a permanent compatibility source id", () => {
     const registry = createDataSourceRegistry({ isDevelopment: true });
     const ids = registry.definitions.map((source) => source.id);
@@ -53,7 +108,6 @@ describe("FI-011B data source integration contracts", () => {
     assert.equal(ids.includes("enc"), false);
     assert.equal(ids.includes("enc-products"), false);
   });
-
   it("publishes and removes derived state through the generic lifecycle contract", () => {
     const lifecycle = createLifecycleHarness();
     const filterCalls = [];
@@ -84,7 +138,6 @@ describe("FI-011B data source integration contracts", () => {
       },
       search: { supported: true, fields: ["datasetName"] },
     };
-
     lifecycle.emit("activated", {
       sourceId: source.id,
       source,
@@ -104,7 +157,6 @@ describe("FI-011B data source integration contracts", () => {
       generation: 3,
       reason: "user-deactivation",
     });
-
     assert.equal(filterCalls[0][0], "replace");
     assert.equal(filterCalls[0][1].providerId, "future-source");
     assert.deepEqual(filterCalls[0][1].filterDefinitions, ["status"]);
@@ -113,10 +165,8 @@ describe("FI-011B data source integration contracts", () => {
     assert.equal(searchCalls[0][1].providerId, "future-source");
     assert.equal(searchCalls[0][1].layers[0].id, "future-products");
     assert.deepEqual(searchCalls[1], ["remove", { id: "future-source", generation: 3 }]);
-
     coordinator.destroy();
   });
-
   it("preserves pending filter intent when activation failure follows snapshot loading", () => {
     const lifecycle = createLifecycleHarness();
     const filterService = createFilterService();
@@ -128,7 +178,6 @@ describe("FI-011B data source integration contracts", () => {
     });
     const source = createRuntimeSource();
     const snapshot = createPaperFilterSnapshot();
-
     assert.equal(filterService.applyFilterSnapshot(snapshot), true);
     lifecycle.emit("deactivating", {
       sourceId: source.id,
@@ -145,13 +194,11 @@ describe("FI-011B data source integration contracts", () => {
       generation: 2,
       layers: [createRuntimeLayer()],
     });
-
     assert.deepEqual([...filterService.getSelectedValues(source.id, "status")], ["Error"]);
     assert.equal(filterService.getLayerMetadata(source.id).visibleCount, 1);
     assert.equal(productSearchIndex.getEntries().length, 2);
     coordinator.destroy();
   });
-
   it("preserves pending filter intent when snapshot loading follows activation failure", () => {
     const lifecycle = createLifecycleHarness();
     const filterService = createFilterService();
@@ -163,7 +210,6 @@ describe("FI-011B data source integration contracts", () => {
     });
     const source = createRuntimeSource();
     const snapshot = createPaperFilterSnapshot();
-
     lifecycle.emit("deactivating", {
       sourceId: source.id,
       source,
@@ -177,13 +223,11 @@ describe("FI-011B data source integration contracts", () => {
       generation: 2,
       layers: [createRuntimeLayer()],
     });
-
     assert.deepEqual(filterService.getFilterSnapshot(), snapshot);
     assert.deepEqual([...filterService.getSelectedValues(source.id, "status")], ["Error"]);
     assert.equal(productSearchIndex.getEntries().length, 2);
     coordinator.destroy();
   });
-
   it("treats explicit deactivation and reset reasons as authoritative removal", () => {
     for (const reason of ["user-deactivation", "local-reset", "global-reset"]) {
       const lifecycle = createLifecycleHarness();
@@ -195,7 +239,6 @@ describe("FI-011B data source integration contracts", () => {
         productSearchIndex,
       });
       const source = createRuntimeSource();
-
       assert.equal(filterService.applyFilterSnapshot(createPaperFilterSnapshot()), true);
       lifecycle.emit("deactivating", {
         sourceId: source.id,
@@ -209,7 +252,6 @@ describe("FI-011B data source integration contracts", () => {
       coordinator.destroy();
     }
   });
-
   it("keeps failed refresh state and blocks stale publication after activation failure", () => {
     const lifecycle = createLifecycleHarness();
     const filterService = createFilterService();
@@ -221,7 +263,6 @@ describe("FI-011B data source integration contracts", () => {
     });
     const source = createRuntimeSource();
     const firstLayer = createRuntimeLayer();
-
     lifecycle.emit("activated", {
       sourceId: source.id,
       source,
@@ -230,7 +271,6 @@ describe("FI-011B data source integration contracts", () => {
     });
     filterService.setFilter(source.id, "status", ["Error"], 2);
     const resultId = productSearchIndex.getEntries()[0].id;
-
     lifecycle.emit("refresh-failed", {
       sourceId: source.id,
       source,
@@ -238,7 +278,6 @@ describe("FI-011B data source integration contracts", () => {
     });
     assert.deepEqual([...filterService.getSelectedValues(source.id, "status")], ["Error"]);
     assert.equal(productSearchIndex.resolve(resultId).graphic.layer, firstLayer);
-
     lifecycle.emit("deactivating", {
       sourceId: "delayed-source",
       source: { ...source, id: "delayed-source" },
@@ -255,7 +294,6 @@ describe("FI-011B data source integration contracts", () => {
       productSearchIndex.getEntries().some((entry) => entry.providerId === "delayed-source"),
       false
     );
-
     coordinator.destroy();
   });
 
@@ -264,7 +302,6 @@ describe("FI-011B data source integration contracts", () => {
       new URL("src/features/map/filters/attributeFilterPanel.js", projectRoot),
       "utf8"
     );
-
     assert.match(panelSource, /readAttributeFilterSnapshot/);
     assert.match(
       panelSource,
@@ -275,7 +312,6 @@ describe("FI-011B data source integration contracts", () => {
     );
     assert.match(panelSource, /if \(saved\.exists\) \{[\s\S]*removeSavedFilterSnapshot\(\)/);
   });
-
   it("persists Clear all after clearing active and pending service state", async () => {
     const panelSource = await readFile(
       new URL("src/features/map/filters/attributeFilterPanel.js", projectRoot),
@@ -291,7 +327,6 @@ describe("FI-011B data source integration contracts", () => {
       /function clearAllFilters\(\) \{[\s\S]*writeFilterSnapshot\(filterService\)/
     );
   });
-
   it("does not persist temporary provider suspension as an authoritative removal", async () => {
     const panelSource = await readFile(
       new URL("src/features/map/filters/attributeFilterPanel.js", projectRoot),
@@ -302,13 +337,11 @@ describe("FI-011B data source integration contracts", () => {
     assert.match(panelSource, /const isTemporarySuspension/);
     assert.match(panelSource, /!isTemporarySuspension/);
   });
-
   it("documents provider and Product identity consistently across search READMEs", async () => {
     const [dataSourceReadme, searchReadme] = await Promise.all([
       readFile(new URL("src/features/dataSources/README.md", projectRoot), "utf8"),
       readFile(new URL("src/features/map/search/README.md", projectRoot), "utf8"),
     ]);
-
     for (const content of [dataSourceReadme, searchReadme]) {
       assert.match(content, /\[providerId, productKey\]/);
       assert.doesNotMatch(content, /Result IDs include provider, layer, and Product identity/);
@@ -320,7 +353,6 @@ describe("FI-011B data source integration contracts", () => {
       new URL("src/features/map/search/mainMapProductSearch.js", projectRoot),
       "utf8"
     );
-
     assert.match(searchSource, /productSearchIndex\.resolve\(resultId\)/);
     assert.match(searchSource, /let graphic = result\.graphic/);
     assert.match(searchSource, /const currentResult = productSearchIndex\.resolve\(result\.id\)/);
@@ -329,7 +361,6 @@ describe("FI-011B data source integration contracts", () => {
     assert.doesNotMatch(searchSource, /setSourceEnabled|activateSource/);
   });
 });
-
 function createFilterService() {
   return createAttributeFilterService({
     getStatuses: () => [],
@@ -351,7 +382,6 @@ function createRuntimeSource() {
     search: { supported: true, fields: ["datasetName"] },
   };
 }
-
 function createPaperFilterSnapshot() {
   return {
     version: 2,
@@ -363,7 +393,6 @@ function createPaperFilterSnapshot() {
     ],
   };
 }
-
 function createRuntimeLayer(id = "paper-products") {
   const graphics = [
     {
@@ -395,7 +424,6 @@ function createRuntimeLayer(id = "paper-products") {
   });
   return layer;
 }
-
 function createLifecycleHarness() {
   const listeners = new Map();
   return {

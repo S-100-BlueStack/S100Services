@@ -1,32 +1,40 @@
 import { isStatusFrozen } from "../state/featureState.js";
-import { attributesSupportLayerCapability } from "../config/layerDefinitions.js";
+import { resolveProductContext } from "../../products/domain/productContext.js";
 import { createPopupActionGroups } from "./popupActionConfig.js";
 import { createActionButton, updateActionButton } from "./popupActionDom.js";
 import { closePopupActionDropdown } from "./popupActionDropdown.js";
 
 const ACTION_ROW_CLASS = "popup-action-bar__row";
 
-export function createPopupActionBar({ attributes, refreshAndRender } = {}) {
-  if (!attributesSupportLayerCapability(attributes, "supportsProductActions")) {
+export function createPopupActionBar({
+  attributes,
+  graphic,
+  productContext,
+  refreshAndRender,
+} = {}) {
+  const context = productContext ?? resolveProductContext({ graphic, attributes });
+  const actionGroups = getActionGroups({
+    context,
+    graphic,
+    attributes,
+    refreshAndRender,
+  });
+
+  if (actionGroups.length === 0) {
     return null;
   }
 
   const container = document.createElement("div");
   container.className = "popup-action-bar";
   container.setAttribute("aria-label", "Popup actions");
-
-  updatePopupActionBar(container, {
-    attributes,
-    refreshAndRender,
-    force: true,
-  });
+  reconcileActionRows(container, actionGroups, { force: true });
 
   return container;
 }
 
 export function updatePopupActionBar(
   container,
-  { attributes, refreshAndRender, force = false } = {}
+  { attributes, graphic, productContext, refreshAndRender, force = false } = {}
 ) {
   if (!container) {
     return {
@@ -35,29 +43,46 @@ export function updatePopupActionBar(
     };
   }
 
-  if (!attributesSupportLayerCapability(attributes, "supportsProductActions")) {
+  const context = productContext ?? resolveProductContext({ graphic, attributes });
+  const actionGroups = getActionGroups({
+    context,
+    graphic,
+    attributes,
+    refreshAndRender,
+  });
+
+  if (actionGroups.length === 0) {
+    const changed = container.childElementCount > 0;
     closeOpenDropdownIn(container);
+    container.replaceChildren();
 
     return {
       supported: false,
-      changed: container.childElementCount > 0,
+      changed,
     };
   }
 
-  const frozen = isStatusFrozen(attributes?.status);
-  const actionGroups = createPopupActionGroups({
-    attributes,
-    frozen,
-    refreshAndRender,
-  });
-  const changed = reconcileActionRows(container, actionGroups, {
-    force,
-  });
+  const changed = reconcileActionRows(container, actionGroups, { force });
 
   return {
     supported: true,
     changed,
   };
+}
+
+function getActionGroups({ context, graphic, attributes, refreshAndRender }) {
+  if (!context) {
+    return [];
+  }
+
+  const resolvedAttributes = attributes ?? graphic?.attributes ?? context.graphic?.attributes ?? {};
+  return createPopupActionGroups({
+    attributes: resolvedAttributes,
+    graphic,
+    productContext: context,
+    frozen: isStatusFrozen(resolvedAttributes?.status),
+    refreshAndRender,
+  });
 }
 
 function reconcileActionRows(container, actionGroups, { force }) {
@@ -131,7 +156,6 @@ function getDirectChildrenByClass(container, className) {
 
 function closeOpenDropdownIn(container) {
   const openAction = container.querySelector?.('[aria-expanded="true"]');
-
   if (openAction) {
     closePopupActionDropdown();
   }

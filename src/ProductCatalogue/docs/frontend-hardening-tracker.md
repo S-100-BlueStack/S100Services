@@ -102,7 +102,7 @@ BE-106 is documentation-only. It confirms that ProductManagerAPI remains the pub
 | FI-008 | Introduction flow                | Add compact first-time and replayable route guidance                     | Done                                     | Completed and manually verified at `0c677549963bb7ce4206fed379dd30dc8c2cc783`. Each route has independent first-time state and replay from Preferences. Main map includes Product search, filters, interactive popup/Product Collection guidance, workspace navigation, Theme and Preferences. Dashboard, Analyze and Review use compact route-specific flows with Product prerequisites where needed. |
 | FI-009 | Dashboard                        | Add user-selectable Dashboard page size                                  | Todo                                     | Backend paging already accepts `1-200`; define compact frontend options, persistence and reset behavior before enabling it.                                                                                                                                                                                                                                                                            |
 | FI-010 | Dashboard                        | Add sortable Dashboard activity columns                                  | Todo                                     | Define supported server-side sort fields, direction, stable tie-break ordering and cursor compatibility before adding sortable headers.                                                                                                                                                                                                                                                                |
-| FI-011 | Main map / Data sources          | Add independent Product-standard data sources and source-aware workflows | In progress (FI-011A/B implemented)      | FI-011A is committed and manually accepted at `8f678480c08e17d7911d6019a44542c6a52ef09f`. FI-011B adds source-aware filters, loaded-feature Product search, and generic navbar-popover coordination. S-57/S-101 transport and FI-011C Product workflows remain pending.                                                                                                                                |
+| FI-011 | Main map / Data sources          | Add independent Product-standard data sources and source-aware workflows | In progress (FI-011A/B/C implemented)    | FI-011A/FI-011B are committed through baseline `60e4854389ab16d3bd280f653998ea10eaa0b6ab`. FI-011C adds central Product context, source-aware action availability, and the flat Edition/Update Export menu. S-57/S-101 transport and FI-011D workspace/history propagation remain pending.                                                                                                             |
 | FI-012 | Main map / Location search       | Add Denmark and Greenland map locator                                    | Todo                                     | Add a compact ArcGIS Search component opened from a binoculars button beside Product search. Search addresses and populated places in Denmark and Greenland only, navigate without a marker or popup, keep Product state unchanged, and prepare configuration for later API-backed custom search sources.                                                                                              |
 | FI-013 | Product terminology              | Rename Product Catalogue S100 terminology to S-101                       | Todo                                     | Use `S-101` for the ENC Product specification in live UI/domain copy. Preserve legitimate generic `S-100` standard references and isolate any legacy `S100` API/wire value behind an adapter until backend contracts are renamed.                                                                                                                                                                      |
 | FI-014 | Popup actions                    | Rename Rollback to Cancel Export and replace its icon                    | Todo                                     | Update live UI copy, confirmation, notices, availability reasons, guidance, and tests to `Cancel Export`. Use a cancellation icon rather than an undo/rollback metaphor; keep any legacy endpoint/action identifier internal until backend contracts change.                                                                                                                                           |
@@ -125,17 +125,18 @@ BE-106 is documentation-only. It confirms that ProductManagerAPI remains the pub
 7. Keep report-link UI and deferred producers blocked until backend report IDs, storage, and producer contracts exist.
 8. Continue targeted regression smoke tests after frontend or backend contract changes.
 9. Keep FI-011A as the committed generic source foundation at `8f678480c08e17d7911d6019a44542c6a52ef09f`; do not introduce a permanent combined ENC source or infer an S-57/S-101 split from the compatibility AOI payload.
-10. Implement FI-011B as source-aware Filters, loaded-feature Product search, navbar-popover coordination, and generation-safe derived-state cleanup.
-11. Keep FI-011C focused on Product Collection, Analyze, Review, History/report integration, and source-aware Product workflows without enabling unsupported mock-source actions.
-12. Keep authoritative production S-57/S-101 transport blocked until the backend supplies separate read contracts and source discrimination.
-13. FI-012 Locator and the independent UI/documentation items FI-013 through FI-017 and FI-019 may proceed subject to their own dependencies.
-14. Complete FI-016 only after the backend status list identifies authoritative error states and display semantics, then activate the final FI-011 error-only first-visit filter preset.
-15. Treat FI-018 as a later cross-repository release-readiness review after configurable branding and deployment settings are established.
+10. Keep FI-011B as the committed source-aware Filters, loaded-feature Product search, navbar-popover coordination, and generation-safe derived-state cleanup baseline.
+11. Implement FI-011C as central Product-context resolution, capability-specific popup actions, and a flat source-aware Edition/Update Export menu without enabling mock-source backend actions.
+12. Keep FI-011D focused on Product Collection, Analyze, Review, History/report integration, and other approved source-aware workflows.
+13. Keep authoritative production S-57/S-101 transport blocked until the backend supplies separate read contracts and source discrimination.
+14. FI-012 Locator and the independent UI/documentation items FI-013 through FI-017 and FI-019 may proceed subject to their own dependencies.
+15. Complete FI-016 only after the backend status list identifies authoritative error states and display semantics, then activate the final FI-011 error-only first-visit filter preset.
+16. Treat FI-018 as a later cross-repository release-readiness review after configurable branding and deployment settings are established.
 
 ## FI-011 independent Product-standard data sources and source-aware workflows
 
-Status: In progress — FI-011A implemented and accepted; FI-011B implementation package prepared  
-Committed foundation baseline: `8f678480c08e17d7911d6019a44542c6a52ef09f`
+Status: In progress — FI-011A, FI-011B, and FI-011C implemented; FI-011D pending  
+Committed implementation baseline before FI-011C: `60e4854389ab16d3bd280f653998ea10eaa0b6ab`
 
 ### Current implementation state
 
@@ -153,8 +154,19 @@ FI-011B integrates the current source model with:
 - committed lifecycle publication and generation guards for derived filter/search state;
 - deactivation cleanup for source filter sections, search entries, popup, selection, and hover state.
 
-FI-011 remains incomplete. Product Collection and workspace propagation, source-specific Product
-workflows, separate production S-57/S-101 transport, related Products, final status defaults, and
+FI-011C extends that baseline with:
+
+- central Product-context resolution from Graphic and layer metadata;
+- an explicit non-persisted compatibility-AOI adapter;
+- capability-specific popup action visibility and fail-closed dispatch;
+- a flat `Export... > Edition / Update` menu generated from declarative source configuration;
+- the existing S100 Edition wire target retained internally for compatibility AOI;
+- disabled Edition/Update placeholders for Paper Charts and S-102;
+- Product Collection header gating through the central `productCollection` Product-context capability,
+  independent from `supportsPopupActions`;
+- source-aware popup-local Export identity and deactivation cleanup.
+
+FI-011 remains incomplete. Product Collection, workspace/history/report propagation, separate production S-57/S-101 transport, related Products, final status defaults, and
 final onboarding/regression work remain deferred.
 
 ### Logical source taxonomy
@@ -198,9 +210,10 @@ Missing or duplicate stable source identity rejects the full source payload befo
 stale operation cannot publish newer map, filter, search, persistence, loading, or error state.
 
 Paper Charts and S-102 remain visualization-only sources. FI-011B enables their declared filters and
-loaded-feature Product search, but Product Collection, Product actions, Analyze, Review, History,
-reports, mutations, and Export execution remain disabled. Search selection reuses the normal popup
-flow and cannot bypass capability gating.
+loaded-feature Product search. FI-011C adds a source-aware popup containing only disabled Edition and
+Update Export placeholders; Product Collection, Analyze, Review, History, reports, mutations, and
+real Export execution remain disabled. Search selection reuses the same Product-context and
+capability path and cannot bypass gating.
 
 ### Shared navbar-popover coordination
 
@@ -296,13 +309,16 @@ They are not production contracts and must not define future backend fields or c
 
 1. **FI-011A — Configurable source foundation:** implemented and manually accepted at the committed
    baseline.
-2. **FI-011B — Source-aware Filters, Search and Navbar Coordination:** current implementation
-   package; does not complete FI-011.
-3. **FI-011C — Source-aware Product workflows:** Product Collection propagation, Analyze, Review,
+2. **FI-011B — Source-aware Filters, Search and Navbar Coordination:** implemented in the committed
+   baseline; does not complete FI-011.
+3. **FI-011C — Source-aware Popup Actions and Export Menu:** implemented in this package; central
+   Product context, capability-specific actions, flat Edition/Update menu, and disabled mock-source
+   placeholders.
+4. **FI-011D — Source-aware workspace and history propagation:** Product Collection, Analyze, Review,
    History/report unavailable states, and approved source-aware workflow integration.
-4. **Production transport package:** authoritative separate S-57/S-101 reads when the backend
+5. **Production transport package:** authoritative separate S-57/S-101 reads when the backend
    contract exists; no fake client split.
-5. **Final status/guidance/regression package:** error-only default after FI-016, onboarding,
+6. **Final status/guidance/regression package:** error-only default after FI-016, onboarding,
    accessibility, and full end-to-end migration regression.
 
 ### Acceptance criteria
@@ -329,7 +345,7 @@ FI-011 is complete only when:
 
 - production Paper Charts, S-102, or S-122 endpoint contracts;
 - heuristic S-57/S-101 splitting of the combined AOI response;
-- Product Collection, Analyze, Review, History, or Export integration for mock sources in FI-011B;
+- Product Collection, Analyze, Review, History, reports, or real Export execution for mock sources before FI-011D or authoritative backend contracts;
 - source-specific Product actions without backend contracts;
 - connected-data or backend Product search;
 - Locator/FI-012;

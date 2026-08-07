@@ -3,8 +3,20 @@ const ALL_EXPORT_SCOPE = "all";
 
 const activeExportActions = new Map();
 
-export function beginPopupExportAction({ datasetName, scope, exportType }) {
+export function beginPopupExportAction({
+  productContext,
+  productIdentity,
+  sourceId,
+  productKey,
+  datasetName,
+  scope,
+  exportType,
+} = {}) {
   const exportAction = createExportAction({
+    productContext,
+    productIdentity,
+    sourceId,
+    productKey,
     datasetName,
     scope,
     exportType,
@@ -19,7 +31,6 @@ export function beginPopupExportAction({ datasetName, scope, exportType }) {
   }
 
   const conflict = getPopupExportConflict(exportAction);
-
   if (conflict) {
     return {
       started: false,
@@ -32,8 +43,7 @@ export function beginPopupExportAction({ datasetName, scope, exportType }) {
     ...exportAction,
     startedAt: Date.now(),
   });
-
-  emitPopupExportStateChanged(exportAction.datasetName);
+  emitPopupExportStateChanged(exportAction);
 
   return {
     started: true,
@@ -45,44 +55,50 @@ export function beginPopupExportAction({ datasetName, scope, exportType }) {
 
 export function endPopupExportAction(key) {
   const exportAction = activeExportActions.get(key);
-
   if (!exportAction) {
     return;
   }
 
   activeExportActions.delete(key);
-  emitPopupExportStateChanged(exportAction.datasetName);
+  emitPopupExportStateChanged(exportAction);
 }
 
-export function getPopupExportActionState({ datasetName, scope, exportType }) {
+export function getPopupExportActionState({
+  productContext,
+  productIdentity,
+  sourceId,
+  productKey,
+  datasetName,
+  scope,
+  exportType,
+} = {}) {
   const exportAction = createExportAction({
+    productContext,
+    productIdentity,
+    sourceId,
+    productKey,
     datasetName,
     scope,
     exportType,
   });
 
   if (!exportAction) {
-    return {
-      running: false,
-      blocked: false,
-      loading: false,
-      disabledReason: null,
-    };
+    return createIdleExportState();
   }
 
   const runningAction = activeExportActions.get(exportAction.key);
-
   if (runningAction) {
     return {
       running: true,
       blocked: true,
       loading: true,
-      disabledReason: `${formatExportAction(runningAction)} is already running for ${runningAction.datasetName}.`,
+      disabledReason: `${formatExportAction(runningAction)} is already running for ${formatProduct(
+        runningAction
+      )}.`,
     };
   }
 
   const conflict = getPopupExportConflict(exportAction);
-
   if (conflict) {
     return {
       running: false,
@@ -92,24 +108,57 @@ export function getPopupExportActionState({ datasetName, scope, exportType }) {
     };
   }
 
-  return {
-    running: false,
-    blocked: false,
-    loading: false,
-    disabledReason: null,
-  };
+  return createIdleExportState();
 }
 
-export function isAnyPopupExportActionRunning(datasetName) {
-  if (!datasetName) {
+export function isAnyPopupExportActionRunning(productOrDatasetName) {
+  const identity = resolveProductIdentity(
+    typeof productOrDatasetName === "string"
+      ? { datasetName: productOrDatasetName }
+      : { productContext: productOrDatasetName }
+  );
+
+  if (!identity) {
     return false;
   }
 
-  const normalizedDatasetName = normalizeDatasetName(datasetName);
-
   return [...activeExportActions.values()].some(
-    (action) => action.normalizedDatasetName === normalizedDatasetName
+    (action) => action.productIdentityKey === identity.productIdentityKey
   );
+}
+
+export function clearPopupExportUiState({
+  productContext,
+  productIdentity,
+  sourceId,
+  productKey,
+  datasetName,
+} = {}) {
+  const identity = resolveProductIdentity({
+    productContext,
+    productIdentity,
+    sourceId,
+    productKey,
+    datasetName,
+  });
+  const normalizedSourceId = normalizeSourceId(sourceId ?? productContext?.sourceId);
+  let removed = 0;
+
+  for (const [key, action] of activeExportActions) {
+    const matchesIdentity = identity && action.productIdentityKey === identity.productIdentityKey;
+    const matchesSource =
+      !identity && normalizedSourceId && action.normalizedSourceId === normalizedSourceId;
+
+    if (!matchesIdentity && !matchesSource) {
+      continue;
+    }
+
+    activeExportActions.delete(key);
+    removed += 1;
+    emitPopupExportStateChanged(action);
+  }
+
+  return removed;
 }
 
 export function onPopupExportStateChanged(callback) {
@@ -126,7 +175,7 @@ export function onPopupExportStateChanged(callback) {
 
 function getPopupExportConflict(exportAction) {
   for (const runningAction of activeExportActions.values()) {
-    if (runningAction.normalizedDatasetName !== exportAction.normalizedDatasetName) {
+    if (runningAction.productIdentityKey !== exportAction.productIdentityKey) {
       continue;
     }
 
@@ -146,19 +195,18 @@ function exportActionsOverlap(candidate, runningAction) {
   );
 }
 
-function createExportAction({ datasetName, scope, exportType }) {
-  if (!datasetName || !scope || !exportType) {
+function createExportAction({ scope, exportType, ...productInput }) {
+  const identity = resolveProductIdentity(productInput);
+  if (!identity || !scope || !exportType) {
     return null;
   }
 
-  const normalizedDatasetName = normalizeDatasetName(datasetName);
   const normalizedScope = normalizeScope(scope);
   const normalizedExportType = normalizeExportType(exportType);
 
   return {
-    key: `${normalizedDatasetName}:${normalizedScope}:${normalizedExportType}`,
-    datasetName,
-    normalizedDatasetName,
+    key: `${identity.productIdentityKey}:${normalizedScope}:${normalizedExportType}`,
+    ...identity,
     scope,
     normalizedScope,
     exportType,
@@ -166,33 +214,104 @@ function createExportAction({ datasetName, scope, exportType }) {
   };
 }
 
+function resolveProductIdentity({
+  productContext,
+  productIdentity,
+  sourceId,
+  productKey,
+  datasetName,
+} = {}) {
+  const resolvedDatasetName = normalizeText(datasetName ?? productContext?.datasetName);
+  const resolvedSourceId = normalizeText(
+    sourceId ?? productContext?.sourceId ?? productIdentity?.sourceId
+  );
+  const resolvedProductKey = normalizeText(
+    productKey ?? productContext?.productKey ?? productIdentity?.productKey
+  );
+
+  // Dataset names are currently globally unique and preserve compatibility with
+  // the existing operation pipeline. Source-aware identity is used when no dataset exists.
+  const productIdentityKey = resolvedDatasetName
+    ? `dataset:${normalizeDatasetName(resolvedDatasetName)}`
+    : resolvedSourceId && resolvedProductKey
+      ? `source:${normalizeSourceId(resolvedSourceId)}:${normalizeProductKey(resolvedProductKey)}`
+      : null;
+
+  if (!productIdentityKey) {
+    return null;
+  }
+
+  return {
+    productIdentityKey,
+    sourceId: resolvedSourceId,
+    normalizedSourceId: normalizeSourceId(resolvedSourceId),
+    productKey: resolvedProductKey,
+    datasetName: resolvedDatasetName,
+    normalizedDatasetName: normalizeDatasetName(resolvedDatasetName),
+  };
+}
+
 function getExportConflictReason(exportAction, conflict) {
   if (conflict.normalizedScope === ALL_EXPORT_SCOPE) {
-    return `${formatExportAction(conflict)} is already running for ${conflict.datasetName}.`;
+    return `${formatExportAction(conflict)} is already running for ${formatProduct(conflict)}.`;
   }
 
   if (exportAction.normalizedScope === ALL_EXPORT_SCOPE) {
-    return `${formatExportAction(conflict)} is already running for ${conflict.datasetName}. Wait until it finishes before exporting All.`;
+    return `${formatExportAction(conflict)} is already running for ${formatProduct(
+      conflict
+    )}. Wait until it finishes before exporting All.`;
   }
 
-  return `${formatExportAction(conflict)} is already running for ${conflict.datasetName}.`;
+  return `${formatExportAction(conflict)} is already running for ${formatProduct(conflict)}.`;
 }
 
 function formatExportAction(exportAction) {
   return `${exportAction.scope} ${exportAction.exportType}`;
 }
 
-function emitPopupExportStateChanged(datasetName) {
+function formatProduct(exportAction) {
+  return exportAction.datasetName ?? exportAction.productKey ?? "the selected Product";
+}
+
+function emitPopupExportStateChanged(exportAction) {
   document.dispatchEvent(
     new CustomEvent(POPUP_EXPORT_STATE_CHANGED_EVENT, {
       detail: {
-        datasetName,
+        productIdentityKey: exportAction.productIdentityKey,
+        sourceId: exportAction.sourceId,
+        datasetName: exportAction.datasetName,
       },
     })
   );
 }
 
+function createIdleExportState() {
+  return {
+    running: false,
+    blocked: false,
+    loading: false,
+    disabledReason: null,
+  };
+}
+
+function normalizeText(value) {
+  const normalized = String(value ?? "").trim();
+  return normalized || null;
+}
+
 function normalizeDatasetName(value) {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase();
+}
+
+function normalizeSourceId(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeProductKey(value) {
   return String(value ?? "")
     .trim()
     .toUpperCase();

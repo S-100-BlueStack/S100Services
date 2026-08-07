@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { EXPORT_TARGET } from "../../data/domain/exportTarget.js";
+import { PRODUCT_CORRECTIONS_LAYER_ID } from "../config/layerDefinitions.js";
+import { resolveProductContext } from "../../products/domain/productContext.js";
 import {
   EXPORT_TYPE,
   SUPPORTED_EXPORT_ACTION_ID,
@@ -10,8 +12,14 @@ import {
 } from "./popupExportContract.js";
 
 const request = async () => ({ success: true });
+const compatibilityContext = resolveProductContext({
+  attributes: {
+    layerId: PRODUCT_CORRECTIONS_LAYER_ID,
+    datasetName: "AOI-001",
+  },
+});
 
-test("only S100 Edition with an implemented request is dispatchable", () => {
+test("only the implemented compatibility Edition tuple is dispatchable", () => {
   assert.equal(
     isSupportedExportAction({
       actionId: SUPPORTED_EXPORT_ACTION_ID,
@@ -19,38 +27,37 @@ test("only S100 Edition with an implemented request is dispatchable", () => {
       exportType: EXPORT_TYPE.EDITION,
       implemented: true,
       request,
+      productContext: compatibilityContext,
     }),
     true
   );
 });
 
-test("each disabled export leaf is rejected by the central dispatch guard", () => {
-  const disabledLeaves = [
-    ["export-all-edition", EXPORT_TARGET.ALL, EXPORT_TYPE.EDITION],
-    ["export-all-update", EXPORT_TARGET.ALL, EXPORT_TYPE.UPDATE],
-    ["s100-export-update", EXPORT_TARGET.S100, EXPORT_TYPE.UPDATE],
-    ["s57-export-edition", EXPORT_TARGET.S57, EXPORT_TYPE.EDITION],
-    ["s57-export-update", EXPORT_TARGET.S57, EXPORT_TYPE.UPDATE],
-  ];
-
-  for (const [actionId, target, exportType] of disabledLeaves) {
-    assert.deepEqual(
-      validateExportDispatch({
-        actionId,
-        target,
-        exportType,
-        implemented: false,
-        request: null,
-      }),
-      {
-        allowed: false,
-        reason: "unsupported-export-action",
-      }
-    );
+test("Update and source placeholders are rejected by the dispatch guard", () => {
+  for (const action of [
+    {
+      actionId: "export-update",
+      target: null,
+      exportType: EXPORT_TYPE.UPDATE,
+      implemented: false,
+      request: null,
+    },
+    {
+      actionId: "export-edition",
+      target: null,
+      exportType: EXPORT_TYPE.EDITION,
+      implemented: false,
+      request: null,
+    },
+  ]) {
+    assert.deepEqual(validateExportDispatch(action), {
+      allowed: false,
+      reason: "unsupported-export-action",
+    });
   }
 });
 
-test("stale metadata cannot enable an unsupported leaf", () => {
+test("stale backend target or operation metadata cannot enable another leaf", () => {
   assert.equal(
     isSupportedExportAction({
       actionId: SUPPORTED_EXPORT_ACTION_ID,
@@ -61,7 +68,6 @@ test("stale metadata cannot enable an unsupported leaf", () => {
     }),
     false
   );
-
   assert.equal(
     isSupportedExportAction({
       actionId: SUPPORTED_EXPORT_ACTION_ID,
@@ -74,17 +80,11 @@ test("stale metadata cannot enable an unsupported leaf", () => {
   );
 });
 
-test("missing implementation or request metadata is rejected", () => {
-  assert.equal(
-    isSupportedExportAction({
-      actionId: SUPPORTED_EXPORT_ACTION_ID,
-      target: EXPORT_TARGET.S100,
-      exportType: EXPORT_TYPE.EDITION,
-      implemented: false,
-      request,
-    }),
-    false
-  );
+test("a Product context without export capability rejects otherwise valid metadata", () => {
+  const unsupportedContext = Object.freeze({
+    sourceId: "paper-charts",
+    capabilities: Object.freeze({ exportEdition: false }),
+  });
 
   assert.equal(
     isSupportedExportAction({
@@ -92,7 +92,8 @@ test("missing implementation or request metadata is rejected", () => {
       target: EXPORT_TARGET.S100,
       exportType: EXPORT_TYPE.EDITION,
       implemented: true,
-      request: null,
+      request,
+      productContext: unsupportedContext,
     }),
     false
   );

@@ -4,9 +4,11 @@ This feature area owns the FI-011 configurable Product data-source foundation fo
 Catalogue Main map.
 
 FI-011A established the source registry, persisted activation state, independent loading, guarded
-layer commits, and source-aware identity. FI-011B adds source-aware filters, loaded-feature Product
-search, and shared navbar-popover coordination. FI-011 remains incomplete because source-aware
-Product workflows and authoritative S-57/S-101 transport are still deferred.
+layer commits, and source-aware identity. FI-011B added source-aware filters, loaded-feature Product
+search, and shared navbar-popover coordination. FI-011C adds central Product-context resolution,
+capability-specific popup actions, and a declarative source-aware Export menu. FI-011 remains
+incomplete because workspace/history propagation and authoritative S-57/S-101 transport are still
+deferred.
 
 ## Logical source model
 
@@ -35,13 +37,15 @@ Product-standard discriminator. A client-side S-57/S-101 split is therefore inte
 - loader, normalizer, and source-aware Product identity contracts;
 - source-owned layer definitions;
 - conservative source and layer capabilities;
+- declarative popup Export configuration;
 - source-specific filtering definitions;
 - source-specific loaded-feature search fields;
 - Product type and active-only refresh strategy.
 
-Filtering and search integrations consume registry and layer metadata. Feature modules must not add
-source-ID conditionals for Paper Charts, S-102, or future sources. A future source participates by
-supplying declarative capabilities and provider metadata.
+Filtering, search, Product-context, and Export integrations consume registry and layer metadata.
+Feature modules must not add source-ID conditionals for Paper Charts, S-102, or future sources. A
+future source participates by supplying declarative capabilities, provider metadata, and optional
+Export leaves.
 
 The FI-011B mock-source configuration is intentionally limited to attributes present in the current
 fixtures:
@@ -65,9 +69,11 @@ source and has no data-source preference key.
 to the shared filter and Product-search provider contracts. It uses the logical Product-corrections
 layer metadata rather than introducing a permanent combined source identifier.
 
-Compatibility refresh continues to preserve popup, filter, and scale behavior. Reconciliation is
-limited to compatibility layer IDs, so runtime-source layers are not removed or rebuilt by the AOI
-refresh path.
+Compatibility refresh continues to preserve popup, action, filter, and scale behavior.
+`features/products/domain/productContext.js` admits this path only through an explicit internal
+`compatibility-aoi` adapter based on Product-corrections layer metadata. The adapter is not a registry
+source or storage value. Reconciliation remains limited to compatibility layer IDs, so runtime-source
+layers are not removed or rebuilt by the AOI refresh path.
 
 ## Lifecycle and guarded derived state
 
@@ -121,6 +127,7 @@ Authoritative deactivation or reset:
 - removes active and pending filter state plus persisted provider intent for that source;
 - removes source-owned layers;
 - closes a popup owned by the source;
+- clears popup-local Export UI state without cancelling backend-authoritative jobs;
 - clears selected and hover highlight state owned by the source;
 - removes the source's runtime filter section and filter state;
 - removes the source's Product-search entries and stale result selection;
@@ -235,25 +242,38 @@ fallback. Missing or duplicate stable identity rejects the source payload before
 The same Product key may exist in different sources without colliding, even though the current domain
 contract states that dataset names are globally unique.
 
-## Capabilities and Product Collection boundary
+## Product context, popup actions, and Product Collection boundary
 
-Paper Charts and S-102 remain visualization-only mock sources. Their safe field popups expose no
-custom Product actions. Their capabilities keep these workflows disabled:
+`features/products/domain/productContext.js` resolves every popup Product from Graphic attributes,
+layer metadata, and the registry-installed source contract. The context retains `sourceId`, stable
+`productKey`, dataset name, Product type, layer ID, capabilities, Graphic, and declarative Export
+configuration. Missing, unknown, attribute-only, or mismatched source metadata fails closed for
+backend-dependent actions.
+
+Paper Charts and S-102 remain visualization-only mock sources. Their layer capability
+`supportsPopupActions: true` permits the safe custom action bar needed for disabled Export
+placeholders; it does not grant Product Collection or backend Product workflows. Product Collection
+is resolved separately through `ProductContext.capabilities.productCollection`, which remains `false`
+for both mock sources. Their source-aware popups expose only an `Export...` root with visible disabled
+`Edition` and `Update` placeholders. Their capabilities keep these workflows disabled:
 
 - Freeze and Unfreeze;
 - Send to IC-ENC;
 - Cancel Export / legacy Rollback dispatch;
 - History and reports;
-- Edition and Update export execution;
+- real Edition and Update export execution;
 - Product Collection;
-- Analyze and Review.
+- Analyze and Review;
+- compatibility backend refresh and job subscriptions.
 
-FI-011B enables only loaded-feature Product search and source-specific filtering for these sources.
-Search selection opens the same capability-gated popup and cannot create Product Collection or action
-UI.
+The placeholder leaves have no handler or backend target. They cannot call compatibility endpoints,
+enter loading state, create success/error notices, or block unrelated Products. Product search opens
+the same capability-gated popup and cannot bypass availability.
 
-Existing compatibility AOI Products keep their established Product Collection, popup actions,
-Analyze, Review, History, and operation workflows.
+Existing compatibility AOI Products keep Product Collection, popup mutations, Analyze, Review,
+History, and operation workflows. Their simplified Export menu contains only `Edition` and `Update`.
+`Edition` keeps the existing S100 wire target; `Update` remains disabled because no implemented Update
+contract exists. This does not represent a source-correct S-57/S-101 split.
 
 ## Development-only mocks
 
@@ -267,16 +287,16 @@ GET /mock/s102         -> mock/products.geojson
 The fixtures validate the generic multi-source frontend. They are not production API contracts and
 must not define future Paper Charts or S-102 backend schemas.
 
-## Deferred to FI-011C and later packages
+## Deferred to FI-011D and later packages
 
-FI-011B does not implement:
+FI-011C does not implement:
 
-- authoritative separate production S-57 or S-101 reads;
+- authoritative separate production S-57 or S-101 reads or export targets;
 - a heuristic split of the compatibility AOI response;
 - Product Collection propagation for runtime sources;
 - Analyze or Review integration for runtime sources;
 - History, IC-ENC report, or internal-validation integration for runtime sources;
-- source-specific Product actions or Export dispatch;
+- real Paper Charts or S-102 Product mutations or Export dispatch;
 - related Products;
 - route/session identity migration;
 - the final error-only filter preset and status palette;

@@ -1,6 +1,6 @@
 # Product Catalogue frontend
 
-Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+Current reviewed runtime baseline before FI-011C: `60e4854389ab16d3bd280f653998ea10eaa0b6ab`.
 
 Product Catalogue is an ArcGIS/Vite frontend for managing product corrections for nautical chart production. The app loads product correction data from backend APIs, renders them as ArcGIS graphics, and lets users perform product actions through a custom popup action bar.
 
@@ -46,9 +46,11 @@ The following flows are implemented and considered stable frontend behavior for 
 - custom popup action bar
 - Freeze / Unfreeze
 - Send to IC-ENC
-- Export `S100 > Edition`
+- source-aware popup actions resolved through central Product context
+- flat `Export... > Edition / Update` menu
+- compatibility AOI Edition export using the established S100 backend target
+- disabled Edition/Update placeholders for Paper Charts and S-102
 - Rollback
-- disabled export leaves for `All`, `S57` and `S100 > Update`
 - popup export loading/conflict state
 - backend-authoritative Product operation state with local caching and reload recovery
 - asynchronous Export/Rollback polling, terminal notices and route refresh
@@ -100,6 +102,7 @@ src/features/map/popups/popupActionDropdown.js
 src/features/map/popups/popupExportState.js
 src/features/map/popups/popupExportConfig.js
 src/features/map/popups/popupExportContract.js
+src/features/products/domain/productContext.js
 src/features/data/domain/exportTarget.js
 ```
 
@@ -114,11 +117,11 @@ Current popup action endpoint status:
 - `Freeze` / `Unfreeze` use the existing product freeze-state API.
 - `Send to IC-ENC` uses the existing product upload/send API.
 - `Rollback` is enabled and calls `POST /export/{name}/rollback/jobs`.
-- `Export > S100 > Edition` is enabled and calls `POST /export/{name}/newedition/jobs?exportTarget=S100`.
+- Compatibility AOI `Export... > Edition` is enabled and calls `POST /export/{name}/newedition/jobs?exportTarget=S100`.
+- Compatibility AOI `Update` remains disabled because no implemented Update contract exists.
+- Paper Charts and S-102 expose disabled Edition/Update placeholders with no handler or backend target.
 - Job status uses `GET /jobs/{jobId}`.
 - Shared active-operation discovery uses `GET /jobs/active?datasetName={datasetName}`.
-- `Export > All > Edition` and `Export > All > Update` are intentionally disabled.
-- `Export > S57 > Edition`, `Export > S57 > Update` and `Export > S100 > Update` remain disabled until the backend contract changes.
 
 BE-102 export target contract:
 
@@ -129,9 +132,21 @@ BE-102 export target contract:
 - `All` and `S57` return `422` with `EXPORT_TARGET_NOT_SUPPORTED` and `supportedTargets: ["S100"]`;
 - `GET /Lookup/exportformats` returns `[{ "Name": "All" }, { "Name": "S100" }, { "Name": "S57" }]`.
 
-The frontend contains explicit target/type metadata for all six leaves. A central dispatch guard allows only S100 Edition and runs before confirmation, loading state, and API dispatch.
+The frontend derives the two visible leaves from Product context and declarative source export configuration. Labels, operation kinds, capabilities, backend targets, and handlers remain separate. A central dispatch guard allows only the established compatibility Edition/S100 tuple and runs before confirmation, loading state, and API dispatch.
 
 Deployment may be frontend-first or backend-first because missing target still defaults to `S100`; frontend-first is preferred so explicit target requests are visible before backend enforcement changes.
+
+### Product context and source-aware actions
+
+Selected Graphics are resolved through:
+
+```txt
+src/features/products/domain/productContext.js
+```
+
+Registry-backed Products require matching Graphic and layer source metadata. The current combined AOI path participates through an explicit internal compatibility adapter, not a permanent registry source or persisted toggle. Unknown or inconsistent source metadata fails closed for backend-dependent actions.
+
+`productActionAvailability.js` combines Product context capabilities with Product status, active operations, backend capability state, and popup Export state. Paper Charts and S-102 therefore retain popup attributes and disabled Export placeholders without gaining mutations, Product Collection, Analyze, Review, History, or reports.
 
 ### Product operation state
 
@@ -244,7 +259,7 @@ Some current behavior is intentionally frontend-only or placeholder-only:
 
 - popup export leaf/scope presentation state
 - same-browser job cache and cross-tab synchronization
-- disabled future export leaves for `All`, `S57` and `S100 > Update`
+- disabled source-configured Edition/Update placeholders for compatibility Update, Paper Charts and S-102
 - Dashboard report actions until IC-ENC/internal validation report IDs or URLs exist
 
 The backend active-job endpoint is the source of truth for shared visibility. Frontend state remains responsible for presentation, polling and responsive local reconciliation.
@@ -256,8 +271,9 @@ Do not implement the following fully until backend/database contracts are ready:
 - atomic Product operation claim before enqueue
 - external shared Hangfire worker migration
 - global map timeline
-- S57 export endpoints
-- S100 update export endpoint
+- separate source-correct S-57 and S-101 Product/read and export contracts
+- compatibility and source-specific Update export endpoints
+- real Paper Charts and S-102 export endpoints
 - real Dashboard IC-ENC report links
 - real Dashboard internal validation report links
 
@@ -316,7 +332,7 @@ Dashboard History panel is route-local. It replaces the right summary column whi
 
 ## Adding future export endpoints
 
-To activate a future export leaf action:
+To activate a future source export operation:
 
 1. Add the backend request function in:
 
@@ -324,23 +340,23 @@ To activate a future export leaf action:
    src/features/data/api/exportApi.js
    ```
 
-2. Import that request in:
+2. Register its stable handler ID in:
 
    ```txt
    src/features/map/popups/popupExportConfig.js
    ```
 
-3. Set the relevant leaf action to `implemented: true`.
-4. Assign the request function.
-5. Add or adjust confirm text if needed.
-
-Do not add endpoint wiring directly in `popupActionConfig.js`.
+3. Declare the source capability, operation kind, backend target, handler ID, and availability text in the source export configuration.
+4. Keep endpoint mapping out of popup DOM and `popupActionConfig.js`.
+5. Add or adjust confirmation text and focused contract tests.
 
 Current implemented export leaf:
 
 ```txt
-Export > S100 > Edition -> POST /export/{name}/newedition/jobs?exportTarget=S100
+Export > Edition -> POST /export/{name}/newedition/jobs?exportTarget=S100
 ```
+
+The generic Edition label preserves the established compatibility wire target. It is not an `All` export and does not infer separate S-57/S-101 source ownership.
 
 Current implemented rollback action:
 
@@ -426,5 +442,8 @@ Recent frontend work has focused on:
 - route-specific onboarding and Preferences replay
 - user-facing Product/Products terminology audit
 - layer capability foundation
+- FI-011A configurable Product data-source foundation
+- FI-011B source-aware Filters, Product search, and navbar coordination
+- FI-011C source-aware Product context, popup actions, and flat Export menu
 
 The frontend is ready for controlled user testing with asynchronous Export/Rollback, shared active-operation visibility and the manually verified BE-107 Dashboard pagination baseline `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`. BE-106 documents—but does not implement—the future move of worker execution to JobPlatform. The next planned backend package is BE-108 Product History failure hardening when its producer contract is ready. Remaining backend-dependent work includes atomic enqueue ownership, any later shared-worker implementation, report contracts, future export variants and the global timeline.

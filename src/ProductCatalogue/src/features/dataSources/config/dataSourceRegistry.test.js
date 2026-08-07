@@ -11,6 +11,7 @@ import {
 
 test("registry defines independent target sources without a permanent combined source", () => {
   const registry = createDataSourceRegistry({ isDevelopment: true });
+
   assert.deepEqual(
     registry.definitions.map((source) => source.id),
     ["s57", "s101", "paper-charts", "s102"]
@@ -25,17 +26,20 @@ test("registry defines independent target sources without a permanent combined s
 
 test("S-57 and S-101 are known but unavailable until authoritative loaders exist", () => {
   const registry = createDataSourceRegistry({ isDevelopment: true });
+
   for (const sourceId of [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101]) {
     const source = registry.byId.get(sourceId);
     assert.equal(source.availability.state, DATA_SOURCE_AVAILABILITY.UNAVAILABLE);
     assert.equal(source.userSelectable, false);
     assert.equal(source.loader, null);
     assert.deepEqual(source.layerDefinitions, []);
+    assert.equal(source.exportConfiguration, null);
   }
 });
 
 test("development registry exposes only Paper Charts and S-102 as selectable", () => {
   const registry = createDataSourceRegistry({ isDevelopment: true });
+
   assert.deepEqual(
     getRuntimeSelectableDataSources(registry).map((source) => source.id),
     [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]
@@ -48,6 +52,7 @@ test("development registry exposes only Paper Charts and S-102 as selectable", (
 
 test("mock sources are unavailable outside Development", () => {
   const registry = createDataSourceRegistry({ isDevelopment: false });
+
   assert.deepEqual(getRuntimeSelectableDataSources(registry), []);
   assert.deepEqual(getDefaultEnabledSourceIds(registry), []);
 });
@@ -57,6 +62,7 @@ test("configuration-disabled sources are not selectable or default-enabled", () 
     isDevelopment: true,
     configuredSourceIds: [DATA_SOURCE_IDS.S102],
   });
+
   assert.deepEqual(
     getRuntimeSelectableDataSources(registry).map((source) => source.id),
     [DATA_SOURCE_IDS.S102]
@@ -65,7 +71,7 @@ test("configuration-disabled sources are not selectable or default-enabled", () 
   assert.equal(registry.byId.get(DATA_SOURCE_IDS.PAPER_CHARTS).enabledByConfiguration, false);
 });
 
-test("mock sources enable frontend search while backend workflows remain disabled", () => {
+test("mock sources expose popup Export placeholders while backend workflows remain disabled", () => {
   const registry = createDataSourceRegistry({ isDevelopment: true });
   const backendWorkflowCapabilities = [
     "freeze",
@@ -80,6 +86,7 @@ test("mock sources enable frontend search while backend workflows remain disable
     "productCollection",
     "analyze",
     "review",
+    "backendProductRefresh",
   ];
 
   for (const sourceId of [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]) {
@@ -87,18 +94,26 @@ test("mock sources enable frontend search while backend workflows remain disable
     const layerCapabilities = source.layerDefinitions[0].capabilities;
 
     assert.equal(source.capabilities.productSearch, true);
+    assert.equal(source.capabilities.popupExport, true);
     assert.equal(source.search.supported, true);
     assert.equal(source.filtering.supported, true);
-
     assert.equal(layerCapabilities.supportsPopup, true);
+    assert.equal(layerCapabilities.supportsPopupActions, true);
     assert.equal(layerCapabilities.supportsAttributeFilters, true);
     assert.equal(layerCapabilities.supportsOverlapPicker, true);
     assert.equal(layerCapabilities.supportsProductSearch, true);
-
-    assert.equal(layerCapabilities.supportsPopupActions, false);
     assert.equal(layerCapabilities.supportsProductActions, false);
     assert.equal(layerCapabilities.supportsProductHistory, false);
+    assert.deepEqual(
+      source.exportConfiguration.leaves.map((leaf) => leaf.label),
+      ["Edition", "Update"]
+    );
 
+    for (const leaf of source.exportConfiguration.leaves) {
+      assert.equal(leaf.implemented, false);
+      assert.equal(leaf.backendTarget, null);
+      assert.equal(leaf.handlerId, null);
+    }
     for (const capability of backendWorkflowCapabilities) {
       assert.equal(source.capabilities[capability], false, capability);
     }

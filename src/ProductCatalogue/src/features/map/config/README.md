@@ -40,7 +40,10 @@ FI-011 source-owned layers additionally receive:
 
 - `appSourceId`;
 - `dataSourceId`;
-- `sourceId`.
+- `sourceId`;
+- `appSourceDefinition`;
+- `appProductType`;
+- source Export configuration metadata.
 
 The transformers copy stable metadata onto each graphic's attributes:
 
@@ -62,18 +65,20 @@ payload shapes differ.
 
 ## Product action safety
 
-Product actions must only be shown for layers with `supportsProductActions: true`.
+Product mutation actions must only be shown for Products whose resolved Product context declares the
+relevant operation capability. Layer capability `supportsProductActions` remains a conservative map
+boundary for backend-dependent Product workflows.
 
 Do not infer action capability only from fields such as `datasetName`, `edition`, or `status`. Those
 fields also exist on non-action FI-011 sources. Source-owned graphics are explicitly prevented from
 falling back to the compatibility AOI capability profile.
 
-Paper Charts and S-102 begin with:
+Paper Charts and S-102 use this FI-011C layer capability profile:
 
 ```js
 capabilities: {
   supportsPopup: true,
-  supportsPopupActions: false,
+  supportsPopupActions: true,
   supportsProductActions: false,
   supportsDisplayScale: false,
   supportsAttributeFilters: true,
@@ -83,14 +88,24 @@ capabilities: {
 }
 ```
 
-Filters and Product search are client-side functions over the source's currently committed Graphics.
-Enabling these capabilities does not enable mutations, History, exports, Product Collection, Analyze,
-or Review. All backend-dependent Product workflows remain disabled until an authoritative
-source-specific backend contract exists.
+`supportsPopupActions` now means that the popup may render capability-safe custom action-bar content.
+For Paper Charts and S-102 this is currently the disabled `Export > Edition` / `Export > Update`
+placeholder surface. It does **not** mean that Product mutation workflows or Product Collection are
+supported.
 
-Their popup is a safe fields-only popup. The popup-header Product Collection action also resolves
-`supportsPopupActions` from the selected Graphic and nested layer metadata, while `Copy dataset name`
-remains independent. No existing ENC-only API call may be dispatched for these sources.
+Product Collection has a separate capability boundary. The popup-header collection action resolves
+the selected Graphic through `features/products/domain/productContext.js` and checks the central
+`productCollection` Product capability. The compatibility AOI adapter declares that capability as
+supported; Paper Charts and S-102 declare it as unsupported in the data source registry. Missing or
+inconsistent Product context therefore fails Product Collection closed. `Copy dataset name` remains
+independent from this capability.
+
+Filters and Product search are client-side functions over the source's currently committed Graphics.
+Enabling them, or enabling safe popup action-bar content, does not enable mutations, History, Product
+Collection, Analyze, or Review. Those backend-dependent Product workflows remain disabled for the
+mock sources until an authoritative source-specific contract exists.
+
+No existing compatibility/ENC-only API call may be dispatched for Paper Charts or S-102.
 
 ## Runtime registry ownership
 
@@ -112,9 +127,10 @@ When adding a new source-owned layer:
 2. Add the corresponding static layer definition in `layerDefinitions.js`.
 3. Give the source a real loader/provider and normalizer contract.
 4. Define a stable Product-key strategy and reject missing or duplicate identity.
-5. Set capabilities conservatively.
-6. Keep mutation and export capabilities disabled until source-specific API dispatch is available.
-7. Add lifecycle, refresh, identity, capability, and stale-operation tests.
+5. Set layer and Product-context capabilities conservatively.
+6. Keep mutation, Product Collection, History, Analyze, Review, and real Export capabilities disabled
+   until source-specific workflow/API dispatch is available.
+7. Add lifecycle, refresh, identity, capability, stale-operation, and popup-header regression tests.
 
-Do not add source checks directly to unrelated UI modules when registry metadata or lifecycle hooks
-can express the behavior.
+Do not add source checks directly to unrelated UI modules when registry metadata, Product context, or
+lifecycle hooks can express the behavior.
