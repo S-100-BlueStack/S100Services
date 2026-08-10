@@ -106,7 +106,7 @@ This matches the existing Dapper and handwritten-SQL architecture.
 The exact names can be confirmed when Batch 1 is generated, but the planned pattern is:
 
 ```text
-src/ProductManagerAPI/Data/Database/Migrations/
+src/ProductCatalogueAPI/Data/Database/Migrations/
   README.md
   BE108A_001_CreateProductHistoryEvent.sql
   BE108A_001_VerifyProductHistoryEvent.sql
@@ -500,7 +500,7 @@ Planned Batch 2 configuration:
 Recurring job ID: product-history-reconciliation
 Initial schedule: every 15 minutes
 Dedicated queue: productmanager-maintenance
-Initial host: ProductManagerAPI Hangfire Server
+Initial host: ProductCatalogueAPI Hangfire Server
 Future host: shared worker
 ```
 
@@ -508,7 +508,7 @@ Future host: shared worker
 
 When Batch 2 is implemented:
 
-- ProductManagerAPI registers the recurring job;
+- ProductCatalogueAPI registers the recurring job;
 - its Hangfire Server listens to `productmanager-maintenance`;
 - the recurring job and queue have one active owner configuration.
 
@@ -548,7 +548,7 @@ Reconciliation must never:
 During later worker extraction:
 
 - queue ownership and recurring registration move together to the shared worker;
-- ProductManagerAPI no longer executes the maintenance queue;
+- ProductCatalogueAPI no longer executes the maintenance queue;
 - the recurring job ID and schedule remain stable unless a separate operational decision changes them;
 - only one active worker configuration owns the queue after cutover.
 

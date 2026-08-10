@@ -1,11 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using ProductManagerAPI.Options;
-using ProductManagerAPI.Controllers;
-using ProductManagerAPI.Models;
+using ProductCatalogueAPI.Options;
+using ProductCatalogueAPI.Controllers;
+using ProductCatalogueAPI.Models;
 using System.Text.Json;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class LookupControllerTests
     {

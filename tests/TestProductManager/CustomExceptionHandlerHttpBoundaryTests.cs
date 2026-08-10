@@ -5,10 +5,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using ProductManagerAPI;
-using ProductManagerAPI.Services.Locking;
+using ProductCatalogueAPI;
+using ProductCatalogueAPI.Services.Locking;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     [Trait("Package", "PC-005")]
     public sealed class CustomExceptionHandlerHttpBoundaryTests

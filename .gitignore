@@ -460,10 +460,10 @@ dist-ssr
 /src/ProductCatalogue/fh006-file-list.txt
 /src/JobManager/.env.development
 job-manager-review-context.md
-/src/ProductManagerAPI/appsettings.Development.json
-src/ProductManagerAPI/config/policies.json
-src/ProductManagerAPI/config/system.connection
-src/ProductManagerAPI/config/hangfire.connection
-/src/ProductManagerAPI/config/SQLServer-ncps-sql101041-s100ed15_maya(s100_dbo).sde
-/src/ProductManagerAPI/config/SQLServer-ncps-sql101041-s100ed15_productcatalogue(s100_dbo).sde
-/src/ProductManagerAPI/config/ed12/SQLServer-ncps-sql101041-s100ed12_columbia_L3(s100_dbo).sde
+/src/ProductCatalogueAPI/appsettings.Development.json
+src/ProductCatalogueAPI/config/policies.json
+src/ProductCatalogueAPI/config/system.connection
+src/ProductCatalogueAPI/config/hangfire.connection
+/src/ProductCatalogueAPI/config/SQLServer-ncps-sql101041-s100ed15_maya(s100_dbo).sde
+/src/ProductCatalogueAPI/config/SQLServer-ncps-sql101041-s100ed15_productcatalogue(s100_dbo).sde
+/src/ProductCatalogueAPI/config/ed12/SQLServer-ncps-sql101041-s100ed12_columbia_L3(s100_dbo).sde

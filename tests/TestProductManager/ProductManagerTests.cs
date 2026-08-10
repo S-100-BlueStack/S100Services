@@ -1,9 +1,9 @@
 using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
 using Microsoft.Extensions.Logging.Abstractions;
-using ProductManagerAPI;
-using ProductManagerAPI.Services.Export;
-using ProductManagerAPI.Services.SevenCs;
+using ProductCatalogueAPI;
+using ProductCatalogueAPI.Services.Export;
+using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using S100FC.YAML;
@@ -15,7 +15,7 @@ using System.Text.Json;
 using Xunit.Abstractions;
 using IO = System.IO;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class TestProductManager
     {

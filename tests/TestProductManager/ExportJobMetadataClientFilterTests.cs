@@ -1,8 +1,8 @@
-using ProductManagerAPI.Jobs;
-using ProductManagerAPI.Services.Operations;
+using ProductCatalogueAPI.Jobs;
+using ProductCatalogueAPI.Services.Operations;
 using System.Globalization;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class ExportJobMetadataClientFilterTests
     {

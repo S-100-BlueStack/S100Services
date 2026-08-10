@@ -1,10 +1,10 @@
 ﻿using Microsoft.Extensions.Configuration;
-using ProductManagerAPI.Data.Database;
-using ProductManagerAPI.Data.Models;
-using ProductManagerAPI.Data.Repositories;
+using ProductCatalogueAPI.Data.Database;
+using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Data.Repositories;
 using Xunit.Abstractions;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class ProductRepositoryTests
     {

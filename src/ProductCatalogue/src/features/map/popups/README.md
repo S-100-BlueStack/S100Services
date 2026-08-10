@@ -393,7 +393,7 @@ Planned Batch 2 configuration:
 Recurring job ID: product-history-reconciliation
 Initial schedule: every 15 minutes
 Dedicated queue: productmanager-maintenance
-Initial host: ProductManagerAPI Hangfire Server
+Initial host: ProductCatalogueAPI Hangfire Server
 Future host: shared worker
 ```
 
@@ -401,6 +401,6 @@ Unknown Hangfire states remain pending and are logged; they are not automaticall
 
 ## Future external worker boundary
 
-The current frontend contract does not depend on the Hangfire worker running inside ProductManagerAPI. A later migration to the shared Hangfire API/worker application can retain the start, status and active-job HTTP contracts, provided the shared worker can execute the Product Catalogue job assembly and access the required ArcGIS, compiler, connection-file and filesystem dependencies.
+The current frontend contract does not depend on the Hangfire worker running inside ProductCatalogueAPI. A later migration to the shared Hangfire API/worker application can retain the start, status and active-job HTTP contracts, provided the shared worker can execute the Product Catalogue job assembly and access the required ArcGIS, compiler, connection-file and filesystem dependencies.
 
 An external worker migration must be coordinated with the planned atomic operation-registry work. The current local dataset lock and Hangfire monitoring lookup are not sufficient as a final distributed ownership model across independently deployed workers.

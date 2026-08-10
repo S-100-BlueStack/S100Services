@@ -1,7 +1,7 @@
-using ProductManagerAPI.Services.Dashboard;
-using static ProductManagerAPI.Models.ResponseTypes;
+using ProductCatalogueAPI.Services.Dashboard;
+using static ProductCatalogueAPI.Models.ResponseTypes;
 
-namespace TestProductManagerAPI;
+namespace TestProductCatalogueAPI;
 
 public class DashboardQueryProcessorTests
 {

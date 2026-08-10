@@ -366,13 +366,13 @@ Rollback -> POST /export/{name}/rollback/jobs
 
 ## Background job deployment direction
 
-ProductManagerAPI currently hosts both the Product Catalogue HTTP API and the Hangfire Server that executes Product Catalogue jobs.
+ProductCatalogueAPI currently hosts both the Product Catalogue HTTP API and the Hangfire Server that executes Product Catalogue jobs.
 
 BE-106 confirms the future direction without changing runtime:
 
-- ProductManagerAPI remains the Product Catalogue API, enqueue and job-status owner;
+- ProductCatalogueAPI remains the Product Catalogue API, enqueue and job-status owner;
 - Product Catalogue worker execution may later move to `JobPlatform.Worker`;
-- the frontend continues using the same ProductManagerAPI routes;
+- the frontend continues using the same ProductCatalogueAPI routes;
 - scheduled tasks are reviewed and migrated separately;
 - no worker move, queue change or shared operation registry is currently implemented.
 

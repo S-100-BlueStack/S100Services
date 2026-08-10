@@ -277,7 +277,7 @@ contract exists. This does not represent a source-correct S-57/S-101 split.
 
 ## Development-only mocks
 
-ProductManagerAPI registers these routes only in Development:
+ProductCatalogueAPI registers these routes only in Development:
 
 ```text
 GET /mock/paper-charts -> mock/some_products.geojson

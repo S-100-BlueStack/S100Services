@@ -1,17 +1,17 @@
 using Hangfire;
 using Microsoft.Extensions.Logging.Abstractions;
-using ProductManagerAPI.Jobs;
-using ProductManagerAPI.Services.Locking;
-using ProductManagerAPI.Services.Operations;
+using ProductCatalogueAPI.Jobs;
+using ProductCatalogueAPI.Services.Locking;
+using ProductCatalogueAPI.Services.Operations;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using S100FC.YAML;
 using YamlDataset = S100FC.YAML.Dataset;
 using System.Collections;
 using System.Reflection;
-using static ProductManagerAPI.Models.RequestTypes;
+using static ProductCatalogueAPI.Models.RequestTypes;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class ExportOperationJobTests
     {

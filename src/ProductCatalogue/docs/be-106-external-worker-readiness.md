@@ -14,7 +14,7 @@ The agreed future deployment direction is:
 Product Catalogue frontend
         |
         v
-ProductManagerAPI
+ProductCatalogueAPI
   - keeps public Product Catalogue endpoints
   - validates and enqueues Product Catalogue jobs
   - returns job status to the frontend
@@ -37,14 +37,14 @@ The Product Catalogue API remains in the current application. Only Hangfire Serv
 
 - Current Product Catalogue Hangfire client, server, status and job execution dependencies.
 - Portability requirements for executing Product Catalogue jobs in `JobPlatform.Worker`.
-- Required compatibility between ProductManagerAPI and JobPlatform.
+- Required compatibility between ProductCatalogueAPI and JobPlatform.
 - Scheduled-task migration candidates and risk classification.
 - Deployment, cutover and rollback prerequisites.
 - Explicit implementation gates and unresolved decisions.
 
 ### Excluded
 
-- Removing `AddHangfireServer()` from ProductManagerAPI.
+- Removing `AddHangfireServer()` from ProductCatalogueAPI.
 - Adding Product Catalogue references to JobPlatform.
 - Creating shared job assemblies or queue constants.
 - Changing the Hangfire database or schema owner.
@@ -57,7 +57,7 @@ The Product Catalogue API remains in the current application. Only Hangfire Serv
 
 ### 3.1 Hosting
 
-`ProductManagerAPI/Program.cs` currently acts as all of the following:
+`ProductCatalogueAPI/Program.cs` currently acts as all of the following:
 
 - Hangfire client;
 - Hangfire Server host;
@@ -70,7 +70,7 @@ The current application configures Hangfire SQL storage, serializer settings and
 
 ### 3.2 Public API ownership
 
-The following public contracts should remain owned by ProductManagerAPI after worker extraction:
+The following public contracts should remain owned by ProductCatalogueAPI after worker extraction:
 
 ```http
 POST /export/{name}/newedition/jobs?exportTarget=S100
@@ -83,7 +83,7 @@ This keeps the frontend isolated from JobPlatform deployment details and prevent
 
 ### 3.3 Enqueue contract
 
-ProductManagerAPI currently enqueues a strongly typed Hangfire invocation:
+ProductCatalogueAPI currently enqueues a strongly typed Hangfire invocation:
 
 ```text
 ExportOperationJob.RunAsync(
@@ -107,7 +107,7 @@ Application-owned metadata is written atomically through `ExportJobMetadataClien
 
 ### 3.4 Status contract
 
-ProductManagerAPI reads Hangfire state and Product Catalogue job parameters directly from shared Hangfire storage. This can continue after worker extraction provided ProductManagerAPI retains compatible read access to the same storage and serializer contract.
+ProductCatalogueAPI reads Hangfire state and Product Catalogue job parameters directly from shared Hangfire storage. This can continue after worker extraction provided ProductCatalogueAPI retains compatible read access to the same storage and serializer contract.
 
 The status API must continue to hide raw Hangfire arguments, implementation types, paths, stack traces and internal exceptions.
 
@@ -139,7 +139,7 @@ The status API must continue to hide raw Hangfire arguments, implementation type
 
 ### 4.3 Build and platform dependencies
 
-ProductManagerAPI currently targets:
+ProductCatalogueAPI currently targets:
 
 ```text
 net10.0-windows10.0.20348
@@ -159,7 +159,7 @@ A future worker cannot be treated as a platform-neutral generic .NET job host. I
 
 ### 4.4 Configuration and external resources
 
-The worker will need explicit access to all configuration currently resolved by ProductManagerAPI/ProductManagerCore, including:
+The worker will need explicit access to all configuration currently resolved by ProductCatalogueAPI/ProductManagerCore, including:
 
 - Product Catalogue/S-128 and system database connections;
 - Hangfire SQL storage connection;
@@ -211,7 +211,7 @@ The exact project/assembly arrangement is deliberately not created by BE-106. Be
 
 ## 7. Hangfire compatibility requirements
 
-Before ProductManagerAPI can enqueue jobs for a separate worker, both processes must agree on:
+Before ProductCatalogueAPI can enqueue jobs for a separate worker, both processes must agree on:
 
 - Hangfire major/minor compatibility;
 - SQL storage schema and owner;
@@ -250,7 +250,7 @@ BE-106 does not add this queue. The final queue name and worker count must be ap
 Current registration:
 
 - controlled by `EnableDetectProductChanges`;
-- registered from ProductManagerAPI startup;
+- registered from ProductCatalogueAPI startup;
 - recurring ID: `detect-product-changes-job`;
 - currently scheduled with `Cron.Daily(23)`;
 - directly performs Product scans, New Edition/New Update work, export, SevenCs validation, attachment writes and repository updates.
@@ -269,7 +269,7 @@ Decision: treat `DetectProductChangesJob` as a separate later migration package.
 
 ### 9.2 Mail import and other commented jobs
 
-Mail-import job registration is currently commented/disabled in ProductManagerAPI. Disabled code is not a migration candidate until its ownership, configuration and production requirement are explicitly restored.
+Mail-import job registration is currently commented/disabled in ProductCatalogueAPI. Disabled code is not a migration candidate until its ownership, configuration and production requirement are explicitly restored.
 
 ### 9.3 Other scheduled tasks
 
@@ -285,7 +285,7 @@ Any additional scheduled task considered for JobPlatform must receive its own in
 
 ## 10. Target responsibility split
 
-### ProductManagerAPI remains responsible for
+### ProductCatalogueAPI remains responsible for
 
 - Product Catalogue HTTP routes and response models;
 - request validation and public error semantics;
@@ -342,7 +342,7 @@ This is a planning sequence only.
 5. Verify worker startup, DI, ArcGIS runtime, database and filesystem access.
 6. Pause new Product Catalogue job creation or enter a controlled maintenance window.
 7. Drain or explicitly resolve existing Product Catalogue jobs in the old storage/queue.
-8. Deploy ProductManagerAPI as client/status reader without Hangfire Server.
+8. Deploy ProductCatalogueAPI as client/status reader without Hangfire Server.
 9. Enable the Product Catalogue queue on JobPlatform.Worker.
 10. Run one controlled Export and one controlled Rollback through the unchanged frontend/API contract.
 11. Verify status, active-job visibility, execution guard, output, Product state and logs.
@@ -372,7 +372,7 @@ These decisions remain intentionally unresolved until JobPlatform is ready:
 4. Final Product Catalogue queue name and worker concurrency.
 5. Worker host and ArcGIS licensing model.
 6. Service identity, secrets and filesystem permissions.
-7. Whether ProductManagerAPI continues direct Hangfire status reads long term.
+7. Whether ProductCatalogueAPI continues direct Hangfire status reads long term.
 8. Persistence and recovery semantics for an atomic Product operation registry.
 9. Final relationship between distributed ownership and the current file lock.
 10. Which scheduled tasks move, remain, or are retired.
@@ -381,7 +381,7 @@ These decisions remain intentionally unresolved until JobPlatform is ready:
 
 ## 15. Review conclusion
 
-The current async Product Catalogue design is portable to a separate JobPlatform worker without changing the frontend or public ProductManagerAPI routes.
+The current async Product Catalogue design is portable to a separate JobPlatform worker without changing the frontend or public ProductCatalogueAPI routes.
 
 The move is **not** a connection-string-only change. The future worker must reproduce the Product Catalogue execution environment, and distributed concurrency must be resolved before more than one host can execute Product Catalogue mutations.
 

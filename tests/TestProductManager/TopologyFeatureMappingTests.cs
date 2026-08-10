@@ -5,7 +5,7 @@ using S100FC.Topology;
 using S100FC.YAML;
 using YamlDataset = S100FC.YAML.Dataset;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class TopologyFeatureMappingTests
     {

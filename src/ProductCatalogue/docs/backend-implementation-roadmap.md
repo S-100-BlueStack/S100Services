@@ -28,7 +28,7 @@ These decisions apply to every work package:
 2. The implemented active-job endpoint is visibility and preflight, not an atomic enqueue claim.
 3. Do not add a second lock or operation registry without a separately approved distributed-ownership design package.
 4. Do not change Product database or geodatabase schema while the relevant administrators are unavailable unless an explicitly approved operation-registry package requires separate persistence.
-5. BE-106 confirms that ProductManagerAPI remains the public API/enqueue/status owner while worker hosting may later move to JobPlatform. No runtime move is approved by BE-106.
+5. BE-106 confirms that ProductCatalogueAPI remains the public API/enqueue/status owner while worker hosting may later move to JobPlatform. No runtime move is approved by BE-106.
 6. Do not introduce a competing background-job system.
 7. Keep `datasetName` until the planned permanent Product ID is introduced by the database owners.
 8. Reports remain blocked pending IC-ENC/internal validation process and API decisions.
@@ -642,8 +642,8 @@ src/ProductCatalogue/docs/be-106-external-worker-readiness.md
 
 ### Confirmed direction
 
-- ProductManagerAPI remains the Product Catalogue HTTP API.
-- ProductManagerAPI continues to own enqueue validation and public job/status responses.
+- ProductCatalogueAPI remains the Product Catalogue HTTP API.
+- ProductCatalogueAPI continues to own enqueue validation and public job/status responses.
 - Hangfire Server/worker execution may later move to `JobPlatform.Worker`.
 - Selected scheduled tasks may later move, but each task requires an explicit migration decision.
 - BE-106 makes no runtime, queue, project-reference, storage or scheduled-task changes.
@@ -894,7 +894,7 @@ This metadata allows deterministic reconciliation if audit finalization fails af
 Recurring job ID: product-history-reconciliation
 Initial schedule: every 15 minutes
 Dedicated queue: productmanager-maintenance
-Initial host: ProductManagerAPI Hangfire Server
+Initial host: ProductCatalogueAPI Hangfire Server
 Future host: shared worker
 ```
 
@@ -915,7 +915,7 @@ Unknown:
     leave pending and log
 ```
 
-The current ProductManagerAPI Hangfire Server must listen to the maintenance queue when Batch 2 is implemented. During a future worker cutover, recurring registration and queue ownership move together, and only one active worker configuration may own the queue.
+The current ProductCatalogueAPI Hangfire Server must listen to the maintenance queue when Batch 2 is implemented. During a future worker cutover, recurring registration and queue ownership move together, and only one active worker configuration may own the queue.
 
 ### Documentation-only acceptance for this baseline
 
@@ -1066,4 +1066,4 @@ The paused-worker metadata acceptance remains required: create a job, immediatel
 
 Also verify `GET /jobs/active?datasetName={datasetName}` from a second browser profile or computer while a job is queued/running, and verify that mutation preflight sends no mutation when active status cannot be read.
 
-Before an external worker migration, repeat the complete acceptance matrix with ProductManagerAPI acting only as client/status API and the shared worker processing the dedicated Product Catalogue queue.
+Before an external worker migration, repeat the complete acceptance matrix with ProductCatalogueAPI acting only as client/status API and the shared worker processing the dedicated Product Catalogue queue.

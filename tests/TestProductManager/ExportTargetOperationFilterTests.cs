@@ -1,12 +1,12 @@
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
-using ProductManagerAPI.Controllers;
-using ProductManagerAPI.OpenApi;
-using ProductManagerAPI.Services.Export;
+using ProductCatalogueAPI.Controllers;
+using ProductCatalogueAPI.OpenApi;
+using ProductCatalogueAPI.Services.Export;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class ExportTargetOperationFilterTests
     {

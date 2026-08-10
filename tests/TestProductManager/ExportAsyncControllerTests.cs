@@ -4,21 +4,21 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
-using ProductManagerAPI.Controllers;
-using ProductManagerAPI.Jobs;
-using ProductManagerAPI.Models;
-using ProductManagerAPI.Services.Export;
-using ProductManagerAPI.Services.Jobs;
-using ProductManagerAPI.Services.Locking;
-using ProductManagerAPI.Services.Operations;
+using ProductCatalogueAPI.Controllers;
+using ProductCatalogueAPI.Jobs;
+using ProductCatalogueAPI.Models;
+using ProductCatalogueAPI.Services.Export;
+using ProductCatalogueAPI.Services.Jobs;
+using ProductCatalogueAPI.Services.Locking;
+using ProductCatalogueAPI.Services.Operations;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using S100FC.YAML;
 using YamlDataset = S100FC.YAML.Dataset;
 using System.Collections;
-using static ProductManagerAPI.Models.RequestTypes;
+using static ProductCatalogueAPI.Models.RequestTypes;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class ExportAsyncControllerTests
     {

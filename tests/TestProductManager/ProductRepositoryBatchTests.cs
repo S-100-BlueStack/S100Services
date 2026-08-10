@@ -1,7 +1,7 @@
-using ProductManagerAPI.Data.Models;
-using ProductManagerAPI.Data.Repositories;
+using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Data.Repositories;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class ProductRepositoryBatchTests
     {

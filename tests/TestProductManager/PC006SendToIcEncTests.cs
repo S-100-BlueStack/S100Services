@@ -5,18 +5,18 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using ProductManagerAPI.Options;
-using ProductManagerAPI.Controllers;
-using ProductManagerAPI.Data.Models;
-using ProductManagerAPI.Data.Repositories;
-using ProductManagerAPI.Jobs;
-using ProductManagerAPI.Models;
-using ProductManagerAPI.Services.Jobs;
-using ProductManagerAPI.Services.Locking;
+using ProductCatalogueAPI.Options;
+using ProductCatalogueAPI.Controllers;
+using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Data.Repositories;
+using ProductCatalogueAPI.Jobs;
+using ProductCatalogueAPI.Models;
+using ProductCatalogueAPI.Services.Jobs;
+using ProductCatalogueAPI.Services.Locking;
 using System.Reflection;
 using System.Text.Json;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public sealed class PC006SendToIcEncTests
     {

@@ -1,15 +1,15 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using ProductManagerAPI.Data.Models;
-using ProductManagerAPI.Data.Repositories;
-using ProductManagerAPI.Services.Export;
-using ProductManagerAPI.Services.Operations;
+using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Data.Repositories;
+using ProductCatalogueAPI.Services.Export;
+using ProductCatalogueAPI.Services.Operations;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using System.Collections;
-using static ProductManagerAPI.Models.RequestTypes;
+using static ProductCatalogueAPI.Models.RequestTypes;
 using YamlDataset = S100FC.YAML.Dataset;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class ExportOperationServiceTests
     {

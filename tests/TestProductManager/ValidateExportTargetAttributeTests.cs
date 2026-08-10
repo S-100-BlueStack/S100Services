@@ -6,14 +6,14 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
-using ProductManagerAPI.Controllers;
-using ProductManagerAPI.Filters;
-using ProductManagerAPI.Services.Export;
+using ProductCatalogueAPI.Controllers;
+using ProductCatalogueAPI.Filters;
+using ProductCatalogueAPI.Services.Export;
 using S100FC.ProductCatalogue;
-using static ProductManagerAPI.Models.RequestTypes;
-using static ProductManagerAPI.Models.ResponseTypes;
+using static ProductCatalogueAPI.Models.RequestTypes;
+using static ProductCatalogueAPI.Models.ResponseTypes;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class ValidateExportTargetAttributeTests
     {

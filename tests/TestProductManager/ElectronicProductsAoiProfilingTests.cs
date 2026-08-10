@@ -6,17 +6,17 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using ProductManagerAPI.Controllers;
-using ProductManagerAPI.Data.Models;
-using ProductManagerAPI.Data.Repositories;
+using ProductCatalogueAPI.Controllers;
+using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Data.Repositories;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using System.Collections;
 using System.Diagnostics;
 using System.Reflection;
-using static ProductManagerAPI.Models.ResponseTypes;
+using static ProductCatalogueAPI.Models.ResponseTypes;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class ElectronicProductsAoiProfilingTests
     {

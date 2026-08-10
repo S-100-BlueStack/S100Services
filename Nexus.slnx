@@ -7,7 +7,7 @@
     <BuildType Project="Debug" />
     <Platform Project="x64" />
   </Project>
-  <Project Path="src/ProductManagerAPI/ProductManagerAPI.csproj">
+  <Project Path="src/ProductCatalogueAPI/ProductCatalogueAPI.csproj">
     <Platform Solution="*|x64" Project="x64" />
     <Platform Solution="Debug|Any CPU" Project="x64" />
   </Project>

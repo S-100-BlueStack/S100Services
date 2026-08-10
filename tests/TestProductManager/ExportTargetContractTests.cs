@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ProductManagerAPI.Services.Export;
-using static ProductManagerAPI.Models.RequestTypes;
+using ProductCatalogueAPI.Services.Export;
+using static ProductCatalogueAPI.Models.RequestTypes;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class ExportTargetContractTests
     {

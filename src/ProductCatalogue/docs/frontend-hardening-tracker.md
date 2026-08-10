@@ -7,7 +7,7 @@ BE-108A documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`.
 
 ## Backend worker-readiness note
 
-BE-106 is documentation-only. It confirms that ProductManagerAPI remains the public API/enqueue/status owner while worker execution may later move to JobPlatform. No frontend runtime change is required, and no shared-worker implementation should begin until JobPlatform is ready.
+BE-106 is documentation-only. It confirms that ProductCatalogueAPI remains the public API/enqueue/status owner while worker execution may later move to JobPlatform. No frontend runtime change is required, and no shared-worker implementation should begin until JobPlatform is ready.
 
 ## Status values
 

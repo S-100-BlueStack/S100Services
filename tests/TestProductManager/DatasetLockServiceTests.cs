@@ -1,6 +1,6 @@
-using ProductManagerAPI.Services.Locking;
+using ProductCatalogueAPI.Services.Locking;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class DatasetLockServiceTests : IDisposable
     {

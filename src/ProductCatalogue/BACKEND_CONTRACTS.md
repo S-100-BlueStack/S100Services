@@ -23,7 +23,7 @@ The following decisions are fixed unless the project owners explicitly reopen th
 - The current active-job endpoint and frontend preflight improve visibility and prevent normal duplicate starts, but they are not an atomic enqueue claim.
 - Do not add a second lock or operation registry without a separately approved distributed-ownership design package. BE-106 documents the requirement but does not authorize implementation.
 - Use the background-job framework already present in the backend. Do not introduce a competing job framework inside Product Catalogue.
-- BE-106 confirms that ProductManagerAPI remains the public API/enqueue/status owner while Hangfire Server/worker hosting may later move to JobPlatform. The move is deferred until JobPlatform is ready and requires shared assemblies, queues, ArcGIS/file dependencies, storage access and distributed concurrency to be resolved.
+- BE-106 confirms that ProductCatalogueAPI remains the public API/enqueue/status owner while Hangfire Server/worker hosting may later move to JobPlatform. The move is deferred until JobPlatform is ready and requires shared assemblies, queues, ArcGIS/file dependencies, storage access and distributed concurrency to be resolved.
 - Avoid Product database and geodatabase schema changes while database administrators are unavailable.
 - Continue using `datasetName` as the temporary Product identifier until a permanent Product ID is introduced by the database owners.
 - Do not implement report storage or report-content APIs until the IC-ENC and internal validation processes are defined.
@@ -802,7 +802,7 @@ The later Batch 2 reconciliation design is:
 Recurring job ID: product-history-reconciliation
 Initial schedule: every 15 minutes
 Dedicated queue: productmanager-maintenance
-Initial host: ProductManagerAPI Hangfire Server
+Initial host: ProductCatalogueAPI Hangfire Server
 Future host: shared worker
 ```
 
@@ -1229,8 +1229,8 @@ BE-106 is complete as documentation only. It introduces no runtime behavior.
 
 ### Fixed future deployment direction
 
-- ProductManagerAPI remains the Product Catalogue HTTP API.
-- ProductManagerAPI keeps request validation, enqueue and the public job/status contract.
+- ProductCatalogueAPI remains the Product Catalogue HTTP API.
+- ProductCatalogueAPI keeps request validation, enqueue and the public job/status contract.
 - `JobPlatform.Worker` is the intended later host for Product Catalogue job execution.
 - Scheduled tasks are evaluated individually and do not move implicitly with Export/Rollback.
 - The frontend must remain unaware of the worker host.
@@ -1254,7 +1254,7 @@ The current dataset lock is an exclusive file handle under local `%ProgramData%`
 
 ### Status ownership
 
-ProductManagerAPI may continue reading Product Catalogue job state from shared Hangfire storage after worker extraction. A later application-owned operation registry may replace active-job discovery, but no registry persistence or runtime contract is approved by BE-106.
+ProductCatalogueAPI may continue reading Product Catalogue job state from shared Hangfire storage after worker extraction. A later application-owned operation registry may replace active-job discovery, but no registry persistence or runtime contract is approved by BE-106.
 
 ### Scheduled-task boundary
 
@@ -1264,7 +1264,7 @@ ProductManagerAPI may continue reading Product Catalogue job state from shared H
 
 Until JobPlatform is ready and a later implementation package is approved, do not:
 
-- remove `AddHangfireServer()` from ProductManagerAPI;
+- remove `AddHangfireServer()` from ProductCatalogueAPI;
 - change Hangfire storage ownership;
 - add or activate a Product Catalogue queue;
 - move job classes or recurring-job registration;

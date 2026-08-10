@@ -1,13 +1,13 @@
-using ProductManagerAPI.Models;
-using ProductManagerAPI.Controllers;
+using ProductCatalogueAPI.Models;
+using ProductCatalogueAPI.Controllers;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
-using ProductManagerAPI.Jobs;
-using ProductManagerAPI.Services.Jobs;
+using ProductCatalogueAPI.Jobs;
+using ProductCatalogueAPI.Services.Jobs;
 using System.Text.Json;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class HangfireJobStatusServiceTests
     {
