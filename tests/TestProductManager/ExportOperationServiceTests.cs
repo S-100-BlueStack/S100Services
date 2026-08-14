@@ -3,324 +3,159 @@ using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.Operations;
+using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.ProductCatalogue;
-using S100FC.S128.FeatureTypes;
 using System.Collections;
-using static ProductCatalogueAPI.Models.RequestTypes;
+using static ProductCatalogueAPI.Services.SevenCs.SevenCsService;
 using YamlDataset = S100FC.YAML.Dataset;
 
-namespace TestProductCatalogueAPI
+namespace TestProductCatalogueAPI;
+
+public sealed class ExportOperationServiceTests
 {
-    public class ExportOperationServiceTests
+    [Fact]
+    public async Task NewEditionUsesReadOnlySnapshotAndStopsBeforeS128Publication() {
+        var products = new RecordingElectronicProductManager();
+        var repository = new RecordingWorkflowRepository();
+        var engine = new RecordingExportEngine();
+        var service = CreateService(products, repository, engine, new SummaryResponse());
+
+        var result = await service.ExecuteExportAsync("101DK001", ProductSpecification.S101, ExportRevisionType.NewEdition, "developer");
+
+        Assert.Equal(ExportOperationContract.ExportCompletedCode, result.Code);
+        Assert.Equal(1, products.SnapshotCalls);
+        Assert.Equal(0, products.AttachmentCalls);
+        Assert.Equal((5, 0), products.LastSnapshotVersion);
+        Assert.Equal(ProductState.ReadyForDistribution, repository.Track.State);
+        Assert.Equal(1, engine.ExportCalls);
+        Assert.Single(repository.Revisions);
+    }
+
+    [Fact]
+    public async Task ValidationFailureDefaultsTrackToError() {
+        var repository = new RecordingWorkflowRepository();
+        var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse { Errors = 1 });
+
+        await Assert.ThrowsAsync<ExportValidationException>(() => service.ExecuteExportAsync("101DK001", ProductSpecification.S101, ExportRevisionType.Update, null));
+
+        Assert.Equal(ProductState.Error, repository.Track.State);
+        Assert.Equal("ExportValidationException", repository.LastErrorCode);
+    }
+
+    [Fact]
+    public async Task FrozenCanOnlyBeClearedByTheUserFlowAndBlocksExportBeforeMutation() {
+        var repository = new RecordingWorkflowRepository { InitialState = ProductState.Frozen };
+        var products = new RecordingElectronicProductManager();
+        var service = CreateService(products, repository, new RecordingExportEngine(), new SummaryResponse());
+        var guardCalled = false;
+
+        await Assert.ThrowsAsync<ExportOperationRejectedException>(() => service.ExecuteExportAsync("101DK001", ProductSpecification.S101, ExportRevisionType.NewEdition, null, beforeMutation: () => guardCalled = true));
+
+        Assert.False(guardCalled);
+        Assert.Equal(0, products.SnapshotCalls);
+        Assert.Equal(ProductState.Frozen, repository.Track.State);
+    }
+
+    [Fact]
+    public async Task CancelExportClearsOnlyTheSqlCandidateAndFilesystemOutput() {
+        var repository = new RecordingWorkflowRepository { CandidateEdition = 5, CandidateUpdate = 0, InitialState = ProductState.ReadyForDistribution };
+        var products = new RecordingElectronicProductManager();
+        var engine = new RecordingExportEngine();
+        var service = CreateService(products, repository, engine, new SummaryResponse());
+
+        var result = await service.ExecuteCancelExportAsync("101DK001", ProductSpecification.S101, "developer");
+
+        Assert.Equal(ExportOperationContract.CancelExportCompletedCode, result.Code);
+        Assert.Equal(ProductState.Cancelled, repository.Track.State);
+        Assert.Null(repository.Track.CandidateEdition);
+        Assert.Equal(1, engine.DeleteCalls);
+        Assert.Equal(0, products.AttachmentCalls);
+    }
+
+    private static TestExportOperationService CreateService(RecordingElectronicProductManager products, RecordingWorkflowRepository repository, RecordingExportEngine engine, SummaryResponse validation) => new(
+        new FakeProductManager(products), new ExportEngineRegistry([engine]), repository, new FakeSevenCsService(validation),
+        new FixedTimeProvider(DateTimeOffset.Parse("2026-08-10T20:00:00Z")), "dataset-yaml");
+
+    private sealed class TestExportOperationService(IProductManager productManager, IExportEngineRegistry engines, IProductWorkflowRepository repository, ISevenCsService sevenCs, TimeProvider timeProvider, string yaml)
+        : ExportOperationService(productManager, engines, repository, sevenCs, timeProvider, NullLogger<ExportOperationService>.Instance)
     {
-        [Fact]
-        public async Task NewEditionUsesOneSharedOperationFlow() {
-            var electronicProducts = new FakeElectronicProductManager();
-            var productManager = new FakeProductManager(electronicProducts);
-            var exports = new FakeExportService();
-            var repository = RepositoryWithState(ProductState.Idle);
-            var service = new TestExportOperationService(
-                productManager,
-                exports,
-                repository,
-                "dataset-yaml"
-            );
-            var guardSet = false;
+        protected override string SerializeDataset(YamlDataset dataset) => yaml;
+    }
 
-            var result = await service.ExecuteNewEditionAsync(
-                "101DK001",
-                ExportFormat.S100,
-                "test-user",
-                beforeMutation: () => {
-                    Assert.Equal(0, electronicProducts.NewEditionCalls);
-                    guardSet = true;
-                }
-            );
+    private sealed class FakeProductManager(IElectronicProductManager electronicProductManager) : IProductManager
+    {
+        public INauticalProductManager NauticalProductManager => null!;
+        public IElectronicProductManager ElectronicProductManager { get; } = electronicProductManager;
+    }
 
-            Assert.True(guardSet);
-            Assert.Equal(ExportOperationContract.ExportCompletedCode, result.Code);
-            Assert.Null(result.Warning);
-            Assert.Equal(1, electronicProducts.NewEditionCalls);
-            Assert.Equal(1, electronicProducts.AttachmentCalls);
-            Assert.Equal(1, exports.CreateCalls);
-            Assert.Equal("dataset-yaml", exports.LastYaml);
-            Assert.Equal(ProductState.Exported, repository.LastState);
-            Assert.Equal("S-101", repository.LastProductSpecification);
-            Assert.Equal("test-user", repository.LastOwner);
-        }
+    private sealed class RecordingElectronicProductManager : IElectronicProductManager
+    {
+        public int SnapshotCalls { get; private set; }
+        public int AttachmentCalls { get; private set; }
+        public (int Edition, int Update) LastSnapshotVersion { get; private set; }
+        public string OutputFolder => "output";
+        public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(string datasetName, CancellationToken cancellationToken = default) => Task.FromResult<ElectronicProductVersion?>(new(datasetName, 4, 2));
+        public Task<YamlDataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default) { SnapshotCalls++; LastSnapshotVersion = (edition, update); return Task.FromResult<YamlDataset>(null!); }
+        public Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign) { AttachmentCalls++; return Task.CompletedTask; }
+        public Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml) { AttachmentCalls++; return Task.CompletedTask; }
+        public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name) => null;
+        public IEnumerator<string> GetEnumerator() => Array.Empty<string>().AsEnumerable().GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? ProductMapping, int? optimumDisplayScale = null) => throw new NotSupportedException();
+        public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, string boundary, int edition, int update, byte[] zipfile) => throw new NotSupportedException();
+        public Task<YamlDataset> CreateNewDatasetAsync(string name) => throw new NotSupportedException();
+        public Task<YamlDataset> CreateNewEditionAsync(string name) => throw new NotSupportedException();
+        public Task<YamlDataset> CreateNewUpdateAsync(string name) => throw new NotSupportedException();
+        public Task<YamlDataset> ReissueAsync(string name) => throw new NotSupportedException();
+        public Task<Dictionary<string, string>> GetDatasetAOIs() => throw new NotSupportedException();
+        public Task<bool> IsDirtyAsync(string name) => throw new NotSupportedException();
+        public Task<string> GetDatasetBoundary(string name) => throw new NotSupportedException();
+        public Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name) => throw new NotSupportedException();
+        public Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc) => throw new NotSupportedException();
+        public Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition) => throw new NotSupportedException();
+    }
 
-        [Fact]
-        public async Task NewEditionRejectsInvalidStateBeforeExecutionGuardAndMutation() {
-            var electronicProducts = new FakeElectronicProductManager();
-            var repository = RepositoryWithState(ProductState.Frozen);
-            var service = new TestExportOperationService(
-                new FakeProductManager(electronicProducts),
-                new FakeExportService(),
-                repository,
-                "dataset-yaml"
-            );
-            var guardSet = false;
+    private sealed class RecordingExportEngine : IExportEngine
+    {
+        public ExportEngineKind Kind => ExportEngineKind.IsoIec8211;
+        public int ExportCalls { get; private set; }
+        public int DeleteCalls { get; private set; }
+        public bool Supports(ProductSpecification productSpecification) => productSpecification is ProductSpecification.S57 or ProductSpecification.S101;
+        public Task<ExportEngineResult> ExportAsync(ExportEngineRequest request, CancellationToken cancellationToken = default) { ExportCalls++; return Task.FromResult(new ExportEngineResult("output", [])); }
+        public Task DeleteOutputAsync(ExportOutputIdentity output, CancellationToken cancellationToken = default) { DeleteCalls++; return Task.CompletedTask; }
+    }
 
-            var exception = await Assert.ThrowsAsync<ExportOperationRejectedException>(() =>
-                service.ExecuteNewEditionAsync(
-                    "101DK001",
-                    ExportFormat.S100,
-                    null,
-                    beforeMutation: () => guardSet = true
-                )
-            );
+    private sealed class RecordingWorkflowRepository : IProductWorkflowRepository
+    {
+        public ProductState InitialState { get; init; } = ProductState.Idle;
+        public int? CandidateEdition { get; init; }
+        public int? CandidateUpdate { get; init; }
+        public ProductExportTrackRecord Track { get; private set; } = null!;
+        public List<ProductRevisionWrite> Revisions { get; } = [];
+        public string? LastErrorCode { get; private set; }
 
-            Assert.Equal(
-                "A New edition could not be created now. Current product state: Frozen.",
-                exception.Message
-            );
-            Assert.False(guardSet);
-            Assert.Equal(0, electronicProducts.NewEditionCalls);
-        }
+        public Task<ProductExportTrackRecord?> GetTrackAsync(string datasetName, ProductSpecification productSpecification, CancellationToken cancellationToken = default) => Task.FromResult<ProductExportTrackRecord?>(EnsureTrack(datasetName, productSpecification));
+        public Task<ProductExportTrackRecord> GetOrCreateTrackAsync(string datasetName, ProductSpecification productSpecification, ExportEngineKind engine, int publishedEdition, int publishedUpdate, CancellationToken cancellationToken = default) => Task.FromResult(EnsureTrack(datasetName, productSpecification));
+        public Task BeginExportAsync(Guid trackId, int candidateEdition, int candidateUpdate, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { Track.State = ProductState.Exporting; Track.CandidateEdition = candidateEdition; Track.CandidateUpdate = candidateUpdate; return Task.CompletedTask; }
+        public Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default) { Track.State = state; LastErrorCode = errorCode; return Task.CompletedTask; }
+        public Task CancelCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { Track.State = ProductState.Cancelled; Track.CandidateEdition = null; Track.CandidateUpdate = null; return Task.CompletedTask; }
+        public Task<Guid> AddRevisionAsync(ProductRevisionWrite revision, CancellationToken cancellationToken = default) { Revisions.Add(revision); return Task.FromResult(Guid.NewGuid()); }
+        public Task AddArtifactAsync(ProductArtifactWrite artifact, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<ProductChangeSummary?> GetOpenChangeSummaryAsync(Guid trackId, DateOnly workDate, CancellationToken cancellationToken = default) => Task.FromResult<ProductChangeSummary?>(null);
+        public Task SaveChangeSummaryAsync(ProductChangeSummary summary, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<ProductChangeSummary>> GetOpenChangeSummariesAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ProductChangeSummary>>([]);
+        public Task CloseChangeSummaryAsync(Guid summaryId, DateTime closedAtUtc, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
-        [Fact]
-        public async Task EmptySerializedDatasetRetainsTheSyncFailureSignal() {
-            var service = new TestExportOperationService(
-                new FakeProductManager(new FakeElectronicProductManager()),
-                new FakeExportService(),
-                RepositoryWithState(ProductState.Idle),
-                string.Empty
-            );
+        private ProductExportTrackRecord EnsureTrack(string datasetName, ProductSpecification specification) => Track ??= new ProductExportTrackRecord { Id = Guid.NewGuid(), DatasetName = datasetName, ProductSpecification = specification, Engine = ExportEngineKind.IsoIec8211, State = InitialState, PublishedEdition = 4, PublishedUpdate = 2, CandidateEdition = CandidateEdition, CandidateUpdate = CandidateUpdate };
+    }
 
-            await Assert.ThrowsAsync<ExportSourceUnavailableException>(() =>
-                service.ExecuteNewEditionAsync(
-                    "101DK001",
-                    ExportFormat.S100,
-                    null
-                )
-            );
-        }
+    private sealed class FakeSevenCsService(SummaryResponse response) : ISevenCsService
+    {
+        public Task<SummaryResponse> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) => Task.FromResult(response);
+    }
 
-        [Fact]
-        public async Task RollbackCleanupFailureReturnsPersistentSafeWarning() {
-            var electronicProducts = new FakeElectronicProductManager();
-            var exports = new FakeExportService { DeleteResult = false };
-            var repository = RepositoryWithState(ProductState.Exported);
-            var service = new TestExportOperationService(
-                new FakeProductManager(electronicProducts),
-                exports,
-                repository,
-                "unused"
-            );
-            var guardSet = false;
-
-            var result = await service.ExecuteRollbackAsync(
-                "101DK001",
-                beforeMutation: () => {
-                    Assert.Equal(0, electronicProducts.RollbackCalls);
-                    guardSet = true;
-                }
-            );
-
-            Assert.True(guardSet);
-            Assert.Equal(ExportOperationContract.RollbackCompletedCode, result.Code);
-            Assert.NotNull(result.Warning);
-            Assert.Equal(
-                ExportOperationContract.RollbackCleanupFailedCode,
-                result.Warning!.Code
-            );
-            Assert.DoesNotContain("\\", result.Warning.Message);
-            Assert.Equal(1, electronicProducts.RollbackCalls);
-            Assert.Equal(ProductState.Idle, repository.LastState);
-            Assert.Equal("S-128", repository.LastProductSpecification);
-            Assert.Null(repository.LastOwner);
-        }
-
-        [Fact]
-        public async Task RollbackRejectsInvalidStateBeforeExecutionGuardAndMutation() {
-            var electronicProducts = new FakeElectronicProductManager();
-            var service = new TestExportOperationService(
-                new FakeProductManager(electronicProducts),
-                new FakeExportService(),
-                RepositoryWithState(ProductState.Idle),
-                "unused"
-            );
-            var guardSet = false;
-
-            var exception = await Assert.ThrowsAsync<ExportOperationRejectedException>(() =>
-                service.ExecuteRollbackAsync(
-                    "101DK001",
-                    beforeMutation: () => guardSet = true
-                )
-            );
-
-            Assert.Equal(
-                "A rollback could not be performed now. Current product state: Idle.",
-                exception.Message
-            );
-            Assert.False(guardSet);
-            Assert.Equal(0, electronicProducts.RollbackCalls);
-        }
-
-        [Fact]
-        public async Task RollbackRejectsEditionOneBeforeExecutionGuardAndMutation() {
-            var electronicProducts = new FakeElectronicProductManager(edition: 1, update: 0);
-            var service = new TestExportOperationService(
-                new FakeProductManager(electronicProducts),
-                new FakeExportService(),
-                RepositoryWithState(ProductState.Exported),
-                "unused"
-            );
-            var guardSet = false;
-
-            var exception = await Assert.ThrowsAsync<ExportOperationRejectedException>(() =>
-                service.ExecuteRollbackAsync(
-                    "101DK001",
-                    beforeMutation: () => guardSet = true
-                )
-            );
-
-            Assert.Equal("Dataset cannot be rolled back further.", exception.Message);
-            Assert.False(guardSet);
-            Assert.Equal(0, electronicProducts.RollbackCalls);
-        }
-
-        private static RecordingRepository RepositoryWithState(ProductState state) => new() {
-            CurrentRecord = new ProductRecord {
-                Name = "101DK001",
-                State = state,
-                EditionNo = 4,
-                UpdateNo = 2
-            }
-        };
-
-        private sealed class TestExportOperationService(
-            IProductManager productManager,
-            IExportService exportService,
-            IProductRepository productRepository,
-            string serializedDataset
-        ) : ExportOperationService(
-            productManager,
-            exportService,
-            productRepository,
-            NullLogger<ExportOperationService>.Instance
-        )
-        {
-            protected override string SerializeDataset(YamlDataset dataset) => serializedDataset;
-        }
-
-        private sealed class FakeProductManager(
-            IElectronicProductManager electronicProductManager
-        ) : IProductManager
-        {
-            public INauticalProductManager NauticalProductManager => null!;
-            public IElectronicProductManager ElectronicProductManager { get; } = electronicProductManager;
-        }
-
-        private sealed class FakeElectronicProductManager(
-            int edition = 4,
-            int update = 2
-        ) : IElectronicProductManager
-        {
-            private readonly ElectronicProduct _product = new() {
-                datasetName = "101DK001",
-                editionNumber = edition,
-                updateNumber = update
-            };
-
-            public string OutputFolder => "output";
-            public int NewEditionCalls { get; private set; }
-            public int RollbackCalls { get; private set; }
-            public int AttachmentCalls { get; private set; }
-
-            public ElectronicProduct? ElectronicProduct(string name) => _product;
-
-            public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(
-                string datasetName,
-                CancellationToken cancellationToken = default
-            ) => Task.FromResult<ElectronicProductVersion?>(new(
-                _product.datasetName!,
-                _product.editionNumber,
-                _product.updateNumber
-            ));
-
-            public Task<YamlDataset> CreateNewEditionAsync(string name) {
-                NewEditionCalls++;
-                _product.editionNumber = 5;
-                _product.updateNumber = 0;
-                return Task.FromResult(new YamlDataset {
-                    Edition = 5,
-                    Update = 0
-                });
-            }
-
-            public Task<bool> RollBackAsync(string name) {
-                RollbackCalls++;
-                _product.updateNumber = Math.Max(0, _product.updateNumber.GetValueOrDefault() - 1);
-                return Task.FromResult(true);
-            }
-
-            public Task CreateAttachmentAsync(
-                string name,
-                ExportTypes exportType,
-                string yaml,
-                string index,
-                string sign
-            ) {
-                AttachmentCalls++;
-                return Task.CompletedTask;
-            }
-
-            public IEnumerator<string> GetEnumerator() => Array.Empty<string>().AsEnumerable().GetEnumerator();
-            IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-            public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? ProductMapping, int? optimumDisplayScale = null) => throw new NotSupportedException();
-            public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, string boundary, int edition, int update, byte[] zipfile) => throw new NotSupportedException();
-            public Task<YamlDataset> CreateNewDatasetAsync(string name) => throw new NotSupportedException();
-            public Task<YamlDataset> CreateNewUpdateAsync(string name) => throw new NotSupportedException();
-            public Task<YamlDataset> ReissueAsync(string name) => throw new NotSupportedException();
-            public Task<Dictionary<string, string>> GetDatasetAOIs() => throw new NotSupportedException();
-            public Task<bool> IsDirtyAsync(string name) => throw new NotSupportedException();
-            public Task<string> GetDatasetBoundary(string name) => throw new NotSupportedException();
-            public Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name) => throw new NotSupportedException();
-            public Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc) => throw new NotSupportedException();
-            public Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition) => throw new NotSupportedException();
-            public Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml) => throw new NotSupportedException();
-        }
-
-        private sealed class FakeExportService : IExportService
-        {
-            public int CreateCalls { get; private set; }
-            public string? LastYaml { get; private set; }
-            public bool DeleteResult { get; set; } = true;
-
-            public ExportResult CreateS100Export(string datasetName, uint editionNo, uint? updateNo, string outputFolder, string yaml, string prevIndex = "") {
-                CreateCalls++;
-                LastYaml = yaml;
-                return new ExportResult("index", "sign");
-            }
-
-            public bool DeleteExport(string datasetName, string outputFolder, uint editionNo, uint? updateNo = 0) => DeleteResult;
-            public int CreateS57Export(string datasetName, uint editionNo, uint? updateNo, string outputFolder, string yaml) => throw new NotSupportedException();
-        }
-
-        private sealed class RecordingRepository : IProductRepository
-        {
-            public ProductRecord? CurrentRecord { get; init; }
-            public ProductState? LastState { get; private set; }
-            public string? LastProductSpecification { get; private set; }
-            public string? LastOwner { get; private set; }
-
-            public Task AppendAsync(string name, ProductState state, string productSpecification, uint editionNo, uint? updateNo, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null) {
-                LastState = state;
-                LastProductSpecification = productSpecification;
-                LastOwner = owner;
-                return Task.CompletedTask;
-            }
-
-            public Task<IEnumerable<ProductRecord>> GetCurrentAsync() => throw new NotSupportedException();
-            public Task<ProductRecord?> GetCurrentByNameAsync(string name) => Task.FromResult(CurrentRecord);
-            public Task<IEnumerable<ProductRecord>> GetCurrentByNamesAsync(IEnumerable<string> names) => throw new NotSupportedException();
-            public Task<DateTime?> GetLastSuccessfulRunUtcAsync(string jobName) => throw new NotSupportedException();
-            public Task SetSuccessfulRunUtcAsync(string jobName, DateTime dateTime) => throw new NotSupportedException();
-            public Task<string[]> GetIneligbleProductsAsync() => throw new NotSupportedException();
-            public Task<string[]> GetEligibleProductsAsync() => throw new NotSupportedException();
-            public Task<IEnumerable<ProductRecord>> GetHistoryByNameAsync(string name) => throw new NotSupportedException();
-            public Task<IEnumerable<ProductRecord>> GetHistoryAsync(DateTime fromInclusive, DateTime toExclusive) => throw new NotSupportedException();
-        }
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 }

@@ -239,7 +239,7 @@ namespace TestProductCatalogueAPI
 
         [Theory]
         [InlineData(ProductState.Idle, 5, 0, SendToIcEncContract.InvalidStateCode)]
-        [InlineData(ProductState.Exported, 6, 0, ExportJobContract.ProductVersionChangedCode)]
+        [InlineData(ProductState.ReadyForDistribution, 6, 0, ExportJobContract.ProductVersionChangedCode)]
         [Trait("Package", "PC-006")]
         public async Task ProductChangeFailsWithoutFabricatedState(
             ProductState state,
@@ -431,10 +431,10 @@ namespace TestProductCatalogueAPI
         }
 
         [Theory]
-        [InlineData("ExportEdition", "S100")]
-        [InlineData("Rollback", null)]
+        [InlineData("ExportEdition", "S101")]
+        [InlineData("CancelExport", "S101")]
         [Trait("Package", "PC-006")]
-        public void ExistingExportAndRollbackStatusAndActiveLookupRemainUnchanged(
+        public void ExistingExportAndCancelExportStatusAndActiveLookupRemainAvailable(
             string operationType,
             string? exportTarget
         ) {
@@ -533,7 +533,7 @@ namespace TestProductCatalogueAPI
         );
 
         private static ProductRecord Product(
-            ProductState state = ProductState.Exported,
+            ProductState state = ProductState.ReadyForDistribution,
             int edition = 5,
             int update = 0
         ) => new() {

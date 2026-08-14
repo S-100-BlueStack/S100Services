@@ -249,7 +249,7 @@ namespace TestProductCatalogueAPI
             public Task<S100FC.YAML.Dataset> CreateNewEditionAsync(string name) => throw new NotSupportedException();
             public Task<S100FC.YAML.Dataset> CreateNewUpdateAsync(string name) => throw new NotSupportedException();
             public Task<S100FC.YAML.Dataset> ReissueAsync(string name) => throw new NotSupportedException();
-            public Task<bool> RollBackAsync(string name) => throw new NotSupportedException();
+            public Task<S100FC.YAML.Dataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default) => throw new NotSupportedException();
             public Task<bool> IsDirtyAsync(string name) => throw new NotSupportedException();
             public Task<string> GetDatasetBoundary(string name) => throw new NotSupportedException();
             public Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name) => throw new NotSupportedException();

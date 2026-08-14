@@ -18,7 +18,7 @@ namespace TestProductCatalogueAPI
 
             var items = document.RootElement.EnumerateArray().ToArray();
             Assert.Equal(3, items.Length);
-            Assert.Equal(new[] { "All", "S100", "S57" }, items.Select(item => item.GetProperty("Name").GetString()));
+            Assert.Equal(new[] { "S57", "S101", "S102", "S122" }, items.Select(item => item.GetProperty("Name").GetString()));
             foreach (var item in items) {
                 Assert.Single(item.EnumerateObject());
                 Assert.False(item.TryGetProperty("Id", out _));

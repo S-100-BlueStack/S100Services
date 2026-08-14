@@ -313,6 +313,27 @@ namespace S100FC.ProductCatalogue
             return await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, ExportTypes.Reissue);
         }
 
+        async Task<YAML.Dataset> IElectronicProductManager.CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken) {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentNullException(nameof(name));
+            if (edition < 0)
+                throw new ArgumentOutOfRangeException(nameof(edition));
+            if (update < 0)
+                throw new ArgumentOutOfRangeException(nameof(update));
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await this.GetElectronicProductAsync(name.ToUpperInvariant());
+            result.ElectronicProduct.editionNumber = edition;
+            result.ElectronicProduct.updateNumber = update;
+
+            // applyEdits must remain false: SQL owns unverified candidate versions until IC-ENC acceptance.
+            var dataset = await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, exportType, applyEdits: false);
+            dataset.Edition = checked((uint)edition);
+            dataset.Update = checked((uint)update);
+            cancellationToken.ThrowIfCancellationRequested();
+            return dataset;
+        }
+
         async Task<bool> IElectronicProductManager.IsDirtyAsync(string name) {
             if (string.IsNullOrEmpty(name))
                 throw new System.ArgumentNullException(nameof(name));
@@ -1679,78 +1700,6 @@ namespace S100FC.ProductCatalogue
                 return boundary.ToJson()!;
             });
 
-        }
-
-        public async Task<bool> RollBackAsync(string name) {
-            await this.Dispatch(() => {
-
-                var electronicProduct = this._electronicProducts[name.ToUpperInvariant()];
-
-                if (electronicProduct.editionNumber <= 1)
-                    throw new InvalidOperationException($"Cannot rollback edition number below 1 for dataset {name}");
-
-                // Delete most recent attachment from attachmenttable
-                this._geodatabase!.ApplyEdits(() => {
-                    using var attachment = this._geodatabase!.OpenDataset<Table>(this.QualifyTableName("attachment"));
-
-                    var datasetName = electronicProduct.datasetName!;
-                    var editionNo = electronicProduct.editionNumber!.Value;
-                    var updateNo = electronicProduct.updateNumber;
-
-                    var escapedDatasetName = datasetName.Replace("'", "''");
-
-                    using var cursor = attachment.Search(new QueryFilter {
-                        WhereClause =
-                            $"ps = 'S-128.NuvionPro' " +
-                            $"AND code = '{nameof(Dataset)}' " +
-                            $"AND json LIKE '%\"DatasetName\":\"{escapedDatasetName}\"%'"
-                    }, false);
-
-                    while (cursor.MoveNext()) {
-                        using var row = cursor.Current;
-                        var jason = row["json"].ToString()!;
-
-                        var dataset = JsonSerializer.Deserialize<Dataset>(jason);   //, this.jsonSerializerOptions);
-
-                        if (dataset?.Edition == editionNo && dataset.Update == updateNo) {
-                            row.Delete();
-
-                            Log.Information("Deleted attachment for dataset {datasetName} edition {edition} update {update}", datasetName, editionNo, updateNo);
-
-                            break;
-                        }
-                    }
-
-
-
-                    // Rollback edition/updateno and save to concurrect dict aswell
-                    using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
-
-                    using var cursorS128 = surface.Search(new QueryFilter {
-                        WhereClause = $"attributebindings LIKE '%\"{electronicProduct.datasetName}\"%'",
-                    }, false);
-
-                    cursorS128.MoveNext();
-
-
-                    if (electronicProduct.updateNumber > 0)
-                        electronicProduct.updateNumber--;
-                    else
-                        electronicProduct.editionNumber--;
-
-
-                    var flatten = electronicProduct.Flatten();
-
-                    var row128 = cursorS128.Current;
-                    row128["attributebindings"] = flatten;
-                    row128.Store();
-                    row128.Dispose();
-
-                    this._electronicProducts[electronicProduct.datasetName!.ToUpperInvariant()] = electronicProduct;
-                });
-            });
-
-            return true;
         }
 
         public Task CreateElectronicProductAsync(string name, productSpecification productSpecification, string boundary, int? optimumDisplayScale = null) {

@@ -224,18 +224,17 @@ namespace ProductCatalogueAPI.Services.Jobs
 
             if (string.IsNullOrWhiteSpace(datasetName) ||
                 string.IsNullOrWhiteSpace(correlationId) ||
-                operationType is not ("ExportEdition" or "Rollback" or "SendToIcEnc"))
+                operationType is not ("ExportEdition" or "ExportUpdate" or "CancelExport" or "SendToIcEnc"))
                 return null;
 
             var exportTarget = ReadOptional<string>(
                 snapshot,
                 ExportJobParameterNames.ExportTarget
             );
-            if (operationType == "ExportEdition" &&
-                !string.Equals(exportTarget, "S100", StringComparison.Ordinal))
+            if (operationType != SendToIcEncContract.OperationType &&
+                exportTarget is not ("S57" or "S101"))
                 return null;
-            if ((operationType == "Rollback" || operationType == SendToIcEncContract.OperationType) &&
-                exportTarget != null)
+            if (operationType == SendToIcEncContract.OperationType && exportTarget != null)
                 return null;
 
             var mode = ReadOptional<string>(snapshot, ExportJobParameterNames.Mode);
@@ -278,7 +277,6 @@ namespace ProductCatalogueAPI.Services.Jobs
 
             ExportJobWarningResponse? warning = null;
             if (publicStatus == ExportJobContract.SucceededStatus &&
-                operationType == "Rollback" &&
                 !string.IsNullOrWhiteSpace(warningCode) &&
                 !string.IsNullOrWhiteSpace(warningMessage)) {
                 warning = new ExportJobWarningResponse {

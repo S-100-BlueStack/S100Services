@@ -4,13 +4,6 @@ namespace ProductCatalogueAPI.Models
 {
     public static class RequestTypes
     {
-        public enum ExportFormat
-        {
-            Both,
-            S100,
-            S57
-        }
-
         public enum SpecificUsage : int
         {
             NavigationalPurposeOverview = 1,
@@ -30,5 +23,4 @@ namespace ProductCatalogueAPI.Models
         }
     }
 }
-
 

@@ -1,5 +1,4 @@
-﻿using S100FC.S128.FeatureTypes;
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -31,9 +30,11 @@ namespace ProductCatalogueAPI.Services.SevenCs
         /// ValidateDatasetResult.IncorrectEdition -  if ShallowIsolatedDangersUpdatedBathy occurs in an update <br />
         /// ValidateDatasetResult.FailedToValidate -  if validation failed for any reason
         /// </returns>
-        public async Task<SummaryResponse> ValidateDatasetAsync(ElectronicProduct product, string outputPath) {
+        public async Task<SummaryResponse> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) {
             // Build path
-            var datasetPath = Path.Combine(outputPath, product.datasetName, $"{product.editionNumber}", "S100_ROOT", "S-101", "DATASET_FILES");
+            var datasetPath = Path.Combine(outputPath, datasetName, "S101", edition.ToString(), update.ToString("000"), "S100_ROOT", "S-101", "DATASET_FILES");
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             _logger.LogInformation("SevenCs dataset validation begun. path: {path}", datasetPath);
 
@@ -89,7 +90,7 @@ namespace ProductCatalogueAPI.Services.SevenCs
                     uploadedFiles.Add(requestObj);
                 else {
                     // Wait one second and retry once more
-                    await Task.Delay(1000);
+                    await Task.Delay(1000, cancellationToken);
 
                     var reUpload = await UploadFile(requestObj, datasetPath);
 

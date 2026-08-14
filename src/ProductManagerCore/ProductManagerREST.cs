@@ -236,6 +236,27 @@ namespace ProductCatalogue
             return await this.CreateDatasetAsync(result.ElectronicProduct, result.Boundary, ExportTypes.Update);
         }
 
+        public async Task<S100FC.YAML.Dataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default) {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentNullException(nameof(name));
+            if (edition < 0)
+                throw new ArgumentOutOfRangeException(nameof(edition));
+            if (update < 0)
+                throw new ArgumentOutOfRangeException(nameof(update));
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await this.GetElectronicProductAsync(name.ToUpperInvariant());
+            result.ElectronicProduct.editionNumber = edition;
+            result.ElectronicProduct.updateNumber = update;
+
+            // applyEdits must remain false: SQL owns unverified candidate versions until IC-ENC acceptance.
+            var dataset = await this.CreateDatasetAsync(result.ElectronicProduct, result.Boundary, exportType, applyEdits: false);
+            dataset.Edition = checked((uint)edition);
+            dataset.Update = checked((uint)update);
+            cancellationToken.ThrowIfCancellationRequested();
+            return dataset;
+        }
+
         public async Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition) {
             var attachmentClient = await this._s128FeatureServiceClient.GetLayerClientAsync("attachment");
 
@@ -928,9 +949,6 @@ namespace ProductCatalogue
             throw new NotImplementedException();
         }
 
-        public Task<bool> RollBackAsync(string name) {
-            throw new NotImplementedException();
-        }
 
         public Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml) {
             throw new NotImplementedException();

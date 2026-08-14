@@ -160,7 +160,7 @@ namespace ProductCatalogueAPI.Controllers
                         {
                             DatasetName = mappedProduct.Product.datasetName,
                             Status = Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString()),
-                            // If no explicit state defined in JobTable, default to Ready,
+                            // Products without a SQL workflow track remain idle until internal work begins.
                             DisplayScale = mappedProduct.Product.optimumDisplayScale,
                             UsageBand = mappedProduct.Product.specificUsage
                         }
@@ -285,7 +285,7 @@ namespace ProductCatalogueAPI.Controllers
                 {
                     DatasetName = electronicProduct.datasetName,
                     Status = Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString()),
-                    // If no explicit state defined in JobTable, default to Idle,
+                    // Products without a SQL workflow track remain idle until internal work begins.
                     DisplayScale = electronicProduct.optimumDisplayScale,
                     UsageBand = electronicProduct.specificUsage,
                     Edition = electronicProduct.editionNumber,
@@ -372,7 +372,7 @@ namespace ProductCatalogueAPI.Controllers
         /// </summary>
         /// <param name="from">Required Danish date or date-time. A date-only value is treated as start of day in Europe/Copenhagen.</param>
         /// <param name="to">Optional Danish date or date-time. A date-only value is treated as the next day exclusive in Europe/Copenhagen.</param>
-        /// <returns>Dashboard summary and activity rows derived from JobTable history.</returns>
+        /// <returns>Dashboard summary and activity rows derived from normalized product-track history.</returns>
         [ProducesResponseType(typeof(ApiResponse<DashboardResponse>), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
@@ -593,6 +593,62 @@ namespace ProductCatalogueAPI.Controllers
                     Title: "Validation failed",
                     Description: "The product was rejected by IC-ENC and needs follow-up."),
 
+                ProductState.ChangesDetected => new DashboardActivityMetadata(
+                    Type: "change",
+                    Severity: "normal",
+                    Status: "active",
+                    Title: "Changes detected",
+                    Description: "Source changes are accumulating in the daily YAML summary."),
+
+                ProductState.Exporting => new DashboardActivityMetadata(
+                    Type: "export",
+                    Severity: "normal",
+                    Status: "active",
+                    Title: "Export running",
+                    Description: "An unverified candidate export is being generated."),
+
+                ProductState.Validating => new DashboardActivityMetadata(
+                    Type: "validation",
+                    Severity: "normal",
+                    Status: "active",
+                    Title: "Validation running",
+                    Description: "The generated candidate is being validated."),
+
+                ProductState.ReadyForDistribution => new DashboardActivityMetadata(
+                    Type: "export",
+                    Severity: "normal",
+                    Status: "completed",
+                    Title: "Ready for distribution",
+                    Description: "The candidate is validated but has not been accepted or published to S-128."),
+
+                ProductState.AcceptedForDistribution => new DashboardActivityMetadata(
+                    Type: "send",
+                    Severity: "normal",
+                    Status: "completed",
+                    Title: "Accepted for distribution",
+                    Description: "IC-ENC acceptance is recorded; S-128 publication can be performed by a future workflow."),
+
+                ProductState.Published => new DashboardActivityMetadata(
+                    Type: "publication",
+                    Severity: "normal",
+                    Status: "completed",
+                    Title: "Published",
+                    Description: "The accepted version is recorded as publicly available."),
+
+                ProductState.Cancelled => new DashboardActivityMetadata(
+                    Type: "cancel",
+                    Severity: "normal",
+                    Status: "completed",
+                    Title: "Export cancelled",
+                    Description: "The unverified candidate export was cancelled."),
+
+                ProductState.Error => new DashboardActivityMetadata(
+                    Type: "error",
+                    Severity: "critical",
+                    Status: "failed",
+                    Title: "Export error",
+                    Description: "Export or validation failed and requires review."),
+
                 ProductState.Idle => new DashboardActivityMetadata(
                     Type: "lifecycle",
                     Severity: "normal",
@@ -663,7 +719,7 @@ namespace ProductCatalogueAPI.Controllers
                 return false;
             }
 
-            // JobTable currently stores date_from/date_to as UTC instants from AppendAsync.
+            // ProductStateHistory stores UTC instants; Copenhagen conversion is an API-boundary concern.
             // The API boundary remains Danish time, while the repository boundary uses the persisted instant for correct filtering.
             fromDatabaseTime = fromDanishTime.UtcDateTime;
             toDatabaseTime = toDanishTime.UtcDateTime;

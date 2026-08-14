@@ -96,11 +96,11 @@ namespace ProductCatalogueAPI.Controllers
                 );
             }
 
-            if (product.State != ProductState.Exported) {
+            if (product.State != ProductState.ReadyForDistribution) {
                 _logger.LogWarning(
                     "IC-ENC send simulation rejected because Product state is invalid. DatasetName: {DatasetName}. ExpectedState: {ExpectedState}. ActualState: {ActualState}",
                     datasetName,
-                    ProductState.Exported,
+                    ProductState.ReadyForDistribution,
                     product.State
                 );
                 return JobProblem(

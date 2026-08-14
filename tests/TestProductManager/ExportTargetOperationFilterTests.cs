@@ -14,6 +14,8 @@ namespace TestProductCatalogueAPI
         [InlineData(nameof(ExportController.NewEdition))]
         [InlineData(nameof(ExportController.NewUpdate))]
         [InlineData(nameof(ExportController.NewEditionJob))]
+        [InlineData(nameof(ExportController.NewUpdateJob))]
+        [InlineData(nameof(ExportController.CancelExport))]
         public void SwaggerShowsOnlyCanonicalReadableTargetValues(string methodName) {
             var method = typeof(ExportController).GetMethod(methodName)
                 ?? throw new InvalidOperationException($"Method {methodName} was not found.");
@@ -34,7 +36,7 @@ namespace TestProductCatalogueAPI
             Assert.False(parameter.Required);
             Assert.Equal("string", parameter.Schema.Type);
             Assert.Equal(
-                new[] { "All", "S100", "S57" },
+                new[] { "S57", "S101", "S102", "S122" },
                 parameter.Schema.Enum.Cast<OpenApiString>().Select(value => value.Value)
             );
             Assert.Equal(

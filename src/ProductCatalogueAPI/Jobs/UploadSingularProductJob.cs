@@ -77,7 +77,7 @@ namespace ProductCatalogueAPI.Jobs
                     );
                 }
 
-                if (product.State != ProductState.Exported) {
+                if (product.State != ProductState.ReadyForDistribution) {
                     throw CreateSafeFailure(
                         context,
                         SendToIcEncContract.InvalidStateCode,

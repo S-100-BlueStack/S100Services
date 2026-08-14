@@ -15,16 +15,18 @@
 
     public enum ProductState : int
     {
-        Idle = 1,       // Default. No changes detected.
-        Exported = 2,   // Exported as new edition/update.
-        Frozen = 5,     // Frozen and awaits manual action.
-        InTransit = 6,  // Awaiting IC-ENC confirmation.
-        Rejected = 7,    // Rejected by IC-ENC.
-
-
-
-        //NewUpdate = 99,   // New update detected. Not yet exported.
-        //NewEdition = 100, // New edition detected. Not yet exported.
-        //Invalid = 101     // Invalid product. Requires manual action.
+        Idle = 1,
+        Exported = 2,
+        Frozen = 5,
+        InTransit = 6,
+        Rejected = 7,
+        ChangesDetected = 8,
+        Exporting = 9,
+        Validating = 10,
+        ReadyForDistribution = 11,
+        AcceptedForDistribution = 12,
+        Published = 13,
+        Cancelled = 14,
+        Error = 15
     }
 }

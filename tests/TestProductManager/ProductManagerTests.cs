@@ -68,10 +68,7 @@ namespace TestProductCatalogueAPI
             var datasetName = "";
             var outputPath = "";
 
-            var res = await sevenCs.ValidateDatasetAsync(new ElectronicProduct {
-                datasetName = datasetName,
-                editionNumber = 1,
-            }, outputPath);
+            var res = await sevenCs.ValidateDatasetAsync(datasetName, 1, 0, outputPath);
 
 
 

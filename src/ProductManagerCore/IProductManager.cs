@@ -35,7 +35,17 @@ namespace S100FC.ProductCatalogue
         Task<YAML.Dataset> CreateNewUpdateAsync(string name);
 
         Task<YAML.Dataset> ReissueAsync(string name);
-        Task<bool> RollBackAsync(string name);
+
+        /// <summary>
+        /// Builds an export candidate at an explicit version without changing the S-128 ElectronicProduct or attachment tables.
+        /// </summary>
+        /// <param name="name">The S-128 dataset name used to select the product coverage.</param>
+        /// <param name="exportType">The candidate revision type.</param>
+        /// <param name="edition">The SQL-authoritative candidate edition.</param>
+        /// <param name="update">The SQL-authoritative candidate update.</param>
+        /// <param name="cancellationToken">Signals cancellation before or after the ArcGIS-dispatched snapshot build.</param>
+        /// <returns>A read-only YAML dataset snapshot containing the requested candidate version.</returns>
+        Task<YAML.Dataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default);
         Task<Dictionary<string, string>> GetDatasetAOIs();
         Task<bool> IsDirtyAsync(string name);
         Task<string> GetDatasetBoundary(string name);

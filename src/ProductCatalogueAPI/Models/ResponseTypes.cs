@@ -176,7 +176,15 @@ namespace ProductCatalogueAPI.Models
             Exported = 2, // Exported as new edition/update.
             Frozen = 5, // Frozen and awaits manual action.
             InTransit = 6, // Awaiting IC-ENC confirmation.
-            Rejected = 7 // Rejected by IC-ENC.
+            Rejected = 7, // Rejected by IC-ENC.
+            ChangesDetected = 8,
+            Exporting = 9,
+            Validating = 10,
+            ReadyForDistribution = 11,
+            AcceptedForDistribution = 12,
+            Published = 13,
+            Cancelled = 14,
+            Error = 15
         }
     }
 }

@@ -28,7 +28,7 @@ namespace ProductCatalogueAPI.OpenApi
             }
 
             parameter.Required = false;
-            parameter.Description = "Export target. Matching is case-insensitive. Missing values default to S100.";
+            parameter.Description = "Independent product export target. Matching is case-insensitive. Missing values default to S101.";
             parameter.Schema = new OpenApiSchema {
                 Type = "string",
                 Enum = ExportTargetContract.AllowedTargets

@@ -56,12 +56,12 @@ namespace TestProductCatalogueAPI
         }
 
         [Fact]
-        public void RollbackCleanupWarningIsReturnedFromPersistentMetadata() {
-            var parameters = RequiredParameters("Rollback", exportTarget: null);
-            parameters[ExportJobParameterNames.ResultCode] = Json("ROLLBACK_COMPLETED");
-            parameters[ExportJobParameterNames.ResultMessage] = Json("Rollback completed.");
-            parameters[ExportJobParameterNames.WarningCode] = Json("ROLLBACK_CLEANUP_FAILED");
-            parameters[ExportJobParameterNames.WarningMessage] = Json("Rollback completed, but old export output could not be fully removed.");
+        public void CancelExportWarningIsReturnedFromPersistentMetadata() {
+            var parameters = RequiredParameters("CancelExport", exportTarget: "S101");
+            parameters[ExportJobParameterNames.ResultCode] = Json("CANCEL_EXPORT_COMPLETED");
+            parameters[ExportJobParameterNames.ResultMessage] = Json("Cancel export completed.");
+            parameters[ExportJobParameterNames.WarningCode] = Json("CANCEL_EXPORT_CLEANUP_FAILED");
+            parameters[ExportJobParameterNames.WarningMessage] = Json("Cancel export completed with a cleanup warning.");
 
             var response = Service(new HangfireJobSnapshot(
                 parameters,
@@ -69,7 +69,7 @@ namespace TestProductCatalogueAPI
             )).GetJob("job-1");
 
             Assert.Equal("Succeeded", response!.Status);
-            Assert.Equal("ROLLBACK_CLEANUP_FAILED", response.Warning!.Code);
+            Assert.Equal("CANCEL_EXPORT_CLEANUP_FAILED", response.Warning!.Code);
             Assert.Null(response.Error);
         }
 
@@ -224,7 +224,7 @@ namespace TestProductCatalogueAPI
 
         private static Dictionary<string, string?> RequiredParameters(
             string operationType = "ExportEdition",
-            string? exportTarget = "S100",
+            string? exportTarget = "S101",
             string datasetName = "101DK001"
         ) => new(StringComparer.Ordinal) {
             [ExportJobParameterNames.DatasetName] = Json(datasetName),

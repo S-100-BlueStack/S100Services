@@ -45,8 +45,8 @@ namespace ProductCatalogueAPI.Jobs
         public const string ProductOperationRejectedCode = "PRODUCT_OPERATION_REJECTED";
         public const string ExportFailedCode = "EXPORT_FAILED";
         public const string ExportFailedMessage = "The export could not be completed.";
-        public const string RollbackFailedCode = "ROLLBACK_FAILED";
-        public const string RollbackFailedMessage = "The rollback could not be completed.";
+        public const string CancelExportFailedCode = "CANCEL_EXPORT_FAILED";
+        public const string CancelExportFailedMessage = "The candidate export could not be cancelled.";
         public const string JobFailedCode = "JOB_FAILED";
         public const string JobFailedMessage = "The operation could not be completed.";
         public const string JobEnqueueFailedCode = "JOB_ENQUEUE_FAILED";
@@ -73,7 +73,7 @@ namespace ProductCatalogueAPI.Jobs
         public const string ConfigurationChangedCode = "SEND_TO_ICENC_CONFIGURATION_CHANGED";
         public const string ConfigurationChangedMessage = "The Send to IC-ENC configuration changed before the simulation started.";
         public const string InvalidStateCode = "SEND_TO_ICENC_PRODUCT_STATE_INVALID";
-        public const string InvalidStateStartMessage = "The product must be Exported before an IC-ENC send simulation can start.";
+        public const string InvalidStateStartMessage = "The product must be ReadyForDistribution before an IC-ENC send simulation can start.";
         public const string InvalidStateJobMessage = "The product state changed before the IC-ENC send simulation started.";
         public const string SetupFailedCode = "SEND_SIMULATION_SETUP_FAILED";
         public const string SetupFailedMessage = "The IC-ENC send simulation could not be prepared.";

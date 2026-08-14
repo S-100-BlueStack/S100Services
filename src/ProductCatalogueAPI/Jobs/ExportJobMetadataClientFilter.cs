@@ -93,17 +93,17 @@ namespace ProductCatalogueAPI.Jobs
         private static void ValidateRequest(ExportOperationJobRequest request) {
             ValidateSharedRequest(request.DatasetName, request.CorrelationId);
 
-            if (request.OperationType == ExportOperationType.ExportEdition &&
-                !string.Equals(request.ExportTarget, "S100", StringComparison.Ordinal)) {
+            if (request.OperationType is ExportOperationType.ExportEdition or ExportOperationType.ExportUpdate &&
+                request.ExportTarget is not ("S57" or "S101")) {
                 throw new InvalidOperationException(
-                    "ExportEdition jobs require the canonical S100 export target."
+                    "Export jobs require a currently implemented canonical product target."
                 );
             }
 
-            if (request.OperationType == ExportOperationType.Rollback &&
-                request.ExportTarget != null) {
+            if (request.OperationType == ExportOperationType.CancelExport &&
+                request.ExportTarget is not ("S57" or "S101")) {
                 throw new InvalidOperationException(
-                    "Rollback jobs must not include an export target."
+                    "CancelExport jobs must include the independent export target."
                 );
             }
         }

@@ -17,7 +17,7 @@ namespace TestProductCatalogueAPI
         }
 
         [Fact]
-        public async Task Test_AppendJobTableRow() {
+        public async Task Test_AppendProductStateHistoryRow() {
             var name = "101DK0040349E";
             var state = ProductState.InTransit;
             

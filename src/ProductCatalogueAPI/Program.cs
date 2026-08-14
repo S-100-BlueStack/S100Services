@@ -7,6 +7,7 @@ using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.OpenApi;
 using ProductCatalogueAPI.Services.Export;
+using ProductCatalogueAPI.Services.ExportRules;
 using ProductCatalogueAPI.Services.Graph;
 using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Jobs;
@@ -193,19 +194,24 @@ namespace ProductCatalogueAPI
             // builder.Services.AddSingleton<IProductRepository, InMemoryProductRepository>();
             //Log.Information("InMemory SystemDB configured");
             builder.Services.AddSingleton<DbConnectionFactory>();
-            builder.Services.AddScoped<IProductRepository, ProductRepository>();
+            builder.Services.AddScoped<ProductRepository>();
+            builder.Services.AddScoped<IProductRepository>(services => services.GetRequiredService<ProductRepository>());
+            builder.Services.AddScoped<IProductWorkflowRepository>(services => services.GetRequiredService<ProductRepository>());
             Log.Information("SystemDB configured");
 
 
             // Locking service
             builder.Services.AddSingleton<IDatasetLockService, DatasetLockService>();
-            // ExportService
-            builder.Services.AddSingleton<IExportService>(sp => {
-                var logger = sp.GetRequiredService<ILogger<ExportService>>();
-                var artifactsPath = builder.Configuration["ArtifactsPath"]!;
-
-                return new ExportService(logger, artifactsPath);
-            });
+            // Independent product engines share no version or execution timeline.
+            builder.Services.AddSingleton<IExportEngine>(services => new IsoIec8211ExportEngine(
+                services.GetRequiredService<ILogger<IsoIec8211ExportEngine>>(),
+                builder.Configuration["ArtifactsPath"] ?? throw new InvalidOperationException("ArtifactsPath is not configured.")));
+            builder.Services.AddSingleton<IExportEngine, Hdf5ExportEngine>();
+            builder.Services.AddSingleton<IExportEngine, GmlExportEngine>();
+            builder.Services.AddSingleton<IExportEngineRegistry, ExportEngineRegistry>();
+            builder.Services.AddSingleton<IExportDecisionRuleSet, PendingS101ExportDecisionRuleSet>();
+            builder.Services.AddSingleton<IExportDecisionRuleSet, PendingS57ExportDecisionRuleSet>();
+            builder.Services.AddSingleton<IExportDecisionRuleSetRegistry, ExportDecisionRuleSetRegistry>();
 
             builder.Services.AddSingleton<ISevenCsService, SevenCsService>();
             builder.Services.AddSingleton(TimeProvider.System);
@@ -214,6 +220,8 @@ namespace ProductCatalogueAPI
             builder.Services.AddSingleton<IHangfireJobStorageAccessor>(_ => new HangfireJobStorageAccessor(JobStorage.Current));
             builder.Services.AddSingleton<IJobStatusService, HangfireJobStatusService>();
             builder.Services.AddTransient<ExportOperationJob>();
+            builder.Services.AddTransient<DetectProductChangesJob>();
+            builder.Services.AddTransient<NightlyExportBuildJob>();
             // TODO: Move to service
             builder.Services.AddHangfireServer();
 
@@ -244,16 +252,8 @@ namespace ProductCatalogueAPI
                 //   Authorization = new[] { new MyAuthorizationFilter() }             // TODO: Auth
             });
 
-            // Read flag from configuration
-            var enableJob = builder.Configuration.GetValue<bool>("EnableDetectProductChanges");
-            if (enableJob) {
-                Log.Information("Scheduling DetectProductChangesJob to run hourly.");
-                RecurringJob.AddOrUpdate<DetectProductChangesJob>(
-                    "detect-product-changes-job",
-                    job => job.RunAsync(CancellationToken.None),
-                    Cron.Daily(23)
-                );
-            }
+            // Change detection and nightly export jobs are registered for explicit invocation only.
+            // Scheduling is intentionally deferred until operational cadence and rulesets are approved.
 
             app.UseExceptionHandler();
             // Configure the HTTP request pipeline.

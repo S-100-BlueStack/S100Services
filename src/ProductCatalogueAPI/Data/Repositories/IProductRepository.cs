@@ -1,27 +1,39 @@
 using ProductCatalogueAPI.Data.Models;
 
-namespace ProductCatalogueAPI.Data.Repositories
-{
-    public interface IProductRepository
-    {
-        Task AppendAsync(
-            string name,
-            ProductState state,
-            string productSpecification,
-            uint editionNo,
-            uint? updateNo,
-            string? owner = null,
-            byte[]? attachment = null,
-            string? attachmentFileName = null);
+namespace ProductCatalogueAPI.Data.Repositories;
 
-        Task<IEnumerable<ProductRecord>> GetCurrentAsync();
-        Task<ProductRecord?> GetCurrentByNameAsync(string name);
-        Task<IEnumerable<ProductRecord>> GetCurrentByNamesAsync(IEnumerable<string> names);
-        Task<DateTime?> GetLastSuccessfulRunUtcAsync(string jobName);
-        Task SetSuccessfulRunUtcAsync(string jobName, DateTime dateTime);
-        Task<string[]> GetIneligbleProductsAsync();
-        Task<string[]> GetEligibleProductsAsync();
-        Task<IEnumerable<ProductRecord>> GetHistoryByNameAsync(string name);
-        Task<IEnumerable<ProductRecord>> GetHistoryAsync(DateTime fromInclusive, DateTime toExclusive);
-    }
+/// <summary>
+/// Provides the legacy dashboard-shaped view over the normalized product workflow schema.
+/// </summary>
+public interface IProductRepository
+{
+    /// <summary>Appends a state transition to the normalized track history.</summary>
+    Task AppendAsync(string name, ProductState state, string productSpecification, uint editionNo, uint? updateNo, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null);
+
+    /// <summary>Gets the current preferred track for every product.</summary>
+    Task<IEnumerable<ProductRecord>> GetCurrentAsync();
+
+    /// <summary>Gets the current preferred track for a product.</summary>
+    Task<ProductRecord?> GetCurrentByNameAsync(string name);
+
+    /// <summary>Gets current preferred tracks for the requested products.</summary>
+    Task<IEnumerable<ProductRecord>> GetCurrentByNamesAsync(IEnumerable<string> names);
+
+    /// <summary>Gets a job's last successful scan watermark.</summary>
+    Task<DateTime?> GetLastSuccessfulRunUtcAsync(string jobName);
+
+    /// <summary>Persists a job's successful scan watermark.</summary>
+    Task SetSuccessfulRunUtcAsync(string jobName, DateTime dateTime);
+
+    /// <summary>Gets products whose current state prevents automatic processing.</summary>
+    Task<string[]> GetIneligbleProductsAsync();
+
+    /// <summary>Gets products eligible for automatic processing.</summary>
+    Task<string[]> GetEligibleProductsAsync();
+
+    /// <summary>Gets state history for a product across all independent tracks.</summary>
+    Task<IEnumerable<ProductRecord>> GetHistoryByNameAsync(string name);
+
+    /// <summary>Gets state history occurring in a UTC interval.</summary>
+    Task<IEnumerable<ProductRecord>> GetHistoryAsync(DateTime fromInclusive, DateTime toExclusive);
 }

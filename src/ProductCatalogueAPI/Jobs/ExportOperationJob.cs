@@ -1,5 +1,6 @@
 using Hangfire;
 using Hangfire.Server;
+using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Operations;
 using S100FC.ProductCatalogue;
@@ -58,7 +59,7 @@ namespace ProductCatalogueAPI.Jobs
             );
 
             await using var datasetLock = await _datasetLockService.TryAcquireAsync(
-                request.DatasetName,
+                $"{request.DatasetName}-{request.ExportTarget}",
                 cancellationToken
             );
 
@@ -160,18 +161,15 @@ namespace ProductCatalogueAPI.Jobs
                     context.SetJobParameter(ExportJobParameterNames.ExecutionStarted, true);
 
                 var result = request.OperationType switch {
-                    ExportOperationType.ExportEdition => await _exportOperationService.ExecuteNewEditionAsync(
-                        request.DatasetName,
-                        ParseExportTarget(request.ExportTarget),
-                        user: null,
-                        cancellationToken,
-                        markExecutionStarted
-                    ),
-                    ExportOperationType.Rollback => await _exportOperationService.ExecuteRollbackAsync(
-                        request.DatasetName,
-                        cancellationToken,
-                        markExecutionStarted
-                    ),
+                    ExportOperationType.ExportEdition => await _exportOperationService.ExecuteExportAsync(
+                        request.DatasetName, ParseExportTarget(request.ExportTarget), ExportRevisionType.NewEdition,
+                        user: null, cancellationToken: cancellationToken, beforeMutation: markExecutionStarted),
+                    ExportOperationType.ExportUpdate => await _exportOperationService.ExecuteExportAsync(
+                        request.DatasetName, ParseExportTarget(request.ExportTarget), ExportRevisionType.Update,
+                        user: null, cancellationToken: cancellationToken, beforeMutation: markExecutionStarted),
+                    ExportOperationType.CancelExport => await _exportOperationService.ExecuteCancelExportAsync(
+                        request.DatasetName, ParseExportTarget(request.ExportTarget), user: null,
+                        cancellationToken: cancellationToken, beforeMutation: markExecutionStarted),
                     _ => throw new ArgumentOutOfRangeException(
                         nameof(request.OperationType),
                         request.OperationType,
@@ -229,13 +227,13 @@ namespace ProductCatalogueAPI.Jobs
             }
             catch (Exception ex) {
                 var (code, message) = request.OperationType switch {
-                    ExportOperationType.ExportEdition => (
+                    ExportOperationType.ExportEdition or ExportOperationType.ExportUpdate => (
                         ExportJobContract.ExportFailedCode,
                         ExportJobContract.ExportFailedMessage
                     ),
-                    ExportOperationType.Rollback => (
-                        ExportJobContract.RollbackFailedCode,
-                        ExportJobContract.RollbackFailedMessage
+                    ExportOperationType.CancelExport => (
+                        ExportJobContract.CancelExportFailedCode,
+                        ExportJobContract.CancelExportFailedMessage
                     ),
                     _ => (
                         ExportJobContract.JobFailedCode,
@@ -258,12 +256,9 @@ namespace ProductCatalogueAPI.Jobs
             }
         }
 
-        private static Models.RequestTypes.ExportFormat ParseExportTarget(string? exportTarget) {
-            if (string.Equals(exportTarget, "S100", StringComparison.OrdinalIgnoreCase))
-                return Models.RequestTypes.ExportFormat.S100;
-
-            throw new InvalidOperationException("The queued export target is invalid.");
-        }
+        private static ProductSpecification ParseExportTarget(string? exportTarget) => Enum.TryParse<ProductSpecification>(exportTarget, ignoreCase: false, out var target)
+            ? target
+            : throw new InvalidOperationException("The queued export target is invalid.");
 
         private static ExportOperationJobException CreateSafeFailure(
             IExportJobExecutionContext context,
