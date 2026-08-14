@@ -98,6 +98,7 @@ namespace ProductCatalogueAPI
                 if (File.Exists(xmlPath))
                     options.IncludeXmlComments(xmlPath);
                 options.OperationFilter<ExportTargetOperationFilter>();
+                options.OperationFilter<SwaggerAllowedValuesOperationFilter>();
             });
 #if DEBUG
             builder.Services.AddCors(options => {

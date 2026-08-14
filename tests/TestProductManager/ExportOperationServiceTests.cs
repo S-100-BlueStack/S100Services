@@ -42,7 +42,7 @@ public sealed class ExportOperationServiceTests
         Assert.Equal(ProductState.Error, repository.Track.State);
         Assert.Equal("SEVENCS_VALIDATION_FAILED", repository.LastErrorCode);
         Assert.Contains("SevenCs validation failed", repository.LastErrorMessage);
-        Assert.Contains(repository.Artifacts, artifact => artifact.Kind == ProductArtifactKind.ValidationReport);
+        Assert.DoesNotContain(repository.Artifacts, artifact => artifact.Kind == ProductArtifactKind.ValidationReport);
         Assert.Contains(repository.Artifacts, artifact => artifact.Kind == ProductArtifactKind.ValidationDiagnostic && artifact.FileName == "101DK001.vld");
     }
 

@@ -8,6 +8,7 @@ using NetTopologySuite.IO;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Models;
+using ProductCatalogueAPI.OpenApi;
 using ProductCatalogueAPI.Services.Dashboard;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
@@ -59,7 +60,7 @@ namespace ProductCatalogueAPI.Controllers
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpGet("aoi")]
-        public async Task<IActionResult> GetAllElectronicProductsAOI([FromQuery] string productSpecification = "S101")
+        public async Task<IActionResult> GetAllElectronicProductsAOI([FromQuery, SwaggerAllowedValues(nameof(ProductSpecification.S57), nameof(ProductSpecification.S101))] string productSpecification = "S101")
         {
             var controllerStopwatch = Stopwatch.StartNew();
             var geometryRetrievalStopwatch = new Stopwatch();

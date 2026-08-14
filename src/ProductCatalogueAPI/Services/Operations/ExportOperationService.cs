@@ -5,7 +5,6 @@ using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.ProductCatalogue;
 using S100FC.YAML;
 using System.Text;
-using System.Text.Json;
 
 namespace ProductCatalogueAPI.Services.Operations;
 
@@ -70,8 +69,6 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
                     throw ExportValidationException.Unavailable(datasetName, ex);
                 }
 
-                var validationBytes = JsonSerializer.SerializeToUtf8Bytes(validationResult.Summary);
-                await _workflowRepository.AddArtifactAsync(new ProductArtifactWrite(track.Id, revisionId, ProductArtifactKind.ValidationReport, $"{datasetName}-{edition}-{update:000}-validation.json", "application/json", validationBytes, _timeProvider.GetUtcNow().UtcDateTime), cancellationToken);
                 foreach (var diagnostic in validationResult.Diagnostics)
                     await _workflowRepository.AddArtifactAsync(new ProductArtifactWrite(track.Id, revisionId, ProductArtifactKind.ValidationDiagnostic, diagnostic.FileName, diagnostic.MediaType, diagnostic.Content, _timeProvider.GetUtcNow().UtcDateTime), cancellationToken);
                 if (validationResult.Summary.Errors > 0 || validationResult.Summary.Critical > 0 || validationResult.Summary.ShallowIsolatedDangersUpdatedBathy)

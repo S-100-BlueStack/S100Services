@@ -636,7 +636,7 @@ namespace S100FC.ProductCatalogue
 
         ElectronicProduct? IElectronicProductManager.ElectronicProduct(string name) => this._preferredElectronicProductsByName.GetValueOrDefault(name.ToUpperInvariant());
 
-        ElectronicProduct? IElectronicProductManager.ElectronicProduct(string name, string productSpecification) => this._electronicProducts.GetValueOrDefault(new ElectronicProductKey(NormalizeProductSpecification(productSpecification), name.ToUpperInvariant()));
+        ElectronicProduct? IElectronicProductManager.ElectronicProduct(string name, string productSpecification) => this._electronicProducts.GetValueOrDefault(CreateElectronicProductKey(productSpecification, name));
 
         async Task<ElectronicProductVersion?> IElectronicProductManager.ReadElectronicProductVersionAsync(
             string datasetName,
@@ -1579,15 +1579,9 @@ namespace S100FC.ProductCatalogue
                                     continue;
                                 }
 
-                                if (!string.IsNullOrWhiteSpace(productSpecification)) {
-                                    var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(attrBindings, typeof(ElectronicProduct));
-                                    if (!string.Equals(
-                                        NormalizeProductSpecification(electronicProduct.productSpecification?.name),
-                                        NormalizeProductSpecification(productSpecification),
-                                        StringComparison.Ordinal)) {
-                                        continue;
-                                    }
-                                }
+                                if (!string.IsNullOrWhiteSpace(productSpecification)
+                                    && !_electronicProducts.ContainsKey(CreateElectronicProductKey(productSpecification, datasetName)))
+                                    continue;
 
                                 var geometryReadStartedAt = Stopwatch.GetTimestamp();
                                 var boundary = feature.GetShape();
@@ -1712,7 +1706,9 @@ namespace S100FC.ProductCatalogue
             _preferredElectronicProductsByName.AddOrUpdate(key.DatasetName, electronicProduct, (_, existing) => NormalizeProductSpecification(electronicProduct.productSpecification?.name) == "S101" ? electronicProduct : existing);
         }
 
-        private static ElectronicProductKey CreateElectronicProductKey(ElectronicProduct electronicProduct) => new(NormalizeProductSpecification(electronicProduct.productSpecification?.name), electronicProduct.datasetName!.ToUpperInvariant());
+        private static ElectronicProductKey CreateElectronicProductKey(ElectronicProduct electronicProduct) => CreateElectronicProductKey(electronicProduct.productSpecification?.name, electronicProduct.datasetName);
+
+        private static ElectronicProductKey CreateElectronicProductKey(string? productSpecification, string? datasetName) => new(NormalizeProductSpecification(productSpecification), datasetName?.Trim().ToUpperInvariant() ?? string.Empty);
 
         private static string NormalizeProductSpecification(string? value) {
             var normalized = value?.Replace("-", string.Empty, StringComparison.Ordinal).Trim().ToUpperInvariant() ?? string.Empty;
