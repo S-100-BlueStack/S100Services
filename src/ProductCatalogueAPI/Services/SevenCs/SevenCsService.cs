@@ -2,6 +2,7 @@
 using System.Net.Http.Headers;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using ProductCatalogueAPI.Services.Export;
 
 namespace ProductCatalogueAPI.Services.SevenCs
 {
@@ -32,7 +33,7 @@ namespace ProductCatalogueAPI.Services.SevenCs
         /// </returns>
         public async Task<SummaryResponse> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) {
             // Build path
-            var datasetPath = Path.Combine(outputPath, datasetName, "S101", edition.ToString(), update.ToString("000"), "S100_ROOT", "S-101", "DATASET_FILES");
+            var datasetPath = ExportOutputPath.GetS101DatasetFilesDirectory(outputPath, datasetName, edition, update);
 
             cancellationToken.ThrowIfCancellationRequested();
 

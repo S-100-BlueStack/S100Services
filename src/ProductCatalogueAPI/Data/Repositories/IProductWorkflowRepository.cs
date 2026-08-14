@@ -34,7 +34,7 @@ public interface IProductWorkflowRepository
     /// <summary>Upserts the complete, lock-protected daily summary and its normalized changes.</summary>
     Task SaveChangeSummaryAsync(ProductChangeSummary summary, CancellationToken cancellationToken = default);
 
-    /// <summary>Gets all open summaries that can be evaluated by the nightly export rulesets.</summary>
+    /// <summary>Gets all open summaries that can be evaluated by the export decision rulesets.</summary>
     Task<IReadOnlyList<ProductChangeSummary>> GetOpenChangeSummariesAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Closes a summary after its candidate export has been durably created.</summary>

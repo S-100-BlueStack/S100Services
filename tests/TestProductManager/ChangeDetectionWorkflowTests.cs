@@ -29,13 +29,13 @@ public sealed class ChangeDetectionWorkflowTests
     }
 
     [Fact]
-    public async Task NightlyJobDoesNotInventAnEditionDecisionWhileRulesArePending() {
+    public async Task ChangeSummaryJobDoesNotInventAnEditionDecisionWhileRulesArePending() {
         var repository = new InMemoryProductRepository();
         var track = await repository.GetOrCreateTrackAsync("101DK001", ProductSpecification.S101, ExportEngineKind.IsoIec8211, 4, 2);
         var summary = new ProductChangeSummary(Guid.NewGuid(), track.Id, track.DatasetName, track.ProductSpecification, new DateOnly(2026, 8, 10), "changes: []\n", [], DateTime.UtcNow, DateTime.UtcNow);
         await repository.SaveChangeSummaryAsync(summary);
         var operations = new RecordingOperations();
-        var job = new NightlyExportBuildJob(repository, new ExportDecisionRuleSetRegistry([new PendingS101ExportDecisionRuleSet()]), operations, new FakeLockService(), TimeProvider.System, NullLogger<NightlyExportBuildJob>.Instance);
+        var job = new ProcessChangeSummariesJob(repository, new ExportDecisionRuleSetRegistry([new PendingS101ExportDecisionRuleSet()]), operations, new FakeLockService(), TimeProvider.System, NullLogger<ProcessChangeSummariesJob>.Instance);
 
         await job.RunAsync(CancellationToken.None);
 

@@ -251,8 +251,7 @@ namespace ProductCatalogue
 
             // applyEdits must remain false: SQL owns unverified candidate versions until IC-ENC acceptance.
             var dataset = await this.CreateDatasetAsync(result.ElectronicProduct, result.Boundary, exportType, applyEdits: false);
-            dataset.Edition = checked((uint)edition);
-            dataset.Update = checked((uint)update);
+            ExportSnapshotVersioning.ApplyCompilerCompatibleVersion(dataset, edition);
             cancellationToken.ThrowIfCancellationRequested();
             return dataset;
         }

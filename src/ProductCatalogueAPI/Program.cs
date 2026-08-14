@@ -221,7 +221,7 @@ namespace ProductCatalogueAPI
             builder.Services.AddSingleton<IJobStatusService, HangfireJobStatusService>();
             builder.Services.AddTransient<ExportOperationJob>();
             builder.Services.AddTransient<DetectProductChangesJob>();
-            builder.Services.AddTransient<NightlyExportBuildJob>();
+            builder.Services.AddTransient<ProcessChangeSummariesJob>();
             // TODO: Move to service
             builder.Services.AddHangfireServer();
 
@@ -252,7 +252,7 @@ namespace ProductCatalogueAPI
                 //   Authorization = new[] { new MyAuthorizationFilter() }             // TODO: Auth
             });
 
-            // Change detection and nightly export jobs are registered for explicit invocation only.
+            // Change detection and change-summary processing jobs are registered for explicit invocation only.
             // Scheduling is intentionally deferred until operational cadence and rulesets are approved.
 
             app.UseExceptionHandler();

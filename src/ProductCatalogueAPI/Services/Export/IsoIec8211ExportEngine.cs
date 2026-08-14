@@ -33,7 +33,14 @@ public sealed partial class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngin
     /// <inheritdoc/>
     public Task DeleteOutputAsync(ExportOutputIdentity output, CancellationToken cancellationToken = default) {
         cancellationToken.ThrowIfCancellationRequested();
-        var directory = GetOutputDirectory(output.OutputRoot, output.DatasetName, output.ProductSpecification, output.Edition, output.Update);
+        var directory = ExportOutputPath.GetCandidateDirectory(output.OutputRoot, output.DatasetName, output.ProductSpecification, output.Edition, output.Update);
+        if (output.ProductSpecification == ProductSpecification.S101 && output.Update > 0) {
+            var updatePath = Path.Combine(ExportOutputPath.GetS101DatasetFilesDirectory(output.OutputRoot, output.DatasetName, output.Edition, output.Update), $"{output.DatasetName}.{output.Update:000}");
+            if (File.Exists(updatePath))
+                File.Delete(updatePath);
+            return Task.CompletedTask;
+        }
+
         if (Directory.Exists(directory))
             Directory.Delete(directory, recursive: true);
         return Task.CompletedTask;
@@ -41,16 +48,16 @@ public sealed partial class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngin
 
     private async Task<ExportEngineResult> ExportS101Async(ExportEngineRequest request, CancellationToken cancellationToken) {
         ValidateRequest(request);
-        var outputDirectory = GetOutputDirectory(request.OutputRoot, request.DatasetName, request.ProductSpecification, request.Edition, request.Update);
-        PrepareOutputDirectory(outputDirectory);
+        var outputDirectory = ExportOutputPath.GetCandidateDirectory(request.OutputRoot, request.DatasetName, request.ProductSpecification, request.Edition, request.Update);
+        PrepareOutputDirectory(request, outputDirectory);
 
         var featureCatalogue = Path.Combine(_artifactsPath, "101_FC_2.0.0.xml");
         if (!File.Exists(featureCatalogue))
             throw new FileNotFoundException("The S-101 feature catalogue was not found.", featureCatalogue);
 
         var inputPath = Path.Combine(outputDirectory, $"temp_{request.DatasetName}.yaml");
-        var previousIndexPath = Path.Combine(outputDirectory, "previous.idx");
-        var compilerIndexPath = Path.Combine(outputDirectory, $"{request.DatasetName}_{request.Update:000}.idx");
+        var previousIndexPath = Path.Combine(outputDirectory, "prev.idx");
+        var compilerIndexPath = Path.Combine(outputDirectory, $"{GetCompilerDatasetName(request.DatasetName)}_{request.Update:000}.idx");
         await File.WriteAllTextAsync(inputPath, request.DatasetYaml, Encoding.UTF8, cancellationToken);
 
         var arguments = $"-f \"{inputPath}\" -c \"{featureCatalogue}\" -d \"{outputDirectory}\" -C \"{request.DatasetName}\" -l \"{compilerIndexPath}\"";
@@ -61,7 +68,7 @@ public sealed partial class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngin
 
         await RunProcessAsync(S100CompilerPath, arguments, outputDirectory, request.DatasetName, cancellationToken);
 
-        var datasetPath = Path.Combine(outputDirectory, "S100_ROOT", "S-101", "DATASET_FILES", $"{request.DatasetName}.{request.Update:000}");
+        var datasetPath = Path.Combine(ExportOutputPath.GetS101DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update), $"{request.DatasetName}.{request.Update:000}");
         var datasetFile = new FileInfo(datasetPath);
         if (!datasetFile.Exists || datasetFile.Length == 0)
             throw new InvalidOperationException($"The S-101 compiler did not create a non-empty dataset for '{request.DatasetName}'.");
@@ -83,8 +90,8 @@ public sealed partial class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngin
 
     private async Task<ExportEngineResult> ExportS57Async(ExportEngineRequest request, CancellationToken cancellationToken) {
         ValidateRequest(request);
-        var outputDirectory = GetOutputDirectory(request.OutputRoot, request.DatasetName, request.ProductSpecification, request.Edition, request.Update);
-        PrepareOutputDirectory(outputDirectory);
+        var outputDirectory = ExportOutputPath.GetCandidateDirectory(request.OutputRoot, request.DatasetName, request.ProductSpecification, request.Edition, request.Update);
+        PrepareOutputDirectory(request, outputDirectory);
 
         var featureCatalogue = Path.Combine(_artifactsPath, "101_FC_2.0.0.xml");
         var pipeline = Path.Combine(_artifactsPath, "pipeline-S101-S57.yaml");
@@ -151,14 +158,21 @@ public sealed partial class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngin
         return stream.ToArray();
     }
 
-    private static string GetOutputDirectory(string root, string datasetName, ProductSpecification productSpecification, int edition, int update) => Path.Combine(root, datasetName, productSpecification.ToString(), edition.ToString(), update.ToString("000"));
-
-    private static void PrepareOutputDirectory(string outputDirectory) {
-        // A retry must not package stale artifacts from an earlier failed attempt of the same candidate version.
-        if (Directory.Exists(outputDirectory))
+    private static void PrepareOutputDirectory(ExportEngineRequest request, string outputDirectory) {
+        // A new S-101 edition and every isolated non-S-101 candidate must not reuse stale compiler output.
+        if (Directory.Exists(outputDirectory) && (request.ProductSpecification != ProductSpecification.S101 || request.Update == 0))
             Directory.Delete(outputDirectory, recursive: true);
         Directory.CreateDirectory(outputDirectory);
+
+        // Updates share their edition exchange set, so only the retried target dataset file is cleared.
+        if (request.ProductSpecification == ProductSpecification.S101 && request.Update > 0) {
+            var updatePath = Path.Combine(ExportOutputPath.GetS101DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update), $"{request.DatasetName}.{request.Update:000}");
+            if (File.Exists(updatePath))
+                File.Delete(updatePath);
+        }
     }
+
+    private static string GetCompilerDatasetName(string datasetName) => datasetName.StartsWith("101DK00", StringComparison.Ordinal) ? datasetName[7..] : datasetName;
 
     private static void ValidateRequest(ExportEngineRequest request) {
         if (string.IsNullOrWhiteSpace(request.DatasetName))
