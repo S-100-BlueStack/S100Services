@@ -514,8 +514,9 @@ namespace ProductCatalogue
                 var attrBindings = Convert.ToString(product.Attributes["attributebindings"]) ?? string.Empty;
                 var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(attrBindings!, typeof(ElectronicProduct));
 
+                // The same dataset name can exist for multiple specifications, so the current row is authoritative.
                 if (!string.IsNullOrWhiteSpace(productSpecification)
-                    && !_electronicProducts.ContainsKey(CreateElectronicProductKey(productSpecification, electronicProduct.datasetName)))
+                    && !string.Equals(NormalizeProductSpecification(electronicProduct.productSpecification?.name), NormalizeProductSpecification(productSpecification), StringComparison.Ordinal))
                     continue;
 
                 var simpleGeometry = product.Geometry.Envelope as Polygon;
@@ -984,9 +985,6 @@ namespace ProductCatalogue
 
         private static ElectronicProductKey CreateElectronicProductKey(string? productSpecification, string? datasetName) => new(NormalizeProductSpecification(productSpecification), datasetName?.Trim().ToUpperInvariant() ?? string.Empty);
 
-        private static string NormalizeProductSpecification(string? value) {
-            var normalized = value?.Replace("-", string.Empty, StringComparison.Ordinal).Trim().ToUpperInvariant() ?? string.Empty;
-            return normalized == "S128" ? "S101" : normalized;
-        }
+        private static string NormalizeProductSpecification(string? value) => value?.Replace("-", string.Empty, StringComparison.Ordinal).Trim().ToUpperInvariant() ?? string.Empty;
     }
 }

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using ProductCatalogueAPI.Controllers;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
+using S100FC;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using System.Collections;
@@ -175,6 +176,21 @@ namespace TestProductCatalogueAPI
                 filter.WhereClause
             );
             Assert.Equal("attributebindings, shape", filter.SubFields);
+        }
+
+        [Theory]
+        [InlineData("S-101", "S101", true)]
+        [InlineData("S-57", "S57", true)]
+        [InlineData("S-57", "S101", false)]
+        [InlineData("S-128", "S101", false)]
+        public void DatasetAoiSpecificationIsReadFromTheRowsAttributeBindings(string actualProductSpecification, string requestedProductSpecification, bool expectedMatch) {
+            var attrBindings = CreateElectronicProduct("TEST", 90_000, 3, actualProductSpecification).Flatten();
+            var method = typeof(ProductManagerGDB).GetMethod("MatchesProductSpecification", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.NotNull(method);
+
+            var matches = Assert.IsType<bool>(method.Invoke(null, [attrBindings, requestedProductSpecification]));
+
+            Assert.Equal(expectedMatch, matches);
         }
 
         [Fact]

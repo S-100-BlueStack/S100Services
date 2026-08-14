@@ -1579,8 +1579,9 @@ namespace S100FC.ProductCatalogue
                                     continue;
                                 }
 
+                                // The same dataset name can exist for multiple specifications, so the current row is authoritative.
                                 if (!string.IsNullOrWhiteSpace(productSpecification)
-                                    && !_electronicProducts.ContainsKey(CreateElectronicProductKey(productSpecification, datasetName)))
+                                    && !MatchesProductSpecification(attrBindings, productSpecification))
                                     continue;
 
                                 var geometryReadStartedAt = Stopwatch.GetTimestamp();
@@ -1710,10 +1711,12 @@ namespace S100FC.ProductCatalogue
 
         private static ElectronicProductKey CreateElectronicProductKey(string? productSpecification, string? datasetName) => new(NormalizeProductSpecification(productSpecification), datasetName?.Trim().ToUpperInvariant() ?? string.Empty);
 
-        private static string NormalizeProductSpecification(string? value) {
-            var normalized = value?.Replace("-", string.Empty, StringComparison.Ordinal).Trim().ToUpperInvariant() ?? string.Empty;
-            return normalized == "S128" ? "S101" : normalized;
+        private static bool MatchesProductSpecification(string attrBindings, string requestedProductSpecification) {
+            var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(attrBindings, typeof(ElectronicProduct));
+            return string.Equals(NormalizeProductSpecification(electronicProduct.productSpecification?.name), NormalizeProductSpecification(requestedProductSpecification), StringComparison.Ordinal);
         }
+
+        private static string NormalizeProductSpecification(string? value) => value?.Replace("-", string.Empty, StringComparison.Ordinal).Trim().ToUpperInvariant() ?? string.Empty;
     }
 
     public sealed class SingleThreadTaskScheduler : TaskScheduler, IDisposable
