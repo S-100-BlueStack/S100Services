@@ -59,11 +59,23 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
 
             await _workflowRepository.SetStateAsync(track.Id, ProductState.Validating, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken: cancellationToken);
             if (productSpecification == ProductSpecification.S101) {
-                var validation = await _sevenCsService.ValidateDatasetAsync(datasetName, edition, update, _electronicProductManager.OutputFolder, cancellationToken);
-                var validationBytes = JsonSerializer.SerializeToUtf8Bytes(validation);
+                SevenCsValidationResult validationResult;
+                try {
+                    validationResult = await _sevenCsService.ValidateDatasetAsync(datasetName, edition, update, _electronicProductManager.OutputFolder, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                    throw;
+                }
+                catch (Exception ex) {
+                    throw ExportValidationException.Unavailable(datasetName, ex);
+                }
+
+                var validationBytes = JsonSerializer.SerializeToUtf8Bytes(validationResult.Summary);
                 await _workflowRepository.AddArtifactAsync(new ProductArtifactWrite(track.Id, revisionId, ProductArtifactKind.ValidationReport, $"{datasetName}-{edition}-{update:000}-validation.json", "application/json", validationBytes, _timeProvider.GetUtcNow().UtcDateTime), cancellationToken);
-                if (validation.Errors > 0 || validation.Critical > 0)
-                    throw new ExportValidationException(datasetName, validation.Errors, validation.Critical);
+                foreach (var diagnostic in validationResult.Diagnostics)
+                    await _workflowRepository.AddArtifactAsync(new ProductArtifactWrite(track.Id, revisionId, ProductArtifactKind.ValidationDiagnostic, diagnostic.FileName, diagnostic.MediaType, diagnostic.Content, _timeProvider.GetUtcNow().UtcDateTime), cancellationToken);
+                if (validationResult.Summary.Errors > 0 || validationResult.Summary.Critical > 0 || validationResult.Summary.ShallowIsolatedDangersUpdatedBathy)
+                    throw ExportValidationException.Findings(datasetName, validationResult.Summary.Errors, validationResult.Summary.Critical, validationResult.Summary.ShallowIsolatedDangersUpdatedBathy);
             }
 
             await _workflowRepository.SetStateAsync(track.Id, ProductState.ReadyForDistribution, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken: cancellationToken);
@@ -112,7 +124,8 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
 
     private async Task SetErrorBestEffortAsync(Guid trackId, string? user, Exception exception) {
         try {
-            await _workflowRepository.SetStateAsync(trackId, ProductState.Error, user, _timeProvider.GetUtcNow().UtcDateTime, exception.GetType().Name, "The export or validation failed. See structured logs for diagnostic details.");
+            var (errorCode, errorMessage) = GetPublicFailure(exception);
+            await _workflowRepository.SetStateAsync(trackId, ProductState.Error, user, _timeProvider.GetUtcNow().UtcDateTime, errorCode, errorMessage);
         }
         catch (Exception persistenceException) {
             _logger.LogError(persistenceException, "Failed to persist Error state after candidate export failure. TrackId: {TrackId}.", trackId);
@@ -120,4 +133,9 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
 
         _logger.LogError(exception, "Candidate export failed and defaulted to Error. TrackId: {TrackId}.", trackId);
     }
+
+    private static (string Code, string Message) GetPublicFailure(Exception exception) => exception switch {
+        ExportValidationException validationException => (validationException.Code, validationException.PublicMessage),
+        _ => (exception.GetType().Name, "The export failed. Contact support and provide the dataset name and failure time.")
+    };
 }

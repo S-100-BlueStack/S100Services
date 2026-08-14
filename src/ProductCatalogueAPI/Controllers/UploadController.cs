@@ -43,13 +43,6 @@ namespace ProductCatalogueAPI.Controllers
             string datasetName,
             CancellationToken cancellationToken
         ) {
-            _logger.LogInformation(
-                "{Method}({DatasetName}). User: {User}",
-                nameof(UploadSingularProduct),
-                datasetName,
-                User?.Identity?.Name ?? string.Empty
-            );
-
             var mode = _sendToIcEncOptions.CurrentValue.Mode;
             if (mode == SendToIcEncMode.Disabled) {
                 return JobProblem(
@@ -156,13 +149,6 @@ namespace ProductCatalogueAPI.Controllers
             string datasetName,
             CancellationToken cancellationToken
         ) {
-            _logger.LogInformation(
-                "{Method}({DatasetName}). User: {User}",
-                nameof(FreezeProduct),
-                datasetName,
-                User?.Identity?.Name ?? string.Empty
-            );
-
             await using var datasetLock = await _datasetLockService.TryAcquireAsync(
                 datasetName,
                 cancellationToken
@@ -204,13 +190,6 @@ namespace ProductCatalogueAPI.Controllers
             string datasetName,
             CancellationToken cancellationToken
         ) {
-            _logger.LogInformation(
-                "{Method}({DatasetName}). User: {User}",
-                nameof(UnfreezeProduct),
-                datasetName,
-                User?.Identity?.Name ?? string.Empty
-            );
-
             await using var datasetLock = await _datasetLockService.TryAcquireAsync(
                 datasetName,
                 cancellationToken

@@ -30,7 +30,10 @@ namespace ProductCatalogue
         private ConnectionREST[] _connections { get; set; } = [];
         private FeatureServiceClient? Connection(string productSpecification) => _connections.FirstOrDefault(e => e.ProductSpecification == productSpecification)?.Client;
 
-        private readonly ConcurrentDictionary<string, S100FC.S128.FeatureTypes.ElectronicProduct> _electronicProducts = new ConcurrentDictionary<string, S100FC.S128.FeatureTypes.ElectronicProduct>();
+        private readonly ConcurrentDictionary<ElectronicProductKey, S100FC.S128.FeatureTypes.ElectronicProduct> _electronicProducts = new();
+        private readonly ConcurrentDictionary<string, S100FC.S128.FeatureTypes.ElectronicProduct> _preferredElectronicProductsByName = new();
+
+        private sealed record ElectronicProductKey(string ProductSpecification, string DatasetName);
 
         protected async Task<ProductManagerREST> InitializeAsync(Func<FeatureServiceClient> creator) {
             this._s128FeatureServiceClient = creator();
@@ -78,7 +81,7 @@ namespace ProductCatalogue
             foreach (var product in electronicProducts) {
                 if (product.Attributes.ContainsKey("attributebindings") && product.Attributes["attributebindings"] != null) {
                     var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(product.Attributes["attributebindings"]!.ToString()!, typeof(ElectronicProduct));
-                    this._electronicProducts.GetOrAdd(electronicProduct.datasetName!.ToUpperInvariant(), electronicProduct);
+                    AddElectronicProduct(electronicProduct);
                 }
             }
 
@@ -91,7 +94,7 @@ namespace ProductCatalogue
 
 
         public async Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign) {
-            var electronicProduct = this._electronicProducts[name.ToUpperInvariant()];
+            var electronicProduct = this._preferredElectronicProductsByName[name.ToUpperInvariant()];
             var timestamp = DateTime.UtcNow;
 
 
@@ -137,7 +140,7 @@ namespace ProductCatalogue
 
             name = name.ToUpperInvariant();
 
-            if (this._electronicProducts.ContainsKey(name))
+            if (this._preferredElectronicProductsByName.ContainsKey(name))
                 throw new System.ArgumentException("An element with the same key already exists!");
 
             var ps = "S-128";
@@ -178,7 +181,7 @@ namespace ProductCatalogue
                 throw new Exception("Error occured during CreateElectronicProductAsync.ApplyEditsAsync()");
 
 
-            var result = this._electronicProducts.TryAdd(name, electronicProduct);
+            AddElectronicProduct(electronicProduct);
         }
 
         public async Task CreateElectronicProductAsync(string name, productSpecification productSpecification, /*specificUsage specificUsage,*/ string boundary, int edition, int update, byte[] zipfile) => throw new NotImplementedException();
@@ -188,7 +191,7 @@ namespace ProductCatalogue
                 throw new System.ArgumentNullException(nameof(name));
             name = name.ToUpperInvariant();
 
-            if (!this._electronicProducts.ContainsKey(name))
+            if (!this._preferredElectronicProductsByName.ContainsKey(name))
                 throw new System.ArgumentException(nameof(name));
 
             var result = await this.GetElectronicProductAsync(name);
@@ -208,7 +211,7 @@ namespace ProductCatalogue
                 throw new System.ArgumentNullException(nameof(name));
             name = name.ToUpperInvariant();
 
-            if (!this._electronicProducts.ContainsKey(name))
+            if (!this._preferredElectronicProductsByName.ContainsKey(name))
                 throw new System.ArgumentException(nameof(name));
 
             var result = await this.GetElectronicProductAsync(name);
@@ -225,7 +228,7 @@ namespace ProductCatalogue
                 throw new System.ArgumentNullException(nameof(name));
             name = name.ToUpperInvariant();
 
-            if (!this._electronicProducts.ContainsKey(name))
+            if (!this._preferredElectronicProductsByName.ContainsKey(name))
                 throw new System.ArgumentException(nameof(name));
 
             var result = await this.GetElectronicProductAsync(name);
@@ -292,7 +295,7 @@ namespace ProductCatalogue
 
             name = name.ToUpperInvariant();
 
-            if (!this._electronicProducts.TryGetValue(name, out var electronicProduct))
+            if (!this._preferredElectronicProductsByName.TryGetValue(name, out var electronicProduct))
                 throw new ArgumentException(null, nameof(name));
 
             var dataset = await this.GetLatestDataset(name);
@@ -356,7 +359,7 @@ namespace ProductCatalogue
 
             name = name.ToUpperInvariant();
 
-            if (!this._electronicProducts.TryGetValue(name, out var electronicProduct))
+            if (!this._preferredElectronicProductsByName.TryGetValue(name, out var electronicProduct))
                 throw new ArgumentException(null, nameof(name));
 
             var dirty = false;
@@ -401,7 +404,7 @@ namespace ProductCatalogue
                 throw new System.ArgumentNullException(nameof(name));
             name = name.ToUpperInvariant();
 
-            if (!this._electronicProducts.ContainsKey(name))
+            if (!this._preferredElectronicProductsByName.ContainsKey(name))
                 throw new System.ArgumentException(nameof(name));
 
             var result = await this.GetElectronicProductAsync(name);
@@ -410,7 +413,9 @@ namespace ProductCatalogue
         }
 
 
-        ElectronicProduct? IElectronicProductManager.ElectronicProduct(string name) => this._electronicProducts.GetValueOrDefault(name.ToUpperInvariant());
+        ElectronicProduct? IElectronicProductManager.ElectronicProduct(string name) => this._preferredElectronicProductsByName.GetValueOrDefault(name.ToUpperInvariant());
+
+        ElectronicProduct? IElectronicProductManager.ElectronicProduct(string name, string productSpecification) => this._electronicProducts.GetValueOrDefault(new ElectronicProductKey(NormalizeProductSpecification(productSpecification), name.ToUpperInvariant()));
 
         async Task<ElectronicProductVersion?> IElectronicProductManager.ReadElectronicProductVersionAsync(
             string datasetName,
@@ -483,15 +488,19 @@ namespace ProductCatalogue
             datasetName?.Trim().ToUpperInvariant() ?? string.Empty;
 
         IEnumerator<string> IEnumerable<string>.GetEnumerator() {
-            foreach (var p in this._electronicProducts)
+            foreach (var p in this._preferredElectronicProductsByName)
                 yield return p.Key;
             yield break;
         }
 
-        IEnumerator IEnumerable.GetEnumerator() => this._electronicProducts.Keys.GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => this._preferredElectronicProductsByName.Keys.GetEnumerator();
 
 
-        async Task<Dictionary<string, string>> IElectronicProductManager.GetDatasetAOIs() {
+        Task<Dictionary<string, string>> IElectronicProductManager.GetDatasetAOIs() => GetDatasetAOIsCore(null);
+
+        Task<Dictionary<string, string>> IElectronicProductManager.GetDatasetAOIs(string productSpecification) => GetDatasetAOIsCore(productSpecification);
+
+        private async Task<Dictionary<string, string>> GetDatasetAOIsCore(string? productSpecification) {
             var result = new Dictionary<string, string>();
 
             var surfaceClient = await this._s128FeatureServiceClient.GetLayerClientAsync("surface");
@@ -505,11 +514,15 @@ namespace ProductCatalogue
                 var attrBindings = Convert.ToString(product.Attributes["attributebindings"]) ?? string.Empty;
                 var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(attrBindings!, typeof(ElectronicProduct));
 
+                if (!string.IsNullOrWhiteSpace(productSpecification)
+                    && !string.Equals(NormalizeProductSpecification(electronicProduct.productSpecification?.name), NormalizeProductSpecification(productSpecification), StringComparison.Ordinal))
+                    continue;
+
                 var simpleGeometry = product.Geometry.Envelope as Polygon;
 
                 var wkt = simpleGeometry.ToString();
 
-                result.Add(electronicProduct.datasetName!, wkt);
+                result[electronicProduct.datasetName!] = wkt;
             }
 
             return result;
@@ -938,7 +951,7 @@ namespace ProductCatalogue
                     Updates = [editableFeature]
                 });
 
-                this._electronicProducts[electronicProduct.datasetName!.ToUpperInvariant()] = electronicProduct;
+                AddElectronicProduct(electronicProduct);
             }
 
             return dataset!;
@@ -959,6 +972,19 @@ namespace ProductCatalogue
 
         public Task CreateElectronicProductAsync(string name, productSpecification productSpecification, int? specificUsage, string boundary, string? ProductMapping, int? optimumDisplayScale = null) {
             throw new NotImplementedException();
+        }
+
+        private void AddElectronicProduct(ElectronicProduct electronicProduct) {
+            var key = CreateElectronicProductKey(electronicProduct);
+            _electronicProducts[key] = electronicProduct;
+            _preferredElectronicProductsByName.AddOrUpdate(key.DatasetName, electronicProduct, (_, existing) => NormalizeProductSpecification(electronicProduct.productSpecification?.name) == "S101" ? electronicProduct : existing);
+        }
+
+        private static ElectronicProductKey CreateElectronicProductKey(ElectronicProduct electronicProduct) => new(NormalizeProductSpecification(electronicProduct.productSpecification?.name), electronicProduct.datasetName!.ToUpperInvariant());
+
+        private static string NormalizeProductSpecification(string? value) {
+            var normalized = value?.Replace("-", string.Empty, StringComparison.Ordinal).Trim().ToUpperInvariant() ?? string.Empty;
+            return normalized == "S128" ? "S101" : normalized;
         }
     }
 }

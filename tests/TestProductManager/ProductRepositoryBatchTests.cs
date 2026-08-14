@@ -47,6 +47,24 @@ namespace TestProductCatalogueAPI
             Assert.Empty(result);
         }
 
+        [Fact]
+        public async Task SpecificationBatchReadKeepsS57AndS101TracksIndependent() {
+            const string name = "SHARED-DATASET";
+            IProductRepository repository = new InMemoryProductRepository();
+            await repository.AppendAsync(name, ProductState.Rejected, "S-57", 4, 2);
+            await repository.AppendAsync(name, ProductState.ReadyForDistribution, "S-101", 5, 0);
+
+            var s57 = Assert.Single(await repository.GetCurrentByNamesAsync([name], ProductSpecification.S57));
+            var s101 = Assert.Single(await repository.GetCurrentByNamesAsync([name], ProductSpecification.S101));
+            var preferred = await repository.GetCurrentByNameAsync(name);
+
+            Assert.Equal(ProductState.Rejected, s57.State);
+            Assert.Equal("IC_ENC_REJECTED", s57.ErrorCode);
+            Assert.Contains("IC-ENC rejected", s57.ErrorMessage);
+            Assert.Equal(ProductState.ReadyForDistribution, s101.State);
+            Assert.Equal("S-101", preferred?.ProductSpecification);
+        }
+
         private static void AssertEquivalent(ProductRecord? expected, ProductRecord actual) {
             Assert.NotNull(expected);
             Assert.Equal(expected!.Id, actual.Id);

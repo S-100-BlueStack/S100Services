@@ -47,11 +47,13 @@ namespace S100FC.ProductCatalogue
         /// <returns>A read-only YAML dataset snapshot containing the requested candidate version.</returns>
         Task<YAML.Dataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default);
         Task<Dictionary<string, string>> GetDatasetAOIs();
+        Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification);
         Task<bool> IsDirtyAsync(string name);
         Task<string> GetDatasetBoundary(string name);
         Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name);
         Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc);
         ElectronicProduct? ElectronicProduct(string name);
+        ElectronicProduct? ElectronicProduct(string name, string productSpecification);
         Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(
             string datasetName,
             CancellationToken cancellationToken = default

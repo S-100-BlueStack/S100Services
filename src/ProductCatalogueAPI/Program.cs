@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Mvc; // Required for ApiVersion
 using ProductCatalogueAPI.Data.Database;
 using ProductCatalogueAPI.Data.Repositories;
+using ProductCatalogueAPI.Filters;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.OpenApi;
 using ProductCatalogueAPI.Services.Export;
@@ -76,7 +77,8 @@ namespace ProductCatalogueAPI
                 }
             });
             // Add services to the container.
-            builder.Services.AddControllers()
+            builder.Services.AddScoped<MutationAuditLogFilter>();
+            builder.Services.AddControllers(options => options.Filters.AddService<MutationAuditLogFilter>())
              .AddJsonOptions(options => {
                  var o = options.JsonSerializerOptions;
 

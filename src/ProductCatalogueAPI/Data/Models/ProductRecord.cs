@@ -11,6 +11,8 @@
         public int UpdateNo { get; set; } = 0;
         public DateTime Date_From { get; set; }
         public DateTime Date_to { get; set; }
+        public string? ErrorCode { get; set; }
+        public string? ErrorMessage { get; set; }
     }
 
     public enum ProductState : int

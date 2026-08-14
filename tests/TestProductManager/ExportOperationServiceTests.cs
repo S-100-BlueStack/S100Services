@@ -34,12 +34,16 @@ public sealed class ExportOperationServiceTests
     [Fact]
     public async Task ValidationFailureDefaultsTrackToError() {
         var repository = new RecordingWorkflowRepository();
-        var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse { Errors = 1 });
+        var diagnostic = new SevenCsDiagnosticArtifact("101DK001.vld", "text/plain", "validation details"u8.ToArray());
+        var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse { Errors = 1 }, [diagnostic]);
 
         await Assert.ThrowsAsync<ExportValidationException>(() => service.ExecuteExportAsync("101DK001", ProductSpecification.S101, ExportRevisionType.Update, null));
 
         Assert.Equal(ProductState.Error, repository.Track.State);
-        Assert.Equal("ExportValidationException", repository.LastErrorCode);
+        Assert.Equal("SEVENCS_VALIDATION_FAILED", repository.LastErrorCode);
+        Assert.Contains("SevenCs validation failed", repository.LastErrorMessage);
+        Assert.Contains(repository.Artifacts, artifact => artifact.Kind == ProductArtifactKind.ValidationReport);
+        Assert.Contains(repository.Artifacts, artifact => artifact.Kind == ProductArtifactKind.ValidationDiagnostic && artifact.FileName == "101DK001.vld");
     }
 
     [Fact]
@@ -72,8 +76,8 @@ public sealed class ExportOperationServiceTests
         Assert.Equal(0, products.AttachmentCalls);
     }
 
-    private static TestExportOperationService CreateService(RecordingElectronicProductManager products, RecordingWorkflowRepository repository, RecordingExportEngine engine, SummaryResponse validation) => new(
-        new FakeProductManager(products), new ExportEngineRegistry([engine]), repository, new FakeSevenCsService(validation),
+    private static TestExportOperationService CreateService(RecordingElectronicProductManager products, RecordingWorkflowRepository repository, RecordingExportEngine engine, SummaryResponse validation, IReadOnlyList<SevenCsDiagnosticArtifact>? diagnostics = null) => new(
+        new FakeProductManager(products), new ExportEngineRegistry([engine]), repository, new FakeSevenCsService(validation, diagnostics ?? []),
         new FixedTimeProvider(DateTimeOffset.Parse("2026-08-10T20:00:00Z")), "dataset-yaml");
 
     private sealed class TestExportOperationService(IProductManager productManager, IExportEngineRegistry engines, IProductWorkflowRepository repository, ISevenCsService sevenCs, TimeProvider timeProvider, string yaml)
@@ -99,6 +103,7 @@ public sealed class ExportOperationServiceTests
         public Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign) { AttachmentCalls++; return Task.CompletedTask; }
         public Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml) { AttachmentCalls++; return Task.CompletedTask; }
         public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name) => null;
+        public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name, string productSpecification) => null;
         public IEnumerator<string> GetEnumerator() => Array.Empty<string>().AsEnumerable().GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? ProductMapping, int? optimumDisplayScale = null) => throw new NotSupportedException();
@@ -108,6 +113,7 @@ public sealed class ExportOperationServiceTests
         public Task<YamlDataset> CreateNewUpdateAsync(string name) => throw new NotSupportedException();
         public Task<YamlDataset> ReissueAsync(string name) => throw new NotSupportedException();
         public Task<Dictionary<string, string>> GetDatasetAOIs() => throw new NotSupportedException();
+        public Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification) => throw new NotSupportedException();
         public Task<bool> IsDirtyAsync(string name) => throw new NotSupportedException();
         public Task<string> GetDatasetBoundary(string name) => throw new NotSupportedException();
         public Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name) => throw new NotSupportedException();
@@ -132,26 +138,31 @@ public sealed class ExportOperationServiceTests
         public int? CandidateUpdate { get; init; }
         public ProductExportTrackRecord Track { get; private set; } = null!;
         public List<ProductRevisionWrite> Revisions { get; } = [];
+        public List<ProductArtifactWrite> Artifacts { get; } = [];
         public string? LastErrorCode { get; private set; }
+        public string? LastErrorMessage { get; private set; }
 
         public Task<ProductExportTrackRecord?> GetTrackAsync(string datasetName, ProductSpecification productSpecification, CancellationToken cancellationToken = default) => Task.FromResult<ProductExportTrackRecord?>(EnsureTrack(datasetName, productSpecification));
         public Task<ProductExportTrackRecord> GetOrCreateTrackAsync(string datasetName, ProductSpecification productSpecification, ExportEngineKind engine, int publishedEdition, int publishedUpdate, CancellationToken cancellationToken = default) => Task.FromResult(EnsureTrack(datasetName, productSpecification));
         public Task BeginExportAsync(Guid trackId, int candidateEdition, int candidateUpdate, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { Track.State = ProductState.Exporting; Track.CandidateEdition = candidateEdition; Track.CandidateUpdate = candidateUpdate; return Task.CompletedTask; }
-        public Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default) { Track.State = state; LastErrorCode = errorCode; return Task.CompletedTask; }
+        public Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default) { Track.State = state; LastErrorCode = errorCode; LastErrorMessage = errorMessage; return Task.CompletedTask; }
         public Task CancelCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { Track.State = ProductState.Cancelled; Track.CandidateEdition = null; Track.CandidateUpdate = null; return Task.CompletedTask; }
         public Task<Guid> AddRevisionAsync(ProductRevisionWrite revision, CancellationToken cancellationToken = default) { Revisions.Add(revision); return Task.FromResult(Guid.NewGuid()); }
-        public Task AddArtifactAsync(ProductArtifactWrite artifact, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task AddArtifactAsync(ProductArtifactWrite artifact, CancellationToken cancellationToken = default) { Artifacts.Add(artifact); return Task.CompletedTask; }
         public Task<ProductChangeSummary?> GetOpenChangeSummaryAsync(Guid trackId, DateOnly workDate, CancellationToken cancellationToken = default) => Task.FromResult<ProductChangeSummary?>(null);
         public Task SaveChangeSummaryAsync(ProductChangeSummary summary, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<IReadOnlyList<ProductChangeSummary>> GetOpenChangeSummariesAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ProductChangeSummary>>([]);
         public Task CloseChangeSummaryAsync(Guid summaryId, DateTime closedAtUtc, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<ProductExportTrackRecord>> GetTracksAsync(string datasetName, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ProductExportTrackRecord>>([]);
+        public Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactsAsync(Guid trackId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ProductArtifactReference>>([]);
+        public Task<ProductArtifactContent?> GetValidationArtifactAsync(string datasetName, Guid artifactId, CancellationToken cancellationToken = default) => Task.FromResult<ProductArtifactContent?>(null);
 
         private ProductExportTrackRecord EnsureTrack(string datasetName, ProductSpecification specification) => Track ??= new ProductExportTrackRecord { Id = Guid.NewGuid(), DatasetName = datasetName, ProductSpecification = specification, Engine = ExportEngineKind.IsoIec8211, State = InitialState, PublishedEdition = 4, PublishedUpdate = 2, CandidateEdition = CandidateEdition, CandidateUpdate = CandidateUpdate };
     }
 
-    private sealed class FakeSevenCsService(SummaryResponse response) : ISevenCsService
+    private sealed class FakeSevenCsService(SummaryResponse response, IReadOnlyList<SevenCsDiagnosticArtifact> diagnostics) : ISevenCsService
     {
-        public Task<SummaryResponse> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) => Task.FromResult(response);
+        public Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) => Task.FromResult(new SevenCsValidationResult(response, diagnostics));
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider

@@ -111,8 +111,8 @@ public sealed class ExportController(ILogger<ExportController> logger, IProductM
         catch (ExportSourceUnavailableException) {
             return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse { Success = false, Message = $"The source snapshot for '{name}' could not be created.", DurationMs = stopwatch.ElapsedMilliseconds });
         }
-        catch (ExportValidationException) {
-            return StatusCode(StatusCodes.Status422UnprocessableEntity, new ApiResponse { Success = false, Message = $"The {target} candidate failed validation and is in Error state.", DurationMs = stopwatch.ElapsedMilliseconds });
+        catch (ExportValidationException ex) {
+            return StatusCode(StatusCodes.Status422UnprocessableEntity, new ApiResponse { Success = false, Message = ex.PublicMessage, DurationMs = stopwatch.ElapsedMilliseconds });
         }
     }
 

@@ -51,7 +51,8 @@ namespace TestProductCatalogueAPI
                 logger,
                 cache,
                 new FakeProductManager(electronicProductManager),
-                repository
+                repository,
+                new InMemoryProductRepository()
             );
             var httpContext = new DefaultHttpContext {
                 TraceIdentifier = requestId,
@@ -108,6 +109,34 @@ namespace TestProductCatalogueAPI
             Assert.True(Assert.IsType<double>(completionEntry.Properties["GeometryRetrievalMs"]) >= 0d);
             Assert.True(Assert.IsType<double>(completionEntry.Properties["ProductStateRetrievalMs"]) >= 0d);
             Assert.True(Assert.IsType<double>(completionEntry.Properties["MappingMs"]) >= 0d);
+        }
+
+        [Fact]
+        public async Task GlobalAoiActionReturnsOnlyTheRequestedProductSpecification() {
+            const string datasetName = "DK3AA01";
+            var electronicProductManager = new FakeElectronicProductManager(
+                new Dictionary<string, string> { [datasetName] = "{\"rings\":[]}" },
+                new Dictionary<string, ElectronicProduct> { [datasetName] = CreateElectronicProduct(datasetName, 90_000, 3, "S-57") }
+            );
+            var repository = new RecordingProductRepository(new Dictionary<string, ProductRecord?> {
+                [datasetName] = new ProductRecord { Name = datasetName, ProductSpecification = "S57", State = ProductState.Error, ErrorMessage = "IC-ENC rejected the dataset." }
+            });
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(
+                new RecordingLogger<ElectronicProductsController>(),
+                cache,
+                new FakeProductManager(electronicProductManager),
+                repository,
+                new InMemoryProductRepository()
+            );
+            controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+
+            var result = await controller.GetAllElectronicProductsAOI("S57");
+
+            var response = Assert.Single(Assert.IsType<List<AOIResponse>>(Assert.IsType<OkObjectResult>(result).Value));
+            Assert.Equal(datasetName, response.Attributes?.DatasetName);
+            Assert.Equal("IC-ENC rejected the dataset.", response.Attributes?.ErrorMessage);
+            Assert.Equal(ProductSpecification.S57, repository.RequestedProductSpecification);
         }
 
         [Theory]
@@ -167,12 +196,14 @@ namespace TestProductCatalogueAPI
         private static ElectronicProduct CreateElectronicProduct(
             string datasetName,
             int optimumDisplayScale,
-            int specificUsage
+            int specificUsage,
+            string productSpecification = "S-101"
         ) {
             return new ElectronicProduct {
                 datasetName = datasetName,
                 optimumDisplayScale = optimumDisplayScale,
                 specificUsage = specificUsage,
+                productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = productSpecification },
             };
         }
 
@@ -200,6 +231,13 @@ namespace TestProductCatalogueAPI
                 return products.GetValueOrDefault(name);
             }
 
+            public ElectronicProduct? ElectronicProduct(string name, string productSpecification) {
+                var product = products.GetValueOrDefault(name);
+                var requested = productSpecification.Replace("-", string.Empty, StringComparison.OrdinalIgnoreCase);
+                var actual = product?.productSpecification?.name?.Replace("-", string.Empty, StringComparison.OrdinalIgnoreCase);
+                return string.Equals(requested, actual, StringComparison.OrdinalIgnoreCase) ? product : null;
+            }
+
             public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(
                 string datasetName,
                 CancellationToken cancellationToken = default
@@ -216,6 +254,10 @@ namespace TestProductCatalogueAPI
             }
 
             public Task<Dictionary<string, string>> GetDatasetAOIs() {
+                return Task.FromResult(new Dictionary<string, string>(aois, StringComparer.OrdinalIgnoreCase));
+            }
+
+            public Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification) {
                 return Task.FromResult(new Dictionary<string, string>(aois, StringComparer.OrdinalIgnoreCase));
             }
 
@@ -267,6 +309,7 @@ namespace TestProductCatalogueAPI
 
             public int BatchCallCount { get; private set; }
             public IReadOnlyList<string> RequestedNames => _requestedNames;
+            public ProductSpecification? RequestedProductSpecification { get; private set; }
 
             public Task<ProductRecord?> GetCurrentByNameAsync(string name) {
                 throw new InvalidOperationException("The global AOI action must use the batch repository method.");
@@ -286,6 +329,11 @@ namespace TestProductCatalogueAPI
                 return Task.FromResult<IEnumerable<ProductRecord>>(records);
             }
 
+            public Task<IEnumerable<ProductRecord>> GetCurrentByNamesAsync(IEnumerable<string> names, ProductSpecification productSpecification) {
+                RequestedProductSpecification = productSpecification;
+                return GetCurrentByNamesAsync(names);
+            }
+
             public Task AppendAsync(
                 string name,
                 ProductState state,
@@ -294,7 +342,9 @@ namespace TestProductCatalogueAPI
                 uint? updateNo,
                 string? owner = null,
                 byte[]? attachment = null,
-                string? attachmentFileName = null
+                string? attachmentFileName = null,
+                string? errorCode = null,
+                string? errorMessage = null
             ) => throw new NotSupportedException();
 
             public Task<IEnumerable<ProductRecord>> GetCurrentAsync() => throw new NotSupportedException();

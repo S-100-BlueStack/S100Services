@@ -31,6 +31,7 @@ namespace ProductCatalogueAPI.Models
             public int? Update { get; set; }
             public DateOnly? IssueDate { get; set; }
             public ProductStatus? Status { get; set; }
+            public string? ErrorMessage { get; set; }
         }
 
         public class ProductResponse
@@ -161,6 +162,8 @@ namespace ProductCatalogueAPI.Models
             public required string Value { get; set; }
         }
 
+        public sealed record ProductArtifactLinkResponse(Guid Id, string FileName, string MediaType, DateTime CreatedAtUtc, string Url);
+
         public sealed record ProductExport(
             string Type,
             string Name,
@@ -168,7 +171,8 @@ namespace ProductCatalogueAPI.Models
             int? Update,
             ProductStatus Status,
             DateTime Date,
-            string? ErrorMessage = default);
+            string? ErrorMessage = default,
+            IReadOnlyList<ProductArtifactLinkResponse>? ValidationArtifacts = default);
 
         public enum ProductStatus : int
         {

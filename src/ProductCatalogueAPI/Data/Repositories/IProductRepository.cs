@@ -8,7 +8,7 @@ namespace ProductCatalogueAPI.Data.Repositories;
 public interface IProductRepository
 {
     /// <summary>Appends a state transition to the normalized track history.</summary>
-    Task AppendAsync(string name, ProductState state, string productSpecification, uint editionNo, uint? updateNo, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null);
+    Task AppendAsync(string name, ProductState state, string productSpecification, uint editionNo, uint? updateNo, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null, string? errorCode = null, string? errorMessage = null);
 
     /// <summary>Gets the current preferred track for every product.</summary>
     Task<IEnumerable<ProductRecord>> GetCurrentAsync();
@@ -18,6 +18,9 @@ public interface IProductRepository
 
     /// <summary>Gets current preferred tracks for the requested products.</summary>
     Task<IEnumerable<ProductRecord>> GetCurrentByNamesAsync(IEnumerable<string> names);
+
+    /// <summary>Gets current tracks for the requested products in one product specification.</summary>
+    Task<IEnumerable<ProductRecord>> GetCurrentByNamesAsync(IEnumerable<string> names, ProductSpecification productSpecification);
 
     /// <summary>Gets a job's last successful scan watermark.</summary>
     Task<DateTime?> GetLastSuccessfulRunUtcAsync(string jobName);

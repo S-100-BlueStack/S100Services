@@ -68,7 +68,10 @@ public enum ProductArtifactKind
     CatalogueSignature,
 
     /// <summary>A validation result or report.</summary>
-    ValidationReport
+    ValidationReport,
+
+    /// <summary>A validator-produced diagnostic file such as a SevenCs VLD log or shapefile bundle.</summary>
+    ValidationDiagnostic
 }
 
 /// <summary>
@@ -105,6 +108,12 @@ public sealed class ProductExportTrackRecord
 
     /// <summary>Gets or sets the last UTC workflow update time.</summary>
     public DateTime UpdatedAtUtc { get; set; }
+
+    /// <summary>Gets or sets the latest user-safe failure code recorded for this track.</summary>
+    public string? ErrorCode { get; set; }
+
+    /// <summary>Gets or sets the latest user-safe failure message recorded for this track.</summary>
+    public string? ErrorMessage { get; set; }
 }
 
 /// <summary>
@@ -161,3 +170,9 @@ public sealed record ProductArtifactWrite(
     /// <returns>The 32-byte SHA-256 digest of <see cref="Content"/>.</returns>
     public byte[] ComputeSha256() => SHA256.HashData(Content);
 }
+
+/// <summary>Describes a downloadable diagnostic artifact without loading its content.</summary>
+public sealed record ProductArtifactReference(Guid Id, Guid TrackId, ProductArtifactKind Kind, string FileName, string MediaType, DateTime CreatedAtUtc);
+
+/// <summary>Contains one diagnostic artifact after dataset ownership has been verified.</summary>
+public sealed record ProductArtifactContent(Guid Id, string FileName, string MediaType, byte[] Content);

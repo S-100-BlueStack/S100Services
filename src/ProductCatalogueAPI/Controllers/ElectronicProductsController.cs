@@ -24,16 +24,13 @@ namespace ProductCatalogueAPI.Controllers
     //[Authorize("productmanager:access")]
     [ApiController]
     [Route("[controller]")]
-    public class ElectronicProductsController(
-        ILogger<ElectronicProductsController> logger,
-        IMemoryCache cache,
-        IProductManager productManager,
-        IProductRepository repository) : ControllerBase
+    public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository, IProductWorkflowRepository workflowRepository) : ControllerBase
     {
         private readonly ILogger<ElectronicProductsController> _logger = logger;
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
         private readonly IMemoryCache _cache = cache;
         private readonly IProductRepository _repository = repository;
+        private readonly IProductWorkflowRepository _workflowRepository = workflowRepository;
 
         /// <summary>
         /// Get all product names in the database.
@@ -62,7 +59,7 @@ namespace ProductCatalogueAPI.Controllers
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpGet("aoi")]
-        public async Task<IActionResult> GetAllElectronicProductsAOI()
+        public async Task<IActionResult> GetAllElectronicProductsAOI([FromQuery] string productSpecification = "S101")
         {
             var controllerStopwatch = Stopwatch.StartNew();
             var geometryRetrievalStopwatch = new Stopwatch();
@@ -79,12 +76,15 @@ namespace ProductCatalogueAPI.Controllers
 
             try
             {
+                if (!TryParseAoiProductSpecification(productSpecification, out var selectedProductSpecification))
+                    return BadRequest(new ApiResponse { Success = false, Message = "productSpecification must be S57 or S101." });
+
                 Dictionary<string, string> aois;
 
                 geometryRetrievalStopwatch.Start();
                 try
                 {
-                    aois = await _electronicProductManager.GetDatasetAOIs();
+                    aois = await _electronicProductManager.GetDatasetAOIs(selectedProductSpecification.ToString());
                 }
                 finally
                 {
@@ -99,7 +99,7 @@ namespace ProductCatalogueAPI.Controllers
 
                 foreach (var aoi in aois)
                 {
-                    var electronicProduct = _electronicProductManager.ElectronicProduct(aoi.Key);
+                    var electronicProduct = _electronicProductManager.ElectronicProduct(aoi.Key, selectedProductSpecification.ToString());
 
                     if (electronicProduct == null)
                     {
@@ -112,6 +112,9 @@ namespace ProductCatalogueAPI.Controllers
                         );
                         continue;
                     }
+
+                    if (!MatchesProductSpecification(electronicProduct, selectedProductSpecification))
+                        continue;
 
                     mappedProducts.Add((aoi.Key, aoi.Value, electronicProduct));
                 }
@@ -128,9 +131,7 @@ namespace ProductCatalogueAPI.Controllers
                     productStateRetrievalStopwatch.Start();
                     try
                     {
-                        currentProducts = await _repository.GetCurrentByNamesAsync(
-                            mappedProducts.Select(product => product.DatasetName)
-                        );
+                        currentProducts = await _repository.GetCurrentByNamesAsync(mappedProducts.Select(product => product.DatasetName), selectedProductSpecification);
                     }
                     finally
                     {
@@ -162,7 +163,8 @@ namespace ProductCatalogueAPI.Controllers
                             Status = Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString()),
                             // Products without a SQL workflow track remain idle until internal work begins.
                             DisplayScale = mappedProduct.Product.optimumDisplayScale,
-                            UsageBand = mappedProduct.Product.specificUsage
+                            UsageBand = mappedProduct.Product.specificUsage,
+                            ErrorMessage = current?.ErrorMessage
                         }
                     });
                 }
@@ -223,6 +225,30 @@ namespace ProductCatalogueAPI.Controllers
             var s128Status = Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString());
             // var s57Status = Enum.Parse((s57current?.State ?? Data.Models.ProductState.Idle).ToString());
 
+            var tracks = await _workflowRepository.GetTracksAsync(name);
+            var exports = new List<ProductExport>();
+            foreach (var track in tracks.Where(track => track.ProductSpecification is ProductSpecification.S57 or ProductSpecification.S101).OrderBy(track => track.ProductSpecification))
+            {
+                var artifacts = await _workflowRepository.GetValidationArtifactsAsync(track.Id);
+                var artifactLinks = artifacts.Select(artifact => new ProductArtifactLinkResponse(
+                    artifact.Id,
+                    artifact.FileName,
+                    artifact.MediaType,
+                    artifact.CreatedAtUtc,
+                    Url.Action(nameof(DownloadValidationArtifact), new { name, artifactId = artifact.Id }) ?? $"/electronicproducts/{Uri.EscapeDataString(name)}/artifacts/{artifact.Id:D}"))
+                    .ToArray();
+
+                exports.Add(new ProductExport(
+                    track.ProductSpecification == ProductSpecification.S101 ? "S100" : "S57",
+                    track.DatasetName,
+                    track.CandidateEdition ?? track.PublishedEdition,
+                    track.CandidateUpdate ?? track.PublishedUpdate,
+                    Enum.Parse<ProductStatus>(track.State.ToString()),
+                    track.UpdatedAtUtc,
+                    track.ErrorMessage,
+                    artifactLinks));
+            }
+
             var product = new ProductResponse
             {
                 IssueDate = electronicProduct.issueDate,
@@ -231,10 +257,8 @@ namespace ProductCatalogueAPI.Controllers
                 Update = electronicProduct.updateNumber,
                 UsageBand = electronicProduct.specificUsage,
                 Status = s128Status,
-                Exports = [
-                    //new(s57product.productSpecification.name, s57product.datasetName, s57product.editionNumber.Value, s57product.updateNumber, s57Status, s57current.Date_From)
-                    //new("S-57", electronicProduct.datasetName.Replace("101DK00", "DK"), electronicProduct.editionNumber.Value, electronicProduct.updateNumber, s128Status, electronicProduct.issueDate.Value.ToDateTime(TimeOnly.MinValue))
-                ]
+                ErrorMessage = current?.ErrorMessage,
+                Exports = exports
             };
 
             response.Data = product;
@@ -242,6 +266,16 @@ namespace ProductCatalogueAPI.Controllers
             response.DurationMs = sw.ElapsedMilliseconds;
 
             return this.Ok(response);
+        }
+
+        /// <summary>Downloads a validator diagnostic associated with the requested dataset.</summary>
+        [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [HttpGet("{name}/artifacts/{artifactId:guid}", Name = "DownloadValidationArtifact")]
+        public async Task<IActionResult> DownloadValidationArtifact(string name, Guid artifactId, CancellationToken cancellationToken)
+        {
+            var artifact = await _workflowRepository.GetValidationArtifactAsync(name, artifactId, cancellationToken);
+            return artifact is null ? NotFound() : File(artifact.Content, artifact.MediaType, artifact.FileName);
         }
 
         /// <summary>
@@ -291,6 +325,7 @@ namespace ProductCatalogueAPI.Controllers
                     Edition = electronicProduct.editionNumber,
                     Update = electronicProduct.updateNumber,
                     IssueDate = electronicProduct.issueDate,
+                    ErrorMessage = current?.ErrorMessage,
                 }
             };
 
@@ -524,7 +559,7 @@ namespace ProductCatalogueAPI.Controllers
                 Type = metadata.Type,
                 Severity = metadata.Severity,
                 Title = metadata.Title,
-                Description = metadata.Description,
+                Description = string.IsNullOrWhiteSpace(record.ErrorMessage) ? metadata.Description : record.ErrorMessage,
                 Status = metadata.Status,
                 Actor = TrimUsername(record.Owner),
                 Edition = record.EditionNo,
@@ -558,7 +593,25 @@ namespace ProductCatalogueAPI.Controllers
                 details.Add(new DashboardActivityDetailResponse { Label = "Owner", Value = owner });
             }
 
+            if (!string.IsNullOrWhiteSpace(record.ErrorCode))
+                details.Add(new DashboardActivityDetailResponse { Label = "Error code", Value = record.ErrorCode });
+
+            if (!string.IsNullOrWhiteSpace(record.ErrorMessage))
+                details.Add(new DashboardActivityDetailResponse { Label = "Error message", Value = record.ErrorMessage });
+
             return details;
+        }
+
+        private static bool TryParseAoiProductSpecification(string value, out ProductSpecification productSpecification)
+        {
+            var normalized = value.Trim().Replace("-", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
+            return Enum.TryParse(normalized, out productSpecification) && productSpecification is ProductSpecification.S57 or ProductSpecification.S101;
+        }
+
+        private static bool MatchesProductSpecification(ElectronicProduct product, ProductSpecification productSpecification)
+        {
+            var value = product.productSpecification?.name;
+            return value is not null && TryParseAoiProductSpecification(value, out var parsed) && parsed == productSpecification;
         }
 
         private static DashboardActivityMetadata GetDashboardActivityMetadata(ProductState state)

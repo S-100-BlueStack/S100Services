@@ -54,8 +54,26 @@ function normalizeProductExportRecord(record) {
     status: readFirstDefined(record, ["status", "Status"]),
     date: readFirstDefined(record, ["date", "Date"]),
     errorMessage: readFirstDefined(record, ["errorMessage", "ErrorMessage"]),
+    validationArtifacts: normalizeValidationArtifacts(readFirstDefined(record, ["validationArtifacts", "ValidationArtifacts"])),
     raw: record,
   };
+}
+
+function normalizeValidationArtifacts(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((artifact) => artifact && typeof artifact === "object")
+    .map((artifact) => ({
+      id: readFirstDefined(artifact, ["id", "Id"]),
+      fileName: readFirstDefined(artifact, ["fileName", "FileName"]),
+      mediaType: readFirstDefined(artifact, ["mediaType", "MediaType"]),
+      createdAtUtc: readFirstDefined(artifact, ["createdAtUtc", "CreatedAtUtc"]),
+      url: readFirstDefined(artifact, ["url", "Url"]),
+    }))
+    .filter((artifact) => artifact.url);
 }
 
 function groupExportsByStandard(items) {

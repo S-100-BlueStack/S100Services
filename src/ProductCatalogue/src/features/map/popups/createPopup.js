@@ -437,6 +437,7 @@ function createMainProductMetadataItem(attributes) {
     status: readAttribute(attributes, ["status", "Status"]),
     date: readAttribute(attributes, ["issueDate", "IssueDate"]),
     errorMessage: readAttribute(attributes, ["errorMessage", "ErrorMessage"]),
+    validationArtifacts: [],
   };
 }
 
@@ -465,6 +466,11 @@ function createProductMetadataRows(columns) {
       label: "Error message",
       getValue: (item) => formatProductTableValue(item?.errorMessage),
       shouldShow: () => columns.some((column) => hasDisplayableValue(column.item?.errorMessage)),
+    },
+    {
+      label: "Validation files",
+      getContent: (item) => createValidationArtifactLinks(item?.validationArtifacts),
+      shouldShow: () => columns.some((column) => column.item?.validationArtifacts?.length),
     },
   ];
 
@@ -499,7 +505,7 @@ function createProductTableBody(columns, rows) {
   return body;
 }
 
-function createProductTableRow({ label, getValue }, columns) {
+function createProductTableRow({ label, getValue, getContent }, columns) {
   const row = document.createElement("tr");
 
   const labelCell = document.createElement("th");
@@ -510,11 +516,34 @@ function createProductTableRow({ label, getValue }, columns) {
 
   for (const column of columns) {
     const cell = document.createElement("td");
-    cell.textContent = getValue(column.item);
+    const content = getContent?.(column.item);
+    if (content instanceof Node) {
+      cell.appendChild(content);
+    } else {
+      cell.textContent = getValue?.(column.item) ?? "";
+    }
     row.appendChild(cell);
   }
 
   return row;
+}
+
+function createValidationArtifactLinks(artifacts) {
+  const container = document.createElement("div");
+  container.className = "popup-product-table__validation-files";
+
+  for (const [index, artifact] of (artifacts ?? []).entries()) {
+    if (!artifact?.url) continue;
+    if (index > 0) container.appendChild(document.createElement("br"));
+
+    const link = document.createElement("a");
+    link.href = artifact.url;
+    link.textContent = artifact.fileName || "Download validation file";
+    link.download = artifact.fileName || "";
+    container.appendChild(link);
+  }
+
+  return container;
 }
 
 function createProductTableHeaderCell(label) {

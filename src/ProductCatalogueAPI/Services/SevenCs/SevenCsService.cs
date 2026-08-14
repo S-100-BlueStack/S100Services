@@ -1,5 +1,6 @@
 ﻿using System.IO.Compression;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using ProductCatalogueAPI.Services.Export;
@@ -31,7 +32,7 @@ namespace ProductCatalogueAPI.Services.SevenCs
         /// ValidateDatasetResult.IncorrectEdition -  if ShallowIsolatedDangersUpdatedBathy occurs in an update <br />
         /// ValidateDatasetResult.FailedToValidate -  if validation failed for any reason
         /// </returns>
-        public async Task<SummaryResponse> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) {
+        public async Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) {
             // Build path
             var datasetPath = ExportOutputPath.GetS101DatasetFilesDirectory(outputPath, datasetName, edition, update);
 
@@ -123,13 +124,27 @@ namespace ProductCatalogueAPI.Services.SevenCs
             var downloadPath = Path.Combine(AppContext.BaseDirectory, "SevenCsTemp", $"{uuid}");
             Directory.CreateDirectory(downloadPath);
 
-            // Download and extract shape.zip
-            await GetAnalyzerShapefile(dsnm, directoryName, downloadPath);
-            ExtractZip(downloadPath);
-            _logger.LogInformation("Extraction & cleanup finished!");
+            var diagnostics = new List<SevenCsDiagnosticArtifact>();
 
-            // Download .vld file
-            await GetAnalyzerLogfile(dsnm, directoryName, downloadPath);
+            // Diagnostic downloads must not hide an otherwise useful validation summary.
+            // Each successfully downloaded file is persisted later with the candidate revision.
+            try {
+                diagnostics.Add(await GetAnalyzerShapefile(dsnm, directoryName, downloadPath, cancellationToken));
+                ExtractZip(downloadPath);
+                _logger.LogInformation("Extraction & cleanup finished!");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException) {
+                _logger.LogWarning(ex, "SevenCs shapefile diagnostics could not be downloaded. DatasetName: {DatasetName}. DirectoryName: {DirectoryName}.", dsnm, directoryName);
+            }
+
+            SevenCsDiagnosticArtifact? validationLog = null;
+            try {
+                validationLog = await GetAnalyzerLogfile(dsnm, directoryName, downloadPath, cancellationToken);
+                diagnostics.Add(validationLog);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException) {
+                _logger.LogWarning(ex, "SevenCs VLD diagnostics could not be downloaded. DatasetName: {DatasetName}. DirectoryName: {DirectoryName}.", dsnm, directoryName);
+            }
 
             // Cleanup results older than 1 hour
             foreach (var dir in Directory.GetDirectories(Path.Combine(AppContext.BaseDirectory, "SevenCsTemp"))) {
@@ -145,14 +160,12 @@ namespace ProductCatalogueAPI.Services.SevenCs
             }
 
             // If dataset is an update, check for ShallowIsolatedDangersUpdatedBathy.
-            if (!lastFile.EndsWith(".000")) {
-                var content = System.IO.File.ReadAllText(Path.Combine(downloadPath, $"{dsnm}.vld"));
-                summary.ShallowIsolatedDangersUpdatedBathy = content.Contains("ShallowIsolatedDangersUpdatedBathy");
-            }
+            if (!lastFile.EndsWith(".000") && validationLog is not null)
+                summary.ShallowIsolatedDangersUpdatedBathy = Encoding.UTF8.GetString(validationLog.Content).Contains("ShallowIsolatedDangersUpdatedBathy", StringComparison.Ordinal);
 
             _logger.LogInformation("SevenCs validation completed. Critical Errors found: {errors}", summary.Critical);
 
-            return summary;
+            return new SevenCsValidationResult(summary, diagnostics);
         }
         private async Task Authorize() {
             var token = Environment.GetEnvironmentVariable("productcatalogue_7cs_credentials");
@@ -264,9 +277,9 @@ namespace ProductCatalogueAPI.Services.SevenCs
             response.EnsureSuccessStatusCode();
 
             var summary = await response.Content.ReadFromJsonAsync<SummaryResponse>();
-            return summary;
+            return summary ?? throw new InvalidOperationException("SevenCs returned an empty analysis summary.");
         }
-        private async Task GetAnalyzerLogfile(string datasetName, string directory, string folder) {
+        private async Task<SevenCsDiagnosticArtifact> GetAnalyzerLogfile(string datasetName, string directory, string folder, CancellationToken cancellationToken) {
             var dict = new Dictionary<string, string>()
             {
                 {"directory-name", directory},
@@ -275,22 +288,22 @@ namespace ProductCatalogueAPI.Services.SevenCs
 
             var queryParams = CreateQueryParameters(dict);
 
-            var response = await client.GetAsync("analyzer-log" + queryParams);
+            using var response = await client.GetAsync("analyzer-log" + queryParams, cancellationToken);
 
             response.EnsureSuccessStatusCode();
 
             // Read the response content as a stream
-            using var responseStream = await response.Content.ReadAsStreamAsync();
+            var content = await response.Content.ReadAsByteArrayAsync(cancellationToken);
 
             // Output path:
             Directory.CreateDirectory(folder);
 
             // Save the stream to a local file
-            using var fileStream = new FileStream(Path.Combine(folder, $"{datasetName}.vld"), FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
-
-            await responseStream.CopyToAsync(fileStream);
+            var fileName = $"{datasetName}.vld";
+            await File.WriteAllBytesAsync(Path.Combine(folder, fileName), content, cancellationToken);
+            return new SevenCsDiagnosticArtifact(fileName, "text/plain", content);
         }
-        private async Task GetAnalyzerShapefile(string datasetName, string directory, string folder) {
+        private async Task<SevenCsDiagnosticArtifact> GetAnalyzerShapefile(string datasetName, string directory, string folder, CancellationToken cancellationToken) {
             var dict = new Dictionary<string, string>()
             {
                 {"directory-name", directory},
@@ -299,20 +312,20 @@ namespace ProductCatalogueAPI.Services.SevenCs
 
             var queryParams = CreateQueryParameters(dict);
 
-            var response = await client.GetAsync("analyzer-shapefile-log" + queryParams);
+            using var response = await client.GetAsync("analyzer-shapefile-log" + queryParams, cancellationToken);
 
             response.EnsureSuccessStatusCode();
 
             // Read the response content as a stream
-            using var responseStream = await response.Content.ReadAsStreamAsync();
+            var content = await response.Content.ReadAsByteArrayAsync(cancellationToken);
 
             // Output path:
             Directory.CreateDirectory(folder);
 
             // Save the stream to a local file
-            using var fileStream = new FileStream(Path.Combine(folder, $"{datasetName}.zip"), FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
-
-            await responseStream.CopyToAsync(fileStream);
+            var fileName = $"{datasetName}-validation-shapes.zip";
+            await File.WriteAllBytesAsync(Path.Combine(folder, fileName), content, cancellationToken);
+            return new SevenCsDiagnosticArtifact(fileName, "application/zip", content);
         }
         private static void ExtractZip(string folder) {
             var folderBasePath = new DirectoryInfo(folder);

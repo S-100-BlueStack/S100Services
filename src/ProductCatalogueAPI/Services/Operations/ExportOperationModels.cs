@@ -31,11 +31,32 @@ public sealed class ExportSourceUnavailableException(string datasetName) : Excep
 /// <summary>Indicates that a requested operation conflicts with the current durable workflow state.</summary>
 public sealed class ExportOperationRejectedException(string message) : InvalidOperationException(message);
 
-/// <summary>Indicates that an export was generated but failed product validation.</summary>
-public sealed class ExportValidationException(string datasetName, int errors, int critical) : Exception($"Validation failed for '{datasetName}' with {errors} errors and {critical} critical findings.")
+/// <summary>Indicates that an export was generated but could not pass or complete product validation.</summary>
+public sealed class ExportValidationException : Exception
 {
+    private ExportValidationException(string datasetName, string code, string publicMessage, Exception? innerException = null) : base(publicMessage, innerException) {
+        DatasetName = datasetName;
+        Code = code;
+        PublicMessage = publicMessage;
+    }
+
     /// <summary>Gets the affected dataset name.</summary>
-    public string DatasetName { get; } = datasetName;
+    public string DatasetName { get; }
+
+    /// <summary>Gets the stable failure code persisted with workflow history.</summary>
+    public string Code { get; }
+
+    /// <summary>Gets the safe message returned to clients and shown in product details.</summary>
+    public string PublicMessage { get; }
+
+    /// <summary>Creates a failure caused by validation findings.</summary>
+    public static ExportValidationException Findings(string datasetName, int errors, int critical, bool shallowIsolatedDangersUpdatedBathy) {
+        var updateFinding = shallowIsolatedDangersUpdatedBathy ? " It also flagged ShallowIsolatedDangersUpdatedBathy." : string.Empty;
+        return new(datasetName, "SEVENCS_VALIDATION_FAILED", $"SevenCs validation failed for '{datasetName}' with {errors} errors and {critical} critical findings.{updateFinding} Download the validation diagnostics for details.");
+    }
+
+    /// <summary>Creates a failure caused by the validation service being unavailable or incomplete.</summary>
+    public static ExportValidationException Unavailable(string datasetName, Exception innerException) => new(datasetName, "SEVENCS_VALIDATION_UNAVAILABLE", $"SevenCs validation could not be completed for '{datasetName}'. Try again or contact support if the problem continues.", innerException);
 }
 
 /// <summary>Defines stable public values and result codes for export operations.</summary>

@@ -81,6 +81,7 @@ public sealed class ExportAsyncControllerTests
         public IEnumerator<string> GetEnumerator() => Array.Empty<string>().AsEnumerable().GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name) => null;
+        public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name, string productSpecification) => null;
         public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? ProductMapping, int? optimumDisplayScale = null) => throw new NotSupportedException();
         public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, string boundary, int edition, int update, byte[] zipfile) => throw new NotSupportedException();
         public Task<S100FC.YAML.Dataset> CreateNewDatasetAsync(string name) => throw new NotSupportedException();
@@ -89,6 +90,7 @@ public sealed class ExportAsyncControllerTests
         public Task<S100FC.YAML.Dataset> ReissueAsync(string name) => throw new NotSupportedException();
         public Task<S100FC.YAML.Dataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Dictionary<string, string>> GetDatasetAOIs() => throw new NotSupportedException();
+        public Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification) => throw new NotSupportedException();
         public Task<bool> IsDirtyAsync(string name) => throw new NotSupportedException();
         public Task<string> GetDatasetBoundary(string name) => throw new NotSupportedException();
         public Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name) => throw new NotSupportedException();

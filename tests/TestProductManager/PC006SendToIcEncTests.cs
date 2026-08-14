@@ -589,7 +589,7 @@ namespace TestProductCatalogueAPI
                 return Task.FromResult(current);
             }
 
-            public Task AppendAsync(string name, ProductState state, string productSpecification, uint editionNo, uint? updateNo, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null) {
+            public Task AppendAsync(string name, ProductState state, string productSpecification, uint editionNo, uint? updateNo, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null, string? errorCode = null, string? errorMessage = null) {
                 AppendCalls++;
                 LastAppendState = state;
                 LastAppendEdition = editionNo;
@@ -599,6 +599,7 @@ namespace TestProductCatalogueAPI
 
             public Task<IEnumerable<ProductRecord>> GetCurrentAsync() => Task.FromResult<IEnumerable<ProductRecord>>([]);
             public Task<IEnumerable<ProductRecord>> GetCurrentByNamesAsync(IEnumerable<string> names) => Task.FromResult<IEnumerable<ProductRecord>>([]);
+            public Task<IEnumerable<ProductRecord>> GetCurrentByNamesAsync(IEnumerable<string> names, ProductSpecification productSpecification) => Task.FromResult<IEnumerable<ProductRecord>>([]);
             public Task<DateTime?> GetLastSuccessfulRunUtcAsync(string jobName) => Task.FromResult<DateTime?>(null);
             public Task SetSuccessfulRunUtcAsync(string jobName, DateTime dateTime) => Task.CompletedTask;
             public Task<string[]> GetIneligbleProductsAsync() => Task.FromResult(Array.Empty<string>());

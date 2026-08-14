@@ -10,6 +10,9 @@ public interface IProductWorkflowRepository
     /// <summary>Gets one product track by dataset and product specification.</summary>
     Task<ProductExportTrackRecord?> GetTrackAsync(string datasetName, ProductSpecification productSpecification, CancellationToken cancellationToken = default);
 
+    /// <summary>Gets all independently versioned tracks for one dataset.</summary>
+    Task<IReadOnlyList<ProductExportTrackRecord>> GetTracksAsync(string datasetName, CancellationToken cancellationToken = default);
+
     /// <summary>Creates a missing track from the currently published S-128 version, or returns the existing SQL-authoritative track.</summary>
     Task<ProductExportTrackRecord> GetOrCreateTrackAsync(string datasetName, ProductSpecification productSpecification, ExportEngineKind engine, int publishedEdition, int publishedUpdate, CancellationToken cancellationToken = default);
 
@@ -27,6 +30,12 @@ public interface IProductWorkflowRepository
 
     /// <summary>Stores a typed artifact without imposing format-specific columns on the schema.</summary>
     Task AddArtifactAsync(ProductArtifactWrite artifact, CancellationToken cancellationToken = default);
+
+    /// <summary>Gets downloadable validation diagnostics for a track without loading their content.</summary>
+    Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactsAsync(Guid trackId, CancellationToken cancellationToken = default);
+
+    /// <summary>Gets one validation diagnostic after verifying that it belongs to the requested dataset.</summary>
+    Task<ProductArtifactContent?> GetValidationArtifactAsync(string datasetName, Guid artifactId, CancellationToken cancellationToken = default);
 
     /// <summary>Gets the open daily summary for a track and work date.</summary>
     Task<ProductChangeSummary?> GetOpenChangeSummaryAsync(Guid trackId, DateOnly workDate, CancellationToken cancellationToken = default);
