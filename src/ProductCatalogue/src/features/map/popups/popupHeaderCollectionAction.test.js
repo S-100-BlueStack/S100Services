@@ -13,32 +13,26 @@ import {
 
 const registry = createDataSourceRegistry({ isDevelopment: true });
 
-function createCompatibilityFeature({ datasetName = "DK4TEST" } = {}) {
-  return {
-    attributes: { datasetName },
-    layer: { customId: "aoi" },
-  };
+function createCompatibilityFeature(datasetName = "DK4TEST") {
+  return { attributes: { datasetName }, layer: { customId: "aoi" } };
 }
 
-function createRegistryFeature(sourceId, { datasetName } = {}) {
+function createRegistryFeature(sourceId, datasetName) {
   const source = registry.byId.get(sourceId);
-  const layerDefinition = source?.layerDefinitions?.[0];
-  assert.ok(source, `Expected registry source ${sourceId}`);
-  assert.ok(layerDefinition, `Expected layer definition for ${sourceId}`);
-
-  const resolvedDatasetName = datasetName ?? `${sourceId}-product`;
+  const definition = source.layerDefinitions[0];
+  const name = datasetName ?? `${sourceId}-product`;
   return {
     attributes: {
-      datasetName: resolvedDatasetName,
-      productKey: resolvedDatasetName,
+      datasetName: name,
+      productKey: name,
       productType: source.productType,
       sourceId: source.id,
     },
     layer: {
-      customId: layerDefinition.id,
-      appLayerId: layerDefinition.id,
-      appLayerKind: layerDefinition.layerKind,
-      appLayerCapabilities: layerDefinition.capabilities,
+      customId: definition.id,
+      appLayerId: definition.id,
+      appLayerKind: definition.layerKind,
+      appLayerCapabilities: definition.capabilities,
       appSourceDefinition: source,
       appSourceId: source.id,
       dataSourceId: source.id,
@@ -48,198 +42,102 @@ function createRegistryFeature(sourceId, { datasetName } = {}) {
   };
 }
 
-function createCustomSourceFeature({
-  sourceId = "future-source",
-  datasetName = "FUTURE-1",
-  supportsPopupActions = false,
-  productCollection = false,
-} = {}) {
-  const productType = "future-product";
-  const sourceDefinition = {
-    id: sourceId,
-    label: "Future source",
-    productType,
-    capabilities: { productCollection },
-    exportConfiguration: null,
-  };
-
-  return {
-    attributes: {
-      datasetName,
-      productKey: datasetName,
-      productType,
-      sourceId,
-    },
-    layer: {
-      customId: "future-products",
-      appLayerCapabilities: { supportsPopupActions },
-      appSourceDefinition: sourceDefinition,
-      appSourceId: sourceId,
-      dataSourceId: sourceId,
-      sourceId,
-      appProductType: productType,
-    },
-  };
-}
-
-test("compatibility AOI features support Product Collection", () => {
-  assert.deepEqual(resolvePopupHeaderCollectionAvailability(createCompatibilityFeature()), {
-    supported: true,
-    datasetName: "DK4TEST",
-  });
-});
-
-test("Paper Charts does not support Product Collection while popup actions stay enabled", () => {
-  const feature = createRegistryFeature(DATA_SOURCE_IDS.PAPER_CHARTS, {
-    datasetName: "PAPER-1",
-  });
-
-  assert.equal(feature.layer.appLayerCapabilities.supportsPopupActions, true);
-  assert.equal(feature.layer.appSourceDefinition.capabilities.productCollection, false);
-  assert.deepEqual(resolvePopupHeaderCollectionAvailability(feature), {
-    supported: false,
-    datasetName: "PAPER-1",
-  });
-});
-
-test("S-102 does not support Product Collection", () => {
-  const feature = createRegistryFeature(DATA_SOURCE_IDS.S102, { datasetName: "S102-1" });
-
-  assert.equal(resolvePopupHeaderCollectionAvailability(feature).supported, false);
-});
-
-test("Product Collection availability follows its Product capability instead of supportsPopupActions", () => {
-  const collectionEnabled = createCustomSourceFeature({
-    supportsPopupActions: false,
-    productCollection: true,
-  });
-  const collectionDisabled = createCustomSourceFeature({
-    sourceId: "future-disabled-source",
-    datasetName: "FUTURE-2",
-    supportsPopupActions: true,
-    productCollection: false,
-  });
-
-  assert.equal(resolvePopupHeaderCollectionAvailability(collectionEnabled).supported, true);
-  assert.equal(resolvePopupHeaderCollectionAvailability(collectionDisabled).supported, false);
-});
-
-test("Paper Charts can render popup action-bar content without Product Collection support", () => {
-  const source = registry.byId.get(DATA_SOURCE_IDS.PAPER_CHARTS);
-  const layerDefinition = source.layerDefinitions[0];
-
-  assert.equal(layerDefinition.capabilities.supportsPopupActions, true);
-  assert.equal(source.capabilities.productCollection, false);
-});
-
-test("switching AOI to Paper Charts removes a stale collection action", () => {
-  assertSelectionSwitchRemovesCollectionAction(
-    createRegistryFeature(DATA_SOURCE_IDS.PAPER_CHARTS, { datasetName: "PAPER-1" })
+test("compatibility, Paper Charts and S-102 support Product Collection with source-aware identity", () => {
+  const compatibility = resolvePopupHeaderCollectionAvailability(createCompatibilityFeature());
+  const paper = resolvePopupHeaderCollectionAvailability(
+    createRegistryFeature(DATA_SOURCE_IDS.PAPER_CHARTS, "PAPER-1")
   );
-});
-
-test("switching AOI to S-102 removes a stale collection action", () => {
-  assertSelectionSwitchRemovesCollectionAction(
-    createRegistryFeature(DATA_SOURCE_IDS.S102, { datasetName: "S102-1" })
+  const s102 = resolvePopupHeaderCollectionAvailability(
+    createRegistryFeature(DATA_SOURCE_IDS.S102, "S102-1")
   );
+  assert.equal(compatibility.supported, true);
+  assert.equal(paper.supported, true);
+  assert.equal(s102.supported, true);
+  assert.equal(paper.productContext.sourceId, "paper-charts");
+  assert.equal(s102.productContext.sourceId, "s102");
+  assert.notEqual(paper.identityKey, s102.identityKey);
 });
 
-test("mock Products cannot mutate Product Collection", () => {
-  for (const [sourceId, datasetName] of [
-    [DATA_SOURCE_IDS.PAPER_CHARTS, "PAPER-1"],
-    [DATA_SOURCE_IDS.S102, "S102-1"],
-  ]) {
-    let addCalls = 0;
-    let removeCalls = 0;
-    const result = mutatePopupHeaderCollection({
-      feature: createRegistryFeature(sourceId, { datasetName }),
-      expectedDatasetName: datasetName,
-      hasProduct: () => false,
-      addProduct: () => {
-        addCalls += 1;
-      },
-      removeProduct: () => {
-        removeCalls += 1;
-      },
-    });
-
-    assert.deepEqual(result, {
-      handled: false,
-      reason: "unsupported",
-      datasetName,
-    });
-    assert.equal(addCalls, 0);
-    assert.equal(removeCalls, 0);
+test("Product Collection capability remains independent from backend Product actions", () => {
+  for (const sourceId of [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]) {
+    const source = registry.byId.get(sourceId);
+    assert.equal(source.capabilities.productCollection, true);
+    assert.equal(source.layerDefinitions[0].capabilities.supportsPopupActions, true);
+    assert.equal(source.layerDefinitions[0].capabilities.supportsProductActions, false);
+    assert.equal(source.capabilities.freeze, false);
+    assert.equal(source.capabilities.sendToIcEnc, false);
+    assert.equal(source.capabilities.cancelExport, false);
   }
 });
 
-test("compatibility AOI can add and remove the current Product Collection item", () => {
-  const feature = createCompatibilityFeature();
+test("switching AOI to a mock Product replaces Collection identity instead of retaining stale selection", () => {
+  const identities = [];
+  for (const feature of [
+    createCompatibilityFeature("AOI-1"),
+    createRegistryFeature(DATA_SOURCE_IDS.PAPER_CHARTS, "PAPER-1"),
+  ]) {
+    reconcilePopupHeaderCollectionAction({
+      feature,
+      onSupported: (availability) => identities.push(availability.identityKey),
+    });
+  }
+  assert.equal(identities.length, 2);
+  assert.notEqual(identities[0], identities[1]);
+});
+
+test("mock Products add and remove through ProductContext rather than dataset-only mutation", () => {
+  const feature = createRegistryFeature(DATA_SOURCE_IDS.PAPER_CHARTS, "PAPER-1");
+  const availability = resolvePopupHeaderCollectionAvailability(feature);
   const added = [];
   const removed = [];
-
   const addResult = mutatePopupHeaderCollection({
     feature,
-    expectedDatasetName: "DK4TEST",
+    expectedDatasetName: "PAPER-1",
+    expectedIdentityKey: availability.identityKey,
     hasProduct: () => false,
-    addProduct: (product) => {
-      added.push(product);
+    addProduct: (context) => {
+      added.push(context);
       return { added: true };
     },
-    removeProduct: (datasetName) => removed.push(datasetName),
   });
-
   assert.equal(addResult.handled, true);
-  assert.deepEqual(addResult.addResult, { added: true });
-  assert.deepEqual(added, [{ datasetName: "DK4TEST" }]);
-  assert.deepEqual(removed, []);
-
+  assert.equal(added[0].sourceId, "paper-charts");
   const removeResult = mutatePopupHeaderCollection({
     feature,
-    expectedDatasetName: "DK4TEST",
+    expectedDatasetName: "PAPER-1",
+    expectedIdentityKey: availability.identityKey,
     hasProduct: () => true,
-    addProduct: (product) => added.push(product),
-    removeProduct: (datasetName) => removed.push(datasetName),
+    removeProduct: (context) => removed.push(context),
   });
-
-  assert.deepEqual(removeResult, {
-    handled: true,
-    removed: true,
-    datasetName: "DK4TEST",
-  });
-  assert.deepEqual(removed, ["DK4TEST"]);
+  assert.equal(removeResult.removed, true);
+  assert.equal(removed[0].productKey, "PAPER-1");
 });
 
-test("a stale button cannot mutate a different selected feature", () => {
-  let addCalls = 0;
+test("stale dataset or source identity cannot mutate Collection", () => {
+  let calls = 0;
+  const feature = createRegistryFeature(DATA_SOURCE_IDS.S102, "S102-NEW");
   const result = mutatePopupHeaderCollection({
-    feature: createCompatibilityFeature({ datasetName: "DK4NEW" }),
-    expectedDatasetName: "DK4OLD",
+    feature,
+    expectedDatasetName: "S102-OLD",
+    expectedIdentityKey: JSON.stringify(["s102", "S102-OLD"]),
     hasProduct: () => false,
     addProduct: () => {
-      addCalls += 1;
+      calls += 1;
     },
   });
-
   assert.equal(result.handled, false);
-  assert.equal(addCalls, 0);
+  assert.equal(calls, 0);
 });
 
-test("missing or unknown Product context fails Product Collection closed", () => {
-  const missingContext = {
-    attributes: { datasetName: "UNKNOWN-1" },
-    layer: { customId: "unknown-layer" },
-  };
-  const inconsistentSource = createRegistryFeature(DATA_SOURCE_IDS.PAPER_CHARTS, {
-    datasetName: "PAPER-2",
-  });
-  inconsistentSource.layer.appSourceId = DATA_SOURCE_IDS.S102;
-
-  assert.equal(resolvePopupHeaderCollectionAvailability(missingContext).supported, false);
-  assert.equal(resolvePopupHeaderCollectionAvailability(inconsistentSource).supported, false);
+test("unknown or inconsistent Product context fails closed", () => {
+  const unknown = { attributes: { datasetName: "UNKNOWN" }, layer: { customId: "unknown" } };
+  const inconsistent = createRegistryFeature(DATA_SOURCE_IDS.PAPER_CHARTS, "PAPER-2");
+  inconsistent.layer.appSourceId = DATA_SOURCE_IDS.S102;
+  assert.equal(resolvePopupHeaderCollectionAvailability(unknown).supported, false);
+  assert.equal(resolvePopupHeaderCollectionAvailability(inconsistent).supported, false);
 });
 
-test("Review and Analyze routes keep the popup header collection action disabled", () => {
+test("Review and Analyze routes keep popup-header Collection mutation disabled", () => {
   assert.equal(
     resolvePopupHeaderCollectionAvailability(createCompatibilityFeature(), {
       isReviewOrAnalyzeRoute: true,
@@ -247,28 +145,3 @@ test("Review and Analyze routes keep the popup header collection action disabled
     false
   );
 });
-
-function assertSelectionSwitchRemovesCollectionAction(nextFeature) {
-  let actionVisible = false;
-  reconcilePopupHeaderCollectionAction({
-    feature: createCompatibilityFeature(),
-    onSupported: () => {
-      actionVisible = true;
-    },
-    onUnsupported: () => {
-      actionVisible = false;
-    },
-  });
-  assert.equal(actionVisible, true);
-
-  reconcilePopupHeaderCollectionAction({
-    feature: nextFeature,
-    onSupported: () => {
-      actionVisible = true;
-    },
-    onUnsupported: () => {
-      actionVisible = false;
-    },
-  });
-  assert.equal(actionVisible, false);
-}

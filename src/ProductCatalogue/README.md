@@ -146,7 +146,7 @@ src/features/products/domain/productContext.js
 
 Registry-backed Products require matching Graphic and layer source metadata. The current combined AOI path participates through an explicit internal compatibility adapter, not a permanent registry source or persisted toggle. Unknown or inconsistent source metadata fails closed for backend-dependent actions.
 
-`productActionAvailability.js` combines Product context capabilities with Product status, active operations, backend capability state, and popup Export state. Paper Charts and S-102 therefore retain popup attributes and disabled Export placeholders without gaining mutations, Product Collection, Analyze, Review, History, or reports.
+`productActionAvailability.js` combines Product context capabilities with Product status, active operations, backend capability state, and popup Export state. Paper Charts and S-102 retain popup attributes and disabled Export placeholders without gaining backend mutations or real Export execution. FI-011D also enables Product Collection, Analyze, Review, and visible History/report/validation surfaces for those sources; unsupported backend content is represented as unavailable and never authorizes compatibility API calls.
 
 ### Product operation state
 
@@ -171,19 +171,34 @@ Do not parse API errors directly in UI files unless there is a strong reason.
 
 ### Product catalog and product picker
 
-Analyze and Review use a shared product picker powered by the lightweight product catalog endpoint:
+Analyze and Review share the source-aware workspace Product boundary:
 
-```http
-GET /electronicproducts
+```txt
+src/features/products/services/workspaceProductService.js
 ```
 
-Current expected lightweight shape:
+The workspace catalog merges independent providers:
 
-```json
-{ "Data": ["101DK0040943E", "101DK0040944E"] }
-```
+- the compatibility provider backed by `GET /electronicproducts`;
+- Paper Charts when its registry workspace provider is runtime-available;
+- S-102 when its registry workspace provider is runtime-available.
 
-The picker is implemented once and reused by Analyze and Review so users can add products directly without first using the main map or Product Collection. It does not use the AOI/map geometry endpoint. Already-added products are hidden from the picker, and unknown products are rejected when catalog validation is available.
+The compatibility endpoint is therefore one provider, not the permanent Product catalog architecture.
+Registry-backed providers reuse their source loader and normalizer, preserve `sourceId`, `sourceLabel`,
+`productKey`, `datasetName`, and `productType`, isolate provider failures, and reject stale provider
+results through generation guards. `datasetName` is the authoritative globally unique workspace/route
+identity; user-facing Product names remain separate metadata. A duplicate normalized `datasetName` across
+providers violates that invariant, is omitted from the catalog, and resolves fail closed as ambiguous
+instead of selecting a provider deterministically.
+
+The workspace catalog is deliberately independent of Main map enabled-source state. A runtime-available
+source can still resolve or appear in Analyze/Review after that source is disabled on the Main map.
+S-57 and S-101 do not contribute independent workspace Products until authoritative read/catalog
+contracts exist.
+
+The shared picker is reused by Analyze and Review. Product name remains the primary visible label and
+source metadata may be shown secondarily when useful. Existing route projection remains datasetName-only
+until FI-019.
 
 ### Main map filters
 
@@ -199,9 +214,13 @@ Product popup attribute rendering is hardened so first-load popup details do not
 
 ### Main map Product search
 
-The main map has a route-local Product search overlay. It uses the shared product catalog endpoint for suggestions and opens the selected Product's popup on the map when a matching rendered graphic exists.
+The Main map has a route-local Product search overlay. FI-011B search is built from the currently active,
+committed frontend Graphics and their source-aware Product contexts. It does **not** query or reuse the
+Analyze/Review workspace catalog.
 
-Product search is a map control, not global navigation. It should stay out of the navbar to avoid layout conflicts on smaller screens.
+Search opens the selected rendered Product's popup on the map. Disabled sources are absent because their
+Graphics are not part of the committed active Main map state. Product search is a map control, not global
+navigation, and stays out of the navbar to avoid layout conflicts on smaller screens.
 
 ### Dashboard
 
@@ -217,7 +236,15 @@ Dashboard documentation:
 src/features/dashboard/README.md
 ```
 
-Dashboard is a read-only operational activity route. It loads bounded activity pages from `/electronicproducts/dashboard`, sends search and filters to the backend, opens a route-local Product History panel from activity rows, and links users onward to Review or Analyze. Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
+Dashboard is a compatibility/backend activity surface. It loads bounded activity pages from
+`/electronicproducts/dashboard`, sends search and filters to the backend, opens a route-local Product
+History panel from activity rows, and links users onward to Review or Analyze. Dashboard intentionally
+keeps the established one-argument `fetchProductHistory(datasetName)` compatibility adapter and is not
+migrated to the generic workspace provider architecture in FI-011D. Paper Charts and S-102 Dashboard
+behavior is not introduced here.
+
+Dashboard must stay isolated from Main map popup state, Product Collection state, Analyze state and
+Review state.
 
 ### Analyze and Review
 
@@ -233,7 +260,19 @@ Review feature files live in:
 src/features/review
 ```
 
-Analyze owns product analysis/report display. It does not own product mutation actions. Review owns multi-product review. Review tabs are independent and should not reintroduce BroadcastChannel/session picker workflows without a clear UX reason.
+Analyze and Review use `workspaceProductService` for source-aware Product catalog and route Product
+resolution. Compatibility Products retain their established backend loaders. Paper Charts and S-102
+resolve through runtime-available registry providers, so Analyze can use source-owned normalized data and
+geometry without calling the compatibility AOI endpoint. Review uses the same Product context to avoid
+cross-source History/report requests.
+
+Analyze owns product analysis/report display and does not own mutation actions. Review owns multi-product
+review; mixed workspaces isolate Product/provider failures and distinguish unavailable content from failed
+loads. Review tabs remain independent and should not reintroduce BroadcastChannel/session picker workflows
+without a clear UX reason.
+
+Analyze/Review routes continue to project dataset names only. FI-019 owns the later route migration; source
+identity remains internal to the workspace runtime model.
 
 ### Timeline and Product History
 
@@ -249,7 +288,19 @@ Timeline documentation:
 src/features/timeline/README.md
 ```
 
-Product History uses the backend product history endpoint for product-level history views. Product History rows are collapsed by default on both the main map quick panel and the Dashboard History panel. Collapsed rows show the event title, timestamp and short description; row details such as previous/new state are expanded only when the user opens that row.
+Product History deliberately exposes two call boundaries. The one-argument
+`fetchProductHistory(datasetName)` contract is the retained compatibility adapter for existing
+compatibility consumers such as Dashboard and calls the established backend History endpoint directly.
+Source-aware Main map, Analyze, and Review callers provide an already resolved `ProductContext`.
+
+Compatibility Product contexts use the same backend endpoint. Paper Charts and S-102 expose a visible
+History surface but return a source-specific unavailable model without a compatibility History request.
+An explicitly unresolved/invalid source context fails closed and must never reinterpret the dataset name
+as a compatibility Product.
+
+Product History rows are collapsed by default on both the Main map quick panel and Dashboard History
+panel. Collapsed rows show the event title, timestamp and short description; row details such as
+previous/new state are expanded only when the user opens that row.
 
 Global map timeline is not implemented yet.
 
@@ -260,6 +311,7 @@ Some current behavior is intentionally frontend-only or placeholder-only:
 - popup export leaf/scope presentation state
 - same-browser job cache and cross-tab synchronization
 - disabled source-configured Edition/Update placeholders for compatibility Update, Paper Charts and S-102
+- truthful unavailable History, IC-ENC report, and Internal validation surfaces for Paper Charts and S-102
 - Dashboard report actions until IC-ENC/internal validation report IDs or URLs exist
 
 The backend active-job endpoint is the source of truth for shared visibility. Frontend state remains responsible for presentation, polling and responsive local reconciliation.
@@ -429,7 +481,8 @@ Recent frontend work has focused on:
 - Dashboard range builder, actionable summary panels and polished Dashboard History panel
 - Dashboard backend activity classification
 - BE-107 Dashboard server-side filtering and cursor pagination, manually verified at `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`
-- shared Product catalog picker for Analyze and Review
+- shared source-aware workspace Product catalog/resolver for Analyze and Review
+- source-aware Product Collection and workspace History/report availability
 - main map filter hardening
 - main map Product search
 - asynchronous S100 Edition and Rollback activation
@@ -445,5 +498,6 @@ Recent frontend work has focused on:
 - FI-011A configurable Product data-source foundation
 - FI-011B source-aware Filters, Product search, and navbar coordination
 - FI-011C source-aware Product context, popup actions, and flat Export menu
+- FI-011D source-aware Product Collection, workspace resolution, and truthful History/report availability
 
 The frontend is ready for controlled user testing with asynchronous Export/Rollback, shared active-operation visibility and the manually verified BE-107 Dashboard pagination baseline `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`. BE-106 documents—but does not implement—the future move of worker execution to JobPlatform. The next planned backend package is BE-108 Product History failure hardening when its producer contract is ready. Remaining backend-dependent work includes atomic enqueue ownership, any later shared-worker implementation, report contracts, future export variants and the global timeline.

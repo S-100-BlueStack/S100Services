@@ -28,38 +28,23 @@ The Product Collection tray can open a new Review tab with the current collectio
 
 This keeps the workflow predictable and avoids hidden cross-tab synchronization. Future work can reintroduce live Review sessions if there is a clear need for it.
 
-## Future shared product picker
+## Shared workspace Product picker
 
-Review should later use a shared product picker/catalog workflow so users can open `/review` directly and add products without first using the main map or Product Collection.
-
-The picker should use the lightweight product catalog endpoint:
-
-```http
-GET /electronicproducts
-```
-
-Current expected lightweight shape:
-
-```json
-{ "Data": ["101DK0040943E", "101DK0040944E"] }
-```
-
-Recommended behavior:
-
-- Keep the current independent Review tab model.
-- Replace or supplement the manual Add field with a searchable product picker.
-- Use product terminology in visible UI.
-- Keep typed input as a fallback if useful during development.
-- Do not fetch AOI geometry just to populate the picker.
-- Reuse the same shared picker as Analyze.
-
-Recommended shared location:
+Review uses the same source-aware workspace catalog/resolver as Analyze:
 
 ```txt
-src/features/products/api/productCatalogApi.js
-src/features/products/domain/productCatalog.js
-src/features/products/ui/productPicker.js
+src/features/products/services/workspaceProductService.js
 ```
+
+The catalog merges the compatibility `GET /electronicproducts` provider with runtime-available registry
+workspace providers for Paper Charts and S-102. Product names remain the primary picker label while source
+metadata is retained by the runtime model. Provider failures are isolated and stale catalog generations
+cannot overwrite newer state.
+
+The workspace catalog is not tied to Main map enabled-source localStorage. A source disabled on the Main
+map can still be added in an already open or directly opened Review workspace when its workspace provider
+is runtime-available. S-57 and S-101 remain absent as independent sources until authoritative read/catalog
+contracts exist.
 
 ## Content model
 
@@ -80,3 +65,13 @@ Future report cards should use the same pattern.
 The Review page currently reuses the existing Product History API and placeholder report cards.
 
 When backend contracts are ready, add loaders/renderers per content type rather than hardcoding report-specific behavior into the core Review page.
+
+## FI-011D source-aware Review content
+
+Review uses the same workspace Product resolver/catalog as Analyze. Compatibility Product History
+continues to load through the existing history endpoint. Paper Charts and S-102 resolve as real
+workspace Products but History, IC-ENC reports, and Internal validation render declarative unavailable
+states without compatibility backend requests. Per-Product load state distinguishes `loaded`,
+`unavailable`, and `failed`, so mixed Review columns remain independent. Product removal/disable and
+existing request guards continue to invalidate stale publication. Main-map source visibility does not
+control an already opened Review workspace. FI-019 routing remains deferred.

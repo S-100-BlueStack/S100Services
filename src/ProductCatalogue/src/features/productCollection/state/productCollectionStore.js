@@ -1,21 +1,21 @@
+import { serializeProductIdentity } from "../../dataSources/domain/productIdentity.js";
+import { COMPATIBILITY_PRODUCT_SOURCE_ID } from "../../products/domain/productContext.js";
+
 const listeners = new Set();
 let items = [];
 
 export function addProductCollectionProduct(product) {
-  const datasetName = getDatasetName(product);
-
-  if (!datasetName) {
+  const normalizedProduct = normalizeCollectionProduct(product);
+  if (!normalizedProduct) {
     return {
       added: false,
-      reason: "missing-dataset-name",
+      reason: "missing-product-identity",
       item: null,
       snapshot: getProductCollectionSnapshot(),
     };
   }
 
-  const id = createDatasetId(datasetName);
-  const existingItem = items.find((item) => item.id === id);
-
+  const existingItem = items.find((item) => isSameCollectionIdentity(item, normalizedProduct));
   if (existingItem) {
     return {
       added: false,
@@ -26,8 +26,7 @@ export function addProductCollectionProduct(product) {
   }
 
   const item = {
-    id,
-    datasetName,
+    ...normalizedProduct,
     addedAt: Date.now(),
   };
 
@@ -42,14 +41,52 @@ export function addProductCollectionProduct(product) {
   };
 }
 
-export function removeProductCollectionProduct(datasetNameOrId) {
-  const id = createDatasetId(datasetNameOrId);
-
-  if (!id) {
+export function removeProductCollectionProduct(productOrIdentity) {
+  const itemId = resolveExistingItemId(productOrIdentity);
+  if (!itemId) {
     return getProductCollectionSnapshot();
   }
 
-  const nextItems = items.filter((item) => item.id !== id);
+  const nextItems = items.filter((item) => item.id !== itemId);
+  if (nextItems.length === items.length) {
+    return getProductCollectionSnapshot();
+  }
+
+  items = nextItems;
+  emitChange();
+  return getProductCollectionSnapshot();
+}
+
+export function removeProductCollectionProductsBySource(sourceId) {
+  const normalizedSourceId = normalizeText(sourceId);
+  if (!normalizedSourceId) {
+    return getProductCollectionSnapshot();
+  }
+
+  const nextItems = items.filter((item) => item.sourceId !== normalizedSourceId);
+  if (nextItems.length === items.length) {
+    return getProductCollectionSnapshot();
+  }
+
+  items = nextItems;
+  emitChange();
+  return getProductCollectionSnapshot();
+}
+
+export function reconcileProductCollectionSourceProducts(sourceId, products) {
+  const normalizedSourceId = normalizeText(sourceId);
+  if (!normalizedSourceId) {
+    return getProductCollectionSnapshot();
+  }
+
+  const currentIdentityKeys = new Set(
+    (Array.isArray(products) ? products : [])
+      .map((product) => createSourceProductIdentityKey(normalizedSourceId, product))
+      .filter(Boolean)
+  );
+  const nextItems = items.filter((item) => {
+    return item.sourceId !== normalizedSourceId || currentIdentityKeys.has(item.id);
+  });
 
   if (nextItems.length === items.length) {
     return getProductCollectionSnapshot();
@@ -57,7 +94,6 @@ export function removeProductCollectionProduct(datasetNameOrId) {
 
   items = nextItems;
   emitChange();
-
   return getProductCollectionSnapshot();
 }
 
@@ -68,18 +104,11 @@ export function clearProductCollection() {
 
   items = [];
   emitChange();
-
   return getProductCollectionSnapshot();
 }
 
-export function hasProductCollectionProduct(datasetNameOrId) {
-  const id = createDatasetId(datasetNameOrId);
-
-  if (!id) {
-    return false;
-  }
-
-  return items.some((item) => item.id === id);
+export function hasProductCollectionProduct(productOrIdentity) {
+  return Boolean(resolveExistingItemId(productOrIdentity));
 }
 
 export function getProductCollectionDatasetNames() {
@@ -100,7 +129,6 @@ export function subscribeProductCollection(listener) {
   }
 
   listeners.add(listener);
-
   return () => {
     listeners.delete(listener);
   };
@@ -108,26 +136,112 @@ export function subscribeProductCollection(listener) {
 
 function emitChange() {
   const snapshot = getProductCollectionSnapshot();
-
   for (const listener of listeners) {
     listener(snapshot);
   }
 }
 
-function getDatasetName(product) {
+function normalizeCollectionProduct(product) {
   if (typeof product === "string") {
-    return normalizeDatasetName(product);
+    return createLegacyCompatibilityProduct(product);
   }
 
-  return normalizeDatasetName(
-    product?.datasetName ?? product?.DatasetName ?? product?.name ?? product?.Name
+  const sourceId = normalizeText(product?.sourceId);
+  const productKey = normalizeText(product?.productKey);
+  const datasetName = normalizeDatasetName(product?.datasetName);
+  const productType = normalizeText(product?.productType);
+  if (!sourceId || !productKey || !datasetName || !productType) {
+    return null;
+  }
+
+  return {
+    id: serializeProductIdentity({ sourceId, productKey }),
+    sourceId,
+    sourceLabel: normalizeText(product?.sourceLabel) ?? sourceId,
+    productKey,
+    datasetName,
+    productType,
+  };
+}
+
+function createLegacyCompatibilityProduct(datasetName) {
+  const normalizedDatasetName = normalizeDatasetName(datasetName);
+  if (!normalizedDatasetName) {
+    return null;
+  }
+
+  return {
+    id: serializeProductIdentity({
+      sourceId: COMPATIBILITY_PRODUCT_SOURCE_ID,
+      productKey: normalizedDatasetName,
+    }),
+    sourceId: COMPATIBILITY_PRODUCT_SOURCE_ID,
+    sourceLabel: "Compatibility AOI",
+    productKey: normalizedDatasetName,
+    datasetName: normalizedDatasetName,
+    productType: "compatibility-product",
+  };
+}
+
+function resolveExistingItemId(productOrIdentity) {
+  if (productOrIdentity && typeof productOrIdentity === "object") {
+    const normalizedProduct = normalizeCollectionProduct(productOrIdentity);
+    return normalizedProduct
+      ? (items.find((item) => isSameCollectionIdentity(item, normalizedProduct))?.id ?? null)
+      : null;
+  }
+
+  const value = normalizeText(productOrIdentity);
+  if (!value) {
+    return null;
+  }
+
+  const exactIdentity = items.find((item) => item.id === value);
+  if (exactIdentity) {
+    return exactIdentity.id;
+  }
+
+  const datasetKey = value.toUpperCase();
+  return items.find((item) => item.datasetName.toUpperCase() === datasetKey)?.id ?? null;
+}
+
+function isSameCollectionIdentity(left, right) {
+  if (!left || !right || left.sourceId !== right.sourceId) {
+    return false;
+  }
+
+  if (left.id === right.id) {
+    return true;
+  }
+
+  // Compatibility AOI callers historically matched dataset names case-insensitively.
+  // Keep that transition behavior while registered source identities remain owned by
+  // the canonical [sourceId, productKey] serializer.
+  return (
+    left.sourceId === COMPATIBILITY_PRODUCT_SOURCE_ID &&
+    left.datasetName.toUpperCase() === right.datasetName.toUpperCase()
   );
 }
 
-function createDatasetId(value) {
-  return normalizeDatasetName(value).toUpperCase();
+function createSourceProductIdentityKey(sourceId, product) {
+  const productSourceId = normalizeText(product?.sourceId) ?? sourceId;
+  const productKey = normalizeText(product?.productKey ?? product?.attributes?.productKey);
+  if (productSourceId !== sourceId || !productKey) {
+    return null;
+  }
+
+  try {
+    return serializeProductIdentity({ sourceId, productKey });
+  } catch {
+    return null;
+  }
 }
 
 function normalizeDatasetName(value) {
-  return String(value ?? "").trim();
+  return normalizeText(value);
+}
+
+function normalizeText(value) {
+  const normalized = String(value ?? "").trim();
+  return normalized || null;
 }

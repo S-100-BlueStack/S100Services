@@ -11,7 +11,6 @@ import {
   mutatePopupHeaderCollection,
   reconcilePopupHeaderCollectionAction,
 } from "./popupHeaderCollectionAction.js";
-
 let currentFeatureId = null;
 let headerMode = "default";
 
@@ -35,7 +34,6 @@ export function applyHeaderColor(view) {
 
   waitForFeatureHeader(view, featureId);
 }
-
 export function resetHeaderColor(view) {
   headerMode = "default";
   currentFeatureId = null;
@@ -52,7 +50,6 @@ function waitForFeatureHeader(view, featureId, remainingFrames = 20) {
 
     return;
   }
-
   if (headerMode !== "feature" || currentFeatureId !== featureId || isOverlapPickerPopup(view)) {
     return;
   }
@@ -72,7 +69,6 @@ function waitForFeatureHeader(view, featureId, remainingFrames = 20) {
     header.style.color = "#ffffff";
     header.dataset.statusColor = color;
   }
-
   ensureCollectionButton(header, feature, view);
   ensureCopyButton(header, attr.datasetName);
 }
@@ -91,7 +87,6 @@ function waitForDefaultHeader(view, remainingFrames = 20) {
   if (headerMode !== "default") {
     return;
   }
-
   // Feature popups set inline styles inside Calcite Shadow DOM. The picker must
   // remove those inline values so theme tokens can apply again.
   header.style.removeProperty("background-color");
@@ -101,7 +96,6 @@ function waitForDefaultHeader(view, remainingFrames = 20) {
   removeCopyButton(header);
   removeCollectionButton(header);
 }
-
 function getPopupHeader(view) {
   const popupContainer =
     view.popup.container ??
@@ -111,7 +105,6 @@ function getPopupHeader(view) {
   if (!popupContainer) {
     return null;
   }
-
   const heading = popupContainer.querySelector(".esri-features__heading");
   const flowItem =
     heading?.closest("calcite-flow-item") ?? popupContainer.querySelector("calcite-flow-item");
@@ -121,7 +114,6 @@ function getPopupHeader(view) {
 
   return panel?.shadowRoot?.querySelector(".header") ?? null;
 }
-
 function isOverlapPickerPopup(view) {
   const content = view.popup.content;
   return content instanceof Element && content.classList.contains("overlap-picker");
@@ -140,7 +132,6 @@ function getHeaderActions(header) {
   if (!actions) {
     return null;
   }
-
   // Calcite hides the end-actions container when it has no slotted/default
   // actions. Header buttons are inserted into this internal container, so it
   // must be explicitly unhidden when we add our custom actions.
@@ -153,7 +144,6 @@ function getHeaderActions(header) {
 function removeCopyButton(header) {
   removeHeaderButton(header, ".popup-copy-btn");
 }
-
 function removeCollectionButton(header) {
   removeHeaderButton(header, ".popup-product-collection-btn");
   removeHeaderButton(header, ".popup-analyze-collection-btn");
@@ -176,7 +166,6 @@ function ensureCopyButton(header, datasetName) {
   if (!actions) {
     return;
   }
-
   let btn = actions.querySelector(".popup-copy-btn");
 
   if (!btn) {
@@ -191,7 +180,6 @@ function ensureCopyButton(header, datasetName) {
 
     btn.addEventListener("click", async () => {
       const datasetName = btn.dataset.datasetName;
-
       try {
         await navigator.clipboard.writeText(datasetName);
         addNotice({
@@ -210,7 +198,6 @@ function ensureCopyButton(header, datasetName) {
       }
     });
   }
-
   // Keep the copy action aligned with the currently selected feature.
   btn.dataset.datasetName = datasetName;
 }
@@ -220,9 +207,8 @@ function ensureCollectionButton(header, feature, view) {
     feature,
     isReviewOrAnalyzeRoute: isReviewOrAnalyzeRoute(),
     onUnsupported: () => removeCollectionButton(header),
-    onSupported: ({ datasetName }) => {
+    onSupported: ({ datasetName, identityKey }) => {
       const actions = getHeaderActions(header);
-
       if (!actions) {
         removeCollectionButton(header);
         return;
@@ -237,17 +223,16 @@ function ensureCollectionButton(header, feature, view) {
         btn.appearance = "transparent";
 
         actions.prepend(btn);
-
         btn.addEventListener("click", () => {
           const result = mutatePopupHeaderCollection({
             feature: view.popup.selectedFeature,
             expectedDatasetName: btn.dataset.datasetName,
+            expectedIdentityKey: btn.dataset.productIdentity,
             isReviewOrAnalyzeRoute: isReviewOrAnalyzeRoute(),
             hasProduct: hasProductCollectionProduct,
             addProduct: addProductCollectionProduct,
             removeProduct: removeProductCollectionProduct,
           });
-
           if (!result.handled) {
             removeCollectionButton(header);
             return;
@@ -264,7 +249,6 @@ function ensureCollectionButton(header, feature, view) {
             syncCollectionButtonState(btn);
             return;
           }
-
           if (result.addResult?.added) {
             addNotice({
               type: "success",
@@ -287,7 +271,6 @@ function ensureCollectionButton(header, feature, view) {
               storeInCenter: false,
             });
           }
-
           syncCollectionButtonState(btn);
         });
 
@@ -297,16 +280,16 @@ function ensureCollectionButton(header, feature, view) {
       }
 
       btn.dataset.datasetName = datasetName;
+      btn.dataset.productIdentity = identityKey;
       syncCollectionButtonState(btn);
     },
   });
 }
 
 function syncCollectionButtonState(btn) {
-  const datasetName = btn.dataset.datasetName;
-  const isSelected = hasProductCollectionProduct(datasetName);
+  const productIdentity = btn.dataset.productIdentity ?? btn.dataset.datasetName;
+  const isSelected = hasProductCollectionProduct(productIdentity);
   const title = isSelected ? "Remove from collection" : "Add to collection";
-
   btn.icon = isSelected ? "check" : "chart-magnifying-glass";
   btn.title = title;
   btn.text = title;

@@ -33,10 +33,16 @@ const DISABLED_OPERATION_CAPABILITIES = Object.freeze({
   backendProductRefresh: false,
 });
 
-const SEARCHABLE_VISUALIZATION_CAPABILITIES = Object.freeze({
+const WORKSPACE_VISUALIZATION_CAPABILITIES = Object.freeze({
   ...DISABLED_OPERATION_CAPABILITIES,
+  history: true,
+  icEncReports: true,
+  internalValidation: true,
   popupExport: true,
+  productCollection: true,
   productSearch: true,
+  analyze: true,
+  review: true,
 });
 
 const ACTIVE_ONLY_REFRESH = Object.freeze({
@@ -54,6 +60,19 @@ const SOURCE_AWARE_IDENTITY = Object.freeze({
 
 const GEOJSON_PRODUCT_NORMALIZER = Object.freeze({
   type: "geojson-products",
+});
+
+// These strategies correct legacy Development fixture identities before they enter
+// ProductContext/workspace state. They are not production naming contracts.
+const PAPER_CHARTS_DEVELOPMENT_DATASET_NAME_STRATEGY = Object.freeze({
+  type: "synthetic-prefix",
+  prefix: "PAPER-MOCK",
+});
+
+const S102_DEVELOPMENT_DATASET_NAME_STRATEGY = Object.freeze({
+  type: "replace-leading-product-code",
+  productCode: "102",
+  fallbackPrefix: "102-MOCK",
 });
 
 const DEFAULT_PRODUCT_SEARCH = Object.freeze({
@@ -89,6 +108,7 @@ export function createDataSourceRegistry({
       layerId: DATA_SOURCE_LAYER_IDS.PAPER_CHARTS_PRODUCTS,
       layerKind: "paper-chart-products",
       filterDefinitions: ["status", "displayScale", "usageBand"],
+      datasetNameStrategy: PAPER_CHARTS_DEVELOPMENT_DATASET_NAME_STRATEGY,
       isDevelopment,
       configuredIds,
     }),
@@ -100,6 +120,7 @@ export function createDataSourceRegistry({
       layerId: DATA_SOURCE_LAYER_IDS.S102_PRODUCTS,
       layerKind: "s102-products",
       filterDefinitions: ["status"],
+      datasetNameStrategy: S102_DEVELOPMENT_DATASET_NAME_STRATEGY,
       isDevelopment,
       configuredIds,
     }),
@@ -131,6 +152,14 @@ export function isRuntimeSelectableDataSource(source) {
   );
 }
 
+export function isWorkspaceAvailableDataSource(source) {
+  return Boolean(
+    source?.workspace?.supported &&
+    source?.availability?.state === DATA_SOURCE_AVAILABILITY.AVAILABLE &&
+    source?.loader
+  );
+}
+
 function createUnavailableSource({ id, label, productType, configuredIds, reason }) {
   return {
     id,
@@ -148,6 +177,11 @@ function createUnavailableSource({ id, label, productType, configuredIds, reason
     layerDefinitions: [],
     capabilities: DISABLED_OPERATION_CAPABILITIES,
     exportConfiguration: null,
+    contentConfiguration: createHiddenContentConfiguration(reason),
+    workspace: {
+      supported: false,
+      providerType: null,
+    },
     filtering: {
       supported: false,
       definitions: [],
@@ -171,6 +205,7 @@ function createDevelopmentMockSource({
   layerId,
   layerKind,
   filterDefinitions,
+  datasetNameStrategy,
   isDevelopment,
   configuredIds,
 }) {
@@ -199,7 +234,10 @@ function createDevelopmentMockSource({
           errorMessage: `${label} mock request failed`,
         }
       : null,
-    normalizer: GEOJSON_PRODUCT_NORMALIZER,
+    normalizer: Object.freeze({
+      ...GEOJSON_PRODUCT_NORMALIZER,
+      datasetNameStrategy,
+    }),
     identityStrategy: SOURCE_AWARE_IDENTITY,
     layerDefinitions: [
       {
@@ -220,8 +258,13 @@ function createDevelopmentMockSource({
         },
       },
     ],
-    capabilities: SEARCHABLE_VISUALIZATION_CAPABILITIES,
+    capabilities: WORKSPACE_VISUALIZATION_CAPABILITIES,
     exportConfiguration: createUnavailableExportConfiguration(exportUnavailableReason),
+    contentConfiguration: createUnavailableWorkspaceContentConfiguration(label),
+    workspace: {
+      supported: true,
+      providerType: "registry-source",
+    },
     filtering: {
       supported: true,
       definitions: filterDefinitions,
@@ -231,6 +274,46 @@ function createDevelopmentMockSource({
     search: DEFAULT_PRODUCT_SEARCH,
     productType,
     refreshStrategy: ACTIVE_ONLY_REFRESH,
+  };
+}
+
+function createUnavailableWorkspaceContentConfiguration(label) {
+  return {
+    history: {
+      visible: true,
+      implemented: false,
+      loaderId: null,
+      availabilityReason: `Product History is not available for ${label} yet.`,
+    },
+    icEncReports: {
+      visible: true,
+      implemented: false,
+      loaderId: null,
+      availabilityReason: `IC-ENC reports are not available for ${label} yet.`,
+    },
+    internalValidation: {
+      visible: true,
+      implemented: false,
+      loaderId: null,
+      availabilityReason: `Internal validation is not available for ${label} yet.`,
+    },
+  };
+}
+
+function createHiddenContentConfiguration(reason) {
+  return {
+    history: createHiddenContentEntry(reason),
+    icEncReports: createHiddenContentEntry(reason),
+    internalValidation: createHiddenContentEntry(reason),
+  };
+}
+
+function createHiddenContentEntry(availabilityReason) {
+  return {
+    visible: false,
+    implemented: false,
+    loaderId: null,
+    availabilityReason,
   };
 }
 

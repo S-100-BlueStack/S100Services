@@ -1,6 +1,7 @@
 export const PRODUCT_HISTORY_SOURCE = Object.freeze({
   BACKEND: "backend",
   DEMO: "demo",
+  UNAVAILABLE: "unavailable",
 });
 
 export const PRODUCT_HISTORY_EVENT_TYPE = Object.freeze({
@@ -13,7 +14,6 @@ export const PRODUCT_HISTORY_EVENT_TYPE = Object.freeze({
   ANALYSIS: "analysis",
   NOTE: "note",
 });
-
 const EVENT_TYPE_LABELS = Object.freeze({
   [PRODUCT_HISTORY_EVENT_TYPE.STATUS]: "Status",
   [PRODUCT_HISTORY_EVENT_TYPE.FREEZE]: "Freeze",
@@ -24,16 +24,17 @@ const EVENT_TYPE_LABELS = Object.freeze({
   [PRODUCT_HISTORY_EVENT_TYPE.ANALYSIS]: "Analysis",
   [PRODUCT_HISTORY_EVENT_TYPE.NOTE]: "Note",
 });
-
 export function normalizeProductHistoryResponse(response) {
   const datasetName = normalizeText(response?.datasetName);
   const source = normalizeHistorySource(response?.source);
   const events = normalizeEvents(response?.events);
-
   return {
     endpointAvailable: Boolean(response?.endpointAvailable),
     datasetName,
     source,
+    sourceId: normalizeText(response?.sourceId),
+    sourceLabel: normalizeText(response?.sourceLabel),
+    availabilityReason: normalizeText(response?.availabilityReason),
     isDemo: source === PRODUCT_HISTORY_SOURCE.DEMO,
     generatedAt: normalizeText(response?.generatedAt) ?? new Date().toISOString(),
     warnings: normalizeWarnings(response?.warnings),
@@ -44,7 +45,6 @@ export function normalizeProductHistoryResponse(response) {
 export function getProductHistoryEventTypeLabel(type) {
   return EVENT_TYPE_LABELS[type] ?? EVENT_TYPE_LABELS[PRODUCT_HISTORY_EVENT_TYPE.NOTE];
 }
-
 export function sortProductHistoryEvents(events) {
   return [...events].sort(compareEventsDescending);
 }
@@ -63,10 +63,8 @@ function normalizeEvent(event, index) {
   if (!event || typeof event !== "object") {
     return null;
   }
-
   const type = normalizeEventType(event.type);
   const timestamp = normalizeText(event.timestamp);
-
   return {
     id:
       normalizeText(event.id) ??
@@ -89,7 +87,6 @@ function normalizeDetails(details) {
   if (!details) {
     return [];
   }
-
   if (Array.isArray(details)) {
     return details
       .map((detail) => ({
@@ -110,7 +107,6 @@ function normalizeDetails(details) {
 
   return [];
 }
-
 function normalizeWarnings(warnings) {
   if (!Array.isArray(warnings)) {
     return [];
@@ -131,7 +127,6 @@ function normalizeEventType(type) {
 
 function normalizeHistorySource(source) {
   const normalizedSource = normalizeText(source);
-
   if (Object.values(PRODUCT_HISTORY_SOURCE).includes(normalizedSource)) {
     return normalizedSource;
   }
@@ -147,7 +142,6 @@ function getTimestampValue(timestamp) {
   const value = new Date(timestamp).getTime();
   return Number.isFinite(value) ? value : 0;
 }
-
 function createFallbackEventId({ type, timestamp, index }) {
   return `${type}-${timestamp ?? "unknown"}-${index}`;
 }
@@ -165,7 +159,6 @@ function normalizeText(value) {
   if (value === null || value === undefined) {
     return null;
   }
-
   const text = String(value).trim();
   return text.length > 0 ? text : null;
 }

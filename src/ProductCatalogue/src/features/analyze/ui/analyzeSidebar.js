@@ -9,7 +9,6 @@ import {
   createProductHistoryStateMessage,
   createProductHistorySummary,
 } from "../../timeline/ui/productHistoryRenderers.js";
-
 export function renderAnalyzeSidebar({
   datasetItems,
   datasetNames,
@@ -25,7 +24,6 @@ export function renderAnalyzeSidebar({
     datasetNames === undefined
       ? getEnabledAnalyzeDatasetNames(normalizedDatasetItems)
       : normalizeDatasetNames(datasetNames);
-
   calcitePanel.heading = createHeading(enabledDatasetNames);
   content.replaceChildren(
     createDatasetManager(normalizedDatasetItems, { loading, productCatalog }),
@@ -41,7 +39,6 @@ function getOrCreateAnalyzePanel() {
   }
 
   const shell = document.querySelector("calcite-shell");
-
   if (!shell) {
     throw new Error("Unable to create analyze sidebar because calcite-shell was not found.");
   }
@@ -57,7 +54,6 @@ function getOrCreateAnalyzePanel() {
 
   const content = document.createElement("div");
   content.className = "analyze-sidebar__content";
-
   panel.appendChild(content);
   shellPanel.appendChild(panel);
   shell.appendChild(shellPanel);
@@ -76,7 +72,6 @@ function createHeading(datasetNames) {
 
   return `Analyze ${datasetNames.length} products`;
 }
-
 function createDatasetManager(datasetItems, { loading, productCatalog }) {
   const container = document.createElement("section");
   container.className = "analyze-dataset-manager";
@@ -88,7 +83,6 @@ function createDatasetManager(datasetItems, { loading, productCatalog }) {
 
   return container;
 }
-
 function createDatasetAddForm(productCatalog, datasetItems) {
   return createProductPickerForm({
     id: "analyze-dataset-input",
@@ -104,7 +98,6 @@ function createDatasetAddForm(productCatalog, datasetItems) {
     className: "analyze-dataset-form",
   });
 }
-
 function createDatasetList(datasetItems) {
   const details = document.createElement("details");
   details.className = "analyze-dataset-list";
@@ -117,7 +110,6 @@ function createDatasetList(datasetItems) {
   const title = document.createElement("span");
   title.className = "analyze-dataset-list__title";
   title.textContent = "Product list";
-
   const count = document.createElement("span");
   count.className = "analyze-dataset-list__count";
   count.textContent =
@@ -128,7 +120,6 @@ function createDatasetList(datasetItems) {
 
   const content = document.createElement("div");
   content.className = "analyze-dataset-list__content";
-
   if (datasetItems.length === 0) {
     const empty = document.createElement("p");
     empty.className = "analyze-dataset-list__empty";
@@ -142,7 +133,6 @@ function createDatasetList(datasetItems) {
     for (const datasetItem of datasetItems) {
       list.appendChild(createDatasetListItem(datasetItem));
     }
-
     content.appendChild(list);
   }
 
@@ -163,7 +153,6 @@ function createDatasetListItem(datasetItem) {
 
   const toggleLabel = document.createElement("label");
   toggleLabel.className = "analyze-dataset-list__item-toggle";
-
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
   checkbox.checked = datasetItem.enabled;
@@ -172,7 +161,6 @@ function createDatasetListItem(datasetItem) {
   const name = document.createElement("span");
   name.className = "analyze-dataset-list__item-name";
   name.textContent = datasetItem.name;
-
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.className = "analyze-dataset-list__remove-button";
@@ -182,7 +170,6 @@ function createDatasetListItem(datasetItem) {
   checkbox.addEventListener("change", () => {
     dispatchAnalyzeDatasetToggle(item, datasetItem.id, checkbox.checked);
   });
-
   removeButton.addEventListener("click", () => {
     dispatchAnalyzeDatasetRemove(item, datasetItem.id);
   });
@@ -198,7 +185,6 @@ function createDatasetListItem(datasetItem) {
 function createLoadingState(datasetNames) {
   const container = document.createElement("div");
   container.className = "analyze-sidebar__loading";
-
   if (datasetNames.length === 0) {
     container.textContent = "Enable or add a product to load analysis.";
     return container;
@@ -211,7 +197,6 @@ function createLoadingState(datasetNames) {
 function createProductsContent(products) {
   const container = document.createElement("div");
   container.className = "analyze-products";
-
   if (products.length === 0) {
     const empty = document.createElement("p");
     empty.className = "analyze-sidebar__empty";
@@ -229,7 +214,6 @@ function createProductsContent(products) {
   for (const product of products) {
     list.appendChild(createProductCard(product));
   }
-
   container.appendChild(list);
   return container;
 }
@@ -242,7 +226,6 @@ function createProductCollapseControls(container) {
   openAllButton.type = "button";
   openAllButton.className = "analyze-products__action-button";
   openAllButton.textContent = "Open all";
-
   const collapseAllButton = document.createElement("button");
   collapseAllButton.type = "button";
   collapseAllButton.className = "analyze-products__action-button";
@@ -258,7 +241,6 @@ function createProductCollapseControls(container) {
 
   actions.appendChild(openAllButton);
   actions.appendChild(collapseAllButton);
-
   return actions;
 }
 
@@ -277,7 +259,6 @@ function createProductCard(product) {
 
   const summary = document.createElement("summary");
   summary.className = "analyze-product-card__summary";
-
   const title = document.createElement("span");
   title.className = "analyze-product-card__title";
   title.textContent = product.datasetName;
@@ -292,6 +273,17 @@ function createProductCard(product) {
   const content = document.createElement("div");
   content.className = "analyze-product-card__content";
 
+  if (product.workspaceLoadState === "failed") {
+    content.appendChild(
+      createProductHistoryStateMessage({
+        title: "Product could not be loaded",
+        message: product.loadError ?? `Workspace data for ${product.datasetName} is unavailable.`,
+      })
+    );
+    card.append(summary, content);
+    return card;
+  }
+
   const rows = document.createElement("div");
   rows.className = "analyze-product-card__rows";
   rows.appendChild(createInfoRow("Edition", product.edition));
@@ -302,14 +294,18 @@ function createProductCard(product) {
   if (product.errorMessage) {
     rows.appendChild(createInfoRow("Message", product.errorMessage));
   }
-
   if (product.loadError) {
     rows.appendChild(createInfoRow("Load warning", product.loadError));
   }
 
   content.appendChild(rows);
-  content.appendChild(createXmlBlock(product.xml));
-  content.appendChild(createInternalValidationReportsBlock(product.internalValidationReports));
+  content.appendChild(createXmlBlock(product.xml, product.contentAvailability?.icEncReports));
+  content.appendChild(
+    createInternalValidationReportsBlock(
+      product.internalValidationReports,
+      product.contentAvailability?.internalValidation
+    )
+  );
   content.appendChild(createHistoryBlock(product));
 
   card.appendChild(summary);
@@ -317,7 +313,6 @@ function createProductCard(product) {
 
   return card;
 }
-
 function createInfoRow(label, value) {
   const row = document.createElement("div");
   row.className = "analyze-info-row";
@@ -335,8 +330,7 @@ function createInfoRow(label, value) {
 
   return row;
 }
-
-function createXmlBlock(xml) {
+function createXmlBlock(xml, availability = null) {
   const details = document.createElement("details");
   details.className = "analyze-xml";
 
@@ -348,8 +342,12 @@ function createXmlBlock(xml) {
 
   const pre = document.createElement("pre");
   const code = document.createElement("code");
-  code.textContent = hasXml ? formatXml(xml) : "No XML report was returned for this product.";
-
+  code.textContent = hasXml
+    ? formatXml(xml)
+    : availability?.implemented === false
+      ? (availability.availabilityReason ??
+        "IC-ENC reports are not available for this Product source yet.")
+      : "No XML report was returned for this product.";
   pre.appendChild(code);
   details.appendChild(summary);
   details.appendChild(pre);
@@ -357,14 +355,13 @@ function createXmlBlock(xml) {
   return details;
 }
 
-function createInternalValidationReportsBlock(reports = []) {
+function createInternalValidationReportsBlock(reports = [], availability = null) {
   const details = document.createElement("details");
   details.className = "analyze-internal-validation";
 
   const validReports = Array.isArray(reports) ? reports : [];
   const hasReports = validReports.length > 0;
   details.open = hasReports;
-
   const summary = document.createElement("summary");
   summary.textContent = hasReports
     ? `Internal validation reports (${validReports.length})`
@@ -372,13 +369,15 @@ function createInternalValidationReportsBlock(reports = []) {
 
   const content = document.createElement("div");
   content.className = "analyze-internal-validation__content";
-
   if (!hasReports) {
     content.appendChild(
       createInternalValidationStateMessage({
         title: "Internal validation not available",
         message:
-          "The Analyze UI is ready for internal validation reports, but no report payload was returned for this product.",
+          availability?.implemented === false
+            ? (availability.availabilityReason ??
+              "Internal validation is not available for this Product source yet.")
+            : "The Analyze UI is ready for internal validation reports, but no report payload was returned for this product.",
       })
     );
     details.append(summary, content);
@@ -388,7 +387,6 @@ function createInternalValidationReportsBlock(reports = []) {
   for (const [index, report] of validReports.entries()) {
     content.appendChild(createInternalValidationReport(report, index));
   }
-
   details.append(summary, content);
   return details;
 }
@@ -400,7 +398,6 @@ function createInternalValidationReport(report, index) {
 
   const summary = document.createElement("summary");
   summary.className = "analyze-internal-validation__report-summary";
-
   const title = document.createElement("span");
   title.className = "analyze-internal-validation__report-title";
   title.textContent = report.title || `Internal validation report ${index + 1}`;
@@ -410,7 +407,6 @@ function createInternalValidationReport(report, index) {
   status.textContent = report.status || "available";
 
   summary.append(title, status);
-
   const content = document.createElement("div");
   content.className = "analyze-internal-validation__report-content";
 
@@ -422,14 +418,12 @@ function createInternalValidationReport(report, index) {
     metadata.append(...metadataRows);
     content.appendChild(metadata);
   }
-
   if (hasText(report.summary)) {
     const summaryText = document.createElement("p");
     summaryText.className = "analyze-internal-validation__summary-text";
     summaryText.textContent = report.summary;
     content.appendChild(summaryText);
   }
-
   if (hasReportContent(report.content)) {
     const pre = document.createElement("pre");
     const code = document.createElement("code");
@@ -444,7 +438,6 @@ function createInternalValidationReport(report, index) {
       })
     );
   }
-
   details.append(summary, content);
   return details;
 }
@@ -463,7 +456,6 @@ function createInternalValidationReportMetadata(report) {
   if (hasText(report.format)) {
     rows.push(createInternalValidationMetadataItem("Format", report.format.toUpperCase()));
   }
-
   return rows;
 }
 
@@ -474,7 +466,6 @@ function createInternalValidationMetadataItem(label, value) {
   const labelElement = document.createElement("span");
   labelElement.className = "analyze-internal-validation__metadata-label";
   labelElement.textContent = label;
-
   const valueElement = document.createElement("span");
   valueElement.className = "analyze-internal-validation__metadata-value";
   valueElement.textContent = value;
@@ -487,7 +478,6 @@ function createInternalValidationMetadataItem(label, value) {
 function createInternalValidationStateMessage({ title, message }) {
   const container = document.createElement("div");
   container.className = "analyze-internal-validation__state";
-
   const titleElement = document.createElement("p");
   titleElement.className = "analyze-internal-validation__state-title";
   titleElement.textContent = title;
@@ -500,7 +490,6 @@ function createInternalValidationStateMessage({ title, message }) {
 
   return container;
 }
-
 function createHistoryBlock(product) {
   const details = document.createElement("details");
   details.className = "analyze-history";
@@ -510,7 +499,6 @@ function createHistoryBlock(product) {
 
   const content = document.createElement("div");
   content.className = "analyze-history__content";
-
   if (product.historyError) {
     content.append(
       createProductHistoryStateMessage({
@@ -521,7 +509,6 @@ function createHistoryBlock(product) {
     details.append(summary, content);
     return details;
   }
-
   if (!product.history) {
     content.append(
       createProductHistoryStateMessage({
@@ -532,7 +519,18 @@ function createHistoryBlock(product) {
     details.append(summary, content);
     return details;
   }
-
+  if (!product.history.endpointAvailable) {
+    content.append(
+      createProductHistoryStateMessage({
+        title: "History unavailable",
+        message:
+          product.history.availabilityReason ??
+          `Product History is not available for ${product.sourceLabel ?? "this source"} yet.`,
+      })
+    );
+    details.append(summary, content);
+    return details;
+  }
   if (product.history.events.length === 0) {
     content.append(
       createProductHistoryStateMessage({
@@ -550,7 +548,6 @@ function createHistoryBlock(product) {
 
   return details;
 }
-
 function normalizeDatasetNames(datasetNames) {
   return normalizeAnalyzeDatasetItems(datasetNames).map((item) => item.name);
 }
@@ -566,7 +563,6 @@ function dispatchAnalyzeDatasetToggle(target, id, enabled) {
     })
   );
 }
-
 function dispatchAnalyzeDatasetRemove(target, id) {
   target.dispatchEvent(
     new CustomEvent("pc-analyze-dataset-remove", {
@@ -577,7 +573,6 @@ function dispatchAnalyzeDatasetRemove(target, id) {
     })
   );
 }
-
 function formatInternalValidationReportContent(report) {
   if (report.format === "json" || isJsonLike(report.content)) {
     try {
@@ -597,7 +592,6 @@ function formatInternalValidationReportContent(report) {
 
   return String(report.content ?? "").trim();
 }
-
 function formatXml(xml) {
   const text = String(xml ?? "").trim();
 
@@ -619,7 +613,6 @@ function hasReportContent(content) {
   if (isJsonLike(content)) {
     return true;
   }
-
   return hasText(content);
 }
 

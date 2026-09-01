@@ -7,6 +7,7 @@ import { createDataSourceDerivedStateCoordinator } from "../services/dataSourceD
 import { createDataSourceLifecycle } from "../services/dataSourceLifecycle.js";
 import { createDataSourceLoader } from "../services/dataSourceLoader.js";
 import { normalizeDataSourcePayload } from "../services/dataSourceNormalizer.js";
+import { createDataSourceProductStateCoordinator } from "../services/dataSourceProductStateCoordinator.js";
 import { initDataSourcePanel } from "../ui/dataSourcePanel.js";
 
 export function createDataSourceRuntime({
@@ -49,6 +50,7 @@ export function createDataSourceRuntime({
     filterService,
     productSearchIndex,
   });
+  const productStateCoordinator = createDataSourceProductStateCoordinator({ lifecycle });
   const panel = initDataSourcePanel({
     registry,
     controller,
@@ -64,6 +66,7 @@ export function createDataSourceRuntime({
     panel,
     destroy() {
       unsubscribeInteractionCleanup();
+      productStateCoordinator.destroy();
       derivedStateCoordinator.destroy();
       panel.destroy();
       controller.destroy();

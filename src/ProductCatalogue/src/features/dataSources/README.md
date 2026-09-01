@@ -5,10 +5,11 @@ Catalogue Main map.
 
 FI-011A established the source registry, persisted activation state, independent loading, guarded
 layer commits, and source-aware identity. FI-011B added source-aware filters, loaded-feature Product
-search, and shared navbar-popover coordination. FI-011C adds central Product-context resolution,
-capability-specific popup actions, and a declarative source-aware Export menu. FI-011 remains
-incomplete because workspace/history propagation and authoritative S-57/S-101 transport are still
-deferred.
+search, and shared navbar-popover coordination. FI-011C added central Product-context resolution, capability-specific popup actions, and a
+declarative source-aware Export menu. FI-011D extends that model through Product Collection,
+workspace Product resolution/catalog providers, Analyze, Review, and Product History surfaces.
+FI-011 remains incomplete because authoritative S-57/S-101 transport, FI-016 defaults, and final
+onboarding/regression work are still deferred.
 
 ## Logical source model
 
@@ -250,20 +251,17 @@ layer metadata, and the registry-installed source contract. The context retains 
 configuration. Missing, unknown, attribute-only, or mismatched source metadata fails closed for
 backend-dependent actions.
 
-Paper Charts and S-102 remain visualization-only mock sources. Their layer capability
-`supportsPopupActions: true` permits the safe custom action bar needed for disabled Export
-placeholders; it does not grant Product Collection or backend Product workflows. Product Collection
-is resolved separately through `ProductContext.capabilities.productCollection`, which remains `false`
-for both mock sources. Their source-aware popups expose only an `Export...` root with visible disabled
-`Edition` and `Update` placeholders. Their capabilities keep these workflows disabled:
+Paper Charts and S-102 remain Development-only registry-backed Product sources. Their layer capability
+`supportsPopupActions: true` permits safe custom popup actions but is not a proxy for backend
+operations. FI-011D enables Product Collection, Analyze, Review, and the History surface through
+independent ProductContext capabilities. Backend implementation permission remains separate through
+source content configuration. Their mutation/export capabilities remain disabled:
 
 - Freeze and Unfreeze;
 - Send to IC-ENC;
 - Cancel Export / legacy Rollback dispatch;
-- History and reports;
+- real History/report backend calls;
 - real Edition and Update export execution;
-- Product Collection;
-- Analyze and Review;
 - compatibility backend refresh and job subscriptions.
 
 The placeholder leaves have no handler or backend target. They cannot call compatibility endpoints,
@@ -287,15 +285,37 @@ GET /mock/s102         -> mock/products.geojson
 The fixtures validate the generic multi-source frontend. They are not production API contracts and
 must not define future Paper Charts or S-102 backend schemas.
 
-## Deferred to FI-011D and later packages
+## FI-011D workspace and Collection integration
 
-FI-011C does not implement:
+Product Collection items now retain deterministic source-aware identity and source metadata while
+continuing to expose a stable `datasetNames` route projection. Authoritative source deactivation
+removes only that source from the Main-map Collection. Successful guarded source refreshes prune
+stale Collection references; failed activation/refresh does not. Reactivation never restores removed
+items automatically.
+
+`features/products/services/workspaceProductService.js` is shared by Analyze and Review. It merges
+the compatibility Product catalog with runtime-available registry workspace providers and resolves a
+globally unique `datasetName` into a source-aware ProductContext. Paper Charts and S-102 reuse the
+registry loader and normalizer and therefore retain source-owned geometry and attributes. S-57/S-101
+remain unavailable until production read/catalog contracts exist. Provider failures are isolated and
+stale provider results cannot replace a newer committed snapshot. Main-map enabled-source persistence
+is deliberately not consulted by workspaces.
+
+History, IC-ENC reports, and Internal validation use declarative content configuration that separates
+`visible` from `implemented`. Paper Charts and S-102 expose truthful unavailable surfaces without
+compatibility API calls. Compatibility AOI retains its existing backend loaders. Unsupported content
+is not classified as a request failure.
+
+Analyze/Review routing remains datasetName-based. FI-019 is explicitly deferred; source IDs are not
+encoded into the current routes.
+
+## Deferred after FI-011D
+
+FI-011D does not implement:
 
 - authoritative separate production S-57 or S-101 reads or export targets;
 - a heuristic split of the compatibility AOI response;
-- Product Collection propagation for runtime sources;
-- Analyze or Review integration for runtime sources;
-- History, IC-ENC report, or internal-validation integration for runtime sources;
+- real Paper Charts or S-102 History/report backends;
 - real Paper Charts or S-102 Product mutations or Export dispatch;
 - related Products;
 - route/session identity migration;

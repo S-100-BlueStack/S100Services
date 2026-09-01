@@ -10,13 +10,19 @@ async function readPopupFile(fileName) {
 
 test("popup header controller reconciles Product Collection through the central capability helper", async () => {
   const controller = await readPopupFile("popupHeaderController.js");
+
   assert.match(
     controller,
     /import \{[\s\S]*?mutatePopupHeaderCollection,[\s\S]*?reconcilePopupHeaderCollectionAction,[\s\S]*?\} from "\.\/popupHeaderCollectionAction\.js";/
   );
   assert.match(controller, /ensureCollectionButton\(header, feature, view\);/);
   assert.match(controller, /onUnsupported: \(\) => removeCollectionButton\(header\)/);
+  assert.match(controller, /onSupported: \(\{ datasetName, identityKey \}\) => \{/);
   assert.match(controller, /feature: view\.popup\.selectedFeature/);
+  assert.match(controller, /expectedDatasetName: btn\.dataset\.datasetName/);
+  assert.match(controller, /expectedIdentityKey: btn\.dataset\.productIdentity/);
+  assert.match(controller, /btn\.dataset\.productIdentity = identityKey;/);
+  assert.match(controller, /hasProductCollectionProduct\(productIdentity\)/);
   assert.match(controller, /if \(!result\.handled\) \{[\s\S]*?removeCollectionButton\(header\);/);
   assert.doesNotMatch(controller, /paper-charts|s102-products|sourceId\s*===/);
 });
@@ -47,15 +53,15 @@ test("popup action bar fails closed through central Product context and action r
   assert.match(actionBar, /createPopupActionGroups\(\{[\s\S]*?productContext: context,/);
   assert.match(actionConfig, /createProductActionAvailability\(/);
   assert.match(actionConfig, /PRODUCT_OPERATION_CAPABILITY/);
-
   assert.doesNotMatch(
     actionBar,
     /attributesSupportLayerCapability|supportsPopupActions|supportsProductActions/
   );
   assert.doesNotMatch(actionBar, /paper-charts|s102-products|sourceId\s*===/);
   assert.doesNotMatch(actionConfig, /paper-charts|s102-products|sourceId\s*===/);
-
   assert.match(collectionAction, /PRODUCT_OPERATION_CAPABILITY\.PRODUCT_COLLECTION/);
   assert.match(collectionAction, /productContextSupportsCapability\(/);
+  assert.match(collectionAction, /getProductContextIdentityKey\(/);
+  assert.match(collectionAction, /expectedIdentityKey/);
   assert.doesNotMatch(collectionAction, /supportsPopupActions/);
 });

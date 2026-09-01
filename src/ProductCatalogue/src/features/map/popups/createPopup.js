@@ -1,9 +1,15 @@
 import { fetchProductPropertiesByDatasetName } from "../../data/api/productApi.js";
 import { getStatusName } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
+import { resolveProductContext } from "../../products/domain/productContext.js";
 import { attributesSupportLayerCapability } from "../config/layerDefinitions.js";
 import { applyGraphicAttributes } from "../state/featureState.js";
 import { createPopupActionBar, updatePopupActionBar } from "./popupActionBar.js";
+import {
+  fetchPopupProductRefresh,
+  initializePopupBackendSynchronization,
+  mergePopupProductRefreshAttributes,
+} from "./popupBackendSync.js";
 import { onPopupExportStateChanged } from "./popupExportState.js";
 import { onProductOperationStateChanged } from "../../products/state/productOperationState.js";
 import { watchActiveProductJobs } from "../../products/services/productJobService.js";
@@ -13,6 +19,11 @@ const GENERIC_POPUP_EXCLUDED_FIELDS = new Set([
   "featureKey",
   "layerId",
   "layerKind",
+  "sourceId",
+  "sourceLabel",
+  "productKey",
+  "productIdentityKey",
+  "productType",
   // Internal Analyze/report fields should not leak into generic map popups.
   "aoiGeometry",
   "errorMessage",
@@ -28,25 +39,32 @@ export function createPopup() {
     title: (event) => {
       return getPopupTitle(event.graphic?.attributes);
     },
-
     content: (event) => {
       const graphic = event.graphic;
       const container = document.createElement("div");
       container.className = "popup-container popup-container--with-action-bar";
-
       let currentAttributes = {
         ...(graphic.attributes ?? {}),
       };
       let latestRefreshId = 0;
+      const productContext = resolveProductContext({
+        graphic,
+        attributes: currentAttributes,
+      });
       const popupDatasetName =
-        readDatasetName(currentAttributes) ?? readDatasetName(graphic?.attributes);
-      const stopWatchingActiveJobs =
-        shouldRenderProductContent(currentAttributes) && popupDatasetName
-          ? watchActiveProductJobs(popupDatasetName)
-          : null;
+        productContext?.datasetName ??
+        readDatasetName(currentAttributes) ??
+        readDatasetName(graphic?.attributes);
+      let backendSync = {
+        enabled: false,
+        stopWatchingActiveJobs: null,
+        stopRefreshingPopup: null,
+      };
 
       function render() {
         renderPopupContent(container, currentAttributes, {
+          graphic,
+          productContext,
           refreshAndRender,
         });
       }
@@ -54,24 +72,35 @@ export function createPopup() {
       async function refreshAndRender({ showFailureNotice = true } = {}) {
         const refreshId = ++latestRefreshId;
         const datasetName =
-          readDatasetName(currentAttributes) ?? readDatasetName(graphic?.attributes);
+          productContext?.datasetName ??
+          readDatasetName(currentAttributes) ??
+          readDatasetName(graphic?.attributes);
 
+        if (!backendSync.enabled) {
+          return false;
+        }
         if (!shouldRenderProductContent(currentAttributes)) {
           return false;
         }
-
         if (!datasetName) {
           return false;
         }
 
-        const result = await fetchProductPropertiesByDatasetName(datasetName);
+        const refreshRequest = await fetchPopupProductRefresh({
+          productContext,
+          datasetName,
+          fetchProduct: fetchProductPropertiesByDatasetName,
+        });
+        if (!refreshRequest.dispatched) {
+          return false;
+        }
+        const result = refreshRequest.result;
 
         // Ignore stale refreshes. This prevents an older popup-open refresh from
         // overwriting a newer freeze/unfreeze refresh.
         if (refreshId !== latestRefreshId) {
           return false;
         }
-
         if (!result.success) {
           if (showFailureNotice) {
             noticeError("Selected product could not be refreshed", result.errorMessage);
@@ -80,19 +109,22 @@ export function createPopup() {
           return false;
         }
 
-        currentAttributes = applyGraphicAttributes(graphic, result.data);
+        currentAttributes = applyGraphicAttributes(
+          graphic,
+          mergePopupProductRefreshAttributes(productContext, result.data)
+        );
         render();
 
         return true;
       }
 
-      const stopRefreshingPopup =
-        shouldRenderProductContent(currentAttributes) && popupDatasetName
-          ? registerPopupRefreshHandler({
-              datasetName: popupDatasetName,
-              refresh: refreshAndRender,
-            })
-          : null;
+      backendSync = initializePopupBackendSynchronization({
+        productContext,
+        datasetName: popupDatasetName,
+        refresh: refreshAndRender,
+        watchActiveProductJobs,
+        registerPopupRefreshHandler,
+      });
       const unsubscribeFromExportState = onPopupExportStateChanged(({ datasetName }) => {
         rerenderWhenDatasetMatches(datasetName);
       });
@@ -101,21 +133,21 @@ export function createPopup() {
           rerenderWhenDatasetMatches(datasetName);
         }
       );
-
       cleanupWhenDisconnected(
         container,
         combineCleanups(
           unsubscribeFromExportState,
           unsubscribeFromProductOperationState,
-          stopWatchingActiveJobs,
-          stopRefreshingPopup
+          backendSync.stopWatchingActiveJobs,
+          backendSync.stopRefreshingPopup
         )
       );
 
       function rerenderWhenDatasetMatches(datasetName) {
         const currentDatasetName =
-          readDatasetName(currentAttributes) ?? readDatasetName(graphic?.attributes);
-
+          productContext?.datasetName ??
+          readDatasetName(currentAttributes) ??
+          readDatasetName(graphic?.attributes);
         if (!isSameDatasetName(datasetName, currentDatasetName)) {
           return;
         }
@@ -128,11 +160,12 @@ export function createPopup() {
       // Initial popup freshness should be silent on failure. A restored popup can be
       // opened while a full map refresh is still retrying, and the full refresh flow
       // owns the user-facing failure notice in that case.
-      void refreshAndRender({ showFailureNotice: false });
+      if (backendSync.enabled) {
+        void refreshAndRender({ showFailureNotice: false });
+      }
 
       return container;
     },
-
     visibleElements: {
       collapseButton: false,
       featureNavigation: false,
@@ -140,22 +173,25 @@ export function createPopup() {
   };
 }
 
-function renderPopupContent(container, attributes, { refreshAndRender }) {
+function renderPopupContent(container, attributes, { graphic, productContext, refreshAndRender }) {
   const section = getOrCreatePopupSection(container);
   const actionBar = getDirectChildByClass(container, "popup-action-bar");
 
   if (actionBar) {
     const actionBarUpdate = updatePopupActionBar(actionBar, {
       attributes,
+      graphic,
+      productContext,
       refreshAndRender,
     });
-
     if (!actionBarUpdate.supported) {
       actionBar.remove();
     }
   } else {
     const nextActionBar = createPopupActionBar({
       attributes,
+      graphic,
+      productContext,
       refreshAndRender,
     });
 
@@ -378,13 +414,11 @@ function readDatasetName(attributes) {
 
 function createProductMetadataTable(attributes) {
   const columns = createProductMetadataColumns(attributes);
-
   if (columns.length === 0) {
     return null;
   }
 
   const rows = createProductMetadataRows(columns);
-
   if (rows.length === 0) {
     return null;
   }
@@ -398,7 +432,6 @@ function createProductMetadataTable(attributes) {
   table.appendChild(createProductTableBody(columns, rows));
 
   container.appendChild(table);
-
   return container;
 }
 
@@ -412,10 +445,8 @@ function createProductMetadataColumns(attributes) {
   ];
 
   const exportMetadata = attributes?.exportMetadata;
-
   for (const standard of exportMetadata?.standards ?? []) {
     const item = exportMetadata.byStandard?.[standard];
-
     if (!item) {
       continue;
     }
@@ -443,7 +474,6 @@ function createMainProductMetadataItem(attributes) {
 function createExportColumnLabel(standard, existingColumns) {
   const label = String(standard ?? "").trim() || "Export";
   const labelExists = existingColumns.some((column) => column.label === label);
-
   return labelExists ? `${label} export` : label;
 }
 
@@ -485,7 +515,6 @@ function createProductTableHead(columns) {
   }
 
   head.appendChild(row);
-
   return head;
 }
 
@@ -501,7 +530,6 @@ function createProductTableBody(columns, rows) {
 
 function createProductTableRow({ label, getValue }, columns) {
   const row = document.createElement("tr");
-
   const labelCell = document.createElement("th");
   labelCell.scope = "row";
   labelCell.className = "popup-product-table__attribute";
@@ -521,7 +549,6 @@ function createProductTableHeaderCell(label) {
   const cell = document.createElement("th");
   cell.scope = "col";
   cell.textContent = label;
-
   return cell;
 }
 
@@ -549,7 +576,6 @@ function readAttribute(attributes, names) {
   }
 
   const normalizedNames = new Set(names.map(normalizeAttributeName));
-
   for (const [name, value] of Object.entries(attributes)) {
     if (normalizedNames.has(normalizeAttributeName(name))) {
       return value;

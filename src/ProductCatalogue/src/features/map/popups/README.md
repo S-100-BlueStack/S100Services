@@ -76,17 +76,20 @@ Compatibility AOI retains the established actions:
 - `Analyze` and `History` through `Tools`;
 - `Export...`.
 
-Paper Charts and S-102 expose only the configured `Export...` root with disabled placeholders. Their
-layer capability `supportsPopupActions: true` permits that safe action-bar content without granting
-backend Product workflows. Product Collection is independently gated by the resolved Product
-context's `productCollection` capability, which is `false` for both mock sources. They do not expose
-Freeze, Unfreeze, Send to IC-ENC, Rollback, History, reports, Analyze, Review, or Product Collection
-actions.
+Paper Charts and S-102 keep backend mutation and real Export capabilities disabled, but FI-011D
+enables the safe Product Collection, Analyze, Review, and History surfaces through independent
+ProductContext capabilities. Their `Export...` root remains a pair of disabled Edition/Update
+placeholders. `Tools` exposes Analyze and History; History opens the existing quick-panel shell and
+renders a source-specific unavailable state without a compatibility History request. Product
+Collection remains independent from `supportsPopupActions` and uses source-aware Product identity.
+Freeze, Unfreeze, Send to IC-ENC, Rollback, real Export dispatch, backend History, IC-ENC report
+loading, and internal-validation loading remain disabled.
 
 The popup-header collection action re-resolves the currently selected Graphic through Product context
-before every add/remove mutation. Selection changes therefore remove stale buttons, and a stale AOI
-button cannot mutate Product Collection after the selected feature becomes a mock Product. `Copy
-dataset name` remains independent from Product Collection capability.
+before every add/remove mutation and guards both dataset name and source-aware identity. Selection
+changes therefore cannot let a stale button mutate a different Product. Paper Charts and S-102
+participate through the same ProductContext-based Collection contract. `Copy dataset name` remains
+independent from Product Collection capability.
 
 Unknown Product context or unknown capability fails closed and renders no backend-dependent action.
 Product-search selection uses the same resolution and availability path and cannot bypass these

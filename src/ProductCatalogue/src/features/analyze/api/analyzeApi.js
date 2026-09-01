@@ -1,36 +1,64 @@
 import { apiGet } from "../../../shared/api/apiClient.js";
 import { normalizeProductExportMetadata } from "../../data/normalizers/productExportMetadata.js";
+import {
+  PRODUCT_CONTENT_TYPE,
+  getProductContentConfiguration,
+  isCompatibilityProductContext,
+} from "../../products/domain/productContext.js";
+import {
+  WORKSPACE_PRODUCT_RESOLUTION_STATUS,
+  getDefaultWorkspaceProductService,
+} from "../../products/services/workspaceProductService.js";
 import { normalizeInternalValidationReports } from "../domain/internalValidationReports.js";
 
 const ANALYZE_PRODUCT_ENDPOINT = "electronicproducts";
-const USE_MOCK_ANALYZE_API = import.meta.env.DEV && false;
+const USE_MOCK_ANALYZE_API = Boolean(import.meta.env?.DEV) && false;
 
-export async function fetchAnalyzeProducts(datasetNames) {
+export async function fetchAnalyzeProducts(
+  datasetNames,
+  { workspaceProductService = getDefaultWorkspaceProductService(), get = apiGet } = {}
+) {
   const uniqueDatasetNames = [...new Set(datasetNames)];
-
-  return await Promise.all(
-    uniqueDatasetNames.map((datasetName) => fetchAnalyzeProduct(datasetName))
+  return Promise.all(
+    uniqueDatasetNames.map((datasetName) =>
+      fetchAnalyzeProduct(datasetName, { workspaceProductService, get })
+    )
   );
 }
 
-async function fetchAnalyzeProduct(datasetName) {
+async function fetchAnalyzeProduct(datasetName, { workspaceProductService, get }) {
+  const resolution = await workspaceProductService.resolveProduct(datasetName);
+  if (resolution.status !== WORKSPACE_PRODUCT_RESOLUTION_STATUS.RESOLVED) {
+    return createFailedAnalyzeProduct(datasetName, resolution);
+  }
+
+  const productContext = resolution.product;
+  if (isCompatibilityProductContext(productContext)) {
+    return fetchCompatibilityAnalyzeProduct(datasetName, { productContext, get });
+  }
+
+  return createSourceAnalyzeProduct(productContext);
+}
+
+async function fetchCompatibilityAnalyzeProduct(datasetName, { productContext, get }) {
   if (USE_MOCK_ANALYZE_API) {
     return normalizeAnalyzeProduct(createMockAnalyzeProduct(datasetName), datasetName, {
       isMock: true,
+      productContext,
     });
   }
 
   try {
-    const payload = await apiGet(
+    const payload = await get(
       `${ANALYZE_PRODUCT_ENDPOINT}/${encodeURIComponent(datasetName)}/aoi`,
       `Analyze data request failed for ${datasetName}`
     );
-
-    return normalizeAnalyzeProduct(payload, datasetName);
+    return normalizeAnalyzeProduct(payload, datasetName, { productContext });
   } catch (error) {
     return normalizeAnalyzeProduct(createMockAnalyzeProduct(datasetName), datasetName, {
       isMock: true,
       loadError: error instanceof Error ? error.message : "Unknown analyze data error",
+      productContext,
     });
   }
 }
@@ -38,10 +66,9 @@ async function fetchAnalyzeProduct(datasetName) {
 function normalizeAnalyzeProduct(
   payload,
   requestedDatasetName,
-  { isMock = false, loadError = null } = {}
+  { isMock = false, loadError = null, productContext = null } = {}
 ) {
   const product = getAnalyzeProductPayload(payload);
-
   const datasetName =
     readFirstDefined(product, ["datasetName", "DatasetName", "name", "Name"]) ??
     requestedDatasetName;
@@ -49,19 +76,22 @@ function normalizeAnalyzeProduct(
   return {
     datasetName,
     name: datasetName,
-
+    sourceId: productContext?.sourceId ?? null,
+    sourceLabel: productContext?.sourceLabel ?? null,
+    productKey: productContext?.productKey ?? datasetName,
+    productType: productContext?.productType ?? null,
+    productContext,
+    workspaceLoadState: "loaded",
+    contentAvailability: createContentAvailability(productContext),
     status: normalizeStatus(
       readFirstDefined(product, ["status", "Status", "productState", "ProductState"]) ?? 4
     ),
-
     edition: readFirstDefined(product, ["edition", "Edition"]) ?? "-",
     update: readFirstDefined(product, ["update", "Update", "updateNumber", "UpdateNumber"]) ?? "-",
     usageBand: readFirstDefined(product, ["usageBand", "UsageBand"]) ?? "-",
     issueDate: readFirstDefined(product, ["issueDate", "IssueDate"]) ?? "-",
-
     // Only read the top-level product error message. Do not read Data.Exports[*].
     errorMessage: readFirstDefined(product, ["errorMessage", "ErrorMessage"]) ?? "",
-
     // The analyze AOI endpoint currently returns Esri JSON as Data.Geometry.
     // Older/mock payloads may still use Aoi/AOI/aoiGeometry, so keep all aliases here.
     aoiGeometry:
@@ -74,9 +104,8 @@ function normalizeAnalyzeProduct(
         "geometry",
         "Geometry",
       ]) ?? null,
-
+    sourceFeature: null,
     xml: readFirstDefined(product, ["xml", "Xml", "XML", "reportXml", "ReportXml"]) ?? null,
-
     internalValidationReports: normalizeInternalValidationReports(
       readFirstDefined(product, [
         "internalValidationReports",
@@ -89,7 +118,6 @@ function normalizeAnalyzeProduct(
         "Validation",
       ])
     ),
-
     raw: payload,
     isMock,
     loadError,
@@ -99,17 +127,98 @@ function normalizeAnalyzeProduct(
   };
 }
 
+function createSourceAnalyzeProduct(productContext) {
+  const attributes = productContext.data?.attributes ?? {};
+  const datasetName = productContext.datasetName;
+
+  return {
+    datasetName,
+    name: datasetName,
+    sourceId: productContext.sourceId,
+    sourceLabel: productContext.sourceLabel,
+    productKey: productContext.productKey,
+    productType: productContext.productType,
+    productContext,
+    workspaceLoadState: "loaded",
+    contentAvailability: createContentAvailability(productContext),
+    status: normalizeOptionalStatus(readFirstDefined(attributes, ["status", "productState"])),
+    edition: readFirstDefined(attributes, ["edition"]) ?? null,
+    update: readFirstDefined(attributes, ["update", "updateNumber"]) ?? null,
+    usageBand: readFirstDefined(attributes, ["usageBand"]) ?? null,
+    issueDate: readFirstDefined(attributes, ["issueDate"]) ?? null,
+    errorMessage: readFirstDefined(attributes, ["errorMessage"]) ?? "",
+    aoiGeometry: null,
+    sourceFeature: productContext.data?.feature ?? null,
+    xml: null,
+    internalValidationReports: [],
+    raw: {
+      attributes: { ...attributes },
+    },
+    isMock: false,
+    loadError: null,
+    exportMetadata: normalizeProductExportMetadata(undefined),
+  };
+}
+
+function createFailedAnalyzeProduct(datasetName, resolution) {
+  const normalizedDatasetName = String(datasetName ?? "").trim();
+  return {
+    datasetName: normalizedDatasetName,
+    name: normalizedDatasetName,
+    sourceId: null,
+    sourceLabel: null,
+    productKey: null,
+    productType: null,
+    productContext: null,
+    workspaceLoadState: "failed",
+    contentAvailability: null,
+    status: null,
+    edition: null,
+    update: null,
+    usageBand: null,
+    issueDate: null,
+    errorMessage: "",
+    aoiGeometry: null,
+    sourceFeature: null,
+    xml: null,
+    internalValidationReports: [],
+    raw: null,
+    isMock: false,
+    loadError:
+      resolution?.error ??
+      (resolution?.status === WORKSPACE_PRODUCT_RESOLUTION_STATUS.NOT_FOUND
+        ? `Product ${normalizedDatasetName} was not found in the workspace catalog.`
+        : "Product resolution failed."),
+    exportMetadata: normalizeProductExportMetadata(undefined),
+  };
+}
+
+function createContentAvailability(productContext) {
+  if (!productContext) {
+    return null;
+  }
+
+  return {
+    history: getProductContentConfiguration(productContext, PRODUCT_CONTENT_TYPE.HISTORY),
+    icEncReports: getProductContentConfiguration(
+      productContext,
+      PRODUCT_CONTENT_TYPE.IC_ENC_REPORTS
+    ),
+    internalValidation: getProductContentConfiguration(
+      productContext,
+      PRODUCT_CONTENT_TYPE.INTERNAL_VALIDATION
+    ),
+  };
+}
+
 function getAnalyzeProductPayload(payload) {
   const data = payload?.Data ?? payload?.data;
-
   if (isPlainObject(data)) {
     const attributes = readFirstDefined(data, ["Attributes", "attributes"]);
-
     if (isPlainObject(attributes)) {
       return {
         ...data,
         ...attributes,
-
         // Geometry belongs to the AOI wrapper in the current backend contract,
         // while product metadata may later move into Attributes.
         Geometry:
@@ -123,7 +232,6 @@ function getAnalyzeProductPayload(payload) {
 
     return data;
   }
-
   if (isPlainObject(payload)) {
     return payload;
   }
@@ -147,8 +255,11 @@ function readFirstDefined(source, keys) {
 
 function normalizeStatus(value) {
   const number = Number(value);
-
   return Number.isFinite(number) ? number : value;
+}
+
+function normalizeOptionalStatus(value) {
+  return value === undefined || value === null || value === "" ? null : normalizeStatus(value);
 }
 
 function isPlainObject(value) {
@@ -157,7 +268,6 @@ function isPlainObject(value) {
 
 function createMockAnalyzeProduct(datasetName) {
   const geometry = createMockAoiGeometry(datasetName);
-
   return {
     Data: {
       Name: datasetName,
@@ -193,7 +303,6 @@ function createMockAoiGeometry(datasetName) {
   const hash = [...datasetName].reduce((value, character) => {
     return (value * 31 + character.charCodeAt(0)) >>> 0;
   }, 17);
-
   const centerX = 9.5 + (hash % 180) / 100;
   const centerY = 55.0 + ((hash >> 8) % 120) / 100;
   const size = 0.12;
@@ -214,7 +323,6 @@ function createMockAoiGeometry(datasetName) {
 
 function createMockXml(datasetName) {
   const escapedDatasetName = escapeXml(datasetName);
-
   return `<?xml version="1.0" encoding="UTF-8"?>
 <ICENCReport>
   <DatasetName>${escapedDatasetName}</DatasetName>

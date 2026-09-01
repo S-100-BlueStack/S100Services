@@ -2,32 +2,32 @@
 
 The Products feature contains shared product-facing frontend helpers that are not owned by the main map, Analyze, Review or Dashboard routes.
 
-## Product catalog picker
+## Product catalog and workspace resolution
 
-`GET /electronicproducts` is used as the lightweight product catalog endpoint for direct Analyze and Review workflows.
+`services/workspaceProductService.js` is the current shared Product catalog and resolution boundary for
+Analyze and Review. It combines independent providers:
 
-Expected lightweight shape:
-
-```json
-{ "Data": ["101DK0040943E", "101DK0040944E"] }
+```txt
+workspaceProductService
+  -> compatibility catalog provider (`GET /electronicproducts`)
+  -> Paper Charts registry provider when runtime-available
+  -> S-102 registry provider when runtime-available
 ```
 
-The shared picker lives in:
+`GET /electronicproducts` remains the lightweight compatibility catalog provider; it is not the permanent
+multi-source Product catalog architecture. Registry providers reuse their source loader/normalizer and
+preserve source-aware Product metadata. `datasetName` is the authoritative globally unique workspace
+identity while display/Product names remain separate metadata. A duplicate normalized `datasetName`
+across providers is invalid and fails closed as ambiguous rather than choosing the first or compatibility
+provider. One provider failure does not reject the full catalog, and generation guards prevent stale
+provider results from replacing newer state.
 
-```text
-src/features/products/api/productCatalogApi.js
-src/features/products/domain/productCatalog.js
-src/features/products/ui/productPicker.js
-```
+The workspace catalog is independent of Main map enabled-source state. S-57 and S-101 remain unavailable
+as independent workspace providers until their authoritative backend read/catalog contracts exist.
 
-Current consumers:
-
-- Analyze sidebar add product form
-- Product Review sidebar add product form
-
-The picker must remain lightweight. Do not fetch AOI geometry or full product details just to populate the dropdown.
-
-Typed input is intentionally preserved as a fallback so users can still add products if the catalog endpoint fails or a product is not present in the returned list.
+Analyze and Review reuse the shared Product picker UI over this catalog. Product name is the primary label,
+already-added Products are hidden, and source metadata remains available for compact secondary labeling.
+Typed input is intentionally preserved as a fallback where the existing workspace UI permits it.
 
 ## Product operation jobs
 
@@ -88,3 +88,12 @@ GET /jobs/active?datasetName={datasetName}
 The backend endpoint is the authoritative discovery source. Browser storage and `BroadcastChannel` only reduce latency between tabs in the same browser profile.
 
 The action layer also runs a backend preflight before Freeze, Unfreeze, Send, Export or Rollback. A failed active-state lookup is treated as unavailable operation state, and the frontend does not dispatch the mutation. This prevents a temporary status-service failure from being interpreted as “no active operation.”
+
+## FI-011D workspace contract
+
+FI-011D makes Product Collection and workspace runtime identity source-aware while routes continue to
+project globally unique `datasetName` values only. `compatibility-aoi` remains an internal adapter, never
+a registry source or storage key. Paper Charts and S-102 resolve through registry-backed workspace
+providers and must not fall through to compatibility AOI/History calls. ProductContext separately models
+visible History/IC-ENC/Internal validation surfaces and backend implementation permission. FI-019 owns
+the later route migration.

@@ -12,7 +12,6 @@ import { createSourceAwareProductSearchIndex } from "../../map/search/sourceAwar
 import { PRODUCT_CORRECTIONS_LAYER_ID } from "../../../shared/config/layerIds.js";
 import { createDataSourceDerivedStateCoordinator } from "../services/dataSourceDerivedStateCoordinator.js";
 const projectRoot = new URL("../../../..", import.meta.url);
-
 const MOCK_LAYER_CAPABILITIES = Object.freeze({
   supportsPopup: true,
   supportsPopupActions: true,
@@ -23,27 +22,33 @@ const MOCK_LAYER_CAPABILITIES = Object.freeze({
   supportsProductSearch: true,
 });
 
-const DISABLED_BACKEND_PRODUCT_CAPABILITIES = Object.freeze([
+const WORKSPACE_SURFACE_CAPABILITIES = Object.freeze([
   "productCollection",
   "analyze",
   "review",
   "history",
+  "icEncReports",
+  "internalValidation",
+]);
+const DISABLED_BACKEND_PRODUCT_CAPABILITIES = Object.freeze([
+  "freeze",
+  "unfreeze",
+  "sendToIcEnc",
+  "cancelExport",
   "exportEdition",
   "exportUpdate",
+  "backendProductRefresh",
 ]);
-
-describe("FI-011B data source integration contracts", () => {
-  it("separates safe client-side mock capabilities from backend Product workflows", () => {
+describe("FI-011B/FI-011D data source integration contracts", () => {
+  it("separates workspace surfaces from backend Product implementations", () => {
     const registry = createDataSourceRegistry({ isDevelopment: true });
     const paper = getDataSourceDefinition(registry, DATA_SOURCE_IDS.PAPER_CHARTS);
     const s102 = getDataSourceDefinition(registry, DATA_SOURCE_IDS.S102);
-
     assert.deepEqual(paper.filtering.definitions, ["status", "displayScale", "usageBand"]);
     assert.deepEqual(s102.filtering.definitions, ["status"]);
 
     for (const source of [paper, s102]) {
       const layerCapabilities = source.layerDefinitions[0].capabilities;
-
       assert.equal(source.search.supported, true);
       assert.equal(source.capabilities.productSearch, true);
       assert.equal(source.capabilities.popupExport, true);
@@ -59,11 +64,17 @@ describe("FI-011B data source integration contracts", () => {
         },
         MOCK_LAYER_CAPABILITIES
       );
-
+      for (const capabilityName of WORKSPACE_SURFACE_CAPABILITIES) {
+        assert.equal(source.capabilities[capabilityName], true);
+      }
       for (const capabilityName of DISABLED_BACKEND_PRODUCT_CAPABILITIES) {
         assert.equal(source.capabilities[capabilityName], false);
       }
-
+      for (const content of Object.values(source.contentConfiguration)) {
+        assert.equal(content.visible, true);
+        assert.equal(content.implemented, false);
+        assert.equal(content.loaderId, null);
+      }
       assert.equal(source.exportConfiguration.visible, true);
       assert.deepEqual(
         source.exportConfiguration.leaves.map((leaf) => ({
@@ -103,7 +114,6 @@ describe("FI-011B data source integration contracts", () => {
   it("does not introduce a permanent compatibility source id", () => {
     const registry = createDataSourceRegistry({ isDevelopment: true });
     const ids = registry.definitions.map((source) => source.id);
-
     assert.deepEqual(ids, ["s57", "s101", "paper-charts", "s102"]);
     assert.equal(ids.includes("enc"), false);
     assert.equal(ids.includes("enc-products"), false);
@@ -184,10 +194,8 @@ describe("FI-011B data source integration contracts", () => {
       source,
       reason: "activation-failed",
     });
-
     assert.deepEqual(filterService.getFilterSnapshot(), snapshot);
     assert.equal(productSearchIndex.getEntries().length, 0);
-
     lifecycle.emit("activated", {
       sourceId: source.id,
       source,
@@ -216,7 +224,6 @@ describe("FI-011B data source integration contracts", () => {
       reason: "activation-failed",
     });
     assert.equal(filterService.applyFilterSnapshot(snapshot), true);
-
     lifecycle.emit("activated", {
       sourceId: source.id,
       source,
@@ -246,7 +253,6 @@ describe("FI-011B data source integration contracts", () => {
         generation: 1,
         reason,
       });
-
       assert.deepEqual(filterService.getFilterSnapshot(), { version: 2, sources: [] });
       assert.equal(productSearchIndex.getEntries().length, 0);
       coordinator.destroy();
@@ -296,7 +302,6 @@ describe("FI-011B data source integration contracts", () => {
     );
     coordinator.destroy();
   });
-
   it("canonicalizes parsed filter snapshots through the panel persistence lifecycle", async () => {
     const panelSource = await readFile(
       new URL("src/features/map/filters/attributeFilterPanel.js", projectRoot),
@@ -317,7 +322,6 @@ describe("FI-011B data source integration contracts", () => {
       new URL("src/features/map/filters/attributeFilterPanel.js", projectRoot),
       "utf8"
     );
-
     assert.match(
       panelSource,
       /function clearAllFilters\(\) \{[\s\S]*filterService\.clearAll\(\);[\s\S]*/
@@ -332,7 +336,6 @@ describe("FI-011B data source integration contracts", () => {
       new URL("src/features/map/filters/attributeFilterPanel.js", projectRoot),
       "utf8"
     );
-
     assert.match(panelSource, /detail\.type === "provider-suspended"/);
     assert.match(panelSource, /const isTemporarySuspension/);
     assert.match(panelSource, /!isTemporarySuspension/);
@@ -347,7 +350,6 @@ describe("FI-011B data source integration contracts", () => {
       assert.doesNotMatch(content, /Result IDs include provider, layer, and Product identity/);
     }
   });
-
   it("routes search selection through the existing popup and selected-graphic flow", async () => {
     const searchSource = await readFile(
       new URL("src/features/map/search/mainMapProductSearch.js", projectRoot),
@@ -367,7 +369,6 @@ function createFilterService() {
     getUsages: () => [],
   });
 }
-
 function createRuntimeSource() {
   return {
     id: "paper-charts",

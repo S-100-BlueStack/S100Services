@@ -6,7 +6,6 @@ import { registerPopupHoverSync } from "../../map/interactions/registerPopupHove
 import { noticeError, noticeWarning } from "../../notices/services/noticeService.js";
 import { fetchProductCatalog } from "../../products/api/productCatalogApi.js";
 import { validateProductCatalogSelection } from "../../products/domain/productCatalog.js";
-import { fetchProductHistory } from "../../timeline/api/productHistoryApi.js";
 import { hideLoader } from "../../../shared/ui/loader.js";
 import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
 import {
@@ -25,6 +24,7 @@ import {
   getCurrentRoute,
   setAnalyzeRouteUrl,
 } from "../routing/analyzeRoute.js";
+import { loadAnalyzeProductHistories } from "../services/analyzeHistoryLoader.js";
 import { renderAnalyzeSidebar } from "../ui/analyzeSidebar.js";
 
 export async function initAnalyzePage({ datasetNames }) {
@@ -40,7 +40,6 @@ export async function initAnalyzePage({ datasetNames }) {
   let cleanupKeyboardClose = null;
 
   const enabledDatasetNames = getEnabledAnalyzeDatasetNames(datasetItems);
-
   document.body.classList.add("pc-analyze-route");
   document.title = createAnalyzeDocumentTitle(enabledDatasetNames);
 
@@ -48,7 +47,6 @@ export async function initAnalyzePage({ datasetNames }) {
   const view = createView(map);
   const hoverManager = createHoverManager(view);
   const cleanupPopupHoverSync = registerPopupHoverSync(view, hoverManager);
-
   const renderSidebar = ({ loading = false } = {}) => {
     renderAnalyzeSidebar({
       datasetItems,
@@ -58,7 +56,6 @@ export async function initAnalyzePage({ datasetNames }) {
       productCatalog,
     });
   };
-
   const loadProductCatalogForPicker = async () => {
     const requestId = ++productCatalogRequestId;
     productCatalog = createProductCatalogState({ loading: true });
@@ -70,7 +67,6 @@ export async function initAnalyzePage({ datasetNames }) {
       if (requestId !== productCatalogRequestId) {
         return;
       }
-
       productCatalog = createProductCatalogState({ products });
     } catch (error) {
       if (requestId !== productCatalogRequestId) {
@@ -84,7 +80,6 @@ export async function initAnalyzePage({ datasetNames }) {
 
     renderSidebar({ loading: false });
   };
-
   const loadAnalyzeDatasetItems = async (
     nextDatasetItems,
     { updateUrl = true, showLoader = true } = {}
@@ -94,7 +89,6 @@ export async function initAnalyzePage({ datasetNames }) {
     datasetItems = validatedDatasetItems.items;
     notifyRejectedCatalogProducts(validatedDatasetItems);
     const enabledNextDatasetNames = getEnabledAnalyzeDatasetNames(datasetItems);
-
     // The Analyze route represents the active load set. Disabled names are local
     // UI composition state so users can pause products without losing the list.
     if (updateUrl) {
@@ -102,7 +96,6 @@ export async function initAnalyzePage({ datasetNames }) {
     }
 
     document.title = createAnalyzeDocumentTitle(enabledNextDatasetNames);
-
     // Close stale popups before replacing analyze layers. ArcGIS popups can otherwise
     // keep rendering details for a graphic that is no longer present in the map.
     closePopup(view);
@@ -117,7 +110,6 @@ export async function initAnalyzePage({ datasetNames }) {
       loading: enabledNextDatasetNames.length > 0,
       productCatalog,
     });
-
     removeLayers(map, currentLayers);
     currentLayers = [];
     currentProducts = [];
@@ -140,7 +132,6 @@ export async function initAnalyzePage({ datasetNames }) {
     if (showLoader) {
       activeLoaderProgress = loaderProgress;
     }
-
     try {
       loaderProgress.startLoading("Loading analyze data...", {
         rotateImmediately: true,
@@ -154,12 +145,11 @@ export async function initAnalyzePage({ datasetNames }) {
         return;
       }
 
-      const productsWithHistory = await loadProductHistories(products);
+      const productsWithHistory = await loadAnalyzeProductHistories(products);
 
       if (requestId !== loadRequestId) {
         return;
       }
-
       loaderProgress.markDataReceived();
       loaderProgress.startRendering({
         text: `Rendering ${productsWithHistory.length} analyze product${
@@ -176,7 +166,6 @@ export async function initAnalyzePage({ datasetNames }) {
         removeLayers(map, layers);
         return;
       }
-
       await registerHoverLayers(hoverManager, layers);
 
       if (requestId !== loadRequestId) {
@@ -196,7 +185,6 @@ export async function initAnalyzePage({ datasetNames }) {
         productCatalog,
       });
       showMockWarningIfNeeded(productsWithHistory);
-
       if (layers.length > 0) {
         await waitForLayerViews(view, layers);
 
@@ -205,7 +193,6 @@ export async function initAnalyzePage({ datasetNames }) {
         }
 
         const didZoom = await zoomToGraphicsExtent(view, layers);
-
         if (!didZoom) {
           noticeWarning(
             "Analyze geometry not found",
@@ -218,7 +205,6 @@ export async function initAnalyzePage({ datasetNames }) {
           "The product metadata was loaded, but the backend response did not include AOI geometry."
         );
       }
-
       loaderProgress.complete({ text: "Analyze ready" });
     } catch (error) {
       if (requestId === loadRequestId) {
@@ -234,7 +220,6 @@ export async function initAnalyzePage({ datasetNames }) {
       }
     }
   };
-
   const loadAnalyzeDatasetNames = async (nextDatasetNames, options = {}) => {
     await loadAnalyzeDatasetItems(createAnalyzeDatasetItems(nextDatasetNames), options);
   };
@@ -247,7 +232,6 @@ export async function initAnalyzePage({ datasetNames }) {
     if (nextDatasetNames.length === 0) {
       return;
     }
-
     const validation = validateCatalogProductNames(nextDatasetNames, {
       excludedProductNames: datasetItems.map((item) => item.name),
     });
@@ -263,7 +247,6 @@ export async function initAnalyzePage({ datasetNames }) {
     for (const datasetName of validation.valid) {
       nextDatasetItems = addAnalyzeDatasetItem(nextDatasetItems, datasetName);
     }
-
     await loadAnalyzeDatasetItems(nextDatasetItems, {
       updateUrl: true,
       showLoader: false,
@@ -285,7 +268,6 @@ export async function initAnalyzePage({ datasetNames }) {
       }
     );
   };
-
   const handleAnalyzeDatasetRemove = async (event) => {
     const itemId = event.detail?.id;
 
@@ -304,7 +286,6 @@ export async function initAnalyzePage({ datasetNames }) {
       updateUrl: true,
     });
   };
-
   document.addEventListener("pc-analyze-dataset-add", handleAnalyzeDatasetAdd);
   document.addEventListener("pc-analyze-dataset-toggle", handleAnalyzeDatasetToggle);
   document.addEventListener("pc-analyze-dataset-remove", handleAnalyzeDatasetRemove);
@@ -312,7 +293,6 @@ export async function initAnalyzePage({ datasetNames }) {
 
   cleanupViewPadding = applyAnalyzeViewPadding(view);
   cleanupKeyboardClose = bindAnalyzeKeyboardClose(view);
-
   await view.when();
   // The bootstrap loader covers initial page and map setup. Hide it before
   // data loading starts so the delayed Analyze loader can decide whether a
@@ -328,14 +308,12 @@ export async function initAnalyzePage({ datasetNames }) {
   });
   await loadProductCatalogForPicker();
   await loadAnalyzeDatasetItems(datasetItems, { updateUrl: false });
-
   const handlePopState = async () => {
     const route = getCurrentRoute();
     await loadAnalyzeDatasetNames(route.datasetNames, { updateUrl: false });
   };
 
   window.addEventListener("popstate", handlePopState);
-
   return {
     map,
     view,
@@ -380,7 +358,6 @@ export async function initAnalyzePage({ datasetNames }) {
         alreadySelected: [],
       };
     }
-
     const validation = validateProductCatalogSelection(
       productCatalog.products,
       normalizedItems.map((item) => item.name)
@@ -451,7 +428,6 @@ function createAnalyzeLoaderProgress() {
 
 function createSilentAnalyzeLoaderProgress() {
   const noop = () => {};
-
   return {
     startLoading: noop,
     markDataReceived: noop,
@@ -471,7 +447,6 @@ function normalizeDatasetNames(datasetNames) {
 
 async function loadLookupsSafely() {
   const results = await Promise.allSettled([loadStatuses()]);
-
   for (const result of results) {
     if (result.status === "rejected") {
       console.warn("[Analyze] Lookup data failed to load", result.reason);
@@ -509,7 +484,6 @@ function applyAnalyzeViewPadding(view) {
     const panel = document.getElementById("analyze-sidebar-panel");
     const panelWidth = panel?.getBoundingClientRect?.().width ?? 420;
     const isNarrowScreen = window.matchMedia("(max-width: 700px)").matches;
-
     view.padding = {
       left: isNarrowScreen ? 0 : Math.min(panelWidth + 24, window.innerWidth * 0.45),
       right: 24,
@@ -529,7 +503,6 @@ function applyAnalyzeViewPadding(view) {
   updatePadding();
   schedulePaddingUpdate();
   window.addEventListener("resize", schedulePaddingUpdate);
-
   return () => {
     window.removeEventListener("resize", schedulePaddingUpdate);
 
@@ -546,42 +519,12 @@ function showMockWarningIfNeeded(products) {
   if (mockProducts.length === 0) {
     return;
   }
-
   noticeWarning(
     "Using mock analyze data",
     `Backend data was not available for ${mockProducts
       .map((product) => product.datasetName)
       .join(", ")}.`
   );
-}
-
-async function loadProductHistories(products) {
-  const results = await Promise.allSettled(
-    products.map(async (product) => {
-      const history = await fetchProductHistory(product.datasetName);
-
-      return {
-        ...product,
-        history,
-        historyError: null,
-      };
-    })
-  );
-
-  return results.map((result, index) => {
-    const product = products[index];
-
-    if (result.status === "fulfilled") {
-      return result.value;
-    }
-
-    return {
-      ...product,
-      history: null,
-      historyError:
-        result.reason instanceof Error ? result.reason.message : "Unknown history error.",
-    };
-  });
 }
 
 async function registerHoverLayers(hoverManager, layers) {
