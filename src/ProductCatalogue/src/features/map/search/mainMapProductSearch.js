@@ -5,17 +5,12 @@ import {
 } from "./productGraphicSearch.js";
 
 const PRODUCT_SEARCH_RESULT_LIMIT = 10;
-const PRODUCT_SEARCH_CONTAINER_ID = "main-map-product-search";
 
-export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
-  const host = ensureProductSearchHost();
-  if (!host || !productSearchIndex) return createNoopSearch();
-
-  const cleanupPosition = bindProductSearchPosition(host);
+export function initMainMapProductSearch({ view, productSearchIndex, host } = {}) {
+  if (!(host instanceof HTMLElement) || !productSearchIndex) return createNoopSearch();
   const form = document.createElement("form");
   form.className = "main-map-product-search__form";
   form.setAttribute("role", "search");
-
   const input = document.createElement("input");
   input.className = "main-map-product-search__input";
   input.type = "text";
@@ -25,7 +20,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
   input.setAttribute("aria-label", "Find product on map");
   input.setAttribute("aria-autocomplete", "list");
   input.setAttribute("aria-expanded", "false");
-
   const results = document.createElement("div");
   results.className = "main-map-product-search__results";
   results.hidden = true;
@@ -39,7 +33,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
   let isOpen = false;
   let selectedResultId = null;
   let destroyed = false;
-
   function renderResults() {
     results.replaceChildren();
     const matches = productSearchIndex.search(input.value, {
@@ -56,7 +49,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
       );
       return;
     }
-
     const duplicateLabels = getDuplicateLabels(matches);
     for (const match of matches) {
       results.appendChild(
@@ -77,7 +69,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
     isOpen = true;
     input.setAttribute("aria-expanded", "true");
   }
-
   function closeResults() {
     if (!isOpen) return false;
     results.hidden = true;
@@ -85,7 +76,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
     input.setAttribute("aria-expanded", "false");
     return true;
   }
-
   async function focusProduct(resultId) {
     const result = productSearchIndex.resolve(resultId);
     if (!result) {
@@ -103,7 +93,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
     input.value = result.label;
     closeResults();
     input.blur();
-
     let graphic = result.graphic;
     if (!graphic) {
       selectedResultId = null;
@@ -117,7 +106,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
 
     await navigateToGraphic(view, graphic, { duration: 450 });
     await waitForAnimationFrame();
-
     const currentResult = productSearchIndex.resolve(result.id);
     if (!currentResult?.graphic) {
       selectedResultId = null;
@@ -127,7 +115,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
       );
       return;
     }
-
     if (currentResult.graphic !== graphic) {
       // Refresh can replace the ArcGIS Graphic while navigation is running. Resolve
       // again so the popup and selected-Graphic flow use the committed representation.
@@ -138,7 +125,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
     const location = createProductPopupLocation(graphic);
     openProductPopup(view, graphic, location);
   }
-
   function handleInputKeydown(event) {
     if (event.key === "Escape") {
       const closed = closeResults();
@@ -155,7 +141,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
       event.preventDefault();
     }
   }
-
   function handleResultsKeydown(event) {
     if (event.key === "Escape") {
       closeResults();
@@ -164,7 +149,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
       event.stopPropagation();
       return;
     }
-
     const options = getResultOptions(results);
     const currentIndex = options.indexOf(document.activeElement);
     if (event.key === "ArrowUp") {
@@ -177,7 +161,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
       event.preventDefault();
     }
   }
-
   function handleSubmit(event) {
     event.preventDefault();
     const query = input.value.trim();
@@ -186,7 +169,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
       openResults();
       return;
     }
-
     const exactMatches = productSearchIndex
       .search(query, { limit: Number.MAX_SAFE_INTEGER })
       .filter(
@@ -207,7 +189,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
       openResults();
       return;
     }
-
     void focusProduct(exactMatches[0].id);
   }
 
@@ -223,7 +204,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
       if (!form.contains(document.activeElement)) closeResults();
     }, 0);
   }
-
   const unsubscribe = productSearchIndex.subscribe(() => {
     if (destroyed) return;
     if (selectedResultId && !productSearchIndex.resolve(selectedResultId)) {
@@ -232,7 +212,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
     }
     if (isOpen) renderResults();
   });
-
   return {
     close: closeResults,
     clearSelection() {
@@ -243,7 +222,6 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
     destroy() {
       destroyed = true;
       unsubscribe();
-      cleanupPosition?.();
       input.removeEventListener("focus", openResults);
       input.removeEventListener("input", openResults);
       input.removeEventListener("keydown", handleInputKeydown);
@@ -251,11 +229,9 @@ export function initMainMapProductSearch({ view, productSearchIndex } = {}) {
       form.removeEventListener("submit", handleSubmit);
       form.removeEventListener("focusout", handleFocusOut);
       host.replaceChildren();
-      host.remove();
     },
   };
 }
-
 async function navigateToGraphic(view, graphic, { duration } = {}) {
   const target = createProductGraphicViewTarget(graphic);
   if (!target) {
@@ -268,7 +244,6 @@ async function navigateToGraphic(view, graphic, { duration } = {}) {
     console.warn("[Product search] Failed to navigate to product", error);
   }
 }
-
 function openProductPopup(view, graphic, location) {
   const options = { features: [graphic], location };
   if (typeof view?.openPopup === "function") view.openPopup(options);
@@ -278,32 +253,6 @@ function openProductPopup(view, graphic, location) {
 function waitForAnimationFrame() {
   return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
 }
-
-function ensureProductSearchHost() {
-  const existingHost = document.getElementById(PRODUCT_SEARCH_CONTAINER_ID);
-  if (existingHost instanceof HTMLElement) return existingHost;
-
-  const header = document.getElementById("header");
-  if (!header || !document.body) return null;
-
-  const host = document.createElement("div");
-  host.id = PRODUCT_SEARCH_CONTAINER_ID;
-  host.className = "main-map-product-search";
-  // Search remains a map overlay rather than competing for compact navbar space.
-  document.body.appendChild(host);
-  return host;
-}
-
-function bindProductSearchPosition(host) {
-  const updatePosition = () => {
-    const headerBottom = document.getElementById("header")?.getBoundingClientRect().bottom ?? 0;
-    host.style.setProperty("--main-map-product-search-top", `${Math.max(8, headerBottom + 10)}px`);
-  };
-  updatePosition();
-  window.addEventListener("resize", updatePosition);
-  return () => window.removeEventListener("resize", updatePosition);
-}
-
 function createProductOption(result, onClick, { showSource = false } = {}) {
   const option = document.createElement("button");
   option.type = "button";
@@ -317,7 +266,6 @@ function createProductOption(result, onClick, { showSource = false } = {}) {
   option.addEventListener("click", onClick, { once: true });
   return option;
 }
-
 function getDuplicateLabels(results) {
   const counts = new Map();
   for (const result of results) {
@@ -332,7 +280,6 @@ function normalizeResultLabel(value) {
     .trim()
     .toLocaleLowerCase();
 }
-
 function createStateMessage(message) {
   const state = document.createElement("div");
   state.className = "main-map-product-search__state";

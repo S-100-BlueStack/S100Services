@@ -15,7 +15,9 @@
 @import "./preferences.css";
 @import "./product-history.css";
 @import "./product-picker.css";
+@import "./main-map-search-controls.css";
 @import "./main-map-product-search.css";
+@import "./main-map-locator.css";
 @import "./analyze.css";
 @import "./product-collection.css";
 @import "./review.css";

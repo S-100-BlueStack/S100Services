@@ -1,0 +1,69 @@
+/* =========================================================
+   Shared Main-map search controls layout
+   ========================================================= */
+#main-map-search-controls {
+  position: fixed;
+  z-index: 850;
+  top: var(--main-map-search-controls-top, 64px);
+  left: 50%;
+  display: flex;
+  box-sizing: border-box;
+  width: min(416px, calc(100vw - 32px));
+  min-width: 0;
+  align-items: flex-start;
+  gap: 4px;
+  color: var(--pc-text);
+  transform: translateX(-50%);
+  transition: width 140ms ease-out;
+}
+
+#main-map-search-controls[data-locator-open="true"] {
+  width: min(748px, calc(100vw - 32px));
+}
+
+.main-map-search-controls__product {
+  flex: 1 1 380px;
+  min-width: 0;
+}
+
+.main-map-search-controls__locator {
+  display: flex;
+  flex: 0 0 32px;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0;
+  transition:
+    flex-basis 140ms ease-out,
+    gap 140ms ease-out;
+}
+
+#main-map-search-controls[data-locator-open="true"] .main-map-search-controls__product {
+  flex: 1 1 380px;
+}
+
+#main-map-search-controls[data-locator-open="true"] .main-map-search-controls__locator {
+  flex: 1 1 360px;
+  gap: 4px;
+}
+
+@media (max-width: 640px) {
+  #main-map-search-controls,
+  #main-map-search-controls[data-locator-open="true"] {
+    right: 10px;
+    left: 10px;
+    width: auto;
+    transform: none;
+  }
+
+  #main-map-search-controls[data-locator-open="true"] .main-map-search-controls__product,
+  #main-map-search-controls[data-locator-open="true"] .main-map-search-controls__locator {
+    flex: 1 1 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #main-map-search-controls,
+  .main-map-search-controls__locator {
+    transition: none;
+  }
+}

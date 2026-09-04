@@ -8,6 +8,7 @@ import "@esri/calcite-components/components/calcite-panel";
 import "@esri/calcite-components/components/calcite-action";
 import "@esri/calcite-components/components/calcite-slider";
 import "@esri/calcite-components/components/calcite-switch";
+import "@arcgis/map-components/components/arcgis-search";
 // import "@arcgis/core/assets/esri/themes/light/main.css";
 // import "@arcgis/core/assets/esri/themes/dark/main.css";
 // import "@arcgis/core/assets/esri/css/main.css";
@@ -17,6 +18,5 @@ import "./styles/index.css";
 import "./styles/onboarding.css";
 import { bootstrap } from "./app/bootstrap.js";
 import { initGlobalHelpTooltips } from "./shared/ui/tooltips/globalHelpTooltips.js";
-
 initGlobalHelpTooltips();
 bootstrap();

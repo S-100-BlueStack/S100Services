@@ -21,12 +21,14 @@ import { initAttributeFilterPanel } from "../features/map/filters/attributeFilte
 import { closePopupActionDropdown } from "../features/map/popups/popupActionDropdown.js";
 import { initProductCollectionTray } from "../features/productCollection/ui/productCollectionTray.js";
 import { initProductHistoryPanel } from "../features/timeline/ui/productHistoryPanel.js";
+import { createConfiguredLocatorSearchSources } from "../features/map/locator/locatorSearchSources.js";
+import { initMainMapLocator } from "../features/map/locator/mainMapLocator.js";
 import { initMainMapProductSearch } from "../features/map/search/mainMapProductSearch.js";
+import { initMainMapSearchControls } from "../features/map/search/mainMapSearchControls.js";
 import { createSourceAwareProductSearchIndex } from "../features/map/search/sourceAwareProductSearchIndex.js";
 import { createCompatibilityDerivedStateAdapter } from "../features/map/services/compatibilityDerivedStateAdapter.js";
 import { bindMapViewpointPersistence } from "../features/map/state/mapViewpointPersistence.js";
 import { initPreferencesPanel } from "../features/preferences/ui/preferencesPanel.js";
-
 function updateLastUpdated(date = new Date()) {
   const element = document.getElementById("last-updated");
   if (!element) return;
@@ -43,11 +45,9 @@ function setLastUpdatedStatus(text) {
   const element = document.getElementById("last-updated");
   if (element) element.textContent = text;
 }
-
 function readLastUpdatedStatus() {
   return document.getElementById("last-updated")?.textContent ?? "";
 }
-
 export function initMap() {
   const map = createMap();
   const view = createView(map);
@@ -62,7 +62,6 @@ export function initMap() {
   });
   let previousLastUpdatedStatus = "";
   let filterPanel = null;
-
   registerPopupHoverSync(view, hoverManager);
 
   const isGraphicAllowed = (graphic, layer) => filterService.matchesGraphic(graphic, layer);
@@ -76,7 +75,6 @@ export function initMap() {
       isGraphicAllowed,
     });
   };
-
   const dataSourceRuntime = createDataSourceRuntime({
     map,
     view,
@@ -95,14 +93,12 @@ export function initMap() {
       });
     },
   });
-
   filterPanel = initAttributeFilterPanel({
     filterService,
     applyVisibility: applyMapVisibility,
     navbarPopoverCoordinator,
   });
   navbarPopoverCoordinator.start();
-
   const preferencesPanel = initPreferencesPanel({
     view,
     filterPanel,
@@ -110,14 +106,31 @@ export function initMap() {
   });
   const productHistoryPanel = initProductHistoryPanel({ view });
   const productCollectionTray = initProductCollectionTray();
-  const productSearch = initMainMapProductSearch({ view, productSearchIndex });
+  const mainMapSearchControls = initMainMapSearchControls();
+  const productSearch = initMainMapProductSearch({
+    view,
+    productSearchIndex,
+    host: mainMapSearchControls.productSearchHost,
+  });
+  const locatorConfiguration = createConfiguredLocatorSearchSources();
+  const locator = initMainMapLocator({
+    view,
+    host: mainMapSearchControls.locatorHost,
+    sources: locatorConfiguration.sources,
+    searchOptions: locatorConfiguration.searchOptions,
+    navigationOptions: locatorConfiguration.navigationOptions,
+    resetSourceState: locatorConfiguration.resetTransientState,
+    unavailableReason: locatorConfiguration.unavailableReason,
+    onOpen: () => productSearch.close(),
+    onOpenStateChange: mainMapSearchControls.setLocatorOpen,
+  });
   const cleanupKeyboardClose = bindMainMapKeyboardClose({
     view,
     preferencesPanel,
     productHistoryPanel,
     productSearch,
+    locator,
   });
-
   bindOverlapPicker(view);
   const compatibilityRefreshService = createRefreshService({
     map,
@@ -162,7 +175,6 @@ export function initMap() {
     compatibilityRefreshService,
     dataSourceController: dataSourceRuntime.controller,
   });
-
   return {
     map,
     view,
@@ -184,11 +196,14 @@ export function initMap() {
     mapViewpointPersistence,
     preferencesPanel,
     productSearch,
+    locator,
     navbarPopoverCoordinator,
     destroy() {
       cleanupKeyboardClose?.();
       refreshService.destroy?.();
+      locator?.destroy?.();
       productSearch?.destroy?.();
+      mainMapSearchControls?.destroy?.();
       filterPanel?.destroy?.();
       dataSourceRuntime.destroy();
       navbarPopoverCoordinator.destroy();
@@ -199,11 +214,19 @@ export function initMap() {
     },
   };
 }
-
-function bindMainMapKeyboardClose({ view, preferencesPanel, productHistoryPanel, productSearch }) {
+function bindMainMapKeyboardClose({
+  view,
+  preferencesPanel,
+  productHistoryPanel,
+  productSearch,
+  locator,
+}) {
   const handleKeydown = (event) => {
     if (event.key !== "Escape" || event.defaultPrevented) return;
-
+    if (locator?.close?.({ restoreFocus: true })) {
+      event.preventDefault();
+      return;
+    }
     if (productSearch?.close?.()) {
       event.preventDefault();
       return;
@@ -231,7 +254,6 @@ function bindMainMapKeyboardClose({ view, preferencesPanel, productHistoryPanel,
       event.preventDefault();
     }
   };
-
   document.addEventListener("keydown", handleKeydown);
   return () => document.removeEventListener("keydown", handleKeydown);
 }
@@ -241,7 +263,6 @@ function closePopupDropdownOnly() {
   closePopupActionDropdown({ restoreFocus: false });
   return true;
 }
-
 function closeNoticePanel() {
   const panel = document.getElementById("notice-panel");
   if (!(panel instanceof HTMLElement) || panel.hasAttribute("collapsed")) return false;

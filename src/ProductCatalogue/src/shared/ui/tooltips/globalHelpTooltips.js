@@ -61,6 +61,11 @@ const GLOBAL_HELP_RULES = [
     mode: "replace-generic",
   },
   {
+    selector: "#main-map-locator-button",
+    title: "Search for an address or place in Denmark or Greenland and move the map there.",
+    mode: "replace-generic",
+  },
+  {
     selector: ".main-map-product-search__option",
     title: (element) => element.title || `Open ${getElementText(element)} on the map.`,
     mode: "fill-empty",
@@ -146,7 +151,6 @@ const GLOBAL_HELP_RULES = [
     title: "Filter the dashboard activity list by this summary value.",
     mode: "fill-empty",
   },
-
   {
     selector: ".pc-dashboard-link-button",
     title: (element) => createDashboardLinkHelp(element),
@@ -185,7 +189,6 @@ const GLOBAL_HELP_RULES = [
     mode: "fill-empty",
   },
 ];
-
 let helpTooltipsInitialized = false;
 let helpTooltipObserver = null;
 let pendingApply = false;
@@ -209,7 +212,6 @@ export function initGlobalHelpTooltips() {
 
   start();
 }
-
 export function applyGlobalHelpTooltips(root = document) {
   for (const rule of GLOBAL_HELP_RULES) {
     applyHelpRule(root, rule);
@@ -230,7 +232,6 @@ function observeTooltipTargets() {
     subtree: true,
   });
 }
-
 function scheduleTooltipApply() {
   if (pendingApply) {
     return;
@@ -255,7 +256,6 @@ function applyHelpRule(root, rule) {
     if (!title || !shouldSetTitle(element, title, rule.mode)) {
       return;
     }
-
     setHelpTitle(element, title);
   });
 }
@@ -280,7 +280,6 @@ function shouldSetTitle(element, nextTitle, mode) {
   if (mode === "replace") {
     return true;
   }
-
   if (mode === "replace-generic") {
     return isGenericTooltip(element, currentTitle);
   }
@@ -296,7 +295,6 @@ function setHelpTitle(element, title) {
     element.setAttribute("aria-label", title);
   }
 }
-
 function isGenericTooltip(element, title) {
   const text = getElementText(element);
   const ariaLabel = getAriaLabel(element);
@@ -305,7 +303,6 @@ function isGenericTooltip(element, title) {
 
   return [text, ariaLabel, label, calciteText].some((value) => value && value === title);
 }
-
 function isIconOnlyControl(element) {
   return (
     element.tagName.toLowerCase() === "calcite-action" ||
@@ -315,7 +312,6 @@ function isIconOnlyControl(element) {
 
 function createDashboardLinkHelp(element) {
   const text = getElementText(element);
-
   const dashboardLinkHelp = {
     Review: "Open this product in Product Review.",
     Analyze: "Open this product in Analyze.",
@@ -328,7 +324,6 @@ function createDashboardLinkHelp(element) {
     dashboardLinkHelp[text] || createActionTextHelp(element, "Use this dashboard activity action.")
   );
 }
-
 function createAnalyzeCollapseActionHelp(element) {
   const text = getElementText(element);
 
@@ -345,7 +340,6 @@ function createAnalyzeCollapseActionHelp(element) {
 
 function createPopupActionHelp(element) {
   const actionId = element.dataset.actionId ?? element.getAttribute("data-action-id") ?? "";
-
   const actionHelp = {
     "freeze-feature": "Freeze this product so it waits for manual handling.",
     "unfreeze-feature": "Unfreeze this product so it can continue in the workflow.",
@@ -365,7 +359,6 @@ function createPopupActionHelp(element) {
     history: "Open product history.",
     tools: "Open additional product tools.",
   };
-
   return actionHelp[actionId] || createActionTextHelp(element, "Use this product action.");
 }
 
@@ -383,7 +376,6 @@ function getElementText(element) {
 function getAriaLabel(element) {
   return normalizeText(element.getAttribute("aria-label"));
 }
-
 function normalizeText(value) {
   return String(value ?? "")
     .replace(/\s+/g, " ")
