@@ -2,7 +2,7 @@
 
 This document tracks frontend-only cleanup, hardening, and architecture improvements for Product Catalogue. The goal is to improve maintainability, reliability, and structure without changing the user-facing feature set unless an item explicitly tracks a feature foundation.
 
-Current reviewed repository baseline: `20a0cab4c64aea42c9ac10aced95f6b592d14280`.
+Current reviewed repository baseline: `a3a53e4aa55850091281f8e47825755798066cf9`.
 BE-108A documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`.
 
 ## Backend worker-readiness note
@@ -103,7 +103,7 @@ BE-106 is documentation-only. It confirms that ProductCatalogueAPI remains the p
 | FI-009 | Dashboard                        | Add user-selectable Dashboard page size                                  | Todo                                     | Backend paging already accepts `1-200`; define compact frontend options, persistence and reset behavior before enabling it.                                                                                                                                                                                                                                                                                                                     |
 | FI-010 | Dashboard                        | Add sortable Dashboard activity columns                                  | Todo                                     | Define supported server-side sort fields, direction, stable tie-break ordering and cursor compatibility before adding sortable headers.                                                                                                                                                                                                                                                                                                         |
 | FI-011 | Main map / Data sources          | Add independent Product-standard data sources and source-aware workflows | In progress (FI-011A/B/C/D implemented)  | FI-011A/FI-011B are committed through baseline `60e4854389ab16d3bd280f653998ea10eaa0b6ab`. FI-011C adds central Product context and the flat Edition/Update Export menu. FI-011D adds source-aware Product Collection, workspace catalog/resolution, Analyze, Review, and truthful unavailable History/report surfaces. Separate S-57/S-101 transport, FI-016 authoritative status/error defaults, and final onboarding/regression work remain. |
-| FI-012 | Main map / Location search       | Add Denmark and Greenland map locator                                    | Todo                                     | Add a compact ArcGIS Search component opened from a binoculars button beside Product search. Search addresses and populated places in Denmark and Greenland only, navigate without a marker or popup, keep Product state unchanged, and prepare configuration for later API-backed custom search sources.                                                                                                                                       |
+| FI-012 | Main map / Location search       | Add Denmark and Greenland map locator                                    | Done                                     | Added a compact ArcGIS Search-based Locator beside Product search. One logical `Places` source uses ArcGIS World Geocoder with `sourceCountry=DNK,GRL` and Address/Postal/Populated Place categories, navigates without marker/popup, preserves Product state, supports first-suggestion Enter for addresses, and keeps the source boundary extensible for future API-backed search sources. Committed at `a3a53e4aa55850091281f8e47825755798066cf9`. |
 | FI-013 | Product terminology              | Rename Product Catalogue S100 terminology to S-101                       | Todo                                     | Use `S-101` for the ENC Product specification in live UI/domain copy. Preserve legitimate generic `S-100` standard references and isolate any legacy `S100` API/wire value behind an adapter until backend contracts are renamed.                                                                                                                                                                                                               |
 | FI-014 | Popup actions                    | Rename Rollback to Cancel Export and replace its icon                    | Todo                                     | Update live UI copy, confirmation, notices, availability reasons, guidance, and tests to `Cancel Export`. Use a cancellation icon rather than an undo/rollback metaphor; keep any legacy endpoint/action identifier internal until backend contracts change.                                                                                                                                                                                    |
 | FI-015 | Product Collection               | Use graph-bar for Add to collection                                      | Todo                                     | Replace the popup Add to collection icon with Calcite `graph-bar`, preserving tooltip, active state, accessibility, and existing collection behavior.                                                                                                                                                                                                                                                                                           |
@@ -129,7 +129,7 @@ BE-106 is documentation-only. It confirms that ProductCatalogueAPI remains the p
 11. Keep FI-011C as the committed central Product-context, capability-specific popup-action, and flat source-aware Edition/Update Export baseline at `391074743efc909ec97168e2be2820484edb8455`.
 12. Implement FI-011D as source-aware Product Collection, workspace catalog/resolution, Analyze, Review, and truthful History/report availability without enabling mock-source backend actions.
 13. Keep authoritative production S-57/S-101 transport blocked until the backend supplies separate read contracts and source discrimination.
-14. FI-012 Locator and the independent UI/documentation items FI-013 through FI-017 and FI-019 may proceed subject to their own dependencies.
+14. FI-012 Locator is complete and manually accepted at `a3a53e4aa55850091281f8e47825755798066cf9`; the independent UI/documentation items FI-013 through FI-017 and FI-019 may proceed subject to their own dependencies.
 15. Complete FI-016 only after the backend status list identifies authoritative error states and display semantics, then activate the final FI-011 error-only first-visit filter preset.
 16. Treat FI-018 as a later cross-repository release-readiness review after configurable branding and deployment settings are established.
 
@@ -352,134 +352,133 @@ FI-011 is complete only when:
 
 ## FI-012 Denmark and Greenland map locator
 
-Status: Todo  
-Documentation baseline: `20a0cab4c64aea42c9ac10aced95f6b592d14280`  
-Implementation order: independent; may proceed while the FI-011 backend contract is pending
+Status: Done  
+Implementation commit: `a3a53e4aa55850091281f8e47825755798066cf9`  
+Authoritative implementation baseline: `737677d7ecd0857312224fde3e5f9a76a0cb7148`
 
-### Goal
+### Goal and final behavior
 
-Add a compact geographic Locator to the Main map so users can quickly navigate to an address, city, or geographic place in Denmark or Greenland while working with Product corrections. The Locator is navigation assistance only and must remain independent from Product search, Product selection, popup state, filters, and source enablement.
+FI-012 adds a compact geographic Locator to the Main map so users can navigate quickly to addresses, cities, postal locations, and populated places in Denmark or Greenland while working with Product corrections.
 
-### ArcGIS component choice
+Locator is navigation assistance only and remains independent from Product search, Product selection, popup state, filters, Product Collection, source enablement, and Product operation state.
 
-Use the ArcGIS Maps SDK Search web component (`arcgis-search`) supported by the current 5.x SDK. Do not introduce the deprecated `@arcgis/core/widgets/Search` widget.
+The accepted Main-map layout is:
 
-Use an explicit source configuration rather than relying on unrestricted default sources. The initial source configuration uses an approved ArcGIS locator/geocoding service and must be replaceable without changing the Locator UI controller.
+```text
+closed:
+[ Product search ][ Locator button ]
 
-Before runtime implementation, confirm and document:
+open:
+[ Product search ][ Locator search ][ Locator button ]
+```
 
-- the organization-approved locator URL;
-- ArcGIS Online, Enterprise, API key, user authentication, or other token strategy;
-- where non-secret locator configuration is supplied;
-- how credentials are kept out of committed frontend source;
-- the verified country restriction mechanism for Denmark and Greenland.
+The shared `mainMapSearchControls` boundary owns only common positioning/layout. Product search keeps its existing Product index, Graphic resolution, selection, navigation, and popup behavior; Locator keeps geographic search and navigation.
 
-The functional requirement is fixed even if the service configuration differs: return results from Denmark and Greenland only and exclude the Faroe Islands. A valid implementation may use one locator request supporting multiple source countries or two configured `LocatorSearchSource` instances searched together. The final choice must be verified against the approved service rather than assumed from the public service defaults.
+### ArcGIS implementation
 
-### UI placement and behavior
+FI-012 uses the ArcGIS Maps SDK Search web component (`arcgis-search`) from `@arcgis/map-components@5.0.15` with the existing `MapView`. It does not use the deprecated `@arcgis/core/widgets/Search` widget and does not migrate the map to `arcgis-map`.
 
-Add an icon-only Locator button directly beside the existing Main map Product search control. Use the Calcite `binoculars` icon to match the established ArcGIS Locator metaphor.
+The organization-approved ArcGIS World Geocoding Service is configured through the non-secret `VITE_ARCGIS_LOCATOR_URL` boundary:
 
-The button opens a simple compact Locator overlay containing the Search component. The first version should reuse the existing Product search overlay's compact positioning and interaction conventions where practical, without merging the two search experiences.
+```text
+https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer
+```
 
-Required behavior:
+The accepted first version uses the service without a Product Catalogue API key, OAuth flow, hardcoded token, or Windows-credential forwarding. Missing/invalid configuration fails closed and does not enable unrestricted ArcGIS default sources.
 
-- tooltip and `aria-label`: `Locator`;
-- clicking the button toggles the Locator overlay;
-- Escape and click-outside close the overlay and restore focus to the button;
-- opening Locator may close Product search if both overlays would conflict spatially;
-- Product search remains a separate control and retains its existing behavior;
-- no permanent large search panel is added to the map;
-- the first implementation may be visually iterated later without changing the search contract.
+### Search-source architecture
 
-### Search scope
+The initial user-facing Locator contains one logical source:
 
-Initial geographic results are limited to:
+```text
+Places
+└── ArcGIS World Geocoder
+    ├── sourceCountry=DNK,GRL
+    ├── category=Address,Postal,Populated Place
+    └── configured fallback zoom scale
+```
 
-- addresses;
-- populated places and administrative place names;
-- postal locations when supported by the approved locator.
+Denmark and Greenland are search scope, not separate user-visible sources. This removes the `Search in...` selector and country grouping from the first version while still excluding the Faroe Islands and worldwide fallback.
 
-General business and point-of-interest discovery is not part of the first version.
+`Places` is implemented as a custom ArcGIS `SearchSource` using public `getSuggestions` / `getResults` contracts and ArcGIS request infrastructure. The same country/category scope is applied to suggestion and candidate resolution.
 
-Country scope:
+The registry/factory boundary remains extensible for later custom API-backed Product Catalogue or domain search sources without rewriting the Locator UI controller. Existing client-side Product `GraphicsLayer`s are not treated as a future `LayerSearchSource` contract.
 
-- Denmark: included;
-- Greenland: included;
-- Faroe Islands: excluded;
-- all other countries: excluded.
+### Enter and suggestion behavior
 
-The source should use explicit category filters equivalent to `Address`, `Populated Place`, and `Postal` where supported. Category and country values must be verified against the selected locator service and must not silently fall back to unrestricted worldwide search.
+The accepted behavior is:
 
-### Result behavior
+- explicit suggestion selection resolves that exact World Geocoder suggestion and its real `magicKey`;
+- Enter without an explicit selection resolves the first actual keyed World Geocoder suggestion for the current term;
+- fast Enter can obtain the scoped suggestion before candidate resolution;
+- city and address searches navigate to the first valid result;
+- stale suggestion generations cannot replace a newer query's provider state.
 
-Selecting a result must:
+After successful Locator navigation:
 
-- navigate the existing `MapView` to the result extent or locator-provided scale;
-- use a configured fallback zoom scale only when the locator does not return a useful extent;
-- not render a result marker or retained result graphic;
-- not open a locator popup;
-- not open, close, or replace a Product popup solely because a location result was selected;
-- not change selected Product identity, hover highlight, Product Collection, filters, enabled data sources, or operation state.
+```text
+map navigates
+-> Locator search term/results clear
+-> Locator remains open
+-> new map viewpoint remains
+```
 
-Clearing or closing Locator clears its search UI but does not restore the previous map viewpoint. A later Product interaction continues using the normal Product popup and selection lifecycle.
+This clear-after-success behavior prevents completed search results from remaining visually sticky when the user begins a new query.
 
-### Extensible search-source configuration
+### Result and lifecycle behavior
 
-Create a small Locator search-source registry or factory. The UI controller must consume configured Search sources rather than hardcoding the public World Geocoding Service directly.
+Selecting a result:
 
-The first release contains only geographic locator sources. The architecture must allow later custom ArcGIS `SearchSource` entries backed by Product Catalogue APIs.
+- navigates the existing `MapView` using the ArcGIS result target/extent with configured fallback scale where needed;
+- renders no Locator marker/result graphic;
+- opens no Locator popup;
+- does not route through Product selection/popup logic;
+- does not modify Product identity, Product popup state, hover, Product Collection, filters, enabled sources, or operation state.
 
-A later database-backed source may search configured Product or related-data attributes and return suggestions/results with a geometry or extent. Because current Product layers are client-side GraphicsLayers, do not assume ArcGIS `LayerSearchSource` can query them. Future attribute search should use an API-backed custom source with explicit `getSuggestions` and `getResults` behavior or a future searchable service layer.
+Close/teardown is hardened independently from the visual animation:
 
-Future source additions must not blur the current workflow boundaries:
+```text
+close
+-> retire active Search session immediately
+-> block stale navigation through session-scoped goToOverride
+-> clear Search state
+-> reset provider transient state
+-> remove/destroy Search component
+```
 
-- Product search remains the dedicated quick Product lookup that opens Product popups across active Product sources;
-- Locator remains map navigation and multi-source geographic/domain search;
-- any future duplicated search domain must be reviewed before being enabled in both controls.
+The neutral application-owned Locator slot then performs the visual close transition. Open and close use matching horizontal expansion/collapse, with `prefers-reduced-motion` support and generation-safe rapid-toggle handling. Late requests from a closed Search session cannot navigate the map.
 
-### Failure and loading behavior
+### UI, guidance, and accessibility
 
-The Search component owns normal suggestion/result loading. Integrate failures with existing notices only when the component does not already provide a clear local error or when configuration/authentication fails.
+The Locator uses the supported Calcite `locator` icon because a `binoculars` icon is not available in the installed Calcite icon set. The final button is compact, angular, centered, and styled through supported Calcite Action component tokens for light/dark mode.
 
-Requirements:
+`aria-label` remains `Locator`, while hover help explains:
 
-- no fullscreen loader;
-- no unhandled promise rejection for locator/auth/network failure;
-- no stale result navigation after the user closes or replaces a search;
-- failed search must leave the current map viewpoint and Product state unchanged;
-- missing locator configuration disables the Locator button with a useful tooltip/notice in development rather than silently enabling worldwide defaults.
+```text
+Search for an address or place in Denmark or Greenland and move the map there.
+```
 
-### Guidance, accessibility, and visual requirements
+Escape, outside interaction, focus boundaries, teardown, and Product-search coordination use the existing Main-map interaction architecture. Main-map onboarding was versioned independently; Dashboard, Analyze, and Review onboarding state was not reset.
 
-Update the versioned Main map introduction added under FI-011 to explain:
+### Manual acceptance
 
-- Locator searches geographic places and addresses;
-- Product search searches Products;
-- selecting a Locator result moves the map without selecting a Product.
+Manually accepted against commit `a3a53e4aa55850091281f8e47825755798066cf9`.
 
-If FI-012 is implemented in a later package than FI-011, bump the Main map onboarding version again or add the Locator step before FI-011 is committed. Do not reset Dashboard, Analyze, or Review onboarding state.
+Verified behavior includes:
 
-The Locator button and overlay must support keyboard navigation, focus restoration, English UI text, light/dark mode, compact square styling, tooltips, and static loading/error cues suitable for RDP/VDI.
-
-### Acceptance criteria
-
-FI-012 is complete only when:
-
-1. A binoculars Locator button is positioned beside Product search.
-2. The button opens and closes a compact Search component overlay with correct keyboard and focus behavior.
-3. Searches such as `Køge`, `Fredericia`, `Aalborg`, a valid Danish address, and a valid Greenlandic place navigate to the correct area.
-4. Results outside Denmark and Greenland are not returned.
-5. Faroe Islands results are not returned.
-6. Business/POI-only searches are excluded from the first version where category filtering supports that distinction.
-7. Selecting a result navigates without a marker or locator popup.
-8. Locator use does not mutate Product popup, selection, hover, filters, Product Collection, data-source, or operation state.
-9. Product search continues to work independently across active Product sources.
-10. Missing or invalid locator authentication/configuration fails closed instead of enabling unrestricted defaults.
-11. The source registry can accept a future custom API-backed Search source without rewriting the Locator UI.
-12. Main map onboarding and hover help explain Locator versus Product search.
-13. Light and dark mode manual verification passes.
-14. `cd src/ProductCatalogue && npm run check` passes.
+1. Locator control is positioned beside Product search and expands/collapses smoothly in the shared Main-map search layout.
+2. The Calcite `locator` icon is visible, centered, and correctly styled in light and dark mode.
+3. The `Search in...` source selector and Denmark/Greenland result grouping are absent.
+4. Denmark and Greenland are searched through one logical `Places` source with no Faroe Islands/worldwide fallback.
+5. City searches and address searches support Enter navigation, including first-suggestion address resolution.
+6. Successful navigation clears Locator input/results while leaving Locator open and preserving the new viewpoint.
+7. Repeated searches do not retain stale/sticky results.
+8. No result marker or Locator popup is shown.
+9. Product search continues to work independently before and after Locator use.
+10. Locator use does not mutate Product popup/selection, hover, filters, Product Collection, data-source state, or operation state.
+11. Close/reopen clears Search state; slow/stale closed searches cannot navigate later.
+12. Keyboard/focus/Escape behavior and rapid open/close/open lifecycle are protected by the final implementation.
+13. `cd src/ProductCatalogue && npm run check` passed in the local repository environment during acceptance.
 
 ### Out of scope for the first implementation
 
@@ -490,7 +489,7 @@ FI-012 is complete only when:
 - result markers or locator popups;
 - general businesses and points of interest;
 - Faroe Islands or worldwide results;
-- changes to Product search behavior beyond FI-011 active-source aggregation.
+- changes to Product search behavior beyond the neutral shared layout/coordination boundary.
 
 ## FI-013 S-101 terminology correction
 
@@ -667,6 +666,7 @@ Do not assign Shift-click in the first experiment. A map has no stable natural r
 
 | Date       | Commit                                   | Items           | Notes                                                                                                                                                                                 |
 | ---------- | ---------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-04 | a3a53e4aa55850091281f8e47825755798066cf9 | FI-012          | Added and manually accepted the Denmark/Greenland Main-map Locator using ArcGIS Search, one scoped `Places` source, address Enter handling, Product-state isolation, and symmetric inline open/close behavior. |
 | 2026-07-28 | 7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd | FH-049 / BE-107 | Added Dashboard server-side filtering and cursor pagination; manual pagination verification passed.                                                                                   |
 | 2026-07-27 | 279fe6a761229fd99af437d0f8401508985afafc | FH-046 / FH-047 | Activated async Export/Rollback and backend-authoritative active-job visibility across browser profiles, users and computers.                                                         |
 | 2026-07-27 | 69752605d935212e89ca7ad4286ca3e46ecb4abe | FH-048          | Preserved popup, action icons and open dropdowns during compatible map and terminal-job refreshes.                                                                                    |
