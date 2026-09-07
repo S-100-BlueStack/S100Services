@@ -65,3 +65,17 @@ test("popup action bar fails closed through central Product context and action r
   assert.match(collectionAction, /expectedIdentityKey/);
   assert.doesNotMatch(collectionAction, /supportsPopupActions/);
 });
+
+test("popup Product Collection uses graph-bar and preserves selected state presentation", async () => {
+  const controller = await readPopupFile("popupHeaderController.js");
+
+  assert.match(controller, /btn\.icon = isSelected \? "check" : "graph-bar";/);
+  assert.match(
+    controller,
+    /const title = isSelected \? "Remove from collection" : "Add to collection";/
+  );
+  assert.match(controller, /btn\.title = title;/);
+  assert.match(controller, /btn\.text = title;/);
+  assert.match(controller, /btn\.toggleAttribute\("data-added", isSelected\);/);
+  assert.match(controller, /btn\.setAttribute\("aria-label", title\);/);
+});

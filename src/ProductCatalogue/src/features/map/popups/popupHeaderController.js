@@ -290,7 +290,7 @@ function syncCollectionButtonState(btn) {
   const productIdentity = btn.dataset.productIdentity ?? btn.dataset.datasetName;
   const isSelected = hasProductCollectionProduct(productIdentity);
   const title = isSelected ? "Remove from collection" : "Add to collection";
-  btn.icon = isSelected ? "check" : "chart-magnifying-glass";
+  btn.icon = isSelected ? "check" : "graph-bar";
   btn.title = title;
   btn.text = title;
   btn.toggleAttribute("data-added", isSelected);
