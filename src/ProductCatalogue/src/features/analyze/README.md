@@ -2,7 +2,7 @@
 
 The Analyze feature shows product analysis content for one or more selected products. It is separate from the main map popup action flow.
 
-Product mutation actions such as Freeze, Unfreeze, Send to IC-ENC, Export and Rollback should stay in the product popup.
+Product mutation actions such as Freeze, Unfreeze, Send to IC-ENC, Export and Cancel Export should stay in the product popup.
 
 ## Responsibilities
 

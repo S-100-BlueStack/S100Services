@@ -34,7 +34,7 @@ The action UI provides:
   compatibility API refresh or job subscriptions.
 - `popupExportConfig.js` creates declarative Edition/Update leaves from Product context.
 - `popupExportContract.js` owns the implemented compatibility dispatch guard.
-- `features/data/api/exportApi.js` starts asynchronous Export and Rollback jobs.
+- `features/data/api/exportApi.js` starts asynchronous Export and Cancel Export jobs through the legacy Rollback job contract.
 - `features/data/api/productJobApi.js` calls the job start and status endpoints.
 - `features/products/services/productJobService.js` persists, resumes, and polls active jobs.
 - `features/products/state/productOperationState.js` combines local operations with restored backend
@@ -72,7 +72,7 @@ Compatibility AOI retains the established actions:
 
 - `Freeze` / `Unfreeze`;
 - `Send to IC-ENC`;
-- `Rollback`;
+- `Cancel Export`;
 - `Analyze` and `History` through `Tools`;
 - `Export...`.
 
@@ -82,7 +82,7 @@ ProductContext capabilities. Their `Export...` root remains a pair of disabled E
 placeholders. `Tools` exposes Analyze and History; History opens the existing quick-panel shell and
 renders a source-specific unavailable state without a compatibility History request. Product
 Collection remains independent from `supportsPopupActions` and uses source-aware Product identity.
-Freeze, Unfreeze, Send to IC-ENC, Rollback, real Export dispatch, backend History, IC-ENC report
+Freeze, Unfreeze, Send to IC-ENC, Cancel Export, real Export dispatch, backend History, IC-ENC report
 loading, and internal-validation loading remain disabled.
 
 The popup-header collection action re-resolves the currently selected Graphic through Product context
@@ -173,7 +173,7 @@ confirm
 -> end local Product operation
 ```
 
-For asynchronous Export and Rollback:
+For asynchronous Export and Cancel Export (legacy Rollback job):
 
 ```text
 confirm
@@ -225,9 +225,9 @@ replace it.
 Source deactivation clears only popup-local UI state for that source. It does not cancel or delete a
 backend-authoritative job.
 
-## Rollback warnings
+## Cancel Export warnings
 
-A successful Rollback can return a warning, currently including:
+A successful Cancel Export can return a warning from the legacy Rollback job, currently including:
 
 ```text
 ROLLBACK_CLEANUP_FAILED
@@ -275,7 +275,7 @@ Operation precondition failures are returned as `PRODUCT_OPERATION_REJECTED` wit
 
 ## Backend-authoritative active job visibility
 
-Active Export and Rollback jobs are now discovered from the shared backend with:
+Active Export and Cancel Export jobs are now discovered from the shared backend through their existing backend operation identifiers with:
 
 ```text
 GET /jobs/active?datasetName={datasetName}

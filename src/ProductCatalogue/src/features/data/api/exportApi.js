@@ -26,7 +26,7 @@ export async function exportRollback(datasetName) {
   return runProductJob({
     datasetName,
     operationType: PRODUCT_JOB_OPERATION.ROLLBACK,
-    label: "Rolling back",
+    label: "Canceling export",
     startJob: () => startProductJob(buildExportRequestPath(datasetName, "rollback")),
   });
 }

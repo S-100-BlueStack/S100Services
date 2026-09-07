@@ -354,7 +354,7 @@ function createPopupActionHelp(element) {
     "export-s100": "Open S-100 export actions.",
     "s100-export-edition": "Export a new S-100 Edition for this product.",
     "s100-export-update": "S-100 Update export is currently disabled.",
-    rollback: "Rollback this product by calling the rollback endpoint.",
+    rollback: "Cancel the current export for this product.",
     analyze: "Open this product in Analyze.",
     history: "Open product history.",
     tools: "Open additional product tools.",

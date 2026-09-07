@@ -5,7 +5,9 @@ import {
   PRODUCT_JOB_OPERATION,
   createProductJobActionResult,
   createProductJobCompletionTitle,
+  createProductJobLabel,
   createProductJobRecord,
+  isRollbackOperation,
   isSendToIcEncOperation,
   isTerminalProductJobStatus,
   normalizeStoredProductJob,
@@ -214,4 +216,26 @@ test("simulation completion titles never claim delivery", () => {
   assert.equal(title, "IC-ENC send simulation completed for 101DK001");
   assert.equal(isSendToIcEncOperation("sendtoicenc"), true);
   assert.doesNotMatch(title, /delivered|sent successfully/i);
+});
+
+test("legacy Rollback job identity maps to Cancel Export presentation", () => {
+  assert.equal(PRODUCT_JOB_OPERATION.ROLLBACK, "Rollback");
+  assert.equal(isRollbackOperation("rollback"), true);
+  assert.equal(createProductJobLabel(PRODUCT_JOB_OPERATION.ROLLBACK), "Canceling export");
+
+  const restored = normalizeStoredProductJob({
+    jobId: "job-rollback",
+    datasetName: "101DK0040943E",
+    operationType: PRODUCT_JOB_OPERATION.ROLLBACK,
+    label: "Rolling back",
+    createdAt: "2026-09-07T06:00:00Z",
+    status: "Running",
+  });
+
+  assert.equal(restored.operationType, "Rollback");
+  assert.equal(restored.label, "Canceling export");
+  assert.equal(
+    createProductJobCompletionTitle(restored, { status: "Succeeded" }),
+    "Cancel Export completed for 101DK0040943E"
+  );
 });

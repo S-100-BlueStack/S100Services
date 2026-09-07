@@ -76,7 +76,7 @@ export const ONBOARDING_STEPS = Object.freeze({
       id: "main-popup-actions",
       title: "Use Product actions",
       description:
-        "The Product popup contains controls for copying, collecting and running operational actions such as Freeze, Send, Export and Rollback.",
+        "The Product popup contains controls for copying, collecting and running operational actions such as Freeze, Send, Export and Cancel Export.",
       selectors: [".popup-copy-btn", ".popup-product-collection-btn", ".popup-action-bar"],
       selectorMode: "all",
       positionSelectors: [

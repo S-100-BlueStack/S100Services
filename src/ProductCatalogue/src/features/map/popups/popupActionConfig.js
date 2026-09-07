@@ -289,8 +289,8 @@ function createRollbackAction({
 
   return {
     id: "rollback",
-    label: operationIsRunning ? "Rolling back..." : "Rollback",
-    icon: "undo",
+    label: operationIsRunning ? "Canceling export..." : "Cancel Export",
+    icon: "x-circle",
     loading: operationIsRunning,
     disabled: availability.rollback.disabled,
     disabledReason: availability.rollback.disabledReason,

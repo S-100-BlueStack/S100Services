@@ -50,10 +50,10 @@ The following flows are implemented and considered stable frontend behavior for 
 - flat `Export... > Edition / Update` menu
 - compatibility AOI Edition export using the established S100 backend target
 - disabled Edition/Update placeholders for Paper Charts and S-102
-- Rollback
+- Cancel Export
 - popup export loading/conflict state
 - backend-authoritative Product operation state with local caching and reload recovery
-- asynchronous Export/Rollback polling, terminal notices and route refresh
+- asynchronous Export/Cancel Export polling, terminal notices and route refresh
 - silent auto-refresh
 - manual refresh button loading
 - popup-preserving compatible refresh without popup, icon or dropdown flashing
@@ -116,7 +116,7 @@ Current popup action endpoint status:
 
 - `Freeze` / `Unfreeze` use the existing product freeze-state API.
 - `Send to IC-ENC` uses the existing product upload/send API.
-- `Rollback` is enabled and calls `POST /export/{name}/rollback/jobs`.
+- `Cancel Export` is enabled and calls the legacy `POST /export/{name}/rollback/jobs` contract.
 - Compatibility AOI `Export... > Edition` is enabled and calls `POST /export/{name}/newedition/jobs?exportTarget=S100`.
 - Compatibility AOI `Update` remains disabled because no implemented Update contract exists.
 - Paper Charts and S-102 expose disabled Edition/Update placeholders with no handler or backend target.
@@ -410,10 +410,10 @@ Export > Edition -> POST /export/{name}/newedition/jobs?exportTarget=S100
 
 The generic Edition label preserves the established compatibility wire target. It is not an `All` export and does not infer separate S-57/S-101 source ownership.
 
-Current implemented rollback action:
+Current implemented Cancel Export action:
 
 ```txt
-Rollback -> POST /export/{name}/rollback/jobs
+Cancel Export -> POST /export/{name}/rollback/jobs
 ```
 
 ## Background job deployment direction
@@ -485,7 +485,7 @@ Recent frontend work has focused on:
 - source-aware Product Collection and workspace History/report availability
 - main map filter hardening
 - main map Product search
-- asynchronous S100 Edition and Rollback activation
+- asynchronous S100 Edition and Cancel Export activation
 - persisted polling and reload recovery
 - backend-authoritative active-job visibility across users and computers
 - fail-closed mutation preflight
@@ -500,4 +500,4 @@ Recent frontend work has focused on:
 - FI-011C source-aware Product context, popup actions, and flat Export menu
 - FI-011D source-aware Product Collection, workspace resolution, and truthful History/report availability
 
-The frontend is ready for controlled user testing with asynchronous Export/Rollback, shared active-operation visibility and the manually verified BE-107 Dashboard pagination baseline `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`. BE-106 documents—but does not implement—the future move of worker execution to JobPlatform. The next planned backend package is BE-108 Product History failure hardening when its producer contract is ready. Remaining backend-dependent work includes atomic enqueue ownership, any later shared-worker implementation, report contracts, future export variants and the global timeline.
+The frontend is ready for controlled user testing with asynchronous Export/Cancel Export, shared active-operation visibility and the manually verified BE-107 Dashboard pagination baseline `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`. BE-106 documents—but does not implement—the future move of worker execution to JobPlatform. The next planned backend package is BE-108 Product History failure hardening when its producer contract is ready. Remaining backend-dependent work includes atomic enqueue ownership, any later shared-worker implementation, report contracts, future export variants and the global timeline.

@@ -146,7 +146,10 @@ test("compatibility AOI retains mutation actions and simplified Export leaves", 
   const tools = actions.find((action) => action.id === "tools");
   assert.ok(actions.some((action) => action.id === "freeze-feature"));
   assert.ok(actions.some((action) => action.id === "send-immediately"));
-  assert.ok(actions.some((action) => action.id === "rollback"));
+  const cancelExportAction = actions.find((action) => action.id === "rollback");
+  assert.ok(cancelExportAction);
+  assert.equal(cancelExportAction.label, "Cancel Export");
+  assert.equal(cancelExportAction.icon, "x-circle");
   assert.deepEqual(
     exportAction.items.map((item) => item.label),
     ["Edition", "Update"]

@@ -10,7 +10,7 @@ const PRODUCT_OPERATION_RUNNING_REASON = "Wait until the current product operati
 const SEND_CAPABILITY_UNAVAILABLE_REASON = "Send to IC-ENC availability could not be verified.";
 const EXPORT_STATE_REASON = "New Edition is only available when product status is Idle.";
 const ROLLBACK_STATE_REASON =
-  "Rollback is only available when product status is Exported or Frozen.";
+  "Cancel Export is only available when product status is Exported or Frozen.";
 
 const PRODUCT_STATE_ID = Object.freeze({
   IDLE: 1,

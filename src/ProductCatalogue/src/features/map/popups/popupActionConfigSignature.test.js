@@ -6,15 +6,15 @@ import { createActionConfigSignature } from "./popupActionConfigSignature.js";
 test("action signature ignores recreated click handlers when visible state is unchanged", () => {
   const first = createActionConfigSignature({
     id: "rollback",
-    label: "Rollback",
-    icon: "undo",
+    label: "Cancel Export",
+    icon: "x-circle",
     disabled: false,
     onClick: () => "first",
   });
   const second = createActionConfigSignature({
     id: "rollback",
-    label: "Rollback",
-    icon: "undo",
+    label: "Cancel Export",
+    icon: "x-circle",
     disabled: false,
     onClick: () => "second",
   });

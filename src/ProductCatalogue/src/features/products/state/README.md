@@ -23,8 +23,8 @@ Supported operation types:
 - `export`
 - `rollback`
 
-Rollback is defined as an operation type for future use, but the UI action is
-currently disabled.
+The internal `rollback` operation type is retained for compatibility with existing job/state contracts.
+The UI presents that operation as `Cancel Export`.
 
 ## Responsibilities
 

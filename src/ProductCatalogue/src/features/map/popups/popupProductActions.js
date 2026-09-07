@@ -143,39 +143,39 @@ export async function sendImmediately(datasetName, anchorElement, { afterResult 
 
 export async function triggerRollback(datasetName, anchorElement, { afterResult } = {}) {
   if (!datasetName) {
-    noticeError("Cannot rollback product", "The selected feature does not have a datasetName.");
+    noticeError("Cannot cancel export", "The selected feature does not have a datasetName.");
     return null;
   }
   return runConfirmedProductOperation({
     datasetName,
     confirm: {
-      title: `Rollback ${datasetName}`,
+      title: `Cancel Export ${datasetName}`,
       message:
-        `Are you sure you want to rollback ${datasetName}? ` +
+        `Are you sure you want to cancel the current export for ${datasetName}? ` +
         "The operation will continue in the background until it succeeds or fails.",
-      confirmText: "Rollback",
+      confirmText: "Confirm",
       cancelText: "Cancel",
       anchorElement,
     },
     operation: {
       type: PRODUCT_OPERATION_TYPE.ROLLBACK,
-      label: "Rolling back",
+      label: "Canceling export",
     },
     execute: () => exportRollback(datasetName),
     onSuccess: (result) => {
       const warning = result.data?.warning;
       if (warning) {
-        noticeWarning(`Product ${datasetName} rolled back with a warning`, warning.message);
+        noticeWarning(`Cancel Export completed for ${datasetName} with a warning`, warning.message);
         return;
       }
 
-      noticeApiSuccess(`Product ${datasetName} rolled back successfully`);
+      noticeApiSuccess(`Cancel Export completed for ${datasetName}`);
     },
     failureNotice: {
-      networkTitle: `Network error while rolling back ${datasetName}`,
-      failureTitle: `Failed to rollback ${datasetName}`,
+      networkTitle: `Network error while canceling export for ${datasetName}`,
+      failureTitle: `Failed to cancel export for ${datasetName}`,
     },
-    unexpectedErrorTitle: `Unexpected error while rolling back ${datasetName}`,
+    unexpectedErrorTitle: `Unexpected error while canceling export for ${datasetName}`,
     afterResult,
   });
 }

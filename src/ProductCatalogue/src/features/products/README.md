@@ -31,7 +31,7 @@ Typed input is intentionally preserved as a fallback where the existing workspac
 
 ## Product operation jobs
 
-New Edition export and Rollback use the asynchronous Product Catalogue job contract:
+New Edition export and Cancel Export use the asynchronous Product Catalogue job contract; Cancel Export retains the legacy Rollback wire operation:
 
 ```text
 POST /export/{datasetName}/newedition/jobs?exportTarget=S100
@@ -87,7 +87,7 @@ GET /jobs/active?datasetName={datasetName}
 
 The backend endpoint is the authoritative discovery source. Browser storage and `BroadcastChannel` only reduce latency between tabs in the same browser profile.
 
-The action layer also runs a backend preflight before Freeze, Unfreeze, Send, Export or Rollback. A failed active-state lookup is treated as unavailable operation state, and the frontend does not dispatch the mutation. This prevents a temporary status-service failure from being interpreted as “no active operation.”
+The action layer also runs a backend preflight before Freeze, Unfreeze, Send, Export or Cancel Export. A failed active-state lookup is treated as unavailable operation state, and the frontend does not dispatch the mutation. This prevents a temporary status-service failure from being interpreted as “no active operation.”
 
 ## FI-011D workspace contract
 
