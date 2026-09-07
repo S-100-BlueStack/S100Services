@@ -8,9 +8,15 @@ import {
   createDashboardPagingState,
   createDashboardQueryState,
   moveDashboardPage,
+  normalizeDashboardPageSize,
   resetDashboardPaging,
 } from "../domain/dashboardQuery.js";
 import { createDashboardRange } from "../domain/dashboardRange.js";
+import {
+  onDashboardPageSizePreferenceReset,
+  readDashboardPageSizePreference,
+  writeDashboardPageSizePreference,
+} from "../state/dashboardPageSizePreference.js";
 import {
   createDashboardDocumentTitle,
   getCurrentDashboardRoute,
@@ -24,7 +30,11 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
   let currentRange = createDashboardRange(rangePreset, { from, to });
   let currentDashboard = null;
   let currentFilters = createDefaultDashboardFilters();
+  let currentPageSize = readDashboardPageSizePreference();
   let pagingState = createDashboardPagingState();
+  let pageSizeGeneration = 0;
+  let currentDashboardPageSizeGeneration = 0;
+  let currentDashboardPageNumber = 1;
   let loadRequestId = 0;
   const activeRequestControllers = new Set();
   let searchDebounceId = null;
@@ -33,14 +43,19 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
   document.title = createDashboardDocumentTitle(currentRange);
 
   const render = ({ loading = false, error = null } = {}) => {
+    const pagingMatchesPageSize = currentDashboardPageSizeGeneration === pageSizeGeneration;
     renderDashboardPage({
       range: currentRange,
       dashboard: currentDashboard,
       filters: currentFilters,
       loading,
       error,
-      pageNumber: pagingState.cursorHistory.length + 1,
-      canGoPrevious: pagingState.cursorHistory.length > 0,
+      pageSize: currentPageSize,
+      pageNumber: pagingMatchesPageSize
+        ? pagingState.cursorHistory.length + 1
+        : currentDashboardPageNumber,
+      canGoPrevious: pagingMatchesPageSize && pagingState.cursorHistory.length > 0,
+      pagingMatchesPageSize,
     });
   };
 
@@ -57,6 +72,8 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
     { updateUrl = true, resetPage = false, abortPrevious = true } = {}
   ) => {
     const requestId = ++loadRequestId;
+    const requestPageSize = currentPageSize;
+    const requestPageSizeGeneration = pageSizeGeneration;
     currentRange = nextRange;
 
     if (resetPage) {
@@ -83,6 +100,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
         createDashboardQueryState({
           filters: currentFilters,
           cursor: pagingState.cursor,
+          pageSize: requestPageSize,
         }),
         { signal: requestController.signal }
       );
@@ -92,6 +110,8 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
       }
 
       currentDashboard = dashboard;
+      currentDashboardPageSizeGeneration = requestPageSizeGeneration;
+      currentDashboardPageNumber = pagingState.cursorHistory.length + 1;
       currentFilters = normalizeDashboardFilters(currentFilters, dashboard.filterOptions);
       render();
       return { status: "succeeded" };
@@ -156,7 +176,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
   };
 
   const handlePageChange = async (event) => {
-    if (searchDebounceId !== null) {
+    if (searchDebounceId !== null || currentDashboardPageSizeGeneration !== pageSizeGeneration) {
       return;
     }
 
@@ -180,6 +200,31 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
     }
   };
 
+  const handlePageSizeChange = async (event, { persist = true } = {}) => {
+    const nextPageSize = normalizeDashboardPageSize(event?.detail?.pageSize);
+    if (nextPageSize === currentPageSize) {
+      return;
+    }
+
+    currentPageSize = nextPageSize;
+    pageSizeGeneration += 1;
+
+    if (persist) {
+      writeDashboardPageSizePreference(currentPageSize);
+    }
+
+    if (searchDebounceId !== null) {
+      window.clearTimeout(searchDebounceId);
+      searchDebounceId = null;
+    }
+
+    await loadDashboard(currentRange, { updateUrl: false, resetPage: true });
+  };
+
+  const pageSizePreferenceResetHandle = onDashboardPageSizePreferenceReset(({ pageSize }) => {
+    void handlePageSizeChange({ detail: { pageSize } }, { persist: false });
+  });
+
   const handleRefresh = async () => {
     await loadDashboard(currentRange, { updateUrl: false });
   };
@@ -198,6 +243,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
   document.addEventListener("pc-dashboard-range-change", handleRangeChange);
   document.addEventListener("pc-dashboard-filter-change", handleFilterChange);
   document.addEventListener("pc-dashboard-page-change", handlePageChange);
+  document.addEventListener("pc-dashboard-page-size-change", handlePageSizeChange);
   document.addEventListener("pc-dashboard-refresh", handleRefresh);
   window.addEventListener("popstate", handlePopState);
 
@@ -225,7 +271,9 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
       document.removeEventListener("pc-dashboard-range-change", handleRangeChange);
       document.removeEventListener("pc-dashboard-filter-change", handleFilterChange);
       document.removeEventListener("pc-dashboard-page-change", handlePageChange);
+      document.removeEventListener("pc-dashboard-page-size-change", handlePageSizeChange);
       document.removeEventListener("pc-dashboard-refresh", handleRefresh);
+      pageSizePreferenceResetHandle.remove();
       window.removeEventListener("popstate", handlePopState);
       document.body.classList.remove("pc-dashboard-route");
     },

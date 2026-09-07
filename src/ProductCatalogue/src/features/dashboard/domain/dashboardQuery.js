@@ -4,14 +4,21 @@ import {
   normalizeDashboardFilters,
 } from "./dashboardFilters.js";
 
-export const DASHBOARD_PAGE_SIZE = 50;
+export const DASHBOARD_PAGE_SIZE_OPTIONS = Object.freeze([25, 50, 100, 200]);
+export const DASHBOARD_DEFAULT_PAGE_SIZE = 50;
+export const DASHBOARD_PAGE_SIZE = DASHBOARD_DEFAULT_PAGE_SIZE;
 
-export function createDashboardQueryState({ filters, cursor = null } = {}) {
+export function createDashboardQueryState({ filters, cursor = null, pageSize } = {}) {
   return {
     filters: normalizeDashboardFilters(filters ?? createDefaultDashboardFilters()),
     cursor: normalizeCursor(cursor),
-    pageSize: DASHBOARD_PAGE_SIZE,
+    pageSize: normalizeDashboardPageSize(pageSize),
   };
+}
+
+export function normalizeDashboardPageSize(value) {
+  const pageSize = Number(value);
+  return DASHBOARD_PAGE_SIZE_OPTIONS.includes(pageSize) ? pageSize : DASHBOARD_DEFAULT_PAGE_SIZE;
 }
 
 export function appendDashboardQueryParameters(params, queryState) {

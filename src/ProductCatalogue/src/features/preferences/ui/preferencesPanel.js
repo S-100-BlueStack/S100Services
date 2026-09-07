@@ -1,4 +1,5 @@
 import { noticeSuccess } from "../../notices/services/noticeService.js";
+import { resetDashboardPageSizePreference } from "../../dashboard/state/dashboardPageSizePreference.js";
 import { resetMapViewpoint } from "../../map/state/mapViewpointPersistence.js";
 import { resetDisplayScaleHidingPreference } from "../../map/scale/displayScaleOverrideState.js";
 import { resetThemePreference } from "../../themes/themeService.js";
@@ -157,6 +158,9 @@ export function initPreferencesPanel({
           await context.dataSourceController?.resetToDefaults?.({
             reason: "preferences-reset",
           });
+        }
+        if (document.body.classList.contains("pc-dashboard-route")) {
+          resetDashboardPageSizePreference();
         }
         resetThemePreference(context.view);
         syncThemeToggle();

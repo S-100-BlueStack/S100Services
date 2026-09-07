@@ -370,7 +370,7 @@ Dashboard can show:
 - operation summary
 - debounced server-side search
 - server-side filters
-- cursor pagination with a fixed frontend page size of 50
+- cursor pagination with a browser-persisted `25 / 50 / 100 / 200` page-size selector, defaulting to 50
 - stale-request suppression and last-successful-result retention
 - actionable status/operation summary rows that apply matching filters
 - Dashboard History panel opened from activity-row `History`
@@ -378,7 +378,7 @@ Dashboard can show:
 - onward links to Review and Analyze
 - disabled or placeholder report actions until report endpoints exist
 
-Dashboard filters run in the backend before summary calculation and cursor page selection. Summary cards, status summary, operation summary and total counts represent the complete filtered result, while the activity list contains only the current page. Filter or range changes reset cursor history.
+Dashboard filters run in the backend before summary calculation and cursor page selection. Summary cards, status summary, operation summary and total counts represent the complete filtered result, while the activity list contains only the current page. Filter, range, or page-size changes reset cursor history. Page size is browser-local Dashboard state and is not added to the route URL.
 
 Dashboard History panel is route-local. It replaces the right summary column while open, closes with `Close` or `Escape`, shows selected activity context, highlights the selected activity row, and reuses the shared product history API/renderers without interacting with main map popup state or Product Collection state.
 

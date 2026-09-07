@@ -683,7 +683,7 @@ Status: Complete and manually verified against baseline `7eb0fe25e2a8d44b9e4da29
 
 The existing `GET /electronicproducts/dashboard` endpoint now accepts additive server-side filters for search, Product, type, status, importance, and reports plus optional cursor paging.
 
-The Product Catalogue frontend uses `pageSize=50`; the backend accepts `1-200`. Omitting `pageSize` preserves the complete filtered activity list for existing consumers. A cursor is opaque and valid only together with `pageSize`.
+The Product Catalogue frontend uses `pageSize=25`, `50`, `100`, or `200`, with `50` as the browser-default selection; the backend accepts `1-200`. Omitting `pageSize` preserves the complete filtered activity list for existing consumers. A cursor is opaque and valid only together with `pageSize`.
 
 Filtering is applied before summaries and page selection. Summary cards, status summary, operation summary, `TotalHits`, and `Paging.Total` represent the complete filtered result. Only `Activities` and `Paging.Returned` are page-bounded.
 
@@ -702,9 +702,10 @@ The persisted `ProductRecord.Id` GUID is used as the stable activity key when av
 - Search text preserves the user's casing while backend matching remains case-insensitive.
 - Rapid search edits supersede stale responses without routinely aborting requests in the browser Network panel.
 - Immediate range, select-filter, page and manual-refresh requests abort stale in-flight requests.
-- Filter and range changes reset cursor history.
-- Previous/Next navigation uses an in-memory stack of opaque backend cursors.
+- Filter, range, and page-size changes reset cursor history.
+- Previous/Next navigation uses an in-memory stack of opaque backend cursors and never reuses that stack across page-size generations.
 - The last successful result stays visible during loading and individual request failures.
+- Dashboard page size is stored as browser-local frontend state and is intentionally excluded from direct URL/reload range state.
 - Dashboard History and direct URL/reload range behavior are preserved.
 
 ### Current repository boundary
@@ -727,10 +728,11 @@ The endpoint now logs source/filtered/returned counts and repository, mapping, f
 
 ### Deferred Dashboard enhancements
 
-The following improvements are recorded for later work and are not part of BE-107 acceptance:
+The following improvement is recorded for later work and is not part of BE-107 acceptance:
 
-- user-selectable page size; the backend already accepts `1-200`, while the frontend intentionally remains fixed at `50`;
 - sortable activity columns; this requires an explicit server-side sort contract and cursor semantics tied to the selected sort.
+
+FI-009 adds the frontend-only user-selectable page-size extension on top of the unchanged BE-107 backend contract.
 
 ---
 

@@ -23,7 +23,7 @@ Implemented scope:
 - Compact activity list with product links.
 - Debounced server-side search.
 - Server-side filters for type, status, importance, reports and product.
-- Cursor-paginated activity rows with a default page size of 50.
+- Cursor-paginated activity rows with a user-selectable page size of 25, 50, 100, or 200; 50 remains the default.
 - Request cancellation so stale filter/search responses cannot replace newer results.
 - Last-successful-result retention during refresh and request failures.
 - Status and operation breakdowns.
@@ -68,7 +68,7 @@ Supported additive query parameters:
 - `pageSize`: 1-200
 - `cursor`: opaque continuation token returned by the previous response
 
-The frontend uses `pageSize=50`. Omitting `pageSize` preserves the legacy full-list response behavior for existing consumers. A cursor is valid only together with `pageSize`.
+The frontend sends the selected Dashboard page size as `pageSize`, using 50 when no valid browser preference exists. Supported UI values are 25, 50, 100, and 200. Page size is intentionally not encoded in the Dashboard route URL. Omitting `pageSize` preserves the legacy full-list response behavior for existing consumers. A cursor is valid only together with `pageSize`.
 
 Ordering is deterministic: `Timestamp DESC`, then immutable activity `Id DESC`. The current activity ID uses the persisted `ProductRecord.Id` GUID when available. The cursor is opaque to consumers and represents the final sort key on the returned page.
 
@@ -186,7 +186,7 @@ The active filters are:
 - reports
 - product
 
-Search is debounced by 300 ms. Debounced search edits supersede older responses through request identity checks without routinely aborting the previous browser request. Immediate range, select-filter, page and manual-refresh actions abort stale in-flight requests. Filter and range changes reset pagination to the first page. Previous/Next navigation keeps a client-side cursor stack, while the cursor values themselves remain backend-owned and opaque.
+Search is debounced by 300 ms. Debounced search edits supersede older responses through request identity checks without routinely aborting the previous browser request. Immediate range, select-filter, page and manual-refresh actions abort stale in-flight requests. Filter, range, and page-size changes reset pagination to the first page. Previous/Next navigation keeps a client-side cursor stack, while the cursor values themselves remain backend-owned and opaque. A page-size change invalidates the current cursor chain before the replacement request starts, so cursors created for another page-size generation cannot be reused even if the replacement request fails.
 
 Summary cards, status summary and operation summary always represent the complete filtered result. They are never calculated from only the visible page. `Paging.Total` is the complete filtered activity count; `Paging.Returned` is the number of rows on the current page.
 
@@ -199,6 +199,14 @@ The Dashboard keeps the last successful result visible while a request loads. If
 Automated coverage includes backend filtering/paging semantics, complete-result summaries, filter options, backward-compatible unpaged requests, stable equal-timestamp ordering, report filters, empty results, query validation, frontend query serialization, cursor history, paging normalization and search-value preservation.
 
 Manual verification by the project owner confirmed that Dashboard pagination works as intended at commit `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+
+## Dashboard page-size preference
+
+The Activity list pagination footer owns a compact `Rows per page` selector with exactly `25`, `50`, `100`, and `200`. The selected logical number is stored in browser-local Dashboard state under `pc.dashboard.pageSize.v1`. Missing, malformed, or unsupported values normalize to `50`.
+
+Changing the selector preserves the current range, search, and filters, clears the cursor stack, aborts superseded requests, and reloads page 1 with the selected size. The existing request ID/AbortController boundary prevents an older page or page-size response from replacing newer state. If the replacement request fails, the last successful Dashboard result remains visible, while its old cursor chain stays disabled until a request for the current page-size generation succeeds.
+
+The existing Preferences `Reset available preferences` action clears this Dashboard value when used on the Dashboard route. The Dashboard controller receives the reset and immediately returns to page size `50` without adding page size to the public route URL.
 
 ## Actionable summaries
 

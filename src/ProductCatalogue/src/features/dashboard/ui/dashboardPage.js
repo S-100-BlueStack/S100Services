@@ -17,6 +17,10 @@ import {
   normalizeDashboardFilters,
 } from "../domain/dashboardFilters.js";
 import {
+  DASHBOARD_DEFAULT_PAGE_SIZE,
+  DASHBOARD_PAGE_SIZE_OPTIONS,
+} from "../domain/dashboardQuery.js";
+import {
   DASHBOARD_RANGE_PRESETS,
   createDashboardRange,
   formatDashboardDateTimeInputValue,
@@ -77,8 +81,10 @@ export function renderDashboardPage({
   filters = createDefaultDashboardFilters(),
   loading = false,
   error = null,
+  pageSize = DASHBOARD_DEFAULT_PAGE_SIZE,
   pageNumber = 1,
   canGoPrevious = false,
+  pagingMatchesPageSize = true,
 }) {
   ensureDashboardHistoryKeyboardHandlers();
   const focusState = captureDashboardControlFocus();
@@ -89,14 +95,25 @@ export function renderDashboardPage({
     filters: dashboardFilters,
     loading,
     error,
+    pageSize,
     pageNumber,
     canGoPrevious,
+    pagingMatchesPageSize,
   };
 
   const page = getOrCreateDashboardPage();
   page.replaceChildren(
     createHeader({ range, dashboard, loading }),
-    createBody({ range, dashboard, loading, error, pageNumber, canGoPrevious })
+    createBody({
+      range,
+      dashboard,
+      loading,
+      error,
+      pageSize,
+      pageNumber,
+      canGoPrevious,
+      pagingMatchesPageSize,
+    })
   );
   restoreDashboardControlFocus(focusState);
 }
@@ -770,14 +787,16 @@ function captureDashboardControlFocus() {
 
   const filterKey = activeElement.dataset.dashboardFilterKey;
   const rangeInputId = activeElement.id?.startsWith("dashboard-range-") ? activeElement.id : null;
+  const pageSizeControl = activeElement.hasAttribute("data-dashboard-page-size");
 
-  if (!filterKey && !rangeInputId) {
+  if (!filterKey && !rangeInputId && !pageSizeControl) {
     return null;
   }
 
   return {
     filterKey,
     rangeInputId,
+    pageSizeControl,
     selectionStart: activeElement instanceof HTMLInputElement ? activeElement.selectionStart : null,
     selectionEnd: activeElement instanceof HTMLInputElement ? activeElement.selectionEnd : null,
   };
@@ -790,7 +809,9 @@ function restoreDashboardControlFocus(focusState) {
 
   const selector = focusState.rangeInputId
     ? `#${CSS.escape(focusState.rangeInputId)}`
-    : `[data-dashboard-filter-key="${focusState.filterKey}"]`;
+    : focusState.pageSizeControl
+      ? "[data-dashboard-page-size]"
+      : `[data-dashboard-filter-key="${focusState.filterKey}"]`;
   const nextElement = document.querySelector(selector);
 
   if (!(nextElement instanceof HTMLInputElement || nextElement instanceof HTMLSelectElement)) {
@@ -821,7 +842,16 @@ function createRefreshButton(loading) {
   return button;
 }
 
-function createBody({ range, dashboard, loading, error, pageNumber, canGoPrevious }) {
+function createBody({
+  range,
+  dashboard,
+  loading,
+  error,
+  pageSize,
+  pageNumber,
+  canGoPrevious,
+  pagingMatchesPageSize,
+}) {
   const body = document.createElement("section");
   body.className = "pc-dashboard-body";
 
@@ -859,8 +889,10 @@ function createBody({ range, dashboard, loading, error, pageNumber, canGoPreviou
       loading,
       filters: dashboardFilters,
       filterOptions,
+      pageSize,
       pageNumber,
       canGoPrevious,
+      pagingMatchesPageSize,
     })
   );
 
@@ -946,8 +978,10 @@ function createDashboardGrid({
   loading,
   filters,
   filterOptions,
+  pageSize,
   pageNumber,
   canGoPrevious,
+  pagingMatchesPageSize,
 }) {
   const grid = document.createElement("section");
   grid.className = "pc-dashboard-grid";
@@ -962,8 +996,10 @@ function createDashboardGrid({
       filterOptions,
       sourceActivityCount,
       paging: dashboard.paging,
+      pageSize,
       pageNumber,
       canGoPrevious,
+      pagingMatchesPageSize,
     })
   );
 
@@ -997,7 +1033,16 @@ function createActivityList(
   activities,
   loading,
   timeZone,
-  { filters, filterOptions, sourceActivityCount, paging, pageNumber, canGoPrevious }
+  {
+    filters,
+    filterOptions,
+    sourceActivityCount,
+    paging,
+    pageSize,
+    pageNumber,
+    canGoPrevious,
+    pagingMatchesPageSize,
+  }
 ) {
   const section = document.createElement("section");
   section.className = "pc-dashboard-panel pc-dashboard-activity";
@@ -1028,7 +1073,14 @@ function createActivityList(
     header,
     createActivityFilterBar({ filters, filterOptions, hasFilters }),
     tableWrapper,
-    createActivityPagination({ paging, pageNumber, canGoPrevious, loading })
+    createActivityPagination({
+      paging,
+      pageSize,
+      pageNumber,
+      canGoPrevious,
+      loading,
+      pagingMatchesPageSize,
+    })
   );
   return section;
 }
@@ -1161,16 +1213,23 @@ function rerenderDashboardPage(focusState = null) {
   restoreDashboardControlFocus(focusState);
 }
 
-function createActivityPagination({ paging, pageNumber, canGoPrevious, loading }) {
+function createActivityPagination({
+  paging,
+  pageSize,
+  pageNumber,
+  canGoPrevious,
+  loading,
+  pagingMatchesPageSize,
+}) {
   const footer = document.createElement("footer");
   footer.className = "pc-dashboard-pagination";
 
   const total = Number(paging?.total) || 0;
   const returned = Number(paging?.returned) || 0;
-  const pageSize = Number(paging?.pageSize) || returned || 1;
-  const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
+  const displayedPageSize = Number(paging?.pageSize) || returned || 1;
+  const totalPages = total > 0 ? Math.ceil(total / displayedPageSize) : 1;
 
-  const firstRow = total > 0 ? (pageNumber - 1) * pageSize + 1 : 0;
+  const firstRow = total > 0 ? (pageNumber - 1) * displayedPageSize + 1 : 0;
   const lastRow = total > 0 ? Math.min(firstRow + returned - 1, total) : 0;
   const rowRange = firstRow === lastRow ? String(firstRow) : `${firstRow}-${lastRow}`;
 
@@ -1178,15 +1237,55 @@ function createActivityPagination({ paging, pageNumber, canGoPrevious, loading }
   meta.className = "pc-dashboard-pagination__meta";
   meta.textContent = `Page ${pageNumber} of ${totalPages} \u00b7 ${rowRange} of ${total}`;
 
+  const controls = document.createElement("div");
+  controls.className = "pc-dashboard-pagination__controls";
+
   const actions = document.createElement("div");
   actions.className = "pc-dashboard-pagination__actions";
   actions.append(
-    createPaginationButton("Previous", "previous", loading || !canGoPrevious),
-    createPaginationButton("Next", "next", loading || !paging?.hasMore)
+    createPaginationButton(
+      "Previous",
+      "previous",
+      loading || !pagingMatchesPageSize || !canGoPrevious
+    ),
+    createPaginationButton("Next", "next", loading || !pagingMatchesPageSize || !paging?.hasMore)
   );
 
-  footer.append(meta, actions);
+  controls.append(createPageSizeControl(pageSize), actions);
+  footer.append(meta, controls);
   return footer;
+}
+
+function createPageSizeControl(pageSize) {
+  const label = document.createElement("label");
+  label.className = "pc-dashboard-page-size";
+
+  const text = document.createElement("span");
+  text.textContent = "Rows per page";
+
+  const select = document.createElement("select");
+  select.className = "pc-dashboard-page-size__select";
+  select.dataset.dashboardPageSize = "true";
+  select.setAttribute("aria-label", "Rows per page");
+
+  for (const option of DASHBOARD_PAGE_SIZE_OPTIONS) {
+    const element = document.createElement("option");
+    element.value = String(option);
+    element.textContent = String(option);
+    select.appendChild(element);
+  }
+
+  select.value = String(pageSize);
+  select.addEventListener("change", () => {
+    document.dispatchEvent(
+      new CustomEvent("pc-dashboard-page-size-change", {
+        detail: { pageSize: Number(select.value) },
+      })
+    );
+  });
+
+  label.append(text, select);
+  return label;
 }
 
 function createPaginationButton(label, direction, disabled) {
