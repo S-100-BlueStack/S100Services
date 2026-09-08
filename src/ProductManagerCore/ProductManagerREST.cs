@@ -641,7 +641,7 @@ namespace ProductCatalogue
                 Edition = (uint?)electronicProduct.editionNumber,
                 ENCVer = "INT.IHO.S-101.2.0",
                 FCVer = "2.0",
-                verticalDatum = "Baltic Sea Chart Datum 2000,44",
+                VerticalDatum = "Baltic Sea Chart Datum 2000,44",
                 //Update = (uint?)electronicProduct.updateNumber,   // todo: Bug in s100ocompiler and must always be null 
             };
 
