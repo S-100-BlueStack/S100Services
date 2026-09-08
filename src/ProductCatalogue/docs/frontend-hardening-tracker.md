@@ -2,7 +2,7 @@
 
 This document tracks frontend-only cleanup, hardening, and architecture improvements for Product Catalogue. The goal is to improve maintainability, reliability, and structure without changing the user-facing feature set unless an item explicitly tracks a feature foundation.
 
-Current reviewed repository baseline: `1c6040a60d97429c2232b9b68f0b849a4591df4b`.
+Current reviewed repository baseline: `8e375296a286e3228fa8a6f7111769715038b320`.
 BE-108A documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`.
 
 ## Backend worker-readiness note
@@ -108,7 +108,7 @@ BE-106 is documentation-only. It confirms that ProductCatalogueAPI remains the p
 | FI-014 | Popup actions                    | Rename Rollback to Cancel Export and replace its icon                    | Done                                     | User-facing Product action is `Cancel Export` with Calcite `x-circle`, `Canceling export...` running presentation, and `[Cancel] [Confirm]` confirmation controls. Legacy rollback endpoint/action/job identifiers remain internal. Committed at `70b0775936505dca8c1abb221f4a08953411efc1`.                                                                                                                                                          |
 | FI-015 | Product Collection               | Use graph-bar for Add to collection                                      | Done                                     | Popup `Add to collection` uses Calcite `graph-bar`; selected/Remove state continues to use `check`. Tooltip, accessibility, toggle behavior, onboarding targeting and source-aware Collection semantics are unchanged. Committed at `636c1b7727d373c780afab60849eca3dc3c1b825`.                                                                                                                                                                       |
 | FI-016 | Main map / Symbology             | Define a new Product AOI status palette                                  | Blocked by backend                       | Wait for the authoritative backend status definition and error classification. Then define centralized, accessible light/dark symbology with stable status semantics across independently rendered sources.                                                                                                                                                                                                                                           |
-| FI-017 | Branding / Deployment            | Make application logo environment-configurable                           | Todo                                     | Load the deployment logo from non-secret environment configuration with a generic non-GST static fallback. A missing or failed custom logo must not break layout or startup.                                                                                                                                                                                                                                                                          |
+| FI-017 | Branding / Deployment            | Make application branding environment-configurable                       | Done                                     | Logo and favicon are deployment-configurable through non-secret Vite build inputs with neutral bundled fallbacks. Custom branding loads from its configured runtime URL, and replacing the file behind an unchanged URL requires no frontend rebuild or redeploy. Committed at `8e375296a286e3228fa8a6f7111769715038b320`. |
 | FI-018 | Open source readiness            | Remove organization-specific deployment assumptions                      | Future review                            | Audit branding, configuration, URLs, authentication assumptions, documentation, sample data, secrets, licenses, and deployment defaults so a third party can deploy the application without editing GST-specific source code.                                                                                                                                                                                                                         |
 | FI-019 | Analyze / Review routing         | Replace path-concatenated Product URLs with canonical query routes       | Ready / canonical contract fixed         | Use `/Analyze?Datasets=ProductA,ProductB` and `/Review?Datasets=ProductA,ProductB`. Dataset names are globally unique across current and future sources, while internal runtime state remains source-aware.                                                                                                                                                                                                                                           |
 | FI-020 | Popup / Related Products         | Navigate backend-linked Products across data sources                     | Blocked by backend relationship contract | Render only explicit backend/database-provided Product relationships. No source pair or relationship may be inferred; authoritative target identity, relation type, and display text must support any current or future source.                                                                                                                                                                                                                       |
@@ -129,7 +129,7 @@ BE-106 is documentation-only. It confirms that ProductCatalogueAPI remains the p
 11. Keep FI-011C as the committed central Product-context, capability-specific popup-action, and flat source-aware Edition/Update Export baseline at `391074743efc909ec97168e2be2820484edb8455`.
 12. Keep FI-011D as the committed source-aware Product Collection, workspace catalog/resolution, Analyze, Review, and truthful History/report baseline at `737677d7ecd0857312224fde3e5f9a76a0cb7148`; do not enable mock-source backend actions.
 13. Keep authoritative production S-57/S-101 transport blocked until the backend supplies separate read contracts and source discrimination.
-14. FI-012, FI-009, FI-013, FI-014 and FI-015 are complete; the latest manually accepted frontend baseline is `1c6040a60d97429c2232b9b68f0b849a4591df4b`. FI-017 and FI-019 may proceed independently subject to their own dependencies.
+14. FI-012, FI-009, FI-013, FI-014, FI-015 and FI-017 are complete; the latest manually accepted frontend baseline is `8e375296a286e3228fa8a6f7111769715038b320`. FI-019 may proceed independently subject to its own dependencies.
 15. Complete FI-016 only after the backend status list identifies authoritative error states and display semantics, then activate the final FI-011 error-only first-visit filter preset.
 16. Treat FI-018 as a later cross-repository release-readiness review after configurable branding and deployment settings are established.
 
@@ -587,29 +587,69 @@ The palette must:
 - define fallback rendering for unknown future statuses;
 - include visual regression/manual checks for overlapping S-57 and S-101 AOIs.
 
-## FI-017 environment-configurable branding logo
+## FI-017 environment-configurable branding
 
-Status: Todo
+Status: Done  
+Implementation commit: `8e375296a286e3228fa8a6f7111769715038b320`
 
-Replace the GST-specific static logo as the deployment default.
+FI-017 removes the GST-specific bundled visual identity from the application shell and introduces one central branding configuration boundary for the navbar logo and browser favicon. The repository default is neutral and remains deployable without organization-specific assets.
 
-Recommended configuration boundary:
+### Configuration boundary
+
+The non-secret Vite build inputs are:
 
 ```text
 VITE_APP_LOGO_URL
 VITE_APP_LOGO_ALT
+VITE_APP_FAVICON_URL
 ```
 
-Requirements:
+Configuration is resolved centrally rather than through feature-local `import.meta.env` reads. Branding values are build-time Vite inputs, while configured image URLs remain browser-loaded runtime resources. A deployment can therefore replace the file behind an unchanged configured URL without rebuilding or redeploying the frontend, subject to normal browser/server cache policy. Changing the configured URL itself still requires a new frontend build and deployment.
 
-- non-secret environment configuration may provide an absolute or deployment-relative logo URL;
-- the repository includes a neutral generic fallback asset;
-- missing, invalid, or failed custom assets fall back without breaking navbar/layout startup;
-- no GST name, path, or visual identity is required in source code to deploy another organization;
-- documentation explains build-time Vite configuration and fallback behavior;
-- accessibility uses configured or generic alternative text.
+Supported configured URL forms are:
 
-This item is a prerequisite/input to FI-018 but does not itself complete open-source readiness.
+- app-relative paths such as `branding/logo.svg` or `./branding/logo.svg`, resolved through the Vite application base;
+- origin-root-relative paths such as `/branding/Logo.png`, preserved without application-base prefixing;
+- absolute HTTP(S) URLs, preserved as configured.
+
+Unsupported explicit schemes fail closed to the bundled neutral fallback. Branding does not perform a preflight `fetch` or `HEAD` request and does not block application startup while a custom asset loads.
+
+### Fallback and accessibility behavior
+
+The repository includes a neutral Product Catalogue SVG fallback and no longer depends on the previous GST logo asset. The navbar keeps bounded logo dimensions so malformed or unusually sized custom artwork cannot expand the application header.
+
+Navbar branding behavior is:
+
+```text
+usable custom logo
+-> configured URL + configured alt text when present
+
+missing/invalid configuration
+-> bundled Product Catalogue fallback + Product Catalogue alt text
+
+custom image load failure
+-> one-way switch to bundled fallback + Product Catalogue alt text
+```
+
+The fallback transition is guarded against error loops and does not throw, show a notice, or block startup. Blank custom alternative text falls back to `Product Catalogue`.
+
+Favicon branding uses the same URL-resolution contract and neutral fallback principle. Branding bootstrap is independent from the main application bootstrap; `main.js` remains a normal static module entry rather than being dynamically imported solely for favicon initialization.
+
+### Deployment boundary and manual acceptance
+
+The production deployment was configured with same-origin `/branding/...` URLs backed by externally managed static files. The application source and committed environment defaults remain organization-neutral; deployment-specific values are supplied through an ignored local production environment file.
+
+Manual acceptance on the dev IIS deployment verified:
+
+1. the production frontend build completed successfully with deployment branding configuration;
+2. the configured navbar logo loaded from the deployment URL;
+3. normal Product Catalogue startup and API use remained functional after deployment;
+4. replacing the logo file behind the same configured URL required no frontend rebuild, API publish, IIS restart, or application restart;
+5. a browser refresh loaded the replacement logo as intended.
+
+The favicon is covered by the implemented configuration/fallback contract, but a separate browser-cache acceptance result was not recorded during this verification pass. Favicon cache policy remains a deployment/browser concern rather than a frontend cache-busting mechanism.
+
+FI-017 is an input to FI-018 but does not itself complete the broader open-source readiness audit.
 
 ## FI-018 open-source and third-party deployment readiness
 
@@ -711,6 +751,7 @@ Do not assign Shift-click in the first experiment. A map has no stable natural r
 
 | Date       | Commit                                   | Items           | Notes                                                                                                                                                                                                          |
 | ---------- | ---------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-08 | 8e375296a286e3228fa8a6f7111769715038b320 | FI-017          | Added environment-configurable logo and favicon branding with neutral bundled fallbacks, removed the GST-specific bundled logo, and manually verified same-URL runtime logo replacement on the dev IIS deployment. |
 | 2026-09-08 | 1c6040a60d97429c2232b9b68f0b849a4591df4b | FI-013          | Corrected Product-specific S-101 presentation while preserving `S100` wire identity; finalized source-specific Export help and compact right-aligned icon-only Tools popup presentation.                       |
 | 2026-09-07 | e4caa4d29c46083605beac10400876af6bf38d1c | FI-009          | Added user-selectable Dashboard page size (`25 / 50 / 100 / 200`), browser-local persistence, reset integration and page-size-safe cursor invalidation.                                                        |
 | 2026-09-07 | 70b0775936505dca8c1abb221f4a08953411efc1 | FI-014          | Renamed the user-facing Rollback action to Cancel Export, added `x-circle`, updated notices/help, and kept legacy rollback backend/wire identity internal.                                                     |

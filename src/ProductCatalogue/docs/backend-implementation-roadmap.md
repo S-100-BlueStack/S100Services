@@ -1,7 +1,7 @@
 # Product Catalogue backend implementation roadmap
 
 Current reviewed backend runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
-Current reviewed frontend baseline: `1c6040a60d97429c2232b9b68f0b849a4591df4b`.
+Current reviewed frontend baseline: `8e375296a286e3228fa8a6f7111769715038b320`.
 BE-108A documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`.
 
 This roadmap converts the current backend discussions into bounded implementation packages. It exists to prevent later work from introducing new architecture assumptions, database changes, or concurrency mechanisms without an explicit decision.
