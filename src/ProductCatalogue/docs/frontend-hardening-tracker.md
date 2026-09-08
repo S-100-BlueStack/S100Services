@@ -2,7 +2,7 @@
 
 This document tracks frontend-only cleanup, hardening, and architecture improvements for Product Catalogue. The goal is to improve maintainability, reliability, and structure without changing the user-facing feature set unless an item explicitly tracks a feature foundation.
 
-Current reviewed repository baseline: `a3a53e4aa55850091281f8e47825755798066cf9`.
+Current reviewed repository baseline: `1c6040a60d97429c2232b9b68f0b849a4591df4b`.
 BE-108A documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`.
 
 ## Backend worker-readiness note
@@ -57,11 +57,11 @@ BE-106 is documentation-only. It confirms that ProductCatalogueAPI remains the p
 | FH-030 | P1       | Analyze            | Show product history in Analyze sidebar                                                        | Done     | ad50c2ad3be05952f1955aa29cff8c3f29c0e79c                                                                                                                                  | Analyze product cards reuse the shared Product History renderer.                                                                                                                                                                                                                                                              |
 | FH-031 | P2       | Analyze            | Review Preferences availability on Analyze route                                               | Rejected |                                                                                                                                                                           | Full Preferences remain disabled on Analyze because most preferences are main-map scoped.                                                                                                                                                                                                                                     |
 | FH-032 | P1       | Product data       | Normalize product export metadata                                                              | Done     | 9ede3a5c94fbce900f0d5ae05d20e826b07faba3                                                                                                                                  | Added shared normalization for product `Exports` metadata.                                                                                                                                                                                                                                                                    |
-| FH-033 | P1       | Popup UI           | Render export metadata comparison in product popup                                             | Done     | 9ede3a5c94fbce900f0d5ae05d20e826b07faba3                                                                                                                                  | Popup shows S100 product metadata next to export metadata columns.                                                                                                                                                                                                                                                            |
+| FH-033 | P1       | Popup UI           | Render export metadata comparison in product popup                                             | Done     | 9ede3a5c94fbce900f0d5ae05d20e826b07faba3                                                                                                                                  | Popup compares Product-standard metadata with export metadata columns; FI-013 now presents the compatibility standard as `S-101` while legacy `S100` remains internal where required.                                                                                                                                           |
 | FH-034 | P2       | Terminology        | Standardize user-facing naming around Product/Products                                         | Done     | 805a853259b6594fe16384ae37b2e828d6de4c76                                                                                                                                  | Completed a UI-only terminology audit across the main user-facing surfaces. Visible copy uses `Product`/`Products`, technical identifiers such as `datasetName` remain unchanged, and a regression test protects the terminology boundary.                                                                                    |
 | FH-035 | P1       | Main map filters   | Restrict main map filters to Display scale, Status and Usage band                              | Done     | 708865afd5e21cc5893f3fade960d63407ec5710                                                                                                                                  | Status options come from the full status/product state endpoint, including count `0` options.                                                                                                                                                                                                                                 |
 | FH-036 | P1       | Popup / attributes | Stabilize first-load attribute display                                                         | Done     | 708865afd5e21cc5893f3fade960d63407ec5710                                                                                                                                  | Product popup details no longer fall back to all raw attributes when field/capability metadata is not ready.                                                                                                                                                                                                                  |
-| FH-037 | P1       | Popup actions      | Enable S100 Edition export and Rollback                                                        | Done     | a3ab23ee615d59b25cccdda4197b226e7efc09ad                                                                                                                                  | Enabled `S100 > Edition` and `Rollback`; disabled `All` export leaves.                                                                                                                                                                                                                                                        |
+| FH-037 | P1       | Popup actions      | Enable S100 Edition export and Rollback                                                        | Done     | a3ab23ee615d59b25cccdda4197b226e7efc09ad                                                                                                                                  | Enabled the legacy `S100` Edition target and Rollback operation; FI-013/FI-014 later changed presentation to `S-101` / `Cancel Export` without changing the backend/wire identity.                                                                                                                                               |
 | FH-038 | P1       | Release readiness  | Harden Product picker and initial loader UX                                                    | Done     | db6e4a37203a5ae847189d6197ed49d09879e9c4                                                                                                                                  | Header remains usable during initial main-map load; Analyze/Review reject unknown products when catalog validation is available; Product picker hides already-added products and no longer toggles from its label.                                                                                                            |
 | FH-039 | P1       | Keyboard           | Harden route and panel Escape behavior                                                         | Done     | 300f68cd9d463ef023b432b4097c08abb9e8b2bd                                                                                                                                  | Escape closes the top-most relevant UI layer, including notification panel, filter/preferences panels, main popup, main Product History panel, Analyze popup and popup action dropdowns. Dashboard time inputs no longer trap Tab navigation.                                                                                 |
 | FH-040 | P2       | Product history    | Collapse Product History entries by default                                                    | Done     | 8e72ca28f23dc9317ce58b2930807ed989c4d6ef                                                                                                                                  | Shared Product History renderer now collapses event metadata by default on the main map and Dashboard panels. Collapsed rows show title, timestamp and short description; users expand individual rows to see details.                                                                                                        |
@@ -100,13 +100,13 @@ BE-106 is documentation-only. It confirms that ProductCatalogueAPI remains the p
 | FI-006 | Analyze / Review                 | Add shared product catalog picker for direct Analyze/Review access       | Done                                     | Uses the lightweight `GET /electronicproducts` endpoint to power a shared searchable Product picker reused by Analyze and Review.                                                                                                                                                                                                                                                                                                                     |
 | FI-007 | Main map                         | Add main page Product search                                             | Done                                     | Added a compact Product search overlay that suggests catalog products and opens the selected Product popup on the main map.                                                                                                                                                                                                                                                                                                                           |
 | FI-008 | Introduction flow                | Add compact first-time and replayable route guidance                     | Done                                     | Completed and manually verified at `0c677549963bb7ce4206fed379dd30dc8c2cc783`. Each route has independent first-time state and replay from Preferences. Main map includes Product search, filters, interactive popup/Product Collection guidance, workspace navigation, Theme and Preferences. Dashboard, Analyze and Review use compact route-specific flows with Product prerequisites where needed.                                                |
-| FI-009 | Dashboard                        | Add user-selectable Dashboard page size                                  | Todo                                     | Backend paging already accepts `1-200`; define compact frontend options, persistence and reset behavior before enabling it.                                                                                                                                                                                                                                                                                                                           |
+| FI-009 | Dashboard                        | Add user-selectable Dashboard page size                                  | Done                                     | Added compact `25 / 50 / 100 / 200` page-size selection with default `50`, browser-local persistence, Preferences reset integration, page-1 restart, and cursor-generation invalidation. Committed at `e4caa4d29c46083605beac10400876af6bf38d1c`.                                                                                                                                              |
 | FI-010 | Dashboard                        | Add sortable Dashboard activity columns                                  | Todo                                     | Define supported server-side sort fields, direction, stable tie-break ordering and cursor compatibility before adding sortable headers.                                                                                                                                                                                                                                                                                                               |
 | FI-011 | Main map / Data sources          | Add independent Product-standard data sources and source-aware workflows | In progress (FI-011A/B/C/D implemented)  | FI-011A/FI-011B are committed through baseline `60e4854389ab16d3bd280f653998ea10eaa0b6ab`. FI-011C adds central Product context and the flat Edition/Update Export menu. FI-011D adds source-aware Product Collection, workspace catalog/resolution, Analyze, Review, and truthful unavailable History/report surfaces. Separate S-57/S-101 transport, FI-016 authoritative status/error defaults, and final onboarding/regression work remain.       |
 | FI-012 | Main map / Location search       | Add Denmark and Greenland map locator                                    | Done                                     | Added a compact ArcGIS Search-based Locator beside Product search. One logical `Places` source uses ArcGIS World Geocoder with `sourceCountry=DNK,GRL` and Address/Postal/Populated Place categories, navigates without marker/popup, preserves Product state, supports first-suggestion Enter for addresses, and keeps the source boundary extensible for future API-backed search sources. Committed at `a3a53e4aa55850091281f8e47825755798066cf9`. |
-| FI-013 | Product terminology              | Rename Product Catalogue S100 terminology to S-101                       | Todo                                     | Use `S-101` for the ENC Product specification in live UI/domain copy. Preserve legitimate generic `S-100` standard references and isolate any legacy `S100` API/wire value behind an adapter until backend contracts are renamed.                                                                                                                                                                                                                     |
-| FI-014 | Popup actions                    | Rename Rollback to Cancel Export and replace its icon                    | Todo                                     | Update live UI copy, confirmation, notices, availability reasons, guidance, and tests to `Cancel Export`. Use a cancellation icon rather than an undo/rollback metaphor; keep any legacy endpoint/action identifier internal until backend contracts change.                                                                                                                                                                                          |
-| FI-015 | Product Collection               | Use graph-bar for Add to collection                                      | Todo                                     | Replace the popup Add to collection icon with Calcite `graph-bar`, preserving tooltip, active state, accessibility, and existing collection behavior.                                                                                                                                                                                                                                                                                                 |
+| FI-013 | Product terminology              | Rename Product Catalogue S100 terminology to S-101                       | Done                                     | Product-specific presentation now uses `S-101` while legitimate generic `S-100` and legacy `S100` wire/API values remain intact. Export help/notices and persisted job presentation are corrected; the flat Edition/Update menu remains source-aware. Committed at `1c6040a60d97429c2232b9b68f0b849a4591df4b`.                                                                                |
+| FI-014 | Popup actions                    | Rename Rollback to Cancel Export and replace its icon                    | Done                                     | User-facing Product action is `Cancel Export` with Calcite `x-circle`, `Canceling export...` running presentation, and `[Cancel] [Confirm]` confirmation controls. Legacy rollback endpoint/action/job identifiers remain internal. Committed at `70b0775936505dca8c1abb221f4a08953411efc1`.                                                                                        |
+| FI-015 | Product Collection               | Use graph-bar for Add to collection                                      | Done                                     | Popup `Add to collection` uses Calcite `graph-bar`; selected/Remove state continues to use `check`. Tooltip, accessibility, toggle behavior, onboarding targeting and source-aware Collection semantics are unchanged. Committed at `636c1b7727d373c780afab60849eca3dc3c1b825`.                                                                                                            |
 | FI-016 | Main map / Symbology             | Define a new Product AOI status palette                                  | Blocked by backend                       | Wait for the authoritative backend status definition and error classification. Then define centralized, accessible light/dark symbology with stable status semantics across independently rendered sources.                                                                                                                                                                                                                                           |
 | FI-017 | Branding / Deployment            | Make application logo environment-configurable                           | Todo                                     | Load the deployment logo from non-secret environment configuration with a generic non-GST static fallback. A missing or failed custom logo must not break layout or startup.                                                                                                                                                                                                                                                                          |
 | FI-018 | Open source readiness            | Remove organization-specific deployment assumptions                      | Future review                            | Audit branding, configuration, URLs, authentication assumptions, documentation, sample data, secrets, licenses, and deployment defaults so a third party can deploy the application without editing GST-specific source code.                                                                                                                                                                                                                         |
@@ -127,16 +127,38 @@ BE-106 is documentation-only. It confirms that ProductCatalogueAPI remains the p
 9. Keep FI-011A as the committed generic source foundation at `8f678480c08e17d7911d6019a44542c6a52ef09f`; do not introduce a permanent combined ENC source or infer an S-57/S-101 split from the compatibility AOI payload.
 10. Keep FI-011B as the committed source-aware Filters, loaded-feature Product search, navbar-popover coordination, and generation-safe derived-state cleanup baseline.
 11. Keep FI-011C as the committed central Product-context, capability-specific popup-action, and flat source-aware Edition/Update Export baseline at `391074743efc909ec97168e2be2820484edb8455`.
-12. Implement FI-011D as source-aware Product Collection, workspace catalog/resolution, Analyze, Review, and truthful History/report availability without enabling mock-source backend actions.
+12. Keep FI-011D as the committed source-aware Product Collection, workspace catalog/resolution, Analyze, Review, and truthful History/report baseline at `737677d7ecd0857312224fde3e5f9a76a0cb7148`; do not enable mock-source backend actions.
 13. Keep authoritative production S-57/S-101 transport blocked until the backend supplies separate read contracts and source discrimination.
-14. FI-012 Locator is complete and manually accepted at `a3a53e4aa55850091281f8e47825755798066cf9`; the independent UI/documentation items FI-013 through FI-017 and FI-019 may proceed subject to their own dependencies.
+14. FI-012, FI-009, FI-013, FI-014 and FI-015 are complete; the latest manually accepted frontend baseline is `1c6040a60d97429c2232b9b68f0b849a4591df4b`. FI-017 and FI-019 may proceed independently subject to their own dependencies.
 15. Complete FI-016 only after the backend status list identifies authoritative error states and display semantics, then activate the final FI-011 error-only first-visit filter preset.
 16. Treat FI-018 as a later cross-repository release-readiness review after configurable branding and deployment settings are established.
 
+## FI-009 Dashboard page size preference
+
+Status: Done  
+Implementation commit: `e4caa4d29c46083605beac10400876af6bf38d1c`
+
+FI-009 extends the existing BE-107 cursor-paging contract without changing the backend API. The Dashboard offers compact page-size choices:
+
+```text
+25
+50
+100
+200
+```
+
+`50` remains the default. The selected numeric value is stored as browser-local Dashboard state under `pc.dashboard.pageSize.v1`; it is not part of the Dashboard route URL.
+
+Changing page size preserves the current range, search and filters, invalidates the existing cursor chain, returns to page 1 and issues a fresh request. Existing request-id/abort stale-response protection remains authoritative. If the new request fails, the last successful result may remain visible, but cursors from the previous page-size generation cannot be reused.
+
+The existing Preferences reset removes the stored page-size preference and returns the live Dashboard to `50` when a change is required. Invalid, unsupported or malformed persisted values fail safely to `50`.
+
+Manual acceptance verified persistence, reset behavior, Previous/Next paging, range/search/filter preservation, light/dark mode and existing Dashboard History/Analyze/Review navigation. The full frontend check passed locally before commit.
+
 ## FI-011 independent Product-standard data sources and source-aware workflows
 
-Status: In progress — FI-011A, FI-011B, and FI-011C committed; FI-011D implemented in the current candidate  
-Current FI-011D package baseline: `63e5648da216908d13576d1b399f7745635bd0dc`
+Status: In progress — FI-011A, FI-011B, FI-011C, and FI-011D committed; production S-57/S-101 transport and final status/guidance/regression work remain  
+FI-011D implementation commit: `737677d7ecd0857312224fde3e5f9a76a0cb7148`
 
 ### Current implementation state
 
@@ -160,7 +182,7 @@ FI-011C extends that baseline with:
 - an explicit non-persisted compatibility-AOI adapter;
 - capability-specific popup action visibility and fail-closed dispatch;
 - a flat `Export... > Edition / Update` menu generated from declarative source configuration;
-- the existing S100 Edition wire target retained internally for compatibility AOI;
+- the legacy `S100` Edition wire target retained internally for compatibility AOI while Product-specific UI presentation uses `S-101`;
 - disabled Edition/Update placeholders for Paper Charts and S-102;
 - Product Collection header gating through the central `productCollection` Product-context capability,
   independent from `supportsPopupActions`;
@@ -284,7 +306,7 @@ data and uses the configured default filter state.
 
 The temporary AOI adapter must preserve existing compatibility behavior for popup selection and
 restoration, hover, refresh, Product Collection, Analyze, Review, Product History, exports, Freeze,
-Unfreeze, Send to IC-ENC, Rollback, notices, and loader progress.
+Unfreeze, Send to IC-ENC, the user-facing Cancel Export action over the legacy Rollback operation contract, notices, and loader progress.
 
 Compatibility filter/search integration uses logical layer metadata without creating permanent
 source preferences. Runtime source refresh and compatibility refresh remain independent.
@@ -309,9 +331,10 @@ They are not production contracts and must not define future backend fields or c
 3. **FI-011C — Source-aware Popup Actions and Export Menu:** implemented in the committed baseline
    `391074743efc909ec97168e2be2820484edb8455`; central Product context, capability-specific actions,
    flat Edition/Update menu, and disabled mock-source placeholders.
-4. **FI-011D — Source-aware workspace and history propagation:** implemented in this package; Product
-   Collection, shared workspace catalog/resolution, Analyze, Review, and truthful History/report
-   unavailable states are source-aware without cross-source compatibility calls.
+4. **FI-011D — Source-aware workspace and history propagation:** implemented and committed at
+   `737677d7ecd0857312224fde3e5f9a76a0cb7148`; Product Collection, shared workspace catalog/resolution,
+   Analyze, Review, and truthful History/report unavailable states are source-aware without cross-source
+   compatibility calls.
 5. **Production transport package:** authoritative separate S-57/S-101 reads when the backend
    contract exists; no fake client split.
 6. **Final status/guidance/regression package:** error-only default after FI-016, onboarding,
@@ -493,39 +516,61 @@ Verified behavior includes:
 
 ## FI-013 S-101 terminology correction
 
-Status: Todo
+Status: Done  
+Implementation commit: `1c6040a60d97429c2232b9b68f0b849a4591df4b`
 
-Replace Product-specific live `S100` / `S-100` terminology with `S-101` across Product Catalogue UI, popup metadata, export labels, notices, tooltips, onboarding, tests, and current documentation.
+Product-specific live presentation now uses `S-101` across popup metadata, Export help, operation presentation, notices, tests and active documentation. Legitimate generic `S-100` references remain unchanged.
 
-Do not perform a blind repository-wide replacement. `S-100` is also a legitimate umbrella standard name and may remain where it describes the standard, platform, repository, or a backend wire contract. If the backend still accepts a value such as `S100`, keep that value behind an explicit adapter/mapping while presenting `S-101` to users.
+The legacy backend/wire identity remains explicit and unchanged where required:
 
-Historical commit log entries may retain the terminology used by the original commit. Active requirements and live UI must use the corrected term.
+```text
+EXPORT_TARGET.S100 = "S100"
+backendTarget = S100
+exportTarget=S100
+PRODUCT_EXPORT_STANDARD.S100
+```
 
-Acceptance requires representative terminology regression tests and explicit verification that API request values have not changed accidentally.
+The flat source-aware Export menu remains:
+
+```text
+Export...
+  Edition
+  Update
+```
+
+No S-101 source-group submenu was introduced. Compatibility/S-101 presentation carries its own display/help metadata instead of deriving UI copy from the `S100` wire value. Persisted/backend-authoritative Edition jobs are normalized to user-facing `S-101` presentation while retaining legacy operation identity.
+
+Paper Charts and S-102 keep source-specific unavailable Export help and fail-closed leaves. As part of the final popup presentation correction, the Tools root action is icon-only with wrench icon, accessible name `Tools`, and existing menu keyboard behavior. It remains in the Export/Cancel Export row and is right-aligned with application-owned flex layout so the empty gap is non-clickable and the popup does not overflow.
+
+Manual acceptance verified S-101 popup metadata/help/notices, `exportTarget=S100`, Paper Charts/S-102 help, popup layout, Tools Enter/Space/arrow/Escape behavior, light/dark mode and FI-014/FI-015 regressions. The full frontend check passed locally before commit.
 
 ## FI-014 Cancel Export action terminology and icon
 
-Status: Todo
+Status: Done  
+Implementation commit: `70b0775936505dca8c1abb221f4a08953411efc1`
 
-Rename the user-facing `Rollback` Product action to `Cancel Export` because the action cancels the Product's export state rather than performing a generic data rollback.
+The user-facing Product action formerly presented as `Rollback` is now `Cancel Export` and uses Calcite `x-circle`. The running presentation is `Canceling export...`, and confirmation uses action-specific title/body context with buttons:
 
-Update:
+```text
+[Cancel] [Confirm]
+```
 
-- popup label and tooltip;
-- confirmation title/body/buttons;
-- success, warning, and error notices;
-- disabled reasons and action availability copy;
-- onboarding/help/documentation;
-- accessibility labels and tests;
-- the rollback/undo-style icon to Calcite `x-circle` or an equivalently explicit cancellation icon available in the installed icon set.
+Frontend-owned success/warning/error presentation, disabled reasons, hover help, onboarding and accessibility copy use Cancel Export terminology. Persisted/remote legacy Rollback jobs are normalized to the new presentation after restore.
 
-Keep legacy endpoint paths, response codes, or internal action IDs only behind the API/domain adapter until a backend rename is approved. Do not rename unrelated transactional rollback or map-adapter rollback terminology.
+Backend and internal contracts remain unchanged where they are actual operation identity, including the rollback endpoint, internal action ID, operation enums/types, error codes and persisted wire values. Unrelated transactional/history rollback terminology is not renamed.
+
+Manual acceptance verified the icon, light/dark mode, confirmation behavior, async backend dispatch, notices, running state and preserved unsupported-source gating.
 
 ## FI-015 Product Collection popup icon
 
-Status: Todo
+Status: Done  
+Implementation commit: `636c1b7727d373c780afab60849eca3dc3c1b825`
 
-Use Calcite `graph-bar` for the popup `Add to collection` action. Preserve the current tooltip, active/selected state, remove/toggle behavior, keyboard accessibility, and onboarding targeting. Verify the icon in light/dark mode and at the compact popup action size.
+The popup Product Collection action uses Calcite `graph-bar` for `Add to collection`. When the Product is selected in the Collection, the existing `check` icon remains in use for the selected/Remove state.
+
+Tooltip/help text, accessible naming, keyboard behavior, active/toggle state, Product Collection identity, capability gating, onboarding targeting and popup refresh behavior are unchanged.
+
+Manual acceptance verified add/remove toggling, light/dark mode, compact popup rendering and existing Collection behavior.
 
 ## FI-016 Product AOI status palette
 
@@ -666,6 +711,10 @@ Do not assign Shift-click in the first experiment. A map has no stable natural r
 
 | Date       | Commit                                   | Items           | Notes                                                                                                                                                                                                          |
 | ---------- | ---------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-08 | 1c6040a60d97429c2232b9b68f0b849a4591df4b | FI-013          | Corrected Product-specific S-101 presentation while preserving `S100` wire identity; finalized source-specific Export help and compact right-aligned icon-only Tools popup presentation.                  |
+| 2026-09-07 | e4caa4d29c46083605beac10400876af6bf38d1c | FI-009          | Added user-selectable Dashboard page size (`25 / 50 / 100 / 200`), browser-local persistence, reset integration and page-size-safe cursor invalidation.                                                     |
+| 2026-09-07 | 70b0775936505dca8c1abb221f4a08953411efc1 | FI-014          | Renamed the user-facing Rollback action to Cancel Export, added `x-circle`, updated notices/help, and kept legacy rollback backend/wire identity internal.                                                   |
+| 2026-09-07 | 636c1b7727d373c780afab60849eca3dc3c1b825 | FI-015          | Changed the popup Add to collection icon to Calcite `graph-bar` while preserving selected `check` state and existing Product Collection behavior.                                                         |
 | 2026-09-04 | a3a53e4aa55850091281f8e47825755798066cf9 | FI-012          | Added and manually accepted the Denmark/Greenland Main-map Locator using ArcGIS Search, one scoped `Places` source, address Enter handling, Product-state isolation, and symmetric inline open/close behavior. |
 | 2026-07-28 | 7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd | FH-049 / BE-107 | Added Dashboard server-side filtering and cursor pagination; manual pagination verification passed.                                                                                                            |
 | 2026-07-27 | 279fe6a761229fd99af437d0f8401508985afafc | FH-046 / FH-047 | Activated async Export/Rollback and backend-authoritative active-job visibility across browser profiles, users and computers.                                                                                  |
