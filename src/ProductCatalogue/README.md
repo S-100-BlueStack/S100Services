@@ -485,7 +485,7 @@ Recent frontend work has focused on:
 - source-aware Product Collection and workspace History/report availability
 - main map filter hardening
 - main map Product search
-- asynchronous S100 Edition and Cancel Export activation
+- asynchronous S-101 Edition and Cancel Export activation
 - persisted polling and reload recovery
 - backend-authoritative active-job visibility across users and computers
 - fail-closed mutation preflight

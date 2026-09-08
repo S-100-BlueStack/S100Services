@@ -15,6 +15,7 @@ import {
   registerAnalyzeGraphicProductContexts,
 } from "../../analyze/map/analyzeGraphicProductContext.js";
 import { createPopupActionGroups } from "./popupActionConfig.js";
+import { beginPopupExportAction, endPopupExportAction } from "./popupExportState.js";
 
 function createCompatibilitySelection(datasetName = "AOI-ACTION-001") {
   const graphic = {
@@ -138,33 +139,97 @@ function createAnalyzeSourceContext(sourceId, productKey, datasetName) {
 
 const flattenActions = (groups) => groups.flatMap((group) => group);
 
-test("compatibility AOI retains mutation actions and simplified Export leaves", () => {
-  const actions = flattenActions(
-    createPopupActionGroups({ ...createCompatibilitySelection(), frozen: false })
-  );
+test("compatibility AOI keeps Freeze/Send in the first row and Export/Cancel Export/Tools in the second", () => {
+  const groups = createPopupActionGroups({ ...createCompatibilitySelection(), frozen: false });
+  const actions = flattenActions(groups);
   const exportAction = actions.find((action) => action.id === "export");
   const tools = actions.find((action) => action.id === "tools");
-  assert.ok(actions.some((action) => action.id === "freeze-feature"));
-  assert.ok(actions.some((action) => action.id === "send-immediately"));
   const cancelExportAction = actions.find((action) => action.id === "rollback");
+
+  assert.deepEqual(
+    groups.map((group) => group.map((action) => action.id)),
+    [
+      ["freeze-feature", "send-immediately"],
+      ["export", "rollback", "tools"],
+    ]
+  );
   assert.ok(cancelExportAction);
   assert.equal(cancelExportAction.label, "Cancel Export");
   assert.equal(cancelExportAction.icon, "x-circle");
+  assert.equal(exportAction.label, "Export...");
+  assert.equal(exportAction.helpText, "Open S-101 export actions.");
   assert.deepEqual(
     exportAction.items.map((item) => item.label),
     ["Edition", "Update"]
   );
+  assert.equal(exportAction.items[0].helpText, "Export a new S-101 Edition for this product.");
+  assert.equal(tools.label, "Tools");
+  assert.equal(tools.ariaLabel, "Tools");
+  assert.equal(tools.icon, "wrench");
+  assert.equal(tools.textEnabled, false);
   assert.deepEqual(
     tools.items.map((item) => item.id),
     ["analyze", "history"]
   );
 });
 
-test("Paper Charts exposes safe Export placeholders plus Analyze and History surfaces only", () => {
-  const actions = flattenActions(createPopupActionGroups(createMockSelection("paper-charts")));
+test("frozen compatibility AOI keeps Unfreeze/Send separate from Export/Cancel Export/Tools", () => {
+  const groups = createPopupActionGroups({ ...createCompatibilitySelection(), frozen: true });
+
   assert.deepEqual(
-    actions.map((action) => action.id),
-    ["export", "tools"]
+    groups.map((group) => group.map((action) => action.id)),
+    [
+      ["unfreeze-feature", "send-immediately"],
+      ["export", "rollback", "tools"],
+    ]
+  );
+});
+
+test("compatibility local Edition loading uses S-101 presentation without changing the S100 scope", () => {
+  if (!globalThis.document) {
+    globalThis.document = new EventTarget();
+  }
+
+  const selection = createCompatibilitySelection("AOI-RUNNING-001");
+  const started = beginPopupExportAction({
+    productContext: selection.productContext,
+    datasetName: selection.productContext.datasetName,
+    scope: "S100",
+    exportType: "Edition",
+    presentationLabel: "S-101 Edition",
+  });
+
+  try {
+    const groups = createPopupActionGroups({ ...selection, frozen: false });
+    const actions = flattenActions(groups);
+    const exportAction = actions.find((action) => action.id === "export");
+    const edition = exportAction.items.find((item) => item.id === "export-edition");
+
+    assert.equal(started.started, true);
+    assert.equal(exportAction.label, "Exporting...");
+    assert.deepEqual(
+      groups.map((group) => group.map((action) => action.id)),
+      [
+        ["freeze-feature", "send-immediately"],
+        ["export", "rollback", "tools"],
+      ]
+    );
+    assert.equal(edition.label, "Exporting S-101 Edition");
+    assert.match(edition.disabledReason, /S-101 Edition/);
+    assert.doesNotMatch(edition.disabledReason, /S100/);
+  } finally {
+    endPopupExportAction(started.key);
+  }
+});
+
+test("Paper Charts keeps source-specific Export parent help and safe placeholder leaves", () => {
+  const groups = createPopupActionGroups(createMockSelection("paper-charts"));
+  const actions = flattenActions(groups);
+  const exportAction = actions.find((action) => action.id === "export");
+  const tools = actions.find((action) => action.id === "tools");
+  assert.deepEqual(
+    groups.map((group) => group.map((action) => action.id)),
+    [["export", "tools"]]
   );
   assert.equal(
     actions.some((action) => action.id === "freeze-feature"),
@@ -178,25 +243,39 @@ test("Paper Charts exposes safe Export placeholders plus Analyze and History sur
     actions.some((action) => action.id === "rollback"),
     false
   );
+  assert.equal(exportAction.helpText, "Paper Charts export is not available yet.");
   assert.equal(
-    actions[0].items.every((item) => item.disabled && item.onClick === undefined),
+    exportAction.items.every((item) => item.disabled && item.onClick === undefined),
     true
   );
+  assert.match(exportAction.items[0].disabledReason, /Paper Charts export is not available yet/);
+  assert.match(exportAction.items[1].disabledReason, /Paper Charts export is not available yet/);
+  assert.equal(tools.icon, "wrench");
+  assert.equal(tools.ariaLabel, "Tools");
+  assert.equal(tools.textEnabled, false);
   assert.deepEqual(
-    actions[1].items.map((item) => item.id),
+    tools.items.map((item) => item.id),
     ["analyze", "history"]
   );
 });
 
-test("S-102 exposes safe Export placeholders plus Analyze and History surfaces only", () => {
-  const actions = flattenActions(createPopupActionGroups(createMockSelection("s102")));
+test("S-102 keeps source-specific Export parent help and safe placeholder leaves", () => {
+  const groups = createPopupActionGroups(createMockSelection("s102"));
+  const actions = flattenActions(groups);
+  const exportAction = actions.find((action) => action.id === "export");
+  const tools = actions.find((action) => action.id === "tools");
   assert.deepEqual(
-    actions.map((action) => action.id),
-    ["export", "tools"]
+    groups.map((group) => group.map((action) => action.id)),
+    [["export", "tools"]]
   );
-  assert.match(actions[0].items[0].disabledReason, /S-102 export is not available yet/);
+  assert.equal(exportAction.helpText, "S-102 export is not available yet.");
+  assert.match(exportAction.items[0].disabledReason, /S-102 export is not available yet/);
+  assert.match(exportAction.items[1].disabledReason, /S-102 export is not available yet/);
+  assert.equal(tools.icon, "wrench");
+  assert.equal(tools.ariaLabel, "Tools");
+  assert.equal(tools.textEnabled, false);
   assert.deepEqual(
-    actions[1].items.map((item) => item.id),
+    tools.items.map((item) => item.id),
     ["analyze", "history"]
   );
 });
@@ -254,20 +333,21 @@ test("registered and cloned Analyze mock Graphics retain safe action groups", ()
     ["s102", "S102-ACTION-003", "102DK0041155E"],
   ]) {
     const context = createAnalyzeSourceContext(sourceId, productKey, datasetName);
-    const actions = flattenActions(
-      createPopupActionGroups(createAnalyzeSelection(context, { clone: true }))
-    );
+    const groups = createPopupActionGroups(createAnalyzeSelection(context, { clone: true }));
+    const actions = flattenActions(groups);
 
     assert.deepEqual(
-      actions.map((action) => action.id),
-      ["export", "tools"]
+      groups.map((group) => group.map((action) => action.id)),
+      [["export", "tools"]]
     );
+    const exportAction = actions.find((action) => action.id === "export");
+    const tools = actions.find((action) => action.id === "tools");
     assert.equal(
-      actions[0].items.every((item) => item.disabled),
+      exportAction.items.every((item) => item.disabled),
       true
     );
     assert.equal(
-      actions[1].items.some((item) => item.id === "analyze"),
+      tools.items.some((item) => item.id === "analyze"),
       true
     );
   }

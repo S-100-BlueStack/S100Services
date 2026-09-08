@@ -47,7 +47,7 @@ function normalizeProductExportRecord(record) {
   return {
     standard,
     type: rawType,
-    label: standard,
+    label: createProductExportStandardLabel(standard),
     datasetName: readFirstDefined(record, ["datasetName", "DatasetName", "name", "Name"]),
     edition: readFirstDefined(record, ["edition", "Edition"]),
     update: readFirstDefined(record, ["update", "Update"]),
@@ -56,6 +56,10 @@ function normalizeProductExportRecord(record) {
     errorMessage: readFirstDefined(record, ["errorMessage", "ErrorMessage"]),
     raw: record,
   };
+}
+
+function createProductExportStandardLabel(standard) {
+  return standard === PRODUCT_EXPORT_STANDARD.S100 ? "S-101" : standard;
 }
 
 function groupExportsByStandard(items) {

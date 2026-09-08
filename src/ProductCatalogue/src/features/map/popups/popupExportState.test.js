@@ -18,17 +18,19 @@ test("Edition loading state is isolated to the selected Product and leaf", () =>
     datasetName: "PRODUCT-A",
     scope: "S100",
     exportType: "Edition",
+    presentationLabel: "S-101 Edition",
   });
 
   assert.equal(started.started, true);
-  assert.equal(
-    getPopupExportActionState({
-      datasetName: "PRODUCT-A",
-      scope: "S100",
-      exportType: "Edition",
-    }).loading,
-    true
-  );
+  const runningState = getPopupExportActionState({
+    datasetName: "PRODUCT-A",
+    scope: "S100",
+    exportType: "Edition",
+    presentationLabel: "S-101 Edition",
+  });
+  assert.equal(runningState.loading, true);
+  assert.match(runningState.disabledReason, /S-101 Edition/);
+  assert.doesNotMatch(runningState.disabledReason, /S100/);
   assert.equal(
     getPopupExportActionState({
       datasetName: "PRODUCT-A",

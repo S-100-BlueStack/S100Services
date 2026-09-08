@@ -265,8 +265,10 @@ source content configuration. Their mutation/export capabilities remain disabled
 - compatibility backend refresh and job subscriptions.
 
 The placeholder leaves have no handler or backend target. They cannot call compatibility endpoints,
-enter loading state, create success/error notices, or block unrelated Products. Product search opens
-the same capability-gated popup and cannot bypass availability.
+enter loading state, create success/error notices, or block unrelated Products. The same declarative
+Export configuration exposes the source-specific unavailable reason as parent help text, while each
+leaf keeps that reason as its disabled explanation. Product search opens the same capability-gated
+popup and cannot bypass availability.
 
 Existing compatibility AOI Products keep Product Collection, popup mutations, Analyze, Review,
 History, and operation workflows. Their simplified Export menu contains only `Edition` and `Update`.

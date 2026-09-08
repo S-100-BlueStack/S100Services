@@ -55,6 +55,8 @@ const COMPATIBILITY_CAPABILITIES = Object.freeze({
 
 const COMPATIBILITY_EXPORT_CONFIGURATION = Object.freeze({
   visible: true,
+  displayLabel: "S-101",
+  helpText: "Open S-101 export actions.",
   leaves: Object.freeze([
     Object.freeze({
       id: "export-edition",
@@ -65,6 +67,7 @@ const COMPATIBILITY_EXPORT_CONFIGURATION = Object.freeze({
       implemented: true,
       backendTarget: EXPORT_TARGET.S100,
       handlerId: "export-new-edition",
+      helpText: "Export a new S-101 Edition for this product.",
       availabilityReason: null,
       confirmation: Object.freeze({
         title: "Export edition for {datasetName}",
@@ -81,6 +84,7 @@ const COMPATIBILITY_EXPORT_CONFIGURATION = Object.freeze({
       implemented: false,
       backendTarget: null,
       handlerId: null,
+      helpText: "S-101 Update export is currently disabled.",
       availabilityReason:
         "Export Update is not available until the backend provides an implemented update contract.",
     }),

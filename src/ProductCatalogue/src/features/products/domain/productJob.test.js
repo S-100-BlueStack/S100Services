@@ -27,14 +27,14 @@ test("accepted export job response is normalized for persistent tracking", () =>
     },
     datasetName: "fallback",
     operationType: PRODUCT_JOB_OPERATION.EXPORT_EDITION,
-    label: "Exporting S100 Edition",
+    label: "Exporting S-101 Edition",
   });
   assert.deepEqual(record, {
     jobId: "job-123",
     datasetName: "101DK0040943E",
     operationType: "ExportEdition",
     exportTarget: "S100",
-    label: "Exporting S100 Edition",
+    label: "Exporting S-101 Edition",
     createdAt: "2026-07-24T08:00:00Z",
     correlationId: "correlation-123",
     statusUrl: "/jobs/job-123",
@@ -216,6 +216,26 @@ test("simulation completion titles never claim delivery", () => {
   assert.equal(title, "IC-ENC send simulation completed for 101DK001");
   assert.equal(isSendToIcEncOperation("sendtoicenc"), true);
   assert.doesNotMatch(title, /delivered|sent successfully/i);
+});
+
+test("legacy S100 export job identity maps to S-101 presentation", () => {
+  const restored = normalizeStoredProductJob({
+    jobId: "job-export",
+    datasetName: "101DK0040943E",
+    operationType: PRODUCT_JOB_OPERATION.EXPORT_EDITION,
+    exportTarget: "S100",
+    label: "Exporting S100 Edition",
+    createdAt: "2026-09-07T06:00:00Z",
+    status: "Running",
+  });
+
+  assert.equal(restored.operationType, "ExportEdition");
+  assert.equal(restored.exportTarget, "S100");
+  assert.equal(restored.label, "Exporting S-101 Edition");
+  assert.equal(
+    createProductJobCompletionTitle(restored, { status: "Failed" }),
+    "S-101 Edition export failed for 101DK0040943E"
+  );
 });
 
 test("legacy Rollback job identity maps to Cancel Export presentation", () => {

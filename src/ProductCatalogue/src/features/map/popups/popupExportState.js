@@ -11,6 +11,7 @@ export function beginPopupExportAction({
   datasetName,
   scope,
   exportType,
+  presentationLabel,
 } = {}) {
   const exportAction = createExportAction({
     productContext,
@@ -20,6 +21,7 @@ export function beginPopupExportAction({
     datasetName,
     scope,
     exportType,
+    presentationLabel,
   });
 
   if (!exportAction) {
@@ -71,6 +73,7 @@ export function getPopupExportActionState({
   datasetName,
   scope,
   exportType,
+  presentationLabel,
 } = {}) {
   const exportAction = createExportAction({
     productContext,
@@ -80,6 +83,7 @@ export function getPopupExportActionState({
     datasetName,
     scope,
     exportType,
+    presentationLabel,
   });
 
   if (!exportAction) {
@@ -195,7 +199,7 @@ function exportActionsOverlap(candidate, runningAction) {
   );
 }
 
-function createExportAction({ scope, exportType, ...productInput }) {
+function createExportAction({ scope, exportType, presentationLabel, ...productInput }) {
   const identity = resolveProductIdentity(productInput);
   if (!identity || !scope || !exportType) {
     return null;
@@ -210,6 +214,7 @@ function createExportAction({ scope, exportType, ...productInput }) {
     scope,
     normalizedScope,
     exportType,
+    presentationLabel: normalizeText(presentationLabel),
     normalizedExportType,
   };
 }
@@ -266,7 +271,7 @@ function getExportConflictReason(exportAction, conflict) {
 }
 
 function formatExportAction(exportAction) {
-  return `${exportAction.scope} ${exportAction.exportType}`;
+  return exportAction.presentationLabel ?? exportAction.exportType ?? "Export";
 }
 
 function formatProduct(exportAction) {

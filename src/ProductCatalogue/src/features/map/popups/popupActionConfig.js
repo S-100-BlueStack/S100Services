@@ -191,6 +191,7 @@ function createExportAction({
   return {
     id: "export",
     label: availability.exportRoot.label ?? "Export...",
+    helpText: context.exportConfiguration?.helpText ?? null,
     icon: "plus-square",
     loading: availability.exportRoot.loading,
     disabled: availability.exportRoot.disabled,
@@ -215,6 +216,7 @@ function createExportLeafAction({
     datasetName,
     scope: stateScope,
     exportType: exportAction.operationKind,
+    presentationLabel: exportAction.presentationLabel,
   });
   const externalExportState = exportAction.backendTarget
     ? getExternalProductExportState({
@@ -242,7 +244,11 @@ function createExportLeafAction({
 
   const action = {
     id: exportAction.id,
-    label: availability.label ?? exportAction.label,
+    label:
+      availability.loading && exportAction.presentationLabel
+        ? `Exporting ${exportAction.presentationLabel}`
+        : (availability.label ?? exportAction.label),
+    helpText: exportAction.helpText,
     icon: exportAction.icon,
     loading: availability.loading,
     disabled: availability.disabled,
@@ -261,6 +267,7 @@ function createExportLeafAction({
         actionId: exportAction.id,
         target: exportAction.backendTarget,
         exportType: exportAction.operationKind,
+        presentationLabel: exportAction.presentationLabel,
         implemented: exportAction.implemented,
         request: exportAction.handler,
         anchorElement,
@@ -338,7 +345,9 @@ function createToolsAction({ context, attributes }) {
   return {
     id: "tools",
     label: "Tools",
+    ariaLabel: "Tools",
     icon: "wrench",
+    textEnabled: false,
     className: "popup-action-bar__action--dropdown",
     items,
   };

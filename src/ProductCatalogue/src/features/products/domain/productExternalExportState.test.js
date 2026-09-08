@@ -12,14 +12,14 @@ const productOperationState = {
     {
       type: "export",
       datasetName: "101DK0040943E",
-      label: "Exporting S100 Edition",
+      label: "Exporting S-101 Edition",
       exportTarget: "S100",
       exportType: "Edition",
     },
   ],
 };
 
-test("external S100 Edition job is exposed as the running export leaf", () => {
+test("external S-101 Edition presentation keeps the legacy S100 target", () => {
   const state = getExternalProductExportState({
     productOperationState,
     target: "S100",
@@ -30,7 +30,7 @@ test("external S100 Edition job is exposed as the running export leaf", () => {
   assert.equal(state.running, true);
   assert.equal(state.blocked, true);
   assert.equal(state.loading, true);
-  assert.match(state.disabledReason, /Exporting S100 Edition/);
+  assert.match(state.disabledReason, /Exporting S-101 Edition/);
 });
 
 test("external S100 export blocks All but not S57", () => {

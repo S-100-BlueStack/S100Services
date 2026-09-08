@@ -439,7 +439,7 @@ function createProductMetadataColumns(attributes) {
   const columns = [
     {
       key: "main",
-      label: "S100",
+      label: "S-101",
       item: createMainProductMetadataItem(attributes),
     },
   ];
@@ -453,7 +453,7 @@ function createProductMetadataColumns(attributes) {
 
     columns.push({
       key: `export:${standard}`,
-      label: createExportColumnLabel(standard, columns),
+      label: createExportColumnLabel(item.label ?? standard, columns),
       item,
     });
   }

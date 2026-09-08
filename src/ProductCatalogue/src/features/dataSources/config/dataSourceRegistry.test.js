@@ -123,10 +123,15 @@ test("mock sources enable workspace surfaces while backend mutations remain disa
       assert.equal(content.loaderId, null);
       assert.match(content.availabilityReason, new RegExp(source.label.replace("-", "-")));
     }
+    assert.equal(
+      source.exportConfiguration.helpText,
+      `${source.label} export is not available yet.`
+    );
     for (const leaf of source.exportConfiguration.leaves) {
       assert.equal(leaf.implemented, false);
       assert.equal(leaf.backendTarget, null);
       assert.equal(leaf.handlerId, null);
+      assert.equal(leaf.availabilityReason, `${source.label} export is not available yet.`);
     }
   }
 });

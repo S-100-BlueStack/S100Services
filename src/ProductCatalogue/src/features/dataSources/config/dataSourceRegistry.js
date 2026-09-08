@@ -320,6 +320,7 @@ function createHiddenContentEntry(availabilityReason) {
 function createUnavailableExportConfiguration(availabilityReason) {
   return {
     visible: true,
+    helpText: availabilityReason,
     leaves: [
       {
         id: "export-edition",

@@ -26,7 +26,7 @@ test("identical external operation replacement does not emit another state chang
     id: "job-1",
     datasetName: "101DK0040943E",
     type: state.PRODUCT_OPERATION_TYPE.EXPORT,
-    label: "Exporting S100 Edition",
+    label: "Exporting S-101 Edition",
     source: "backend",
     startedAt: "2026-07-24T08:00:00Z",
     exportTarget: "S100",

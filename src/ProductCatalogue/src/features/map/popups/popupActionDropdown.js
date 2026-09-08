@@ -130,9 +130,14 @@ function createDropdownItem(itemConfig, level = 0) {
     item.setAttribute("aria-expanded", "false");
   }
 
+  const helpText = itemConfig.disabledReason ?? itemConfig.helpText ?? null;
+  if (helpText) {
+    item.title = helpText;
+  }
+
   if (disabled) {
     item.setAttribute("aria-disabled", "true");
-    item.title = itemConfig.disabledReason ?? "This action is unavailable.";
+    item.title = helpText ?? "This action is unavailable.";
   }
 
   item.appendChild(createDropdownLeadingVisual(itemConfig));

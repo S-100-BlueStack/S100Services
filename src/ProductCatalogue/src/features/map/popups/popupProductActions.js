@@ -185,12 +185,14 @@ export async function triggerExport({
   actionId,
   target,
   exportType,
+  presentationLabel,
   implemented,
   request,
   anchorElement,
   confirm,
   afterResult,
 }) {
+  const exportLabel = createExportPresentationLabel({ presentationLabel, exportType });
   const dispatchValidation = validateExportDispatch({
     actionId,
     target,
@@ -199,10 +201,7 @@ export async function triggerExport({
     request,
   });
   if (!dispatchValidation.allowed) {
-    noticeError(
-      "Export is not available",
-      `${target ?? "Unknown"} ${exportType ?? "export"} is not an enabled export action.`
-    );
+    noticeError("Export is not available", `${exportLabel} is not an enabled export action.`);
     return createSkippedActionResult(dispatchValidation.reason);
   }
 
@@ -211,7 +210,6 @@ export async function triggerExport({
     return null;
   }
 
-  const exportLabel = `${target} ${exportType}`;
   return runConfirmedExportOperation({
     datasetName,
     scope: target,
@@ -334,6 +332,7 @@ async function runConfirmedExportOperation({
       datasetName,
       scope,
       exportType,
+      presentationLabel: exportLabel,
     });
     if (!runningExport.started) {
       noticeError(
@@ -367,15 +366,15 @@ async function runConfirmedExportOperation({
       noticeApiSuccess(`Export completed for ${datasetName}`, exportLabel);
     } else {
       noticeApiFailure(result, {
-        networkTitle: `Network error while exporting ${datasetName}`,
-        failureTitle: `Failed to export ${datasetName}`,
+        networkTitle: `Network error while exporting ${exportLabel} for ${datasetName}`,
+        failureTitle: `Failed to export ${exportLabel} for ${datasetName}`,
         fallbackMessage: exportLabel,
       });
     }
     return await finishProductActionResult(result, afterResult);
   } catch (error) {
     noticeUnexpectedApiError(error, {
-      title: `Unexpected error while exporting ${datasetName}`,
+      title: `Unexpected error while exporting ${exportLabel} for ${datasetName}`,
     });
 
     return await finishProductActionResult(
@@ -421,6 +420,15 @@ async function finishProductActionResult(result, afterResult) {
 
 function shouldRunPostAction(result) {
   return Boolean(result && result.skipped !== true);
+}
+
+function createExportPresentationLabel({ presentationLabel, exportType } = {}) {
+  const configuredLabel = String(presentationLabel ?? "").trim();
+  if (configuredLabel) {
+    return configuredLabel;
+  }
+
+  return String(exportType ?? "").trim() || "Export";
 }
 
 function createSkippedActionResult(reason) {
