@@ -1,9 +1,17 @@
+import fallbackLogoUrl from "../../../assets/product-catalogue-logo.svg?no-inline";
+import { resolveBranding } from "../../../shared/config/brandingConfig.js";
+import { initializeNavbarBranding } from "./navbarBranding.js";
+
 export async function loadNavbar() {
   const res = await fetch(`${import.meta.env.BASE_URL}components/navbar.html`);
   const html = await res.text();
 
   document.getElementById("navbar").innerHTML = html;
 
+  initializeNavbarBranding(
+    document.querySelector("[data-navbar-logo]"),
+    resolveBranding({ fallbackSrc: fallbackLogoUrl })
+  );
   initializeNavbarLinks();
   initializeDocumentationButton();
 }

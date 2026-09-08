@@ -454,6 +454,101 @@ When adding a new logical map layer:
 4. Ensure popup/filter/display-scale behavior checks layer capabilities.
 5. Avoid enabling product actions unless the layer truly supports product correction mutations.
 
+## Branding configuration
+
+`VITE_APP_LOGO_URL`, `VITE_APP_LOGO_ALT`, and `VITE_APP_FAVICON_URL` are optional,
+non-secret client-side Vite build variables. Use the existing `.env.example` as a template.
+Do not put secrets in these values or commit organization-specific environment settings.
+
+The configured URLs and alt text are build-time inputs; the browser loads the images at runtime:
+
+- Changing a configured URL or alt value requires **rebuild + redeploy**. It does not update
+  an already-built deployment dynamically.
+- Replacing a file served at an **unchanged configured URL** requires no frontend rebuild,
+  redeployment, or application restart. Refresh the browser to see the replacement, subject
+  to deployment and browser cache policy. Favicon caches may retain an older icon longer.
+- Cache headers belong to the deployment/web server. The frontend adds no cache-busting,
+  polling, or configuration fetch.
+
+A deployment can provide independent files for the navbar logo and favicon:
+
+```dotenv
+VITE_APP_LOGO_URL=/branding/organisation-logo.png
+VITE_APP_LOGO_ALT=Example Hydrographic Office
+VITE_APP_FAVICON_URL=/branding/organisation-favicon.png
+```
+
+`/branding` may be served from a local directory, a network/UNC share, or another static asset
+location. An IIS Virtual Directory is one valid implementation, not an application requirement.
+The web server maps the URL to its storage location; do not configure a UNC or filesystem path
+as the browser URL. Keep deployment-owned files outside build output if they must survive
+frontend redeployments.
+
+Values are trimmed. Missing, empty, or whitespace-only logo or favicon URLs select their
+neutral bundled fallback. Invalid URLs also select fallback. Logo and favicon configuration
+are independent: the logo URL is never used implicitly as the favicon URL. Missing or blank
+`VITE_APP_LOGO_ALT` uses `Product Catalogue`. A configured alt applies only to a usable custom
+logo URL and never renames the generic fallback.
+
+Both URL variables use the same resolution contract:
+
+| Configured URL                        | URL behavior                                                      |
+| ------------------------------------- | ----------------------------------------------------------------- |
+| `branding/logo.svg`                   | Relative to Vite's `import.meta.env.BASE_URL`.                    |
+| `./branding/favicon.png`              | Also relative to the application base.                            |
+| `/branding/favicon.png`               | Relative to the origin root, independent of the application base. |
+| `https://cdn.example.org/favicon.png` | Uses the absolute external URL directly.                          |
+| `http://localhost:8080/logo.svg`      | HTTP remains supported for local/non-TLS deployments.             |
+
+For example, with Vite base `/product-catalogue/`, `branding/logo.svg` resolves beneath
+`/product-catalogue/branding/`; `/branding/logo.svg` still resolves from the origin root.
+Vite's relative base (`./`) resolves against the document URL. Configure the Vite base
+through the existing build tooling (for example, `npm run build -- --base=/product-catalogue/`).
+The default Vite configuration does not override `base`.
+
+Supply custom files at their configured locations. The variables are URLs, not source imports
+or local filesystem paths. An optional `public/branding/logo.svg` is copied by Vite to
+`branding/logo.svg` in the build output; the repository does not include that example asset.
+Unsupported explicit schemes (including `javascript:`, `data:`, and `file:`), malformed absolute
+URLs, protocol-relative URLs, backslashes, and embedded control characters select fallback.
+
+The browser loads custom images passively, without preflight requests or startup waits.
+A custom logo image error switches once to the bundled logo and resets alt to `Product Catalogue`.
+If the bundled logo also fails, the listener and image source are removed, retaining the
+generic alt and reserved space without retrying, throwing, or creating notices.
+Both custom and fallback logos fit proportionally inside the existing 42 × 42 px logo space;
+the navbar height remains 50 px. Very wide logos therefore appear smaller within that space.
+The neutral fallback has its own contrasting background and works in both application themes.
+
+The favicon starts as the same neutral source-owned catalogue SVG in `index.html`. Vite owns
+the asset URL, filename, and base path. `src/app/startApp.js` applies a usable custom favicon
+as an independent HTML module script before the normal static `src/main.js` module entry.
+The branding bootstrap does not import or launch the application. Favicon selection does not
+depend on navbar loading, ArcGIS initialization, Product data, or authentication completion.
+The favicon link has no fixed MIME type or size restriction, allowing deployment-owned formats.
+
+If the browser dispatches an `error` event for the configured favicon, a one-shot listener
+restores the bundled neutral URL. It cannot retry the fallback. Browsers do not consistently
+report favicon loading failures through link events: without an event, a failed custom favicon
+may leave the previous icon or no icon. Guaranteed recovery from that browser behavior is not
+provided. No preflight, retry, notice, or startup wait is added. Missing/invalid configuration
+always retains the initial neutral favicon without assigning a custom URL.
+
+`src/shared/config/brandingConfig.js` owns independent logo and favicon configuration functions
+and their shared URL resolver. `src/features/layout/services/navbarLoader.js` imports the
+source-owned `src/assets/product-catalogue-logo.svg` through Vite with `?no-inline`.
+`navbarBranding.js` owns the existing image lifecycle; `faviconBranding.js` in the same layout
+folder owns the favicon link lifecycle. The HTML fallback and app entry reuse the same SVG
+through Vite rather than adding a duplicate favicon asset. Branding does not change navigation,
+application title, themes, or Product workflows.
+
+No CSP is configured in the supplied frontend `index.html` or `public/web.config`.
+Deployment-owned `img-src` policy may need to permit configured external image hosts;
+HTTPS pages may also block HTTP images. Logo failures use their normal fallback path;
+favicon recovery follows the event limitation above. FI-017 does not relax deployment policy.
+The bundled fallback is emitted as a same-origin asset for normal same-origin builds,
+rather than an inline data URL.
+
 ## Build and formatting
 
 From this folder:
