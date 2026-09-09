@@ -1,3 +1,5 @@
+import { parseWorkspaceRoute } from "../../shared/routing/workspaceRoute.js";
+
 export function getCurrentRoute() {
   const pathname = getPathnameWithoutBase(window.location.pathname);
 
@@ -9,21 +11,8 @@ export function getCurrentRoute() {
     };
   }
 
-  const analyzeMatch = pathname.match(/^\/analyze(?:\/(.+))?\/?$/i);
-  if (analyzeMatch) {
-    return {
-      name: "analyze",
-      datasetNames: parseDatasetNames(analyzeMatch[1] ?? ""),
-    };
-  }
-
-  const reviewMatch = pathname.match(/^\/review(?:\/(.+))?\/?$/i);
-  if (reviewMatch) {
-    return {
-      name: "review",
-      datasetNames: parseDatasetNames(reviewMatch[1] ?? ""),
-    };
-  }
+  const workspaceRoute = parseWorkspaceRoute(window.location.href);
+  if (workspaceRoute) return workspaceRoute;
 
   return { name: "main" };
 }
@@ -36,22 +25,6 @@ function parseDashboardSearch(search) {
     from: params.get("from"),
     to: params.get("to"),
   };
-}
-
-function parseDatasetNames(value) {
-  return String(value)
-    .split("&")
-    .map((part) => safeDecodeURIComponent(part.trim()))
-    .map((part) => part.trim())
-    .filter(Boolean);
-}
-
-function safeDecodeURIComponent(value) {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
 }
 
 function getPathnameWithoutBase(pathname) {
@@ -72,5 +45,5 @@ function getBasePath() {
 }
 
 function getBaseUrl() {
-  return String(import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
+  return String(import.meta.env?.BASE_URL || "/").replace(/\/?$/, "/");
 }

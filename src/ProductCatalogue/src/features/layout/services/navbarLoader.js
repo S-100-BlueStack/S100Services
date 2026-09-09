@@ -1,3 +1,5 @@
+import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
+import { buildReviewUrl } from "../../review/routing/reviewRoute.js";
 import fallbackLogoUrl from "../../../assets/product-catalogue-logo.svg?no-inline";
 import { resolveBranding } from "../../../shared/config/brandingConfig.js";
 import { initializeNavbarBranding } from "./navbarBranding.js";
@@ -31,11 +33,11 @@ function initializeNavbarLinks() {
   }
 
   if (analyzeLink) {
-    analyzeLink.href = getAppUrl("analyze/");
+    analyzeLink.href = buildAnalyzeUrl([]);
   }
 
   if (reviewLink) {
-    reviewLink.href = getAppUrl("review/");
+    reviewLink.href = buildReviewUrl([]);
   }
 }
 

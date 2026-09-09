@@ -308,8 +308,9 @@ History, IC-ENC reports, and Internal validation use declarative content configu
 compatibility API calls. Compatibility AOI retains its existing backend loaders. Unsupported content
 is not classified as a request failure.
 
-Analyze/Review routing remains datasetName-based. FI-019 is explicitly deferred; source IDs are not
-encoded into the current routes.
+Analyze/Review routing remains datasetName-based through `/Analyze?Datasets=...` and
+`/Review?Datasets=...`. Source IDs remain internal. The shared public route boundary does not
+replace this source-aware workspace resolver.
 
 ## Deferred after FI-011D
 

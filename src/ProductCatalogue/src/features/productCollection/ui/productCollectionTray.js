@@ -149,6 +149,13 @@ function createActionButton({ label, title, onClick }) {
 }
 
 function openCollectionUrl(url, errorTitle) {
+  if (!url) {
+    noticeError(
+      "Workspace link unavailable",
+      "Product names containing commas cannot be shared in a workspace URL."
+    );
+    return;
+  }
   const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
 
   if (!openedWindow) {

@@ -276,7 +276,7 @@ function createRegistryEntries(source, normalized) {
 function createCatalogSummary(context, { displayName = null } = {}) {
   return {
     id: createDatasetKey(context.datasetName),
-    // `name` remains the picker/route value until FI-019. User-facing labels are
+    // `name` remains the dataset-name picker/route value. User-facing labels are
     // carried separately so visible Product names never become route identity.
     name: context.datasetName,
     displayName: normalizeText(displayName) ?? context.datasetName,

@@ -63,8 +63,11 @@ export function filterProductCatalog(
 }
 
 export function parseProductInput(value) {
-  return String(value ?? "")
-    .split(/[&\n,]+/)
+  // Route parsing and catalog selection already supply atomic names in arrays.
+  // Only free text needs separator parsing; splitting arrays would corrupt names containing &.
+  const parts = Array.isArray(value) ? value : String(value ?? "").split(/[&\n,]+/);
+  return parts
+    .map((part) => String(part ?? ""))
     .map((part) => part.trim())
     .filter(Boolean);
 }

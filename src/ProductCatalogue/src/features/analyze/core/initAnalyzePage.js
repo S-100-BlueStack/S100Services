@@ -115,6 +115,7 @@ export async function initAnalyzePage({ datasetNames }) {
     currentProducts = [];
 
     if (enabledNextDatasetNames.length === 0) {
+      if (!updateUrl) setAnalyzeRouteUrl([], { replace: true });
       renderAnalyzeSidebar({
         datasetItems,
         datasetNames: [],
@@ -174,6 +175,8 @@ export async function initAnalyzePage({ datasetNames }) {
         return;
       }
 
+      // The request generation has been checked, so a stale load cannot rewrite a newer URL.
+      if (!updateUrl) setAnalyzeRouteUrl(enabledNextDatasetNames, { replace: true });
       currentProducts = productsWithHistory;
       currentLayers = layers;
 

@@ -36,6 +36,13 @@ export function openAnalyzePage(datasetName) {
   }
 
   const analyzeUrl = buildAnalyzeUrl([datasetName]);
+  if (!analyzeUrl) {
+    noticeError(
+      "Workspace link unavailable",
+      "Product names containing commas cannot be shared in a workspace URL."
+    );
+    return;
+  }
   const openedWindow = window.open(analyzeUrl, "_blank", "noopener,noreferrer");
 
   if (!openedWindow) {

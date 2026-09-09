@@ -74,4 +74,10 @@ workspace Products but History, IC-ENC reports, and Internal validation render d
 states without compatibility backend requests. Per-Product load state distinguishes `loaded`,
 `unavailable`, and `failed`, so mixed Review columns remain independent. Product removal/disable and
 existing request guards continue to invalidate stale publication. Main-map source visibility does not
-control an already opened Review workspace. FI-019 routing remains deferred.
+control an already opened Review workspace.
+
+## Public route
+
+The canonical route is `/Review?Datasets=ProductA,ProductB`. See
+[workspace routing](../../shared/routing/README.md) for the shared URL boundary, local picker
+synchronization, and temporary legacy-path compatibility. Content toggles remain local state.

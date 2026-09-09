@@ -271,8 +271,10 @@ review; mixed workspaces isolate Product/provider failures and distinguish unava
 loads. Review tabs remain independent and should not reintroduce BroadcastChannel/session picker workflows
 without a clear UX reason.
 
-Analyze/Review routes continue to project dataset names only. FI-019 owns the later route migration; source
-identity remains internal to the workspace runtime model.
+Canonical public routes are `/Analyze?Datasets=ProductA,ProductB` and
+`/Review?Datasets=ProductA,ProductB`. Dataset names are globally unique; source identity remains
+internal to the workspace runtime model. See [workspace routing](src/shared/routing/README.md)
+for serialization, picker synchronization, and temporary legacy-path compatibility.
 
 ### Timeline and Product History
 

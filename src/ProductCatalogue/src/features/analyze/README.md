@@ -152,4 +152,11 @@ and GeoJSON geometry and never call the compatibility AOI endpoint. Mixed worksp
 Products when another provider fails. History, IC-ENC reports, and Internal validation distinguish
 `unavailable` from request `failed`; unavailable mock content does not fabricate XML, reports, history,
 status, or version metadata. Existing request-generation guards remain the publication boundary.
-Routing stays datasetName-based until FI-019.
+Routing remains datasetName-based; source identity stays internal to the workspace runtime.
+
+## Public route
+
+The canonical route is `/Analyze?Datasets=ProductA,ProductB`. See
+[workspace routing](../../shared/routing/README.md) for the shared URL boundary and temporary
+legacy-path compatibility. The URL continues to represent enabled Products; disabled list entries
+remain local workspace composition state.

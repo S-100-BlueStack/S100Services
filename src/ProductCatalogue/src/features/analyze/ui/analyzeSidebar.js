@@ -89,7 +89,7 @@ function createDatasetAddForm(productCatalog, datasetItems) {
     eventName: "pc-analyze-dataset-add",
     labelText: "Add product",
     placeholder: "Search or type product name",
-    helpText: "Add one product at a time, or paste multiple names from an Analyze URL.",
+    helpText: "Add one product at a time, or enter comma-separated product names.",
     products: productCatalog.products,
     excludedProductNames: datasetItems.map((item) => item.name),
     loading: productCatalog.loading,
