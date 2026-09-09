@@ -69,6 +69,77 @@ test("compatibility Analyze keeps the existing AOI endpoint", async () => {
   assert.ok(result.aoiGeometry);
 });
 
+test("compatibility Analyze API failure returns truthful failed Product without synthetic content", async () => {
+  const product = createCompatibilityWorkspaceProductContext("AOI-FAILED");
+  const [result] = await fetchAnalyzeProducts(["AOI-FAILED"], {
+    workspaceProductService: { resolveProduct: async () => resolved(product) },
+    get: async () => {
+      throw new Error("Analyze backend unavailable");
+    },
+  });
+
+  assert.equal(result.workspaceLoadState, "failed");
+  assert.equal(result.datasetName, "AOI-FAILED");
+  assert.equal(result.sourceId, product.sourceId);
+  assert.equal(result.productKey, product.productKey);
+  assert.equal(result.productContext, product);
+  assert.equal(result.loadError, "Analyze backend unavailable");
+  assert.equal(result.aoiGeometry, null);
+  assert.equal(result.sourceFeature, null);
+  assert.equal(result.status, null);
+  assert.equal(result.edition, null);
+  assert.equal(result.update, null);
+  assert.equal(result.issueDate, null);
+  assert.equal(result.errorMessage, "");
+  assert.equal(result.xml, null);
+  assert.deepEqual(result.internalValidationReports, []);
+  assert.equal(result.raw, null);
+  assert.equal(result.isMock, false);
+});
+
+test("mixed compatibility Analyze failure preserves successful Product independently", async () => {
+  const contexts = new Map([
+    ["AOI-GOOD", createCompatibilityWorkspaceProductContext("AOI-GOOD")],
+    ["AOI-BROKEN", createCompatibilityWorkspaceProductContext("AOI-BROKEN")],
+  ]);
+  const results = await fetchAnalyzeProducts([...contexts.keys()], {
+    workspaceProductService: { resolveProduct: async (name) => resolved(contexts.get(name)) },
+    get: async (endpoint) => {
+      if (endpoint.includes("AOI-BROKEN")) {
+        throw new Error("Backend failed for AOI-BROKEN");
+      }
+
+      return {
+        Data: {
+          Name: "AOI-GOOD",
+          Geometry: {
+            rings: [
+              [
+                [10, 56],
+                [11, 56],
+                [10, 56],
+              ],
+            ],
+          },
+          Status: 4,
+          Xml: "<Report />",
+        },
+      };
+    },
+  });
+
+  assert.equal(results[0].workspaceLoadState, "loaded");
+  assert.ok(results[0].aoiGeometry);
+  assert.equal(results[0].status, 4);
+  assert.equal(results[0].xml, "<Report />");
+
+  assert.equal(results[1].workspaceLoadState, "failed");
+  assert.equal(results[1].loadError, "Backend failed for AOI-BROKEN");
+  assert.equal(results[1].aoiGeometry, null);
+  assert.equal(results[1].status, null);
+  assert.equal(results[1].xml, null);
+});
+
 test("Paper Charts and S-102 use source-owned geometry without compatibility requests or fabricated content", async () => {
   const contexts = new Map([
     ["PAPER-1", mockContext("paper-charts", "Paper Charts", "PAPER-1", "paper-chart")],

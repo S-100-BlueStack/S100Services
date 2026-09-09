@@ -31,19 +31,20 @@ User-facing Analyze UI should use `Product` and `Products`, not `Dataset` or `Da
 
 Code can keep technical identifiers such as `datasetName` where required by backend contracts or normalized product attributes, but labels, buttons, empty states and help text should use product terminology.
 
-## Demo mode
+## Failure state
 
-Analyze currently supports frontend demo fallback data because the real backend data contract is not complete yet.
+A resolved compatibility Product whose real Analyze request fails remains a resolved workspace Product,
+but its Analyze content is represented as failed. The model retains Product identity and `loadError`
+while leaving geometry, status, version metadata, XML/report content, validation reports, and raw
+payload empty. The sidebar uses the existing compact failed Product card instead of presenting
+synthetic content as successfully loaded data.
 
-Demo state should be visible to users as a warning or note, but internal demo fields should not leak into map graphic attributes or generic popup fields.
+Analyze loads Products independently. A failed Product does not discard successfully loaded Products in
+the same workspace, and failed Products do not create map graphics or trigger Product History requests.
+Request-generation checks remain the publication boundary for superseded loads.
 
-Examples of internal fields that should stay out of map graphics:
-
-- `isMock`
-- `loadError`
-- raw backend/debug payloads
-
-The sidebar can use these values directly from the Analyze product model when it needs to show a warning.
+The development-only Paper Charts and S-102 workspace sources are separate source contracts. They keep
+their registry-owned attributes and geometry and do not fall through to the compatibility Analyze API.
 
 ## Map graphics
 
@@ -130,29 +131,26 @@ When the endpoint contract is finalized, keep this UI-facing shape stable and ma
 
 ## Backend integration
 
-When the backend Analyze contract is ready, replace demo fallback behavior in `api/analyzeApi.js`.
+Compatibility Analyze content is loaded from the established real backend endpoint and normalized in
+`api/analyzeApi.js`. Request failure must remain a truthful failed Product state; do not add catch-based
+mock payload substitution.
 
-The expected integration path is:
-
-1. Keep the UI-facing Analyze product shape stable.
-2. Normalize backend responses in the Analyze API/service layer.
-3. Keep map graphics minimal.
-4. Keep product actions out of the Analyze sidebar.
-5. Replace demo warnings with backend-specific error/loading states.
-6. Map internal validation report payloads into `internalValidationReports`.
-
-Do not make Analyze depend directly on popup operation state unless there is a specific product action UX requirement.
+Keep the UI-facing Analyze product shape stable, map backend-specific report fields into the existing
+normalizers, keep map graphics minimal, and keep Product mutation actions out of the Analyze sidebar.
+Do not make Analyze depend directly on popup operation state unless there is a specific Product action UX
+requirement.
 
 ## FI-011D source-aware workspace loading
 
 Analyze resolves route `datasetName` values through the shared workspace Product service before
 loading Product content. Compatibility Products keep the established `/electronicproducts/{name}/aoi`
-path and existing fallback behavior. Paper Charts and S-102 use registry-owned normalized attributes
-and GeoJSON geometry and never call the compatibility AOI endpoint. Mixed workspaces keep successful
-Products when another provider fails. History, IC-ENC reports, and Internal validation distinguish
-`unavailable` from request `failed`; unavailable mock content does not fabricate XML, reports, history,
-status, or version metadata. Existing request-generation guards remain the publication boundary.
-Routing remains datasetName-based; source identity stays internal to the workspace runtime.
+path. A failed compatibility request keeps the resolved Product context but publishes a failed Analyze
+state with no fabricated geometry, status, report, or version payload. Paper Charts and S-102 use
+registry-owned normalized attributes and GeoJSON geometry and never call the compatibility AOI endpoint.
+Mixed workspaces keep successful Products when another Product or provider fails. History, IC-ENC
+reports, and Internal validation distinguish `unavailable` from request `failed`. Existing
+request-generation guards remain the publication boundary. Routing remains datasetName-based; source
+identity stays internal to the workspace runtime.
 
 ## Public route
 

@@ -12,7 +12,6 @@ import {
 import { normalizeInternalValidationReports } from "../domain/internalValidationReports.js";
 
 const ANALYZE_PRODUCT_ENDPOINT = "electronicproducts";
-const USE_MOCK_ANALYZE_API = Boolean(import.meta.env?.DEV) && false;
 
 export async function fetchAnalyzeProducts(
   datasetNames,
@@ -41,13 +40,6 @@ async function fetchAnalyzeProduct(datasetName, { workspaceProductService, get }
 }
 
 async function fetchCompatibilityAnalyzeProduct(datasetName, { productContext, get }) {
-  if (USE_MOCK_ANALYZE_API) {
-    return normalizeAnalyzeProduct(createMockAnalyzeProduct(datasetName), datasetName, {
-      isMock: true,
-      productContext,
-    });
-  }
-
   try {
     const payload = await get(
       `${ANALYZE_PRODUCT_ENDPOINT}/${encodeURIComponent(datasetName)}/aoi`,
@@ -55,10 +47,9 @@ async function fetchCompatibilityAnalyzeProduct(datasetName, { productContext, g
     );
     return normalizeAnalyzeProduct(payload, datasetName, { productContext });
   } catch (error) {
-    return normalizeAnalyzeProduct(createMockAnalyzeProduct(datasetName), datasetName, {
-      isMock: true,
-      loadError: error instanceof Error ? error.message : "Unknown analyze data error",
-      productContext,
+    return createFailedAnalyzeProduct(datasetName, {
+      product: productContext,
+      error: error instanceof Error ? error.message : "Unknown analyze data error",
     });
   }
 }
@@ -93,7 +84,7 @@ function normalizeAnalyzeProduct(
     // Only read the top-level product error message. Do not read Data.Exports[*].
     errorMessage: readFirstDefined(product, ["errorMessage", "ErrorMessage"]) ?? "",
     // The analyze AOI endpoint currently returns Esri JSON as Data.Geometry.
-    // Older/mock payloads may still use Aoi/AOI/aoiGeometry, so keep all aliases here.
+    // Older payloads may still use Aoi/AOI/aoiGeometry, so keep all aliases here.
     aoiGeometry:
       readFirstDefined(product, [
         "aoiGeometry",
@@ -161,17 +152,18 @@ function createSourceAnalyzeProduct(productContext) {
 }
 
 function createFailedAnalyzeProduct(datasetName, resolution) {
-  const normalizedDatasetName = String(datasetName ?? "").trim();
+  const productContext = resolution?.product ?? null;
+  const normalizedDatasetName = String(productContext?.datasetName ?? datasetName ?? "").trim();
   return {
     datasetName: normalizedDatasetName,
     name: normalizedDatasetName,
-    sourceId: null,
-    sourceLabel: null,
-    productKey: null,
-    productType: null,
-    productContext: null,
+    sourceId: productContext?.sourceId ?? null,
+    sourceLabel: productContext?.sourceLabel ?? null,
+    productKey: productContext?.productKey ?? null,
+    productType: productContext?.productType ?? null,
+    productContext,
     workspaceLoadState: "failed",
-    contentAvailability: null,
+    contentAvailability: productContext ? createContentAvailability(productContext) : null,
     status: null,
     edition: null,
     update: null,
@@ -264,78 +256,4 @@ function normalizeOptionalStatus(value) {
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function createMockAnalyzeProduct(datasetName) {
-  const geometry = createMockAoiGeometry(datasetName);
-  return {
-    Data: {
-      Name: datasetName,
-      Status: 4,
-      Edition: 1,
-      Update: 0,
-      UsageBand: 1,
-      IssueDate: "2026-05-29",
-      ErrorMessage:
-        "Demo IC-ENC rejection message. Replace this when the backend report payload is ready.",
-      Aoi: JSON.stringify(geometry),
-      Xml: createMockXml(datasetName),
-      InternalValidationReports: [],
-      Exports: [
-        {
-          Type: "S-57",
-          Name: datasetName,
-          Edition: 1,
-          Update: 0,
-          Status: 4,
-          Date: "2026-05-29T00:00:00",
-          ErrorMessage: null,
-        },
-      ],
-    },
-    Success: true,
-    Message: null,
-    TotalHits: 1,
-  };
-}
-
-function createMockAoiGeometry(datasetName) {
-  const hash = [...datasetName].reduce((value, character) => {
-    return (value * 31 + character.charCodeAt(0)) >>> 0;
-  }, 17);
-  const centerX = 9.5 + (hash % 180) / 100;
-  const centerY = 55.0 + ((hash >> 8) % 120) / 100;
-  const size = 0.12;
-
-  return {
-    rings: [
-      [
-        [centerX - size, centerY - size],
-        [centerX + size, centerY - size],
-        [centerX + size, centerY + size],
-        [centerX - size, centerY + size],
-        [centerX - size, centerY - size],
-      ],
-    ],
-    spatialReference: { wkid: 4326 },
-  };
-}
-
-function createMockXml(datasetName) {
-  const escapedDatasetName = escapeXml(datasetName);
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<ICENCReport>
-  <DatasetName>${escapedDatasetName}</DatasetName>
-  <Status>Rejected</Status>
-  <Message>Mock IC-ENC report. Replace this with the XML returned by the backend.</Message>
-</ICENCReport>`;
-}
-
-function escapeXml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
 }

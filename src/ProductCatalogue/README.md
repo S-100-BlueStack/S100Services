@@ -456,6 +456,33 @@ When adding a new logical map layer:
 4. Ensure popup/filter/display-scale behavior checks layer capabilities.
 5. Avoid enabling product actions unless the layer truly supports product correction mutations.
 
+## ArcGIS portal configuration
+
+`VITE_ARCGIS_PORTAL_URL` is an optional, non-secret Vite build-time deployment value for the
+ArcGIS Maps SDK portal. `src/shared/config/arcgisConfig.js` is the single environment-read boundary;
+map, theme, Locator, and UI code do not read this value directly.
+
+The supported contract is:
+
+| Configured value                                            | Portal behavior                                                            |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Missing, empty, or whitespace-only                          | Uses `https://www.arcgis.com`.                                             |
+| Absolute `https://` URL                                     | Uses the configured portal.                                                |
+| Absolute `http://` URL                                      | Uses the configured portal, for deployments that intentionally allow HTTP. |
+| Relative, malformed, unsupported scheme, or URL credentials | Uses `https://www.arcgis.com`.                                             |
+
+The value is compiled into the frontend by Vite. Changing it requires **rebuild + redeploy**; the
+application does not fetch runtime configuration and does not preflight the portal during startup. A
+custom portal that parses correctly may still fail later through normal ArcGIS resource loading.
+
+Do not put credentials, tokens, or other secrets in `VITE_ARCGIS_PORTAL_URL`. Organization deployments
+that require their own ArcGIS portal should provide the value through deployment-local configuration,
+such as `.env.production.local`, rather than committing organization-specific production values.
+
+Portal configuration is independent from `VITE_ARCGIS_LOCATOR_URL`. The Locator keeps its existing
+provider/service contract and DK/GL scope. The existing `Map` / `MapView` and basemap behavior are not
+changed by this configuration boundary.
+
 ## Branding configuration
 
 `VITE_APP_LOGO_URL`, `VITE_APP_LOGO_ALT`, and `VITE_APP_FAVICON_URL` are optional,

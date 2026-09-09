@@ -158,6 +158,9 @@ export async function initAnalyzePage({ datasetNames }) {
         }...`,
       });
 
+      const loadedProducts = productsWithHistory.filter(
+        (product) => product.workspaceLoadState === "loaded"
+      );
       const layers = await createAnalyzeLayers(map, productsWithHistory, {
         onProgress: loaderProgress.handleRenderProgress,
       });
@@ -187,7 +190,6 @@ export async function initAnalyzePage({ datasetNames }) {
         loading: false,
         productCatalog,
       });
-      showMockWarningIfNeeded(productsWithHistory);
       if (layers.length > 0) {
         await waitForLayerViews(view, layers);
 
@@ -202,7 +204,7 @@ export async function initAnalyzePage({ datasetNames }) {
             "The product metadata was loaded, but no AOI geometry could be rendered on the map."
           );
         }
-      } else if (productsWithHistory.length > 0) {
+      } else if (loadedProducts.length > 0) {
         noticeWarning(
           "Analyze geometry unavailable",
           "The product metadata was loaded, but the backend response did not include AOI geometry."
@@ -514,20 +516,6 @@ function applyAnalyzeViewPadding(view) {
       pendingAnimationFrame = null;
     }
   };
-}
-
-function showMockWarningIfNeeded(products) {
-  const mockProducts = products.filter((product) => product.isMock);
-
-  if (mockProducts.length === 0) {
-    return;
-  }
-  noticeWarning(
-    "Using mock analyze data",
-    `Backend data was not available for ${mockProducts
-      .map((product) => product.datasetName)
-      .join(", ")}.`
-  );
 }
 
 async function registerHoverLayers(hoverManager, layers) {
