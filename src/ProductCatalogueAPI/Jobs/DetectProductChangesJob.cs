@@ -1,4 +1,5 @@
-﻿using ProductCatalogueAPI.Data.Repositories;
+﻿using Hangfire;
+using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.ProductCatalogue;
@@ -6,7 +7,7 @@ using S100FC.YAML;
 
 namespace ProductCatalogueAPI.Jobs
 {
-    public class DetectProductChangesJob(IProductRepository repository, IProductManager productManager, IExportService exportService, ISevenCsService sevenCsService, ILogger<DetectProductChangesJob> logger) : IBackgroundJob
+    public class DetectProductChangesJob(IProductRepository repository, IProductManager productManager, IExportService exportService, ISevenCsService sevenCsService, ILogger<DetectProductChangesJob> logger, DetectProductChangesState detectionState) : IBackgroundJob
     {
         private readonly IProductRepository _repository = repository;
         private readonly IProductManager _productManager = productManager;
@@ -15,7 +16,10 @@ namespace ProductCatalogueAPI.Jobs
         private readonly ILogger<DetectProductChangesJob> _logger = logger;
 
 
+        [AutomaticRetry(Attempts = 0)]
         public async Task RunAsync(CancellationToken cancellationToken) {
+            detectionState.EnsureEnabled();
+
             var jobName = nameof(DetectProductChangesJob);
             var scanStartedUtc = DateTime.UtcNow;
             var initialImportDate = new DateTime(2026, 04, 12);

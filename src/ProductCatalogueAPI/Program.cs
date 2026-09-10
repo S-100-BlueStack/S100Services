@@ -42,6 +42,8 @@ namespace ProductCatalogueAPI
             Log.Information("Bootstrap logger started");
 
             var builder = CreateApplicationBuilder(args);
+            var detectionState = DetectProductChangesState.FromConfiguration(builder.Configuration);
+            builder.Services.AddSingleton(detectionState);
             // logging
             builder.Host.UseSerilog((context, loggerConfiguration) => {
                 loggerConfiguration.MinimumLevel.Information()
@@ -71,7 +73,7 @@ namespace ProductCatalogueAPI
                         outputTemplate: outputTemplate);
                 }
                 else {
-                    Log.Warning("No central log path configured. Set environment variable 'serilog_path' to enable logging to a central location.");
+                    Log.Warning("No central log path configured. Set environment variable 'log_path' to enable logging to a central location.");
                 }
             });
             // Add services to the container.
@@ -237,20 +239,15 @@ namespace ProductCatalogueAPI
             //}
 
             var app = builder.Build();
+            DetectProductChangesRecurringJob.Reconcile(
+                detectionState,
+                app.Services,
+                app.Services.GetRequiredService<ILogger<DetectProductChangesJob>>()
+            );
+
             app.UseHangfireDashboard("/dashboard", new DashboardOptions {
                 //   Authorization = new[] { new MyAuthorizationFilter() }             // TODO: Auth
             });
-
-            // Read flag from configuration
-            var enableJob = builder.Configuration.GetValue<bool>("EnableDetectProductChanges");
-            if (enableJob) {
-                Log.Information("Scheduling DetectProductChangesJob to run hourly.");
-                RecurringJob.AddOrUpdate<DetectProductChangesJob>(
-                    "detect-product-changes-job",
-                    job => job.RunAsync(CancellationToken.None),
-                    Cron.Daily(23)
-                );
-            }
 
             app.UseExceptionHandler();
             // Configure the HTTP request pipeline.
