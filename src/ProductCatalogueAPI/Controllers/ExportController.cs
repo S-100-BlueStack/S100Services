@@ -46,6 +46,7 @@ namespace ProductCatalogueAPI.Controllers
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
         [ValidateExportTarget]
         [HttpPost("{name}/newedition", Name = "NewEdition")]
         public async Task<IActionResult> NewEdition(string name, CancellationToken cancellationToken) {
@@ -85,6 +86,12 @@ namespace ProductCatalogueAPI.Controllers
                 response.Message = ex.Message;
                 response.DurationMs = sw.ElapsedMilliseconds;
                 return StatusCode(StatusCodes.Status400BadRequest, response);
+            }
+            catch (S100CompilerPrerequisiteException ex) {
+                response.Success = false;
+                response.Message = ex.Message;
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, response);
             }
             catch (ExportSourceUnavailableException) {
                 response.Success = false;
@@ -249,6 +256,7 @@ namespace ProductCatalogueAPI.Controllers
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
         [HttpPost("{name}/newdataset", Name = "NewDataset")]
         public async Task<IActionResult> NewDataset(string name = "101DK0040349E") {
             var sw = Stopwatch.StartNew();
@@ -266,11 +274,30 @@ namespace ProductCatalogueAPI.Controllers
                 return StatusCode(StatusCodes.Status404NotFound, response);
             }
 
+            try {
+                _exportService.EnsureS100CompilerAvailable();
+            }
+            catch (S100CompilerPrerequisiteException ex) {
+                response.Success = false;
+                response.Message = ex.Message;
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, response);
+            }
+
             var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
 
             var yaml = dataset.Serialize();
 
-            var result = _exportService.CreateS100Export(name, dataset.Edition!.Value, dataset.Update, _electronicProductManager.OutputFolder, yaml);
+            ExportResult result;
+            try {
+                result = _exportService.CreateS100Export(name, dataset.Edition!.Value, dataset.Update, _electronicProductManager.OutputFolder, yaml);
+            }
+            catch (S100CompilerPrerequisiteException ex) {
+                response.Success = false;
+                response.Message = ex.Message;
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, response);
+            }
 
             // _exportService.CreateS57Export(name, dataset.Edition!.Value, dataset.Update!.Value, _electronicProductManager.OutputFolder, yaml);
 
@@ -481,6 +508,7 @@ namespace ProductCatalogueAPI.Controllers
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
         [HttpPost("alldatasets", Name = "NewDatasets")]
         public async Task<IActionResult> CreateAllDatasets() {
             var sw = Stopwatch.StartNew();
@@ -510,6 +538,7 @@ namespace ProductCatalogueAPI.Controllers
 
 
                     // Create exchange set
+                    _exportService.EnsureS100CompilerAvailable();
                     var dataset = await _electronicProductManager.CreateNewDatasetAsync(name);
 
                     var yaml = dataset.Serialize();
@@ -522,6 +551,12 @@ namespace ProductCatalogueAPI.Controllers
                     _logger.LogInformation("Exchangeset created successfully");
 
                     await _productRepository.AppendAsync(name, Data.Models.ProductState.Idle, "S-101", dataset.Edition.Value, dataset.Update);
+                }
+                catch (S100CompilerPrerequisiteException ex) {
+                    response.Success = false;
+                    response.Message = ex.Message;
+                    response.DurationMs = sw.ElapsedMilliseconds;
+                    return StatusCode(StatusCodes.Status503ServiceUnavailable, response);
                 }
                 catch (InvalidOperationException ex) {
                     _logger.LogWarning("ex: {ex}", ex);

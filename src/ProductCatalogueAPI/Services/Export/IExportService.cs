@@ -2,6 +2,7 @@
 {
     public interface IExportService
     {
+        void EnsureS100CompilerAvailable();
         ExportResult CreateS100Export(string datasetName, uint editionNo, uint? updateNo, string outputFolder, string yaml, string prevIndex = "");
         bool DeleteExport(string datasetName, string outputFolder, uint editionNo, uint? updateNo = 0);
 

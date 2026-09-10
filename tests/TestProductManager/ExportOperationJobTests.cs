@@ -1,6 +1,7 @@
 using Hangfire;
 using Microsoft.Extensions.Logging.Abstractions;
 using ProductCatalogueAPI.Jobs;
+using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Operations;
 using S100FC.ProductCatalogue;
@@ -218,6 +219,40 @@ namespace TestProductCatalogueAPI
         }
 
         [Fact]
+        public async Task CompilerPrerequisiteFailureStoresStableSafeErrorMetadataBeforeExecutionGuard() {
+            var context = new FakeExecutionContext();
+            var operations = new RecordingOperationService {
+                ExceptionBeforeMutation = new S100CompilerPrerequisiteException()
+            };
+            var job = CreateJob(
+                new FakeElectronicProductManager(
+                    new ElectronicProductVersion("101DK001", 4, 2)
+                ),
+                new FakeLockService(true),
+                operations
+            );
+
+            var exception = await Assert.ThrowsAsync<ExportOperationJobException>(() =>
+                job.ExecuteAsync(Request(), context, CancellationToken.None)
+            );
+
+            Assert.False(context.Contains(ExportJobParameterNames.ExecutionStarted));
+            Assert.Equal(
+                ExportJobContract.CompilerUnavailableCode,
+                context.Get<string>(ExportJobParameterNames.ErrorCode)
+            );
+            Assert.Equal(
+                ExportJobContract.CompilerUnavailableMessage,
+                context.Get<string>(ExportJobParameterNames.ErrorMessage)
+            );
+            Assert.Equal(ExportJobContract.CompilerUnavailableCode, exception.Code);
+            Assert.Equal(
+                $"{ExportJobContract.CompilerUnavailableCode}: {ExportJobContract.CompilerUnavailableMessage}",
+                exception.Message
+            );
+        }
+
+        [Fact]
         public async Task OperationFailureStoresOnlySafeErrorMetadata() {
             var context = new FakeExecutionContext();
             var operations = new RecordingOperationService {
@@ -329,6 +364,7 @@ namespace TestProductCatalogueAPI
             public int RollbackCalls { get; private set; }
             public int TotalCalls => NewEditionCalls + RollbackCalls;
             public Action? BeforeCall { get; init; }
+            public Exception? ExceptionBeforeMutation { get; init; }
             public Exception? ExceptionToThrow { get; init; }
             public bool RejectBeforeMutation { get; init; }
             public CancellationToken LastCancellationToken { get; private set; }
@@ -346,6 +382,8 @@ namespace TestProductCatalogueAPI
             ) {
                 if (RejectBeforeMutation)
                     throw new ExportOperationRejectedException("Operation precondition failed.");
+                if (ExceptionBeforeMutation != null)
+                    throw ExceptionBeforeMutation;
 
                 beforeMutation?.Invoke();
                 BeforeCall?.Invoke();
@@ -366,6 +404,8 @@ namespace TestProductCatalogueAPI
             ) {
                 if (RejectBeforeMutation)
                     throw new ExportOperationRejectedException("Operation precondition failed.");
+                if (ExceptionBeforeMutation != null)
+                    throw ExceptionBeforeMutation;
 
                 beforeMutation?.Invoke();
                 BeforeCall?.Invoke();

@@ -79,6 +79,37 @@ namespace TestProductCatalogueAPI
         }
 
         [Fact]
+        public async Task NewEditionCompilerPrerequisiteFailsBeforeExecutionGuardAndMutation() {
+            var electronicProducts = new FakeElectronicProductManager();
+            var exports = new FakeExportService {
+                PrerequisiteException = new S100CompilerPrerequisiteException()
+            };
+            var service = new TestExportOperationService(
+                new FakeProductManager(electronicProducts),
+                exports,
+                RepositoryWithState(ProductState.Idle),
+                "dataset-yaml"
+            );
+            var guardSet = false;
+
+            var exception = await Assert.ThrowsAsync<S100CompilerPrerequisiteException>(() =>
+                service.ExecuteNewEditionAsync(
+                    "101DK001",
+                    ExportFormat.S100,
+                    null,
+                    beforeMutation: () => guardSet = true
+                )
+            );
+
+            Assert.Equal(S100CompilerContract.UnavailableCode, exception.Code);
+            Assert.False(guardSet);
+            Assert.Equal(1, exports.PrerequisiteChecks);
+            Assert.Equal(0, electronicProducts.NewEditionCalls);
+            Assert.Equal(0, electronicProducts.AttachmentCalls);
+            Assert.Equal(0, exports.CreateCalls);
+        }
+
+        [Fact]
         public async Task EmptySerializedDatasetRetainsTheSyncFailureSignal() {
             var service = new TestExportOperationService(
                 new FakeProductManager(new FakeElectronicProductManager()),
@@ -284,9 +315,17 @@ namespace TestProductCatalogueAPI
 
         private sealed class FakeExportService : IExportService
         {
+            public int PrerequisiteChecks { get; private set; }
             public int CreateCalls { get; private set; }
             public string? LastYaml { get; private set; }
             public bool DeleteResult { get; set; } = true;
+            public Exception? PrerequisiteException { get; init; }
+
+            public void EnsureS100CompilerAvailable() {
+                PrerequisiteChecks++;
+                if (PrerequisiteException != null)
+                    throw PrerequisiteException;
+            }
 
             public ExportResult CreateS100Export(string datasetName, uint editionNo, uint? updateNo, string outputFolder, string yaml, string prevIndex = "") {
                 CreateCalls++;

@@ -58,6 +58,8 @@ namespace ProductCatalogueAPI.Jobs
                     continue;
                 }
 
+                _exportService.EnsureS100CompilerAvailable();
+
                 // TODO: Skip frozen products? Figure out how to deal with the SuccesfulRun timestamp being past a skipped products updates then.
 
                 _logger.LogInformation("({count}) Pending edits detected for {dataset}", dirtyFeatures.Count, productName);

@@ -4,14 +4,23 @@ using IO = System.IO;
 
 namespace ProductCatalogueAPI.Services.Export
 {
-    public partial class ExportService(ILogger<ExportService> logger, string artifactsPath) : IExportService
+    public partial class ExportService(
+        ILogger<ExportService> logger,
+        string artifactsPath,
+        string s100CompilerExecutablePath
+    ) : IExportService
     {
         private readonly ILogger<ExportService> _logger = logger;
         private readonly string _artifactsPath = artifactsPath;
+        private readonly string _s100CompilerExecutablePath = s100CompilerExecutablePath;
         const string fileReferencePattern = @"^101[A-Z]{2}\d{2}";
         private static readonly Regex fileReferenceRegex = new Regex(fileReferencePattern);
 
+        public void EnsureS100CompilerAvailable() =>
+            _ = GetValidatedS100CompilerExecutablePath();
+
         public ExportResult CreateS100Export(string datasetName, uint editionNo, uint? updateNo, string outputFolder, string yaml, string prevIndex = "") {
+            var compilerExecutablePath = GetValidatedS100CompilerExecutablePath();
             var dir = IO.Directory.CreateDirectory(outputFolder);
 
             var Export = IO.Directory.CreateDirectory(Path.Combine(dir.FullName, datasetName, $"{editionNo}"));
@@ -48,7 +57,7 @@ namespace ProductCatalogueAPI.Services.Export
             _logger.LogInformation("Starting S100 compiler for product: {product} with commandline: {commandline}", datasetName, commandline);
 
             var startInfo = new ProcessStartInfo {
-                FileName = @"C:\Program Files\s100compiler\s100compiler.exe",
+                FileName = compilerExecutablePath,
                 Arguments = commandline,
                 WorkingDirectory = Export.FullName,
                 UseShellExecute = false,
@@ -57,11 +66,7 @@ namespace ProductCatalogueAPI.Services.Export
                 RedirectStandardError = true
             };
 
-            using var process = new Process {
-                StartInfo = startInfo
-            };
-
-            process.Start();
+            using var process = StartCompilerProcessSafely(startInfo, datasetName);
 
             var errorTask = process.StandardError.ReadToEndAsync();
 
@@ -101,6 +106,65 @@ namespace ProductCatalogueAPI.Services.Export
             return new(index, sign);
         }
 
+
+        private string GetValidatedS100CompilerExecutablePath() {
+            if (string.IsNullOrWhiteSpace(_s100CompilerExecutablePath)) {
+                _logger.LogError(
+                    "S100 compiler prerequisite validation failed because {ConfigurationKey} is blank.",
+                    S100CompilerConfiguration.ExecutablePathKey
+                );
+                throw new S100CompilerPrerequisiteException();
+            }
+
+            string fullPath;
+            try {
+                fullPath = IO.Path.GetFullPath(_s100CompilerExecutablePath.Trim());
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) {
+                _logger.LogError(
+                    ex,
+                    "S100 compiler prerequisite validation failed because {ConfigurationKey} is not a valid filesystem path.",
+                    S100CompilerConfiguration.ExecutablePathKey
+                );
+                throw new S100CompilerPrerequisiteException();
+            }
+
+            if (!string.Equals(IO.Path.GetExtension(fullPath), ".exe", StringComparison.OrdinalIgnoreCase)) {
+                _logger.LogError(
+                    "S100 compiler prerequisite validation failed because {ConfigurationKey} does not reference an .exe file.",
+                    S100CompilerConfiguration.ExecutablePathKey
+                );
+                throw new S100CompilerPrerequisiteException();
+            }
+
+            if (!IO.File.Exists(fullPath)) {
+                _logger.LogError(
+                    "S100 compiler prerequisite validation failed because the configured executable is unavailable. ExecutablePath: {ExecutablePath}",
+                    fullPath
+                );
+                throw new S100CompilerPrerequisiteException();
+            }
+
+            return fullPath;
+        }
+
+        private Process StartCompilerProcessSafely(ProcessStartInfo startInfo, string datasetName) {
+            try {
+                return StartCompilerProcess(startInfo);
+            }
+            catch (Exception ex) {
+                _logger.LogError(
+                    ex,
+                    "Configured S100 compiler could not be started for product {Product}.",
+                    datasetName
+                );
+                throw new S100CompilerPrerequisiteException();
+            }
+        }
+
+        protected virtual Process StartCompilerProcess(ProcessStartInfo startInfo) =>
+            Process.Start(startInfo)
+            ?? throw new InvalidOperationException("The configured S100 compiler process did not start.");
 
         public int CreateS57Export(string datasetName, uint editionNo, uint? updateNo, string output, string yaml) {
             var featureCataloguePath = Path.Combine(_artifactsPath, "101_FC_2.0.0.xml");

@@ -39,6 +39,8 @@ namespace ProductCatalogueAPI.Services.Operations
             }
 
             cancellationToken.ThrowIfCancellationRequested();
+            _exportService.EnsureS100CompilerAvailable();
+            cancellationToken.ThrowIfCancellationRequested();
             beforeMutation?.Invoke();
 
             var dataset = await _electronicProductManager.CreateNewEditionAsync(datasetName);

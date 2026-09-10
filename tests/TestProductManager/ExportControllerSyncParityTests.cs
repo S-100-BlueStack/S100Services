@@ -99,6 +99,29 @@ namespace TestProductCatalogueAPI
         }
 
         [Fact]
+        public async Task NewEditionCompilerPrerequisiteReturnsSafeServiceUnavailableBody() {
+            var operations = new RecordingOperationService {
+                NewEditionException = new S100CompilerPrerequisiteException()
+            };
+            var controller = CreateController(
+                new FakeElectronicProductManager(Product("101DK001", 4, 0)),
+                new FakeLockService(acquired: true),
+                operations
+            );
+            ExportTargetContract.SetValidatedTarget(controller.HttpContext, ExportFormat.S100);
+
+            var result = await controller.NewEdition("101DK001", CancellationToken.None);
+
+            var objectResult = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(StatusCodes.Status503ServiceUnavailable, objectResult.StatusCode);
+            var response = Assert.IsType<ApiResponse>(objectResult.Value);
+            Assert.False(response.Success);
+            Assert.Equal(S100CompilerContract.UnavailableMessage, response.Message);
+            Assert.DoesNotContain("\\", response.Message);
+            Assert.Equal(1, operations.NewEditionCalls);
+        }
+
+        [Fact]
         public async Task RollbackSuccessKeepsEmptyOkResponse() {
             var operations = new RecordingOperationService();
             var controller = CreateController(
@@ -168,6 +191,7 @@ namespace TestProductCatalogueAPI
             public int NewEditionCalls { get; private set; }
             public int RollbackCalls { get; private set; }
             public string? NewEditionRejectionMessage { get; init; }
+            public Exception? NewEditionException { get; init; }
             public string? RollbackRejectionMessage { get; init; }
 
             public Task<ExportOperationResult> ExecuteNewEditionAsync(
@@ -180,6 +204,8 @@ namespace TestProductCatalogueAPI
                 NewEditionCalls++;
                 if (NewEditionRejectionMessage != null)
                     throw new ExportOperationRejectedException(NewEditionRejectionMessage);
+                if (NewEditionException != null)
+                    throw NewEditionException;
 
                 beforeMutation?.Invoke();
                 return Task.FromResult(new ExportOperationResult(

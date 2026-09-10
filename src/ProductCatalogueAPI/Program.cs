@@ -41,7 +41,7 @@ namespace ProductCatalogueAPI
                 .CreateBootstrapLogger();
             Log.Information("Bootstrap logger started");
 
-            var builder = WebApplication.CreateBuilder(args);
+            var builder = CreateApplicationBuilder(args);
             // logging
             builder.Host.UseSerilog((context, loggerConfiguration) => {
                 loggerConfiguration.MinimumLevel.Information()
@@ -159,10 +159,6 @@ namespace ProductCatalogueAPI
             builder.Services.AddExceptionHandler<CustomExceptionHandler>();
 
 
-            // Bind configuration
-            builder.Configuration
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
             // Configure ArcGIS and ProductCatalogue services
             await builder.Services.AddS100ProductCatalogue(builder.Configuration);
 
@@ -203,8 +199,9 @@ namespace ProductCatalogueAPI
             builder.Services.AddSingleton<IExportService>(sp => {
                 var logger = sp.GetRequiredService<ILogger<ExportService>>();
                 var artifactsPath = builder.Configuration["ArtifactsPath"]!;
+                var compilerExecutablePath = S100CompilerConfiguration.ResolveExecutablePath(builder.Configuration);
 
-                return new ExportService(logger, artifactsPath);
+                return new ExportService(logger, artifactsPath, compilerExecutablePath);
             });
 
             builder.Services.AddSingleton<ISevenCsService, SevenCsService>();
@@ -312,6 +309,14 @@ namespace ProductCatalogueAPI
 
             app.Run();
         }
+
+        internal static WebApplicationBuilder CreateApplicationBuilder(
+            string[] args,
+            string? contentRootPath = null
+        ) => WebApplication.CreateBuilder(new WebApplicationOptions {
+            Args = args,
+            ContentRootPath = contentRootPath
+        });
 
         private static IResult GetDevelopmentGeoJson(IWebHostEnvironment environment, string fileName) {
             var path = Path.Combine(environment.ContentRootPath, "mock", fileName);
