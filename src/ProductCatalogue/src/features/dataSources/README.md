@@ -280,12 +280,14 @@ contract exists. This does not represent a source-correct S-57/S-101 split.
 ProductCatalogueAPI registers these routes only in Development:
 
 ```text
-GET /mock/paper-charts -> mock/some_products.geojson
-GET /mock/s102         -> mock/products.geojson
+GET /mock/paper-charts -> mock/paper-charts.geojson
+GET /mock/s102         -> mock/s102.geojson
 ```
 
-The fixtures validate the generic multi-source frontend. They are not production API contracts and
-must not define future Paper Charts or S-102 backend schemas.
+The fixtures are small, synthetic Development-only datasets used to exercise the generic
+multi-source frontend. They are not production API contracts and must not define future Paper Charts
+or S-102 backend schemas. The obsolete generic `/mock/products` route is intentionally absent now
+that compatibility Products come from the real backend.
 
 ## FI-011D workspace and Collection integration
 

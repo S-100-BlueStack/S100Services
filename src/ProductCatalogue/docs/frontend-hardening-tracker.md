@@ -316,8 +316,8 @@ source preferences. Runtime source refresh and compatibility refresh remain inde
 Paper Charts and S-102 continue to use Development-only fixtures:
 
 ```text
-GET /mock/paper-charts -> mock/some_products.geojson
-GET /mock/s102         -> mock/products.geojson
+GET /mock/paper-charts -> mock/paper-charts.geojson
+GET /mock/s102         -> mock/s102.geojson
 ```
 
 They are not production contracts and must not define future backend fields or capabilities.

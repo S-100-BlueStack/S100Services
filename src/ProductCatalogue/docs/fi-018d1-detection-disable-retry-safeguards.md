@@ -10,11 +10,11 @@ This change does not activate detection. The tracked `EnableDetectProductChanges
 
 `EnableDetectProductChanges` is resolved once immediately after the application builder is created. `DetectProductChangesState` retains only an immutable Boolean decision and is registered as a singleton for job activation. Startup reconciliation receives the same instance.
 
-| Effective value | Startup decision |
-| --- | --- |
-| Missing | Disabled |
-| `false` | Disabled |
-| `true` | Enabled |
+| Effective value                                     | Startup decision                                                  |
+| --------------------------------------------------- | ----------------------------------------------------------------- |
+| Missing                                             | Disabled                                                          |
+| `false`                                             | Disabled                                                          |
+| `true`                                              | Enabled                                                           |
 | Explicit invalid Boolean text, including blank text | Startup fails with `DETECT_PRODUCT_CHANGES_CONFIGURATION_INVALID` |
 
 The existing ASP.NET configuration providers and their precedence remain unchanged: command line > environment > environment-specific JSON > base JSON. The state does not retain `IConfiguration`, reread a file, or subscribe to reload notifications. A restart is required after a setting change.

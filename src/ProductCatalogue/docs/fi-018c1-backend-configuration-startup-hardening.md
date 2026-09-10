@@ -98,15 +98,15 @@ FI-018C1 does not change `INT.IHO.S-101.2.0`, `FCVer 2.0`, or `101_FC_2.0.0.xml`
 
 `reloadOnChange` on a JSON provider does not make every consumer dynamic. The effective lifecycle for the inspected settings is:
 
-| Setting | Lifecycle in FI-018C1 |
-| --- | --- |
-| `Connections:S128Connection` | Read during required ProductManager startup. Restart required. |
-| `Connections:HangfireConnection` | Read during Hangfire startup and its connection file is consumed once. Restart required. |
-| `ArtifactsPath` | Captured when the singleton `IExportService` is constructed. Treat as restart required after the singleton has been created. |
-| `S100Compiler:ExecutablePath` | Captured with the singleton `IExportService`. Treat as restart required after the singleton has been created. |
-| `EnableDetectProductChanges` | FI-018D1 supersedes this lifecycle: resolved once before host construction and shared as an immutable startup snapshot. Restart required. Disabled startup removes the persisted recurring definition and disabled invocations fail before detection work. See [FI-018D1](fi-018d1-detection-disable-retry-safeguards.md). |
-| `log_path` | Read directly from the process environment before the application builder is created. Restart required. |
-| `SendToIcEnc:Mode` | Consumed through `IOptionsMonitor<SendToIcEncOptions>`. Reload-capable configuration providers can update the monitored value at runtime; changing process environment variables or command-line arguments requires restart. |
+| Setting                          | Lifecycle in FI-018C1                                                                                                                                                                                                                                                                                                      |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Connections:S128Connection`     | Read during required ProductManager startup. Restart required.                                                                                                                                                                                                                                                             |
+| `Connections:HangfireConnection` | Read during Hangfire startup and its connection file is consumed once. Restart required.                                                                                                                                                                                                                                   |
+| `ArtifactsPath`                  | Captured when the singleton `IExportService` is constructed. Treat as restart required after the singleton has been created.                                                                                                                                                                                               |
+| `S100Compiler:ExecutablePath`    | Captured with the singleton `IExportService`. Treat as restart required after the singleton has been created.                                                                                                                                                                                                              |
+| `EnableDetectProductChanges`     | FI-018D1 supersedes this lifecycle: resolved once before host construction and shared as an immutable startup snapshot. Restart required. Disabled startup removes the persisted recurring definition and disabled invocations fail before detection work. See [FI-018D1](fi-018d1-detection-disable-retry-safeguards.md). |
+| `log_path`                       | Read directly from the process environment before the application builder is created. Restart required.                                                                                                                                                                                                                    |
+| `SendToIcEnc:Mode`               | Consumed through `IOptionsMonitor<SendToIcEncOptions>`. Reload-capable configuration providers can update the monitored value at runtime; changing process environment variables or command-line arguments requires restart.                                                                                               |
 
 For deployment changes to long-lived/native resources, restart the API rather than relying on JSON file reload.
 

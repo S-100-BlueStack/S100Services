@@ -271,22 +271,15 @@ namespace ProductCatalogueAPI
                 await next();
             });
             if (app.Environment.IsDevelopment()) {
-                app.MapGet("/mock/products", (IWebHostEnvironment env) => {
-                    return GetDevelopmentGeoJson(env, "products.geojson");
+                app.MapGet("/mock/paper-charts", () => {
+                    return GetDevelopmentGeoJson("paper-charts.geojson");
                 })
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound)
                 .AllowAnonymous();
 
-                app.MapGet("/mock/paper-charts", (IWebHostEnvironment env) => {
-                    return GetDevelopmentGeoJson(env, "some_products.geojson");
-                })
-                .Produces(StatusCodes.Status200OK)
-                .Produces(StatusCodes.Status404NotFound)
-                .AllowAnonymous();
-
-                app.MapGet("/mock/s102", (IWebHostEnvironment env) => {
-                    return GetDevelopmentGeoJson(env, "products.geojson");
+                app.MapGet("/mock/s102", () => {
+                    return GetDevelopmentGeoJson("s102.geojson");
                 })
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound)
@@ -315,13 +308,14 @@ namespace ProductCatalogueAPI
             ContentRootPath = contentRootPath
         });
 
-        private static IResult GetDevelopmentGeoJson(IWebHostEnvironment environment, string fileName) {
-            var path = Path.Combine(environment.ContentRootPath, "mock", fileName);
+        private static IResult GetDevelopmentGeoJson(string fileName) {
+            var resourceName = $"ProductCatalogueAPI.mock.{fileName}";
+            var stream = typeof(Program).Assembly.GetManifestResourceStream(resourceName);
 
-            if (!File.Exists(path))
+            if (stream is null)
                 return Results.NotFound();
 
-            return Results.File(path, "application/geo+json");
+            return Results.Stream(stream, "application/geo+json");
         }
     }
 }

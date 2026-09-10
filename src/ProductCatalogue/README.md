@@ -477,7 +477,9 @@ custom portal that parses correctly may still fail later through normal ArcGIS r
 
 Do not put credentials, tokens, or other secrets in `VITE_ARCGIS_PORTAL_URL`. Organization deployments
 that require their own ArcGIS portal should provide the value through deployment-local configuration,
-such as `.env.production.local`, rather than committing organization-specific production values.
+such as `.env.development.local` or `.env.production.local`, rather than committing
+organization-specific values. The repository-wide `*.local` ignore rule keeps these Vite local
+override files untracked.
 
 Portal configuration is independent from `VITE_ARCGIS_LOCATOR_URL`. The Locator keeps its existing
 provider/service contract and DK/GL scope. The existing `Map` / `MapView` and basemap behavior are not
@@ -487,7 +489,9 @@ changed by this configuration boundary.
 
 `VITE_APP_LOGO_URL`, `VITE_APP_LOGO_ALT`, and `VITE_APP_FAVICON_URL` are optional,
 non-secret client-side Vite build variables. Use the existing `.env.example` as a template.
-Do not put secrets in these values or commit organization-specific environment settings.
+The tracked `.env.development` stays neutral; put organization-specific Development branding in
+`.env.development.local`. Do not put secrets in these values or commit organization-specific
+environment settings.
 
 The configured URLs and alt text are build-time inputs; the browser loads the images at runtime:
 

@@ -61,8 +61,8 @@ test("Development mock fixture files normalize to globally unique source dataset
   const paperSource = registry.byId.get(DATA_SOURCE_IDS.PAPER_CHARTS);
   const s102Source = registry.byId.get(DATA_SOURCE_IDS.S102);
   const [paperPayload, s102Payload] = await Promise.all([
-    readFixture("mock/some_products.geojson"),
-    readFixture("mock/products.geojson"),
+    readFixture("mock/paper-charts.geojson"),
+    readFixture("mock/s102.geojson"),
   ]);
   const paper = normalizeDataSourcePayload(paperPayload, paperSource);
   const s102 = normalizeDataSourcePayload(s102Payload, s102Source);
@@ -86,5 +86,13 @@ test("Development mock fixture files normalize to globally unique source dataset
   assert.equal(
     allNames.some((datasetName) => /\((?:S-?102|Paper Charts)\)/i.test(datasetName)),
     false
+  );
+  assert.equal(
+    paper.products.every((product) => product.productName?.startsWith("Synthetic Paper Chart")),
+    true
+  );
+  assert.equal(
+    s102.products.every((product) => product.productName?.startsWith("Synthetic S-102")),
+    true
   );
 });

@@ -8,24 +8,36 @@ async function readApiFile(relativePath) {
   return readFile(new URL(relativePath, productManagerApiRoot), "utf8");
 }
 
-test("ProductCatalogueAPI registers the FI-011A mock routes inside Development only", async () => {
+test("ProductCatalogueAPI registers only the retained source mocks inside Development", async () => {
   const program = await readApiFile("Program.cs");
   const developmentBlockStart = program.indexOf("if (app.Environment.IsDevelopment())");
+  const genericProductRoute = program.indexOf('app.MapGet("/mock/products"');
   const paperRoute = program.indexOf('app.MapGet("/mock/paper-charts"');
   const s102Route = program.indexOf('app.MapGet("/mock/s102"');
   const appRun = program.indexOf("app.Run();");
 
   assert.ok(developmentBlockStart >= 0);
+  assert.equal(genericProductRoute, -1);
   assert.ok(paperRoute > developmentBlockStart && paperRoute < appRun);
   assert.ok(s102Route > developmentBlockStart && s102Route < appRun);
-  assert.match(program, /GetDevelopmentGeoJson\(env, "some_products\.geojson"\)/);
-  assert.match(program, /GetDevelopmentGeoJson\(env, "products\.geojson"\)/);
+  assert.match(program, /GetDevelopmentGeoJson\("paper-charts\.geojson"\)/);
+  assert.match(program, /GetDevelopmentGeoJson\("s102\.geojson"\)/);
+  assert.match(program, /GetManifestResourceStream\(resourceName\)/);
+  assert.equal(program.includes("environment.ContentRootPath"), false);
 });
 
-test("ProductCatalogueAPI copies both Development mock fixtures to output", async () => {
+test("ProductCatalogueAPI embeds only source-specific Development mock fixtures", async () => {
   const projectFile = await readApiFile("ProductCatalogueAPI.csproj");
 
-  assert.match(projectFile, /Content Include="mock\\products\.geojson"/);
-  assert.match(projectFile, /Content Include="mock\\some_products\.geojson"/);
+  assert.match(
+    projectFile,
+    /EmbeddedResource Include="mock\\paper-charts\.geojson" LogicalName="ProductCatalogueAPI\.mock\.paper-charts\.geojson"/
+  );
+  assert.match(
+    projectFile,
+    /EmbeddedResource Include="mock\\s102\.geojson" LogicalName="ProductCatalogueAPI\.mock\.s102\.geojson"/
+  );
+  assert.equal(projectFile.includes("mock\\products.geojson"), false);
+  assert.equal(projectFile.includes("mock\\some_products.geojson"), false);
   assert.equal(projectFile.includes("enc-products"), false);
 });
