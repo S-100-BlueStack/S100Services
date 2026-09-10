@@ -2,12 +2,10 @@ using ArcGIS.Core.Data;
 using ArcGIS.Core.Data.UtilityNetwork.Trace;
 using ArcGIS.Core.Geometry;
 using ArcGIS.Core.Internal.Geometry;
-using Microsoft.Extensions.Logging;
 using S100BlueStack.Settings;
 using S100FC.S128.ComplexAttributes;
 using S100FC.S128.FeatureAssociation;
 using S100FC.S128.FeatureTypes;
-using S100FC.S128.SimpleAttributes;
 using S100FC.YAML;
 using S100Horizon.Settings;
 using Serilog;
@@ -250,7 +248,7 @@ namespace S100FC.ProductCatalogue
             result.ElectronicProduct.editionNumber = 1;
             result.ElectronicProduct.updateNumber = 0;
 
-            return await this.CreateDatasetAsync(result.ElectronicProduct, result.Shape, result.NominalScale, ExportTypes.NewDataset);
+            return await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, ExportTypes.NewDataset);
         }
 
         async Task<YAML.Dataset> IElectronicProductManager.CreateNewEditionAsync(string name) {
@@ -268,7 +266,7 @@ namespace S100FC.ProductCatalogue
             result.ElectronicProduct.updateNumber = 0;
 
 
-            return await this.CreateDatasetAsync(result.ElectronicProduct, result.Shape, result.NominalScale, ExportTypes.NewEdition);
+            return await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, ExportTypes.NewEdition);
         }
 
         async Task<YAML.Dataset> IElectronicProductManager.CreateNewUpdateAsync(string name) {
@@ -284,7 +282,7 @@ namespace S100FC.ProductCatalogue
 
             result.ElectronicProduct.updateNumber += 1;
 
-            return await this.CreateDatasetAsync(result.ElectronicProduct, result.Shape, result.NominalScale, ExportTypes.Update);
+            return await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, ExportTypes.Update);
         }
 
         async Task<YAML.Dataset> IElectronicProductManager.ReissueAsync(string name) {
@@ -297,7 +295,7 @@ namespace S100FC.ProductCatalogue
 
             var result = await this.GetElectronicProductAsync(name);
 
-            return await this.CreateDatasetAsync(result.ElectronicProduct, result.Shape, result.NominalScale, ExportTypes.Reissue);
+            return await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, ExportTypes.Reissue);
         }
 
         async Task<YAML.Dataset> IElectronicProductManager.CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken) {
@@ -314,7 +312,7 @@ namespace S100FC.ProductCatalogue
             result.ElectronicProduct.updateNumber = update;
 
             // applyEdits must remain false: SQL owns unverified candidate versions until IC-ENC acceptance.
-            var dataset = await this.CreateDatasetAsync(result.ElectronicProduct, result.Shape, result.NominalScale, exportType, applyEdits: false);
+            var dataset = await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, exportType, applyEdits: false);
             ExportSnapshotVersioning.ApplyCompilerCompatibleVersion(dataset, edition);
             cancellationToken.ThrowIfCancellationRequested();
             return dataset;
@@ -749,7 +747,7 @@ namespace S100FC.ProductCatalogue
 
         IEnumerator IEnumerable.GetEnumerator() => this._preferredElectronicProductsByName.Keys.GetEnumerator();
 
-        private async Task<(ElectronicProduct ElectronicProduct, ArcGIS.Core.Geometry.Polygon Shape, long NominalScale)> GetElectronicProductAsync(string name) {
+        private async Task<(ElectronicProduct ElectronicProduct, SpatialQueryFilter Filter)> GetElectronicProductAsync(string name) {
             return await this.Dispatch(() => {
                 using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
                 ArcGIS.Core.Data.Row row128;
@@ -770,23 +768,22 @@ namespace S100FC.ProductCatalogue
                 var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row128["attributebindings"])!, typeof(ElectronicProduct));
 
                 var shapeCoverage = (ArcGIS.Core.Geometry.Polygon)((ArcGIS.Core.Data.Feature)cursorS128.Current).GetShape();
-                var nominalScale = cursorS128.Current["nominalScale"] != null ? Convert.ToInt64(cursorS128.Current["nominalScale"]) : 0;
+
+                var whereClause = "upper(ps) = 'S-101'";
 
 
-                //var whereClause = "upper(ps) = 'S-101'";
+                var filter = new SpatialQueryFilter {
+                    FilterGeometry = shapeCoverage,
+                    SpatialRelationship = SpatialRelationship.Relation,
+                    SpatialRelationshipDescription = S100FC.Topology.Matrix.DE9IM,
+                    WhereClause = whereClause,
+                };
 
-                //var filter = new SpatialQueryFilter {
-                //    FilterGeometry = shapeCoverage,
-                //    SpatialRelationship = SpatialRelationship.Relation,
-                //    SpatialRelationshipDescription = S100FC.Topology.Matrix.DE9IM,
-                //    WhereClause = whereClause,
-                //};
-
-                return (electronicProduct, shapeCoverage, nominalScale);
+                return (electronicProduct, filter);
             });
         }
 
-        private async Task<YAML.Dataset> CreateDatasetAsync(ElectronicProduct electronicProduct, ArcGIS.Core.Geometry.Polygon shape, long nominalScale, ExportTypes exportType, bool applyEdits = true) {
+        private async Task<YAML.Dataset> CreateDatasetAsync(ElectronicProduct electronicProduct, SpatialQueryFilter filter, ExportTypes exportType, bool applyEdits = true) {
             var timestamp = DateTime.UtcNow;
 
             var featureCatalogue = S100FC.Catalogues.FeatureCatalogue.Catalogues.Single(e => e.ProductID.Equals("S-101"));
@@ -806,7 +803,7 @@ namespace S100FC.ProductCatalogue
                 Edition = (uint?)electronicProduct.editionNumber,
                 ENCVer = "INT.IHO.S-101.2.0",
                 FCVer = "2.0",
-                VerticalDatum = "Baltic Sea Chart Datum 2000,44",
+                verticalDatum = "Baltic Sea Chart Datum 2000,44",
                 //Update = (uint?)electronicProduct.updateNumber,   // todo: Bug in s100ocompiler and must always be null
             };
 
@@ -820,28 +817,7 @@ namespace S100FC.ProductCatalogue
 
             return await this.Dispatch(() => {
                 using var connection = this.OpenGeodatabase(uri);
-
-
-                //var s101Uri = this.Connection("S-101") ?? throw new InvalidOperationException("No S-101 geodatabase connection is configured.");
-                //using var s101Geodatabase = this.OpenGeodatabase(s101Uri);
-
-
-                using var loggerFactory = LoggerFactory.Create(builder => {
-                    builder.SetMinimumLevel(LogLevel.Trace);
-                    builder.AddSerilog();
-
-                });
-
-
-                // TODO: Fix S101_QueryDataCoverage. Returns empty array and causes BuildTopology to fail.
-                var filters = connection.S101_QueryDataCoverage(shape, nominalScale).Select(result => result.Filter).ToArray();
-                var result = connection.BuildTopology(filters, loggerFactory: loggerFactory)!;
-
-                var topology = result.matrix;
-                var selection = result.selection;
-                var collapse = topology.Collapse;
-
-
+                var topology = connection.BuildTopology(filter)!;
 
                 // InformationTypes
                 try {
@@ -945,12 +921,7 @@ namespace S100FC.ProductCatalogue
                     var hashSet = new HashSet<long>();
 
                     using var fc = connection.OpenDataset<FeatureClass>(def.GetName());
-                    // using var featureCursor = fc.Search(filter, true);
-                    using var featureCursor = fc.Search(new QueryFilter {
-                        WhereClause = $"OBJECTID IN ({string.Join(',', selection[tableName.ToLowerInvariant()])})",
-                        SubFields = "OBJECTID,UID,GLOBALID,CODE,attributeBindings,informationBindings,featureBindings,SHAPE",
-                    }, true);
-
+                    using var featureCursor = fc.Search(filter, true);
                     while (featureCursor.MoveNext()) {
                         var current = (ArcGIS.Core.Data.Feature)featureCursor.Current;
                         var name = current["UID"].ToString()!;  //$"{current.UID()}";
@@ -963,7 +934,7 @@ namespace S100FC.ProductCatalogue
 
                         var _uid = Convert.ToString(current["UID"])!;
 
-                        if (collapse.Contains(_uid)) continue;
+                        if (topology.matrix.Collapse.Contains(_uid)) continue;
 
                         var shapetype = def.GetShapeType();
 
@@ -978,9 +949,9 @@ namespace S100FC.ProductCatalogue
                         var featureMappings = TopologyFeatureMapping.Resolve(
                             _uid,
                             prim,
-                            result.mapper,
-                            topology.MappingFOID,
-                            topology.Surfaces);
+                            topology.mapper,
+                            topology.matrix.MappingFOID,
+                            topology.matrix.Surfaces);
 
                         foreach (var featureMapping in featureMappings) {
                             var geometry = featureMapping.Geometry;
@@ -1212,7 +1183,7 @@ namespace S100FC.ProductCatalogue
                     Log.Verbose("Adding {geometryType} with ID: {name}", geometry.GeometryType, name);
                 }
 
-                dataset!.AddTopology(topology);
+                dataset!.AddTopology(topology.matrix);
 
                 // Add Spatial Association Informationbindings. Must be handled after curves are added to dataset.
                 foreach (var sa in spatialAssociations) {
