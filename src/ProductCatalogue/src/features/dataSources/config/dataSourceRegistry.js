@@ -62,14 +62,14 @@ const GEOJSON_PRODUCT_NORMALIZER = Object.freeze({
   type: "geojson-products",
 });
 
-// These strategies correct legacy Development fixture identities before they enter
+// These strategies normalize synthetic mock identities before they enter
 // ProductContext/workspace state. They are not production naming contracts.
-const PAPER_CHARTS_DEVELOPMENT_DATASET_NAME_STRATEGY = Object.freeze({
+const PAPER_CHARTS_MOCK_DATASET_NAME_STRATEGY = Object.freeze({
   type: "synthetic-prefix",
   prefix: "PAPER-MOCK",
 });
 
-const S102_DEVELOPMENT_DATASET_NAME_STRATEGY = Object.freeze({
+const S102_MOCK_DATASET_NAME_STRATEGY = Object.freeze({
   type: "replace-leading-product-code",
   productCode: "102",
   fallbackPrefix: "102-MOCK",
@@ -82,9 +82,13 @@ const DEFAULT_PRODUCT_SEARCH = Object.freeze({
 
 export function createDataSourceRegistry({
   isDevelopment = Boolean(import.meta.env?.DEV),
+  mockDataSourcesEnabled = isMockDataSourcesFlagEnabled(
+    import.meta.env?.VITE_ENABLE_MOCK_DATA_SOURCES
+  ),
   configuredSourceIds,
 } = {}) {
   const configuredIds = normalizeConfiguredSourceIds(configuredSourceIds);
+  const mockSourcesEnabled = isDevelopment || mockDataSourcesEnabled;
   const definitions = [
     createUnavailableSource({
       id: DATA_SOURCE_IDS.S57,
@@ -100,7 +104,7 @@ export function createDataSourceRegistry({
       configuredIds,
       reason: "An authoritative S-101 read contract is not available yet.",
     }),
-    createDevelopmentMockSource({
+    createMockSource({
       id: DATA_SOURCE_IDS.PAPER_CHARTS,
       label: "Paper Charts",
       productType: "paper-chart",
@@ -108,11 +112,11 @@ export function createDataSourceRegistry({
       layerId: DATA_SOURCE_LAYER_IDS.PAPER_CHARTS_PRODUCTS,
       layerKind: "paper-chart-products",
       filterDefinitions: ["status", "displayScale", "usageBand"],
-      datasetNameStrategy: PAPER_CHARTS_DEVELOPMENT_DATASET_NAME_STRATEGY,
-      isDevelopment,
+      datasetNameStrategy: PAPER_CHARTS_MOCK_DATASET_NAME_STRATEGY,
+      mockSourcesEnabled,
       configuredIds,
     }),
-    createDevelopmentMockSource({
+    createMockSource({
       id: DATA_SOURCE_IDS.S102,
       label: "S-102",
       productType: "s102-product",
@@ -120,8 +124,8 @@ export function createDataSourceRegistry({
       layerId: DATA_SOURCE_LAYER_IDS.S102_PRODUCTS,
       layerKind: "s102-products",
       filterDefinitions: ["status"],
-      datasetNameStrategy: S102_DEVELOPMENT_DATASET_NAME_STRATEGY,
-      isDevelopment,
+      datasetNameStrategy: S102_MOCK_DATASET_NAME_STRATEGY,
+      mockSourcesEnabled,
       configuredIds,
     }),
   ];
@@ -197,7 +201,7 @@ function createUnavailableSource({ id, label, productType, configuredIds, reason
   };
 }
 
-function createDevelopmentMockSource({
+function createMockSource({
   id,
   label,
   productType,
@@ -206,10 +210,10 @@ function createDevelopmentMockSource({
   layerKind,
   filterDefinitions,
   datasetNameStrategy,
-  isDevelopment,
+  mockSourcesEnabled,
   configuredIds,
 }) {
-  const enabledByConfiguration = isConfigured(id, configuredIds) && isDevelopment;
+  const enabledByConfiguration = isConfigured(id, configuredIds) && mockSourcesEnabled;
   const exportUnavailableReason = `${label} export is not available yet.`;
 
   return {
@@ -223,7 +227,7 @@ function createDevelopmentMockSource({
         }
       : {
           state: DATA_SOURCE_AVAILABILITY.UNAVAILABLE,
-          reason: "The development-only mock source is unavailable in this environment.",
+          reason: "The mock source is unavailable in this environment.",
         },
     userSelectable: enabledByConfiguration,
     defaultEnabled: true,
@@ -384,6 +388,14 @@ function normalizeConfiguredSourceIds(configuredSourceIds) {
 
 function isConfigured(sourceId, configuredIds) {
   return configuredIds === null || configuredIds.has(sourceId);
+}
+
+export function isMockDataSourcesFlagEnabled(value) {
+  return (
+    String(value ?? "")
+      .trim()
+      .toLowerCase() === "true"
+  );
 }
 
 function normalizeSourceId(value) {

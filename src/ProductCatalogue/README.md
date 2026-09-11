@@ -456,6 +456,36 @@ When adding a new logical map layer:
 4. Ensure popup/filter/display-scale behavior checks layer capabilities.
 5. Avoid enabling product actions unless the layer truly supports product correction mutations.
 
+## Mock data source configuration
+
+Paper Charts and S-102 use synthetic fixtures until authoritative backend read contracts are available.
+They are enabled automatically in Vite Development builds. A production-mode test build can opt in with:
+
+```dotenv
+VITE_ENABLE_MOCK_DATA_SOURCES=true
+```
+
+This is a non-secret Vite build-time setting. Rebuild and redeploy the frontend after changing it. Missing,
+blank, `false`, or unsupported values keep the mock sources disabled outside Development.
+
+The API has an independent runtime gate. Development enables the retained mock endpoints automatically.
+For a non-Development test deployment, set:
+
+```text
+MockDataSources:Enabled=true
+```
+
+The equivalent environment variable is:
+
+```text
+MockDataSources__Enabled=true
+```
+
+The repository default is `false`. Both frontend and backend opt-ins must be enabled for Paper Charts and
+S-102 to work end-to-end in a production-mode test deployment. These flags expose only the existing
+synthetic `/mock/paper-charts` and `/mock/s102` sources; they do not enable backend Product mutations,
+Export, History, or report contracts for those sources.
+
 ## ArcGIS portal configuration
 
 `VITE_ARCGIS_PORTAL_URL` is an optional, non-secret Vite build-time deployment value for the

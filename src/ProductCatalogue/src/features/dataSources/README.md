@@ -15,12 +15,12 @@ onboarding/regression work are still deferred.
 
 The permanent registry contains these independent Product sources:
 
-| Source ID      | Label          | Runtime availability | Loader                                      |
-| -------------- | -------------- | -------------------- | ------------------------------------------- |
-| `s57`          | `S-57`         | Unavailable          | Pending authoritative backend read contract |
-| `s101`         | `S-101`        | Unavailable          | Pending authoritative backend read contract |
-| `paper-charts` | `Paper Charts` | Development only     | `GET /mock/paper-charts`                    |
-| `s102`         | `S-102`        | Development only     | `GET /mock/s102`                            |
+| Source ID      | Label          | Runtime availability                | Loader                                      |
+| -------------- | -------------- | ----------------------------------- | ------------------------------------------- |
+| `s57`          | `S-57`         | Unavailable                         | Pending authoritative backend read contract |
+| `s101`         | `S-101`        | Unavailable                         | Pending authoritative backend read contract |
+| `paper-charts` | `Paper Charts` | Development or explicit mock opt-in | `GET /mock/paper-charts`                    |
+| `s102`         | `S-102`        | Development or explicit mock opt-in | `GET /mock/s102`                            |
 
 There is no permanent combined ENC source, toggle, identity, or storage entry. The existing combined
 AOI flow remains a temporary compatibility path and must not be used to infer or duplicate S-57 and
@@ -251,7 +251,7 @@ layer metadata, and the registry-installed source contract. The context retains 
 configuration. Missing, unknown, attribute-only, or mismatched source metadata fails closed for
 backend-dependent actions.
 
-Paper Charts and S-102 remain Development-only registry-backed Product sources. Their layer capability
+Paper Charts and S-102 remain synthetic registry-backed Product sources that are available only in Development or through explicit mock-data-source opt-in. Their layer capability
 `supportsPopupActions: true` permits safe custom popup actions but is not a proxy for backend
 operations. FI-011D enables Product Collection, Analyze, Review, and the History surface through
 independent ProductContext capabilities. Backend implementation permission remains separate through
@@ -275,18 +275,20 @@ History, and operation workflows. Their simplified Export menu contains only `Ed
 `Edition` keeps the existing S100 wire target; `Update` remains disabled because no implemented Update
 contract exists. This does not represent a source-correct S-57/S-101 split.
 
-## Development-only mocks
+## Synthetic mock sources
 
-ProductCatalogueAPI registers these routes only in Development:
+ProductCatalogueAPI registers these routes in Development or when `MockDataSources:Enabled=true`:
 
 ```text
 GET /mock/paper-charts -> mock/paper-charts.geojson
 GET /mock/s102         -> mock/s102.geojson
 ```
 
-The fixtures are small, synthetic Development-only datasets used to exercise the generic
-multi-source frontend. They are not production API contracts and must not define future Paper Charts
-or S-102 backend schemas. The obsolete generic `/mock/products` route is intentionally absent now
+The fixtures are small, synthetic datasets used to exercise the generic multi-source frontend. Vite
+Development enables them automatically; a production-mode test build must explicitly set
+`VITE_ENABLE_MOCK_DATA_SOURCES=true`, and the API deployment must independently set
+`MockDataSources:Enabled=true`. They are not production API contracts and must not define future Paper
+Charts or S-102 backend schemas. The obsolete generic `/mock/products` route is intentionally absent now
 that compatibility Products come from the real backend.
 
 ## FI-011D workspace and Collection integration

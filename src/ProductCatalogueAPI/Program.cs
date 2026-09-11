@@ -270,16 +270,20 @@ namespace ProductCatalogueAPI
                 }
                 await next();
             });
-            if (app.Environment.IsDevelopment()) {
+            var mockDataSourcesEnabled = MockDataSourcesConfiguration.IsEnabled(
+                builder.Configuration,
+                app.Environment.IsDevelopment()
+            );
+            if (mockDataSourcesEnabled) {
                 app.MapGet("/mock/paper-charts", () => {
-                    return GetDevelopmentGeoJson("paper-charts.geojson");
+                    return GetMockGeoJson("paper-charts.geojson");
                 })
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound)
                 .AllowAnonymous();
 
                 app.MapGet("/mock/s102", () => {
-                    return GetDevelopmentGeoJson("s102.geojson");
+                    return GetMockGeoJson("s102.geojson");
                 })
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound)
@@ -308,7 +312,7 @@ namespace ProductCatalogueAPI
             ContentRootPath = contentRootPath
         });
 
-        private static IResult GetDevelopmentGeoJson(string fileName) {
+        private static IResult GetMockGeoJson(string fileName) {
             var resourceName = $"ProductCatalogueAPI.mock.{fileName}";
             var stream = typeof(Program).Assembly.GetManifestResourceStream(resourceName);
 

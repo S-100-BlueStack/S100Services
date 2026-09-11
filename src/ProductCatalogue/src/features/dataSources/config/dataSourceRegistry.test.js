@@ -7,6 +7,7 @@ import {
   createDataSourceRegistry,
   getDefaultEnabledSourceIds,
   getRuntimeSelectableDataSources,
+  isMockDataSourcesFlagEnabled,
   isWorkspaceAvailableDataSource,
 } from "./dataSourceRegistry.js";
 
@@ -57,7 +58,7 @@ test("development registry exposes Paper Charts and S-102 for Main-map and works
   });
 });
 
-test("mock sources remain unavailable outside Development", () => {
+test("mock sources remain unavailable outside Development without explicit opt-in", () => {
   const registry = createDataSourceRegistry({ isDevelopment: false });
   assert.deepEqual(getRuntimeSelectableDataSources(registry), []);
   assert.deepEqual(getDefaultEnabledSourceIds(registry), []);
@@ -66,6 +67,32 @@ test("mock sources remain unavailable outside Development", () => {
     false
   );
   assert.equal(isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.S102)), false);
+});
+
+test("mock sources can be explicitly enabled outside Development", () => {
+  const registry = createDataSourceRegistry({
+    isDevelopment: false,
+    mockDataSourcesEnabled: true,
+  });
+
+  assert.deepEqual(
+    getRuntimeSelectableDataSources(registry).map((source) => source.id),
+    [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]
+  );
+  assert.equal(
+    isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.PAPER_CHARTS)),
+    true
+  );
+  assert.equal(isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.S102)), true);
+});
+
+test("mock data source build flag only enables explicit true values", () => {
+  for (const value of [undefined, null, "", "false", "1", "yes", "invalid"]) {
+    assert.equal(isMockDataSourcesFlagEnabled(value), false, String(value));
+  }
+
+  assert.equal(isMockDataSourcesFlagEnabled("true"), true);
+  assert.equal(isMockDataSourcesFlagEnabled(" TRUE "), true);
 });
 
 test("configuration-disabled sources are not selectable or workspace-available", () => {

@@ -18,16 +18,18 @@ The Product Catalogue frontend no longer depends on `express` or `node-expose-ss
 
 The tracked `.env.development` keeps local API/Locator defaults but uses neutral branding. Organization-specific Development branding belongs in `.env.development.local`; the repository's existing `*.local` ignore rule keeps that file untracked.
 
-## Development mock contract
+## Synthetic mock contract
 
-Only these Development-only mock routes remain:
+Only these mock routes remain:
 
 ```text
 GET /mock/paper-charts -> mock/paper-charts.geojson
 GET /mock/s102         -> mock/s102.geojson
 ```
 
-The two small synthetic fixtures are embedded into the API assembly with explicit logical resource names. This keeps Development mock loading independent of `ContentRootPath`, Visual Studio output-platform folders, and copied `bin` content. The routes remain registered only when `app.Environment.IsDevelopment()` is true.
+The two small synthetic fixtures are embedded into the API assembly with explicit logical resource names. This keeps mock loading independent of `ContentRootPath`, Visual Studio output-platform folders, and copied `bin` content. Development continues to register the routes automatically. Non-Development test deployments can opt in with `MockDataSources:Enabled=true`; the repository default remains disabled.
+
+Frontend exposure is independently controlled at build time. Development builds continue to expose the mock sources automatically. A production-mode test build can opt in with `VITE_ENABLE_MOCK_DATA_SOURCES=true`. Both frontend and API opt-ins are required for end-to-end use outside Development. Neither setting grants backend mutation/export capabilities to Paper Charts or S-102.
 
 The old generic `/mock/products` route is removed because compatibility Product data now comes from the real backend path.
 
@@ -63,4 +65,4 @@ Backend build verification for the changed mock-content project file and Develop
 dotnet build .\src\ProductCatalogueAPI\ProductCatalogueAPI.csproj -c Release
 ```
 
-Manual Development verification should confirm that Paper Charts and S-102 can still be enabled and rendered, while `/mock/products` is no longer registered.
+Manual verification should confirm both boundaries: Development still exposes Paper Charts and S-102 without extra configuration; a production-mode test deployment exposes them only when both mock opt-ins are enabled; `/mock/products` remains absent.
