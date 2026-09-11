@@ -372,8 +372,10 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
     public async Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactsAsync(Guid productRevisionId, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
         var artifacts = await connection.QueryAsync<ProductArtifactReference>(new CommandDefinition("""
-            SELECT product_artifact_id AS Id, product_export_track_id AS TrackId, product_revision_id AS RevisionId,
-                   artifact_kind AS Kind, file_name AS FileName, media_type AS MediaType, created_at_utc AS CreatedAtUtc
+            -- Keep this projection in ProductArtifactReference constructor order; Dapper materializes positional records by column order.
+            SELECT product_artifact_id AS Id, product_export_track_id AS TrackId,
+                   artifact_kind AS Kind, file_name AS FileName, media_type AS MediaType, created_at_utc AS CreatedAtUtc,
+                   product_revision_id AS RevisionId
             FROM dbo.ProductArtifact
             WHERE product_revision_id = @ProductRevisionId
               AND artifact_kind IN @Kinds
@@ -389,8 +391,10 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
     public async Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactHistoryAsync(Guid trackId, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
         var artifacts = await connection.QueryAsync<ProductArtifactReference>(new CommandDefinition("""
-            SELECT product_artifact_id AS Id, product_export_track_id AS TrackId, product_revision_id AS RevisionId,
-                   artifact_kind AS Kind, file_name AS FileName, media_type AS MediaType, created_at_utc AS CreatedAtUtc
+            -- Keep this projection in ProductArtifactReference constructor order; Dapper materializes positional records by column order.
+            SELECT product_artifact_id AS Id, product_export_track_id AS TrackId,
+                   artifact_kind AS Kind, file_name AS FileName, media_type AS MediaType, created_at_utc AS CreatedAtUtc,
+                   product_revision_id AS RevisionId
             FROM dbo.ProductArtifact
             WHERE product_export_track_id = @TrackId
               AND artifact_kind IN @Kinds
