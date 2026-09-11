@@ -36,6 +36,13 @@ export function openAnalyzePage(datasetName) {
   }
 
   const analyzeUrl = buildAnalyzeUrl([datasetName]);
+  if (!analyzeUrl) {
+    noticeError(
+      "Workspace link unavailable",
+      "Product names containing commas cannot be shared in a workspace URL."
+    );
+    return;
+  }
   const openedWindow = window.open(analyzeUrl, "_blank", "noopener,noreferrer");
 
   if (!openedWindow) {
@@ -143,39 +150,39 @@ export async function sendImmediately(datasetName, anchorElement, { afterResult 
 
 export async function triggerRollback(datasetName, anchorElement, { afterResult } = {}) {
   if (!datasetName) {
-    noticeError("Cannot rollback product", "The selected feature does not have a datasetName.");
+    noticeError("Cannot cancel export", "The selected feature does not have a datasetName.");
     return null;
   }
   return runConfirmedProductOperation({
     datasetName,
     confirm: {
-      title: `Rollback ${datasetName}`,
+      title: `Cancel Export ${datasetName}`,
       message:
-        `Are you sure you want to rollback ${datasetName}? ` +
+        `Are you sure you want to cancel the current export for ${datasetName}? ` +
         "The operation will continue in the background until it succeeds or fails.",
-      confirmText: "Rollback",
+      confirmText: "Confirm",
       cancelText: "Cancel",
       anchorElement,
     },
     operation: {
       type: PRODUCT_OPERATION_TYPE.ROLLBACK,
-      label: "Rolling back",
+      label: "Canceling export",
     },
     execute: () => exportRollback(datasetName),
     onSuccess: (result) => {
       const warning = result.data?.warning;
       if (warning) {
-        noticeWarning(`Product ${datasetName} rolled back with a warning`, warning.message);
+        noticeWarning(`Cancel Export completed for ${datasetName} with a warning`, warning.message);
         return;
       }
 
-      noticeApiSuccess(`Product ${datasetName} rolled back successfully`);
+      noticeApiSuccess(`Cancel Export completed for ${datasetName}`);
     },
     failureNotice: {
-      networkTitle: `Network error while rolling back ${datasetName}`,
-      failureTitle: `Failed to rollback ${datasetName}`,
+      networkTitle: `Network error while canceling export for ${datasetName}`,
+      failureTitle: `Failed to cancel export for ${datasetName}`,
     },
-    unexpectedErrorTitle: `Unexpected error while rolling back ${datasetName}`,
+    unexpectedErrorTitle: `Unexpected error while canceling export for ${datasetName}`,
     afterResult,
   });
 }
@@ -185,12 +192,14 @@ export async function triggerExport({
   actionId,
   target,
   exportType,
+  presentationLabel,
   implemented,
   request,
   anchorElement,
   confirm,
   afterResult,
 }) {
+  const exportLabel = createExportPresentationLabel({ presentationLabel, exportType });
   const dispatchValidation = validateExportDispatch({
     actionId,
     target,
@@ -199,10 +208,7 @@ export async function triggerExport({
     request,
   });
   if (!dispatchValidation.allowed) {
-    noticeError(
-      "Export is not available",
-      `${target ?? "Unknown"} ${exportType ?? "export"} is not an enabled export action.`
-    );
+    noticeError("Export is not available", `${exportLabel} is not an enabled export action.`);
     return createSkippedActionResult(dispatchValidation.reason);
   }
 
@@ -211,7 +217,6 @@ export async function triggerExport({
     return null;
   }
 
-  const exportLabel = `${target} ${exportType}`;
   return runConfirmedExportOperation({
     datasetName,
     scope: target,
@@ -334,6 +339,7 @@ async function runConfirmedExportOperation({
       datasetName,
       scope,
       exportType,
+      presentationLabel: exportLabel,
     });
     if (!runningExport.started) {
       noticeError(
@@ -367,15 +373,15 @@ async function runConfirmedExportOperation({
       noticeApiSuccess(`Export completed for ${datasetName}`, exportLabel);
     } else {
       noticeApiFailure(result, {
-        networkTitle: `Network error while exporting ${datasetName}`,
-        failureTitle: `Failed to export ${datasetName}`,
+        networkTitle: `Network error while exporting ${exportLabel} for ${datasetName}`,
+        failureTitle: `Failed to export ${exportLabel} for ${datasetName}`,
         fallbackMessage: exportLabel,
       });
     }
     return await finishProductActionResult(result, afterResult);
   } catch (error) {
     noticeUnexpectedApiError(error, {
-      title: `Unexpected error while exporting ${datasetName}`,
+      title: `Unexpected error while exporting ${exportLabel} for ${datasetName}`,
     });
 
     return await finishProductActionResult(
@@ -421,6 +427,15 @@ async function finishProductActionResult(result, afterResult) {
 
 function shouldRunPostAction(result) {
   return Boolean(result && result.skipped !== true);
+}
+
+function createExportPresentationLabel({ presentationLabel, exportType } = {}) {
+  const configuredLabel = String(presentationLabel ?? "").trim();
+  if (configuredLabel) {
+    return configuredLabel;
+  }
+
+  return String(exportType ?? "").trim() || "Export";
 }
 
 function createSkippedActionResult(reason) {

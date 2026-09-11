@@ -118,11 +118,15 @@ test("all product actions are disabled while a product mutation is running", () 
   assert.equal(availability.exportRoot.disabled, true);
 });
 
-test("rollback is disabled when product status is Idle", () => {
+test("Cancel Export is disabled when product status is Idle", () => {
   const availability = createActions({
     attributes: { datasetName: "DK_TEST_PRODUCT", status: 1 },
   });
   assert.equal(availability.rollback.disabled, true);
+  assert.equal(
+    availability.rollback.disabledReason,
+    "Cancel Export is only available when product status is Exported or Frozen."
+  );
 });
 
 test("rollback is available when product status is Exported", () => {

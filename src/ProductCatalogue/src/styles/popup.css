@@ -153,6 +153,10 @@
   --calcite-action-icon-color: var(--pc-popup-text);
 }
 
+.popup-action-bar__action[data-popup-action-id="tools"] {
+  margin-inline-start: auto;
+}
+
 .popup-product-table-wrapper {
   margin-top: 0;
   overflow: visible;

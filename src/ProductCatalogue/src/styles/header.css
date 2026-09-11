@@ -17,6 +17,14 @@
   flex: 0 0 auto;
 }
 
+[data-navbar-logo] {
+  inline-size: 42px;
+  block-size: 42px;
+  max-inline-size: 42px;
+  max-block-size: 42px;
+  object-fit: contain;
+}
+
 .header-center {
   display: flex;
   align-items: center;

@@ -204,6 +204,29 @@ namespace ProductCatalogueAPI.Jobs
                     result.Warning?.Code
                 );
             }
+            catch (S100CompilerPrerequisiteException ex) {
+                context.SetJobParameter(
+                    ExportJobParameterNames.ErrorCode,
+                    ExportJobContract.CompilerUnavailableCode
+                );
+                context.SetJobParameter(
+                    ExportJobParameterNames.ErrorMessage,
+                    ExportJobContract.CompilerUnavailableMessage
+                );
+
+                _logger.LogWarning(
+                    ex,
+                    "Product Manager job could not start S-101 export because the configured compiler is unavailable. JobId: {JobId}. DatasetName: {DatasetName}. CorrelationId: {CorrelationId}",
+                    context.JobId,
+                    request.DatasetName,
+                    request.CorrelationId
+                );
+
+                throw new ExportOperationJobException(
+                    ExportJobContract.CompilerUnavailableCode,
+                    ExportJobContract.CompilerUnavailableMessage
+                );
+            }
             catch (ExportOperationRejectedException ex) {
                 context.SetJobParameter(
                     ExportJobParameterNames.ErrorCode,

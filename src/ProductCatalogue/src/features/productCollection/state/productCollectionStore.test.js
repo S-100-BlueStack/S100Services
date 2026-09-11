@@ -1,61 +1,105 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { beforeEach, test } from "node:test";
 
+import { COMPATIBILITY_PRODUCT_SOURCE_ID } from "../../products/domain/productContext.js";
 import {
   addProductCollectionProduct,
   clearProductCollection,
+  getProductCollectionDatasetNames,
   getProductCollectionSnapshot,
   hasProductCollectionProduct,
+  reconcileProductCollectionSourceProducts,
   removeProductCollectionProduct,
+  removeProductCollectionProductsBySource,
   subscribeProductCollection,
 } from "./productCollectionStore.js";
 
-test("addProductCollectionProduct adds unique products case-insensitively", () => {
-  clearProductCollection();
+beforeEach(() => clearProductCollection());
 
-  const firstResult = addProductCollectionProduct({ datasetName: "101DK001NORSO" });
-  const duplicateResult = addProductCollectionProduct({ datasetName: "101dk001norso" });
+function product(sourceId, datasetName, productType = `${sourceId}-product`) {
+  return {
+    sourceId,
+    sourceLabel: sourceId === "paper-charts" ? "Paper Charts" : sourceId,
+    productKey: datasetName,
+    datasetName,
+    productType,
+  };
+}
 
-  assert.equal(firstResult.added, true);
-  assert.equal(duplicateResult.added, false);
-  assert.equal(duplicateResult.reason, "already-added");
-  assert.deepEqual(getProductCollectionSnapshot().datasetNames, ["101DK001NORSO"]);
+test("compatibility Products retain source-aware metadata and legacy case-insensitive dedupe", () => {
+  const first = addProductCollectionProduct("DK4TEST");
+  const duplicate = addProductCollectionProduct("dk4test");
+  assert.equal(first.added, true);
+  assert.equal(duplicate.added, false);
+  assert.equal(first.item.sourceId, COMPATIBILITY_PRODUCT_SOURCE_ID);
+  assert.equal(first.item.productKey, "DK4TEST");
+  assert.equal(first.item.datasetName, "DK4TEST");
 });
 
-test("removeProductCollectionProduct removes by dataset name", () => {
-  clearProductCollection();
-
-  addProductCollectionProduct("101DK001NORSO");
-  addProductCollectionProduct("101DK0021733C");
-
-  removeProductCollectionProduct("101dk001norso");
-
-  assert.deepEqual(getProductCollectionSnapshot().datasetNames, ["101DK0021733C"]);
+test("Paper Charts and S-102 use source-aware deterministic identities without collisions", () => {
+  const paper = addProductCollectionProduct(product("paper-charts", "SHARED", "paper-chart"));
+  const s102 = addProductCollectionProduct(product("s102", "SHARED", "s102-product"));
+  assert.equal(paper.added, true);
+  assert.equal(s102.added, true);
+  assert.notEqual(paper.item.id, s102.item.id);
+  assert.equal(getProductCollectionSnapshot().count, 2);
 });
 
-test("hasProductCollectionProduct matches case-insensitively", () => {
-  clearProductCollection();
-
-  addProductCollectionProduct("101DK001NORSO");
-
-  assert.equal(hasProductCollectionProduct("101dk001norso"), true);
-  assert.equal(hasProductCollectionProduct("101DK0021733C"), false);
+test("remove accepts stable identity, ProductContext shape, and legacy dataset projection", () => {
+  const paper = addProductCollectionProduct(product("paper-charts", "PAPER-1", "paper-chart"));
+  addProductCollectionProduct("AOI-1");
+  removeProductCollectionProduct(paper.item.id);
+  assert.equal(
+    hasProductCollectionProduct(product("paper-charts", "PAPER-1", "paper-chart")),
+    false
+  );
+  removeProductCollectionProduct("aoi-1");
+  assert.equal(getProductCollectionSnapshot().count, 0);
 });
 
-test("subscribeProductCollection receives updated snapshots", () => {
-  clearProductCollection();
+test("datasetNames projection remains stable for mixed collections", () => {
+  addProductCollectionProduct("AOI-1");
+  addProductCollectionProduct(product("paper-charts", "PAPER-1", "paper-chart"));
+  addProductCollectionProduct(product("s102", "S102-1", "s102-product"));
+  assert.deepEqual(getProductCollectionDatasetNames(), ["AOI-1", "PAPER-1", "S102-1"]);
+  assert.deepEqual(getProductCollectionSnapshot().datasetNames, ["AOI-1", "PAPER-1", "S102-1"]);
+});
 
-  const snapshots = [];
-  const unsubscribe = subscribeProductCollection((snapshot) => {
-    snapshots.push(snapshot);
+test("S-102 Collection item projects its authoritative datasetName unchanged", () => {
+  addProductCollectionProduct({
+    ...product("s102", "102DK0041149E", "s102-product"),
+    productKey: "s102-product-1149e",
   });
 
-  addProductCollectionProduct("101DK001NORSO");
-  removeProductCollectionProduct("101DK001NORSO");
-  unsubscribe();
-  addProductCollectionProduct("101DK0021733C");
+  const snapshot = getProductCollectionSnapshot();
+  assert.equal(snapshot.items[0].datasetName, "102DK0041149E");
+  assert.deepEqual(snapshot.datasetNames, ["102DK0041149E"]);
+  assert.deepEqual(getProductCollectionDatasetNames(), ["102DK0041149E"]);
+});
 
-  assert.equal(snapshots.length, 2);
-  assert.deepEqual(snapshots[0].datasetNames, ["101DK001NORSO"]);
-  assert.deepEqual(snapshots[1].datasetNames, []);
+test("source removal removes only the requested source", () => {
+  addProductCollectionProduct("AOI-1");
+  addProductCollectionProduct(product("paper-charts", "PAPER-1", "paper-chart"));
+  addProductCollectionProduct(product("s102", "S102-1", "s102-product"));
+  removeProductCollectionProductsBySource("paper-charts");
+  assert.deepEqual(getProductCollectionDatasetNames(), ["AOI-1", "S102-1"]);
+});
+
+test("successful source reconciliation prunes stale items without adding current Products", () => {
+  addProductCollectionProduct(product("paper-charts", "PAPER-OLD", "paper-chart"));
+  addProductCollectionProduct(product("paper-charts", "PAPER-KEEP", "paper-chart"));
+  reconcileProductCollectionSourceProducts("paper-charts", [
+    product("paper-charts", "PAPER-KEEP", "paper-chart"),
+    product("paper-charts", "PAPER-NEW", "paper-chart"),
+  ]);
+  assert.deepEqual(getProductCollectionDatasetNames(), ["PAPER-KEEP"]);
+});
+
+test("subscriptions publish source-aware snapshots", () => {
+  const snapshots = [];
+  const unsubscribe = subscribeProductCollection((snapshot) => snapshots.push(snapshot));
+  addProductCollectionProduct(product("s102", "S102-1", "s102-product"));
+  unsubscribe();
+  assert.equal(snapshots.length, 1);
+  assert.equal(snapshots[0].items[0].sourceId, "s102");
 });

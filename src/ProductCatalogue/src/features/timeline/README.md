@@ -36,7 +36,7 @@ Do not move product history into a separate feature folder unless the product hi
 
 ## Current product history contract
 
-`fetchProductHistory(datasetName)` calls the backend product history endpoint and returns normalized frontend history data.
+`fetchProductHistory(datasetName)` with no ProductContext is the retained compatibility adapter. It calls the backend product history endpoint directly and returns normalized frontend history data. Dashboard and other established compatibility consumers keep this one-argument boundary.
 
 Current frontend shape:
 
@@ -233,3 +233,30 @@ Before implementing the global map timeline, clarify:
 3. Should timeline requests respect the same filters as the live map?
 4. What timestamp format is guaranteed by the API?
 5. Can timeline events arrive out of order, or should the frontend sort them?
+
+## FI-011D source-aware History surfaces
+
+History deliberately distinguishes the legacy compatibility adapter from source-aware consumers:
+
+```txt
+fetchProductHistory(datasetName)
+  -> direct compatibility History request
+
+fetchProductHistory(datasetName, { productContext })
+  -> explicit source-aware decision
+```
+
+The one-argument call is retained for compatibility/backend consumers such as Dashboard and does not
+resolve through the workspace catalog. Source-aware Main map, Analyze, and Review flows resolve Product
+identity before the History call and pass the resulting `ProductContext` explicitly.
+
+An explicit compatibility ProductContext uses the established compatibility History endpoint. Paper
+Charts and S-102 return `endpointAvailable: false` plus their source-specific unavailable reason and make
+no compatibility History request. An explicitly supplied `null`, invalid, unknown, or unresolved source
+context fails closed; it must never be treated as permission to fall back to compatibility History.
+
+Unsupported History is an `unavailable` source/content state, not a failed request. Actual compatibility
+backend failures remain `failed`. Main map History carries the selected Graphic's validated ProductContext
+through the History event, so a source switch cannot reinterpret stale mock content as compatibility
+content. Source deactivation closes an affected non-pinned mock History panel, while unrelated pinned
+compatibility History remains independent.

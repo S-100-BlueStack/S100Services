@@ -200,6 +200,176 @@ public class DashboardQueryProcessorTests
         Assert.Equal(expectedMessage, validationMessage);
     }
 
+    [Fact]
+    public void DefaultsToTimeDescending()
+    {
+        var options = CreateOptions();
+        Assert.Equal("time", options.SortBy);
+        Assert.Equal("desc", options.SortDirection);
+        Assert.Equal(new[] { "c", "b", "a", "d" }, SortedIds(SortActivities(), options));
+    }
+
+    [Fact]
+    public void SortsTimeAscendingWithStableIdTieBreak()
+    {
+        Assert.Equal(new[] { "d", "a", "c", "b" },
+            SortedIds(SortActivities(), CreateOptions(sortBy: "time", sortDirection: "asc")));
+    }
+
+    [Theory]
+    [InlineData("product", "asc", "c,b,a,d")]
+    [InlineData("product", "desc", "d,c,b,a")]
+    [InlineData("activity", "asc", "d,c,b,a")]
+    [InlineData("activity", "desc", "c,b,a,d")]
+    [InlineData("status", "asc", "d,c,b,a")]
+    [InlineData("status", "desc", "c,b,a,d")]
+    public void SortsTextWithTimestampAndIdDescendingTieBreakers(string field, string direction, string expected)
+    {
+        Assert.Equal(expected.Split(','),
+            SortedIds(SortActivities(), CreateOptions(sortBy: field, sortDirection: direction)));
+    }
+
+    [Theory]
+    [InlineData("product", "asc", "c,b,a,d")]
+    [InlineData("product", "desc", "d,c,b,a")]
+    [InlineData("activity", "asc", "d,c,b,a")]
+    [InlineData("activity", "desc", "c,b,a,d")]
+    [InlineData("status", "asc", "d,c,b,a")]
+    [InlineData("status", "desc", "c,b,a,d")]
+    [InlineData("time", "asc", "d,a,c,b")]
+    [InlineData("time", "desc", "c,b,a,d")]
+    public void CursorContinuesSortWithoutDuplicates(string field, string direction, string expected)
+    {
+        var ids = new List<string>();
+        string? cursor = null;
+        for (var pageNumber = 0; pageNumber < 4; pageNumber++)
+        {
+            var page = DashboardQueryProcessor.Execute(SortActivities(),
+                CreateOptions(pageSize: 1, cursor: cursor, sortBy: field, sortDirection: direction));
+            ids.Add(Assert.Single(page.PageActivities).Id);
+            cursor = page.Paging.NextCursor;
+            if (pageNumber < 3)
+            {
+                Assert.NotNull(cursor);
+                Assert.StartsWith("v1|", DecodeCursor(cursor!));
+            }
+        }
+
+        Assert.Null(cursor);
+        Assert.Equal(expected.Split(','), ids);
+        Assert.Equal(ids.Count, ids.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void LegacyCursorRemainsValidForDefaultTimeDescending()
+    {
+        var result = DashboardQueryProcessor.Execute(SortActivities(),
+            CreateOptions(pageSize: 1, cursor: LegacyCursor()));
+        Assert.Equal("a", Assert.Single(result.PageActivities).Id);
+        Assert.StartsWith("v1|", DecodeCursor(result.Paging.NextCursor!));
+    }
+
+    [Theory]
+    [InlineData("time", "asc")]
+    [InlineData("product", "asc")]
+    [InlineData("product", "desc")]
+    [InlineData("activity", "asc")]
+    [InlineData("status", "desc")]
+    public void RejectsLegacyCursorForNonDefaultSort(string field, string direction)
+    {
+        AssertCursorMismatch(LegacyCursor(), field, direction);
+    }
+
+    [Theory]
+    [InlineData("status", "asc")]
+    [InlineData("product", "desc")]
+    public void RejectsCursorCreatedForDifferentSortFieldOrDirection(string field, string direction)
+    {
+        var first = DashboardQueryProcessor.Execute(SortActivities(),
+            CreateOptions(pageSize: 1, sortBy: "product", sortDirection: "asc"));
+        AssertCursorMismatch(first.Paging.NextCursor!, field, direction);
+    }
+
+    [Theory]
+    [InlineData("unknown", null, "sortBy")]
+    [InlineData("", null, "sortBy")]
+    [InlineData("  ", null, "sortBy")]
+    [InlineData(null, "up", "sortDirection")]
+    [InlineData(null, "", "sortDirection")]
+    [InlineData(null, "  ", "sortDirection")]
+    public void RejectsInvalidSortValues(string? field, string? direction, string parameter)
+    {
+        Assert.False(DashboardQueryOptions.TryCreate(null, null, null, null, null, null, null, null,
+            out _, out var message, field, direction));
+        Assert.Equal(parameter == "sortBy"
+            ? "The 'sortBy' query parameter must be one of: time, product, activity, status."
+            : "The 'sortDirection' query parameter must be one of: asc, desc.", message);
+    }
+
+    [Theory]
+    [InlineData("v2|product|asc|100||a")]
+    [InlineData("v1|product|up|100||a")]
+    [InlineData("v1|product|asc|0||a")]
+    [InlineData("v1|product|asc|100|!|a")]
+    [InlineData("v1|product|asc|100||")]
+    public void RejectsMalformedVersionedCursor(string decoded)
+    {
+        Assert.False(DashboardQueryProcessor.IsValidCursor(EncodeCursor(decoded)));
+    }
+
+    [Fact]
+    public void SummariesRemainIndependentOfSortOrder()
+    {
+        var now = DateTimeOffset.Parse("2026-07-27T12:00:00+02:00");
+        var baseline = DashboardQueryProcessor.CreateResponse(now, now, now,
+            DashboardQueryProcessor.Execute(SortActivities(), CreateOptions(pageSize: 1)));
+        foreach (var field in new[] { "time", "product", "activity", "status" })
+        foreach (var direction in new[] { "asc", "desc" })
+        {
+            var response = DashboardQueryProcessor.CreateResponse(now, now, now,
+                DashboardQueryProcessor.Execute(SortActivities(),
+                    CreateOptions(pageSize: 1, sortBy: field, sortDirection: direction)));
+            Assert.Equal(System.Text.Json.JsonSerializer.Serialize(baseline.Summary),
+                System.Text.Json.JsonSerializer.Serialize(response.Summary));
+            Assert.Equal(baseline.StatusSummary.Select(row => (row.Status, row.Count)),
+                response.StatusSummary.Select(row => (row.Status, row.Count)));
+            Assert.Equal(baseline.OperationSummary.Select(row => (row.Type, row.Count, row.Failed)),
+                response.OperationSummary.Select(row => (row.Type, row.Count, row.Failed)));
+        }
+    }
+
+    private static DashboardActivityResponse[] SortActivities() =>
+    [
+        Activity("a", "alpha", "export", "failed", 2, title: "Zulu"),
+        Activity("d", "Beta", "validation", "active", 3, title: "Alpha"),
+        Activity("b", "ALPHA", "freeze", "failed", 1, title: "zulu"),
+        Activity("c", "Alpha", "send", "failed", 1, title: "ZULU")
+    ];
+
+    private static IEnumerable<string> SortedIds(DashboardActivityResponse[] activities, DashboardQueryOptions options) =>
+        DashboardQueryProcessor.Execute(activities, options).PageActivities.Select(item => item.Id);
+
+    private static string LegacyCursor() => EncodeCursor(
+        $"{SortActivities()[2].Timestamp.UtcDateTime.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture)}|b");
+
+    private static string EncodeCursor(string value) =>
+        Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(value))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    private static string DecodeCursor(string value)
+    {
+        var normalized = value.Replace('-', '+').Replace('_', '/');
+        return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(
+            normalized.PadRight(normalized.Length + ((4 - normalized.Length % 4) % 4), '=')));
+    }
+
+    private static void AssertCursorMismatch(string cursor, string field, string direction)
+    {
+        Assert.False(DashboardQueryOptions.TryCreate(null, null, null, null, null, null, 1, cursor,
+            out _, out var message, field, direction));
+        Assert.Equal("The 'cursor' query parameter does not match the requested sort.", message);
+    }
+
     private static DashboardQueryOptions CreateOptions(
         string search = "",
         string product = "all",
@@ -208,11 +378,13 @@ public class DashboardQueryProcessorTests
         string importance = "all",
         string reports = "all",
         int? pageSize = null,
-        string? cursor = null)
+        string? cursor = null,
+        string? sortBy = null,
+        string? sortDirection = null)
     {
         var valid = DashboardQueryOptions.TryCreate(
             search, product, type, status, importance, reports, pageSize, cursor,
-            out var options, out var validationMessage);
+            out var options, out var validationMessage, sortBy, sortDirection);
 
         Assert.True(valid, validationMessage);
         return options;

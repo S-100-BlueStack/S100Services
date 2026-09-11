@@ -33,10 +33,16 @@ const DISABLED_OPERATION_CAPABILITIES = Object.freeze({
   backendProductRefresh: false,
 });
 
-const SEARCHABLE_VISUALIZATION_CAPABILITIES = Object.freeze({
+const WORKSPACE_VISUALIZATION_CAPABILITIES = Object.freeze({
   ...DISABLED_OPERATION_CAPABILITIES,
+  history: true,
+  icEncReports: true,
+  internalValidation: true,
   popupExport: true,
+  productCollection: true,
   productSearch: true,
+  analyze: true,
+  review: true,
 });
 
 const ACTIVE_ONLY_REFRESH = Object.freeze({
@@ -56,6 +62,19 @@ const GEOJSON_PRODUCT_NORMALIZER = Object.freeze({
   type: "geojson-products",
 });
 
+// These strategies normalize synthetic mock identities before they enter
+// ProductContext/workspace state. They are not production naming contracts.
+const PAPER_CHARTS_MOCK_DATASET_NAME_STRATEGY = Object.freeze({
+  type: "synthetic-prefix",
+  prefix: "PAPER-MOCK",
+});
+
+const S102_MOCK_DATASET_NAME_STRATEGY = Object.freeze({
+  type: "replace-leading-product-code",
+  productCode: "102",
+  fallbackPrefix: "102-MOCK",
+});
+
 const DEFAULT_PRODUCT_SEARCH = Object.freeze({
   supported: true,
   fields: Object.freeze(["datasetName", "productName", "productKey"]),
@@ -63,9 +82,13 @@ const DEFAULT_PRODUCT_SEARCH = Object.freeze({
 
 export function createDataSourceRegistry({
   isDevelopment = Boolean(import.meta.env?.DEV),
+  mockDataSourcesEnabled = isMockDataSourcesFlagEnabled(
+    import.meta.env?.VITE_ENABLE_MOCK_DATA_SOURCES
+  ),
   configuredSourceIds,
 } = {}) {
   const configuredIds = normalizeConfiguredSourceIds(configuredSourceIds);
+  const mockSourcesEnabled = isDevelopment || mockDataSourcesEnabled;
   const definitions = [
     createUnavailableSource({
       id: DATA_SOURCE_IDS.S57,
@@ -81,7 +104,7 @@ export function createDataSourceRegistry({
       configuredIds,
       reason: "An authoritative S-101 read contract is not available yet.",
     }),
-    createDevelopmentMockSource({
+    createMockSource({
       id: DATA_SOURCE_IDS.PAPER_CHARTS,
       label: "Paper Charts",
       productType: "paper-chart",
@@ -89,10 +112,11 @@ export function createDataSourceRegistry({
       layerId: DATA_SOURCE_LAYER_IDS.PAPER_CHARTS_PRODUCTS,
       layerKind: "paper-chart-products",
       filterDefinitions: ["status", "displayScale", "usageBand"],
-      isDevelopment,
+      datasetNameStrategy: PAPER_CHARTS_MOCK_DATASET_NAME_STRATEGY,
+      mockSourcesEnabled,
       configuredIds,
     }),
-    createDevelopmentMockSource({
+    createMockSource({
       id: DATA_SOURCE_IDS.S102,
       label: "S-102",
       productType: "s102-product",
@@ -100,7 +124,8 @@ export function createDataSourceRegistry({
       layerId: DATA_SOURCE_LAYER_IDS.S102_PRODUCTS,
       layerKind: "s102-products",
       filterDefinitions: ["status"],
-      isDevelopment,
+      datasetNameStrategy: S102_MOCK_DATASET_NAME_STRATEGY,
+      mockSourcesEnabled,
       configuredIds,
     }),
   ];
@@ -131,6 +156,14 @@ export function isRuntimeSelectableDataSource(source) {
   );
 }
 
+export function isWorkspaceAvailableDataSource(source) {
+  return Boolean(
+    source?.workspace?.supported &&
+    source?.availability?.state === DATA_SOURCE_AVAILABILITY.AVAILABLE &&
+    source?.loader
+  );
+}
+
 function createUnavailableSource({ id, label, productType, configuredIds, reason }) {
   return {
     id,
@@ -148,6 +181,11 @@ function createUnavailableSource({ id, label, productType, configuredIds, reason
     layerDefinitions: [],
     capabilities: DISABLED_OPERATION_CAPABILITIES,
     exportConfiguration: null,
+    contentConfiguration: createHiddenContentConfiguration(reason),
+    workspace: {
+      supported: false,
+      providerType: null,
+    },
     filtering: {
       supported: false,
       definitions: [],
@@ -163,7 +201,7 @@ function createUnavailableSource({ id, label, productType, configuredIds, reason
   };
 }
 
-function createDevelopmentMockSource({
+function createMockSource({
   id,
   label,
   productType,
@@ -171,10 +209,11 @@ function createDevelopmentMockSource({
   layerId,
   layerKind,
   filterDefinitions,
-  isDevelopment,
+  datasetNameStrategy,
+  mockSourcesEnabled,
   configuredIds,
 }) {
-  const enabledByConfiguration = isConfigured(id, configuredIds) && isDevelopment;
+  const enabledByConfiguration = isConfigured(id, configuredIds) && mockSourcesEnabled;
   const exportUnavailableReason = `${label} export is not available yet.`;
 
   return {
@@ -188,7 +227,7 @@ function createDevelopmentMockSource({
         }
       : {
           state: DATA_SOURCE_AVAILABILITY.UNAVAILABLE,
-          reason: "The development-only mock source is unavailable in this environment.",
+          reason: "The mock source is unavailable in this environment.",
         },
     userSelectable: enabledByConfiguration,
     defaultEnabled: true,
@@ -199,7 +238,10 @@ function createDevelopmentMockSource({
           errorMessage: `${label} mock request failed`,
         }
       : null,
-    normalizer: GEOJSON_PRODUCT_NORMALIZER,
+    normalizer: Object.freeze({
+      ...GEOJSON_PRODUCT_NORMALIZER,
+      datasetNameStrategy,
+    }),
     identityStrategy: SOURCE_AWARE_IDENTITY,
     layerDefinitions: [
       {
@@ -220,8 +262,13 @@ function createDevelopmentMockSource({
         },
       },
     ],
-    capabilities: SEARCHABLE_VISUALIZATION_CAPABILITIES,
+    capabilities: WORKSPACE_VISUALIZATION_CAPABILITIES,
     exportConfiguration: createUnavailableExportConfiguration(exportUnavailableReason),
+    contentConfiguration: createUnavailableWorkspaceContentConfiguration(label),
+    workspace: {
+      supported: true,
+      providerType: "registry-source",
+    },
     filtering: {
       supported: true,
       definitions: filterDefinitions,
@@ -234,9 +281,50 @@ function createDevelopmentMockSource({
   };
 }
 
+function createUnavailableWorkspaceContentConfiguration(label) {
+  return {
+    history: {
+      visible: true,
+      implemented: false,
+      loaderId: null,
+      availabilityReason: `Product History is not available for ${label} yet.`,
+    },
+    icEncReports: {
+      visible: true,
+      implemented: false,
+      loaderId: null,
+      availabilityReason: `IC-ENC reports are not available for ${label} yet.`,
+    },
+    internalValidation: {
+      visible: true,
+      implemented: false,
+      loaderId: null,
+      availabilityReason: `Internal validation is not available for ${label} yet.`,
+    },
+  };
+}
+
+function createHiddenContentConfiguration(reason) {
+  return {
+    history: createHiddenContentEntry(reason),
+    icEncReports: createHiddenContentEntry(reason),
+    internalValidation: createHiddenContentEntry(reason),
+  };
+}
+
+function createHiddenContentEntry(availabilityReason) {
+  return {
+    visible: false,
+    implemented: false,
+    loaderId: null,
+    availabilityReason,
+  };
+}
+
 function createUnavailableExportConfiguration(availabilityReason) {
   return {
     visible: true,
+    helpText: availabilityReason,
     leaves: [
       {
         id: "export-edition",
@@ -300,6 +388,14 @@ function normalizeConfiguredSourceIds(configuredSourceIds) {
 
 function isConfigured(sourceId, configuredIds) {
   return configuredIds === null || configuredIds.has(sourceId);
+}
+
+export function isMockDataSourcesFlagEnabled(value) {
+  return (
+    String(value ?? "")
+      .trim()
+      .toLowerCase() === "true"
+  );
 }
 
 function normalizeSourceId(value) {

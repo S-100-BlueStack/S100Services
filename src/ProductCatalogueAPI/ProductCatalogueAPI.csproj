@@ -28,19 +28,14 @@
 		<None Remove="101_Feature_Catalogue_2.0.0.xml" />
 		<None Remove="bootstrap.log" />
 		<None Remove="ProductCatalogueAPI.log" />
-		<None Remove="products.geojson" />
 		<None Remove="s100edX.gdb.zip" />
 	</ItemGroup>
 	<ItemGroup>
 		<Content Include="101_Feature_Catalogue_2.0.0.xml">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
-		<Content Include="mock\products.geojson">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</Content>
-		<Content Include="mock\some_products.geojson">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</Content>
+		<EmbeddedResource Include="mock\paper-charts.geojson" LogicalName="ProductCatalogueAPI.mock.paper-charts.geojson" />
+		<EmbeddedResource Include="mock\s102.geojson" LogicalName="ProductCatalogueAPI.mock.s102.geojson" />
 	</ItemGroup>
 
 	<ItemGroup>

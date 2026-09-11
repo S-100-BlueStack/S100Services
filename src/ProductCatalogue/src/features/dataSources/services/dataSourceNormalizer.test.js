@@ -23,7 +23,7 @@ test("normalizer produces stable lowercase attributes and source-aware metadata"
   );
   const attributes = result.layers[0].data.features[0].properties;
 
-  assert.equal(attributes.datasetName, "P001");
+  assert.equal(attributes.datasetName, "PAPER-MOCK-P001");
   assert.equal(attributes.edition, 2);
   assert.equal(attributes.update, 4);
   assert.equal(attributes.status, "Ready");
@@ -41,7 +41,6 @@ test("feature order does not affect normalized identity", () => {
     { type: "FeatureCollection", features: [createFeature("B"), createFeature("A")] },
     s102Source
   );
-
   assert.deepEqual(
     new Set(first.products.map((product) => product.productIdentityKey)),
     new Set(reordered.products.map((product) => product.productIdentityKey))
@@ -52,7 +51,6 @@ test("equal Product keys in different sources produce different identities", () 
   const payload = { type: "FeatureCollection", features: [createFeature("P001")] };
   const paper = normalizeDataSourcePayload(payload, paperSource);
   const s102 = normalizeDataSourcePayload(payload, s102Source);
-
   assert.notEqual(paper.products[0].productIdentityKey, s102.products[0].productIdentityKey);
 });
 

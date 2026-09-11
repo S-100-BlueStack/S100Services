@@ -91,6 +91,7 @@ export async function initReviewPage({ datasetNames } = {}) {
     currentProducts = [];
 
     if (enabledNextDatasetNames.length === 0) {
+      if (!updateUrl) setReviewRouteUrl([], { replace: true });
       isLoadingReviewProducts = false;
       renderCurrentReviewPage();
       return;
@@ -104,6 +105,8 @@ export async function initReviewPage({ datasetNames } = {}) {
         return;
       }
 
+      // The request generation has been checked, so a stale load cannot rewrite a newer URL.
+      if (!updateUrl) setReviewRouteUrl(enabledNextDatasetNames, { replace: true });
       currentProducts = products;
       isLoadingReviewProducts = false;
       renderCurrentReviewPage();

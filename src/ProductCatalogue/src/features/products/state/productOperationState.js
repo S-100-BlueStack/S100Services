@@ -18,7 +18,7 @@ const PRODUCT_OPERATION_LABELS = Object.freeze({
   [PRODUCT_OPERATION_TYPE.UNFREEZE]: "Unfreeze",
   [PRODUCT_OPERATION_TYPE.SEND]: "Send",
   [PRODUCT_OPERATION_TYPE.EXPORT]: "Export",
-  [PRODUCT_OPERATION_TYPE.ROLLBACK]: "Rollback",
+  [PRODUCT_OPERATION_TYPE.ROLLBACK]: "Cancel Export",
 });
 
 const activeLocalOperationsByDatasetName = new Map();

@@ -10,6 +10,7 @@ export function createActionButton(actionConfig) {
     config: actionConfig,
     signature: null,
     localBusy: false,
+    configuredAriaLabel: false,
     configuredClassNames: [],
   };
 
@@ -107,7 +108,9 @@ function applyActionConfig(action, state) {
   const blocksClickWhileLoading = showsLoading && !hasDropdown;
   const disabled = Boolean(actionConfig.disabled) || state.localBusy;
   const busy = state.localBusy || blocksClickWhileLoading;
-  const title = actionConfig.disabledReason ?? actionConfig.label;
+  const title = actionConfig.disabledReason ?? actionConfig.helpText ?? actionConfig.label;
+  const textEnabled = actionConfig.textEnabled !== false;
+  const ariaLabel = actionConfig.ariaLabel ?? null;
 
   action.icon = actionConfig.icon;
   action.text = actionConfig.label;
@@ -116,7 +119,7 @@ function applyActionConfig(action, state) {
   action.appearance = "transparent";
   action.disabled = disabled;
   action.loading = showsLoading;
-  action.textEnabled = true;
+  action.textEnabled = textEnabled;
   applyConfiguredClasses(action, state, [
     "popup-action-bar__action",
     ...splitClassNames(actionConfig.className),
@@ -127,7 +130,14 @@ function applyActionConfig(action, state) {
 
   action.setAttribute("text", actionConfig.label);
   action.setAttribute("title", title);
-  action.setAttribute("text-enabled", "");
+  action.toggleAttribute("text-enabled", textEnabled);
+  if (ariaLabel) {
+    action.setAttribute("aria-label", ariaLabel);
+    state.configuredAriaLabel = true;
+  } else if (state.configuredAriaLabel) {
+    action.removeAttribute("aria-label");
+    state.configuredAriaLabel = false;
+  }
   action.toggleAttribute("disabled", disabled);
   setBooleanAriaAttribute(action, "aria-disabled", disabled);
   action.toggleAttribute("loading", showsLoading);

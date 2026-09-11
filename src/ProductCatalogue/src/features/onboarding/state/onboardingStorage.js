@@ -1,16 +1,18 @@
-import { ONBOARDING_FLOW_VERSION } from "../config/onboardingSteps.js";
+import { ONBOARDING_FLOW_VERSION, getOnboardingFlowVersion } from "../config/onboardingSteps.js";
 
 const LEGACY_ONBOARDING_STORAGE_KEY = "pc.onboarding.v1";
 const ONBOARDING_STORAGE_PREFIX = "pc.onboarding";
 const SUPPORTED_ROUTES = new Set(["main", "dashboard", "analyze", "review"]);
 
 export function getOnboardingStorageKey(routeName) {
-  return `${ONBOARDING_STORAGE_PREFIX}.${normalizeRouteName(routeName)}.v${ONBOARDING_FLOW_VERSION}`;
+  const normalizedRouteName = normalizeRouteName(routeName);
+  return `${ONBOARDING_STORAGE_PREFIX}.${normalizedRouteName}.v${getOnboardingFlowVersion(
+    normalizedRouteName
+  )}`;
 }
-
-export function createDefaultOnboardingState() {
+export function createDefaultOnboardingState(routeName = "main") {
   return {
-    version: ONBOARDING_FLOW_VERSION,
+    version: getOnboardingFlowVersion(normalizeRouteName(routeName)),
     dismissedWelcome: false,
     completed: false,
   };
@@ -23,25 +25,27 @@ export function readOnboardingState(routeName, storage = window.localStorage) {
     const value = storage.getItem(getOnboardingStorageKey(normalizedRouteName));
 
     if (value) {
-      return normalizeOnboardingState(JSON.parse(value));
+      return normalizeOnboardingState(JSON.parse(value), normalizedRouteName);
     }
-
-    if (normalizedRouteName === "main") {
+    if (
+      normalizedRouteName === "main" &&
+      getOnboardingFlowVersion(normalizedRouteName) === ONBOARDING_FLOW_VERSION
+    ) {
       return readLegacyMainState(storage);
     }
 
-    return createDefaultOnboardingState();
+    return createDefaultOnboardingState(normalizedRouteName);
   } catch (error) {
     console.warn("Failed to read introduction preference.", error);
-    return createDefaultOnboardingState();
+    return createDefaultOnboardingState(normalizedRouteName);
   }
 }
 
 export function writeOnboardingState(routeName, state, storage = window.localStorage) {
-  const normalizedState = normalizeOnboardingState(state);
-
+  const normalizedRouteName = normalizeRouteName(routeName);
+  const normalizedState = normalizeOnboardingState(state, normalizedRouteName);
   try {
-    storage.setItem(getOnboardingStorageKey(routeName), JSON.stringify(normalizedState));
+    storage.setItem(getOnboardingStorageKey(normalizedRouteName), JSON.stringify(normalizedState));
   } catch (error) {
     console.warn("Failed to save introduction preference.", error);
   }
@@ -49,13 +53,14 @@ export function writeOnboardingState(routeName, state, storage = window.localSto
   return normalizedState;
 }
 
-export function normalizeOnboardingState(value) {
-  if (value?.version !== ONBOARDING_FLOW_VERSION) {
-    return createDefaultOnboardingState();
+export function normalizeOnboardingState(value, routeName = "main") {
+  const normalizedRouteName = normalizeRouteName(routeName);
+  const version = getOnboardingFlowVersion(normalizedRouteName);
+  if (value?.version !== version) {
+    return createDefaultOnboardingState(normalizedRouteName);
   }
-
   return {
-    version: ONBOARDING_FLOW_VERSION,
+    version,
     dismissedWelcome: value.dismissedWelcome === true,
     completed: value.completed === true,
   };
@@ -65,13 +70,12 @@ function readLegacyMainState(storage) {
   const rawLegacyValue = storage.getItem(LEGACY_ONBOARDING_STORAGE_KEY);
 
   if (!rawLegacyValue) {
-    return createDefaultOnboardingState();
+    return createDefaultOnboardingState("main");
   }
 
   const legacyState = JSON.parse(rawLegacyValue);
-
   return {
-    version: ONBOARDING_FLOW_VERSION,
+    version: getOnboardingFlowVersion("main"),
     dismissedWelcome: legacyState?.dismissedWelcome === true,
     completed: legacyState?.completedFlows?.main === true,
   };

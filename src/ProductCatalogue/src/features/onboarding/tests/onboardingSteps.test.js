@@ -3,11 +3,11 @@ import test from "node:test";
 
 import {
   ONBOARDING_STEPS,
+  getOnboardingFlowVersion,
   getOnboardingSteps,
   getOnboardingWelcomeContent,
 } from "../config/onboardingSteps.js";
 import { calculatePopoverPosition } from "../ui/onboardingUi.js";
-
 test("defines a compact flow for every Product Catalogue route", () => {
   assert.equal(getOnboardingSteps("main").length, 8);
   assert.equal(getOnboardingSteps("dashboard").length, 5);
@@ -15,20 +15,23 @@ test("defines a compact flow for every Product Catalogue route", () => {
   assert.equal(getOnboardingSteps("review").length, 4);
   assert.deepEqual(getOnboardingSteps("unknown"), []);
 });
-
 test("defines route-specific welcome copy", () => {
   assert.equal(getOnboardingWelcomeContent("main").title, "Welcome to Product Catalogue");
   assert.equal(getOnboardingWelcomeContent("dashboard").title, "Welcome to Dashboard");
   assert.equal(getOnboardingWelcomeContent("analyze").title, "Welcome to Analyze");
   assert.equal(getOnboardingWelcomeContent("review").title, "Welcome to Product Review");
 });
-
+test("bumps only the Main-map onboarding flow version for FI-012", () => {
+  assert.equal(getOnboardingFlowVersion("main"), 3);
+  assert.equal(getOnboardingFlowVersion("dashboard"), 2);
+  assert.equal(getOnboardingFlowVersion("analyze"), 2);
+  assert.equal(getOnboardingFlowVersion("review"), 2);
+});
 test("uses unique step identifiers and complete user-facing copy", () => {
   const steps = Object.values(ONBOARDING_STEPS).flat();
   const ids = steps.map((step) => step.id);
 
   assert.equal(new Set(ids).size, ids.length);
-
   for (const step of steps) {
     assert.ok(step.title.trim());
     assert.ok(step.description.trim());
@@ -39,7 +42,6 @@ test("uses unique step identifiers and complete user-facing copy", () => {
     assert.doesNotMatch(step.description, /backend/i);
   }
 });
-
 test("connects map selection, popup actions, Product Collection and browser preferences", () => {
   const [
     searchStep,
@@ -51,9 +53,14 @@ test("connects map selection, popup actions, Product Collection and browser pref
     themeStep,
     preferencesStep,
   ] = getOnboardingSteps("main");
-
   assert.match(searchStep.selectors[0], /input/);
   assert.equal(searchStep.placement, "adjacent-horizontal");
+  assert.equal(searchStep.selectorMode, "all");
+  assert.equal(searchStep.maximumTargets, 2);
+  assert.ok(searchStep.selectors.includes("#main-map-locator-button"));
+  assert.match(searchStep.description, /Product search/);
+  assert.match(searchStep.description, /Locator/);
+  assert.match(searchStep.description, /only moves the map/);
   assert.equal(filterStep.selectors[0], "#filter-button");
   assert.equal(mapStep.highlight, false);
   assert.equal(mapStep.selectors[0], "[data-onboarding-target='product-search']");
@@ -88,10 +95,8 @@ test("connects map selection, popup actions, Product Collection and browser pref
   assert.equal(preferencesStep.behavior.autoAdvance, false);
   assert.equal(preferencesStep.behavior.readyNextLabel, "Finish");
 });
-
 test("covers the primary Dashboard workflow without route navigation", () => {
   const steps = getOnboardingSteps("dashboard");
-
   assert.deepEqual(
     steps.map((step) => step.id),
     [
@@ -108,10 +113,8 @@ test("covers the primary Dashboard workflow without route navigation", () => {
   assert.equal(steps[4].selectors[0], ".pc-dashboard-grid__aside");
   assert.ok(steps.every((step) => !step.behavior));
 });
-
 test("requires an Analyze Product and keeps guidance beside the sidebar", () => {
   const steps = getOnboardingSteps("analyze");
-
   assert.deepEqual(
     steps.map((step) => step.id),
     [
@@ -128,10 +131,8 @@ test("requires an Analyze Product and keeps guidance beside the sidebar", () => 
   assert.equal(steps[2].behavior.type, "require-target-count");
   assert.equal(steps[3].behavior.type, "require-target-count");
 });
-
 test("requires two Review Products and highlights two columns", () => {
   const steps = getOnboardingSteps("review");
-
   assert.deepEqual(
     steps.map((step) => step.id),
     [
@@ -151,7 +152,6 @@ test("requires two Review Products and highlights two columns", () => {
   assert.equal(steps[2].placement, "target-top-right");
   assert.equal(steps[2].behavior.type, "require-target-count");
 });
-
 test("keeps map, popup and collection guidance anchored to Product search", () => {
   const [, , mapStep, popupStep, collectionStep] = getOnboardingSteps("main");
 
@@ -161,7 +161,6 @@ test("keeps map, popup and collection guidance anchored to Product search", () =
   assert.deepEqual(popupStep.positionSelectors, mapStep.selectors);
   assert.deepEqual(collectionStep.positionSelectors, mapStep.selectors);
 });
-
 test("places map guidance to the upper left of Product search", () => {
   const position = calculatePopoverPosition({
     popoverRect: { width: 340, height: 190 },
@@ -185,7 +184,6 @@ test("places map guidance to the upper left of Product search", () => {
     left: 288,
   });
 });
-
 test("keeps an adjacent Product search card on the right when horizontal space exists", () => {
   const position = calculatePopoverPosition({
     popoverRect: { width: 340, height: 190 },
@@ -202,14 +200,12 @@ test("keeps an adjacent Product search card on the right when horizontal space e
     viewportHeight: 900,
     minimumTop: 68,
   });
-
   assert.deepEqual(position, {
     centered: false,
     top: 68,
     left: 1092,
   });
 });
-
 test("uses the left side when an adjacent card has no room on the right", () => {
   const position = calculatePopoverPosition({
     popoverRect: { width: 340, height: 190 },
@@ -233,7 +229,6 @@ test("uses the left side when an adjacent card has no room on the right", () => 
     left: 768,
   });
 });
-
 test("places Review guidance inside the top-right of the highlighted columns", () => {
   const position = calculatePopoverPosition({
     popoverRect: { width: 340, height: 190 },
@@ -250,7 +245,6 @@ test("places Review guidance inside the top-right of the highlighted columns", (
     viewportHeight: 900,
     minimumTop: 62,
   });
-
   assert.deepEqual(position, {
     centered: false,
     top: 82,

@@ -1,5 +1,10 @@
 import { apiGet } from "../../../shared/api/apiClient.js";
 import {
+  PRODUCT_CONTENT_TYPE,
+  getProductContentConfiguration,
+  isCompatibilityProductContext,
+} from "../../products/domain/productContext.js";
+import {
   PRODUCT_HISTORY_EVENT_TYPE,
   PRODUCT_HISTORY_SOURCE,
   normalizeProductHistoryResponse,
@@ -8,21 +13,70 @@ import { getStatusName, isFrozenStatus } from "../../data/stores/statusStore.js"
 
 const PRODUCT_HISTORY_ENDPOINT = "electronicproducts";
 
-export async function fetchProductHistory(datasetName) {
+export async function fetchProductHistory(datasetName, options = {}) {
   const normalizedDatasetName = normalizeDatasetName(datasetName);
-
   if (!normalizedDatasetName) {
     throw new Error("datasetName is required to fetch product history.");
   }
 
-  const payload = await apiGet(
-    `${PRODUCT_HISTORY_ENDPOINT}/${encodeURIComponent(normalizedDatasetName)}/history`,
-    `Product history request failed for ${normalizedDatasetName}`
+  const get = options.get ?? apiGet;
+  const hasExplicitProductContext = Object.hasOwn(options, "productContext");
+
+  // Calls that omit productContext are the established compatibility adapter used
+  // by Dashboard and other backend-only consumers. Explicit source-aware callers
+  // must provide a resolved ProductContext and fail closed when resolution failed.
+  if (!hasExplicitProductContext) {
+    return fetchCompatibilityProductHistory(normalizedDatasetName, get);
+  }
+
+  const productContext = options.productContext;
+  if (!productContext) {
+    throw new Error(
+      `Product History source context could not be resolved for ${normalizedDatasetName}.`
+    );
+  }
+
+  const historyConfiguration = getProductContentConfiguration(
+    productContext,
+    PRODUCT_CONTENT_TYPE.HISTORY
   );
 
-  return normalizeProductHistoryResponse(
-    normalizeBackendProductHistory(payload, normalizedDatasetName)
+  if (!historyConfiguration.visible || !historyConfiguration.implemented) {
+    return normalizeProductHistoryResponse({
+      endpointAvailable: false,
+      datasetName: productContext.datasetName ?? normalizedDatasetName,
+      source: PRODUCT_HISTORY_SOURCE.UNAVAILABLE,
+      sourceId: productContext.sourceId,
+      sourceLabel: productContext.sourceLabel,
+      availabilityReason:
+        historyConfiguration.availabilityReason ??
+        `Product History is not available for ${productContext.sourceLabel ?? "this source"} yet.`,
+      warnings: [],
+      events: [],
+    });
+  }
+
+  if (
+    !isCompatibilityProductContext(productContext) ||
+    historyConfiguration.loaderId !== "compatibility-history"
+  ) {
+    throw new Error(
+      `Product History loader is not configured for ${
+        productContext.sourceLabel ?? productContext.sourceId ?? "the selected source"
+      }.`
+    );
+  }
+
+  return fetchCompatibilityProductHistory(normalizedDatasetName, get);
+}
+
+async function fetchCompatibilityProductHistory(datasetName, get) {
+  const payload = await get(
+    `${PRODUCT_HISTORY_ENDPOINT}/${encodeURIComponent(datasetName)}/history`,
+    `Product history request failed for ${datasetName}`
   );
+
+  return normalizeProductHistoryResponse(normalizeBackendProductHistory(payload, datasetName));
 }
 
 function normalizeBackendProductHistory(payload, requestedDatasetName) {
@@ -31,7 +85,6 @@ function normalizeBackendProductHistory(payload, requestedDatasetName) {
     records
       .map((record) => normalizeDatasetName(readFirstDefined(record, ["Name", "name"])))
       .find(Boolean) ?? requestedDatasetName;
-
   return {
     endpointAvailable: true,
     datasetName,
@@ -47,7 +100,6 @@ function normalizeBackendProductHistory(payload, requestedDatasetName) {
     ),
   };
 }
-
 function normalizeBackendHistoryRecord(record, { index, datasetName, previousRecord }) {
   const status = readFirstDefined(record, ["Status", "status"]);
   const previousStatus = readFirstDefined(previousRecord, ["Status", "status"]);
@@ -67,7 +119,6 @@ function normalizeBackendHistoryRecord(record, { index, datasetName, previousRec
     previousUpdate,
   });
   const isCurrent = isOpenEndedHistoryDate(to);
-
   return {
     id: createHistoryEventId({
       datasetName,
@@ -113,7 +164,6 @@ function normalizeBackendHistoryRecord(record, { index, datasetName, previousRec
     ].filter((detail) => hasDisplayableValue(detail.value)),
   };
 }
-
 function createProductHistoryChange({
   status,
   previousStatus,
@@ -135,7 +185,6 @@ function createProductHistoryChange({
       previousValue: previousUpdate,
     },
   ]);
-
   if (previousStatus === undefined || previousStatus === null) {
     return statusChange;
   }
@@ -152,7 +201,6 @@ function createProductHistoryChange({
 
   if (valueChanges.length > 0) {
     const direction = getValueChangeDirection(valueChanges);
-
     return {
       type: getValueChangeEventType(direction),
       title: getValueChangeTitle(direction),
@@ -164,7 +212,6 @@ function createProductHistoryChange({
 
   return statusChange;
 }
-
 function createStatusChange(status, previousStatus) {
   const statusLabel = formatStatus(status);
   const previousStatusLabel = previousStatus === undefined ? null : formatStatus(previousStatus);
@@ -178,7 +225,6 @@ function createStatusChange(status, previousStatus) {
       previousStatusLabel,
     };
   }
-
   const wasFrozen = isFrozenStatus(previousStatus);
   const isFrozen = isFrozenStatus(status);
 
@@ -191,7 +237,6 @@ function createStatusChange(status, previousStatus) {
       previousStatusLabel,
     };
   }
-
   if (wasFrozen && !isFrozen) {
     return {
       type: PRODUCT_HISTORY_EVENT_TYPE.UNFREEZE,
@@ -201,7 +246,6 @@ function createStatusChange(status, previousStatus) {
       previousStatusLabel,
     };
   }
-
   if (String(status) !== String(previousStatus)) {
     return {
       type: PRODUCT_HISTORY_EVENT_TYPE.STATUS,
@@ -211,7 +255,6 @@ function createStatusChange(status, previousStatus) {
       previousStatusLabel,
     };
   }
-
   return {
     type: PRODUCT_HISTORY_EVENT_TYPE.STATUS,
     title: `Status: ${statusLabel}`,
@@ -220,7 +263,6 @@ function createStatusChange(status, previousStatus) {
     previousStatusLabel,
   };
 }
-
 function createValueChanges(fields) {
   return fields
     .filter(({ value, previousValue }) => {
@@ -238,7 +280,6 @@ function createValueChanges(fields) {
       description: `${label} changed from ${formatHistoryValue(previousValue)} to ${formatHistoryValue(value)}.`,
     }));
 }
-
 function createStatusDetails({ statusLabel, previousStatusLabel, hasPreviousStatus }) {
   if (!hasPreviousStatus) {
     return [
@@ -260,7 +301,6 @@ function createStatusDetails({ statusLabel, previousStatusLabel, hasPreviousStat
     },
   ];
 }
-
 function createValueDetails({ label, value, previousValue }) {
   if (hasComparableValue(previousValue) && !areEqualHistoryValues(value, previousValue)) {
     return [
@@ -282,7 +322,6 @@ function createValueDetails({ label, value, previousValue }) {
     },
   ];
 }
-
 function getValueChangeDirection(changes) {
   if (changes.some((change) => change.direction === "decrease")) {
     return "decrease";
@@ -303,7 +342,6 @@ function getValueChangeEventType(direction) {
   if (direction === "increase") {
     return PRODUCT_HISTORY_EVENT_TYPE.EXPORT;
   }
-
   return PRODUCT_HISTORY_EVENT_TYPE.STATUS;
 }
 
@@ -322,7 +360,6 @@ function getValueChangeTitle(direction) {
 function getNumericDirection(previousValue, value) {
   const previousNumber = Number(previousValue);
   const number = Number(value);
-
   if (!Number.isFinite(previousNumber) || !Number.isFinite(number)) {
     return "change";
   }
@@ -347,7 +384,6 @@ function getHistoryRecords(payload) {
 
   return [];
 }
-
 function createHistoryEventId({ datasetName, status, from, to, index }) {
   return [
     normalizeDatasetName(datasetName) ?? "product",
@@ -365,7 +401,6 @@ function formatStatus(status) {
 
   return String(getStatusName(status) ?? status);
 }
-
 function formatHistoryDate(value) {
   const text = normalizeText(value);
 
@@ -395,7 +430,6 @@ function isOpenEndedHistoryDate(value) {
   if (!text) {
     return true;
   }
-
   return text.startsWith("9999-12-31");
 }
 
@@ -418,7 +452,6 @@ function normalizeDatasetName(datasetName) {
 
   return normalizedDatasetName || null;
 }
-
 function normalizeText(value) {
   if (value === null || value === undefined) {
     return null;
@@ -440,7 +473,6 @@ function hasComparableValue(value) {
 function areEqualHistoryValues(left, right) {
   return String(left) === String(right);
 }
-
 function joinDescriptionParts(parts) {
   return parts.filter(Boolean).join(" ");
 }

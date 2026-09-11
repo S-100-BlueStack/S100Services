@@ -34,6 +34,7 @@ export function createPopupExportActions(productContext) {
 
 function createExportAction(leaf, productContext) {
   const operationKind = leaf.operationKind;
+  const displayLabel = normalizeText(productContext?.exportConfiguration?.displayLabel);
   const handler = leaf.handlerId ? (EXPORT_HANDLERS[leaf.handlerId] ?? null) : null;
   const capabilitySupported = productContextSupportsCapability(productContext, leaf.capability);
   const implemented = leaf.implemented === true && typeof handler === "function";
@@ -42,6 +43,9 @@ function createExportAction(leaf, productContext) {
   return Object.freeze({
     id: leaf.id,
     label: operationKind,
+    displayLabel,
+    presentationLabel: createPresentationLabel(displayLabel, operationKind),
+    helpText: normalizeText(leaf.helpText),
     icon: EXPORT_ACTION_ICON[operationKind],
     operationKind,
     visible: true,
@@ -85,6 +89,15 @@ function createConfirmationFactory(confirmation) {
 
 function replaceDatasetName(value, datasetName) {
   return String(value ?? "").replaceAll("{datasetName}", String(datasetName ?? ""));
+}
+
+function createPresentationLabel(displayLabel, operationKind) {
+  return [displayLabel, normalizeText(operationKind)].filter(Boolean).join(" ");
+}
+
+function normalizeText(value) {
+  const normalized = String(value ?? "").trim();
+  return normalized || null;
 }
 
 export function getSupportedCompatibilityExportActionId() {

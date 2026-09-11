@@ -23,11 +23,14 @@ export function normalizeDataSourcePayload(rawPayload, source) {
     const identity = createSourceAwareProductIdentity(source.id, productKey);
     const productIdentityKey = serializeProductIdentity(identity);
     const rawProperties = readProperties(feature);
-    const datasetName =
-      readFirstDefined(rawProperties, ["datasetName", "productName", "name"]) ?? productKey;
+    const datasetName = resolveDatasetName({
+      rawProperties,
+      productKey,
+      featureIndex,
+      source,
+    });
 
     identities.push(identity);
-
     return {
       ...feature,
       type: "Feature",
@@ -72,6 +75,83 @@ export function normalizeDataSourcePayload(rawPayload, source) {
       data,
     })),
   };
+}
+
+function resolveDatasetName({ rawProperties, productKey, featureIndex, source }) {
+  const rawDatasetName =
+    normalizeText(readFirstDefined(rawProperties, ["datasetName", "productName", "name"])) ??
+    productKey;
+  const strategy = source?.normalizer?.datasetNameStrategy;
+
+  if (!strategy) {
+    return rawDatasetName;
+  }
+
+  const identitySeed = stripDevelopmentDisplaySuffix(rawDatasetName ?? productKey);
+  switch (strategy.type) {
+    case "replace-leading-product-code":
+      return replaceLeadingProductCode(identitySeed, productKey, strategy, featureIndex);
+    case "synthetic-prefix":
+      return createSyntheticDatasetName(identitySeed ?? productKey, strategy.prefix, featureIndex);
+    default:
+      throw new Error(
+        `Unsupported dataset name strategy "${strategy.type ?? "unknown"}" for data source "${
+          source?.label ?? source?.id ?? "unknown"
+        }".`
+      );
+  }
+}
+
+function replaceLeadingProductCode(identitySeed, productKey, strategy, featureIndex) {
+  const productCode = normalizeText(strategy.productCode);
+  if (!productCode) {
+    throw new Error("A replace-leading-product-code strategy requires productCode.");
+  }
+
+  if (/^\d{3}/.test(identitySeed ?? "")) {
+    return `${productCode}${identitySeed.slice(3)}`;
+  }
+
+  return createSyntheticDatasetName(
+    productKey,
+    normalizeText(strategy.fallbackPrefix) ?? `${productCode}-MOCK`,
+    featureIndex
+  );
+}
+
+function createSyntheticDatasetName(value, prefix, featureIndex) {
+  const normalizedPrefix = normalizeText(prefix);
+  if (!normalizedPrefix) {
+    throw new Error("A synthetic-prefix dataset name strategy requires prefix.");
+  }
+
+  const token = createSyntheticDatasetToken(value) ?? String(featureIndex + 1).padStart(4, "0");
+  return `${normalizedPrefix}-${token}`;
+}
+
+function createSyntheticDatasetToken(value) {
+  const normalized = stripDevelopmentDisplaySuffix(normalizeText(value));
+  if (!normalized) {
+    return null;
+  }
+
+  const token = normalized
+    .normalize("NFKD")
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toUpperCase();
+  return token || null;
+}
+
+function stripDevelopmentDisplaySuffix(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return null;
+  }
+
+  // The legacy Development fixtures used parenthesized source labels for visual
+  // disambiguation. Dataset identity must stay independent of those UI labels.
+  return normalized.replace(/\s+\((?:S-?102|Paper Charts)\)\s*$/i, "").trim();
 }
 
 function readGeoJsonFeatures(rawPayload, source) {
@@ -120,4 +200,9 @@ function normalizePropertyName(value) {
 
 function compactUndefinedValues(source) {
   return Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined));
+}
+
+function normalizeText(value) {
+  const normalized = String(value ?? "").trim();
+  return normalized || null;
 }

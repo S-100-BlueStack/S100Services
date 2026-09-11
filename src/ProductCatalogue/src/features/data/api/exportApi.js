@@ -12,7 +12,7 @@ export async function exportNewEdition(datasetName) {
     datasetName,
     operationType: PRODUCT_JOB_OPERATION.EXPORT_EDITION,
     exportTarget: EXPORT_TARGET.S100,
-    label: "Exporting S100 Edition",
+    label: "Exporting S-101 Edition",
     startJob: () =>
       startProductJob(buildExportRequestPath(datasetName, "newedition", EXPORT_TARGET.S100)),
   });
@@ -26,7 +26,7 @@ export async function exportRollback(datasetName) {
   return runProductJob({
     datasetName,
     operationType: PRODUCT_JOB_OPERATION.ROLLBACK,
-    label: "Rolling back",
+    label: "Canceling export",
     startJob: () => startProductJob(buildExportRequestPath(datasetName, "rollback")),
   });
 }

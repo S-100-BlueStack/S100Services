@@ -1,5 +1,6 @@
 import {
   PRODUCT_OPERATION_CAPABILITY,
+  getProductContextIdentityKey,
   productContextSupportsCapability,
   resolveProductContext,
 } from "../../products/domain/productContext.js";
@@ -10,8 +11,10 @@ export function resolvePopupHeaderCollectionAvailability(
 ) {
   const datasetName = normalizeDatasetName(feature?.attributes?.datasetName);
   const productContext = resolveProductContext({ graphic: feature });
+  const identityKey = getProductContextIdentityKey(productContext);
   const supported = Boolean(
     datasetName &&
+    identityKey &&
     !isReviewOrAnalyzeRoute &&
     productContextSupportsCapability(
       productContext,
@@ -22,6 +25,8 @@ export function resolvePopupHeaderCollectionAvailability(
   return {
     supported,
     datasetName,
+    identityKey,
+    productContext,
   };
 }
 
@@ -47,6 +52,7 @@ export function reconcilePopupHeaderCollectionAction({
 export function mutatePopupHeaderCollection({
   feature,
   expectedDatasetName,
+  expectedIdentityKey,
   isReviewOrAnalyzeRoute = false,
   hasProduct,
   addProduct,
@@ -58,7 +64,10 @@ export function mutatePopupHeaderCollection({
     isReviewOrAnalyzeRoute,
   });
   const expectedName = normalizeDatasetName(expectedDatasetName);
-  if (!availability.supported || availability.datasetName !== expectedName) {
+  const expectedIdentity = normalizeText(expectedIdentityKey);
+  const identityChanged = expectedIdentity && availability.identityKey !== expectedIdentity;
+
+  if (!availability.supported || availability.datasetName !== expectedName || identityChanged) {
     return {
       handled: false,
       reason: "unsupported",
@@ -66,8 +75,8 @@ export function mutatePopupHeaderCollection({
     };
   }
 
-  if (hasProduct?.(availability.datasetName)) {
-    removeProduct?.(availability.datasetName);
+  if (hasProduct?.(availability.productContext)) {
+    removeProduct?.(availability.productContext);
     return {
       handled: true,
       removed: true,
@@ -79,11 +88,15 @@ export function mutatePopupHeaderCollection({
     handled: true,
     removed: false,
     datasetName: availability.datasetName,
-    addResult: addProduct?.({ datasetName: availability.datasetName }),
+    addResult: addProduct?.(availability.productContext),
   };
 }
 
 function normalizeDatasetName(value) {
+  return normalizeText(value);
+}
+
+function normalizeText(value) {
   const normalized = String(value ?? "").trim();
   return normalized || null;
 }

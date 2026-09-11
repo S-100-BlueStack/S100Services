@@ -12,7 +12,7 @@ const TEST_RANGE = {
 };
 
 describe("dashboardActivity", () => {
-  it("normalizes API payloads and sorts newest activity first", () => {
+  it("normalizes API payloads and preserves backend activity order", () => {
     const dashboard = normalizeDashboardPayload(
       {
         data: {
@@ -37,7 +37,10 @@ describe("dashboardActivity", () => {
       TEST_RANGE
     );
 
-    assert.equal(dashboard.activities[0].id, "new");
+    assert.deepEqual(
+      dashboard.activities.map((activity) => activity.id),
+      ["old", "new"]
+    );
     assert.equal(dashboard.summary.totalActivities, 2);
     assert.equal(dashboard.summary.productsTouched, 2);
     assert.equal(dashboard.summary.failedOperations, 1);

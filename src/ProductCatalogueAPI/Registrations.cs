@@ -1,7 +1,8 @@
 using ArcGIS.Core.Data;
-using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Jobs;
+using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Services.Jobs;
+using ProductCatalogueAPI.Startup;
 using Serilog;
 
 namespace ProductCatalogueAPI
@@ -18,6 +19,49 @@ namespace ProductCatalogueAPI
         /// <param name="configuration">The application configuration containing the S-128 connection settings.</param>
         /// <returns>A task that completes after the ArcGIS-backed product manager has been initialized.</returns>
         public static async Task AddS100ProductCatalogue(this IServiceCollection services, ConfigurationManager configuration) {
+            S128ConnectionPrerequisite connection;
+            try {
+                connection = ProductCatalogueStartupPrerequisites.ValidateS128Connection(
+                    configuration.GetSection("Connections")["S128Connection"]
+                );
+            }
+            catch (Exception ex) {
+                Log.Error(
+                    ex,
+                    "Product Catalogue startup prerequisite validation failed. Prerequisite: {Prerequisite}",
+                    "S128Configuration"
+                );
+                throw ProductCatalogueStartupException.S128ConfigurationInvalid();
+            }
+
+            try {
+                ArcGIS.Core.Hosting.Host.Initialize(ArcGIS.Core.Hosting.Host.LicenseProductCode.ArcGISPro);
+                Log.Information("ArcGIS Core Host Initialized");
+                Log.Information("Connecting to configured S128-Database");
+
+                var productManager = await S100FC.ProductCatalogue.ProductManagerGDB.CreateInstanceAsync(() => {
+                    return connection.ConnectionType switch {
+                        S128ConnectionType.EnterpriseGeodatabase => new Geodatabase(
+                            new DatabaseConnectionFile(new Uri(connection.Path))
+                        ),
+                        S128ConnectionType.FileGeodatabase => new Geodatabase(
+                            new FileGeodatabaseConnectionPath(new Uri(connection.Path))
+                        ),
+                        _ => throw new InvalidOperationException("Unsupported S-128 connection type.")
+                    };
+                });
+
+                services.AddSingleton(productManager);
+            }
+            catch (Exception ex) {
+                Log.Error(
+                    ex,
+                    "Required Product Catalogue initialization failed. Prerequisite: {Prerequisite}",
+                    "ArcGISProductManager"
+                );
+                throw ProductCatalogueStartupException.ProductManagerInitializationFailed();
+            }
+
             services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<SendToIcEncOptions>, SendToIcEncOptionsValidator>();
             services
                 .AddOptions<SendToIcEncOptions>()
@@ -25,38 +69,6 @@ namespace ProductCatalogueAPI
                 .ValidateOnStart();
             services.AddSingleton<ISendToIcEncJobService, HangfireSendToIcEncJobService>();
             services.AddTransient<UploadSingularProductJob>();
-
-            try {
-                // Set up ArcGIS and ProductCatalogue services
-                ArcGIS.Core.Hosting.Host.Initialize(ArcGIS.Core.Hosting.Host.LicenseProductCode.ArcGISPro);
-                Log.Information("ArcGIS Core Host Initialized");
-                // Connect to gdb/sde
-                var path = configuration.GetSection("Connections")["S128Connection"];
-
-                if (string.IsNullOrWhiteSpace(path) || !Path.Exists(path))
-                    throw new InvalidOperationException($"S128:ConnectionFile is either not configured or the system has insufficient access to the file: {path}");
-
-                Log.Information("Connecting to S128-Database: {path}", path);
-                var productManager = await S100FC.ProductCatalogue.ProductManagerGDB.CreateInstanceAsync(() => {
-                    if (".sde".Equals(System.IO.Path.GetExtension(path), StringComparison.OrdinalIgnoreCase)) {
-                        var connectionFile = new DatabaseConnectionFile(new Uri(System.IO.Path.GetFullPath(path)));
-
-                        return new Geodatabase(connectionFile);
-                    }
-                    else if (".gdb".Equals(System.IO.Path.GetExtension(path), StringComparison.OrdinalIgnoreCase)) {
-                        var connectionFile = new FileGeodatabaseConnectionPath(new Uri(Path.GetFullPath(path)));
-                        return new Geodatabase(connectionFile);
-                    }
-                    else {
-                        throw new InvalidOperationException("Connectionfile path for S128-Database is neither .gdb nor .sde");
-                    }
-                });
-
-                services.AddSingleton(productManager);
-            }
-            catch (Exception ex) {
-                Log.Error("Exception occured during init. {ex}", ex);
-            }
         }
     }
 }

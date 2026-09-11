@@ -1,6 +1,7 @@
 # Product Catalogue backend implementation roadmap
 
-Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+Current reviewed backend runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+Current reviewed frontend baseline: `8e375296a286e3228fa8a6f7111769715038b320`.
 BE-108A documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`.
 
 This roadmap converts the current backend discussions into bounded implementation packages. It exists to prevent later work from introducing new architecture assumptions, database changes, or concurrency mechanisms without an explicit decision.
@@ -40,6 +41,8 @@ These decisions apply to every work package:
 14. Authentication and authorization remain intentionally open during development and are deferred to production-readiness work.
 15. Backend changes must follow the existing controller/service/repository/job/error conventions after the full context review.
 16. Frontend and backend changes for one contract should be delivered together or in a deployment-safe order.
+17. Product-specific frontend presentation uses `S-101`, while the current ExportTarget backend/wire contract remains `S100`; do not rename the public target without a separately approved contract migration.
+18. The user-facing popup action is `Cancel Export`, while the current backend endpoint, operation identity, persisted values and audit terminology remain Rollback where they describe the actual legacy contract.
 
 ## Work package status
 
@@ -170,6 +173,8 @@ Preferred request:
 ```
 
 OpenAPI/Swagger must present the readable values rather than requiring API consumers to know internal enum assignments.
+
+Current frontend presentation note: FI-013 is complete at `1c6040a60d97429c2232b9b68f0b849a4591df4b`. Product-specific UI presents this compatibility target as `S-101`, but the backend/public wire value remains exactly `S100`. Edition requests therefore continue to send `exportTarget=S100`; frontend display labels must not be used as backend target values.
 
 ASP.NET enum model binding previously accepted enum names and numeric values. BE-102 validates the raw query value before controller execution. Numeric values and the legacy name `Both` are invalid, and consumer review found no reason to add temporary compatibility.
 
@@ -463,6 +468,8 @@ BE-104 is complete. BE-104A backend work is committed at `7fe500aafb5831e71dd766
 
 The implementation provides additive async start endpoints, application-owned Hangfire metadata, job-by-ID status, authoritative Product-version validation, a persistent-handle dataset lock, an execution guard, zero automatic retries, persisted frontend polling, reload recovery and terminal route refresh. The existing synchronous endpoints remain available for compatibility, but normal popup Export/Rollback actions use the async contract.
 
+Current frontend presentation note: FI-014 is complete at `70b0775936505dca8c1abb221f4a08953411efc1`. The popup presents the legacy Rollback operation as `Cancel Export` with `x-circle` and `Canceling export...`, while the backend route/job/operation identity remains Rollback. FI-013 separately presents the compatibility `S100` Edition target as `S-101` without changing the async request or job wire values.
+
 ### Purpose
 
 Stop long-running Export/Rollback work from depending on one open HTTP request and provide recoverable backend job state.
@@ -683,7 +690,7 @@ Status: Complete and manually verified against baseline `7eb0fe25e2a8d44b9e4da29
 
 The existing `GET /electronicproducts/dashboard` endpoint now accepts additive server-side filters for search, Product, type, status, importance, and reports plus optional cursor paging.
 
-The Product Catalogue frontend uses `pageSize=50`; the backend accepts `1-200`. Omitting `pageSize` preserves the complete filtered activity list for existing consumers. A cursor is opaque and valid only together with `pageSize`.
+The Product Catalogue frontend uses `pageSize=25`, `50`, `100`, or `200`, with `50` as the browser-default selection; the backend accepts `1-200`. Omitting `pageSize` preserves the complete filtered activity list for existing consumers. A cursor is opaque and valid only together with `pageSize`.
 
 Filtering is applied before summaries and page selection. Summary cards, status summary, operation summary, `TotalHits`, and `Paging.Total` represent the complete filtered result. Only `Activities` and `Paging.Returned` are page-bounded.
 
@@ -702,9 +709,10 @@ The persisted `ProductRecord.Id` GUID is used as the stable activity key when av
 - Search text preserves the user's casing while backend matching remains case-insensitive.
 - Rapid search edits supersede stale responses without routinely aborting requests in the browser Network panel.
 - Immediate range, select-filter, page and manual-refresh requests abort stale in-flight requests.
-- Filter and range changes reset cursor history.
-- Previous/Next navigation uses an in-memory stack of opaque backend cursors.
+- Filter, range, and page-size changes reset cursor history.
+- Previous/Next navigation uses an in-memory stack of opaque backend cursors and never reuses that stack across page-size generations.
 - The last successful result stays visible during loading and individual request failures.
+- Dashboard page size is stored as browser-local frontend state and is intentionally excluded from direct URL/reload range state.
 - Dashboard History and direct URL/reload range behavior are preserved.
 
 ### Current repository boundary
@@ -722,15 +730,17 @@ The endpoint now logs source/filtered/returned counts and repository, mapping, f
 - Filter options remain available from the complete date-bounded source.
 - Frontend requests prevent stale results, and rapid search edits remain silent to the user.
 - Empty results, legacy full results, invalid paging, stable equal-timestamp ordering, report filters, and paging normalization have automated coverage.
-- Manual Dashboard verification confirmed that pagination works as intended at commit `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+- Manual Dashboard verification confirmed that backend pagination works as intended at commit `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+- FI-009 frontend page-size selection, persistence, reset behavior and page-size-safe cursor invalidation were manually accepted at `e4caa4d29c46083605beac10400876af6bf38d1c`.
 - No Product database or geodatabase schema change is included.
 
 ### Deferred Dashboard enhancements
 
-The following improvements are recorded for later work and are not part of BE-107 acceptance:
+The following improvement is recorded for later work and is not part of BE-107 acceptance:
 
-- user-selectable page size; the backend already accepts `1-200`, while the frontend intentionally remains fixed at `50`;
 - sortable activity columns; this requires an explicit server-side sort contract and cursor semantics tied to the selected sort.
+
+FI-009 is complete at `e4caa4d29c46083605beac10400876af6bf38d1c` and adds the frontend-only user-selectable page-size extension on top of the unchanged BE-107 backend contract.
 
 ---
 

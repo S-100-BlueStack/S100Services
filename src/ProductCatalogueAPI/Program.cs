@@ -43,7 +43,9 @@ namespace ProductCatalogueAPI
                 .CreateBootstrapLogger();
             Log.Information("Bootstrap logger started");
 
-            var builder = WebApplication.CreateBuilder(args);
+            var builder = CreateApplicationBuilder(args);
+            var detectionState = DetectProductChangesState.FromConfiguration(builder.Configuration);
+            builder.Services.AddSingleton(detectionState);
             // logging
             builder.Host.UseSerilog((context, loggerConfiguration) => {
                 loggerConfiguration.MinimumLevel.Information()
@@ -73,7 +75,7 @@ namespace ProductCatalogueAPI
                         outputTemplate: outputTemplate);
                 }
                 else {
-                    Log.Warning("No central log path configured. Set environment variable 'serilog_path' to enable logging to a central location.");
+                    Log.Warning("No central log path configured. Set environment variable 'log_path' to enable logging to a central location.");
                 }
             });
             // Add services to the container.
@@ -163,10 +165,6 @@ namespace ProductCatalogueAPI
             builder.Services.AddExceptionHandler<CustomExceptionHandler>();
 
 
-            // Bind configuration
-            builder.Configuration
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
             // Configure ArcGIS and ProductCatalogue services
             await builder.Services.AddS100ProductCatalogue(builder.Configuration);
 
@@ -251,6 +249,12 @@ namespace ProductCatalogueAPI
             //}
 
             var app = builder.Build();
+            DetectProductChangesRecurringJob.Reconcile(
+                detectionState,
+                app.Services,
+                app.Services.GetRequiredService<ILogger<DetectProductChangesJob>>()
+            );
+
             app.UseHangfireDashboard("/dashboard", new DashboardOptions {
                 //   Authorization = new[] { new MyAuthorizationFilter() }             // TODO: Auth
             });
@@ -279,23 +283,20 @@ namespace ProductCatalogueAPI
                 }
                 await next();
             });
-            if (app.Environment.IsDevelopment()) {
-                app.MapGet("/mock/products", (IWebHostEnvironment env) => {
-                    return GetDevelopmentGeoJson(env, "products.geojson");
+            var mockDataSourcesEnabled = MockDataSourcesConfiguration.IsEnabled(
+                builder.Configuration,
+                app.Environment.IsDevelopment()
+            );
+            if (mockDataSourcesEnabled) {
+                app.MapGet("/mock/paper-charts", () => {
+                    return GetMockGeoJson("paper-charts.geojson");
                 })
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound)
                 .AllowAnonymous();
 
-                app.MapGet("/mock/paper-charts", (IWebHostEnvironment env) => {
-                    return GetDevelopmentGeoJson(env, "some_products.geojson");
-                })
-                .Produces(StatusCodes.Status200OK)
-                .Produces(StatusCodes.Status404NotFound)
-                .AllowAnonymous();
-
-                app.MapGet("/mock/s102", (IWebHostEnvironment env) => {
-                    return GetDevelopmentGeoJson(env, "products.geojson");
+                app.MapGet("/mock/s102", () => {
+                    return GetMockGeoJson("s102.geojson");
                 })
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound)
@@ -316,13 +317,22 @@ namespace ProductCatalogueAPI
             app.Run();
         }
 
-        private static IResult GetDevelopmentGeoJson(IWebHostEnvironment environment, string fileName) {
-            var path = Path.Combine(environment.ContentRootPath, "mock", fileName);
+        internal static WebApplicationBuilder CreateApplicationBuilder(
+            string[] args,
+            string? contentRootPath = null
+        ) => WebApplication.CreateBuilder(new WebApplicationOptions {
+            Args = args,
+            ContentRootPath = contentRootPath
+        });
 
-            if (!File.Exists(path))
+        private static IResult GetMockGeoJson(string fileName) {
+            var resourceName = $"ProductCatalogueAPI.mock.{fileName}";
+            var stream = typeof(Program).Assembly.GetManifestResourceStream(resourceName);
+
+            if (stream is null)
                 return Results.NotFound();
 
-            return Results.File(path, "application/geo+json");
+            return Results.Stream(stream, "application/geo+json");
         }
     }
 }

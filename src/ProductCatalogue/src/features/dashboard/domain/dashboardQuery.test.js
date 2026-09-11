@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  DASHBOARD_DEFAULT_PAGE_SIZE,
+  DASHBOARD_PAGE_SIZE_OPTIONS,
   appendDashboardQueryParameters,
   createDashboardPagingState,
+  createDashboardQueryState,
   moveDashboardPage,
   resetDashboardPaging,
+  selectDashboardSort,
 } from "./dashboardQuery.js";
 
 test("appendDashboardQueryParameters omits all filters and includes paging", () => {
@@ -30,6 +34,40 @@ test("appendDashboardQueryParameters omits all filters and includes paging", () 
   assert.equal(params.get("cursor"), "next-token");
 });
 
+test("appendDashboardQueryParameters uses the selected page size", () => {
+  const params = appendDashboardQueryParameters(new URLSearchParams(), {
+    pageSize: 100,
+  });
+
+  assert.equal(params.get("pageSize"), "100");
+});
+
+test("Dashboard page size supports only the configured choices and defaults to 50", () => {
+  assert.deepEqual(DASHBOARD_PAGE_SIZE_OPTIONS, [25, 50, 100, 200]);
+  assert.equal(DASHBOARD_DEFAULT_PAGE_SIZE, 50);
+  assert.equal(createDashboardQueryState({ pageSize: 25 }).pageSize, 25);
+  assert.equal(createDashboardQueryState({ pageSize: 100 }).pageSize, 100);
+  assert.equal(createDashboardQueryState({ pageSize: 75 }).pageSize, 50);
+  assert.equal(createDashboardQueryState({ pageSize: "invalid" }).pageSize, 50);
+});
+
+test("query state preserves filters while page size and cursor change independently", () => {
+  const filters = {
+    search: "failed",
+    type: "export",
+    status: "all",
+    importance: "failed",
+    reports: "all",
+    product: "101DK001",
+  };
+  const state = createDashboardQueryState({ filters, cursor: "cursor-2", pageSize: 100 });
+
+  assert.deepEqual(state.filters, filters);
+  assert.equal(state.cursor, "cursor-2");
+  assert.equal(state.pageSize, 100);
+  assert.deepEqual(resetDashboardPaging(), { cursor: null, cursorHistory: [] });
+});
+
 test("moveDashboardPage keeps a cursor stack for previous navigation", () => {
   const first = createDashboardPagingState();
   const second = moveDashboardPage(first, { nextCursor: "page-2" }, "next");
@@ -42,4 +80,30 @@ test("moveDashboardPage keeps a cursor stack for previous navigation", () => {
     cursorHistory: [null],
   });
   assert.deepEqual(resetDashboardPaging(), { cursor: null, cursorHistory: [] });
+});
+
+test("Dashboard query state defaults to time descending and serializes both sort parameters", () => {
+  const state = createDashboardQueryState();
+  assert.equal(state.sortBy, "time");
+  assert.equal(state.sortDirection, "desc");
+  const params = appendDashboardQueryParameters(new URLSearchParams(), state);
+  assert.equal(params.get("sortBy"), "time");
+  assert.equal(params.get("sortDirection"), "desc");
+});
+
+test("selecting textual columns starts ascending and active columns toggle both ways", () => {
+  for (const sortBy of ["product", "activity", "status"]) {
+    const selected = selectDashboardSort({ sortBy: "time", sortDirection: "desc" }, sortBy);
+    assert.deepEqual(selected, { sortBy, sortDirection: "asc" });
+    const descending = selectDashboardSort(selected, sortBy);
+    assert.deepEqual(descending, { sortBy, sortDirection: "desc" });
+    assert.deepEqual(selectDashboardSort(descending, sortBy), selected);
+  }
+});
+
+test("selecting Time from a textual sort starts descending", () => {
+  const selected = selectDashboardSort({ sortBy: "product", sortDirection: "asc" }, "time");
+  assert.deepEqual(selected, { sortBy: "time", sortDirection: "desc" });
+  assert.deepEqual(selectDashboardSort(selected, "time"), { sortBy: "time", sortDirection: "asc" });
+  assert.equal(selectDashboardSort(selected, "links"), selected);
 });

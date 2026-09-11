@@ -19,6 +19,7 @@ test("direct triggerExport calls cannot bypass the export dispatch guard", async
     actionId: SUPPORTED_EXPORT_ACTION_ID,
     target: EXPORT_TARGET.S57,
     exportType: EXPORT_TYPE.EDITION,
+    presentationLabel: "S-101 Edition",
     implemented: true,
     request: async () => {
       requestCalls++;
@@ -34,6 +35,9 @@ test("direct triggerExport calls cannot bypass the export dispatch guard", async
   assert.equal(requestCalls, 0);
   assert.equal(afterResultCalls, 0);
   assert.equal(isAnyPopupExportActionRunning(DATASET_NAME), false);
+  const notice = getNotices().find((item) => item.title === "Export is not available");
+  assert.match(notice?.message ?? "", /S-101 Edition/);
+  assert.doesNotMatch(notice?.message ?? "", /S100/);
 });
 
 test("guard rejection happens before confirmation and export state", async () => {

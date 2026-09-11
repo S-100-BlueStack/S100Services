@@ -50,10 +50,10 @@ The following flows are implemented and considered stable frontend behavior for 
 - flat `Export... > Edition / Update` menu
 - compatibility AOI Edition export using the established S100 backend target
 - disabled Edition/Update placeholders for Paper Charts and S-102
-- Rollback
+- Cancel Export
 - popup export loading/conflict state
 - backend-authoritative Product operation state with local caching and reload recovery
-- asynchronous Export/Rollback polling, terminal notices and route refresh
+- asynchronous Export/Cancel Export polling, terminal notices and route refresh
 - silent auto-refresh
 - manual refresh button loading
 - popup-preserving compatible refresh without popup, icon or dropdown flashing
@@ -116,7 +116,7 @@ Current popup action endpoint status:
 
 - `Freeze` / `Unfreeze` use the existing product freeze-state API.
 - `Send to IC-ENC` uses the existing product upload/send API.
-- `Rollback` is enabled and calls `POST /export/{name}/rollback/jobs`.
+- `Cancel Export` is enabled and calls the legacy `POST /export/{name}/rollback/jobs` contract.
 - Compatibility AOI `Export... > Edition` is enabled and calls `POST /export/{name}/newedition/jobs?exportTarget=S100`.
 - Compatibility AOI `Update` remains disabled because no implemented Update contract exists.
 - Paper Charts and S-102 expose disabled Edition/Update placeholders with no handler or backend target.
@@ -146,7 +146,7 @@ src/features/products/domain/productContext.js
 
 Registry-backed Products require matching Graphic and layer source metadata. The current combined AOI path participates through an explicit internal compatibility adapter, not a permanent registry source or persisted toggle. Unknown or inconsistent source metadata fails closed for backend-dependent actions.
 
-`productActionAvailability.js` combines Product context capabilities with Product status, active operations, backend capability state, and popup Export state. Paper Charts and S-102 therefore retain popup attributes and disabled Export placeholders without gaining mutations, Product Collection, Analyze, Review, History, or reports.
+`productActionAvailability.js` combines Product context capabilities with Product status, active operations, backend capability state, and popup Export state. Paper Charts and S-102 retain popup attributes and disabled Export placeholders without gaining backend mutations or real Export execution. FI-011D also enables Product Collection, Analyze, Review, and visible History/report/validation surfaces for those sources; unsupported backend content is represented as unavailable and never authorizes compatibility API calls.
 
 ### Product operation state
 
@@ -171,19 +171,34 @@ Do not parse API errors directly in UI files unless there is a strong reason.
 
 ### Product catalog and product picker
 
-Analyze and Review use a shared product picker powered by the lightweight product catalog endpoint:
+Analyze and Review share the source-aware workspace Product boundary:
 
-```http
-GET /electronicproducts
+```txt
+src/features/products/services/workspaceProductService.js
 ```
 
-Current expected lightweight shape:
+The workspace catalog merges independent providers:
 
-```json
-{ "Data": ["101DK0040943E", "101DK0040944E"] }
-```
+- the compatibility provider backed by `GET /electronicproducts`;
+- Paper Charts when its registry workspace provider is runtime-available;
+- S-102 when its registry workspace provider is runtime-available.
 
-The picker is implemented once and reused by Analyze and Review so users can add products directly without first using the main map or Product Collection. It does not use the AOI/map geometry endpoint. Already-added products are hidden from the picker, and unknown products are rejected when catalog validation is available.
+The compatibility endpoint is therefore one provider, not the permanent Product catalog architecture.
+Registry-backed providers reuse their source loader and normalizer, preserve `sourceId`, `sourceLabel`,
+`productKey`, `datasetName`, and `productType`, isolate provider failures, and reject stale provider
+results through generation guards. `datasetName` is the authoritative globally unique workspace/route
+identity; user-facing Product names remain separate metadata. A duplicate normalized `datasetName` across
+providers violates that invariant, is omitted from the catalog, and resolves fail closed as ambiguous
+instead of selecting a provider deterministically.
+
+The workspace catalog is deliberately independent of Main map enabled-source state. A runtime-available
+source can still resolve or appear in Analyze/Review after that source is disabled on the Main map.
+S-57 and S-101 do not contribute independent workspace Products until authoritative read/catalog
+contracts exist.
+
+The shared picker is reused by Analyze and Review. Product name remains the primary visible label and
+source metadata may be shown secondarily when useful. Existing route projection remains datasetName-only
+until FI-019.
 
 ### Main map filters
 
@@ -199,9 +214,13 @@ Product popup attribute rendering is hardened so first-load popup details do not
 
 ### Main map Product search
 
-The main map has a route-local Product search overlay. It uses the shared product catalog endpoint for suggestions and opens the selected Product's popup on the map when a matching rendered graphic exists.
+The Main map has a route-local Product search overlay. FI-011B search is built from the currently active,
+committed frontend Graphics and their source-aware Product contexts. It does **not** query or reuse the
+Analyze/Review workspace catalog.
 
-Product search is a map control, not global navigation. It should stay out of the navbar to avoid layout conflicts on smaller screens.
+Search opens the selected rendered Product's popup on the map. Disabled sources are absent because their
+Graphics are not part of the committed active Main map state. Product search is a map control, not global
+navigation, and stays out of the navbar to avoid layout conflicts on smaller screens.
 
 ### Dashboard
 
@@ -217,7 +236,15 @@ Dashboard documentation:
 src/features/dashboard/README.md
 ```
 
-Dashboard is a read-only operational activity route. It loads bounded activity pages from `/electronicproducts/dashboard`, sends search and filters to the backend, opens a route-local Product History panel from activity rows, and links users onward to Review or Analyze. Dashboard must stay isolated from main map popup state, Product Collection state, Analyze state and Review state.
+Dashboard is a compatibility/backend activity surface. It loads bounded activity pages from
+`/electronicproducts/dashboard`, sends search and filters to the backend, opens a route-local Product
+History panel from activity rows, and links users onward to Review or Analyze. Dashboard intentionally
+keeps the established one-argument `fetchProductHistory(datasetName)` compatibility adapter and is not
+migrated to the generic workspace provider architecture in FI-011D. Paper Charts and S-102 Dashboard
+behavior is not introduced here.
+
+Dashboard must stay isolated from Main map popup state, Product Collection state, Analyze state and
+Review state.
 
 ### Analyze and Review
 
@@ -233,7 +260,21 @@ Review feature files live in:
 src/features/review
 ```
 
-Analyze owns product analysis/report display. It does not own product mutation actions. Review owns multi-product review. Review tabs are independent and should not reintroduce BroadcastChannel/session picker workflows without a clear UX reason.
+Analyze and Review use `workspaceProductService` for source-aware Product catalog and route Product
+resolution. Compatibility Products retain their established backend loaders. Paper Charts and S-102
+resolve through runtime-available registry providers, so Analyze can use source-owned normalized data and
+geometry without calling the compatibility AOI endpoint. Review uses the same Product context to avoid
+cross-source History/report requests.
+
+Analyze owns product analysis/report display and does not own mutation actions. Review owns multi-product
+review; mixed workspaces isolate Product/provider failures and distinguish unavailable content from failed
+loads. Review tabs remain independent and should not reintroduce BroadcastChannel/session picker workflows
+without a clear UX reason.
+
+Canonical public routes are `/Analyze?Datasets=ProductA,ProductB` and
+`/Review?Datasets=ProductA,ProductB`. Dataset names are globally unique; source identity remains
+internal to the workspace runtime model. See [workspace routing](src/shared/routing/README.md)
+for serialization, picker synchronization, and temporary legacy-path compatibility.
 
 ### Timeline and Product History
 
@@ -249,7 +290,19 @@ Timeline documentation:
 src/features/timeline/README.md
 ```
 
-Product History uses the backend product history endpoint for product-level history views. Product History rows are collapsed by default on both the main map quick panel and the Dashboard History panel. Collapsed rows show the event title, timestamp and short description; row details such as previous/new state are expanded only when the user opens that row.
+Product History deliberately exposes two call boundaries. The one-argument
+`fetchProductHistory(datasetName)` contract is the retained compatibility adapter for existing
+compatibility consumers such as Dashboard and calls the established backend History endpoint directly.
+Source-aware Main map, Analyze, and Review callers provide an already resolved `ProductContext`.
+
+Compatibility Product contexts use the same backend endpoint. Paper Charts and S-102 expose a visible
+History surface but return a source-specific unavailable model without a compatibility History request.
+An explicitly unresolved/invalid source context fails closed and must never reinterpret the dataset name
+as a compatibility Product.
+
+Product History rows are collapsed by default on both the Main map quick panel and Dashboard History
+panel. Collapsed rows show the event title, timestamp and short description; row details such as
+previous/new state are expanded only when the user opens that row.
 
 Global map timeline is not implemented yet.
 
@@ -260,6 +313,7 @@ Some current behavior is intentionally frontend-only or placeholder-only:
 - popup export leaf/scope presentation state
 - same-browser job cache and cross-tab synchronization
 - disabled source-configured Edition/Update placeholders for compatibility Update, Paper Charts and S-102
+- truthful unavailable History, IC-ENC report, and Internal validation surfaces for Paper Charts and S-102
 - Dashboard report actions until IC-ENC/internal validation report IDs or URLs exist
 
 The backend active-job endpoint is the source of truth for shared visibility. Frontend state remains responsible for presentation, polling and responsive local reconciliation.
@@ -318,7 +372,7 @@ Dashboard can show:
 - operation summary
 - debounced server-side search
 - server-side filters
-- cursor pagination with a fixed frontend page size of 50
+- cursor pagination with a browser-persisted `25 / 50 / 100 / 200` page-size selector, defaulting to 50
 - stale-request suppression and last-successful-result retention
 - actionable status/operation summary rows that apply matching filters
 - Dashboard History panel opened from activity-row `History`
@@ -326,7 +380,7 @@ Dashboard can show:
 - onward links to Review and Analyze
 - disabled or placeholder report actions until report endpoints exist
 
-Dashboard filters run in the backend before summary calculation and cursor page selection. Summary cards, status summary, operation summary and total counts represent the complete filtered result, while the activity list contains only the current page. Filter or range changes reset cursor history.
+Dashboard filters run in the backend before summary calculation and cursor page selection. Summary cards, status summary, operation summary and total counts represent the complete filtered result, while the activity list contains only the current page. Filter, range, or page-size changes reset cursor history. Page size is browser-local Dashboard state and is not added to the route URL.
 
 Dashboard History panel is route-local. It replaces the right summary column while open, closes with `Close` or `Escape`, shows selected activity context, highlights the selected activity row, and reuses the shared product history API/renderers without interacting with main map popup state or Product Collection state.
 
@@ -358,10 +412,10 @@ Export > Edition -> POST /export/{name}/newedition/jobs?exportTarget=S100
 
 The generic Edition label preserves the established compatibility wire target. It is not an `All` export and does not infer separate S-57/S-101 source ownership.
 
-Current implemented rollback action:
+Current implemented Cancel Export action:
 
 ```txt
-Rollback -> POST /export/{name}/rollback/jobs
+Cancel Export -> POST /export/{name}/rollback/jobs
 ```
 
 ## Background job deployment direction
@@ -402,6 +456,162 @@ When adding a new logical map layer:
 4. Ensure popup/filter/display-scale behavior checks layer capabilities.
 5. Avoid enabling product actions unless the layer truly supports product correction mutations.
 
+## Mock data source configuration
+
+Paper Charts and S-102 use synthetic fixtures until authoritative backend read contracts are available.
+They are enabled automatically in Vite Development builds. A production-mode test build can opt in with:
+
+```dotenv
+VITE_ENABLE_MOCK_DATA_SOURCES=true
+```
+
+This is a non-secret Vite build-time setting. Rebuild and redeploy the frontend after changing it. Missing,
+blank, `false`, or unsupported values keep the mock sources disabled outside Development.
+
+The API has an independent runtime gate. Development enables the retained mock endpoints automatically.
+For a non-Development test deployment, set:
+
+```text
+MockDataSources:Enabled=true
+```
+
+The equivalent environment variable is:
+
+```text
+MockDataSources__Enabled=true
+```
+
+The repository default is `false`. Both frontend and backend opt-ins must be enabled for Paper Charts and
+S-102 to work end-to-end in a production-mode test deployment. These flags expose only the existing
+synthetic `/mock/paper-charts` and `/mock/s102` sources; they do not enable backend Product mutations,
+Export, History, or report contracts for those sources.
+
+## ArcGIS portal configuration
+
+`VITE_ARCGIS_PORTAL_URL` is an optional, non-secret Vite build-time deployment value for the
+ArcGIS Maps SDK portal. `src/shared/config/arcgisConfig.js` is the single environment-read boundary;
+map, theme, Locator, and UI code do not read this value directly.
+
+The supported contract is:
+
+| Configured value                                            | Portal behavior                                                            |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Missing, empty, or whitespace-only                          | Uses `https://www.arcgis.com`.                                             |
+| Absolute `https://` URL                                     | Uses the configured portal.                                                |
+| Absolute `http://` URL                                      | Uses the configured portal, for deployments that intentionally allow HTTP. |
+| Relative, malformed, unsupported scheme, or URL credentials | Uses `https://www.arcgis.com`.                                             |
+
+The value is compiled into the frontend by Vite. Changing it requires **rebuild + redeploy**; the
+application does not fetch runtime configuration and does not preflight the portal during startup. A
+custom portal that parses correctly may still fail later through normal ArcGIS resource loading.
+
+Do not put credentials, tokens, or other secrets in `VITE_ARCGIS_PORTAL_URL`. Organization deployments
+that require their own ArcGIS portal should provide the value through deployment-local configuration,
+such as `.env.development.local` or `.env.production.local`, rather than committing
+organization-specific values. The repository-wide `*.local` ignore rule keeps these Vite local
+override files untracked.
+
+Portal configuration is independent from `VITE_ARCGIS_LOCATOR_URL`. The Locator keeps its existing
+provider/service contract and DK/GL scope. The existing `Map` / `MapView` and basemap behavior are not
+changed by this configuration boundary.
+
+## Branding configuration
+
+`VITE_APP_LOGO_URL`, `VITE_APP_LOGO_ALT`, and `VITE_APP_FAVICON_URL` are optional,
+non-secret client-side Vite build variables. Use the existing `.env.example` as a template.
+The tracked `.env.development` stays neutral; put organization-specific Development branding in
+`.env.development.local`. Do not put secrets in these values or commit organization-specific
+environment settings.
+
+The configured URLs and alt text are build-time inputs; the browser loads the images at runtime:
+
+- Changing a configured URL or alt value requires **rebuild + redeploy**. It does not update
+  an already-built deployment dynamically.
+- Replacing a file served at an **unchanged configured URL** requires no frontend rebuild,
+  redeployment, or application restart. Refresh the browser to see the replacement, subject
+  to deployment and browser cache policy. Favicon caches may retain an older icon longer.
+- Cache headers belong to the deployment/web server. The frontend adds no cache-busting,
+  polling, or configuration fetch.
+
+A deployment can provide independent files for the navbar logo and favicon:
+
+```dotenv
+VITE_APP_LOGO_URL=/branding/organisation-logo.png
+VITE_APP_LOGO_ALT=Example Hydrographic Office
+VITE_APP_FAVICON_URL=/branding/organisation-favicon.png
+```
+
+`/branding` may be served from a local directory, a network/UNC share, or another static asset
+location. An IIS Virtual Directory is one valid implementation, not an application requirement.
+The web server maps the URL to its storage location; do not configure a UNC or filesystem path
+as the browser URL. Keep deployment-owned files outside build output if they must survive
+frontend redeployments.
+
+Values are trimmed. Missing, empty, or whitespace-only logo or favicon URLs select their
+neutral bundled fallback. Invalid URLs also select fallback. Logo and favicon configuration
+are independent: the logo URL is never used implicitly as the favicon URL. Missing or blank
+`VITE_APP_LOGO_ALT` uses `Product Catalogue`. A configured alt applies only to a usable custom
+logo URL and never renames the generic fallback.
+
+Both URL variables use the same resolution contract:
+
+| Configured URL                        | URL behavior                                                      |
+| ------------------------------------- | ----------------------------------------------------------------- |
+| `branding/logo.svg`                   | Relative to Vite's `import.meta.env.BASE_URL`.                    |
+| `./branding/favicon.png`              | Also relative to the application base.                            |
+| `/branding/favicon.png`               | Relative to the origin root, independent of the application base. |
+| `https://cdn.example.org/favicon.png` | Uses the absolute external URL directly.                          |
+| `http://localhost:8080/logo.svg`      | HTTP remains supported for local/non-TLS deployments.             |
+
+For example, with Vite base `/product-catalogue/`, `branding/logo.svg` resolves beneath
+`/product-catalogue/branding/`; `/branding/logo.svg` still resolves from the origin root.
+Vite's relative base (`./`) resolves against the document URL. Configure the Vite base
+through the existing build tooling (for example, `npm run build -- --base=/product-catalogue/`).
+The default Vite configuration does not override `base`.
+
+Supply custom files at their configured locations. The variables are URLs, not source imports
+or local filesystem paths. An optional `public/branding/logo.svg` is copied by Vite to
+`branding/logo.svg` in the build output; the repository does not include that example asset.
+Unsupported explicit schemes (including `javascript:`, `data:`, and `file:`), malformed absolute
+URLs, protocol-relative URLs, backslashes, and embedded control characters select fallback.
+
+The browser loads custom images passively, without preflight requests or startup waits.
+A custom logo image error switches once to the bundled logo and resets alt to `Product Catalogue`.
+If the bundled logo also fails, the listener and image source are removed, retaining the
+generic alt and reserved space without retrying, throwing, or creating notices.
+Both custom and fallback logos fit proportionally inside the existing 42 × 42 px logo space;
+the navbar height remains 50 px. Very wide logos therefore appear smaller within that space.
+The neutral fallback has its own contrasting background and works in both application themes.
+
+The favicon starts as the same neutral source-owned catalogue SVG in `index.html`. Vite owns
+the asset URL, filename, and base path. `src/app/startApp.js` applies a usable custom favicon
+as an independent HTML module script before the normal static `src/main.js` module entry.
+The branding bootstrap does not import or launch the application. Favicon selection does not
+depend on navbar loading, ArcGIS initialization, Product data, or authentication completion.
+The favicon link has no fixed MIME type or size restriction, allowing deployment-owned formats.
+
+If the browser dispatches an `error` event for the configured favicon, a one-shot listener
+restores the bundled neutral URL. It cannot retry the fallback. Browsers do not consistently
+report favicon loading failures through link events: without an event, a failed custom favicon
+may leave the previous icon or no icon. Guaranteed recovery from that browser behavior is not
+provided. No preflight, retry, notice, or startup wait is added. Missing/invalid configuration
+always retains the initial neutral favicon without assigning a custom URL.
+
+`src/shared/config/brandingConfig.js` owns independent logo and favicon configuration functions
+and their shared URL resolver. `src/features/layout/services/navbarLoader.js` imports the
+source-owned `src/assets/product-catalogue-logo.svg` through Vite with `?no-inline`.
+`navbarBranding.js` owns the existing image lifecycle; `faviconBranding.js` in the same layout
+folder owns the favicon link lifecycle. The HTML fallback and app entry reuse the same SVG
+through Vite rather than adding a duplicate favicon asset. Branding does not change navigation,
+application title, themes, or Product workflows.
+
+No CSP is configured in the supplied frontend `index.html` or `public/web.config`.
+Deployment-owned `img-src` policy may need to permit configured external image hosts;
+HTTPS pages may also block HTTP images. Logo failures use their normal fallback path;
+favicon recovery follows the event limitation above. FI-017 does not relax deployment policy.
+The bundled fallback is emitted as a same-origin asset for normal same-origin builds,
+rather than an inline data URL.
+
 ## Build and formatting
 
 From this folder:
@@ -429,10 +639,11 @@ Recent frontend work has focused on:
 - Dashboard range builder, actionable summary panels and polished Dashboard History panel
 - Dashboard backend activity classification
 - BE-107 Dashboard server-side filtering and cursor pagination, manually verified at `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`
-- shared Product catalog picker for Analyze and Review
+- shared source-aware workspace Product catalog/resolver for Analyze and Review
+- source-aware Product Collection and workspace History/report availability
 - main map filter hardening
 - main map Product search
-- asynchronous S100 Edition and Rollback activation
+- asynchronous S-101 Edition and Cancel Export activation
 - persisted polling and reload recovery
 - backend-authoritative active-job visibility across users and computers
 - fail-closed mutation preflight
@@ -445,5 +656,6 @@ Recent frontend work has focused on:
 - FI-011A configurable Product data-source foundation
 - FI-011B source-aware Filters, Product search, and navbar coordination
 - FI-011C source-aware Product context, popup actions, and flat Export menu
+- FI-011D source-aware Product Collection, workspace resolution, and truthful History/report availability
 
-The frontend is ready for controlled user testing with asynchronous Export/Rollback, shared active-operation visibility and the manually verified BE-107 Dashboard pagination baseline `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`. BE-106 documents—but does not implement—the future move of worker execution to JobPlatform. The next planned backend package is BE-108 Product History failure hardening when its producer contract is ready. Remaining backend-dependent work includes atomic enqueue ownership, any later shared-worker implementation, report contracts, future export variants and the global timeline.
+The frontend is ready for controlled user testing with asynchronous Export/Cancel Export, shared active-operation visibility and the manually verified BE-107 Dashboard pagination baseline `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`. BE-106 documents—but does not implement—the future move of worker execution to JobPlatform. The next planned backend package is BE-108 Product History failure hardening when its producer contract is ready. Remaining backend-dependent work includes atomic enqueue ownership, any later shared-worker implementation, report contracts, future export variants and the global timeline.

@@ -23,7 +23,7 @@ Implemented scope:
 - Compact activity list with product links.
 - Debounced server-side search.
 - Server-side filters for type, status, importance, reports and product.
-- Cursor-paginated activity rows with a default page size of 50.
+- Cursor-paginated activity rows with a user-selectable page size of 25, 50, 100, or 200; 50 remains the default.
 - Request cancellation so stale filter/search responses cannot replace newer results.
 - Last-successful-result retention during refresh and request failures.
 - Status and operation breakdowns.
@@ -67,10 +67,12 @@ Supported additive query parameters:
 - `reports`: `all`, `any`, `ic-enc`, or `internal-validation`
 - `pageSize`: 1-200
 - `cursor`: opaque continuation token returned by the previous response
+- `sortBy`: `time`, `product`, `activity`, or `status` (default `time`)
+- `sortDirection`: `asc` or `desc` (default `desc`)
 
-The frontend uses `pageSize=50`. Omitting `pageSize` preserves the legacy full-list response behavior for existing consumers. A cursor is valid only together with `pageSize`.
+The frontend sends the selected Dashboard page size as `pageSize`, using 50 when no valid browser preference exists. Supported UI values are 25, 50, 100, and 200. Page size is intentionally not encoded in the Dashboard route URL. Omitting `pageSize` preserves the legacy full-list response behavior for existing consumers. A cursor is valid only together with `pageSize`.
 
-Ordering is deterministic: `Timestamp DESC`, then immutable activity `Id DESC`. The current activity ID uses the persisted `ProductRecord.Id` GUID when available. The cursor is opaque to consumers and represents the final sort key on the returned page.
+Default ordering is deterministic: `Timestamp DESC`, then immutable activity `Id DESC`. FI-010 adds the alternate orderings and sort-aware cursor contract documented below. The current activity ID uses the persisted `ProductRecord.Id` GUID when available. The cursor is opaque to consumers and represents the final sort key on the returned page.
 
 Expected payload shape:
 
@@ -140,7 +142,7 @@ Expected payload shape:
 
 ## Activity classification
 
-Dashboard activity classification is owned by the backend endpoint. The frontend should render and filter the returned `Type`, `Status` and `Severity` values, not duplicate source-state mapping rules.
+Dashboard activity classification is owned by the backend endpoint. The backend owns Dashboard classification, filtering, sorting and paging. The frontend normalizes and renders the supplied activity order without duplicating source-state mapping rules.
 
 Current intended classification examples:
 
@@ -186,7 +188,7 @@ The active filters are:
 - reports
 - product
 
-Search is debounced by 300 ms. Debounced search edits supersede older responses through request identity checks without routinely aborting the previous browser request. Immediate range, select-filter, page and manual-refresh actions abort stale in-flight requests. Filter and range changes reset pagination to the first page. Previous/Next navigation keeps a client-side cursor stack, while the cursor values themselves remain backend-owned and opaque.
+Search is debounced by 300 ms. Debounced search edits supersede older responses through request identity checks without routinely aborting the previous browser request. Immediate range, select-filter, page and manual-refresh actions abort stale in-flight requests. Filter, range, and page-size changes reset pagination to the first page. Previous/Next navigation keeps a client-side cursor stack, while the cursor values themselves remain backend-owned and opaque. A page-size change invalidates the current cursor chain before the replacement request starts, so cursors created for another page-size generation cannot be reused even if the replacement request fails.
 
 Summary cards, status summary and operation summary always represent the complete filtered result. They are never calculated from only the visible page. `Paging.Total` is the complete filtered activity count; `Paging.Returned` is the number of rows on the current page.
 
@@ -199,6 +201,90 @@ The Dashboard keeps the last successful result visible while a request loads. If
 Automated coverage includes backend filtering/paging semantics, complete-result summaries, filter options, backward-compatible unpaged requests, stable equal-timestamp ordering, report filters, empty results, query validation, frontend query serialization, cursor history, paging normalization and search-value preservation.
 
 Manual verification by the project owner confirmed that Dashboard pagination works as intended at commit `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+
+## Server-side activity sorting
+
+FI-010 is implemented against `d68e18e7fc91512c91af57299ccdbc1b94ee7077`; local build and manual acceptance remain pending.
+
+Every frontend Dashboard request sends `sortBy` and `sortDirection`. Omitting them remains compatible with earlier clients and defaults to `time` / `desc`. An explicitly invalid value, including an empty or whitespace-only value, returns HTTP 400 before history is read. Tokens are trimmed and normalized to lowercase.
+
+| Header   | API field  | Authoritative value                   | Initial direction when selected |
+| -------- | ---------- | ------------------------------------- | ------------------------------- |
+| Time     | `time`     | `Timestamp`                           | `desc`                          |
+| Product  | `product`  | `DatasetName`                         | `asc`                           |
+| Activity | `activity` | `Title` (displayed title, not `Type`) | `asc`                           |
+| Status   | `status`   | `Status`                              | `asc`                           |
+| Links    | None       | Not sortable                          | None                            |
+
+`sortDirection` accepts `asc` and `desc`. Time ordering uses `Timestamp ASC/DESC`, then `Id DESC`. Text ordering uses the selected primary value `ASC/DESC`, then `Timestamp DESC`, then `Id DESC`. Text comparison uses `StringComparer.OrdinalIgnoreCase`; ID comparison uses `StringComparer.Ordinal`. The processor shares the ordering comparison with cursor continuation to preserve identical tie-break semantics.
+
+The processor remains responsible for filtering, sorting, cursor continuation and paging after `GetHistoryAsync` and activity classification. No repository interface, SQL, schema or response DTO changes are required. Summaries still use the complete filtered result. Frontend activity normalization preserves the backend array order, including equal timestamps; it does not sort the current page again.
+
+### Cursor compatibility
+
+New responses generate opaque Base64Url cursors with a version marker, sort field, direction, textual primary value where applicable, UTC timestamp ticks and activity ID. The internal representation is not a client contract. Unknown versions and malformed values return the existing invalid-cursor HTTP 400 response. A valid cursor for another field or direction returns HTTP 400 with `The 'cursor' query parameter does not match the requested sort.`
+
+Legacy timestamp/ID cursors remain valid only with `time` / `desc`, whether those defaults are implicit or explicit. New responses always generate the versioned format. The frontend never decodes or edits cursors. Cursor requests still require `pageSize`, and omitting `pageSize` still returns the complete filtered list.
+
+Paging reads the current history for each request; it does not introduce snapshot isolation across concurrent history changes. Use unchanged data and a fixed range when checking complete cursor traversal for duplicate or missing rows.
+
+### Session state and request lifecycle
+
+A fresh Dashboard session starts at Time DESC. Sort is Dashboard-local and is never stored in localStorage, Preferences or the route URL. Filter, search, range, refresh, page-size and Previous/Next operations preserve the active sort.
+
+Native buttons inside `th scope="col"` provide Tab, Enter and Space behavior. Only the active header has `aria-sort="ascending"` or `aria-sort="descending"`. Direction indicators are hidden from assistive technology; the accessible button name describes the next action. The existing focus capture/restore lifecycle uses `data-dashboard-sort-key` to restore the activated header after replacement without overriding focus the user has subsequently moved elsewhere. Headers remain available when the loaded result is empty.
+
+Selecting the active column toggles direction. Selecting another column starts with the direction in the table above. Each sort change immediately clears the cursor and history, cancels a pending search debounce, and uses the existing request identity and AbortController boundary to supersede older work. Paging is blocked while that sort transition is pending.
+
+A successful sort loads page 1. A failed sort retains the last successful rows, restores the last successful sort and cursor history, and shows the existing Dashboard error banner. Multiple pending sorts share the last successful rollback state, so an unfinished intermediate sort cannot become the fallback. FI-009 page-size generations still take precedence: failure never reactivates cursors from an older page-size generation. A newer filter/range/size/refresh request that supersedes a sort uses the same success/failure boundary.
+
+### FI-010 verification
+
+No dependencies were added. Frontend Node tests cover query defaults/serialization, selection rules, controller request races and failure restoration, page-size preservation, native header structure, focus identity, and payload order. Backend tests cover all eight orderings, stable duplicate primary/timestamp ties across cursor pages, legacy and versioned cursors, validation, summaries, and controller HTTP 400 responses before repository access.
+
+Run from the repository root on the configured development machine:
+
+```powershell
+Push-Location .\src\ProductCatalogue
+npm run check
+Pop-Location
+
+dotnet test .\tests\TestProductManager\TestProductManager.csproj -c Release --filter "FullyQualifiedName~DashboardQueryProcessorTests|FullyQualifiedName~DashboardControllerSortTests"
+dotnet build .\src\ProductCatalogueAPI\ProductCatalogueAPI.csproj -c Release
+```
+
+The backend projects require their existing Windows/.NET/ArcGIS development prerequisites. No prerequisites should be installed solely to validate this candidate in Work.
+
+### FI-010 manual acceptance
+
+| Check                                                          | Expected result                                                                       |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| 1. Fresh Dashboard load                                        | Time DESC; newest activities first.                                                   |
+| 2. Toggle Time twice                                           | ASC then DESC; equal timestamps retain ID DESC.                                       |
+| 3. Select and toggle Product                                   | ASC then DESC across the complete result.                                             |
+| 4. Select and toggle Activity                                  | ASC then DESC by displayed title.                                                     |
+| 5. Select and toggle Status                                    | ASC then DESC by status.                                                              |
+| 6. Inspect Links                                               | Plain header, no sort interaction or keyboard stop.                                   |
+| 7. Next/Previous under each sort                               | Active sort and stable ordering survive navigation.                                   |
+| 8. Traverse fixed, unchanged data                              | Every activity ID appears once; duplicate primary values and timestamps are included. |
+| 9. Change sort on page 2+                                      | Page 1 loads; Previous is unavailable and old cursors are discarded.                  |
+| 10. Change page size                                           | Sort survives; FI-009 restarts page 1 with the selected size.                         |
+| 11. Change filters/search/range                                | Sort survives and paging resets as before.                                            |
+| 12. Refresh                                                    | Sort survives; current cursor semantics remain unchanged.                             |
+| 13. Tab, Enter and Space                                       | All four native sort buttons are operable.                                            |
+| 14. Rerender after keyboard sort                               | Focus stays on that header; moving focus elsewhere is respected.                      |
+| 15. Light/dark mode                                            | Compact angular headers, visible direction and focus indicator.                       |
+| 16. Open existing row links                                    | History, Review and Analyze still work.                                               |
+| 17. Fail a sort on page 2+                                     | Old rows, sort and paging restored with the existing error banner.                    |
+| 18. Delay rapid Product ASC, Product DESC, Status ASC requests | Only the latest active request updates rows or errors.                                |
+
+## Dashboard page-size preference
+
+The Activity list pagination footer owns a compact `Rows per page` selector with exactly `25`, `50`, `100`, and `200`. The selected logical number is stored in browser-local Dashboard state under `pc.dashboard.pageSize.v1`. Missing, malformed, or unsupported values normalize to `50`.
+
+Changing the selector preserves the current range, search, and filters, clears the cursor stack, aborts superseded requests, and reloads page 1 with the selected size. The existing request ID/AbortController boundary prevents an older page or page-size response from replacing newer state. If the replacement request fails, the last successful Dashboard result remains visible, while its old cursor chain stays disabled until a request for the current page-size generation succeeds.
+
+The existing Preferences `Reset available preferences` action clears this Dashboard value when used on the Dashboard route. The Dashboard controller receives the reset and immediately returns to page size `50` without adding page size to the public route URL.
 
 ## Actionable summaries
 

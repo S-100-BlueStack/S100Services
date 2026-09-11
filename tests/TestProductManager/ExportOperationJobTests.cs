@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Jobs;
+using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Operations;
 using S100FC.ProductCatalogue;

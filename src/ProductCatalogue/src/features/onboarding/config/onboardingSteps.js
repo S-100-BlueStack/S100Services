@@ -1,4 +1,12 @@
 export const ONBOARDING_FLOW_VERSION = 2;
+export const MAIN_ONBOARDING_FLOW_VERSION = 3;
+
+export function getOnboardingFlowVersion(routeName) {
+  const normalizedRouteName = String(routeName ?? "main")
+    .trim()
+    .toLowerCase();
+  return normalizedRouteName === "main" ? MAIN_ONBOARDING_FLOW_VERSION : ONBOARDING_FLOW_VERSION;
+}
 
 export const ONBOARDING_WELCOME_CONTENT = Object.freeze({
   main: {
@@ -18,19 +26,22 @@ export const ONBOARDING_WELCOME_CONTENT = Object.freeze({
     description: "Take a short tour of adding Products and comparing them side by side.",
   },
 });
-
 export const ONBOARDING_STEPS = Object.freeze({
   main: [
     {
       id: "main-product-search",
-      title: "Find a Product",
-      description: "Use Product search to locate a Product and open it directly on the map.",
+      title: "Find Products and locations",
+      description:
+        "Product search finds loaded active Products and opens the selected Product. Locator searches addresses, populated places and postal locations in Denmark and Greenland; selecting a Locator result only moves the map.",
       selectors: [
         "[data-onboarding-target='product-search'] input",
         "#main-map-product-search input",
         ".pc-main-map-product-search input",
         ".main-map-product-search input",
+        "#main-map-locator-button",
       ],
+      selectorMode: "all",
+      maximumTargets: 2,
       placement: "adjacent-horizontal",
     },
     {
@@ -65,7 +76,7 @@ export const ONBOARDING_STEPS = Object.freeze({
       id: "main-popup-actions",
       title: "Use Product actions",
       description:
-        "The Product popup contains controls for copying, collecting and running operational actions such as Freeze, Send, Export and Rollback.",
+        "The Product popup contains controls for copying, collecting and running operational actions such as Freeze, Send, Export and Cancel Export.",
       selectors: [".popup-copy-btn", ".popup-product-collection-btn", ".popup-action-bar"],
       selectorMode: "all",
       positionSelectors: [
@@ -298,7 +309,6 @@ export const ONBOARDING_STEPS = Object.freeze({
     },
   ],
 });
-
 export function getOnboardingSteps(routeName) {
   return ONBOARDING_STEPS[routeName] ?? [];
 }

@@ -59,7 +59,11 @@ export function createProductJobRecord({
     datasetName: normalizedDatasetName,
     operationType: normalizedOperationType,
     exportTarget: normalizeNullableText(response?.exportTarget ?? exportTarget),
-    label: normalizeText(label) || createProductJobLabel(normalizedOperationType),
+    label:
+      isRollbackOperation(normalizedOperationType) ||
+      isExportEditionOperation(normalizedOperationType)
+        ? createProductJobLabel(normalizedOperationType)
+        : normalizeText(label) || createProductJobLabel(normalizedOperationType),
     createdAt: normalizeText(response?.createdAt) || new Date().toISOString(),
     correlationId: normalizeNullableText(response?.correlationId),
     statusUrl: normalizeNullableText(response?.statusUrl),
@@ -156,15 +160,17 @@ export function createProductJobLabel(operationType) {
     return "Simulating IC-ENC send";
   }
 
-  return isRollbackOperation(operationType) ? "Rolling back" : "Exporting S100 Edition";
+  return isRollbackOperation(operationType) ? "Canceling export" : "Exporting S-101 Edition";
 }
 
 export function createProductJobCompletionTitle(record, statusResponse) {
   const action = isSendToIcEncOperation(record?.operationType)
     ? "IC-ENC send simulation"
     : isRollbackOperation(record?.operationType)
-      ? "Rollback"
-      : "Export";
+      ? "Cancel Export"
+      : isExportEditionOperation(record?.operationType)
+        ? "S-101 Edition export"
+        : "Export";
   const status = normalizeText(statusResponse?.status);
 
   if (status.toLowerCase() === PRODUCT_JOB_STATUS.SUCCEEDED.toLowerCase()) {
@@ -176,6 +182,13 @@ export function createProductJobCompletionTitle(record, statusResponse) {
 
 export function getProductJobFailureMessage(statusResponse) {
   return normalizeJobError(statusResponse).message;
+}
+
+function isExportEditionOperation(operationType) {
+  return (
+    normalizeText(operationType).toLowerCase() ===
+    PRODUCT_JOB_OPERATION.EXPORT_EDITION.toLowerCase()
+  );
 }
 
 export function isRollbackOperation(operationType) {

@@ -12,13 +12,12 @@ test("compatibility AOI layer keeps existing popup and Product actions", () => {
     attributes: { datasetName: "DK4TEST" },
     layer: { customId: "aoi" },
   };
-
   assert.equal(attributesSupportLayerCapability(feature, "supportsPopup"), true);
   assert.equal(attributesSupportLayerCapability(feature, "supportsPopupActions"), true);
   assert.equal(attributesSupportLayerCapability(feature, "supportsProductActions"), true);
 });
 
-test("mock source layers allow safe popup actions, frontend filtering, and search while Product workflows stay disabled", () => {
+test("mock source layers allow safe popup actions, frontend filtering, and search while backend Product actions stay disabled", () => {
   for (const layerId of ["paper-charts-products", "s102-products"]) {
     const definition = getLayerDefinition(layerId);
     assert.ok(definition);
@@ -32,7 +31,7 @@ test("mock source layers allow safe popup actions, frontend filtering, and searc
   }
 });
 
-test("supportsPopupActions does not imply Product Collection support", () => {
+test("layer popup actions and Product Collection use independent capability boundaries", () => {
   const registry = createDataSourceRegistry({ isDevelopment: true });
 
   for (const sourceId of [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]) {
@@ -40,7 +39,9 @@ test("supportsPopupActions does not imply Product Collection support", () => {
     const definition = getLayerDefinition(source.layerDefinitions[0].id);
 
     assert.equal(definition.capabilities.supportsPopupActions, true);
-    assert.equal(source.capabilities.productCollection, false);
+    assert.equal(Object.hasOwn(definition.capabilities, "productCollection"), false);
+    assert.equal(Object.hasOwn(source.capabilities, "supportsPopupActions"), false);
+    assert.equal(source.capabilities.productCollection, true);
   }
 });
 

@@ -1,21 +1,10 @@
 /* =========================================================
    Main map Product search
    ========================================================= */
-#main-map-product-search {
-  position: fixed;
-  z-index: 850;
-  top: var(--main-map-product-search-top, 64px);
-  left: 50%;
-  width: min(380px, calc(100vw - 32px));
-  color: var(--pc-text);
-  transform: translateX(-50%);
-}
-
 .main-map-product-search__form {
   position: relative;
   min-width: 0;
 }
-
 .main-map-product-search__input {
   box-sizing: border-box;
   width: 100%;
@@ -36,7 +25,6 @@
   outline: 2px solid var(--pc-focus-ring);
   outline-offset: 2px;
 }
-
 .main-map-product-search__results {
   position: absolute;
   z-index: 10050;
@@ -57,7 +45,6 @@
 .main-map-product-search__results[hidden] {
   display: none;
 }
-
 .main-map-product-search__option {
   display: flex;
   box-sizing: border-box;
@@ -80,7 +67,6 @@
   white-space: nowrap;
   cursor: pointer;
 }
-
 .main-map-product-search__option:hover,
 .main-map-product-search__option:focus-visible {
   background: var(--pc-surface-alt);
@@ -92,13 +78,4 @@
   color: var(--pc-text-muted);
   font-size: 12px;
   line-height: 1.35;
-}
-
-@media (max-width: 640px) {
-  #main-map-product-search {
-    right: 10px;
-    left: 10px;
-    width: auto;
-    transform: none;
-  }
 }

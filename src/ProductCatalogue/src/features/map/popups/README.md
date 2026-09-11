@@ -34,7 +34,7 @@ The action UI provides:
   compatibility API refresh or job subscriptions.
 - `popupExportConfig.js` creates declarative Edition/Update leaves from Product context.
 - `popupExportContract.js` owns the implemented compatibility dispatch guard.
-- `features/data/api/exportApi.js` starts asynchronous Export and Rollback jobs.
+- `features/data/api/exportApi.js` starts asynchronous Export and Cancel Export jobs through the legacy Rollback job contract.
 - `features/data/api/productJobApi.js` calls the job start and status endpoints.
 - `features/products/services/productJobService.js` persists, resumes, and polls active jobs.
 - `features/products/state/productOperationState.js` combines local operations with restored backend
@@ -72,21 +72,24 @@ Compatibility AOI retains the established actions:
 
 - `Freeze` / `Unfreeze`;
 - `Send to IC-ENC`;
-- `Rollback`;
+- `Cancel Export`;
 - `Analyze` and `History` through `Tools`;
 - `Export...`.
 
-Paper Charts and S-102 expose only the configured `Export...` root with disabled placeholders. Their
-layer capability `supportsPopupActions: true` permits that safe action-bar content without granting
-backend Product workflows. Product Collection is independently gated by the resolved Product
-context's `productCollection` capability, which is `false` for both mock sources. They do not expose
-Freeze, Unfreeze, Send to IC-ENC, Rollback, History, reports, Analyze, Review, or Product Collection
-actions.
+Paper Charts and S-102 keep backend mutation and real Export capabilities disabled, but FI-011D
+enables the safe Product Collection, Analyze, Review, and History surfaces through independent
+ProductContext capabilities. Their `Export...` root remains a pair of disabled Edition/Update
+placeholders. `Tools` exposes Analyze and History; History opens the existing quick-panel shell and
+renders a source-specific unavailable state without a compatibility History request. Product
+Collection remains independent from `supportsPopupActions` and uses source-aware Product identity.
+Freeze, Unfreeze, Send to IC-ENC, Cancel Export, real Export dispatch, backend History, IC-ENC report
+loading, and internal-validation loading remain disabled.
 
 The popup-header collection action re-resolves the currently selected Graphic through Product context
-before every add/remove mutation. Selection changes therefore remove stale buttons, and a stale AOI
-button cannot mutate Product Collection after the selected feature becomes a mock Product. `Copy
-dataset name` remains independent from Product Collection capability.
+before every add/remove mutation and guards both dataset name and source-aware identity. Selection
+changes therefore cannot let a stale button mutate a different Product. Paper Charts and S-102
+participate through the same ProductContext-based Collection contract. `Copy dataset name` remains
+independent from Product Collection capability.
 
 Unknown Product context or unknown capability fails closed and renders no backend-dependent action.
 Product-search selection uses the same resolution and availability path and cannot bypass these
@@ -170,7 +173,7 @@ confirm
 -> end local Product operation
 ```
 
-For asynchronous Export and Rollback:
+For asynchronous Export and Cancel Export (legacy Rollback job):
 
 ```text
 confirm
@@ -222,9 +225,9 @@ replace it.
 Source deactivation clears only popup-local UI state for that source. It does not cancel or delete a
 backend-authoritative job.
 
-## Rollback warnings
+## Cancel Export warnings
 
-A successful Rollback can return a warning, currently including:
+A successful Cancel Export can return a warning from the legacy Rollback job, currently including:
 
 ```text
 ROLLBACK_CLEANUP_FAILED
@@ -272,7 +275,7 @@ Operation precondition failures are returned as `PRODUCT_OPERATION_REJECTED` wit
 
 ## Backend-authoritative active job visibility
 
-Active Export and Rollback jobs are now discovered from the shared backend with:
+Active Export and Cancel Export jobs are now discovered from the shared backend through their existing backend operation identifiers with:
 
 ```text
 GET /jobs/active?datasetName={datasetName}
