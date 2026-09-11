@@ -4,6 +4,7 @@ using Microsoft.OpenApi.Models;
 using ProductCatalogueAPI.Controllers;
 using ProductCatalogueAPI.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
+using System.Reflection;
 
 namespace TestProductCatalogueAPI
 {

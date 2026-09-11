@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
@@ -16,7 +17,7 @@ public sealed class ChangeDetectionWorkflowTests
     public async Task DetectJobAccumulatesYamlForIndependentS101AndS57TracksWithoutExporting() {
         var repository = new InMemoryProductRepository();
         var products = new FakeElectronicProductManager();
-        var job = new DetectProductChangesJob(repository, repository, new FakeProductManager(products), new FakeLockService(), new FixedTimeProvider(), NullLogger<DetectProductChangesJob>.Instance);
+        var job = new DetectProductChangesJob(repository, repository, new FakeProductManager(products), new FakeLockService(), new FixedTimeProvider(), NullLogger<DetectProductChangesJob>.Instance, EnabledDetectionState());
 
         await job.RunAsync(CancellationToken.None);
         await job.RunAsync(CancellationToken.None);
@@ -47,13 +48,16 @@ public sealed class ChangeDetectionWorkflowTests
     public async Task DetectJobPreservesWatermarkWhenAProductCannotBeProcessed() {
         var repository = new InMemoryProductRepository();
         var products = new FakeElectronicProductManager();
-        var job = new DetectProductChangesJob(repository, repository, new FakeProductManager(products), new RejectingLockService(), new FixedTimeProvider(), NullLogger<DetectProductChangesJob>.Instance);
+        var job = new DetectProductChangesJob(repository, repository, new FakeProductManager(products), new RejectingLockService(), new FixedTimeProvider(), NullLogger<DetectProductChangesJob>.Instance, EnabledDetectionState());
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => job.RunAsync(CancellationToken.None));
 
         Assert.Null(await repository.GetLastSuccessfulRunUtcAsync(nameof(DetectProductChangesJob)));
         Assert.Empty(await repository.GetOpenChangeSummariesAsync());
     }
+
+    /// <summary>Explicitly opts workflow tests into detection without changing the disabled production default.</summary>
+    private static DetectProductChangesState EnabledDetectionState() => DetectProductChangesState.FromConfiguration(new ConfigurationManager { ["EnableDetectProductChanges"] = "true" });
 
     private sealed class RecordingOperations : IExportOperationService
     {

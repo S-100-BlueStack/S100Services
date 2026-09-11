@@ -82,7 +82,8 @@ public class DashboardControllerSortTests
         NullLogger<ElectronicProductsController>.Instance,
         null!,
         new UnusedProductManager(),
-        DispatchProxy.Create<IProductRepository, RejectRepositoryAccess>())
+        DispatchProxy.Create<IProductRepository, RejectRepositoryAccess>(),
+        DispatchProxy.Create<IProductWorkflowRepository, RejectRepositoryAccess>())
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
     };

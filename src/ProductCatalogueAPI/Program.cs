@@ -206,7 +206,8 @@ namespace ProductCatalogueAPI
             // Independent product engines share no version or execution timeline.
             builder.Services.AddSingleton<IExportEngine>(services => new IsoIec8211ExportEngine(
                 services.GetRequiredService<ILogger<IsoIec8211ExportEngine>>(),
-                builder.Configuration["ArtifactsPath"] ?? throw new InvalidOperationException("ArtifactsPath is not configured.")));
+                builder.Configuration["ArtifactsPath"] ?? throw new InvalidOperationException("ArtifactsPath is not configured."),
+                S100CompilerConfiguration.ResolveExecutablePath(builder.Configuration)));
             builder.Services.AddSingleton<IExportEngine, Hdf5ExportEngine>();
             builder.Services.AddSingleton<IExportEngine, GmlExportEngine>();
             builder.Services.AddSingleton<IExportEngineRegistry, ExportEngineRegistry>();

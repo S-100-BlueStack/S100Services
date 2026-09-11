@@ -5,8 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
-using ProductCatalogueAPI.Services.Export;
-using ProductCatalogueAPI.Services.SevenCs;
+using ProductCatalogueAPI.Services.Locking;
 using S100FC.ProductCatalogue;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -264,19 +263,17 @@ namespace TestProductCatalogueAPI
             return DetectProductChangesState.FromConfiguration(configuration);
         }
 
-        private static void Reconcile(
-            DetectProductChangesState state,
-            RecordingSchedule schedule,
-            RecordingLogger? logger = null
-        ) => DetectProductChangesRecurringJob.Reconcile(
+        private static void Reconcile(DetectProductChangesState state, RecordingSchedule schedule, RecordingLogger? logger = null) => DetectProductChangesRecurringJob.Reconcile(
             state, logger ?? new RecordingLogger(), schedule.AddOrUpdate, schedule.RemoveIfExists
         );
 
+        /// <summary>Fails on dependency access so disabled jobs cannot silently perform any work.</summary>
         private static DetectProductChangesJob CreateJob(DetectProductChangesState state, List<string> calls) => new(
             DependencySpy<IProductRepository>.Create(calls),
+            DependencySpy<IProductWorkflowRepository>.Create(calls),
             DependencySpy<IProductManager>.Create(calls),
-            DependencySpy<IExportService>.Create(calls),
-            DependencySpy<ISevenCsService>.Create(calls),
+            DependencySpy<IDatasetLockService>.Create(calls),
+            TimeProvider.System,
             DependencySpy<ILogger<DetectProductChangesJob>>.Create(calls),
             state
         );

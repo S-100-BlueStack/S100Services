@@ -8,13 +8,20 @@ namespace ProductCatalogueAPI.Services.Export;
 /// <summary>
 /// Encodes S-101 directly and maps S-101 source YAML to the existing S-57 compiler pipeline.
 /// </summary>
-public sealed class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, string artifactsPath) : IExportEngine
+/// <param name="logger">Receives compiler diagnostics without exposing internal paths to API callers.</param>
+/// <param name="artifactsPath">Contains the feature catalogue and S-57 mapping pipeline.</param>
+/// <param name="s100CompilerExecutablePath">The configured S-101 compiler executable.</param>
+public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, string artifactsPath, string s100CompilerExecutablePath = S100CompilerConfiguration.CompatibilityDefaultExecutablePath) : IExportEngine
 {
-    private const string S100CompilerPath = @"C:\Program Files\s100compiler\s100compiler.exe";
     private const string S100MapperPath = @"C:\Program Files\s100mapper\s100mapper.exe";
     private const string S57CompilerPath = @"C:\Program Files\s57compiler\s57compiler.exe";
     private readonly ILogger<IsoIec8211ExportEngine> _logger = logger;
     private readonly string _artifactsPath = artifactsPath;
+    private readonly string _s100CompilerExecutablePath = s100CompilerExecutablePath;
+
+    /// <summary>Checks the configured S-101 executable without creating output or starting a process.</summary>
+    /// <exception cref="S100CompilerPrerequisiteException">The configured path is blank, invalid, missing, or not an executable path.</exception>
+    public void EnsureS100CompilerAvailable() => _ = GetValidatedS100CompilerExecutablePath();
 
     /// <inheritdoc/>
     public ExportEngineKind Kind => ExportEngineKind.IsoIec8211;
@@ -46,7 +53,10 @@ public sealed class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logge
     }
 
     private async Task<ExportEngineResult> ExportS101Async(ExportEngineRequest request, CancellationToken cancellationToken) {
+        cancellationToken.ThrowIfCancellationRequested();
         ValidateRequest(request);
+        // Validate before clearing candidate output so a configuration failure preserves existing files.
+        var compilerExecutablePath = GetValidatedS100CompilerExecutablePath();
         var outputDirectory = ExportOutputPath.GetCandidateDirectory(request.OutputRoot, request.DatasetName, request.ProductSpecification, request.Edition, request.Update);
         PrepareOutputDirectory(request, outputDirectory);
 
@@ -65,7 +75,7 @@ public sealed class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logge
             arguments += $" -L \"{previousIndexPath}\"";
         }
 
-        await RunProcessAsync(S100CompilerPath, arguments, outputDirectory, request.DatasetName, cancellationToken);
+        await RunProcessAsync(compilerExecutablePath, arguments, outputDirectory, request.DatasetName, cancellationToken, isS100Compiler: true);
 
         var datasetPath = Path.Combine(ExportOutputPath.GetS101DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update), $"{request.DatasetName}.{request.Update:000}");
         var datasetFile = new FileInfo(datasetPath);
@@ -115,24 +125,67 @@ public sealed class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logge
         ]);
     }
 
-    private async Task RunProcessAsync(string executable, string arguments, string workingDirectory, string datasetName, CancellationToken cancellationToken) {
-        if (!File.Exists(executable))
+    /// <summary>Validates the compiler path and returns an absolute path while keeping technical errors in server logs.</summary>
+    private string GetValidatedS100CompilerExecutablePath() {
+        if (string.IsNullOrWhiteSpace(_s100CompilerExecutablePath)) {
+            _logger.LogError("S100 compiler prerequisite failed because {ConfigurationKey} is blank.", S100CompilerConfiguration.ExecutablePathKey);
+            throw new S100CompilerPrerequisiteException();
+        }
+
+        string fullPath;
+        try {
+            fullPath = Path.GetFullPath(_s100CompilerExecutablePath.Trim());
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) {
+            _logger.LogError(ex, "S100 compiler prerequisite failed because {ConfigurationKey} is not a valid path.", S100CompilerConfiguration.ExecutablePathKey);
+            throw new S100CompilerPrerequisiteException();
+        }
+
+        if (!string.Equals(Path.GetExtension(fullPath), ".exe", StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath)) {
+            _logger.LogError("S100 compiler prerequisite failed because the configured executable is unavailable. ExecutablePath: {ExecutablePath}", fullPath);
+            throw new S100CompilerPrerequisiteException();
+        }
+
+        return fullPath;
+    }
+
+    /// <summary>Starts the external compiler. Tests override this boundary without launching installed tools.</summary>
+    /// <param name="startInfo">The configured compiler command and redirected streams.</param>
+    /// <returns>The running compiler process.</returns>
+    protected virtual Process StartCompilerProcess(ProcessStartInfo startInfo) => Process.Start(startInfo)
+        ?? throw new InvalidOperationException("The configured compiler process did not start.");
+
+    /// <summary>Preserves the safe S-101 prerequisite failure contract when process creation fails.</summary>
+    private Process StartCompilerProcessSafely(ProcessStartInfo startInfo, string datasetName, bool isS100Compiler) {
+        try {
+            return StartCompilerProcess(startInfo);
+        }
+        catch (Exception ex) when (isS100Compiler) {
+            _logger.LogError(ex, "Configured S100 compiler could not be started for {DatasetName}.", datasetName);
+            throw new S100CompilerPrerequisiteException();
+        }
+    }
+
+    private async Task RunProcessAsync(string executable, string arguments, string workingDirectory, string datasetName, CancellationToken cancellationToken, bool isS100Compiler = false) {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!File.Exists(executable)) {
+            if (isS100Compiler)
+                throw new S100CompilerPrerequisiteException();
             throw new FileNotFoundException("The configured export compiler was not found.", executable);
+        }
 
         _logger.LogInformation("Starting export compiler {CompilerName} for {DatasetName}.", Path.GetFileName(executable), datasetName);
-        using var process = new Process {
-            StartInfo = new ProcessStartInfo {
-                FileName = executable,
-                Arguments = arguments,
-                WorkingDirectory = workingDirectory,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            }
+        var startInfo = new ProcessStartInfo {
+            FileName = executable,
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
         };
 
-        process.Start();
+        using var process = StartCompilerProcessSafely(startInfo, datasetName, isS100Compiler);
         var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
         await process.WaitForExitAsync(cancellationToken);

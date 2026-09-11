@@ -17,7 +17,7 @@ namespace TestProductCatalogueAPI
             using var document = JsonDocument.Parse(json);
 
             var items = document.RootElement.EnumerateArray().ToArray();
-            Assert.Equal(3, items.Length);
+            Assert.Equal(4, items.Length);
             Assert.Equal(new[] { "S57", "S101", "S102", "S122" }, items.Select(item => item.GetProperty("Name").GetString()));
             foreach (var item in items) {
                 Assert.Single(item.EnumerateObject());

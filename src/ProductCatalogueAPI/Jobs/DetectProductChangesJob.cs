@@ -1,3 +1,4 @@
+using Hangfire;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Services.Locking;
@@ -9,17 +10,29 @@ namespace ProductCatalogueAPI.Jobs;
 /// <summary>
 /// Accumulates detected source edits into daily YAML summaries. It never creates exports or changes S-128.
 /// </summary>
-public sealed class DetectProductChangesJob(IProductRepository productRepository, IProductWorkflowRepository workflowRepository, IProductManager productManager, IDatasetLockService datasetLockService, TimeProvider timeProvider, ILogger<DetectProductChangesJob> logger) : IBackgroundJob
+/// <param name="productRepository">Persists the successful scan watermark.</param>
+/// <param name="workflowRepository">Persists independent product tracks and change summaries.</param>
+/// <param name="productManager">Provides catalogue products and pending geodatabase edits.</param>
+/// <param name="datasetLockService">Serializes summary updates for each source dataset.</param>
+/// <param name="timeProvider">Supplies the scan timestamp and work-date boundary.</param>
+/// <param name="logger">Receives scan diagnostics.</param>
+/// <param name="detectionState">The immutable startup decision that guards scheduled and persisted invocations.</param>
+public sealed class DetectProductChangesJob(IProductRepository productRepository, IProductWorkflowRepository workflowRepository, IProductManager productManager, IDatasetLockService datasetLockService, TimeProvider timeProvider, ILogger<DetectProductChangesJob> logger, DetectProductChangesState detectionState) : IBackgroundJob
 {
     private readonly IProductRepository _productRepository = productRepository;
     private readonly IProductWorkflowRepository _workflowRepository = workflowRepository;
-    private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
+    private readonly IProductManager _productManager = productManager;
     private readonly IDatasetLockService _datasetLockService = datasetLockService;
     private readonly TimeProvider _timeProvider = timeProvider;
     private readonly ILogger<DetectProductChangesJob> _logger = logger;
+    private readonly DetectProductChangesState _detectionState = detectionState;
 
     /// <inheritdoc/>
+    [AutomaticRetry(Attempts = 0, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
     public async Task RunAsync(CancellationToken cancellationToken) {
+        // Removing the recurring schedule does not remove already persisted invocations.
+        _detectionState.EnsureEnabled();
+        cancellationToken.ThrowIfCancellationRequested();
         var jobName = nameof(DetectProductChangesJob);
         var scanStartedUtc = _timeProvider.GetUtcNow().UtcDateTime;
         var sinceUtc = await _productRepository.GetLastSuccessfulRunUtcAsync(jobName);
@@ -28,7 +41,8 @@ public sealed class DetectProductChangesJob(IProductRepository productRepository
             _logger.LogInformation("Initialized {JobName} scan window at the start of the Copenhagen work day. SinceUtc: {SinceUtc}.", jobName, sinceUtc);
         }
 
-        var pendingEdits = await _electronicProductManager.GetPendingEditsAsync(sinceUtc.Value);
+        var electronicProductManager = _productManager.ElectronicProductManager;
+        var pendingEdits = await electronicProductManager.GetPendingEditsAsync(sinceUtc.Value);
         var scanCompleted = true;
         foreach (var (datasetName, dirtyFeatures) in pendingEdits) {
             cancellationToken.ThrowIfCancellationRequested();
@@ -45,12 +59,12 @@ public sealed class DetectProductChangesJob(IProductRepository productRepository
             var targets = new List<(string DatasetName, ProductSpecification ProductSpecification)> {
                 (datasetName, ProductSpecification.S101)
             };
-            targets.AddRange(_electronicProductManager.GetMappedElectronicProducts(datasetName, ProductSpecification.S57.ToString())
+            targets.AddRange(electronicProductManager.GetMappedElectronicProducts(datasetName, ProductSpecification.S57.ToString())
                 .Where(product => !string.IsNullOrWhiteSpace(product.datasetName))
                 .Select(product => (product.datasetName!.Trim(), ProductSpecification.S57)));
 
             foreach (var target in targets.Distinct()) {
-                var publicVersion = await _electronicProductManager.ReadElectronicProductVersionAsync(target.DatasetName, target.ProductSpecification.ToString(), cancellationToken);
+                var publicVersion = await electronicProductManager.ReadElectronicProductVersionAsync(target.DatasetName, target.ProductSpecification.ToString(), cancellationToken);
                 if (publicVersion is null) {
                     _logger.LogError("Skipped change-summary update because the mapped S-128 product was not found. SourceDatasetName: {SourceDatasetName}. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.", datasetName, target.DatasetName, target.ProductSpecification);
                     scanCompleted = false;

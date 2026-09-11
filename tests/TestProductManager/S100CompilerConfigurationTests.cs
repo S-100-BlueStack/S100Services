@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using ProductCatalogueAPI;
+using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Services.Export;
 
 namespace TestProductCatalogueAPI
@@ -44,10 +45,10 @@ namespace TestProductCatalogueAPI
         [Fact]
         public void S100CompilerConfiguration_InvalidExecutableFailsExportPrerequisite() {
             var invalidPath = Path.Combine(_temporaryRoot, "missing", "s100compiler.exe");
-            var service = CreateExportService(invalidPath);
+            var engine = CreateExportEngine(invalidPath);
 
             var exception = Assert.Throws<S100CompilerPrerequisiteException>(
-                service.EnsureS100CompilerAvailable
+                engine.EnsureS100CompilerAvailable
             );
 
             Assert.Equal(S100CompilerContract.UnavailableCode, exception.Code);
@@ -57,28 +58,28 @@ namespace TestProductCatalogueAPI
 
         [Fact]
         public void S100CompilerConfiguration_BlankConfiguredExecutableFailsExportPrerequisite() {
-            var service = CreateExportService("   ");
+            var engine = CreateExportEngine("   ");
 
             var exception = Assert.Throws<S100CompilerPrerequisiteException>(
-                service.EnsureS100CompilerAvailable
+                engine.EnsureS100CompilerAvailable
             );
 
             Assert.Equal(S100CompilerContract.UnavailableCode, exception.Code);
             Assert.Equal(S100CompilerContract.UnavailableMessage, exception.Message);
-            Assert.Equal(0, service.ProcessStartCalls);
+            Assert.Equal(0, engine.ProcessStartCalls);
         }
 
         [Fact]
         public void S100CompilerConfiguration_NonExecutableFileFailsBeforeProcessStart() {
             var invalidPath = Path.Combine(_temporaryRoot, "s100compiler.txt");
             File.WriteAllText(invalidPath, "not an executable");
-            var service = CreateExportService(invalidPath);
+            var engine = CreateExportEngine(invalidPath);
 
             Assert.Throws<S100CompilerPrerequisiteException>(
-                service.EnsureS100CompilerAvailable
+                engine.EnsureS100CompilerAvailable
             );
 
-            Assert.Equal(0, service.ProcessStartCalls);
+            Assert.Equal(0, engine.ProcessStartCalls);
         }
 
         [Fact]
@@ -97,17 +98,54 @@ namespace TestProductCatalogueAPI
         }
 
         [Fact]
-        public void InvalidCompilerPathDoesNotStartProcessOrCreateExportOutput() {
+        public async Task InvalidCompilerPathDoesNotStartProcessOrCreateExportOutput() {
             var invalidPath = Path.Combine(_temporaryRoot, "missing", "s100compiler.exe");
             var outputPath = Path.Combine(_temporaryRoot, "output");
-            var service = CreateExportService(invalidPath);
+            var engine = CreateExportEngine(invalidPath);
 
-            Assert.Throws<S100CompilerPrerequisiteException>(() =>
-                service.CreateS100Export("101DK001", 1, 0, outputPath, "dataset-yaml")
+            await Assert.ThrowsAsync<S100CompilerPrerequisiteException>(() =>
+                engine.ExportAsync(new ExportEngineRequest("101DK001", ProductSpecification.S101, 1, 0, outputPath, "dataset-yaml"))
             );
 
-            Assert.Equal(0, service.ProcessStartCalls);
+            Assert.Equal(0, engine.ProcessStartCalls);
             Assert.False(Directory.Exists(outputPath));
+        }
+
+        /// <summary>Guards against deleting an earlier candidate before a missing compiler is detected.</summary>
+        [Fact]
+        public async Task InvalidCompilerPathPreservesExistingCandidateOutput() {
+            var outputPath = Path.Combine(_temporaryRoot, "output");
+            var candidateDirectory = ExportOutputPath.GetCandidateDirectory(outputPath, "101DK001", ProductSpecification.S101, 1, 0);
+            Directory.CreateDirectory(candidateDirectory);
+            var existingFile = Path.Combine(candidateDirectory, "existing.txt");
+            await File.WriteAllTextAsync(existingFile, "existing candidate");
+            var engine = CreateExportEngine(Path.Combine(_temporaryRoot, "missing.exe"));
+
+            await Assert.ThrowsAsync<S100CompilerPrerequisiteException>(() => engine.ExportAsync(new ExportEngineRequest("101DK001", ProductSpecification.S101, 1, 0, outputPath, "dataset-yaml")));
+
+            Assert.Equal("existing candidate", await File.ReadAllTextAsync(existingFile));
+            Assert.Equal(0, engine.ProcessStartCalls);
+        }
+
+        /// <summary>Checks that the migrated engine uses the override and keeps process-start errors safe.</summary>
+        [Fact]
+        public async Task ConfiguredCompilerIsUsedAndStartFailureDoesNotExposeTechnicalDetails() {
+            var executablePath = Path.Combine(_temporaryRoot, "configured.exe");
+            // The overridden process boundary prevents this fixture from ever being executed.
+            await File.WriteAllTextAsync(executablePath, "compiler fixture");
+            await File.WriteAllTextAsync(Path.Combine(_temporaryRoot, "101_FC_2.0.0.xml"), "catalogue fixture");
+            var engine = CreateExportEngine(executablePath);
+            engine.EnsureS100CompilerAvailable();
+            Assert.Equal(0, engine.ProcessStartCalls);
+
+            var exception = await Assert.ThrowsAsync<S100CompilerPrerequisiteException>(() => engine.ExportAsync(new ExportEngineRequest("101DK001", ProductSpecification.S101, 1, 0, Path.Combine(_temporaryRoot, "output"), "dataset-yaml")));
+
+            Assert.Equal(1, engine.ProcessStartCalls);
+            Assert.Equal(Path.GetFullPath(executablePath), engine.LastStartInfo!.FileName);
+            Assert.Equal(S100CompilerContract.UnavailableCode, exception.Code);
+            Assert.Equal(S100CompilerContract.UnavailableMessage, exception.Message);
+            Assert.Null(exception.InnerException);
+            Assert.DoesNotContain(executablePath, exception.Message, StringComparison.OrdinalIgnoreCase);
         }
 
         public void Dispose() {
@@ -115,22 +153,22 @@ namespace TestProductCatalogueAPI
             Directory.Delete(_temporaryRoot, recursive: true);
         }
 
-        private RecordingExportService CreateExportService(string executablePath) => new(
-            NullLogger<ExportService>.Instance,
+        /// <summary>Exercises the current ISO/IEC 8211 engine without invoking a real compiler.</summary>
+        private RecordingExportEngine CreateExportEngine(string executablePath) => new(
+            NullLogger<IsoIec8211ExportEngine>.Instance,
             _temporaryRoot,
             executablePath
         );
 
-        private sealed class RecordingExportService(
-            Microsoft.Extensions.Logging.ILogger<ExportService> logger,
-            string artifactsPath,
-            string executablePath
-        ) : ExportService(logger, artifactsPath, executablePath)
+        private sealed class RecordingExportEngine(Microsoft.Extensions.Logging.ILogger<IsoIec8211ExportEngine> logger, string artifactsPath, string executablePath) : IsoIec8211ExportEngine(logger, artifactsPath, executablePath)
         {
             public int ProcessStartCalls { get; private set; }
+            public ProcessStartInfo? LastStartInfo { get; private set; }
 
+            /// <inheritdoc/>
             protected override Process StartCompilerProcess(ProcessStartInfo startInfo) {
                 ProcessStartCalls++;
+                LastStartInfo = startInfo;
                 throw new InvalidOperationException("The test must not start a process.");
             }
         }
