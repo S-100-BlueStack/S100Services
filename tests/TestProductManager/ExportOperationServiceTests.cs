@@ -177,7 +177,9 @@ public sealed class ExportOperationServiceTests
         public Task<IReadOnlyList<ProductChangeSummary>> GetOpenChangeSummariesAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ProductChangeSummary>>([]);
         public Task CloseChangeSummaryAsync(Guid summaryId, DateTime closedAtUtc, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<IReadOnlyList<ProductExportTrackRecord>> GetTracksAsync(string datasetName, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ProductExportTrackRecord>>([]);
-        public Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactsAsync(Guid trackId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ProductArtifactReference>>([]);
+        public Task<Guid?> GetLatestRevisionIdAsync(Guid trackId, CancellationToken cancellationToken = default) => Task.FromResult<Guid?>(null);
+        public Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactsAsync(Guid productRevisionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ProductArtifactReference>>([]);
+        public Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactHistoryAsync(Guid trackId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ProductArtifactReference>>([]);
         public Task<ProductArtifactContent?> GetValidationArtifactAsync(string datasetName, Guid artifactId, CancellationToken cancellationToken = default) => Task.FromResult<ProductArtifactContent?>(null);
 
         private ProductExportTrackRecord EnsureTrack(string datasetName, ProductSpecification specification) => Track ??= new ProductExportTrackRecord { Id = Guid.NewGuid(), DatasetName = datasetName, ProductSpecification = specification, Engine = ExportEngineKind.IsoIec8211, State = InitialState, PublishedEdition = 4, PublishedUpdate = 2, CandidateEdition = CandidateEdition, CandidateUpdate = CandidateUpdate };

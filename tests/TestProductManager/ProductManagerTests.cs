@@ -31,27 +31,6 @@ namespace TestProductCatalogueAPI
 
 
         [Fact]
-        public async Task Test_ProductManagerREST() {
-            var productManager = await ProductCatalogue.ProductManagerREST.CreateInstanceAsync(() => {
-                var url = Environment.GetEnvironmentVariable("featureService_dev", EnvironmentVariableTarget.User)!;
-
-                var client = new HttpClient();
-                var opt = new S100Framework.REST.Configuration.FeatureServiceClientOptions {
-                    ServiceUri = new Uri(url),
-                };
-                return new S100Framework.REST.Clients.FeatureServiceClient(client, opt);
-
-            });
-
-
-
-            Assert.NotNull(productManager);
-
-            System.Diagnostics.Debugger.Break();
-        }
-
-
-        [Fact]
         public async Task Test_GenerateKey() {
             var creds = Environment.GetEnvironmentVariable("7cs_credentials", EnvironmentVariableTarget.User);
 

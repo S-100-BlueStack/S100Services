@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ProductCatalogueAPI.Models
 {
     public static class ResponseTypes
@@ -19,18 +21,27 @@ namespace ProductCatalogueAPI.Models
         public class AOIResponse
         {
             public required string Geometry { get; set; }
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public required Attributes? Attributes { get; set; }
         }
 
         public class Attributes
         {
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public string? DatasetName { get; set; }
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public int? DisplayScale { get; set; }
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public int? UsageBand { get; set; }
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public int? Edition { get; set; }
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public int? Update { get; set; }
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public DateOnly? IssueDate { get; set; }
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public ProductStatus? Status { get; set; }
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public string? ErrorMessage { get; set; }
         }
 
@@ -163,6 +174,18 @@ namespace ProductCatalogueAPI.Models
         }
 
         public sealed record ProductArtifactLinkResponse(Guid Id, string FileName, string MediaType, DateTime CreatedAtUtc, string Url);
+
+        public sealed record ProductArtifactHistoryResponse(
+            Guid Id,
+            Guid TrackId,
+            Guid? RevisionId,
+            string DatasetName,
+            string ProductSpecification,
+            string Kind,
+            string FileName,
+            string MediaType,
+            DateTime CreatedAtUtc,
+            string Url);
 
         public sealed record ProductExport(
             string Type,

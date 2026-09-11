@@ -31,8 +31,14 @@ public interface IProductWorkflowRepository
     /// <summary>Stores a typed artifact without imposing format-specific columns on the schema.</summary>
     Task AddArtifactAsync(ProductArtifactWrite artifact, CancellationToken cancellationToken = default);
 
-    /// <summary>Gets downloadable validation diagnostics for a track without loading their content.</summary>
-    Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactsAsync(Guid trackId, CancellationToken cancellationToken = default);
+    /// <summary>Gets the most recently created candidate revision for a product track.</summary>
+    Task<Guid?> GetLatestRevisionIdAsync(Guid trackId, CancellationToken cancellationToken = default);
+
+    /// <summary>Gets downloadable validation diagnostics belonging to one candidate revision.</summary>
+    Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactsAsync(Guid productRevisionId, CancellationToken cancellationToken = default);
+
+    /// <summary>Gets all downloadable validation diagnostics ever created for a product track.</summary>
+    Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactHistoryAsync(Guid trackId, CancellationToken cancellationToken = default);
 
     /// <summary>Gets one validation diagnostic after verifying that it belongs to the requested dataset.</summary>
     Task<ProductArtifactContent?> GetValidationArtifactAsync(string datasetName, Guid artifactId, CancellationToken cancellationToken = default);

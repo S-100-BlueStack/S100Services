@@ -226,21 +226,14 @@ namespace ProductCatalogueAPI.Controllers
             var s128Status = Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString());
             // var s57Status = Enum.Parse((s57current?.State ?? Data.Models.ProductState.Idle).ToString());
 
-            var relatedDatasetNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { electronicProduct.datasetName! };
-            foreach (var specification in new[] { ProductSpecification.S57, ProductSpecification.S101 }) {
-                foreach (var mappedProduct in _electronicProductManager.GetMappedElectronicProducts(electronicProduct.datasetName!, specification.ToString())) {
-                    if (!string.IsNullOrWhiteSpace(mappedProduct.datasetName))
-                        relatedDatasetNames.Add(mappedProduct.datasetName.Trim());
-                }
-            }
-
-            var tracks = new List<ProductExportTrackRecord>();
-            foreach (var relatedDatasetName in relatedDatasetNames)
-                tracks.AddRange(await _workflowRepository.GetTracksAsync(relatedDatasetName));
+            var tracks = await GetRelatedExportTracksAsync(electronicProduct);
             var exports = new List<ProductExport>();
-            foreach (var track in tracks.DistinctBy(track => track.Id).Where(track => track.ProductSpecification is ProductSpecification.S57 or ProductSpecification.S101).OrderBy(track => track.ProductSpecification))
+            foreach (var track in tracks)
             {
-                var artifacts = await _workflowRepository.GetValidationArtifactsAsync(track.Id);
+                var latestRevisionId = await _workflowRepository.GetLatestRevisionIdAsync(track.Id);
+                var artifacts = latestRevisionId is Guid revisionId
+                    ? await _workflowRepository.GetValidationArtifactsAsync(revisionId)
+                    : [];
                 var artifactLinks = artifacts.Select(artifact => new ProductArtifactLinkResponse(
                     artifact.Id,
                     artifact.FileName,
@@ -287,6 +280,52 @@ namespace ProductCatalogueAPI.Controllers
         {
             var artifact = await _workflowRepository.GetValidationArtifactAsync(name, artifactId, cancellationToken);
             return artifact is null ? NotFound() : File(artifact.Content, artifact.MediaType, artifact.FileName);
+        }
+
+        /// <summary>Gets every validation artifact created for the product's S-57 and S-101 export tracks.</summary>
+        /// <param name="name">The name of the dataset.</param>
+        /// <param name="cancellationToken">The request cancellation token.</param>
+        /// <returns>All validation artifacts, including artifacts from previous candidate revisions.</returns>
+        [ProducesResponseType(typeof(ApiResponse<ProductArtifactHistoryResponse[]>), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
+        [HttpGet("{name}/artifacts/history", Name = "GetValidationArtifactHistory")]
+        public async Task<IActionResult> GetValidationArtifactHistory(string name, CancellationToken cancellationToken)
+        {
+            var sw = Stopwatch.StartNew();
+            var response = new ApiResponse<ProductArtifactHistoryResponse[]>();
+            var electronicProduct = _electronicProductManager.ElectronicProduct(name);
+
+            if (electronicProduct is null)
+            {
+                response.Success = false;
+                response.Message = $"No electronic product with name '{name}' was found.";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return NotFound(response);
+            }
+
+            var tracks = await GetRelatedExportTracksAsync(electronicProduct, cancellationToken);
+            var artifacts = new List<ProductArtifactHistoryResponse>();
+            foreach (var track in tracks)
+            {
+                var trackArtifacts = await _workflowRepository.GetValidationArtifactHistoryAsync(track.Id, cancellationToken);
+                artifacts.AddRange(trackArtifacts.Select(artifact => new ProductArtifactHistoryResponse(
+                    artifact.Id,
+                    artifact.TrackId,
+                    artifact.RevisionId,
+                    track.DatasetName,
+                    track.ProductSpecification.ToString(),
+                    artifact.Kind.ToString(),
+                    artifact.FileName,
+                    artifact.MediaType,
+                    artifact.CreatedAtUtc,
+                    Url.Action(nameof(DownloadValidationArtifact), new { name = track.DatasetName, artifactId = artifact.Id })
+                        ?? $"/electronicproducts/{Uri.EscapeDataString(track.DatasetName)}/artifacts/{artifact.Id:D}")));
+            }
+
+            response.Data = [.. artifacts.OrderByDescending(artifact => artifact.CreatedAtUtc)];
+            response.TotalHits = artifacts.Count;
+            response.DurationMs = sw.ElapsedMilliseconds;
+            return Ok(response);
         }
 
         /// <summary>
@@ -617,6 +656,32 @@ namespace ProductCatalogueAPI.Controllers
         {
             var normalized = value.Trim().Replace("-", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
             return Enum.TryParse(normalized, out productSpecification) && productSpecification is ProductSpecification.S57 or ProductSpecification.S101;
+        }
+
+        private async Task<IReadOnlyList<ProductExportTrackRecord>> GetRelatedExportTracksAsync(ElectronicProduct electronicProduct, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(electronicProduct.datasetName))
+                return [];
+
+            var datasetName = electronicProduct.datasetName.Trim();
+            var relatedDatasetNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { datasetName };
+            foreach (var specification in new[] { ProductSpecification.S57, ProductSpecification.S101 })
+            {
+                foreach (var mappedProduct in _electronicProductManager.GetMappedElectronicProducts(datasetName, specification.ToString()))
+                {
+                    if (!string.IsNullOrWhiteSpace(mappedProduct.datasetName))
+                        relatedDatasetNames.Add(mappedProduct.datasetName.Trim());
+                }
+            }
+
+            var tracks = new List<ProductExportTrackRecord>();
+            foreach (var relatedDatasetName in relatedDatasetNames)
+                tracks.AddRange(await _workflowRepository.GetTracksAsync(relatedDatasetName, cancellationToken));
+
+            return [.. tracks
+                .DistinctBy(track => track.Id)
+                .Where(track => track.ProductSpecification is ProductSpecification.S57 or ProductSpecification.S101)
+                .OrderBy(track => track.ProductSpecification)];
         }
 
         private static bool MatchesProductSpecification(ElectronicProduct product, ProductSpecification productSpecification)

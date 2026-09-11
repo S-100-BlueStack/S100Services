@@ -5,7 +5,6 @@ using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Models;
 using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.Jobs;
-using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Operations;
 using S100FC.ProductCatalogue;
 using System.Diagnostics;
@@ -19,114 +18,37 @@ namespace ProductCatalogueAPI.Controllers;
 [AllowAnonymous]
 [ApiController]
 [Route("[controller]")]
-public sealed class ExportController(ILogger<ExportController> logger, IProductManager productManager, IDatasetLockService datasetLockService, IExportOperationService exportOperationService, IExportJobService exportJobService, TimeProvider timeProvider) : ControllerBase
+public sealed class ExportController(ILogger<ExportController> logger, IProductManager productManager, IExportJobService exportJobService, TimeProvider timeProvider) : ControllerBase
 {
     private readonly ILogger<ExportController> _logger = logger;
     private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
-    private readonly IDatasetLockService _datasetLockService = datasetLockService;
-    private readonly IExportOperationService _exportOperationService = exportOperationService;
     private readonly IExportJobService _exportJobService = exportJobService;
     private readonly TimeProvider _timeProvider = timeProvider;
 
-    /// <summary>Builds and validates a new-edition candidate without changing S-128.</summary>
-    [HttpPost("{name}/newedition", Name = "NewEdition")]
-    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
-    public Task<IActionResult> NewEdition(string name, CancellationToken cancellationToken) => ExecuteExportAsync(name, ExportRevisionType.NewEdition, cancellationToken);
-
     /// <summary>Queues a new-edition candidate build.</summary>
-    [HttpPost("{name}/newedition/jobs", Name = "NewEditionJob")]
+    [HttpPost("{name}/newedition", Name = "NewEdition")]
     [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
-    public Task<IActionResult> NewEditionJob(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.ExportEdition, cancellationToken);
-
-    /// <summary>Builds and validates an update candidate without changing S-128.</summary>
-    [HttpPost("{name}/newupdate", Name = "NewUpdate")]
-    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
-    public Task<IActionResult> NewUpdate(string name, CancellationToken cancellationToken) => ExecuteExportAsync(name, ExportRevisionType.Update, cancellationToken);
+    public Task<IActionResult> NewEdition(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.ExportEdition, cancellationToken);
 
     /// <summary>Queues an update candidate build.</summary>
-    [HttpPost("{name}/newupdate/jobs", Name = "NewUpdateJob")]
+    [HttpPost("{name}/newupdate", Name = "NewUpdate")]
     [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
-    public Task<IActionResult> NewUpdateJob(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.ExportUpdate, cancellationToken);
-
-    /// <summary>Builds the first candidate edition for a catalogue product without publishing it to S-128.</summary>
-    [HttpPost("{name}/newdataset", Name = "NewDataset")]
-    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
-    public Task<IActionResult> NewDataset(string name, CancellationToken cancellationToken) => ExecuteExportAsync(name, ExportRevisionType.NewEdition, cancellationToken);
+    public Task<IActionResult> NewUpdate(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.ExportUpdate, cancellationToken);
 
     /// <summary>Preserves the legacy bulk route while preventing uncontrolled parallel publication behavior.</summary>
     [HttpPost("alldatasets", Name = "NewDatasets")]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status501NotImplemented, "application/json")]
     public IActionResult CreateAllDatasets() => StatusCode(StatusCodes.Status501NotImplemented, new ApiResponse { Success = false, Message = "Bulk candidate creation is not implemented for independent export tracks." });
 
-    /// <summary>Cancels one unverified product-track export without changing S-128.</summary>
-    [HttpPost("{name}/cancel-export", Name = "CancelExport")]
-    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
-    public async Task<IActionResult> CancelExport(string name, CancellationToken cancellationToken) {
-        ExportProductIdentity? product;
-        try {
-            product = ResolveProduct(name);
-        }
-        catch (ProductMappingIntegrityException ex) {
-            return Conflict(new ApiResponse { Success = false, Message = ex.Message });
-        }
-
-        if (product is null)
-            return NotFound(new ApiResponse { Success = false, Message = $"No electronic product with name '{name}' was found." });
-
-        await using var datasetLock = await _datasetLockService.TryAcquireAsync($"{product.DatasetName}-{product.ProductSpecification}", cancellationToken);
-        if (datasetLock is null)
-            return Conflict(new ApiResponse { Success = false, Message = $"The {product.ProductSpecification} export for {name} is already being processed." });
-
-        try {
-            var result = await _exportOperationService.ExecuteCancelExportAsync(product.DatasetName, User?.Identity?.Name, cancellationToken);
-            return Ok(new ApiResponse { Success = true, Message = result.Message });
-        }
-        catch (ExportOperationRejectedException ex) {
-            return BadRequest(new ApiResponse { Success = false, Message = ex.Message });
-        }
-    }
-
     /// <summary>Queues cancellation of one unverified product-track export.</summary>
-    [HttpPost("{name}/cancel-export/jobs", Name = "CancelExportJob")]
+    [HttpPost("{name}/cancel-export", Name = "CancelExport")]
     [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
-    public Task<IActionResult> CancelExportJob(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.CancelExport, cancellationToken);
+    public Task<IActionResult> CancelExport(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.CancelExport, cancellationToken);
 
-    /// <summary>Preserves the analysis route until validation artifacts receive a dedicated query contract.</summary>
+    /// <summary>Preserves the legacy analysis route while validation history is served by the electronic-products API.</summary>
     [HttpPost("{name}/analysis", Name = "GetAnalysis")]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status501NotImplemented, "application/json")]
-    public IActionResult GetExportAnalysis(string name) => StatusCode(StatusCodes.Status501NotImplemented, new ApiResponse { Success = false, Message = "Validation artifact retrieval is not implemented yet." });
-
-    private async Task<IActionResult> ExecuteExportAsync(string name, ExportRevisionType revisionType, CancellationToken cancellationToken) {
-        var stopwatch = Stopwatch.StartNew();
-        ExportProductIdentity? product;
-        try {
-            product = ResolveProduct(name);
-        }
-        catch (ProductMappingIntegrityException ex) {
-            return Conflict(new ApiResponse { Success = false, Message = ex.Message, DurationMs = stopwatch.ElapsedMilliseconds });
-        }
-
-        if (product is null)
-            return NotFound(new ApiResponse { Success = false, Message = $"No electronic product with name '{name}' was found.", DurationMs = stopwatch.ElapsedMilliseconds });
-
-        await using var datasetLock = await _datasetLockService.TryAcquireAsync($"{product.DatasetName}-{product.ProductSpecification}", cancellationToken);
-        if (datasetLock is null)
-            return Conflict(new ApiResponse { Success = false, Message = $"The {product.ProductSpecification} export for {name} is already being processed.", DurationMs = stopwatch.ElapsedMilliseconds });
-
-        try {
-            var result = await _exportOperationService.ExecuteExportAsync(product.DatasetName, revisionType, User?.Identity?.Name, cancellationToken: cancellationToken);
-            return Ok(new ApiResponse { Success = true, Message = result.Message, DurationMs = stopwatch.ElapsedMilliseconds });
-        }
-        catch (ExportOperationRejectedException ex) {
-            return BadRequest(new ApiResponse { Success = false, Message = ex.Message, DurationMs = stopwatch.ElapsedMilliseconds });
-        }
-        catch (ExportSourceUnavailableException) {
-            return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse { Success = false, Message = $"The source snapshot for '{name}' could not be created.", DurationMs = stopwatch.ElapsedMilliseconds });
-        }
-        catch (ExportValidationException ex) {
-            return StatusCode(StatusCodes.Status422UnprocessableEntity, new ApiResponse { Success = false, Message = ex.PublicMessage, DurationMs = stopwatch.ElapsedMilliseconds });
-        }
-    }
+    public IActionResult GetExportAnalysis(string name) => StatusCode(StatusCodes.Status501NotImplemented, new ApiResponse { Success = false, Message = "Use GET /electronicproducts/{name}/artifacts/history for validation artifact history." });
 
     private async Task<IActionResult> QueueJobAsync(string name, ExportOperationType operationType, CancellationToken cancellationToken) {
         var correlationId = Activity.Current?.TraceId.ToString();

@@ -172,7 +172,7 @@ public sealed record ProductArtifactWrite(
 }
 
 /// <summary>Describes a downloadable diagnostic artifact without loading its content.</summary>
-public sealed record ProductArtifactReference(Guid Id, Guid TrackId, ProductArtifactKind Kind, string FileName, string MediaType, DateTime CreatedAtUtc);
+public sealed record ProductArtifactReference(Guid Id, Guid TrackId, ProductArtifactKind Kind, string FileName, string MediaType, DateTime CreatedAtUtc, Guid? RevisionId = null);
 
 /// <summary>Contains one diagnostic artifact after dataset ownership has been verified.</summary>
 public sealed record ProductArtifactContent(Guid Id, string FileName, string MediaType, byte[] Content);

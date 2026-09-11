@@ -7,7 +7,6 @@ using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Models;
 using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.Jobs;
-using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Operations;
 using S100FC.ProductCatalogue;
 using System.Collections;
@@ -17,11 +16,11 @@ namespace TestProductCatalogueAPI;
 public sealed class ExportAsyncControllerTests
 {
     [Fact]
-    public async Task NewEditionJobInfersS101FromTheCatalogueProduct() {
+    public async Task NewEditionInfersS101FromTheCatalogueProduct() {
         var jobs = new RecordingJobService();
-        var controller = CreateController(new RecordingOperations(), jobs);
+        var controller = CreateController(jobs);
 
-        var result = await controller.NewEditionJob("101DK001", CancellationToken.None);
+        var result = await controller.NewEdition("101DK001", CancellationToken.None);
 
         Assert.IsType<AcceptedResult>(result);
         Assert.Equal("101DK001", jobs.Request!.DatasetName);
@@ -30,22 +29,24 @@ public sealed class ExportAsyncControllerTests
     }
 
     [Fact]
-    public async Task CancelExportInfersS57FromTheCatalogueProduct() {
-        var operations = new RecordingOperations();
-        var controller = CreateController(operations, new RecordingJobService());
+    public async Task CancelExportQueuesS57FromTheCatalogueProduct() {
+        var jobs = new RecordingJobService();
+        var controller = CreateController(jobs);
 
         var result = await controller.CancelExport("DK3BIDQE", CancellationToken.None);
 
-        Assert.IsType<OkObjectResult>(result);
-        Assert.Equal("DK3BIDQE", operations.CancelDatasetName);
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Equal("DK3BIDQE", jobs.Request!.DatasetName);
+        Assert.Equal("S57", jobs.Request.ProductSpecification);
+        Assert.Equal(ExportOperationType.CancelExport, jobs.Request.OperationType);
     }
 
     [Fact]
     public async Task S57JobUsesTheS57ProductNamedByTheCaller() {
         var jobs = new RecordingJobService();
-        var controller = CreateController(new RecordingOperations(), jobs);
+        var controller = CreateController(jobs);
 
-        var result = await controller.NewEditionJob("DK3BIDQE", CancellationToken.None);
+        var result = await controller.NewEdition("DK3BIDQE", CancellationToken.None);
 
         Assert.IsType<AcceptedResult>(result);
         Assert.Equal("DK3BIDQE", jobs.Request!.DatasetName);
@@ -55,40 +56,27 @@ public sealed class ExportAsyncControllerTests
     [Fact]
     public async Task CallerExportTargetDoesNotOverrideTheCatalogueProductSpecification() {
         var jobs = new RecordingJobService();
-        var controller = CreateController(new RecordingOperations(), jobs);
+        var controller = CreateController(jobs);
         controller.HttpContext.Request.QueryString = new QueryString("?exportTarget=S57");
 
-        var result = await controller.NewEditionJob("101DK001", CancellationToken.None);
+        var result = await controller.NewEdition("101DK001", CancellationToken.None);
 
         Assert.IsType<AcceptedResult>(result);
         Assert.Equal("S101", jobs.Request!.ProductSpecification);
     }
 
-    private static ExportController CreateController(RecordingOperations operations, RecordingJobService jobs) {
-        var controller = new ExportController(NullLogger<ExportController>.Instance, new FakeProductManager(new FakeElectronicProductManager()), new FakeLockService(), operations, jobs, TimeProvider.System) {
+    private static ExportController CreateController(RecordingJobService jobs) {
+        var controller = new ExportController(NullLogger<ExportController>.Instance, new FakeProductManager(new FakeElectronicProductManager()), jobs, TimeProvider.System) {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
         controller.HttpContext.TraceIdentifier = "trace";
         return controller;
     }
 
-    private sealed class RecordingOperations : IExportOperationService
-    {
-        public string? CancelDatasetName { get; private set; }
-        public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) => Task.FromResult(new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage));
-        public Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) { CancelDatasetName = datasetName; return Task.FromResult(new ExportOperationResult(ExportOperationContract.CancelExportCompletedCode, ExportOperationContract.CancelExportCompletedMessage)); }
-    }
-
     private sealed class RecordingJobService : IExportJobService
     {
         public ExportOperationJobRequest? Request { get; private set; }
         public ExportJobStartResponse Enqueue(ExportOperationJobRequest request) { Request = request; return new ExportJobStartResponse { JobId = "1", DatasetName = request.DatasetName, OperationType = request.OperationType.ToString(), ExportTarget = request.ProductSpecification, Status = "Queued", CreatedAt = request.CreatedAtUtc, CorrelationId = request.CorrelationId, StatusUrl = "/jobs/1" }; }
-    }
-
-    private sealed class FakeLockService : IDatasetLockService
-    {
-        public Task<IAsyncDisposable?> TryAcquireAsync(string datasetName, CancellationToken cancellationToken = default) => Task.FromResult<IAsyncDisposable?>(new Handle());
-        private sealed class Handle : IAsyncDisposable { public ValueTask DisposeAsync() => ValueTask.CompletedTask; }
     }
 
     private sealed class FakeProductManager(IElectronicProductManager electronicProductManager) : IProductManager

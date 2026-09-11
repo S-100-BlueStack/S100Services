@@ -358,11 +358,39 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactsAsync(Guid trackId, CancellationToken cancellationToken = default) {
+    public async Task<Guid?> GetLatestRevisionIdAsync(Guid trackId, CancellationToken cancellationToken = default) {
+        using var connection = _connectionFactory.Create();
+        return await connection.QuerySingleOrDefaultAsync<Guid?>(new CommandDefinition("""
+            SELECT TOP 1 product_revision_id
+            FROM dbo.ProductRevision
+            WHERE product_export_track_id = @TrackId
+            ORDER BY created_at_utc DESC, product_revision_id DESC;
+            """, new { TrackId = trackId }, cancellationToken: cancellationToken));
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactsAsync(Guid productRevisionId, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
         var artifacts = await connection.QueryAsync<ProductArtifactReference>(new CommandDefinition("""
-            SELECT product_artifact_id AS Id, product_export_track_id AS TrackId, artifact_kind AS Kind,
-                   file_name AS FileName, media_type AS MediaType, created_at_utc AS CreatedAtUtc
+            SELECT product_artifact_id AS Id, product_export_track_id AS TrackId, product_revision_id AS RevisionId,
+                   artifact_kind AS Kind, file_name AS FileName, media_type AS MediaType, created_at_utc AS CreatedAtUtc
+            FROM dbo.ProductArtifact
+            WHERE product_revision_id = @ProductRevisionId
+              AND artifact_kind IN @Kinds
+            ORDER BY created_at_utc DESC, product_artifact_id DESC;
+            """, new {
+                ProductRevisionId = productRevisionId,
+                Kinds = new[] { ProductArtifactKind.ValidationReport.ToString(), ProductArtifactKind.ValidationDiagnostic.ToString() }
+            }, cancellationToken: cancellationToken));
+        return artifacts.ToArray();
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactHistoryAsync(Guid trackId, CancellationToken cancellationToken = default) {
+        using var connection = _connectionFactory.Create();
+        var artifacts = await connection.QueryAsync<ProductArtifactReference>(new CommandDefinition("""
+            SELECT product_artifact_id AS Id, product_export_track_id AS TrackId, product_revision_id AS RevisionId,
+                   artifact_kind AS Kind, file_name AS FileName, media_type AS MediaType, created_at_utc AS CreatedAtUtc
             FROM dbo.ProductArtifact
             WHERE product_export_track_id = @TrackId
               AND artifact_kind IN @Kinds
@@ -596,7 +624,7 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     private readonly Dictionary<string, DateTime> _lastSuccessfulRuns = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<(string Name, ProductSpecification Specification), ProductExportTrackRecord> _tracks = new();
     private readonly Dictionary<Guid, ProductChangeSummary> _summaries = [];
-    private readonly List<ProductRevisionWrite> _revisions = [];
+    private readonly List<(Guid Id, ProductRevisionWrite Revision)> _revisions = [];
     private readonly List<(Guid Id, ProductArtifactWrite Artifact)> _artifacts = [];
 
     /// <inheritdoc/>
@@ -672,18 +700,46 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     public Task CancelCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.State = ProductState.Cancelled; track.CandidateEdition = null; track.CandidateUpdate = null; track.UpdatedAtUtc = occurredAtUtc; } return Task.CompletedTask; }
 
     /// <inheritdoc/>
-    public Task<Guid> AddRevisionAsync(ProductRevisionWrite revision, CancellationToken cancellationToken = default) { lock (_gate) _revisions.Add(revision); return Task.FromResult(Guid.NewGuid()); }
+    public Task<Guid> AddRevisionAsync(ProductRevisionWrite revision, CancellationToken cancellationToken = default) {
+        var revisionId = Guid.NewGuid();
+        lock (_gate)
+            _revisions.Add((revisionId, revision));
+        return Task.FromResult(revisionId);
+    }
 
     /// <inheritdoc/>
     public Task AddArtifactAsync(ProductArtifactWrite artifact, CancellationToken cancellationToken = default) { lock (_gate) _artifacts.Add((Guid.NewGuid(), artifact)); return Task.CompletedTask; }
 
     /// <inheritdoc/>
-    public Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactsAsync(Guid trackId, CancellationToken cancellationToken = default) {
+    public Task<Guid?> GetLatestRevisionIdAsync(Guid trackId, CancellationToken cancellationToken = default) {
+        lock (_gate) {
+            var latestRevisionId = _revisions
+                .Where(item => item.Revision.TrackId == trackId)
+                .OrderByDescending(item => item.Revision.CreatedAtUtc)
+                .ThenByDescending(item => item.Id)
+                .Select(item => (Guid?)item.Id)
+                .FirstOrDefault();
+            return Task.FromResult(latestRevisionId);
+        }
+    }
+
+    /// <inheritdoc/>
+    public Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactsAsync(Guid productRevisionId, CancellationToken cancellationToken = default) {
+        lock (_gate) {
+            return Task.FromResult<IReadOnlyList<ProductArtifactReference>>([.. _artifacts
+                .Where(item => item.Artifact.RevisionId == productRevisionId && IsValidationArtifact(item.Artifact.Kind))
+                .OrderByDescending(item => item.Artifact.CreatedAtUtc)
+                .Select(item => new ProductArtifactReference(item.Id, item.Artifact.TrackId, item.Artifact.Kind, item.Artifact.FileName, item.Artifact.MediaType, item.Artifact.CreatedAtUtc, item.Artifact.RevisionId))]);
+        }
+    }
+
+    /// <inheritdoc/>
+    public Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactHistoryAsync(Guid trackId, CancellationToken cancellationToken = default) {
         lock (_gate) {
             return Task.FromResult<IReadOnlyList<ProductArtifactReference>>([.. _artifacts
                 .Where(item => item.Artifact.TrackId == trackId && IsValidationArtifact(item.Artifact.Kind))
                 .OrderByDescending(item => item.Artifact.CreatedAtUtc)
-                .Select(item => new ProductArtifactReference(item.Id, item.Artifact.TrackId, item.Artifact.Kind, item.Artifact.FileName, item.Artifact.MediaType, item.Artifact.CreatedAtUtc))]);
+                .Select(item => new ProductArtifactReference(item.Id, item.Artifact.TrackId, item.Artifact.Kind, item.Artifact.FileName, item.Artifact.MediaType, item.Artifact.CreatedAtUtc, item.Artifact.RevisionId))]);
         }
     }
 
