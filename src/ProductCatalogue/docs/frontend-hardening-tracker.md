@@ -77,16 +77,16 @@ BE-106 is documentation-only. It confirms that ProductCatalogueAPI remains the p
 
 ## Deferred / backend-dependent notes
 
-| ID     | Area     | Item                                                   | Status                                   | Notes                                                                                                                                              |
-| ------ | -------- | ------------------------------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| BE-001 | Export   | Cross-browser/cross-user export-in-progress visibility | Done                                     | Backend-authoritative active-job discovery is integrated into popup state and mutation preflight.                                                  |
-| BE-002 | Export   | Async export job with job-status endpoint              | Done                                     | New Edition and Rollback use async start endpoints, persisted polling and terminal refresh.                                                        |
-| BE-003 | Timeline | Global map timeline data contract                      | Blocked by backend                       | Product-level history endpoint exists. Global map timeline remains deferred until API/database contract is known.                                  |
-| BE-004 | API      | Safe timeout policy for long-running operations        | Done                                     | Job-start requests avoid unsafe client timeout; repeatable status requests use finite timeout and bounded retry.                                   |
-| BE-005 | Reports  | Real Dashboard IC-ENC/internal validation report links | Blocked by backend                       | Requires report IDs/storage contracts before Dashboard report actions can be enabled.                                                              |
-| BE-006 | Jobs     | Atomic Product operation claim before enqueue          | Planned                                  | Required to eliminate the remaining near-simultaneous enqueue race and support a distributed external worker cleanly.                              |
-| BE-007 | Jobs     | External shared Hangfire worker migration              | Deferred / architecture review           | Current HTTP/job contracts are reusable, but worker dependencies, queues, shared storage and ArcGIS/file access must be reviewed before migration. |
-| BE-008 | Timeline | Product History audit event hardening                  | Design approved / implementation pending | BE-108A is split into foundation and producer/recovery batches. Legacy state history remains; runtime and SQL implementation have not started.     |
+| ID     | Area     | Item                                                   | Status                                      | Notes                                                                                                                                                                                                                            |
+| ------ | -------- | ------------------------------------------------------ | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BE-001 | Export   | Cross-browser/cross-user export-in-progress visibility | Done                                        | Backend-authoritative active-job discovery is integrated into popup state and mutation preflight.                                                                                                                                |
+| BE-002 | Export   | Async export job with job-status endpoint              | Done                                        | New Edition and Rollback use async start endpoints, persisted polling and terminal refresh.                                                                                                                                      |
+| BE-003 | Timeline | Global map timeline data contract                      | Blocked by backend                          | Product-level history endpoint exists. Global map timeline remains deferred until API/database contract is known.                                                                                                                |
+| BE-004 | API      | Safe timeout policy for long-running operations        | Done                                        | Job-start requests avoid unsafe client timeout; repeatable status requests use finite timeout and bounded retry.                                                                                                                 |
+| BE-005 | Reports  | Real Dashboard IC-ENC/internal validation report links | Blocked by backend                          | Requires report IDs/storage contracts before Dashboard report actions can be enabled.                                                                                                                                            |
+| BE-006 | Jobs     | Atomic Product operation claim before enqueue          | Planned                                     | Required to eliminate the remaining near-simultaneous enqueue race and support a distributed external worker cleanly.                                                                                                            |
+| BE-007 | Jobs     | External shared Hangfire worker migration              | Deferred / architecture review              | Current HTTP/job contracts are reusable, but worker dependencies, queues, shared storage and ArcGIS/file access must be reviewed before migration.                                                                               |
+| BE-008 | Timeline | Product History audit event hardening                  | Batch 1 port verified; manual smoke pending | Foundation is ported to `2ec17a5c47aa353256d0a3445620bebe83e6eecf`: additive audit persistence/API, normalized `ProductStateHistory` IDs, shared normalization and deterministic suppression. No producers; Batch 2 not started. |
 
 ## Future implementation ideas
 
@@ -120,8 +120,8 @@ BE-106 is documentation-only. It confirms that ProductCatalogueAPI remains the p
 2. Use the completed BE-106 external-worker readiness review as the implementation gate; do not move Product Catalogue jobs until JobPlatform is ready.
 3. Keep atomic Product-operation ownership deferred until its persistence owner, recovery contract and distributed-worker boundary are approved.
 4. BE-107 Dashboard filtering and pagination is complete and manually verified at `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
-5. BE-108A design is approved at documentation baseline `8caf5f771f1a6721398007589afbe875d553615d`; the next runtime package is Batch 1 foundation only after explicit implementation approval.
-6. Keep Batch 2 producer/recovery work separate until Batch 1 is built, tested, and reviewed.
+5. BE-108A Batch 1 is ported to workflow-redesign baseline `2ec17a5c47aa353256d0a3445620bebe83e6eecf`; frontend/backend/database-owner verification passed on 2026-09-11. Re-run post-port manual Product History smoke before final acceptance.
+6. Keep Batch 2 producer/recovery work separate; it must target the normalized Product workflow repository and must not restore `JobTable` or the old `AppendAsync -> Task<Guid>` assumption.
 7. Keep report-link UI and deferred producers blocked until backend report IDs, storage, and producer contracts exist.
 8. Continue targeted regression smoke tests after frontend or backend contract changes.
 9. Keep FI-011A as the committed generic source foundation at `8f678480c08e17d7911d6019a44542c6a52ef09f`; do not introduce a permanent combined ENC source or infer an S-57/S-101 split from the compatibility AOI payload.
@@ -157,7 +157,7 @@ Manual acceptance verified persistence, reset behavior, Previous/Next paging, ra
 
 ## FI-011 independent Product-standard data sources and source-aware workflows
 
-Status: In progress — FI-011A, FI-011B, FI-011C, and FI-011D committed; production S-57/S-101 transport and final status/guidance/regression work remain  
+Status: In progress â€” FI-011A, FI-011B, FI-011C, and FI-011D committed; production S-57/S-101 transport and final status/guidance/regression work remain  
 FI-011D implementation commit: `737677d7ecd0857312224fde3e5f9a76a0cb7148`
 
 ### Current implementation state
@@ -324,14 +324,14 @@ They are not production contracts and must not define future backend fields or c
 
 ### Remaining FI-011 packages
 
-1. **FI-011A — Configurable source foundation:** implemented and manually accepted at the committed
+1. **FI-011A â€” Configurable source foundation:** implemented and manually accepted at the committed
    baseline.
-2. **FI-011B — Source-aware Filters, Search and Navbar Coordination:** implemented in the committed
+2. **FI-011B â€” Source-aware Filters, Search and Navbar Coordination:** implemented in the committed
    baseline; does not complete FI-011.
-3. **FI-011C — Source-aware Popup Actions and Export Menu:** implemented in the committed baseline
+3. **FI-011C â€” Source-aware Popup Actions and Export Menu:** implemented in the committed baseline
    `391074743efc909ec97168e2be2820484edb8455`; central Product context, capability-specific actions,
    flat Edition/Update menu, and disabled mock-source placeholders.
-4. **FI-011D — Source-aware workspace and history propagation:** implemented and committed at
+4. **FI-011D â€” Source-aware workspace and history propagation:** implemented and committed at
    `737677d7ecd0857312224fde3e5f9a76a0cb7148`; Product Collection, shared workspace catalog/resolution,
    Analyze, Review, and truthful History/report unavailable states are source-aware without cross-source
    compatibility calls.
@@ -415,10 +415,10 @@ The initial user-facing Locator contains one logical source:
 
 ```text
 Places
-└── ArcGIS World Geocoder
-    ├── sourceCountry=DNK,GRL
-    ├── category=Address,Postal,Populated Place
-    └── configured fallback zoom scale
+â””â”€â”€ ArcGIS World Geocoder
+    â”œâ”€â”€ sourceCountry=DNK,GRL
+    â”œâ”€â”€ category=Address,Postal,Populated Place
+    â””â”€â”€ configured fallback zoom scale
 ```
 
 Denmark and Greenland are search scope, not separate user-visible sources. This removes the `Search in...` selector and country grouping from the first version while still excluding the Faroe Islands and worldwide fallback.

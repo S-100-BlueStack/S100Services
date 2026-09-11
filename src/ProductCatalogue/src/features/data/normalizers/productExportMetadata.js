@@ -54,7 +54,9 @@ function normalizeProductExportRecord(record) {
     status: readFirstDefined(record, ["status", "Status"]),
     date: readFirstDefined(record, ["date", "Date"]),
     errorMessage: readFirstDefined(record, ["errorMessage", "ErrorMessage"]),
-    validationArtifacts: normalizeValidationArtifacts(readFirstDefined(record, ["validationArtifacts", "ValidationArtifacts"])),
+    validationArtifacts: normalizeValidationArtifacts(
+      readFirstDefined(record, ["validationArtifacts", "ValidationArtifacts"])
+    ),
     raw: record,
   };
 }

@@ -106,11 +106,12 @@ function createSummaryItem({ label, value, className = null }) {
 
 function createProductHistoryEventItem(event) {
   const item = document.createElement("li");
-  item.className = `pc-product-history-list__item pc-product-history-list__item--${event.type}`;
+  const presentationType = event.presentationType ?? event.type;
+  item.className = `pc-product-history-list__item pc-product-history-list__item--${presentationType}`;
 
   const marker = document.createElement("span");
   marker.className = "pc-product-history-list__marker";
-  marker.appendChild(createEventIcon(event.type));
+  marker.appendChild(createEventIcon(presentationType));
 
   const body = document.createElement("div");
   body.className = "pc-product-history-list__body";

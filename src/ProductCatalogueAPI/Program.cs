@@ -10,6 +10,7 @@ using ProductCatalogueAPI.OpenApi;
 using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.ExportRules;
 using ProductCatalogueAPI.Services.Graph;
+using ProductCatalogueAPI.Services.History;
 using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Services.Operations;
@@ -198,6 +199,8 @@ namespace ProductCatalogueAPI
             builder.Services.AddScoped<ProductRepository>();
             builder.Services.AddScoped<IProductRepository>(services => services.GetRequiredService<ProductRepository>());
             builder.Services.AddScoped<IProductWorkflowRepository>(services => services.GetRequiredService<ProductRepository>());
+            builder.Services.AddScoped<IProductHistoryEventRepository, ProductHistoryEventRepository>();
+            builder.Services.AddScoped<IProductHistoryEventService, ProductHistoryEventService>();
             Log.Information("SystemDB configured");
 
 

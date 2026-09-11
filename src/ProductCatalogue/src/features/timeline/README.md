@@ -7,7 +7,7 @@ This feature area contains two related but separate concepts:
 
 The current UI implements product history content. The global map timeline is intentionally not implemented until the backend and database model are defined.
 
-BE-108A design documentation is approved against baseline `8caf5f771f1a6721398007589afbe875d553615d`. No BE-108A runtime normalization or API behavior is implemented at this baseline.
+BE-108A Batch 1 is ported to workflow-redesign baseline `2ec17a5c47aa353256d0a3445620bebe83e6eecf`. The History endpoint and shared frontend normalizer now support additive explicit audit events while retaining state-history-only payload compatibility.
 
 ## Naming conventions
 
@@ -97,7 +97,7 @@ Examples:
 
 The frontend may display negative edition/update values if the backend returns them, but those values should be treated as backend data issues. The frontend should still describe the actual change instead of hiding it behind an unchanged-status summary.
 
-## Approved BE-108A future Product History contract
+## BE-108A Batch 1 Product History contract
 
 The approved design is documented in:
 
@@ -105,38 +105,38 @@ The approved design is documented in:
 src/ProductCatalogue/docs/be-108a-product-history-event-design.md
 ```
 
-The current frontend continues to normalize legacy state-history records exactly as before. BE-108A runtime behavior is planned later in two batches.
+The workflow redesign stores Product state history in `dbo.ProductStateHistory`. Its `product_state_history_id` is exposed by the backend as `ProductRecord.Id` / `ProductHistoryResponse.Id` and becomes the frontend `stateRecordId` for inferred state-history events.
 
-### Future endpoint envelope
+### Endpoint envelope
 
-The existing Product History route must preserve:
+The existing Product History route preserves:
 
 ```text
 Data: ProductHistoryResponse[]
-TotalHits: legacy state count
+TotalHits: state-history count
 ```
 
-and later add:
+and adds:
 
 ```text
 Events: ProductHistoryEventResponse[]
-EventTotalHits: explicit event count
+EventTotalHits: finalized explicit-event count
 ```
 
-The endpoint uses a dedicated response type. It must not change the global generic API envelope.
+The endpoint uses a dedicated response type and does not change the global generic API envelope. Existing payloads without `Events`/`EventTotalHits` remain supported.
 
-### Future normalized sources
+### Normalized sources
 
-The frontend will later normalize two distinct sources:
+The frontend normalizes two distinct sources:
 
-- legacy state history inferred from `Data`;
+- inferred state-history events from `Data`;
 - explicit operation audit events from `Events`.
 
-The normalized UI model must preserve the source and identifiers needed for deterministic association.
+The normalized UI model preserves source, raw type/outcome values, and identifiers needed for deterministic association.
 
 ### Identity and deterministic association
 
-The future contract preserves:
+The audit contract preserves:
 
 ```text
 OperationId
@@ -145,32 +145,25 @@ CorrelationId
 StateRecordId
 ```
 
-An inferred legacy entry may be suppressed only when every condition below is true:
+An inferred state-history entry may be suppressed only when every condition below is true:
 
 ```text
 Explicit event type is Export or Rollback
 Explicit outcome is Succeeded or SucceededWithWarning
-Explicit StateRecordId is present and matches the legacy state row Id
-Normalized legacy event type matches the explicit event type
+Explicit StateRecordId is present and matches the state-history row Id
+Exactly one Data row in the current History payload has that StateRecordId
+Normalized inferred operation type matches the explicit event type
 ```
 
-The normalized operation types must agree. An explicit Export event cannot suppress a Rollback, status, note, Freeze/Unfreeze, or other inferred entry merely because the underlying row ID matches.
+The normalized operation types must agree. An explicit Export event cannot suppress a Rollback, status, note, Freeze/Unfreeze, or another inferred entry merely because an ID matches.
 
-Both timeline elements remain visible when the explicit outcome is `Failed` or `RequiresManualReview`, when `StateRecordId` is absent or different, when operation types differ, or when the legacy item normalizes to status/note or another non-Export/non-Rollback type.
+Duplicate IDs fail closed. If more than one state-history row in the current payload has the same non-empty `StateRecordId`, that ID suppresses no inferred event. Both elements also remain visible for failed/manual-review outcomes, missing or mismatched IDs, type mismatches, status/note entries, and other non-Export/non-Rollback state transitions.
 
-Do not deduplicate through:
-
-- timestamps;
-- dataset name plus version;
-- array indexes;
-- titles or messages;
-- rounded date values.
-
-When the complete deterministic association rule is not satisfied, explicit audit events and legacy state transitions remain separate timeline elements.
+Do not deduplicate through timestamps, dataset/version combinations, array indexes, titles/messages, or rounded dates.
 
 ### Outcome handling
 
-Canonical future outcomes:
+Canonical outcomes:
 
 ```text
 Succeeded
@@ -179,13 +172,13 @@ SucceededWithWarning
 RequiresManualReview
 ```
 
-`RequiresManualReview` represents an operation whose irreversible side effects began but whose final state cannot be proven. It must have distinct presentation from a confirmed `Failed` operation.
+`RequiresManualReview` represents an operation whose irreversible side effects began but whose final state cannot be proven. Unknown event types/outcomes remain visible with neutral fallback presentation and raw values retained for diagnosis.
 
-Unknown event types or outcomes must use neutral fallback rendering and remain visible. Do not discard future values and do not predeclare producer-specific event values before the producer contract exists.
+Known Product presentation keeps `S101` as `S-101`. Rollback audit events use the established user-facing `Cancel Export` terminology where operation presentation is shown.
 
 ### Rendering responsibilities
 
-Collapsed explicit event rows should show derived title, timestamp, safe message, and outcome indication. Expanded details may include:
+Collapsed explicit event rows show derived title, timestamp, safe message, and outcome indication. Expanded details may include:
 
 ```text
 Code
@@ -196,11 +189,13 @@ StateRecordId
 structured operation metadata
 ```
 
-The frontend must continue to render text through safe text APIs and must not render backend messages as HTML.
+All text continues through safe text APIs; backend content is never rendered as HTML.
 
 ### Batch boundary
 
-Batch 1 later adds the endpoint normalization and deterministic association foundation. Batch 2 later connects Export/Rollback producers and recovery outcomes.
+Batch 1 implements the persistence/read/normalization foundation only. Export and Rollback/Cancel Export are not connected as audit producers, so an empty `Events` array is normal in ordinary runtime use.
+
+Producer-side capture of newly written `ProductStateHistory` IDs, Hangfire recovery metadata, audit finalization recovery, and reconciliation belong to Batch 2 and must be designed against the normalized Product workflow repository. `IProductRepository.AppendAsync` is not changed to return a state ID.
 
 Internal validation, IC-ENC report processing, Send to IC-ENC, report content/storage, Dashboard event-source integration, and external worker extraction remain outside BE-108A.
 

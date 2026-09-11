@@ -9,6 +9,10 @@ import {
   PRODUCT_HISTORY_SOURCE,
   normalizeProductHistoryResponse,
 } from "../model/productHistoryTypes.js";
+import {
+  associateProductHistoryEvents,
+  normalizeExplicitProductHistoryEvents,
+} from "../model/productHistoryAuditEvents.js";
 import { getStatusName, isFrozenStatus } from "../../data/stores/statusStore.js";
 
 const PRODUCT_HISTORY_ENDPOINT = "electronicproducts";
@@ -91,12 +95,15 @@ function normalizeBackendProductHistory(payload, requestedDatasetName) {
     source: PRODUCT_HISTORY_SOURCE.BACKEND,
     generatedAt: readFirstDefined(payload, ["Timestamp", "timestamp"]) ?? new Date().toISOString(),
     warnings: [],
-    events: records.map((record, index) =>
-      normalizeBackendHistoryRecord(record, {
-        index,
-        datasetName,
-        previousRecord: records[index + 1] ?? null,
-      })
+    events: associateProductHistoryEvents(
+      records.map((record, index) =>
+        normalizeBackendHistoryRecord(record, {
+          index,
+          datasetName,
+          previousRecord: records[index + 1] ?? null,
+        })
+      ),
+      normalizeExplicitProductHistoryEvents(payload?.Events ?? payload?.events)
     ),
   };
 }
@@ -127,6 +134,8 @@ function normalizeBackendHistoryRecord(record, { index, datasetName, previousRec
       to,
       index,
     }),
+    stateRecordId: readFirstDefined(record, ["Id", "id"]) ?? null,
+    sourceKind: "legacy",
     type: change.type,
     timestamp: from,
     title: change.title,

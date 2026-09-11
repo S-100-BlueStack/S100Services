@@ -10,6 +10,7 @@ using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Models;
 using ProductCatalogueAPI.OpenApi;
 using ProductCatalogueAPI.Services.Dashboard;
+using ProductCatalogueAPI.Services.History;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using S100FC.S128.SimpleAttributes;
@@ -25,7 +26,7 @@ namespace ProductCatalogueAPI.Controllers
     //[Authorize("productmanager:access")]
     [ApiController]
     [Route("[controller]")]
-    public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository, IProductWorkflowRepository workflowRepository) : ControllerBase
+    public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository, IProductWorkflowRepository workflowRepository, IProductHistoryEventService historyEventService = null!) : ControllerBase
     {
         private readonly ILogger<ElectronicProductsController> _logger = logger;
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
@@ -561,13 +562,13 @@ namespace ProductCatalogueAPI.Controllers
         /// </summary>
         /// <param name="name">The name of the dataset.</param>
         /// <returns>The product.</returns>
-        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ProductHistoryEnvelope), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpGet("{name}/history", Name = "GetElectronicProductHistory")]
         public async Task<IActionResult> GetElectronicProductHistory(string name)
         {
             var sw = Stopwatch.StartNew();
-            var response = new ApiResponse<ProductHistoryResponse[]>();
+            var response = new ProductHistoryEnvelope();
             var electronicProduct = this._electronicProductManager.ElectronicProduct(name);
 
             if (electronicProduct == null)
@@ -584,6 +585,7 @@ namespace ProductCatalogueAPI.Controllers
             response.Data = [
                 .. historyRows.Select(r => new ProductHistoryResponse
                 {
+                    Id = r.Id,
                     Name = r.Name,
                     Edition = r.EditionNo,
                     Update = r.UpdateNo,
@@ -594,6 +596,23 @@ namespace ProductCatalogueAPI.Controllers
                 })
             ];
             response.TotalHits = historyRows.Length;
+            string? canonicalDatasetName;
+            try { canonicalDatasetName = ProductHistoryEventContract.NormalizeDatasetName(name); }
+            catch (ArgumentException)
+            {
+                // Audit storage limits must not reject a Product already resolved by the state-history flow.
+                // Such a name cannot have audit events written through the audit contract.
+                canonicalDatasetName = null;
+            }
+            if (canonicalDatasetName != null)
+            {
+                if (historyEventService is null)
+                    throw new InvalidOperationException("Product History audit service is not configured.");
+                var events = await historyEventService.GetFinalizedByDatasetNameAsync(canonicalDatasetName);
+                response.Events = events.Where(e => e.FinalizedAtUtc.HasValue)
+                    .Select(ProductHistoryEventResponse.FromRecord).ToArray();
+                response.EventTotalHits = response.Events.Length;
+            }
             response.DurationMs = sw.ElapsedMilliseconds;
 
             return this.Ok(response);

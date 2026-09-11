@@ -46,29 +46,29 @@ These decisions apply to every work package:
 
 ## Work package status
 
-| ID      | Area                                        | Status                                   | Database/geodatabase change | Primary dependency                                            |
-| ------- | ------------------------------------------- | ---------------------------------------- | --------------------------- | ------------------------------------------------------------- |
-| BE-101  | Full backend context review                 | Complete                                 | No                          | Current backend source and tests                              |
-| BE-102  | Readable ExportTarget contract              | Complete                                 | No                          | Verified export controller/service contract                   |
-| FE-101  | Usage band label                            | Complete                                 | No                          | Existing Usage band ID + description payload                  |
-| BE-103  | AOI profiling and optimization              | Complete                                 | No                          | Measured request path                                         |
-| BE-104  | Async Export/Rollback jobs                  | Complete                                 | No                          | Existing Hangfire SQL storage and Product operation code      |
-| BE-105  | Backend-authoritative active job visibility | Complete                                 | No                          | Product Catalogue Hangfire metadata and monitoring API        |
-| BE-106  | External shared worker readiness review     | Complete                                 | No                          | Product Catalogue baseline and JobPlatform target direction   |
-| BE-107  | Dashboard filtering and pagination          | Complete                                 | No                          | Existing JobTable history and stable activity ID              |
-| BE-108A | Product History audit event hardening       | Design approved / implementation pending | Yes, additive audit table   | Approved BE-108A design and database-owner deployment process |
-| BE-108B | Additional Product History producers        | Deferred                                 | Unknown                     | Internal validation, IC-ENC and Send producer contracts       |
-| BE-109  | Report storage/content                      | Blocked                                  | Unknown                     | IC-ENC and internal validation process/API                    |
-| BE-110  | Permanent Product ID                        | Blocked                                  | Yes                         | Database owners                                               |
-| BE-111  | Historical global map timeline              | Deferred                                 | Likely                      | Architecture and retention decision                           |
+| ID      | Area                                        | Status                                      | Database/geodatabase change | Primary dependency                                              |
+| ------- | ------------------------------------------- | ------------------------------------------- | --------------------------- | --------------------------------------------------------------- |
+| BE-101  | Full backend context review                 | Complete                                    | No                          | Current backend source and tests                                |
+| BE-102  | Readable ExportTarget contract              | Complete                                    | No                          | Verified export controller/service contract                     |
+| FE-101  | Usage band label                            | Complete                                    | No                          | Existing Usage band ID + description payload                    |
+| BE-103  | AOI profiling and optimization              | Complete                                    | No                          | Measured request path                                           |
+| BE-104  | Async Export/Rollback jobs                  | Complete                                    | No                          | Existing Hangfire SQL storage and Product operation code        |
+| BE-105  | Backend-authoritative active job visibility | Complete                                    | No                          | Product Catalogue Hangfire metadata and monitoring API          |
+| BE-106  | External shared worker readiness review     | Complete                                    | No                          | Product Catalogue baseline and JobPlatform target direction     |
+| BE-107  | Dashboard filtering and pagination          | Complete                                    | No                          | Product state-history data and stable activity ID               |
+| BE-108A | Product History audit event hardening       | Batch 1 port verified; manual smoke pending | Yes, additive audit table   | Product workflow redesign and database-owner deployment process |
+| BE-108B | Additional Product History producers        | Deferred                                    | Unknown                     | Internal validation, IC-ENC and Send producer contracts         |
+| BE-109  | Report storage/content                      | Blocked                                     | Unknown                     | IC-ENC and internal validation process/API                      |
+| BE-110  | Permanent Product ID                        | Blocked                                     | Yes                         | Database owners                                                 |
+| BE-111  | Historical global map timeline              | Deferred                                    | Likely                      | Architecture and retention decision                             |
 
 ## Implementation order
 
 Recommended order:
 
 1. BE-101 through BE-107 are complete at the current implementation baseline `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
-2. BE-108A Batch 1: Product History event foundation after an implementation package is explicitly approved.
-3. BE-108A Batch 2: Export/Rollback producers and recovery after Batch 1 is built, tested, and reviewed.
+2. BE-108A Batch 1: foundation ported to workflow-redesign baseline `2ec17a5c47aa353256d0a3445620bebe83e6eecf`; automated and database-owner verification completed on 2026-09-11, with post-port manual History smoke still pending.
+3. BE-108A Batch 2: Export/Rollback producers and recovery remain separate and must target the normalized Product workflow persistence model.
 4. Deferred: additional producers, reports, permanent Product ID, global map timeline, shared-worker implementation and atomic Product-operation ownership.
 
 Worker extraction is not the next runtime package. It remains deferred until JobPlatform is ready and a separate implementation package is explicitly approved.
@@ -746,7 +746,15 @@ FI-009 is complete at `e4caa4d29c46083605beac10400876af6bf38d1c` and adds the fr
 
 ## BE-108A: Product History audit event hardening
 
-Status: **Design approved; runtime implementation not started.**
+Status: **Batch 1 foundation ported to the Product workflow redesign and technically verified; post-port manual History smoke and commit remain pending. Batch 2 is not started.**
+
+Port baseline:
+
+```text
+2ec17a5c47aa353256d0a3445620bebe83e6eecf
+```
+
+The previous BE-108A implementation commit `7ee4ec903e883d2f8d35af1019ef0d0881c5c410` was used only as controlled port input. The newer workflow redesign remains authoritative where contracts differ.
 
 Detailed source-of-truth design:
 
@@ -756,15 +764,21 @@ src/ProductCatalogue/docs/be-108a-product-history-event-design.md
 
 ### Purpose
 
-Add a durable Product-level audit event model without replacing the existing `JobTable` state history. The event model must represent safe terminal outcomes for logical operations and remain independent of Hangfire retention.
+Add durable Product-level audit lifecycle persistence alongside the normalized Product state history. Product History remains an audit log, not historical-map reconstruction, and the audit table remains independent of Hangfire retention.
 
-### Current boundary
+### Current persistence boundary
 
-- `JobTable` remains legacy state history.
-- Product History remains an audit log, not historical map reconstruction.
-- There is one public audit event per logical operation.
-- Export and Rollback are the first planned producers.
-- Internal validation, IC-ENC report processing, Send to IC-ENC, report storage/content, Dashboard event-source integration, and external worker extraction are deferred.
+The workflow redesign replaced runtime `JobTable` state history with:
+
+```text
+dbo.ProductStateHistory
+primary state identity: product_state_history_id
+API/state-history identity: ProductRecord.Id
+```
+
+Legacy data was migrated by the workflow redesign; BE-108A does not write to, restore, or depend on `dbo.JobTable`.
+
+`dbo.ProductHistoryEvent` remains a separate additive audit table. Batch 1 introduces no Export, Rollback/Cancel Export, Send, validation, report, scheduler, reconciliation, lock, or operation-ownership producer behavior.
 
 ### Authoritative migration mechanism
 
@@ -777,7 +791,7 @@ No EF Core introduction
 Additive audit table retained during application rollback
 ```
 
-The future create and verify scripts must strictly validate the complete expected schema and fail with `THROW` for incompatible definitions. No schema script is implemented by this documentation package.
+The normalized workflow schema must exist first. BE-108A then runs `BE108A_001_CreateProductHistoryEvent.sql` and `BE108A_001_VerifyProductHistoryEvent.sql`. Both fail closed on incompatible contracts. BE-108A never creates, alters, repairs, or renames normalized workflow tables.
 
 ### Canonical outcomes
 
@@ -788,7 +802,7 @@ SucceededWithWarning
 RequiresManualReview
 ```
 
-Use `RequiresManualReview` when irreversible side effects have started and the final state cannot be proven.
+`RequiresManualReview` is reserved for cases where irreversible side effects began but the final business state cannot be proven.
 
 ### Identity contract
 
@@ -799,140 +813,87 @@ CorrelationId
 StateRecordId
 ```
 
-`OperationId` identifies the logical operation. `StateRecordId` participates in deterministic association with the exact successful legacy state row, but an ID match alone is insufficient. Suppression is allowed only for matching Export/Export or Rollback/Rollback types when the explicit outcome is `Succeeded` or `SucceededWithWarning`. Failed/manual-review outcomes, missing or mismatched IDs, different operation types, and legacy status/note entries remain separate. Timestamp-based deduplication is prohibited.
+`OperationId` identifies the logical operation. `StateRecordId` refers to the exact `dbo.ProductStateHistory.product_state_history_id` associated with the relevant successful state transition. The existing normalized repository already projects that value as `ProductRecord.Id` for History reads.
+
+Batch 1 deliberately does **not** change `IProductRepository.AppendAsync`, `ProductRepository`, or `IProductWorkflowRepository` to return state IDs. Producer-side capture of a newly inserted state ID belongs to Batch 2 and must be designed against the normalized workflow repository.
 
 ### Persistence and DatasetName contract
 
-Batch 1 must validate and canonicalize one central persistence model before repository access. Database limits are shared across migration, service, repository assumptions, and tests; raw exception messages are never accepted as safe audit messages.
+The central audit contract validates and canonicalizes persistence input before repository access. `DatasetName` uses trim plus invariant-uppercase canonicalization at both write and query boundaries, followed by exact equality. Repository SQL includes a UTF-16 binary equality residual so audit lookup does not depend on database-default accent, width, or trailing-space semantics.
 
-`DatasetName` uses shared trim plus invariant-uppercase canonicalization at both write and query boundaries, followed by exact equality. The implementation must not depend on database-default collation and requires SQL Server integration verification.
+The audit storage contract remains bounded and safe-message based. Raw exceptions, arbitrary caller messages, report payloads, credentials, SQL/compiler details, and unrestricted JSON are not accepted as public audit fields.
 
-### Public endpoint direction
+### Public History endpoint
 
-The existing history route later receives an endpoint-specific response envelope that preserves:
+`GET /electronicproducts/{datasetName}/history` now uses an endpoint-specific envelope that preserves state history:
 
 ```text
 Data: ProductHistoryResponse[]
-TotalHits: legacy state count
+TotalHits: state-history count
 ```
 
-and adds:
+and adds finalized explicit audit events:
 
 ```text
 Events: ProductHistoryEventResponse[]
-EventTotalHits: explicit event count
+EventTotalHits: explicit finalized-event count
 ```
 
-Do not change the global `ApiResponse` to implement this contract.
+Each `Data` row exposes the normalized state-history `Id` additively. Pending audit rows are not public. The global `ApiResponse` is unchanged.
 
-### Batch 1 - Foundation
+### Frontend deterministic association
 
-Planned later:
+The frontend normalizes both inferred state-history events and explicit audit events. An inferred Export/Rollback item is suppressed only when all of these conditions hold:
 
-- dedicated event persistence;
-- repository and lifecycle service;
-- endpoint-specific history response;
-- additive explicit events and legacy state IDs;
-- `AppendAsync` returning `Guid` with application-generated state record IDs;
-- `OperationId` and required future Hangfire parameter names;
-- deterministic frontend `StateRecordId` association;
-- legacy/explicit event normalization;
-- foundation tests and deployment documentation.
+```text
+explicit type is Export or Rollback
+explicit outcome is Succeeded or SucceededWithWarning
+explicit StateRecordId matches a state-history row Id
+that StateRecordId occurs on exactly one Data row in the current payload
+normalized inferred operation type matches the explicit operation type
+```
 
-Batch 1 does not connect Export or Rollback producers.
+Duplicate state IDs fail closed: if more than one current state-history row has the same non-empty ID, none of those inferred events is suppressed. Failed/manual-review outcomes, missing or mismatched IDs, different operation types, and status/note/Freeze/Unfreeze items remain visible. Timestamp-based deduplication is prohibited.
+
+Unknown event types/outcomes remain visible with neutral presentation. Product-specific `S101` audit target presentation remains `S-101`, and Rollback remains user-facing `Cancel Export` where appropriate.
+
+### Batch 1 verification on 2026-09-11
+
+Against baseline `2ec17a5c47aa353256d0a3445620bebe83e6eecf`:
+
+- ProductCatalogueAPI Release build succeeded; warnings remained but no errors occurred.
+- Focused `ProductHistory` test run succeeded with 43 passed, 0 failed, and the database-owner test skipped before opt-in.
+- Frontend formatting/check completed successfully in the local repository environment.
+- `BE108A_001_CreateProductHistoryEvent.sql` succeeded against the configured System database after the Product workflow migration.
+- `BE108A_001_VerifyProductHistoryEvent.sql` succeeded against the same database.
+- The opt-in `ProductHistoryDatabaseOwnerTests` run then succeeded 1/1 with no skips, verifying the `ProductStateHistory` identity prerequisite, rollback-only explicit state-ID insertion, canonical audit lookup, near-match exclusion, public finalized visibility, and cleanup behavior.
+
+A fresh destructive/incompatible-schema negative test was not run against the live System database. Post-port manual Product History UI smoke remains to be rerun before final acceptance.
 
 ### Batch 2 - Producers and recovery
 
-Planned after Batch 1 review:
+Batch 2 remains a separate future package. It must be rediscovered against the current workflow architecture before implementation and is expected to cover:
 
-- Export producer lifecycle;
-- Rollback producer lifecycle;
+- Export and Rollback producer lifecycle;
+- deterministic capture of normalized state-history IDs;
 - success, failure, warning, and manual-review outcomes;
 - pending creation and finalization failure handling;
 - terminal recovery metadata;
-- reconciliation;
-- dedicated maintenance queue;
+- reconciliation and maintenance-queue ownership;
 - worker restart/requeue recovery;
-- crash and recovery tests.
+- failure injection and crash/recovery tests.
 
-### Audit failure policy
+No old `JobTable` or `AppendAsync -> Task<Guid>` assumption may be carried into Batch 2.
+
+### Audit failure policy for Batch 2
 
 - Pending audit persistence must succeed before irreversible business execution.
 - Pending creation failure stops execution with a distinct safe audit-unavailable code.
 - Audit finalization failure after business success does not change the business or Hangfire result to failure.
-- Reconciliation later completes pending events.
+- Reconciliation later completes recoverable pending events.
 - The event table is not a distributed lock or operation ownership registry.
 
-### Execution-start ordering for Batch 2
-
-Before irreversible side effects:
-
-```text
-pending audit event exists
-→ set Hangfire ProductManagerExecutionStarted
-→ persist audit ExecutionStartedAtUtc
-→ begin business side effects
-```
-
-If the audit execution checkpoint fails after the Hangfire flag is set, business execution must not begin. The logical event is conservatively finalized or recovered as:
-
-```text
-Outcome = RequiresManualReview
-Code = MANUAL_REVIEW_REQUIRED
-```
-
-### Planned terminal recovery metadata
-
-After successful Export/Rollback and before audit finalization, Batch 2 must persist:
-
-```text
-ProductManagerOperationId
-ProductManagerStateRecordId
-ProductManagerResultEdition
-ProductManagerResultUpdate
-ProductManagerResultCode
-ProductManagerResultMessage
-ProductManagerWarningCode
-ProductManagerWarningMessage
-```
-
-This metadata allows deterministic reconciliation if audit finalization fails after the legacy state append.
-
-### Planned reconciliation
-
-```text
-Recurring job ID: product-history-reconciliation
-Initial schedule: every 15 minutes
-Dedicated queue: productmanager-maintenance
-Initial host: ProductCatalogueAPI Hangfire Server
-Future host: shared worker
-```
-
-State classification:
-
-```text
-Non-terminal:
-    leave pending
-
-Succeeded:
-    finalize from application-owned safe metadata
-
-Terminal non-success:
-    Failed when execution never started
-    RequiresManualReview when execution started
-
-Unknown:
-    leave pending and log
-```
-
-The current ProductCatalogueAPI Hangfire Server must listen to the maintenance queue when Batch 2 is implemented. During a future worker cutover, recurring registration and queue ownership move together, and only one active worker configuration may own the queue.
-
-### Documentation-only acceptance for this baseline
-
-- The design is recorded in source-of-truth documentation.
-- Batch 1 and Batch 2 boundaries are explicit.
-- The database-owner deployment mechanism is approved.
-- No C#, JavaScript, SQL, tests, project files, configuration, queue registration, or runtime behavior is changed.
+The exact execution checkpoint, state-ID capture API, Hangfire metadata, and reconciliation integration must be confirmed against the normalized Product workflow implementation before Batch 2 starts.
 
 ## Separate future contract task: Analyze geometry response
 

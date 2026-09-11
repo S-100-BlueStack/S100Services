@@ -65,6 +65,11 @@ function normalizeEvent(event, index) {
   }
   const type = normalizeEventType(event.type);
   const timestamp = normalizeText(event.timestamp);
+  const outcome = preserveRawText(event.outcome);
+  const unknownOutcome =
+    outcome &&
+    !["Succeeded", "Failed", "SucceededWithWarning", "RequiresManualReview"].includes(outcome);
+  const details = normalizeDetails(event.details);
   return {
     id:
       normalizeText(event.id) ??
@@ -74,12 +79,33 @@ function normalizeEvent(event, index) {
         index,
       }),
     type,
+    presentationType: unknownOutcome ? "note" : normalizeEventType(event.presentationType ?? type),
+    rawType: preserveRawText(event.rawType ?? event.rawEventType ?? event.type),
+    rawEventType: preserveRawText(event.rawEventType ?? event.rawType ?? event.type),
+    outcome,
+    rawOutcome: preserveRawText(event.rawOutcome ?? event.outcome),
+    sourceKind: normalizeText(event.sourceKind) ?? "legacy",
+    stateRecordId: normalizeText(event.stateRecordId),
+    operationId: normalizeText(event.operationId),
+    jobId: normalizeText(event.jobId),
+    correlationId: normalizeText(event.correlationId),
+    datasetName: normalizeText(event.datasetName),
+    exportTarget: normalizeText(event.exportTarget),
+    operationMetadata: event.operationMetadata ?? null,
     timestamp,
     title: normalizeText(event.title) ?? getProductHistoryEventTypeLabel(type),
     description: normalizeText(event.description),
     actor: normalizeText(event.actor),
     source: normalizeText(event.source),
-    details: normalizeDetails(event.details),
+    details: [
+      ...details,
+      ...(unknownOutcome && !details.some((detail) => detail.label === "Outcome")
+        ? [{ label: "Outcome", value: String(event.rawOutcome ?? outcome) }]
+        : []),
+      ...(!Object.values(PRODUCT_HISTORY_EVENT_TYPE).includes(event.type) && event.type
+        ? [{ label: "Event type", value: String(event.rawType ?? event.type) }]
+        : []),
+    ],
   };
 }
 
@@ -161,4 +187,8 @@ function normalizeText(value) {
   }
   const text = String(value).trim();
   return text.length > 0 ? text : null;
+}
+
+function preserveRawText(value) {
+  return value === null || value === undefined ? null : String(value);
 }

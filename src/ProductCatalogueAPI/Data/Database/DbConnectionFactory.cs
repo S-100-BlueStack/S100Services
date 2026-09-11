@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using System.Data;
 
 namespace ProductCatalogueAPI.Data.Database;
@@ -7,7 +7,7 @@ public class DbConnectionFactory(IConfiguration config)
 {
     private readonly IConfiguration _config = config;
 
-    public IDbConnection Create() {
+    public virtual IDbConnection Create() {
         var filePath = _config.GetSection("Connections")["SystemConnection"];
 
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))

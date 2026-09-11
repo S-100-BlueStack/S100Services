@@ -2,9 +2,9 @@
 
 Documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`
 
-Status: **Approved pre-implementation design. Runtime implementation has not started.**
+Status: **Batch 1 foundation ported to workflow-redesign baseline `2ec17a5c47aa353256d0a3445620bebe83e6eecf` and technically verified on 2026-09-11. Post-port manual History smoke and commit remain pending. Batch 2 is not started.**
 
-This document is the source of truth for BE-108A. It records design decisions only and does not authorize runtime, SQL, test, project, or configuration changes by itself.
+This document remains the source of truth for BE-108A. The original design is retained where it still applies; section 17 records the Batch 1 implementation after adaptation to the normalized Product workflow architecture.
 
 ## 1. Purpose
 
@@ -16,43 +16,41 @@ The design must answer:
 - when it reached a terminal audit outcome;
 - whether the outcome is confirmed, warning-bearing, failed, or uncertain;
 - which job and correlation identifiers support diagnosis;
-- which exact legacy state row belongs to a successful operation.
+- which exact normalized state-history row belongs to a successful operation.
 
 Product History remains an audit log. It does not reconstruct historical map state.
 
 ## 2. Current-state boundary
 
-The current history endpoint returns temporal `JobTable` state rows through:
+The current history endpoint returns normalized Product state-history rows from `dbo.ProductStateHistory` through:
 
 ```text
 Data: ProductHistoryResponse[]
 ```
 
-The frontend compares adjacent rows and infers summaries such as Freeze, Export, or Rollback. This remains the legacy state-history model.
+The frontend compares adjacent rows and infers summaries such as Freeze, Export, or Rollback. This remains the state-history model alongside the explicit audit model.
 
-`JobTable` is not replaced or repurposed as the explicit event store.
+The workflow redesign migrated the old `JobTable` data and renamed that table to `JobTable_Legacy`; BE-108A no longer uses `JobTable` as a runtime contract. `dbo.ProductStateHistory.product_state_history_id` is the authoritative state-row identity and is projected as `ProductRecord.Id`.
 
-The new event persistence is additive and independent from Hangfire job retention.
+The new `dbo.ProductHistoryEvent` persistence is additive and independent from Product state persistence and Hangfire job retention.
 
 ## 3. BE-108A implementation batches
 
 ### Batch 1 - Foundation
 
-Planned later:
+Implemented and ported:
 
 - dedicated Product History event persistence;
 - repository and lifecycle service;
-- endpoint-specific history response;
-- additive `Events`, `EventTotalHits`, and legacy state `Id`;
-- `AppendAsync` returning `Guid`;
-- application-generated `StateRecordId`;
+- endpoint-specific History response;
+- additive `Events`, `EventTotalHits`, and state-history `Id`;
+- `StateRecordId` association with `ProductStateHistory.product_state_history_id`;
 - application-owned `OperationId`;
-- required future Hangfire parameter names;
-- deterministic frontend `StateRecordId` association;
-- frontend legacy/explicit event normalization;
-- foundation tests and deployment documentation.
+- deterministic frontend `StateRecordId` association with duplicate-ID fail-closed behavior;
+- frontend state-history/explicit-event normalization;
+- foundation tests and database-owner deployment documentation.
 
-Batch 1 must not connect Export or Rollback jobs to the event lifecycle.
+Batch 1 does not connect Export or Rollback jobs to the event lifecycle and does not change normalized workflow writes to return state IDs.
 
 ### Batch 2 - Producers and recovery
 
@@ -101,9 +99,9 @@ Additive audit table retained during application rollback
 
 This matches the existing Dapper and handwritten-SQL architecture.
 
-### 5.1 Expected future repository layout
+### 5.1 Repository layout
 
-The exact names can be confirmed when Batch 1 is generated, but the planned pattern is:
+Batch 1 uses:
 
 ```text
 src/ProductCatalogueAPI/Data/Database/Migrations/
@@ -112,9 +110,9 @@ src/ProductCatalogueAPI/Data/Database/Migrations/
   BE108A_001_VerifyProductHistoryEvent.sql
 ```
 
-No migration files exist as part of this documentation-only package.
+The create and verify scripts are implemented. They validate the normalized `ProductStateHistory` identity prerequisite without changing that workflow table.
 
-### 5.2 Future create-script requirements
+### 5.2 Create-script requirements
 
 The create script must:
 
@@ -125,7 +123,7 @@ The create script must:
 - use `THROW` for an incompatible existing table, column, constraint, or index;
 - never silently alter or repair unknown schema variants.
 
-### 5.3 Future verify-script requirements
+### 5.3 Verify-script requirements
 
 The verify script must terminate with a clear failure for any missing or incompatible:
 
@@ -148,9 +146,9 @@ The approved implementation direction is shared application canonicalization at 
 
 ```text
 trim surrounding whitespace
-→ convert with invariant uppercase
-→ validate the canonical value
-→ persist/query using the canonical value
+-> convert with invariant uppercase
+-> validate the canonical value
+-> persist/query using the canonical value
 ```
 
 The event table therefore stores the canonical `DatasetName`. Repository queries receive an already canonicalized value and use exact equality; prefix, substring, wildcard, and culture-sensitive matching are prohibited.
@@ -165,8 +163,8 @@ Deployment is database-first:
 
 ```text
 database owner executes create script
-→ database owner executes verify script
-→ application deployment may proceed
+-> database owner executes verify script
+-> application deployment may proceed
 ```
 
 The additive event table remains during application rollback. An older application ignores it, while dropping it would destroy audit data.
@@ -186,7 +184,7 @@ It must not be used as:
 
 ### 6.1 Required lifecycle timestamps
 
-The future event persistence must include:
+The event persistence includes:
 
 ```text
 CreatedAtUtc
@@ -295,7 +293,7 @@ This is not equivalent to `Failed`. False-positive manual review is preferable t
 
 ## 8. Identity model
 
-The future lifecycle preserves four separate identifiers:
+The audit lifecycle preserves four separate identifiers:
 
 ```text
 OperationId
@@ -324,16 +322,11 @@ StateRecordId
 
 ### 8.4 StateRecordId
 
-- Identifies the exact legacy `dbo.JobTable` row created by a successful operation.
-- Must be generated by the application before insert:
-
-```csharp
-var stateRecordId = Guid.NewGuid();
-```
-
-- The generated value is inserted explicitly into `dbo.JobTable.id`.
-- `AppendAsync` later returns `Task<Guid>`.
-- SQL and in-memory repositories use the same identity behavior.
+- Identifies the exact normalized `dbo.ProductStateHistory` row associated with a successful operation.
+- The database identity is `product_state_history_id`, a non-null single-column `uniqueidentifier` primary key.
+- State-history reads expose that value through `ProductRecord.Id` and then `ProductHistoryResponse.Id`.
+- Batch 1 does not change `IProductRepository.AppendAsync`, `ProductRepository`, or `IProductWorkflowRepository` to return state IDs.
+- Producer-side capture of a newly inserted state-history ID is a Batch 2 concern and must use the normalized workflow repository contract rather than restoring the pre-redesign `JobTable` write path.
 
 ## 9. Deterministic state association
 
@@ -344,8 +337,9 @@ An inferred legacy entry may be suppressed only when every condition below is tr
 ```text
 Explicit event type is Export or Rollback
 Explicit outcome is Succeeded or SucceededWithWarning
-Explicit StateRecordId is present and matches the legacy state row Id
-Normalized legacy event type matches the explicit event type
+Explicit StateRecordId is present and matches the state-history row Id
+Exactly one Data row in the current History payload has that StateRecordId
+Normalized inferred event type matches the explicit event type
 ```
 
 The comparison uses canonical normalized operation types. An explicit Export event can suppress only an inferred Export entry, and an explicit Rollback event can suppress only an inferred Rollback entry. A normal status transition, note, Freeze/Unfreeze transition, or another legacy event type is never hidden merely because its source row has the same ID.
@@ -357,9 +351,10 @@ explicit outcome is Failed
 explicit outcome is RequiresManualReview
 StateRecordId is missing
 StateRecordId does not match
-explicit and normalized legacy operation types differ
-legacy item is a status or note event
-legacy item is not a normalized Export or Rollback event
+StateRecordId occurs on more than one Data row in the current History payload
+explicit and normalized inferred operation types differ
+state-history item is a status or note event
+state-history item is not a normalized Export or Rollback event
 ```
 
 Timestamp-based or heuristic deduplication is prohibited.
@@ -372,7 +367,7 @@ Do not deduplicate by:
 - array position;
 - rounded time values.
 
-When the complete deterministic rule is not satisfied, explicit operation events and legacy state transitions remain separate timeline items.
+When the complete deterministic rule is not satisfied, explicit operation events and inferred state-history transitions remain separate timeline items.
 
 ## 10. Public API contract
 
@@ -382,13 +377,13 @@ The existing route remains:
 GET /electronicproducts/{datasetName}/history
 ```
 
-The future implementation uses an endpoint-specific response type.
+Batch 1 uses an endpoint-specific response type.
 
 The wire contract preserves:
 
 ```text
 Data: ProductHistoryResponse[]
-TotalHits: legacy state count
+TotalHits: state-history count
 ```
 
 and adds:
@@ -400,13 +395,13 @@ EventTotalHits: explicit event count
 
 The global generic `ApiResponse` must not be changed to add Product History events.
 
-Legacy state rows later expose their existing database identifier additively as `Id`.
+State-history rows expose their existing `ProductStateHistory.product_state_history_id` additively as `Id`.
 
 ## 11. Frontend normalization contract
 
-Batch 1 later normalizes:
+Batch 1 normalizes:
 
-- legacy inferred state events from `Data`;
+- inferred state-history events from `Data`;
 - explicit audit events from `Events`.
 
 The normalized model preserves source, raw event/outcome values, and identity references.
@@ -419,7 +414,7 @@ Unknown event types or outcomes:
 - do not get dropped;
 - do not require speculative producer enums in advance.
 
-Current legacy-only payloads remain supported when `Events` and `EventTotalHits` are absent.
+State-history-only payloads remain supported when `Events` and `EventTotalHits` are absent.
 
 ## 12. Audit failure policy
 
@@ -445,9 +440,9 @@ Batch 2 must preserve the existing Hangfire replay guard and add the audit check
 
 ```text
 pending audit event exists
-→ set ProductManagerExecutionStarted
-→ update audit ExecutionStartedAtUtc and UpdatedAtUtc
-→ begin business side effects
+-> set ProductManagerExecutionStarted
+-> update audit ExecutionStartedAtUtc and UpdatedAtUtc
+-> begin business side effects
 ```
 
 If the audit execution checkpoint fails after the Hangfire flag is set:
@@ -488,7 +483,7 @@ ProductManagerWarningCode
 ProductManagerWarningMessage
 ```
 
-This metadata lets reconciliation reconstruct the complete terminal event if audit finalization fails after `JobTable` append.
+This metadata is intended to let reconciliation reconstruct the complete terminal event if audit finalization fails after the normalized state-history write.
 
 `StateRecordId` must not exist only in the audit table finalization write, because that would make recovery nondeterministic.
 
@@ -554,30 +549,72 @@ During later worker extraction:
 
 External worker extraction is not part of BE-108A.
 
-## 15. Batch 1 future database script acceptance
+## 15. Batch 1 database and verification acceptance
 
-When Batch 1 is later implemented, the database-owner review must confirm:
+The Batch 1 database contract requires:
 
-1. The create script succeeds on a database without the table.
-2. Re-running it against an identical schema makes no changes and succeeds.
-3. It fails on incompatible columns, types, nullability, defaults, constraints, or indexes.
-4. The verify script returns a failing exit/error for every incompatible schema condition.
-5. The table uses `[dbo]` explicitly.
-6. Transaction and `XACT_ABORT` behavior leave no partial additive schema deployment.
-7. Application rollback leaves the additive table intact.
+1. `dbo.ProductStateHistory` exists before BE-108A deployment.
+2. `product_state_history_id` is a non-null built-in `uniqueidentifier` and the single-column primary key.
+3. The BE-108A create script is idempotent against the expected `dbo.ProductHistoryEvent` schema and fails closed on incompatible definitions.
+4. The verify script fails with `THROW` for incompatible audit-schema or state-ID prerequisites.
+5. The audit table uses `[dbo]` explicitly and create runs transactionally with `XACT_ABORT ON`.
+6. Application rollback retains the additive audit table and existing audit data.
+7. BE-108A never repairs or changes the normalized Product workflow schema.
 
-## 16. Documentation-only completion gate
+Verification performed on 2026-09-11 against the configured System database after the Product workflow redesign:
 
-This design is complete when source-of-truth documents agree on:
+- `BE108A_001_CreateProductHistoryEvent.sql`: succeeded.
+- `BE108A_001_VerifyProductHistoryEvent.sql`: succeeded.
+- Re-running create against the already-existing expected audit schema succeeded without recreating it.
+- The opt-in `ProductHistoryDatabaseOwnerTests` run succeeded 1/1 and verified the `ProductStateHistory` identity prerequisite, a rollback-only explicit state-history ID insertion, canonical audit write/query behavior, near-match exclusion, finalized public visibility, and cleanup.
 
-- Batch 1 and Batch 2 boundaries;
-- migration ownership;
-- outcomes;
-- identities;
-- deterministic association;
-- endpoint envelope;
-- audit failure handling;
-- reconciliation host, schedule, queue, and state classification;
-- deferred producers and integrations.
+No deliberately incompatible schema was introduced into the live System database. Negative-schema testing remains restricted to a disposable database copy.
 
-No runtime implementation, SQL migration, tests, project files, configuration changes, or queue registration belongs to this documentation-only package.
+## 16. Batch 1 completion state
+
+Batch 1 is technically verified when source-of-truth documents agree on:
+
+- the normalized `ProductStateHistory` state-history boundary;
+- additive `ProductHistoryEvent` persistence;
+- migration ownership and database-first deployment;
+- canonical outcomes and bounded safe audit fields;
+- `OperationId`, `JobId`, `CorrelationId`, and `StateRecordId` identities;
+- deterministic association with duplicate-ID fail-closed behavior;
+- the endpoint-specific History envelope;
+- source-aware frontend behavior and unknown-value fallback;
+- the explicit separation between the implemented foundation and future producers/recovery.
+
+Automated frontend/backend verification and database-owner verification passed on 2026-09-11. A post-port manual Product History UI smoke test remains before final acceptance/commit.
+
+## 17. Batch 1 implementation record after workflow redesign
+
+Authoritative port baseline:
+
+```text
+2ec17a5c47aa353256d0a3445620bebe83e6eecf
+```
+
+Controlled previous implementation input:
+
+```text
+7ee4ec903e883d2f8d35af1019ef0d0881c5c410
+```
+
+The workflow redesign is authoritative wherever it conflicts with the previous implementation. The port therefore preserves the new `IProductRepository.AppendAsync` contract and normalized `IProductWorkflowRepository`/`ProductRepository` architecture instead of restoring the old `JobTable`-based `Task<Guid>` behavior.
+
+Batch 1 adds or retains:
+
+- `ProductHistoryEventRecord`, repository, lifecycle service, central contract, and endpoint-specific envelope;
+- database-first create/verify scripts for the additive audit table;
+- the `ProductStateHistory.product_state_history_id` prerequisite and `ProductRecord.Id` public state-history identity;
+- finalized-only audit reads;
+- shared frontend normalization of state-history and explicit audit events;
+- deterministic successful Export/Rollback suppression only with exact unique state identity and matching operation type;
+- duplicate state-ID fail-closed behavior;
+- neutral presentation of unknown event types/outcomes;
+- source-aware History fail-closed behavior for unsupported sources;
+- no Batch 1 producer, Hangfire metadata, scheduler, reconciliation, lock, or ownership changes.
+
+The audit table may already exist from an earlier BE-108A deployment. The port intentionally keeps its schema stable and retargets only the state-reference prerequisite to the normalized workflow state-history table.
+
+Batch 2 must begin with a fresh discovery pass against the then-current workflow implementation before producer-side state-ID capture or recovery metadata is designed.

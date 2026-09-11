@@ -59,6 +59,7 @@ namespace ProductCatalogueAPI.Models
 
         public class ProductHistoryResponse
         {
+            public Guid Id { get; set; }
             public required string Name { get; set; }
             public int? Edition { get; set; }
             public int? Update { get; set; }
