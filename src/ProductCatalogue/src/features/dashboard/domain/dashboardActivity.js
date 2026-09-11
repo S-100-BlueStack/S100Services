@@ -43,7 +43,7 @@ export function normalizeActivities(value) {
     return [];
   }
 
-  return value.map(normalizeActivity).sort(compareActivitiesByTimestampDesc);
+  return value.map(normalizeActivity);
 }
 
 function normalizeActivity(value, index) {
@@ -262,19 +262,6 @@ function normalizeSummaryRows(value, labelKey) {
       };
     })
     .filter(Boolean);
-}
-
-function compareActivitiesByTimestampDesc(left, right) {
-  const leftTime = Date.parse(left.timestamp ?? "");
-  const rightTime = Date.parse(right.timestamp ?? "");
-  const timestampDifference =
-    (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
-
-  if (timestampDifference !== 0) {
-    return timestampDifference;
-  }
-
-  return String(right.id ?? "").localeCompare(String(left.id ?? ""));
 }
 
 function unwrapDashboardPayload(payload) {

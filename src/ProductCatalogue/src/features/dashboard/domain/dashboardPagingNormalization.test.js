@@ -58,6 +58,6 @@ test("normalizeDashboardPayload preserves backend ID ordering for equal timestam
 
   assert.deepEqual(
     dashboard.activities.map((activity) => activity.id),
-    ["c", "b", "a"]
+    ["a", "c", "b"]
   );
 });

@@ -84,6 +84,8 @@ export function renderDashboardPage({
   pageSize = DASHBOARD_DEFAULT_PAGE_SIZE,
   pageNumber = 1,
   canGoPrevious = false,
+  sortBy = "time",
+  sortDirection = "desc",
   pagingMatchesPageSize = true,
 }) {
   ensureDashboardHistoryKeyboardHandlers();
@@ -98,6 +100,8 @@ export function renderDashboardPage({
     pageSize,
     pageNumber,
     canGoPrevious,
+    sortBy,
+    sortDirection,
     pagingMatchesPageSize,
   };
 
@@ -112,6 +116,8 @@ export function renderDashboardPage({
       pageSize,
       pageNumber,
       canGoPrevious,
+      sortBy,
+      sortDirection,
       pagingMatchesPageSize,
     })
   );
@@ -781,19 +787,27 @@ function updateDashboardRangeApplyButtons() {
 function captureDashboardControlFocus() {
   const activeElement = document.activeElement;
 
-  if (!(activeElement instanceof HTMLInputElement || activeElement instanceof HTMLSelectElement)) {
+  if (
+    !(
+      activeElement instanceof HTMLInputElement ||
+      activeElement instanceof HTMLSelectElement ||
+      activeElement instanceof HTMLButtonElement
+    )
+  ) {
     return null;
   }
 
+  const sortKey = activeElement.dataset.dashboardSortKey;
   const filterKey = activeElement.dataset.dashboardFilterKey;
   const rangeInputId = activeElement.id?.startsWith("dashboard-range-") ? activeElement.id : null;
   const pageSizeControl = activeElement.hasAttribute("data-dashboard-page-size");
 
-  if (!filterKey && !rangeInputId && !pageSizeControl) {
+  if (!sortKey && !filterKey && !rangeInputId && !pageSizeControl) {
     return null;
   }
 
   return {
+    sortKey,
     filterKey,
     rangeInputId,
     pageSizeControl,
@@ -807,14 +821,22 @@ function restoreDashboardControlFocus(focusState) {
     return;
   }
 
-  const selector = focusState.rangeInputId
-    ? `#${CSS.escape(focusState.rangeInputId)}`
-    : focusState.pageSizeControl
-      ? "[data-dashboard-page-size]"
-      : `[data-dashboard-filter-key="${focusState.filterKey}"]`;
+  const selector = focusState.sortKey
+    ? `[data-dashboard-sort-key="${CSS.escape(focusState.sortKey)}"]`
+    : focusState.rangeInputId
+      ? `#${CSS.escape(focusState.rangeInputId)}`
+      : focusState.pageSizeControl
+        ? "[data-dashboard-page-size]"
+        : `[data-dashboard-filter-key="${focusState.filterKey}"]`;
   const nextElement = document.querySelector(selector);
 
-  if (!(nextElement instanceof HTMLInputElement || nextElement instanceof HTMLSelectElement)) {
+  if (
+    !(
+      nextElement instanceof HTMLInputElement ||
+      nextElement instanceof HTMLSelectElement ||
+      nextElement instanceof HTMLButtonElement
+    )
+  ) {
     return;
   }
 
@@ -850,6 +872,8 @@ function createBody({
   pageSize,
   pageNumber,
   canGoPrevious,
+  sortBy,
+  sortDirection,
   pagingMatchesPageSize,
 }) {
   const body = document.createElement("section");
@@ -892,6 +916,8 @@ function createBody({
       pageSize,
       pageNumber,
       canGoPrevious,
+      sortBy,
+      sortDirection,
       pagingMatchesPageSize,
     })
   );
@@ -981,6 +1007,8 @@ function createDashboardGrid({
   pageSize,
   pageNumber,
   canGoPrevious,
+  sortBy,
+  sortDirection,
   pagingMatchesPageSize,
 }) {
   const grid = document.createElement("section");
@@ -999,6 +1027,8 @@ function createDashboardGrid({
       pageSize,
       pageNumber,
       canGoPrevious,
+      sortBy,
+      sortDirection,
       pagingMatchesPageSize,
     })
   );
@@ -1041,6 +1071,8 @@ function createActivityList(
     pageSize,
     pageNumber,
     canGoPrevious,
+    sortBy,
+    sortDirection,
     pagingMatchesPageSize,
   }
 ) {
@@ -1060,13 +1092,12 @@ function createActivityList(
   const tableWrapper = document.createElement("div");
   tableWrapper.className = "pc-dashboard-activity__table-wrapper";
 
+  tableWrapper.appendChild(createActivityTable(activities, timeZone, { sortBy, sortDirection }));
   if (activities.length === 0) {
     const emptyText = hasFilters
       ? "No activity matches the selected filters."
       : "No activity found for the selected range.";
     tableWrapper.appendChild(createEmptyText(emptyText));
-  } else {
-    tableWrapper.appendChild(createActivityTable(activities, timeZone));
   }
 
   section.append(
@@ -1300,7 +1331,7 @@ function createPaginationButton(label, direction, disabled) {
   return button;
 }
 
-function createActivityTable(activities, timeZone) {
+function createActivityTable(activities, timeZone, { sortBy, sortDirection }) {
   const table = document.createElement("table");
   table.className = "pc-dashboard-activity-table";
 
@@ -1310,7 +1341,41 @@ function createActivityTable(activities, timeZone) {
   for (const label of ["Time", "Product", "Activity", "Status", "Links"]) {
     const th = document.createElement("th");
     th.scope = "col";
-    th.textContent = label;
+    const sortKey = label.toLowerCase();
+    if (label === "Links") {
+      th.textContent = label;
+    } else {
+      const active = sortKey === sortBy;
+      if (active) {
+        th.setAttribute("aria-sort", sortDirection === "asc" ? "ascending" : "descending");
+      }
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "pc-dashboard-sort-button";
+      button.dataset.dashboardSortKey = sortKey;
+      const nextDirection = active
+        ? sortDirection === "asc"
+          ? "descending"
+          : "ascending"
+        : sortKey === "time"
+          ? "descending"
+          : "ascending";
+      button.setAttribute("aria-label", `${label}: sort ${nextDirection}`);
+      button.title = `Sort ${label} ${nextDirection}`;
+      button.append(label);
+      const indicator = document.createElement("span");
+      indicator.setAttribute("aria-hidden", "true");
+      indicator.textContent = active ? (sortDirection === "asc" ? "↑" : "↓") : "↕";
+      button.appendChild(indicator);
+      button.addEventListener("click", () => {
+        document.dispatchEvent(
+          new CustomEvent("pc-dashboard-sort-change", {
+            detail: { sortBy: sortKey },
+          })
+        );
+      });
+      th.appendChild(button);
+    }
     headRow.appendChild(th);
   }
 

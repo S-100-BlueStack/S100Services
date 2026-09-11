@@ -12,7 +12,9 @@ public sealed record DashboardQueryOptions(
     string Importance,
     string Reports,
     int? PageSize,
-    string? Cursor)
+    string? Cursor,
+    string SortBy = "time",
+    string SortDirection = "desc")
 {
     public const int MaximumPageSize = 200;
     public const string AnyValue = "all";
@@ -33,7 +35,9 @@ public sealed record DashboardQueryOptions(
         int? pageSize,
         string? cursor,
         out DashboardQueryOptions options,
-        out string? validationMessage)
+        out string? validationMessage,
+        string? sortBy = null,
+        string? sortDirection = null)
     {
         var normalizedImportance = NormalizeToken(importance, AnyValue);
         var normalizedReports = NormalizeToken(reports, AnyValue);
@@ -47,8 +51,22 @@ public sealed record DashboardQueryOptions(
             normalizedImportance,
             normalizedReports,
             pageSize,
-            normalizedCursor);
+            normalizedCursor,
+            sortBy?.Trim().ToLowerInvariant() ?? "time",
+            sortDirection?.Trim().ToLowerInvariant() ?? "desc");
         validationMessage = null;
+
+        if (options.SortBy is not ("time" or "product" or "activity" or "status"))
+        {
+            validationMessage = "The 'sortBy' query parameter must be one of: time, product, activity, status.";
+            return false;
+        }
+
+        if (options.SortDirection is not ("asc" or "desc"))
+        {
+            validationMessage = "The 'sortDirection' query parameter must be one of: asc, desc.";
+            return false;
+        }
 
         if (pageSize is <= 0 or > MaximumPageSize)
         {
@@ -80,6 +98,12 @@ public sealed record DashboardQueryOptions(
             return false;
         }
 
+        if (normalizedCursor is not null && !DashboardQueryProcessor.CursorMatchesSort(normalizedCursor, options))
+        {
+            validationMessage = "The 'cursor' query parameter does not match the requested sort.";
+            return false;
+        }
+
         return true;
     }
 
@@ -104,6 +128,11 @@ public static class DashboardQueryProcessor
     public static bool IsValidCursor(string value) =>
         DashboardCursor.TryParse(value, out _);
 
+    public static bool CursorMatchesSort(string value, DashboardQueryOptions options) =>
+        DashboardCursor.TryParse(value, out var cursor)
+        && cursor!.SortBy == options.SortBy
+        && cursor.SortDirection == options.SortDirection;
+
     private static readonly HashSet<string> FailedStatuses =
         new(StringComparer.OrdinalIgnoreCase) { "failed", "error", "rejected" };
 
@@ -121,17 +150,18 @@ public static class DashboardQueryProcessor
         var filterOptions = CreateFilterOptions(source);
         var filtered = source
             .Where(activity => Matches(activity, options))
-            .OrderByDescending(activity => activity.Timestamp)
-            .ThenByDescending(activity => activity.Id, StringComparer.Ordinal)
+            .OrderBy(activity => activity, Comparer<DashboardActivityResponse>.Create((left, right) =>
+                ComparePosition(left, GetPrimaryValue(right, options.SortBy),
+                    right.Timestamp.UtcDateTime.Ticks, right.Id, options)))
             .ToArray();
 
-        var afterCursor = ApplyCursor(filtered, options.Cursor);
+        var afterCursor = ApplyCursor(filtered, options);
         var page = options.PageSize is int pageSize
             ? afterCursor.Take(pageSize).ToArray()
             : afterCursor.ToArray();
         var hasMore = options.PageSize is int requestedPageSize && afterCursor.Count > requestedPageSize;
         var nextCursor = hasMore && page.Length > 0
-            ? DashboardCursor.Create(page[^1])
+            ? DashboardCursor.Create(page[^1], options)
             : null;
 
         return new DashboardQueryResult(
@@ -212,31 +242,50 @@ public static class DashboardQueryProcessor
 
     private static IReadOnlyList<DashboardActivityResponse> ApplyCursor(
         IReadOnlyList<DashboardActivityResponse> activities,
-        string? cursorValue)
+        DashboardQueryOptions options)
     {
-        if (cursorValue is null)
+        if (options.Cursor is null)
         {
             return activities;
         }
 
-        DashboardCursor.TryParse(cursorValue, out var cursor);
-
-        return activities
-            .Where(activity => IsAfterCursor(activity, cursor!))
-            .ToArray();
-    }
-
-    private static bool IsAfterCursor(DashboardActivityResponse activity, DashboardCursor cursor)
-    {
-        var activityTicks = activity.Timestamp.UtcDateTime.Ticks;
-
-        if (activityTicks != cursor.TimestampUtcTicks)
+        if (!DashboardCursor.TryParse(options.Cursor, out var cursor)
+            || !CursorMatchesSort(options.Cursor, options))
         {
-            return activityTicks < cursor.TimestampUtcTicks;
+            throw new ArgumentException("Invalid Dashboard cursor or sort mismatch.", nameof(options));
         }
 
-        return string.Compare(activity.Id, cursor.ActivityId, StringComparison.Ordinal) < 0;
+        return activities.Where(activity => ComparePosition(activity, cursor!.PrimaryValue,
+            cursor.TimestampUtcTicks, cursor.ActivityId, options) > 0).ToArray();
     }
+
+    // Ordering and cursor continuation share one comparison to keep tie-breaks identical.
+    private static int ComparePosition(
+        DashboardActivityResponse activity, string primaryValue, long timestampUtcTicks,
+        string activityId, DashboardQueryOptions options)
+    {
+        var primaryComparison = options.SortBy == "time"
+            ? activity.Timestamp.UtcDateTime.Ticks.CompareTo(timestampUtcTicks)
+            : StringComparer.OrdinalIgnoreCase.Compare(GetPrimaryValue(activity, options.SortBy), primaryValue);
+        if (primaryComparison != 0)
+        {
+            return options.SortDirection == "asc" ? primaryComparison : -primaryComparison;
+        }
+
+        var timestampComparison = timestampUtcTicks.CompareTo(activity.Timestamp.UtcDateTime.Ticks);
+        return timestampComparison != 0
+            ? timestampComparison
+            : StringComparer.Ordinal.Compare(activityId, activity.Id);
+    }
+
+    private static string GetPrimaryValue(DashboardActivityResponse activity, string sortBy) =>
+        sortBy switch
+        {
+            "product" => activity.DatasetName,
+            "activity" => activity.Title,
+            "status" => activity.Status,
+            _ => string.Empty
+        };
 
     private static bool Matches(DashboardActivityResponse activity, DashboardQueryOptions options)
     {
@@ -371,11 +420,14 @@ public static class DashboardQueryProcessor
                     .Select(part => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(part.ToLowerInvariant())))
         };
 
-    private sealed record DashboardCursor(long TimestampUtcTicks, string ActivityId)
+    private sealed record DashboardCursor(
+        long TimestampUtcTicks, string ActivityId, string SortBy = "time",
+        string SortDirection = "desc", string PrimaryValue = "")
     {
-        public static string Create(DashboardActivityResponse activity)
+        public static string Create(DashboardActivityResponse activity, DashboardQueryOptions options)
         {
-            var value = $"{activity.Timestamp.UtcDateTime.Ticks.ToString(CultureInfo.InvariantCulture)}|{activity.Id}";
+            var primary = Convert.ToBase64String(Encoding.UTF8.GetBytes(GetPrimaryValue(activity, options.SortBy)));
+            var value = $"v1|{options.SortBy}|{options.SortDirection}|{activity.Timestamp.UtcDateTime.Ticks.ToString(CultureInfo.InvariantCulture)}|{primary}|{activity.Id}";
             return Convert.ToBase64String(Encoding.UTF8.GetBytes(value))
                 .TrimEnd('=')
                 .Replace('+', '-')
@@ -391,6 +443,30 @@ public static class DashboardQueryProcessor
                 var normalized = value.Replace('-', '+').Replace('_', '/');
                 normalized = normalized.PadRight(normalized.Length + ((4 - normalized.Length % 4) % 4), '=');
                 var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(normalized));
+                if (decoded.StartsWith("v1|", StringComparison.Ordinal))
+                {
+                    var parts = decoded.Split('|', 6);
+                    if (parts.Length != 6
+                        || parts[1] is not ("time" or "product" or "activity" or "status")
+                        || parts[2] is not ("asc" or "desc")
+                        || !long.TryParse(parts[3], NumberStyles.None, CultureInfo.InvariantCulture, out var versionedTicks)
+                        || versionedTicks <= 0 || versionedTicks > DateTime.MaxValue.Ticks
+                        || string.IsNullOrWhiteSpace(parts[5]))
+                    {
+                        return false;
+                    }
+
+                    var primary = Encoding.UTF8.GetString(Convert.FromBase64String(parts[4]));
+                    if (parts[1] == "time" && primary.Length != 0)
+                    {
+                        return false;
+                    }
+
+                    cursor = new DashboardCursor(versionedTicks, parts[5], parts[1], parts[2], primary);
+                    return true;
+                }
+
+                // Pre-FI-010 cursors always represent time descending.
                 var separatorIndex = decoded.IndexOf('|');
 
                 if (separatorIndex <= 0 || separatorIndex == decoded.Length - 1)

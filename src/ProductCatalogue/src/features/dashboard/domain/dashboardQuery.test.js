@@ -8,6 +8,7 @@ import {
   createDashboardQueryState,
   moveDashboardPage,
   resetDashboardPaging,
+  selectDashboardSort,
 } from "./dashboardQuery.js";
 
 test("appendDashboardQueryParameters omits all filters and includes paging", () => {
@@ -79,4 +80,30 @@ test("moveDashboardPage keeps a cursor stack for previous navigation", () => {
     cursorHistory: [null],
   });
   assert.deepEqual(resetDashboardPaging(), { cursor: null, cursorHistory: [] });
+});
+
+test("Dashboard query state defaults to time descending and serializes both sort parameters", () => {
+  const state = createDashboardQueryState();
+  assert.equal(state.sortBy, "time");
+  assert.equal(state.sortDirection, "desc");
+  const params = appendDashboardQueryParameters(new URLSearchParams(), state);
+  assert.equal(params.get("sortBy"), "time");
+  assert.equal(params.get("sortDirection"), "desc");
+});
+
+test("selecting textual columns starts ascending and active columns toggle both ways", () => {
+  for (const sortBy of ["product", "activity", "status"]) {
+    const selected = selectDashboardSort({ sortBy: "time", sortDirection: "desc" }, sortBy);
+    assert.deepEqual(selected, { sortBy, sortDirection: "asc" });
+    const descending = selectDashboardSort(selected, sortBy);
+    assert.deepEqual(descending, { sortBy, sortDirection: "desc" });
+    assert.deepEqual(selectDashboardSort(descending, sortBy), selected);
+  }
+});
+
+test("selecting Time from a textual sort starts descending", () => {
+  const selected = selectDashboardSort({ sortBy: "product", sortDirection: "asc" }, "time");
+  assert.deepEqual(selected, { sortBy: "time", sortDirection: "desc" });
+  assert.deepEqual(selectDashboardSort(selected, "time"), { sortBy: "time", sortDirection: "asc" });
+  assert.equal(selectDashboardSort(selected, "links"), selected);
 });

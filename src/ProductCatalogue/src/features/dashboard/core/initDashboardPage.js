@@ -10,6 +10,7 @@ import {
   moveDashboardPage,
   normalizeDashboardPageSize,
   resetDashboardPaging,
+  selectDashboardSort,
 } from "../domain/dashboardQuery.js";
 import { createDashboardRange } from "../domain/dashboardRange.js";
 import {
@@ -32,6 +33,9 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
   let currentFilters = createDefaultDashboardFilters();
   let currentPageSize = readDashboardPageSizePreference();
   let pagingState = createDashboardPagingState();
+  let currentSort = { sortBy: "time", sortDirection: "desc" };
+  let successfulQueryState = { sort: currentSort, paging: pagingState, pageSizeGeneration: 0 };
+  let sortRollbackState = null;
   let pageSizeGeneration = 0;
   let currentDashboardPageSizeGeneration = 0;
   let currentDashboardPageNumber = 1;
@@ -48,6 +52,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
       range: currentRange,
       dashboard: currentDashboard,
       filters: currentFilters,
+      ...currentSort,
       loading,
       error,
       pageSize: currentPageSize,
@@ -101,6 +106,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
           filters: currentFilters,
           cursor: pagingState.cursor,
           pageSize: requestPageSize,
+          ...currentSort,
         }),
         { signal: requestController.signal }
       );
@@ -110,6 +116,12 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
       }
 
       currentDashboard = dashboard;
+      successfulQueryState = {
+        sort: currentSort,
+        paging: pagingState,
+        pageSizeGeneration: requestPageSizeGeneration,
+      };
+      sortRollbackState = null;
       currentDashboardPageSizeGeneration = requestPageSizeGeneration;
       currentDashboardPageNumber = pagingState.cursorHistory.length + 1;
       currentFilters = normalizeDashboardFilters(currentFilters, dashboard.filterOptions);
@@ -118,6 +130,16 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
     } catch (error) {
       if (requestId !== loadRequestId || requestController.signal.aborted) {
         return { status: "cancelled" };
+      }
+
+      if (sortRollbackState) {
+        currentSort = sortRollbackState.sort;
+        // A page-size change must never reactivate cursors from an older generation.
+        pagingState =
+          sortRollbackState.pageSizeGeneration === pageSizeGeneration
+            ? sortRollbackState.paging
+            : resetDashboardPaging();
+        sortRollbackState = null;
       }
 
       const message = error instanceof Error ? error.message : "Unknown dashboard error.";
@@ -176,7 +198,11 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
   };
 
   const handlePageChange = async (event) => {
-    if (searchDebounceId !== null || currentDashboardPageSizeGeneration !== pageSizeGeneration) {
+    if (
+      sortRollbackState ||
+      searchDebounceId !== null ||
+      currentDashboardPageSizeGeneration !== pageSizeGeneration
+    ) {
       return;
     }
 
@@ -198,6 +224,23 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
       pagingState = previousPagingState;
       render({ error: result.message });
     }
+  };
+
+  const handleSortChange = async (event) => {
+    const nextSort = selectDashboardSort(currentSort, event.detail?.sortBy);
+    if (nextSort === currentSort) {
+      return;
+    }
+
+    // Retain the last loaded order, including when another sort is still pending.
+    sortRollbackState ??= successfulQueryState;
+    currentSort = nextSort;
+    if (searchDebounceId !== null) {
+      window.clearTimeout(searchDebounceId);
+      searchDebounceId = null;
+    }
+
+    await loadDashboard(currentRange, { updateUrl: false, resetPage: true });
   };
 
   const handlePageSizeChange = async (event, { persist = true } = {}) => {
@@ -244,6 +287,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
   document.addEventListener("pc-dashboard-filter-change", handleFilterChange);
   document.addEventListener("pc-dashboard-page-change", handlePageChange);
   document.addEventListener("pc-dashboard-page-size-change", handlePageSizeChange);
+  document.addEventListener("pc-dashboard-sort-change", handleSortChange);
   document.addEventListener("pc-dashboard-refresh", handleRefresh);
   window.addEventListener("popstate", handlePopState);
 
@@ -272,6 +316,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
       document.removeEventListener("pc-dashboard-filter-change", handleFilterChange);
       document.removeEventListener("pc-dashboard-page-change", handlePageChange);
       document.removeEventListener("pc-dashboard-page-size-change", handlePageSizeChange);
+      document.removeEventListener("pc-dashboard-sort-change", handleSortChange);
       document.removeEventListener("pc-dashboard-refresh", handleRefresh);
       pageSizePreferenceResetHandle.remove();
       window.removeEventListener("popstate", handlePopState);

@@ -18,6 +18,8 @@ test("createDashboardActivityPath includes range, server filters, and cursor", (
         product: "all",
       },
       cursor: "abc-123",
+      sortBy: "product",
+      sortDirection: "asc",
     }
   );
   const url = new URL(path, "https://example.invalid/");
@@ -30,4 +32,6 @@ test("createDashboardActivityPath includes range, server filters, and cursor", (
   assert.equal(url.searchParams.get("status"), "failed");
   assert.equal(url.searchParams.get("pageSize"), "50");
   assert.equal(url.searchParams.get("cursor"), "abc-123");
+  assert.equal(url.searchParams.get("sortBy"), "product");
+  assert.equal(url.searchParams.get("sortDirection"), "asc");
 });

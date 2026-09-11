@@ -387,7 +387,9 @@ namespace ProductCatalogueAPI.Controllers
             [FromQuery] string? importance = null,
             [FromQuery] string? reports = null,
             [FromQuery] int? pageSize = null,
-            [FromQuery] string? cursor = null)
+            [FromQuery] string? cursor = null,
+            [FromQuery] string? sortBy = null,
+            [FromQuery] string? sortDirection = null)
         {
             var totalStopwatch = Stopwatch.StartNew();
 
@@ -418,7 +420,9 @@ namespace ProductCatalogueAPI.Controllers
                 pageSize,
                 cursor,
                 out var queryOptions,
-                out validationMessage))
+                out validationMessage,
+                sortBy ?? (HttpContext?.Request.Query.ContainsKey("sortBy") == true ? "" : null),
+                sortDirection ?? (HttpContext?.Request.Query.ContainsKey("sortDirection") == true ? "" : null)))
             {
                 return BadRequest(new ApiResponse
                 {

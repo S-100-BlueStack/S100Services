@@ -8,8 +8,16 @@ export const DASHBOARD_PAGE_SIZE_OPTIONS = Object.freeze([25, 50, 100, 200]);
 export const DASHBOARD_DEFAULT_PAGE_SIZE = 50;
 export const DASHBOARD_PAGE_SIZE = DASHBOARD_DEFAULT_PAGE_SIZE;
 
-export function createDashboardQueryState({ filters, cursor = null, pageSize } = {}) {
+export function createDashboardQueryState({
+  filters,
+  cursor = null,
+  pageSize,
+  sortBy = "time",
+  sortDirection = "desc",
+} = {}) {
   return {
+    sortBy,
+    sortDirection,
     filters: normalizeDashboardFilters(filters ?? createDefaultDashboardFilters()),
     cursor: normalizeCursor(cursor),
     pageSize: normalizeDashboardPageSize(pageSize),
@@ -31,6 +39,8 @@ export function appendDashboardQueryParameters(params, queryState) {
   appendFilter(params, "status", filters.status);
   appendFilter(params, "importance", filters.importance);
   appendFilter(params, "reports", filters.reports);
+  params.set("sortBy", state.sortBy);
+  params.set("sortDirection", state.sortDirection);
   params.set("pageSize", String(state.pageSize));
   appendOptional(params, "cursor", state.cursor);
 
@@ -89,4 +99,22 @@ function appendOptional(params, key, value) {
 function normalizeCursor(value) {
   const normalized = String(value ?? "").trim();
   return normalized || null;
+}
+
+export function selectDashboardSort(currentSort, sortBy) {
+  if (!["time", "product", "activity", "status"].includes(sortBy)) {
+    return currentSort;
+  }
+
+  return {
+    sortBy,
+    sortDirection:
+      currentSort.sortBy === sortBy
+        ? currentSort.sortDirection === "asc"
+          ? "desc"
+          : "asc"
+        : sortBy === "time"
+          ? "desc"
+          : "asc",
+  };
 }
