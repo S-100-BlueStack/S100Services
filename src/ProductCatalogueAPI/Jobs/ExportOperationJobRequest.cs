@@ -5,7 +5,7 @@ namespace ProductCatalogueAPI.Jobs
     public sealed record ExportOperationJobRequest(
         string DatasetName,
         ExportOperationType OperationType,
-        string? ExportTarget,
+        string? ProductSpecification,
         int? ExpectedEdition,
         int? ExpectedUpdate,
         string CorrelationId,

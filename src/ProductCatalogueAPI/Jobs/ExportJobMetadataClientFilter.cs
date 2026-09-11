@@ -41,7 +41,7 @@ namespace ProductCatalogueAPI.Jobs
             return CreateSharedParameters(
                 request.DatasetName,
                 ExportOperationContract.ToPublicValue(request.OperationType),
-                request.ExportTarget,
+                request.ProductSpecification,
                 request.ExpectedEdition,
                 request.ExpectedUpdate,
                 request.CorrelationId,
@@ -94,14 +94,14 @@ namespace ProductCatalogueAPI.Jobs
             ValidateSharedRequest(request.DatasetName, request.CorrelationId);
 
             if (request.OperationType is ExportOperationType.ExportEdition or ExportOperationType.ExportUpdate &&
-                request.ExportTarget is not ("S57" or "S101")) {
+                request.ProductSpecification is not ("S57" or "S101")) {
                 throw new InvalidOperationException(
                     "Export jobs require a currently implemented canonical product target."
                 );
             }
 
             if (request.OperationType == ExportOperationType.CancelExport &&
-                request.ExportTarget is not ("S57" or "S101")) {
+                request.ProductSpecification is not ("S57" or "S101")) {
                 throw new InvalidOperationException(
                     "CancelExport jobs must include the independent export target."
                 );

@@ -23,8 +23,8 @@ public sealed class ChangeDetectionWorkflowTests
 
         var summaries = await repository.GetOpenChangeSummariesAsync();
         Assert.Equal(2, summaries.Count);
-        Assert.Contains(summaries, summary => summary.ProductSpecification == ProductSpecification.S101);
-        Assert.Contains(summaries, summary => summary.ProductSpecification == ProductSpecification.S57);
+        Assert.Contains(summaries, summary => summary.ProductSpecification == ProductSpecification.S101 && summary.DatasetName == "101DK001");
+        Assert.Contains(summaries, summary => summary.ProductSpecification == ProductSpecification.S57 && summary.DatasetName == "DK3BIDQE");
         Assert.All(summaries, summary => Assert.Contains("attributes.categoryOfLight", summary.Yaml));
     }
 
@@ -58,8 +58,8 @@ public sealed class ChangeDetectionWorkflowTests
     private sealed class RecordingOperations : IExportOperationService
     {
         public int Calls { get; private set; }
-        public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ProductSpecification productSpecification, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) { Calls++; throw new InvalidOperationException("Pending rules must not start an export."); }
-        public Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, ProductSpecification productSpecification, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) => throw new NotSupportedException();
+        public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) { Calls++; throw new InvalidOperationException("Pending rules must not start an export."); }
+        public Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) => throw new NotSupportedException();
     }
 
     private sealed class FakeLockService : IDatasetLockService
@@ -93,6 +93,9 @@ public sealed class ChangeDetectionWorkflowTests
             }
         });
         public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(string datasetName, CancellationToken cancellationToken = default) => Task.FromResult<ElectronicProductVersion?>(new(datasetName, 4, 2));
+        public IReadOnlyList<S100FC.S128.FeatureTypes.ElectronicProduct> GetMappedElectronicProducts(string name, string productSpecification) => productSpecification == "S57"
+            ? [new S100FC.S128.FeatureTypes.ElectronicProduct { datasetName = "DK3BIDQE", productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-57" } }]
+            : [];
         public IEnumerator<string> GetEnumerator() => Array.Empty<string>().AsEnumerable().GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name) => null;

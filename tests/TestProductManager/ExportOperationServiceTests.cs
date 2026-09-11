@@ -20,7 +20,7 @@ public sealed class ExportOperationServiceTests
         var engine = new RecordingExportEngine();
         var service = CreateService(products, repository, engine, new SummaryResponse());
 
-        var result = await service.ExecuteExportAsync("101DK001", ProductSpecification.S101, ExportRevisionType.NewEdition, "developer");
+        var result = await service.ExecuteExportAsync("101DK001", ExportRevisionType.NewEdition, "developer");
 
         Assert.Equal(ExportOperationContract.ExportCompletedCode, result.Code);
         Assert.Equal(1, products.SnapshotCalls);
@@ -37,7 +37,7 @@ public sealed class ExportOperationServiceTests
         var diagnostic = new SevenCsDiagnosticArtifact("101DK001.vld", "text/plain", "validation details"u8.ToArray());
         var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse { Errors = 1 }, [diagnostic]);
 
-        await Assert.ThrowsAsync<ExportValidationException>(() => service.ExecuteExportAsync("101DK001", ProductSpecification.S101, ExportRevisionType.Update, null));
+        await Assert.ThrowsAsync<ExportValidationException>(() => service.ExecuteExportAsync("101DK001", ExportRevisionType.Update, null));
 
         Assert.Equal(ProductState.Error, repository.Track.State);
         Assert.Equal("SEVENCS_VALIDATION_FAILED", repository.LastErrorCode);
@@ -53,7 +53,7 @@ public sealed class ExportOperationServiceTests
         var service = CreateService(products, repository, new RecordingExportEngine(), new SummaryResponse());
         var guardCalled = false;
 
-        await Assert.ThrowsAsync<ExportOperationRejectedException>(() => service.ExecuteExportAsync("101DK001", ProductSpecification.S101, ExportRevisionType.NewEdition, null, beforeMutation: () => guardCalled = true));
+        await Assert.ThrowsAsync<ExportOperationRejectedException>(() => service.ExecuteExportAsync("101DK001", ExportRevisionType.NewEdition, null, beforeMutation: () => guardCalled = true));
 
         Assert.False(guardCalled);
         Assert.Equal(0, products.SnapshotCalls);
@@ -67,13 +67,28 @@ public sealed class ExportOperationServiceTests
         var engine = new RecordingExportEngine();
         var service = CreateService(products, repository, engine, new SummaryResponse());
 
-        var result = await service.ExecuteCancelExportAsync("101DK001", ProductSpecification.S101, "developer");
+        var result = await service.ExecuteCancelExportAsync("101DK001", "developer");
 
         Assert.Equal(ExportOperationContract.CancelExportCompletedCode, result.Code);
         Assert.Equal(ProductState.Cancelled, repository.Track.State);
         Assert.Null(repository.Track.CandidateEdition);
         Assert.Equal(1, engine.DeleteCalls);
         Assert.Equal(0, products.AttachmentCalls);
+    }
+
+    [Fact]
+    public async Task S57ExportUsesProductMappingInsteadOfDerivingTheDatasetName() {
+        var products = new RecordingElectronicProductManager();
+        var repository = new RecordingWorkflowRepository();
+        var engine = new RecordingExportEngine();
+        var service = CreateService(products, repository, engine, new SummaryResponse());
+
+        await service.ExecuteExportAsync("DK3BIDQE", ExportRevisionType.NewEdition, "developer");
+
+        Assert.Equal("DK3BIDQE", repository.Track.DatasetName);
+        Assert.Equal("101DK001", products.LastSnapshotDatasetName);
+        Assert.Equal("DK3BIDQE", engine.LastRequest!.DatasetName);
+        Assert.Equal("101DK001", engine.LastRequest.SourceDatasetName);
     }
 
     private static TestExportOperationService CreateService(RecordingElectronicProductManager products, RecordingWorkflowRepository repository, RecordingExportEngine engine, SummaryResponse validation, IReadOnlyList<SevenCsDiagnosticArtifact>? diagnostics = null) => new(
@@ -97,13 +112,20 @@ public sealed class ExportOperationServiceTests
         public int SnapshotCalls { get; private set; }
         public int AttachmentCalls { get; private set; }
         public (int Edition, int Update) LastSnapshotVersion { get; private set; }
+        public string? LastSnapshotDatasetName { get; private set; }
         public string OutputFolder => "output";
         public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(string datasetName, CancellationToken cancellationToken = default) => Task.FromResult<ElectronicProductVersion?>(new(datasetName, 4, 2));
-        public Task<YamlDataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default) { SnapshotCalls++; LastSnapshotVersion = (edition, update); return Task.FromResult<YamlDataset>(null!); }
+        public Task<YamlDataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default) { SnapshotCalls++; LastSnapshotDatasetName = name; LastSnapshotVersion = (edition, update); return Task.FromResult<YamlDataset>(null!); }
         public Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign) { AttachmentCalls++; return Task.CompletedTask; }
         public Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml) { AttachmentCalls++; return Task.CompletedTask; }
         public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name) => null;
         public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name, string productSpecification) => null;
+        public S100FC.S128.FeatureTypes.ElectronicProduct? ResolveExportProduct(string name) => name == "DK3BIDQE"
+            ? new S100FC.S128.FeatureTypes.ElectronicProduct { datasetName = "DK3BIDQE", productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-57" } }
+            : new S100FC.S128.FeatureTypes.ElectronicProduct { datasetName = "101DK001", productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-101" } };
+        public IReadOnlyList<S100FC.S128.FeatureTypes.ElectronicProduct> GetMappedElectronicProducts(string name, string productSpecification) => name == "DK3BIDQE" && productSpecification == "S101"
+            ? [new S100FC.S128.FeatureTypes.ElectronicProduct { datasetName = "101DK001", productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-101" } }]
+            : [];
         public IEnumerator<string> GetEnumerator() => Array.Empty<string>().AsEnumerable().GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? ProductMapping, int? optimumDisplayScale = null) => throw new NotSupportedException();
@@ -126,8 +148,9 @@ public sealed class ExportOperationServiceTests
         public ExportEngineKind Kind => ExportEngineKind.IsoIec8211;
         public int ExportCalls { get; private set; }
         public int DeleteCalls { get; private set; }
+        public ExportEngineRequest? LastRequest { get; private set; }
         public bool Supports(ProductSpecification productSpecification) => productSpecification is ProductSpecification.S57 or ProductSpecification.S101;
-        public Task<ExportEngineResult> ExportAsync(ExportEngineRequest request, CancellationToken cancellationToken = default) { ExportCalls++; return Task.FromResult(new ExportEngineResult("output", [])); }
+        public Task<ExportEngineResult> ExportAsync(ExportEngineRequest request, CancellationToken cancellationToken = default) { ExportCalls++; LastRequest = request; return Task.FromResult(new ExportEngineResult("output", [])); }
         public Task DeleteOutputAsync(ExportOutputIdentity output, CancellationToken cancellationToken = default) { DeleteCalls++; return Task.CompletedTask; }
     }
 

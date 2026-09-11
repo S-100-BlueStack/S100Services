@@ -18,6 +18,8 @@ namespace S100FC.ProductCatalogue
         public int ExactMatchCount { get; } = exactMatchCount;
     }
 
+    public sealed class ProductMappingIntegrityException(string message) : Exception(message);
+
     public interface INauticalProductManager
     {
     }
@@ -54,10 +56,23 @@ namespace S100FC.ProductCatalogue
         Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc);
         ElectronicProduct? ElectronicProduct(string name);
         ElectronicProduct? ElectronicProduct(string name, string productSpecification);
+        /// <summary>
+        /// Resolves the product represented by a dataset name using its S-128 catalogue identity.
+        /// </summary>
+        /// <param name="name">The dataset name supplied by the caller.</param>
+        /// <returns>The uniquely identified product, or <see langword="null"/> when it is not present.</returns>
+        ElectronicProduct? ResolveExportProduct(string name) => null;
+        ElectronicProduct? ResolveElectronicProduct(string name, string productSpecification) => ElectronicProduct(name, productSpecification);
+        IReadOnlyList<ElectronicProduct> GetMappedElectronicProducts(string name, string productSpecification) => [];
         Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(
             string datasetName,
             CancellationToken cancellationToken = default
         );
+        Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(
+            string datasetName,
+            string productSpecification,
+            CancellationToken cancellationToken = default
+        ) => ReadElectronicProductVersionAsync(datasetName, cancellationToken);
 
         Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition);
         Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign);

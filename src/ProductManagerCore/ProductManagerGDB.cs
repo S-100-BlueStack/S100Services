@@ -58,6 +58,7 @@ namespace S100FC.ProductCatalogue
 
         private readonly ConcurrentDictionary<ElectronicProductKey, S100FC.S128.FeatureTypes.ElectronicProduct> _electronicProducts = new();
         private readonly ConcurrentDictionary<string, S100FC.S128.FeatureTypes.ElectronicProduct> _preferredElectronicProductsByName = new();
+        private ElectronicProductMappingIndex _productMappings = ElectronicProductMappingIndex.Empty;
 
         private ProductManagerGDB() {
             this._singleThreadTaskScheduler = new SingleThreadTaskScheduler();
@@ -120,6 +121,7 @@ namespace S100FC.ProductCatalogue
             });
 
             await this.Dispatch(() => {
+                var catalogueEntries = new List<ElectronicProductCatalogueEntry>();
                 using (var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"))) {
                     using var cursor = surface.Search(new QueryFilter {
                         WhereClause = "upper(ps) = 'S-128'"
@@ -137,9 +139,14 @@ namespace S100FC.ProductCatalogue
                             var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(json.ToString(), typeof(ElectronicProduct));
 
                             AddElectronicProduct(electronicProduct);
+                            catalogueEntries.Add(new ElectronicProductCatalogueEntry(
+                                c.IsNull("UID") ? string.Empty : Convert.ToString(c["UID"]) ?? string.Empty,
+                                electronicProduct,
+                                c.IsNull("featurebindings") ? null : Convert.ToString(c["featurebindings"])));
                         }
                     }
                 }
+                _productMappings = ElectronicProductMappingIndex.Create(catalogueEntries);
             });
 
             return this;
@@ -467,13 +474,13 @@ namespace S100FC.ProductCatalogue
             var result = new Dictionary<string, Dictionary<string, ArchiveRow>>();
 
             await this.Dispatch(() => {
-                var products = this._preferredElectronicProductsByName
-                    .Where(x => x.Value.optimumDisplayScale.HasValue)
+                var products = this._electronicProducts
+                    .Where(x => x.Key.ProductSpecification == "S101" && x.Value.optimumDisplayScale.HasValue)
                     .Select(x => new {
-                        Name = x.Key,
+                        Name = x.Key.DatasetName,
                         Product = x.Value,
                         DisplayScale = x.Value.optimumDisplayScale!.Value,
-                        Aoi = this.GetProductAoiGeometry(x.Key)
+                        Aoi = this.GetProductAoiGeometry(x.Key.DatasetName, "S-101")
                     })
                     .Where(x => x.Aoi != null && !x.Aoi.IsEmpty)
                     .ToList();
@@ -638,10 +645,24 @@ namespace S100FC.ProductCatalogue
 
         ElectronicProduct? IElectronicProductManager.ElectronicProduct(string name, string productSpecification) => this._electronicProducts.GetValueOrDefault(CreateElectronicProductKey(productSpecification, name));
 
+        ElectronicProduct? IElectronicProductManager.ResolveExportProduct(string name) => _productMappings.ResolveByDatasetName(name);
+
+        ElectronicProduct? IElectronicProductManager.ResolveElectronicProduct(string name, string productSpecification) => _productMappings.Resolve(name, productSpecification);
+
+        IReadOnlyList<ElectronicProduct> IElectronicProductManager.GetMappedElectronicProducts(string name, string productSpecification) => _productMappings.GetMapped(name, productSpecification);
+
         async Task<ElectronicProductVersion?> IElectronicProductManager.ReadElectronicProductVersionAsync(
             string datasetName,
             CancellationToken cancellationToken
-        ) {
+        ) => await ReadElectronicProductVersionCoreAsync(datasetName, null, cancellationToken);
+
+        async Task<ElectronicProductVersion?> IElectronicProductManager.ReadElectronicProductVersionAsync(
+            string datasetName,
+            string productSpecification,
+            CancellationToken cancellationToken
+        ) => await ReadElectronicProductVersionCoreAsync(datasetName, productSpecification, cancellationToken);
+
+        private async Task<ElectronicProductVersion?> ReadElectronicProductVersionCoreAsync(string datasetName, string? productSpecification, CancellationToken cancellationToken) {
             if (string.IsNullOrWhiteSpace(datasetName))
                 throw new ArgumentNullException(nameof(datasetName));
 
@@ -683,10 +704,15 @@ namespace S100FC.ProductCatalogue
                         continue;
                     }
 
-                    candidates.Add(S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(
+                    var candidate = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(
                         attributes,
                         typeof(ElectronicProduct)
-                    ));
+                    );
+                    if (!string.IsNullOrWhiteSpace(productSpecification) &&
+                        !string.Equals(NormalizeProductSpecification(candidate.productSpecification?.name), NormalizeProductSpecification(productSpecification), StringComparison.Ordinal))
+                        continue;
+
+                    candidates.Add(candidate);
                 }
 
                 return SelectExactElectronicProductVersion(datasetName, candidates);
@@ -750,24 +776,32 @@ namespace S100FC.ProductCatalogue
         private async Task<(ElectronicProduct ElectronicProduct, SpatialQueryFilter Filter)> GetElectronicProductAsync(string name) {
             return await this.Dispatch(() => {
                 using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
-                ArcGIS.Core.Data.Row row128;
-
                 using var cursorS128 = surface.Search(new QueryFilter {
-                    //WhereClause = $"json LIKE '%datasetName\":\"{name}\"%'",
-                    WhereClause = $"attributebindings LIKE '%\"{name}\"%'",
-                }, false);
+                    WhereClause = "upper(ps) = 'S-128' AND code = 'ElectronicProduct'",
+                    SubFields = "attributebindings, shape"
+                }, true);
 
-                cursorS128.MoveNext();
+                var matches = new List<(ElectronicProduct Product, ArcGIS.Core.Geometry.Polygon Shape)>();
+                while (cursorS128.MoveNext()) {
+                    var row = cursorS128.Current;
+                    if (row.IsNull("attributebindings") || row is not ArcGIS.Core.Data.Feature feature)
+                        continue;
 
+                    var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                    if (NormalizeDatasetName(product.datasetName) != NormalizeDatasetName(name) ||
+                        NormalizeProductSpecification(product.productSpecification?.name) != NormalizeProductSpecification("S-101"))
+                        continue;
 
-                row128 = cursorS128.Current;
+                    matches.Add((product, (ArcGIS.Core.Geometry.Polygon)feature.GetShape().Clone()));
+                }
 
-                if (row128.IsNull("attributebindings"))
-                    throw new System.ArgumentNullException(nameof(name));
+                if (matches.Count == 0)
+                    throw new ArgumentException($"No S-101 ElectronicProduct named '{name}' was found in S-128.", nameof(name));
+                if (matches.Count > 1)
+                    throw new ProductDataIntegrityException(name, matches.Count);
 
-                var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row128["attributebindings"])!, typeof(ElectronicProduct));
-
-                var shapeCoverage = (ArcGIS.Core.Geometry.Polygon)((ArcGIS.Core.Data.Feature)cursorS128.Current).GetShape();
+                var electronicProduct = matches[0].Product;
+                var shapeCoverage = matches[0].Shape;
 
                 var whereClause = "upper(ps) = 'S-101'";
 
@@ -1251,7 +1285,8 @@ namespace S100FC.ProductCatalogue
         }
 
         public async Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml) {
-            var electronicProduct = this._preferredElectronicProductsByName[name.ToUpperInvariant()];
+            var electronicProduct = _productMappings.Resolve(name, "S-57")
+                ?? throw new ArgumentException($"No S-57 ElectronicProduct named or ProductMapped from '{name}' was found.", nameof(name));
             var timestamp = DateTime.UtcNow;
             await this.Dispatch(() => {
                 this._geodatabase!.ApplyEdits(() => {
@@ -1342,7 +1377,7 @@ namespace S100FC.ProductCatalogue
             });
         }
 
-        private ArcGIS.Core.Geometry.Geometry GetProductAoiGeometry(string productName) {
+        private ArcGIS.Core.Geometry.Geometry GetProductAoiGeometry(string productName, string productSpecification) {
             if (string.IsNullOrWhiteSpace(productName))
                 throw new ArgumentNullException(nameof(productName));
 
@@ -1350,24 +1385,29 @@ namespace S100FC.ProductCatalogue
                 this.QualifyTableName("surface"));
 
             using var cursor = surface.Search(new QueryFilter {
-                WhereClause = $"attributebindings LIKE '%\"{productName}\"%'",
-            }, false);
+                WhereClause = "upper(ps) = 'S-128' AND code = 'ElectronicProduct'",
+                SubFields = "attributebindings, shape"
+            }, true);
 
-            if (!cursor.MoveNext() || cursor.Current == null)
-                throw new InvalidOperationException(
-                    $"Could not find product coverage surface for product '{productName}'.");
+            var matches = new List<ArcGIS.Core.Geometry.Geometry>();
+            while (cursor.MoveNext()) {
+                var row = cursor.Current;
+                if (row.IsNull("attributebindings") || row is not ArcGIS.Core.Data.Feature feature)
+                    continue;
+                var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                if (NormalizeDatasetName(product.datasetName) != NormalizeDatasetName(productName) ||
+                    NormalizeProductSpecification(product.productSpecification?.name) != NormalizeProductSpecification(productSpecification))
+                    continue;
+                var shape = feature.GetShape();
+                if (shape != null && !shape.IsEmpty)
+                    matches.Add(shape.Clone());
+            }
 
-            if (cursor.Current is not ArcGIS.Core.Data.Feature feature)
-                throw new InvalidOperationException(
-                    $"Product coverage row for '{productName}' is not a feature.");
-
-            var shape = feature.GetShape();
-
-            if (shape == null || shape.IsEmpty)
-                throw new InvalidOperationException(
-                    $"Product coverage geometry for '{productName}' is empty.");
-
-            return shape.Clone();
+            return matches.Count switch {
+                1 => matches[0],
+                0 => throw new InvalidOperationException($"Could not find product coverage surface for {productSpecification} product '{productName}'."),
+                _ => throw new ProductDataIntegrityException(productName, matches.Count)
+            };
         }
 
         private async Task<SpatialQueryFilter> BuildSpatialQueryFilter(Dataset dataset) {
@@ -1388,7 +1428,7 @@ namespace S100FC.ProductCatalogue
                     $"UPPER(ps) = 'S-101' AND " +
                     $"(GDB_FROM_DATE > {formattedDate} OR GDB_TO_DATE > {formattedDate})";
 
-                var shapeCoverage = this.GetProductAoiGeometry(dataset.DatasetName);
+                var shapeCoverage = this.GetProductAoiGeometry(dataset.DatasetName, "S-101");
 
                 return new SpatialQueryFilter {
                     FilterGeometry = shapeCoverage,

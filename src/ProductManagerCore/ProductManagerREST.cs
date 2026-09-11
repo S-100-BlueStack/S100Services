@@ -32,6 +32,7 @@ namespace ProductCatalogue
 
         private readonly ConcurrentDictionary<ElectronicProductKey, S100FC.S128.FeatureTypes.ElectronicProduct> _electronicProducts = new();
         private readonly ConcurrentDictionary<string, S100FC.S128.FeatureTypes.ElectronicProduct> _preferredElectronicProductsByName = new();
+        private ElectronicProductMappingIndex _productMappings = ElectronicProductMappingIndex.Empty;
 
         private sealed record ElectronicProductKey(string ProductSpecification, string DatasetName);
 
@@ -73,17 +74,24 @@ namespace ProductCatalogue
             }
 
             // ----- Read electronic products
-            var attachmentClient = await this._s128FeatureServiceClient.GetLayerClientAsync("attachment");
-            var electronicProducts = await attachmentClient.QueryAsync(new FeatureQuery() {
+            var surfaceClient = await this._s128FeatureServiceClient.GetLayerClientAsync("surface");
+            var electronicProducts = await surfaceClient.QueryAsync(new FeatureQuery() {
                 Where = "upper(ps) = 'S-128' AND code = 'ElectronicProduct'",
+                ReturnGeometry = false,
+                OutFields = ["UID", "attributebindings", "featurebindings"]
             }).ToListAsync();
 
+            var catalogueEntries = new List<ElectronicProductCatalogueEntry>();
             foreach (var product in electronicProducts) {
-                if (product.Attributes.ContainsKey("attributebindings") && product.Attributes["attributebindings"] != null) {
-                    var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(product.Attributes["attributebindings"]!.ToString()!, typeof(ElectronicProduct));
+                if (TryGetAttribute(product.Attributes, "attributebindings", out var attributeBindings) && attributeBindings != null) {
+                    var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(attributeBindings.ToString()!, typeof(ElectronicProduct));
                     AddElectronicProduct(electronicProduct);
+                    TryGetAttribute(product.Attributes, "UID", out var featureId);
+                    TryGetAttribute(product.Attributes, "featurebindings", out var featureBindings);
+                    catalogueEntries.Add(new ElectronicProductCatalogueEntry(Convert.ToString(featureId) ?? string.Empty, electronicProduct, Convert.ToString(featureBindings)));
                 }
             }
+            _productMappings = ElectronicProductMappingIndex.Create(catalogueEntries);
 
             return this;
         }
@@ -417,19 +425,33 @@ namespace ProductCatalogue
 
         ElectronicProduct? IElectronicProductManager.ElectronicProduct(string name, string productSpecification) => this._electronicProducts.GetValueOrDefault(CreateElectronicProductKey(productSpecification, name));
 
+        ElectronicProduct? IElectronicProductManager.ResolveExportProduct(string name) => _productMappings.ResolveByDatasetName(name);
+
+        ElectronicProduct? IElectronicProductManager.ResolveElectronicProduct(string name, string productSpecification) => _productMappings.Resolve(name, productSpecification);
+
+        IReadOnlyList<ElectronicProduct> IElectronicProductManager.GetMappedElectronicProducts(string name, string productSpecification) => _productMappings.GetMapped(name, productSpecification);
+
         async Task<ElectronicProductVersion?> IElectronicProductManager.ReadElectronicProductVersionAsync(
             string datasetName,
             CancellationToken cancellationToken
-        ) {
+        ) => await ReadElectronicProductVersionCoreAsync(datasetName, null, cancellationToken);
+
+        async Task<ElectronicProductVersion?> IElectronicProductManager.ReadElectronicProductVersionAsync(
+            string datasetName,
+            string productSpecification,
+            CancellationToken cancellationToken
+        ) => await ReadElectronicProductVersionCoreAsync(datasetName, productSpecification, cancellationToken);
+
+        private async Task<ElectronicProductVersion?> ReadElectronicProductVersionCoreAsync(string datasetName, string? productSpecification, CancellationToken cancellationToken) {
             cancellationToken.ThrowIfCancellationRequested();
 
             if (string.IsNullOrWhiteSpace(datasetName))
                 throw new ArgumentNullException(nameof(datasetName));
 
             var normalizedDatasetName = NormalizeDatasetName(datasetName);
-            var attachmentClient = await this._s128FeatureServiceClient!
-                .GetLayerClientAsync("attachment");
-            var rows = await attachmentClient.QueryAsync(new FeatureQuery() {
+            var surfaceClient = await this._s128FeatureServiceClient!
+                .GetLayerClientAsync("surface");
+            var rows = await surfaceClient.QueryAsync(new FeatureQuery() {
                 Where = "upper(ps) = 'S-128' AND code = 'ElectronicProduct'",
                 ReturnGeometry = false,
                 OutFields = ["attributebindings"]
@@ -454,7 +476,8 @@ namespace ProductCatalogue
                     NormalizeDatasetName(candidate.datasetName),
                     normalizedDatasetName,
                     StringComparison.OrdinalIgnoreCase
-                )) {
+                ) && (string.IsNullOrWhiteSpace(productSpecification) ||
+                    string.Equals(NormalizeProductSpecification(candidate.productSpecification?.name), NormalizeProductSpecification(productSpecification), StringComparison.Ordinal))) {
                     exactMatches.Add(candidate);
                 }
             }
@@ -605,17 +628,28 @@ namespace ProductCatalogue
 
         private async Task<(ElectronicProduct ElectronicProduct, NetTopologySuite.Geometries.Geometry Boundary)> GetElectronicProductAsync(string name) {
             var surfaceClient = await this._s128FeatureServiceClient.GetLayerClientAsync("surface");
-            var product = await surfaceClient.QueryAsync(new FeatureQuery() {
-                Where = $"attributebindings LIKE '{name}' AND Code = 'ElectronicProduct'",
-
+            var rows = await surfaceClient.QueryAsync(new FeatureQuery() {
+                Where = "upper(ps) = 'S-128' AND code = 'ElectronicProduct'",
                 ReturnGeometry = true,
-            }).SingleOrDefaultAsync();
+                OutFields = ["attributebindings"]
+            }).ToListAsync();
 
-            var attrBindings = Convert.ToString(product.Attributes["attributebindings"]) ?? string.Empty;
+            var matches = new List<(ElectronicProduct Product, NetTopologySuite.Geometries.Geometry Boundary)>();
+            foreach (var row in rows) {
+                if (!TryGetAttribute(row.Attributes, "attributebindings", out var rawAttributes) || row.Geometry == null)
+                    continue;
+                var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(rawAttributes) ?? string.Empty, typeof(ElectronicProduct));
+                if (NormalizeDatasetName(product.datasetName) != NormalizeDatasetName(name) ||
+                    NormalizeProductSpecification(product.productSpecification?.name) != NormalizeProductSpecification("S-101"))
+                    continue;
+                matches.Add((product, row.Geometry));
+            }
 
-            var electronicProduct = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(attrBindings!, typeof(ElectronicProduct));
-
-            return (electronicProduct, product.Geometry);
+            return matches.Count switch {
+                1 => matches[0],
+                0 => throw new ArgumentException($"No S-101 ElectronicProduct named '{name}' was found in S-128.", nameof(name)),
+                _ => throw new ProductDataIntegrityException(name, matches.Count)
+            };
 
         }
         // TODO: Reimplement AddTopology and AddGeometry
@@ -986,5 +1020,16 @@ namespace ProductCatalogue
         private static ElectronicProductKey CreateElectronicProductKey(string? productSpecification, string? datasetName) => new(NormalizeProductSpecification(productSpecification), datasetName?.Trim().ToUpperInvariant() ?? string.Empty);
 
         private static string NormalizeProductSpecification(string? value) => value?.Replace("-", string.Empty, StringComparison.Ordinal).Trim().ToUpperInvariant() ?? string.Empty;
+
+        private static bool TryGetAttribute(IReadOnlyDictionary<string, object?> attributes, string name, out object? value) {
+            foreach (var attribute in attributes) {
+                if (string.Equals(attribute.Key, name, StringComparison.OrdinalIgnoreCase)) {
+                    value = attribute.Value;
+                    return true;
+                }
+            }
+            value = null;
+            return false;
+        }
     }
 }

@@ -36,7 +36,7 @@ public sealed class ProcessChangeSummariesJob(IProductWorkflowRepository workflo
             return;
         }
 
-        await _exportOperations.ExecuteExportAsync(summary.DatasetName, summary.ProductSpecification, decision.RevisionType.Value, "system", summary.Yaml, cancellationToken);
+        await _exportOperations.ExecuteExportAsync(summary.DatasetName, decision.RevisionType.Value, "system", summary.Yaml, cancellationToken);
         await _workflowRepository.CloseChangeSummaryAsync(summary.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
     }
 }

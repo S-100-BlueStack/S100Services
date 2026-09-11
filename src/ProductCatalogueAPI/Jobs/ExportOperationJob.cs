@@ -1,6 +1,7 @@
 using Hangfire;
 using Hangfire.Server;
 using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Operations;
 using S100FC.ProductCatalogue;
@@ -59,7 +60,7 @@ namespace ProductCatalogueAPI.Jobs
             );
 
             await using var datasetLock = await _datasetLockService.TryAcquireAsync(
-                $"{request.DatasetName}-{request.ExportTarget}",
+                $"{request.DatasetName}-{request.ProductSpecification}",
                 cancellationToken
             );
 
@@ -81,6 +82,7 @@ namespace ProductCatalogueAPI.Jobs
             var executionStarted = context.GetJobParameter<bool?>(
                 ExportJobParameterNames.ExecutionStarted
             ) == true;
+            var productSpecification = ParseProductSpecification(request.ProductSpecification);
 
             if (executionStarted) {
                 _logger.LogError(
@@ -101,6 +103,7 @@ namespace ProductCatalogueAPI.Jobs
             try {
                 currentVersion = await _electronicProductManager.ReadElectronicProductVersionAsync(
                     request.DatasetName,
+                    productSpecification.ToString(),
                     cancellationToken
                 );
             }
@@ -162,13 +165,13 @@ namespace ProductCatalogueAPI.Jobs
 
                 var result = request.OperationType switch {
                     ExportOperationType.ExportEdition => await _exportOperationService.ExecuteExportAsync(
-                        request.DatasetName, ParseExportTarget(request.ExportTarget), ExportRevisionType.NewEdition,
+                        request.DatasetName, ExportRevisionType.NewEdition,
                         user: null, cancellationToken: cancellationToken, beforeMutation: markExecutionStarted),
                     ExportOperationType.ExportUpdate => await _exportOperationService.ExecuteExportAsync(
-                        request.DatasetName, ParseExportTarget(request.ExportTarget), ExportRevisionType.Update,
+                        request.DatasetName, ExportRevisionType.Update,
                         user: null, cancellationToken: cancellationToken, beforeMutation: markExecutionStarted),
                     ExportOperationType.CancelExport => await _exportOperationService.ExecuteCancelExportAsync(
-                        request.DatasetName, ParseExportTarget(request.ExportTarget), user: null,
+                        request.DatasetName, user: null,
                         cancellationToken: cancellationToken, beforeMutation: markExecutionStarted),
                     _ => throw new ArgumentOutOfRangeException(
                         nameof(request.OperationType),
@@ -256,9 +259,8 @@ namespace ProductCatalogueAPI.Jobs
             }
         }
 
-        private static ProductSpecification ParseExportTarget(string? exportTarget) => Enum.TryParse<ProductSpecification>(exportTarget, ignoreCase: false, out var target)
-            ? target
-            : throw new InvalidOperationException("The queued export target is invalid.");
+        private static ProductSpecification ParseProductSpecification(string? value) =>
+            ExportProductResolver.ParseProductSpecification(value, "queued job");
 
         private static ExportOperationJobException CreateSafeFailure(
             IExportJobExecutionContext context,

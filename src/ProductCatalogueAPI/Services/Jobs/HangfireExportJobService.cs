@@ -35,7 +35,8 @@ namespace ProductCatalogueAPI.Services.Jobs
                     JobId = jobId,
                     DatasetName = request.DatasetName,
                     OperationType = ExportOperationContract.ToPublicValue(request.OperationType),
-                    ExportTarget = request.ExportTarget,
+                    // The specification is resolved from the S-128 catalogue before the job is queued.
+                    ExportTarget = request.ProductSpecification,
                     Status = ExportJobContract.QueuedStatus,
                     CreatedAt = request.CreatedAtUtc.ToUniversalTime(),
                     CorrelationId = request.CorrelationId,

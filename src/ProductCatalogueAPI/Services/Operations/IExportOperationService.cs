@@ -8,8 +8,8 @@ namespace ProductCatalogueAPI.Services.Operations;
 public interface IExportOperationService
 {
     /// <summary>Builds and validates a new edition or update candidate for one independent product track.</summary>
-    Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ProductSpecification productSpecification, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null);
+    Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null);
 
     /// <summary>Cancels an unverified candidate without changing the public S-128 catalogue.</summary>
-    Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, ProductSpecification productSpecification, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null);
+    Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null);
 }

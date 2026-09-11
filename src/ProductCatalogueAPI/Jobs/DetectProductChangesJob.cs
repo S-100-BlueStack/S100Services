@@ -11,7 +11,6 @@ namespace ProductCatalogueAPI.Jobs;
 /// </summary>
 public sealed class DetectProductChangesJob(IProductRepository productRepository, IProductWorkflowRepository workflowRepository, IProductManager productManager, IDatasetLockService datasetLockService, TimeProvider timeProvider, ILogger<DetectProductChangesJob> logger) : IBackgroundJob
 {
-    private static readonly ProductSpecification[] SummaryTracks = [ProductSpecification.S101, ProductSpecification.S57];
     private readonly IProductRepository _productRepository = productRepository;
     private readonly IProductWorkflowRepository _workflowRepository = workflowRepository;
     private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
@@ -43,17 +42,22 @@ public sealed class DetectProductChangesJob(IProductRepository productRepository
                 continue;
             }
 
-            var publicVersion = await _electronicProductManager.ReadElectronicProductVersionAsync(datasetName, cancellationToken);
-            if (publicVersion is null) {
-                _logger.LogError("Skipped change-summary update because the S-128 product was not found. DatasetName: {DatasetName}.", datasetName);
-                scanCompleted = false;
-                continue;
-            }
+            var targets = new List<(string DatasetName, ProductSpecification ProductSpecification)> {
+                (datasetName, ProductSpecification.S101)
+            };
+            targets.AddRange(_electronicProductManager.GetMappedElectronicProducts(datasetName, ProductSpecification.S57.ToString())
+                .Where(product => !string.IsNullOrWhiteSpace(product.datasetName))
+                .Select(product => (product.datasetName!.Trim(), ProductSpecification.S57)));
 
-            foreach (var productSpecification in SummaryTracks) {
-                var initialEdition = productSpecification == ProductSpecification.S101 ? publicVersion.Edition ?? 0 : 0;
-                var initialUpdate = productSpecification == ProductSpecification.S101 ? publicVersion.Update ?? 0 : 0;
-                var track = await _workflowRepository.GetOrCreateTrackAsync(datasetName, productSpecification, ExportEngineKind.IsoIec8211, initialEdition, initialUpdate, cancellationToken);
+            foreach (var target in targets.Distinct()) {
+                var publicVersion = await _electronicProductManager.ReadElectronicProductVersionAsync(target.DatasetName, target.ProductSpecification.ToString(), cancellationToken);
+                if (publicVersion is null) {
+                    _logger.LogError("Skipped change-summary update because the mapped S-128 product was not found. SourceDatasetName: {SourceDatasetName}. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.", datasetName, target.DatasetName, target.ProductSpecification);
+                    scanCompleted = false;
+                    continue;
+                }
+
+                var track = await _workflowRepository.GetOrCreateTrackAsync(publicVersion.DatasetName, target.ProductSpecification, ExportEngineKind.IsoIec8211, publicVersion.Edition ?? 0, publicVersion.Update ?? 0, cancellationToken);
                 await MergeDailySummaryAsync(track, dirtyFeatures, scanStartedUtc, cancellationToken);
                 if (track.State != ProductState.Frozen)
                     await _workflowRepository.SetStateAsync(track.Id, ProductState.ChangesDetected, "system", scanStartedUtc, cancellationToken: cancellationToken);

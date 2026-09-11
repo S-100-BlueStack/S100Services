@@ -221,14 +221,24 @@ namespace ProductCatalogueAPI.Controllers
                 return NotFound(response);
             }
 
-            var current = await _repository.GetCurrentByNameAsync(name);
+            var current = await _repository.GetCurrentByNameAsync(electronicProduct.datasetName!);
             // var s57current = await _repository.GetCurrentByNameAsync(s57product.datasetName);
             var s128Status = Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString());
             // var s57Status = Enum.Parse((s57current?.State ?? Data.Models.ProductState.Idle).ToString());
 
-            var tracks = await _workflowRepository.GetTracksAsync(name);
+            var relatedDatasetNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { electronicProduct.datasetName! };
+            foreach (var specification in new[] { ProductSpecification.S57, ProductSpecification.S101 }) {
+                foreach (var mappedProduct in _electronicProductManager.GetMappedElectronicProducts(electronicProduct.datasetName!, specification.ToString())) {
+                    if (!string.IsNullOrWhiteSpace(mappedProduct.datasetName))
+                        relatedDatasetNames.Add(mappedProduct.datasetName.Trim());
+                }
+            }
+
+            var tracks = new List<ProductExportTrackRecord>();
+            foreach (var relatedDatasetName in relatedDatasetNames)
+                tracks.AddRange(await _workflowRepository.GetTracksAsync(relatedDatasetName));
             var exports = new List<ProductExport>();
-            foreach (var track in tracks.Where(track => track.ProductSpecification is ProductSpecification.S57 or ProductSpecification.S101).OrderBy(track => track.ProductSpecification))
+            foreach (var track in tracks.DistinctBy(track => track.Id).Where(track => track.ProductSpecification is ProductSpecification.S57 or ProductSpecification.S101).OrderBy(track => track.ProductSpecification))
             {
                 var artifacts = await _workflowRepository.GetValidationArtifactsAsync(track.Id);
                 var artifactLinks = artifacts.Select(artifact => new ProductArtifactLinkResponse(
@@ -236,7 +246,7 @@ namespace ProductCatalogueAPI.Controllers
                     artifact.FileName,
                     artifact.MediaType,
                     artifact.CreatedAtUtc,
-                    Url.Action(nameof(DownloadValidationArtifact), new { name, artifactId = artifact.Id }) ?? $"/electronicproducts/{Uri.EscapeDataString(name)}/artifacts/{artifact.Id:D}"))
+                    Url.Action(nameof(DownloadValidationArtifact), new { name = track.DatasetName, artifactId = artifact.Id }) ?? $"/electronicproducts/{Uri.EscapeDataString(track.DatasetName)}/artifacts/{artifact.Id:D}"))
                     .ToArray();
 
                 exports.Add(new ProductExport(

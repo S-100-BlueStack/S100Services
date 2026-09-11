@@ -18,7 +18,6 @@ public sealed class ExportOperationJobTests
 
         await job.ExecuteAsync(Request(ExportOperationType.ExportUpdate), context, CancellationToken.None);
 
-        Assert.Equal(ProductSpecification.S101, operations.LastTarget);
         Assert.Equal(ExportRevisionType.Update, operations.LastRevisionType);
         Assert.True(context.Get<bool?>(ExportJobParameterNames.ExecutionStarted));
         Assert.Equal(ExportOperationContract.ExportCompletedCode, context.Get<string>(ExportJobParameterNames.ResultCode));
@@ -51,10 +50,9 @@ public sealed class ExportOperationJobTests
     {
         public int ExportCalls { get; private set; }
         public int CancelCalls { get; private set; }
-        public ProductSpecification? LastTarget { get; private set; }
         public ExportRevisionType? LastRevisionType { get; private set; }
-        public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ProductSpecification productSpecification, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) { beforeMutation?.Invoke(); ExportCalls++; LastTarget = productSpecification; LastRevisionType = revisionType; return Task.FromResult(new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage)); }
-        public Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, ProductSpecification productSpecification, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) { beforeMutation?.Invoke(); CancelCalls++; LastTarget = productSpecification; return Task.FromResult(new ExportOperationResult(ExportOperationContract.CancelExportCompletedCode, ExportOperationContract.CancelExportCompletedMessage)); }
+        public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) { beforeMutation?.Invoke(); ExportCalls++; LastRevisionType = revisionType; return Task.FromResult(new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage)); }
+        public Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) { beforeMutation?.Invoke(); CancelCalls++; return Task.FromResult(new ExportOperationResult(ExportOperationContract.CancelExportCompletedCode, ExportOperationContract.CancelExportCompletedMessage)); }
     }
 
     private sealed class FakeExecutionContext : IExportJobExecutionContext
@@ -86,6 +84,7 @@ public sealed class ExportOperationJobTests
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name) => null;
         public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name, string productSpecification) => null;
+        public S100FC.S128.FeatureTypes.ElectronicProduct? ResolveExportProduct(string name) => new() { datasetName = "101DK001", productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-101" } };
         public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? ProductMapping, int? optimumDisplayScale = null) => throw new NotSupportedException();
         public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, string boundary, int edition, int update, byte[] zipfile) => throw new NotSupportedException();
         public Task<S100FC.YAML.Dataset> CreateNewDatasetAsync(string name) => throw new NotSupportedException();

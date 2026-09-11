@@ -17,28 +17,51 @@ namespace TestProductCatalogueAPI;
 public sealed class ExportAsyncControllerTests
 {
     [Fact]
-    public async Task NewEditionJobQueuesCanonicalIndependentProductTarget() {
+    public async Task NewEditionJobInfersS101FromTheCatalogueProduct() {
         var jobs = new RecordingJobService();
         var controller = CreateController(new RecordingOperations(), jobs);
-        ExportTargetContract.SetValidatedTarget(controller.HttpContext, ProductSpecification.S101);
 
         var result = await controller.NewEditionJob("101DK001", CancellationToken.None);
 
         Assert.IsType<AcceptedResult>(result);
-        Assert.Equal("S101", jobs.Request!.ExportTarget);
+        Assert.Equal("101DK001", jobs.Request!.DatasetName);
+        Assert.Equal("S101", jobs.Request.ProductSpecification);
         Assert.Equal(ExportOperationType.ExportEdition, jobs.Request.OperationType);
     }
 
     [Fact]
-    public async Task CancelExportCallsRenamedOperationForSelectedTrack() {
+    public async Task CancelExportInfersS57FromTheCatalogueProduct() {
         var operations = new RecordingOperations();
         var controller = CreateController(operations, new RecordingJobService());
-        ExportTargetContract.SetValidatedTarget(controller.HttpContext, ProductSpecification.S57);
 
-        var result = await controller.CancelExport("101DK001", CancellationToken.None);
+        var result = await controller.CancelExport("DK3BIDQE", CancellationToken.None);
 
         Assert.IsType<OkObjectResult>(result);
-        Assert.Equal(ProductSpecification.S57, operations.CancelTarget);
+        Assert.Equal("DK3BIDQE", operations.CancelDatasetName);
+    }
+
+    [Fact]
+    public async Task S57JobUsesTheS57ProductNamedByTheCaller() {
+        var jobs = new RecordingJobService();
+        var controller = CreateController(new RecordingOperations(), jobs);
+
+        var result = await controller.NewEditionJob("DK3BIDQE", CancellationToken.None);
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Equal("DK3BIDQE", jobs.Request!.DatasetName);
+        Assert.Equal("S57", jobs.Request.ProductSpecification);
+    }
+
+    [Fact]
+    public async Task CallerExportTargetDoesNotOverrideTheCatalogueProductSpecification() {
+        var jobs = new RecordingJobService();
+        var controller = CreateController(new RecordingOperations(), jobs);
+        controller.HttpContext.Request.QueryString = new QueryString("?exportTarget=S57");
+
+        var result = await controller.NewEditionJob("101DK001", CancellationToken.None);
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Equal("S101", jobs.Request!.ProductSpecification);
     }
 
     private static ExportController CreateController(RecordingOperations operations, RecordingJobService jobs) {
@@ -51,15 +74,15 @@ public sealed class ExportAsyncControllerTests
 
     private sealed class RecordingOperations : IExportOperationService
     {
-        public ProductSpecification? CancelTarget { get; private set; }
-        public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ProductSpecification productSpecification, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) => Task.FromResult(new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage));
-        public Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, ProductSpecification productSpecification, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) { CancelTarget = productSpecification; return Task.FromResult(new ExportOperationResult(ExportOperationContract.CancelExportCompletedCode, ExportOperationContract.CancelExportCompletedMessage)); }
+        public string? CancelDatasetName { get; private set; }
+        public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) => Task.FromResult(new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage));
+        public Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) { CancelDatasetName = datasetName; return Task.FromResult(new ExportOperationResult(ExportOperationContract.CancelExportCompletedCode, ExportOperationContract.CancelExportCompletedMessage)); }
     }
 
     private sealed class RecordingJobService : IExportJobService
     {
         public ExportOperationJobRequest? Request { get; private set; }
-        public ExportJobStartResponse Enqueue(ExportOperationJobRequest request) { Request = request; return new ExportJobStartResponse { JobId = "1", DatasetName = request.DatasetName, OperationType = request.OperationType.ToString(), ExportTarget = request.ExportTarget, Status = "Queued", CreatedAt = request.CreatedAtUtc, CorrelationId = request.CorrelationId, StatusUrl = "/jobs/1" }; }
+        public ExportJobStartResponse Enqueue(ExportOperationJobRequest request) { Request = request; return new ExportJobStartResponse { JobId = "1", DatasetName = request.DatasetName, OperationType = request.OperationType.ToString(), ExportTarget = request.ProductSpecification, Status = "Queued", CreatedAt = request.CreatedAtUtc, CorrelationId = request.CorrelationId, StatusUrl = "/jobs/1" }; }
     }
 
     private sealed class FakeLockService : IDatasetLockService
@@ -82,6 +105,12 @@ public sealed class ExportAsyncControllerTests
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name) => null;
         public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name, string productSpecification) => null;
+        public S100FC.S128.FeatureTypes.ElectronicProduct? ResolveExportProduct(string name) => name.Equals("DK3BIDQE", StringComparison.OrdinalIgnoreCase)
+            ? new S100FC.S128.FeatureTypes.ElectronicProduct { datasetName = "DK3BIDQE", productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-57" } }
+            : new S100FC.S128.FeatureTypes.ElectronicProduct { datasetName = "101DK001", productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-101" } };
+        public S100FC.S128.FeatureTypes.ElectronicProduct? ResolveElectronicProduct(string name, string productSpecification) => productSpecification == "S57"
+            ? new S100FC.S128.FeatureTypes.ElectronicProduct { datasetName = "DK3BIDQE", productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-57" } }
+            : null;
         public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? ProductMapping, int? optimumDisplayScale = null) => throw new NotSupportedException();
         public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, string boundary, int edition, int update, byte[] zipfile) => throw new NotSupportedException();
         public Task<S100FC.YAML.Dataset> CreateNewDatasetAsync(string name) => throw new NotSupportedException();

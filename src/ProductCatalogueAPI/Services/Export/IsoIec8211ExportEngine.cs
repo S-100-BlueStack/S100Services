@@ -2,14 +2,13 @@ using ProductCatalogueAPI.Data.Models;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace ProductCatalogueAPI.Services.Export;
 
 /// <summary>
 /// Encodes S-101 directly and maps S-101 source YAML to the existing S-57 compiler pipeline.
 /// </summary>
-public sealed partial class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, string artifactsPath) : IExportEngine
+public sealed class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, string artifactsPath) : IExportEngine
 {
     private const string S100CompilerPath = @"C:\Program Files\s100compiler\s100compiler.exe";
     private const string S100MapperPath = @"C:\Program Files\s100mapper\s100mapper.exe";
@@ -98,9 +97,11 @@ public sealed partial class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngin
         if (!File.Exists(featureCatalogue) || !File.Exists(pipeline))
             throw new FileNotFoundException("The S-57 mapping pipeline artifacts were not found.");
 
-        var s101Yaml = Path.Combine(outputDirectory, $"{request.DatasetName}.yaml");
-        var s57DatasetName = S101DatasetPrefix().Replace(request.DatasetName, request.DatasetName.Substring(3, 2));
-        var s57Yaml = Path.Combine(outputDirectory, $"{s57DatasetName}.yaml");
+        if (string.IsNullOrWhiteSpace(request.SourceDatasetName))
+            throw new ArgumentException("An S-101 source dataset name resolved through ProductMapping is required for an S-57 export.", nameof(request));
+
+        var s101Yaml = Path.Combine(outputDirectory, $"{request.SourceDatasetName}.yaml");
+        var s57Yaml = Path.Combine(outputDirectory, $"{request.DatasetName}.yaml");
         await File.WriteAllTextAsync(s101Yaml, request.DatasetYaml, Encoding.UTF8, cancellationToken);
 
         var mapperArguments = $"\"{s101Yaml}\" \"{s57Yaml}\" --fc \"{Path.GetFullPath(featureCatalogue)}\" --pipeline \"{pipeline}\"";
@@ -110,7 +111,7 @@ public sealed partial class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngin
         await RunProcessAsync(S57CompilerPath, $"\"{true}\" s57", outputDirectory, request.DatasetName, cancellationToken);
         var exchangeSet = await CreateZipAsync(outputDirectory, cancellationToken);
         return new ExportEngineResult(outputDirectory, [
-            new ExportEngineArtifact(ProductArtifactKind.ExchangeSet, $"{s57DatasetName}-{request.Edition}-{request.Update:000}.zip", "application/zip", exchangeSet)
+            new ExportEngineArtifact(ProductArtifactKind.ExchangeSet, $"{request.DatasetName}-{request.Edition}-{request.Update:000}.zip", "application/zip", exchangeSet)
         ]);
     }
 
@@ -183,6 +184,4 @@ public sealed partial class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngin
             throw new ArgumentOutOfRangeException(nameof(request), "Edition and update numbers cannot be negative.");
     }
 
-    [GeneratedRegex(@"^101[A-Z]{2}\d{2}")]
-    private static partial Regex S101DatasetPrefix();
 }

@@ -21,17 +21,22 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
     private readonly ILogger<ExportOperationService> _logger = logger;
 
     /// <inheritdoc/>
-    public async Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ProductSpecification productSpecification, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) {
+    public async Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) {
         cancellationToken.ThrowIfCancellationRequested();
+        var product = ResolveRequiredExportProduct(datasetName);
+        var targetDatasetName = product.DatasetName;
+        var productSpecification = product.ProductSpecification;
         var engine = _exportEngines.GetRequiredEngine(productSpecification);
-        var publicVersion = await _electronicProductManager.ReadElectronicProductVersionAsync(datasetName, cancellationToken)
+        var publicVersion = await _electronicProductManager.ReadElectronicProductVersionAsync(targetDatasetName, productSpecification.ToString(), cancellationToken)
             ?? throw new ExportOperationRejectedException($"Electronic product '{datasetName}' was not found in the public S-128 catalogue.");
 
-        var initialPublishedEdition = productSpecification == ProductSpecification.S101 ? publicVersion.Edition ?? 0 : 0;
-        var initialPublishedUpdate = productSpecification == ProductSpecification.S101 ? publicVersion.Update ?? 0 : 0;
-        var track = await _workflowRepository.GetOrCreateTrackAsync(datasetName, productSpecification, engine.Kind, initialPublishedEdition, initialPublishedUpdate, cancellationToken);
+        targetDatasetName = publicVersion.DatasetName;
+        var initialPublishedEdition = publicVersion.Edition ?? 0;
+        var initialPublishedUpdate = publicVersion.Update ?? 0;
+        var track = await _workflowRepository.GetOrCreateTrackAsync(targetDatasetName, productSpecification, engine.Kind, initialPublishedEdition, initialPublishedUpdate, cancellationToken);
         EnsureExportCanStart(track);
         var (edition, update) = GetCandidateVersion(track, revisionType);
+        var sourceDatasetName = ResolveSourceDatasetName(targetDatasetName, productSpecification);
 
         cancellationToken.ThrowIfCancellationRequested();
         beforeMutation?.Invoke();
@@ -43,15 +48,15 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
             exportStarted = true;
 
             var exportType = revisionType == ExportRevisionType.NewEdition ? ExportTypes.NewEdition : ExportTypes.Update;
-            var dataset = await _electronicProductManager.CreateExportSnapshotAsync(datasetName, exportType, edition, update, cancellationToken);
+            var dataset = await _electronicProductManager.CreateExportSnapshotAsync(sourceDatasetName, exportType, edition, update, cancellationToken);
             var datasetYaml = SerializeDataset(dataset);
             if (string.IsNullOrWhiteSpace(datasetYaml))
-                throw new ExportSourceUnavailableException(datasetName);
+                throw new ExportSourceUnavailableException(sourceDatasetName);
 
             var revisionId = await _workflowRepository.AddRevisionAsync(new ProductRevisionWrite(track.Id, revisionType, edition, update, datasetYaml, changeSummaryYaml, user, now), cancellationToken);
-            await _workflowRepository.AddArtifactAsync(new ProductArtifactWrite(track.Id, revisionId, ProductArtifactKind.DatasetYaml, $"{datasetName}-{edition}-{update:000}.yaml", "application/yaml", Encoding.UTF8.GetBytes(datasetYaml), now), cancellationToken);
+            await _workflowRepository.AddArtifactAsync(new ProductArtifactWrite(track.Id, revisionId, ProductArtifactKind.DatasetYaml, $"{sourceDatasetName}-{edition}-{update:000}.yaml", "application/yaml", Encoding.UTF8.GetBytes(datasetYaml), now), cancellationToken);
 
-            var exportResult = await engine.ExportAsync(new ExportEngineRequest(datasetName, productSpecification, edition, update, _electronicProductManager.OutputFolder, datasetYaml), cancellationToken);
+            var exportResult = await engine.ExportAsync(new ExportEngineRequest(targetDatasetName, productSpecification, edition, update, _electronicProductManager.OutputFolder, datasetYaml, SourceDatasetName: sourceDatasetName), cancellationToken);
             foreach (var artifact in exportResult.Artifacts) {
                 await _workflowRepository.AddArtifactAsync(new ProductArtifactWrite(track.Id, revisionId, artifact.Kind, artifact.FileName, artifact.MediaType, artifact.Content, now, artifact.MetadataJson), cancellationToken);
             }
@@ -60,23 +65,23 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
             if (productSpecification == ProductSpecification.S101) {
                 SevenCsValidationResult validationResult;
                 try {
-                    validationResult = await _sevenCsService.ValidateDatasetAsync(datasetName, edition, update, _electronicProductManager.OutputFolder, cancellationToken);
+                    validationResult = await _sevenCsService.ValidateDatasetAsync(targetDatasetName, edition, update, _electronicProductManager.OutputFolder, cancellationToken);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
                     throw;
                 }
                 catch (Exception ex) {
-                    throw ExportValidationException.Unavailable(datasetName, ex);
+                    throw ExportValidationException.Unavailable(targetDatasetName, ex);
                 }
 
                 foreach (var diagnostic in validationResult.Diagnostics)
                     await _workflowRepository.AddArtifactAsync(new ProductArtifactWrite(track.Id, revisionId, ProductArtifactKind.ValidationDiagnostic, diagnostic.FileName, diagnostic.MediaType, diagnostic.Content, _timeProvider.GetUtcNow().UtcDateTime), cancellationToken);
                 if (validationResult.Summary.Errors > 0 || validationResult.Summary.Critical > 0 || validationResult.Summary.ShallowIsolatedDangersUpdatedBathy)
-                    throw ExportValidationException.Findings(datasetName, validationResult.Summary.Errors, validationResult.Summary.Critical, validationResult.Summary.ShallowIsolatedDangersUpdatedBathy);
+                    throw ExportValidationException.Findings(targetDatasetName, validationResult.Summary.Errors, validationResult.Summary.Critical, validationResult.Summary.ShallowIsolatedDangersUpdatedBathy);
             }
 
             await _workflowRepository.SetStateAsync(track.Id, ProductState.ReadyForDistribution, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken: cancellationToken);
-            _logger.LogInformation("Candidate export is ready for distribution. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}. Edition: {Edition}. Update: {Update}. S128Published: {S128Published}", datasetName, productSpecification, edition, update, false);
+            _logger.LogInformation("Candidate export is ready for distribution. DatasetName: {DatasetName}. SourceDatasetName: {SourceDatasetName}. ProductSpecification: {ProductSpecification}. Edition: {Edition}. Update: {Update}. S128Published: {S128Published}", targetDatasetName, sourceDatasetName, productSpecification, edition, update, false);
             return new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage);
         }
         catch (Exception ex) when (exportStarted) {
@@ -86,9 +91,12 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
     }
 
     /// <inheritdoc/>
-    public async Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, ProductSpecification productSpecification, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) {
+    public async Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) {
         cancellationToken.ThrowIfCancellationRequested();
-        var track = await _workflowRepository.GetTrackAsync(datasetName, productSpecification, cancellationToken)
+        var product = ResolveRequiredExportProduct(datasetName);
+        var targetDatasetName = product.DatasetName;
+        var productSpecification = product.ProductSpecification;
+        var track = await _workflowRepository.GetTrackAsync(targetDatasetName, productSpecification, cancellationToken)
             ?? throw new ExportOperationRejectedException($"No {productSpecification} export track exists for '{datasetName}'.");
 
         if (!track.CandidateEdition.HasValue || !track.CandidateUpdate.HasValue)
@@ -98,14 +106,36 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
 
         beforeMutation?.Invoke();
         var engine = _exportEngines.GetRequiredEngine(productSpecification);
-        await engine.DeleteOutputAsync(new ExportOutputIdentity(datasetName, productSpecification, track.CandidateEdition.Value, track.CandidateUpdate.Value, _electronicProductManager.OutputFolder), cancellationToken);
+        await engine.DeleteOutputAsync(new ExportOutputIdentity(targetDatasetName, productSpecification, track.CandidateEdition.Value, track.CandidateUpdate.Value, _electronicProductManager.OutputFolder), cancellationToken);
         await _workflowRepository.CancelCandidateAsync(track.Id, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
-        _logger.LogInformation("Unverified candidate export cancelled. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.", datasetName, productSpecification);
+        _logger.LogInformation("Unverified candidate export cancelled. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.", targetDatasetName, productSpecification);
         return new ExportOperationResult(ExportOperationContract.CancelExportCompletedCode, ExportOperationContract.CancelExportCompletedMessage);
     }
 
     /// <summary>Serializes a read-only dataset snapshot. Overridden by focused tests.</summary>
     protected virtual string SerializeDataset(S100FC.YAML.Dataset dataset) => dataset.Serialize();
+
+    private ExportProductIdentity ResolveRequiredExportProduct(string requestedDatasetName) {
+        try {
+            return ExportProductResolver.Resolve(_electronicProductManager, requestedDatasetName)
+                ?? throw new ExportOperationRejectedException($"Electronic product '{requestedDatasetName}' was not found in the public S-128 catalogue.");
+        }
+        catch (ProductMappingIntegrityException ex) {
+            throw new ExportOperationRejectedException(ex.Message);
+        }
+    }
+
+    private string ResolveSourceDatasetName(string targetDatasetName, ProductSpecification productSpecification) {
+        if (productSpecification == ProductSpecification.S101)
+            return targetDatasetName;
+
+        var sources = _electronicProductManager.GetMappedElectronicProducts(targetDatasetName, ProductSpecification.S101.ToString());
+        return sources.Count switch {
+            1 when !string.IsNullOrWhiteSpace(sources[0].datasetName) => sources[0].datasetName!.Trim(),
+            0 => throw new ExportOperationRejectedException($"S-57 product '{targetDatasetName}' has no S-101 ProductMapping in S-128."),
+            _ => throw new ExportOperationRejectedException($"S-57 product '{targetDatasetName}' has multiple S-101 ProductMappings in S-128.")
+        };
+    }
 
     private static void EnsureExportCanStart(ProductExportTrackRecord track) {
         if (track.State is ProductState.Frozen or ProductState.InTransit or ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or ProductState.AcceptedForDistribution)

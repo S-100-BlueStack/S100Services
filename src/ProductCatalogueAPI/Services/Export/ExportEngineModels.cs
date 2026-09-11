@@ -6,7 +6,7 @@ namespace ProductCatalogueAPI.Services.Export;
 /// <summary>
 /// Contains all immutable input required by an export engine.
 /// </summary>
-public sealed record ExportEngineRequest(string DatasetName, ProductSpecification ProductSpecification, int Edition, int Update, string OutputRoot, string DatasetYaml, string? PreviousIndex = null);
+public sealed record ExportEngineRequest(string DatasetName, ProductSpecification ProductSpecification, int Edition, int Update, string OutputRoot, string DatasetYaml, string? PreviousIndex = null, string? SourceDatasetName = null);
 
 /// <summary>
 /// Identifies output belonging to one candidate and one independent product track.
