@@ -84,5 +84,16 @@ namespace ProductCatalogueAPI.Controllers
 
             return Ok(values);
         }
+
+        /// <summary>Gets the product-specific export types whose encoders are currently implemented.</summary>
+        [HttpGet("exporttypes")]
+        public IActionResult GetExportTypes() {
+            var values = ExportTargetContract.SupportedTargets
+                .Select(name => new {
+                    Name = name
+                });
+
+            return Ok(values);
+        }
     }
 }

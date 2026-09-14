@@ -28,6 +28,18 @@ namespace TestProductCatalogueAPI
         }
 
         [Fact]
+        public void ExportTypesExposeOnlyCurrentlySupportedProductSpecifications() {
+            var result = Assert.IsType<OkObjectResult>(Controller(SendToIcEncMode.Disabled).GetExportTypes());
+            var json = JsonSerializer.Serialize(result.Value);
+            using var document = JsonDocument.Parse(json);
+
+            var items = document.RootElement.EnumerateArray().ToArray();
+            Assert.Equal(new[] { "S57", "S101" }, items.Select(item => item.GetProperty("Name").GetString()));
+            foreach (var item in items)
+                Assert.Single(item.EnumerateObject());
+        }
+
+        [Fact]
         [Trait("Package", "PC-006")]
         public void DisabledCapabilityIsBackendOwnedAndIncludesSafeReason() {
             var result = Assert.IsType<OkObjectResult>(Controller(SendToIcEncMode.Disabled).GetCapabilities());
