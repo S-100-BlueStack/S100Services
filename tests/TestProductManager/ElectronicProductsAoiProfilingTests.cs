@@ -193,6 +193,16 @@ namespace TestProductCatalogueAPI
             Assert.Equal(expectedMatch, matches);
         }
 
+        [Theory]
+        [InlineData("deleted-feature", true)]
+        [InlineData("current-feature", false)]
+        [InlineData("CURRENT-FEATURE", false)]
+        public void ArchivedFeatureIsDeletedOnlyWhenItsUidIsAbsentFromTheCurrentFeatureClass(string featureId, bool expectedDeleted) {
+            var currentFeatureIds = new HashSet<string>(["current-feature"], StringComparer.OrdinalIgnoreCase);
+
+            Assert.Equal(expectedDeleted, ProductManagerGDB.IsDeletedFeature(featureId, currentFeatureIds));
+        }
+
         [Fact]
         public async Task SingleThreadTaskSchedulerPreservesActivityCorrelation() {
             using var scheduler = new SingleThreadTaskScheduler();

@@ -426,6 +426,8 @@ namespace S100FC.ProductCatalogue
                         continue;
                     }
 
+                    var currentFeatureIds = ReadCurrentFeatureIds(fc);
+
                     using var archiveTable = fc.GetArchiveTable();
 
                     using var cursor = archiveTable.Search(filter, true);
@@ -445,10 +447,7 @@ namespace S100FC.ProductCatalogue
                             AttributeBindings = row["attributebindings"]?.ToString(),
                             InformationBindings = row["informationbindings"]?.ToString(),
                             FeatureBindings = row["featurebindings"]?.ToString(),
-
-                            // Do not infer deletion from a single historical row.
-                            // Deletion needs separate current-row validation if required.
-                            Deleted = false
+                            Deleted = IsDeletedFeature(id, currentFeatureIds)
                         };
 
                         tableCount++;
@@ -540,6 +539,8 @@ namespace S100FC.ProductCatalogue
                     continue;
                 }
 
+                var currentFeatureIds = ReadCurrentFeatureIds(fc);
+
                 using var archiveTable = fc.GetArchiveTable();
 
                 using var cursor = archiveTable.Search(new QueryFilter {
@@ -582,7 +583,7 @@ namespace S100FC.ProductCatalogue
                         AttributeBindings = row["attributebindings"]?.ToString(),
                         InformationBindings = row["informationbindings"]?.ToString(),
                         FeatureBindings = row["featurebindings"]?.ToString(),
-                        Deleted = false,
+                        Deleted = IsDeletedFeature(id, currentFeatureIds),
                         EditDate = row["GDB_FROM_DATE"] as DateTime?
                     };
 
@@ -608,6 +609,27 @@ namespace S100FC.ProductCatalogue
                     affectedProducts.Count);
             }
         }
+
+        /// <summary>Reads the UIDs that still exist in the current feature class version.</summary>
+        private static HashSet<string> ReadCurrentFeatureIds(FeatureClass featureClass) {
+            var currentFeatureIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            using var cursor = featureClass.Search(new QueryFilter {
+                SubFields = "UID"
+            }, true);
+
+            while (cursor.MoveNext()) {
+                var id = cursor.Current["UID"]?.ToString();
+                if (!string.IsNullOrWhiteSpace(id))
+                    currentFeatureIds.Add(id);
+            }
+
+            return currentFeatureIds;
+        }
+
+        /// <summary>Identifies a deleted feature by its absence from the current feature class version.</summary>
+        internal static bool IsDeletedFeature(string featureId, ISet<string> currentFeatureIds) => !currentFeatureIds.Contains(featureId);
+
         public async Task<(string yaml, string index)> GetLatestDatasetYAML(string datasetName, int edition) {
             return await this.Dispatch(() => {
                 using var attachment = _geodatabase!.OpenDataset<Table>(QualifyTableName("attachment"));

@@ -30,18 +30,34 @@ public sealed class ChangeDetectionWorkflowTests
     }
 
     [Fact]
-    public async Task ChangeSummaryJobDoesNotInventAnEditionDecisionWhileRulesArePending() {
+    public async Task ChangeSummaryJobDefaultsToNewEditionWhenRulesArePending() {
         var repository = new InMemoryProductRepository();
         var track = await repository.GetOrCreateTrackAsync("101DK001", ProductSpecification.S101, ExportEngineKind.IsoIec8211, 4, 2);
         var summary = new ProductChangeSummary(Guid.NewGuid(), track.Id, track.DatasetName, track.ProductSpecification, new DateOnly(2026, 8, 10), "changes: []\n", [], DateTime.UtcNow, DateTime.UtcNow);
         await repository.SaveChangeSummaryAsync(summary);
-        var operations = new RecordingOperations();
+        var operations = new SuccessfulRecordingOperations();
         var job = new ProcessChangeSummariesJob(repository, new ExportDecisionRuleSetRegistry([new PendingS101ExportDecisionRuleSet()]), operations, new FakeLockService(), TimeProvider.System, NullLogger<ProcessChangeSummariesJob>.Instance);
 
         await job.RunAsync(CancellationToken.None);
 
-        Assert.Equal(0, operations.Calls);
-        Assert.Single(await repository.GetOpenChangeSummariesAsync());
+        Assert.Equal(1, operations.Calls);
+        Assert.Equal(ExportRevisionType.NewEdition, Assert.Single(operations.RevisionTypes));
+        Assert.Empty(await repository.GetOpenChangeSummariesAsync());
+    }
+
+    [Theory]
+    [InlineData(ProductSpecification.S101)]
+    [InlineData(ProductSpecification.S57)]
+    public void FormatSpecificFallbackRulesDefaultToNewEdition(ProductSpecification productSpecification) {
+        var summary = new ProductChangeSummary(Guid.NewGuid(), Guid.NewGuid(), "TEST", productSpecification, new DateOnly(2026, 8, 10), "changes: []\n", [], DateTime.UtcNow, DateTime.UtcNow);
+        IExportDecisionRuleSet ruleSet = productSpecification == ProductSpecification.S101
+            ? new PendingS101ExportDecisionRuleSet()
+            : new PendingS57ExportDecisionRuleSet();
+
+        var decision = ruleSet.Evaluate(summary);
+
+        Assert.Equal(ExportRevisionType.NewEdition, decision.RevisionType);
+        Assert.Contains("defaulting to NewEdition", decision.Reason);
     }
 
     [Fact]
@@ -102,18 +118,13 @@ public sealed class ChangeDetectionWorkflowTests
     /// <summary>Explicitly opts workflow tests into detection without changing the disabled production default.</summary>
     private static DetectProductChangesState EnabledDetectionState() => DetectProductChangesState.FromConfiguration(new ConfigurationManager { ["EnableDetectProductChanges"] = "true" });
 
-    private sealed class RecordingOperations : IExportOperationService
-    {
-        public int Calls { get; private set; }
-        public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) { Calls++; throw new InvalidOperationException("Pending rules must not start an export."); }
-        public Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) => throw new NotSupportedException();
-    }
-
     private sealed class SuccessfulRecordingOperations : IExportOperationService
     {
         public int Calls { get; private set; }
+        public List<ExportRevisionType> RevisionTypes { get; } = [];
         public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) {
             Calls++;
+            RevisionTypes.Add(revisionType);
             return Task.FromResult(new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage));
         }
 

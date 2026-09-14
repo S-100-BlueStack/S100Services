@@ -14,7 +14,7 @@ public interface IExportDecisionRuleSet
     ExportDecision Evaluate(ProductChangeSummary summary);
 }
 
-/// <summary>Represents a ruleset outcome. A null revision means policy is not implemented or no export is required.</summary>
+/// <summary>Represents a ruleset outcome. A null revision means no export is required or processing is deferred.</summary>
 public sealed record ExportDecision(ExportRevisionType? RevisionType, string Reason)
 {
     /// <summary>Creates the explicit pending-policy outcome used by scaffolds.</summary>
@@ -45,7 +45,7 @@ public sealed class ExportDecisionRuleSetRegistry(IEnumerable<IExportDecisionRul
 }
 
 /// <summary>
-/// Holds S-101/S-128 publication summaries until the real edition/update rules are supplied.
+/// Defaults S-101/S-128 publication summaries to NewEdition until the real edition/update rules are supplied.
 /// </summary>
 public sealed class PendingS101ExportDecisionRuleSet : IExportDecisionRuleSet
 {
@@ -53,11 +53,11 @@ public sealed class PendingS101ExportDecisionRuleSet : IExportDecisionRuleSet
     public ProductSpecification ProductSpecification => ProductSpecification.S101;
 
     /// <inheritdoc/>
-    public ExportDecision Evaluate(ProductChangeSummary summary) => ExportDecision.PendingRules("The S-101/S-128 NewEdition-versus-Update ruleset has not been implemented.");
+    public ExportDecision Evaluate(ProductChangeSummary summary) => new(ExportRevisionType.NewEdition, "No S-101/S-128 NewEdition-versus-Update rules are configured; defaulting to NewEdition.");
 }
 
 /// <summary>
-/// Holds S-57 summaries until the independent S-57 edition/update rules are supplied.
+/// Defaults S-57 summaries to NewEdition until the independent S-57 edition/update rules are supplied.
 /// </summary>
 public sealed class PendingS57ExportDecisionRuleSet : IExportDecisionRuleSet
 {
@@ -65,5 +65,5 @@ public sealed class PendingS57ExportDecisionRuleSet : IExportDecisionRuleSet
     public ProductSpecification ProductSpecification => ProductSpecification.S57;
 
     /// <inheritdoc/>
-    public ExportDecision Evaluate(ProductChangeSummary summary) => ExportDecision.PendingRules("The S-57 NewEdition-versus-Update ruleset has not been implemented.");
+    public ExportDecision Evaluate(ProductChangeSummary summary) => new(ExportRevisionType.NewEdition, "No S-57 NewEdition-versus-Update rules are configured; defaulting to NewEdition.");
 }
