@@ -1,3 +1,4 @@
+using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Services.ExportRules;
 using ProductCatalogueAPI.Services.Locking;
@@ -36,7 +37,25 @@ public sealed class ProcessChangeSummariesJob(IProductWorkflowRepository workflo
             return;
         }
 
-        await _exportOperations.ExecuteExportAsync(summary.DatasetName, decision.RevisionType.Value, "system", summary.Yaml, cancellationToken);
+        // Freezing is an intentional operator hold, so defer this summary without failing the batch.
+        var track = await _workflowRepository.GetTrackAsync(summary.DatasetName, summary.ProductSpecification, cancellationToken);
+        if (track?.State == ProductState.Frozen) {
+            _logger.LogInformation("Change-summary export deferred because the product track is frozen. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}. TrackId: {TrackId}.", summary.DatasetName, summary.ProductSpecification, summary.TrackId);
+            return;
+        }
+
+        try {
+            await _exportOperations.ExecuteExportAsync(summary.DatasetName, decision.RevisionType.Value, "system", summary.Yaml, cancellationToken);
+        }
+        catch (ExportOperationRejectedException) {
+            var currentTrack = await _workflowRepository.GetTrackAsync(summary.DatasetName, summary.ProductSpecification, cancellationToken);
+            if (currentTrack?.State != ProductState.Frozen)
+                throw;
+
+            _logger.LogInformation("Change-summary export deferred because the product track became frozen during processing. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}. TrackId: {TrackId}.", summary.DatasetName, summary.ProductSpecification, summary.TrackId);
+            return;
+        }
+
         await _workflowRepository.CloseChangeSummaryAsync(summary.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
     }
 }

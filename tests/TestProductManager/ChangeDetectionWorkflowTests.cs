@@ -45,6 +45,49 @@ public sealed class ChangeDetectionWorkflowTests
     }
 
     [Fact]
+    public async Task ChangeSummaryJobDefersFrozenTracksAndContinuesWithOtherSummaries() {
+        var repository = new InMemoryProductRepository();
+        var frozenTrack = await repository.GetOrCreateTrackAsync("101DK001", ProductSpecification.S101, ExportEngineKind.IsoIec8211, 4, 2);
+        var activeTrack = await repository.GetOrCreateTrackAsync("101DK002", ProductSpecification.S101, ExportEngineKind.IsoIec8211, 4, 2);
+        var now = DateTime.UtcNow;
+        await repository.SetStateAsync(frozenTrack.Id, ProductState.Frozen, "operator", now);
+
+        var frozenSummary = new ProductChangeSummary(Guid.NewGuid(), frozenTrack.Id, frozenTrack.DatasetName, frozenTrack.ProductSpecification, new DateOnly(2026, 8, 10), "changes: []\n", [], now, now);
+        var activeSummary = new ProductChangeSummary(Guid.NewGuid(), activeTrack.Id, activeTrack.DatasetName, activeTrack.ProductSpecification, new DateOnly(2026, 8, 10), "changes: []\n", [], now, now);
+        await repository.SaveChangeSummaryAsync(frozenSummary);
+        await repository.SaveChangeSummaryAsync(activeSummary);
+
+        var operations = new SuccessfulRecordingOperations();
+        var job = new ProcessChangeSummariesJob(repository, new ExportDecisionRuleSetRegistry([new NewEditionS101DecisionRuleSet()]), operations, new FakeLockService(), TimeProvider.System, NullLogger<ProcessChangeSummariesJob>.Instance);
+
+        await job.RunAsync(CancellationToken.None);
+
+        Assert.Equal(1, operations.Calls);
+        Assert.Equal(ProductState.Frozen, frozenTrack.State);
+        var openSummaries = await repository.GetOpenChangeSummariesAsync();
+        Assert.Contains(openSummaries, summary => summary.Id == frozenSummary.Id);
+        Assert.DoesNotContain(openSummaries, summary => summary.Id == activeSummary.Id);
+    }
+
+    [Fact]
+    public async Task ChangeSummaryJobDefersWhenTrackBecomesFrozenDuringExport() {
+        var repository = new InMemoryProductRepository();
+        var track = await repository.GetOrCreateTrackAsync("101DK001", ProductSpecification.S101, ExportEngineKind.IsoIec8211, 4, 2);
+        var now = DateTime.UtcNow;
+        var summary = new ProductChangeSummary(Guid.NewGuid(), track.Id, track.DatasetName, track.ProductSpecification, new DateOnly(2026, 8, 10), "changes: []\n", [], now, now);
+        await repository.SaveChangeSummaryAsync(summary);
+
+        var operations = new FreezingRecordingOperations(repository, track.Id);
+        var job = new ProcessChangeSummariesJob(repository, new ExportDecisionRuleSetRegistry([new NewEditionS101DecisionRuleSet()]), operations, new FakeLockService(), TimeProvider.System, NullLogger<ProcessChangeSummariesJob>.Instance);
+
+        await job.RunAsync(CancellationToken.None);
+
+        Assert.Equal(1, operations.Calls);
+        Assert.Equal(ProductState.Frozen, track.State);
+        Assert.Contains(await repository.GetOpenChangeSummariesAsync(), item => item.Id == summary.Id);
+    }
+
+    [Fact]
     public async Task DetectJobPreservesWatermarkWhenAProductCannotBeProcessed() {
         var repository = new InMemoryProductRepository();
         var products = new FakeElectronicProductManager();
@@ -63,6 +106,36 @@ public sealed class ChangeDetectionWorkflowTests
     {
         public int Calls { get; private set; }
         public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) { Calls++; throw new InvalidOperationException("Pending rules must not start an export."); }
+        public Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) => throw new NotSupportedException();
+    }
+
+    private sealed class SuccessfulRecordingOperations : IExportOperationService
+    {
+        public int Calls { get; private set; }
+        public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) {
+            Calls++;
+            return Task.FromResult(new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage));
+        }
+
+        public Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) => throw new NotSupportedException();
+    }
+
+    private sealed class NewEditionS101DecisionRuleSet : IExportDecisionRuleSet
+    {
+        public ProductSpecification ProductSpecification => ProductSpecification.S101;
+        public ExportDecision Evaluate(ProductChangeSummary summary) => new(ExportRevisionType.NewEdition, "test");
+    }
+
+    private sealed class FreezingRecordingOperations(InMemoryProductRepository repository, Guid trackId) : IExportOperationService
+    {
+        public int Calls { get; private set; }
+
+        public async Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) {
+            Calls++;
+            await repository.SetStateAsync(trackId, ProductState.Frozen, "operator", DateTime.UtcNow, cancellationToken: cancellationToken);
+            throw new ExportOperationRejectedException("The test simulates a concurrent freeze.");
+        }
+
         public Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) => throw new NotSupportedException();
     }
 
