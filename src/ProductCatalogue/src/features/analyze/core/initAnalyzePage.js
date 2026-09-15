@@ -6,6 +6,12 @@ import { registerPopupHoverSync } from "../../map/interactions/registerPopupHove
 import { noticeError, noticeWarning } from "../../notices/services/noticeService.js";
 import { fetchProductCatalog } from "../../products/api/productCatalogApi.js";
 import { validateProductCatalogSelection } from "../../products/domain/productCatalog.js";
+import { createWorkspaceFreshnessMonitor } from "../../products/services/workspaceFreshnessMonitor.js";
+import {
+  getProductOperationState,
+  onProductOperationStateChanged,
+} from "../../products/state/productOperationState.js";
+import { hideLoader } from "../../../shared/ui/loader.js";
 import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
 import {
   addAnalyzeDatasetItem,
@@ -37,6 +43,10 @@ export async function initAnalyzePage({ datasetNames }) {
   let activeLoaderProgress = null;
   let cleanupViewPadding = null;
   let cleanupKeyboardClose = null;
+  let freshnessMonitor = null;
+  let unsubscribeFromProductOperationState = null;
+  let activeWorkspaceLoadRequestId = null;
+  let targetedRefreshRequestId = 0;
 
   const enabledDatasetNames = getEnabledAnalyzeDatasetNames(datasetItems);
   document.body.classList.add("pc-analyze-route");
@@ -84,6 +94,7 @@ export async function initAnalyzePage({ datasetNames }) {
     { updateUrl = true, showLoader = true } = {}
   ) => {
     const requestId = ++loadRequestId;
+    activeWorkspaceLoadRequestId = requestId;
     const validatedDatasetItems = validateAnalyzeDatasetItems(nextDatasetItems);
     datasetItems = validatedDatasetItems.items;
     notifyRejectedCatalogProducts(validatedDatasetItems);
@@ -114,6 +125,10 @@ export async function initAnalyzePage({ datasetNames }) {
     currentProducts = [];
 
     if (enabledNextDatasetNames.length === 0) {
+      await freshnessMonitor?.prime([]);
+      if (activeWorkspaceLoadRequestId === requestId) {
+        activeWorkspaceLoadRequestId = null;
+      }
       if (!updateUrl) setAnalyzeRouteUrl([], { replace: true });
       renderAnalyzeSidebar({
         datasetItems,
@@ -122,6 +137,11 @@ export async function initAnalyzePage({ datasetNames }) {
         loading: false,
         productCatalog,
       });
+      return;
+    }
+
+    await freshnessMonitor?.prime(enabledNextDatasetNames);
+    if (requestId !== loadRequestId) {
       return;
     }
 
@@ -222,10 +242,70 @@ export async function initAnalyzePage({ datasetNames }) {
       if (activeLoaderProgress === loaderProgress) {
         activeLoaderProgress = null;
       }
+      if (activeWorkspaceLoadRequestId === requestId) {
+        activeWorkspaceLoadRequestId = null;
+      }
     }
   };
   const loadAnalyzeDatasetNames = async (nextDatasetNames, options = {}) => {
     await loadAnalyzeDatasetItems(createAnalyzeDatasetItems(nextDatasetNames), options);
+  };
+
+  const refreshAnalyzeProducts = async (datasetNamesToRefresh) => {
+    if (activeWorkspaceLoadRequestId !== null) {
+      return false;
+    }
+
+    const enabledNames = getEnabledAnalyzeDatasetNames(datasetItems);
+    const enabledKeys = new Set(enabledNames.map(normalizeDatasetKey));
+    const refreshNames = normalizeDatasetNames(datasetNamesToRefresh).filter((datasetName) =>
+      enabledKeys.has(normalizeDatasetKey(datasetName))
+    );
+
+    if (refreshNames.length === 0) {
+      return true;
+    }
+
+    const refreshRequestId = ++targetedRefreshRequestId;
+    const workspaceLoadRequestId = loadRequestId;
+    try {
+      await ensureLookupsLoaded();
+      const products = await fetchAnalyzeProducts(refreshNames);
+      if (
+        refreshRequestId !== targetedRefreshRequestId ||
+        workspaceLoadRequestId !== loadRequestId ||
+        activeWorkspaceLoadRequestId !== null
+      ) {
+        return false;
+      }
+
+      const refreshedProducts = await loadAnalyzeProductHistories(products);
+      if (
+        refreshRequestId !== targetedRefreshRequestId ||
+        workspaceLoadRequestId !== loadRequestId ||
+        activeWorkspaceLoadRequestId !== null
+      ) {
+        return false;
+      }
+
+      currentProducts = mergeProductsByDatasetName(
+        currentProducts,
+        refreshedProducts,
+        enabledNames
+      );
+      renderSidebar({ loading: false });
+      return true;
+    } catch (error) {
+      if (
+        refreshRequestId !== targetedRefreshRequestId ||
+        workspaceLoadRequestId !== loadRequestId
+      ) {
+        return false;
+      }
+
+      console.warn("[Analyze] Automatic workspace refresh failed", error);
+      return false;
+    }
   };
 
   const handleAnalyzeDatasetAdd = async (event) => {
@@ -290,14 +370,43 @@ export async function initAnalyzePage({ datasetNames }) {
       updateUrl: true,
     });
   };
+  const handleAnalyzeRefresh = async () => {
+    await loadAnalyzeDatasetItems(datasetItems, {
+      updateUrl: false,
+      showLoader: false,
+    });
+  };
+
+  freshnessMonitor = createWorkspaceFreshnessMonitor({
+    getDatasetNames: () => getEnabledAnalyzeDatasetNames(datasetItems),
+    onChanged: (changedDatasetNames) => refreshAnalyzeProducts(changedDatasetNames),
+  });
+  unsubscribeFromProductOperationState = onProductOperationStateChanged(({ datasetName } = {}) => {
+    if (!datasetName || getProductOperationState(datasetName).running) {
+      return;
+    }
+
+    const enabledKeys = new Set(
+      getEnabledAnalyzeDatasetNames(datasetItems).map(normalizeDatasetKey)
+    );
+    if (enabledKeys.has(normalizeDatasetKey(datasetName))) {
+      void freshnessMonitor?.check();
+    }
+  });
+
   document.addEventListener("pc-analyze-dataset-add", handleAnalyzeDatasetAdd);
   document.addEventListener("pc-analyze-dataset-toggle", handleAnalyzeDatasetToggle);
   document.addEventListener("pc-analyze-dataset-remove", handleAnalyzeDatasetRemove);
   document.addEventListener("pc-analyze-dataset-submit", handleAnalyzeDatasetSubmit);
+  document.addEventListener("pc-analyze-refresh", handleAnalyzeRefresh);
 
   cleanupViewPadding = applyAnalyzeViewPadding(view);
   cleanupKeyboardClose = bindAnalyzeKeyboardClose(view);
   await view.when();
+  // The bootstrap loader covers initial page and map setup. Hide it before
+  // data loading starts so the delayed Analyze loader can decide whether a
+  // loader is needed at all.
+  hideLoader();
 
   renderAnalyzeSidebar({
     datasetItems,
@@ -308,6 +417,7 @@ export async function initAnalyzePage({ datasetNames }) {
   });
   await loadProductCatalogForPicker();
   await loadAnalyzeDatasetItems(datasetItems, { updateUrl: false });
+  freshnessMonitor.start();
   const handlePopState = async () => {
     const route = getCurrentRoute();
     await loadAnalyzeDatasetNames(route.datasetNames, { updateUrl: false });
@@ -326,12 +436,19 @@ export async function initAnalyzePage({ datasetNames }) {
     loadAnalyzeDatasetNames,
     destroy() {
       loadRequestId += 1;
+      targetedRefreshRequestId += 1;
+      activeWorkspaceLoadRequestId = null;
       productCatalogRequestId += 1;
       document.removeEventListener("pc-analyze-dataset-add", handleAnalyzeDatasetAdd);
       document.removeEventListener("pc-analyze-dataset-toggle", handleAnalyzeDatasetToggle);
       document.removeEventListener("pc-analyze-dataset-remove", handleAnalyzeDatasetRemove);
       document.removeEventListener("pc-analyze-dataset-submit", handleAnalyzeDatasetSubmit);
+      document.removeEventListener("pc-analyze-refresh", handleAnalyzeRefresh);
       window.removeEventListener("popstate", handlePopState);
+      unsubscribeFromProductOperationState?.();
+      unsubscribeFromProductOperationState = null;
+      freshnessMonitor?.destroy();
+      freshnessMonitor = null;
       cleanupKeyboardClose?.();
       cleanupKeyboardClose = null;
       closePopup(view);
@@ -442,6 +559,29 @@ function createSilentAnalyzeLoaderProgress() {
 function normalizeDatasetNames(datasetNames) {
   return (Array.isArray(datasetNames) ? datasetNames : [datasetNames])
     .map((datasetName) => String(datasetName ?? "").trim())
+    .filter(Boolean);
+}
+
+function normalizeDatasetKey(datasetName) {
+  return String(datasetName ?? "")
+    .trim()
+    .toUpperCase();
+}
+
+function mergeProductsByDatasetName(currentProducts, refreshedProducts, enabledDatasetNames) {
+  const currentByDatasetName = new Map(
+    currentProducts.map((product) => [normalizeDatasetKey(product?.datasetName), product])
+  );
+
+  for (const product of refreshedProducts) {
+    const key = normalizeDatasetKey(product?.datasetName);
+    if (key) {
+      currentByDatasetName.set(key, product);
+    }
+  }
+
+  return enabledDatasetNames
+    .map((datasetName) => currentByDatasetName.get(normalizeDatasetKey(datasetName)))
     .filter(Boolean);
 }
 

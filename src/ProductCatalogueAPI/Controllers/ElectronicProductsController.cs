@@ -17,6 +17,8 @@ using S100FC.S128.FeatureTypes;
 using S100FC.S128.SimpleAttributes;
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using static ProductCatalogueAPI.Models.RequestTypes;
 using static ProductCatalogueAPI.Models.ResponseTypes;
@@ -27,16 +29,18 @@ namespace ProductCatalogueAPI.Controllers
     //[Authorize("productmanager:access")]
     [ApiController]
     [Route("[controller]")]
-    public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository, IProductWorkflowRepository workflowRepository, IProductHistoryEventService historyEventService = null!) : ControllerBase
+    public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository, IProductWorkflowRepository workflowRepository, IProductHistoryEventService historyEventService = null!, IProductWorkspaceFreshnessRepository workspaceFreshnessRepository = null!) : ControllerBase
     {
         private const string AoiCacheKeyPrefix = "electronic-products-aoi";
         private static readonly TimeSpan AoiCacheLifetime = TimeSpan.FromHours(24);
+        private const int WorkspaceFreshnessDatasetLimit = 50;
 
         private readonly ILogger<ElectronicProductsController> _logger = logger;
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
         private readonly IMemoryCache _cache = cache;
         private readonly IProductRepository _repository = repository;
         private readonly IProductWorkflowRepository _workflowRepository = workflowRepository;
+        private readonly IProductWorkspaceFreshnessRepository? _workspaceFreshnessRepository = workspaceFreshnessRepository;
 
         /// <summary>
         /// Get all product names in the database.
@@ -56,6 +60,84 @@ namespace ProductCatalogueAPI.Controllers
             response.DurationMs = sw.ElapsedMilliseconds;
 
             return this.Ok(response);
+        }
+
+        /// <summary>
+        /// Gets lightweight revision tokens for open Analyze and Review workspace Products.
+        /// </summary>
+        /// <remarks>
+        /// The endpoint reads cached S-128 Product metadata and SQL-owned workflow signals only.
+        /// It deliberately does not dispatch ArcGIS work, load Product History bodies, or read artifact content.
+        /// </remarks>
+        [ProducesResponseType(typeof(ApiResponse<ProductWorkspaceFreshnessResponse[]>), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
+        [HttpGet("workspace/freshness", Name = "GetElectronicProductWorkspaceFreshness")]
+        public async Task<IActionResult> GetWorkspaceFreshness(
+            [FromQuery] string[] datasetNames,
+            CancellationToken cancellationToken)
+        {
+            var sw = Stopwatch.StartNew();
+            var names = NormalizeWorkspaceDatasetNames(datasetNames);
+
+            if (names.Length == 0)
+            {
+                return BadRequest(new ApiResponse
+                {
+                    Success = false,
+                    Message = "At least one datasetNames query parameter is required.",
+                    DurationMs = sw.ElapsedMilliseconds
+                });
+            }
+
+            if (names.Length > WorkspaceFreshnessDatasetLimit)
+            {
+                return BadRequest(new ApiResponse
+                {
+                    Success = false,
+                    Message = $"At most {WorkspaceFreshnessDatasetLimit} datasetNames query parameters are supported.",
+                    DurationMs = sw.ElapsedMilliseconds
+                });
+            }
+
+            if (_workspaceFreshnessRepository is null)
+                throw new InvalidOperationException("Product workspace freshness persistence is not configured.");
+
+            var resolvedProducts = names
+                .Select(name => new WorkspaceFreshnessProduct(name, _electronicProductManager.ElectronicProduct(name)))
+                .ToArray();
+
+            var relatedNames = resolvedProducts
+                .Where(item => item.Product is not null)
+                .SelectMany(item => GetRelatedDatasetNames(item.Product!))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            var persistedSnapshot = await _workspaceFreshnessRepository.GetSnapshotAsync(
+                relatedNames,
+                cancellationToken);
+
+            var responseItems = resolvedProducts.Select(item =>
+            {
+                if (item.Product is null || string.IsNullOrWhiteSpace(item.Product.datasetName))
+                    return new ProductWorkspaceFreshnessResponse(item.RequestedDatasetName, null, Available: false);
+
+                var canonicalDatasetName = item.Product.datasetName.Trim();
+                var relatedDatasetNames = GetRelatedDatasetNames(item.Product);
+                var revision = CreateWorkspaceFreshnessRevision(
+                    item.Product,
+                    canonicalDatasetName,
+                    relatedDatasetNames,
+                    persistedSnapshot);
+
+                return new ProductWorkspaceFreshnessResponse(canonicalDatasetName, revision, Available: true);
+            }).ToArray();
+
+            return Ok(new ApiResponse<ProductWorkspaceFreshnessResponse[]>
+            {
+                Data = responseItems,
+                TotalHits = responseItems.Length,
+                DurationMs = sw.ElapsedMilliseconds
+            });
         }
 
         /// <summary>
@@ -739,6 +821,18 @@ namespace ProductCatalogueAPI.Controllers
 
         private async Task<IReadOnlyList<ProductExportTrackRecord>> GetRelatedExportTracksAsync(ElectronicProduct electronicProduct, CancellationToken cancellationToken = default)
         {
+            var tracks = new List<ProductExportTrackRecord>();
+            foreach (var relatedDatasetName in GetRelatedDatasetNames(electronicProduct))
+                tracks.AddRange(await _workflowRepository.GetTracksAsync(relatedDatasetName, cancellationToken));
+
+            return [.. tracks
+                .DistinctBy(track => track.Id)
+                .Where(track => track.ProductSpecification is ProductSpecification.S57 or ProductSpecification.S101)
+                .OrderBy(track => track.ProductSpecification)];
+        }
+
+        private IReadOnlyList<string> GetRelatedDatasetNames(ElectronicProduct electronicProduct)
+        {
             if (string.IsNullOrWhiteSpace(electronicProduct.datasetName))
                 return [];
 
@@ -753,15 +847,83 @@ namespace ProductCatalogueAPI.Controllers
                 }
             }
 
-            var tracks = new List<ProductExportTrackRecord>();
-            foreach (var relatedDatasetName in relatedDatasetNames)
-                tracks.AddRange(await _workflowRepository.GetTracksAsync(relatedDatasetName, cancellationToken));
-
-            return [.. tracks
-                .DistinctBy(track => track.Id)
-                .Where(track => track.ProductSpecification is ProductSpecification.S57 or ProductSpecification.S101)
-                .OrderBy(track => track.ProductSpecification)];
+            return [.. relatedDatasetNames.OrderBy(name => name, StringComparer.OrdinalIgnoreCase)];
         }
+
+        private static string[] NormalizeWorkspaceDatasetNames(IEnumerable<string>? datasetNames) =>
+            (datasetNames ?? Array.Empty<string>())
+                .Select(name => name?.Trim() ?? string.Empty)
+                .Where(name => name.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+        private static string CreateWorkspaceFreshnessRevision(
+            ElectronicProduct electronicProduct,
+            string canonicalDatasetName,
+            IReadOnlyCollection<string> relatedDatasetNames,
+            ProductWorkspaceFreshnessStoreSnapshot persistedSnapshot)
+        {
+            var relatedNameSet = relatedDatasetNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var tracks = persistedSnapshot.Tracks
+                .Where(track => relatedNameSet.Contains(track.DatasetName))
+                .OrderBy(track => track.DatasetName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(track => track.ProductSpecification, StringComparer.Ordinal)
+                .ThenBy(track => track.TrackId)
+                .Select(track => new
+                {
+                    track.TrackId,
+                    track.DatasetName,
+                    track.ProductSpecification,
+                    track.State,
+                    track.PublishedEdition,
+                    track.PublishedUpdate,
+                    track.CandidateEdition,
+                    track.CandidateUpdate,
+                    track.UpdatedAtUtc,
+                    RowVersion = Convert.ToHexString(track.RowVersion),
+                    track.StateHistoryCount,
+                    track.LatestStateHistoryId,
+                    track.LatestStateHistoryAtUtc,
+                    track.ValidationArtifactCount,
+                    track.LatestValidationArtifactId,
+                    track.LatestValidationArtifactAtUtc
+                })
+                .ToArray();
+
+            var canonicalAuditDatasetName = canonicalDatasetName.ToUpperInvariant();
+            var audit = persistedSnapshot.AuditEvents.FirstOrDefault(item =>
+                string.Equals(item.DatasetName, canonicalAuditDatasetName, StringComparison.Ordinal));
+
+            var payload = JsonSerializer.Serialize(new
+            {
+                Version = 1,
+                Product = new
+                {
+                    DatasetName = canonicalDatasetName,
+                    ProductSpecification = electronicProduct.productSpecification?.name,
+                    electronicProduct.editionNumber,
+                    electronicProduct.updateNumber,
+                    electronicProduct.issueDate,
+                    electronicProduct.specificUsage,
+                    electronicProduct.optimumDisplayScale
+                },
+                RelatedDatasetNames = relatedDatasetNames.OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToArray(),
+                Tracks = tracks,
+                Audit = audit is null
+                    ? null
+                    : new
+                    {
+                        audit.DatasetName,
+                        audit.EventCount,
+                        audit.LatestUpdatedAtUtc
+                    }
+            });
+
+            var digest = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
+            return $"v1:{Convert.ToHexString(digest).ToLowerInvariant()}";
+        }
+
+        private sealed record WorkspaceFreshnessProduct(string RequestedDatasetName, ElectronicProduct? Product);
 
         private static bool MatchesProductSpecification(ElectronicProduct product, ProductSpecification productSpecification)
         {

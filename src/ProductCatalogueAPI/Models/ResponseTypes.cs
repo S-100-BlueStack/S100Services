@@ -190,6 +190,11 @@ namespace ProductCatalogueAPI.Models
             DateTime CreatedAtUtc,
             string Url);
 
+        public sealed record ProductWorkspaceFreshnessResponse(
+            string DatasetName,
+            string? Revision,
+            bool Available);
+
         public sealed record ProductExport(
             string Type,
             string Name,

@@ -2,6 +2,12 @@ import { loadStatuses } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { fetchProductCatalog } from "../../products/api/productCatalogApi.js";
 import { validateProductCatalogSelection } from "../../products/domain/productCatalog.js";
+import { createWorkspaceFreshnessMonitor } from "../../products/services/workspaceFreshnessMonitor.js";
+import {
+  getProductOperationState,
+  onProductOperationStateChanged,
+} from "../../products/state/productOperationState.js";
+import { hideLoader } from "../../../shared/ui/loader.js";
 import {
   addReviewProductItem,
   createReviewProductItems,
@@ -28,6 +34,10 @@ export async function initReviewPage({ datasetNames } = {}) {
   let lookupsLoaded = false;
   let isLoadingReviewProducts = false;
   let reviewError = null;
+  let freshnessMonitor = null;
+  let unsubscribeFromProductOperationState = null;
+  let activeWorkspaceLoadRequestId = null;
+  let targetedRefreshRequestId = 0;
 
   const enabledDatasetNames = getEnabledReviewDatasetNames(productItems);
 
@@ -72,6 +82,7 @@ export async function initReviewPage({ datasetNames } = {}) {
 
   const loadReviewProductItems = async (nextProductItems, { updateUrl = true } = {}) => {
     const requestId = ++loadRequestId;
+    activeWorkspaceLoadRequestId = requestId;
     const validatedProductItems = validateReviewProductItems(nextProductItems);
     productItems = validatedProductItems.items;
     notifyRejectedCatalogProducts(validatedProductItems);
@@ -90,9 +101,18 @@ export async function initReviewPage({ datasetNames } = {}) {
     currentProducts = [];
 
     if (enabledNextDatasetNames.length === 0) {
+      await freshnessMonitor?.prime([]);
+      if (activeWorkspaceLoadRequestId === requestId) {
+        activeWorkspaceLoadRequestId = null;
+      }
       if (!updateUrl) setReviewRouteUrl([], { replace: true });
       isLoadingReviewProducts = false;
       renderCurrentReviewPage();
+      return;
+    }
+
+    await freshnessMonitor?.prime(enabledNextDatasetNames);
+    if (requestId !== loadRequestId) {
       return;
     }
 
@@ -122,6 +142,10 @@ export async function initReviewPage({ datasetNames } = {}) {
         "Product Review failed",
         error instanceof Error ? error.message : "Unknown review error"
       );
+    } finally {
+      if (activeWorkspaceLoadRequestId === requestId) {
+        activeWorkspaceLoadRequestId = null;
+      }
     }
   };
 
@@ -161,6 +185,55 @@ export async function initReviewPage({ datasetNames } = {}) {
 
   const loadReviewDatasetNames = async (nextDatasetNames, options = {}) => {
     await replaceDatasetNamesInReview(nextDatasetNames, options);
+  };
+
+  const refreshReviewProducts = async (datasetNamesToRefresh) => {
+    if (activeWorkspaceLoadRequestId !== null) {
+      return false;
+    }
+
+    const enabledNames = getEnabledReviewDatasetNames(productItems);
+    const enabledKeys = new Set(enabledNames.map(normalizeDatasetKey));
+    const refreshNames = normalizeDatasetNames(datasetNamesToRefresh).filter((datasetName) =>
+      enabledKeys.has(normalizeDatasetKey(datasetName))
+    );
+
+    if (refreshNames.length === 0) {
+      return true;
+    }
+
+    const refreshRequestId = ++targetedRefreshRequestId;
+    const workspaceLoadRequestId = loadRequestId;
+    try {
+      await ensureLookupsLoaded();
+      const refreshedProducts = await loadReviewHistories(refreshNames);
+      if (
+        refreshRequestId !== targetedRefreshRequestId ||
+        workspaceLoadRequestId !== loadRequestId ||
+        activeWorkspaceLoadRequestId !== null
+      ) {
+        return false;
+      }
+
+      currentProducts = mergeProductsByDatasetName(
+        currentProducts,
+        refreshedProducts,
+        enabledNames
+      );
+      reviewError = null;
+      renderCurrentReviewPage();
+      return true;
+    } catch (error) {
+      if (
+        refreshRequestId !== targetedRefreshRequestId ||
+        workspaceLoadRequestId !== loadRequestId
+      ) {
+        return false;
+      }
+
+      console.warn("[Review] Automatic workspace refresh failed", error);
+      return false;
+    }
   };
 
   const handleProductAdd = async (event) => {
@@ -213,16 +286,40 @@ export async function initReviewPage({ datasetNames } = {}) {
     renderCurrentReviewPage();
   };
 
+  const handleReviewRefresh = async () => {
+    await loadReviewProductItems(productItems, { updateUrl: false });
+  };
+
+  freshnessMonitor = createWorkspaceFreshnessMonitor({
+    getDatasetNames: () => getEnabledReviewDatasetNames(productItems),
+    onChanged: (changedDatasetNames) => refreshReviewProducts(changedDatasetNames),
+  });
+  unsubscribeFromProductOperationState = onProductOperationStateChanged(({ datasetName } = {}) => {
+    if (!datasetName || getProductOperationState(datasetName).running) {
+      return;
+    }
+
+    const enabledKeys = new Set(
+      getEnabledReviewDatasetNames(productItems).map(normalizeDatasetKey)
+    );
+    if (enabledKeys.has(normalizeDatasetKey(datasetName))) {
+      void freshnessMonitor?.check();
+    }
+  });
+
   document.addEventListener("pc-review-product-add", handleProductAdd);
   document.addEventListener("pc-review-product-toggle", handleProductToggle);
   document.addEventListener("pc-review-content-toggle", handleContentToggle);
   document.addEventListener("pc-review-product-remove", handleProductRemove);
+  document.addEventListener("pc-review-refresh", handleReviewRefresh);
 
   await waitForNextPaint();
+  hideLoader();
 
   renderCurrentReviewPage();
   await loadProductCatalogForPicker();
   await loadReviewProductItems(productItems, { updateUrl: false });
+  freshnessMonitor.start();
 
   const handlePopState = async () => {
     const route = getCurrentReviewRoute();
@@ -238,12 +335,19 @@ export async function initReviewPage({ datasetNames } = {}) {
     loadReviewDatasetNames,
     destroy() {
       loadRequestId += 1;
+      targetedRefreshRequestId += 1;
+      activeWorkspaceLoadRequestId = null;
       productCatalogRequestId += 1;
       document.removeEventListener("pc-review-product-add", handleProductAdd);
       document.removeEventListener("pc-review-product-toggle", handleProductToggle);
       document.removeEventListener("pc-review-content-toggle", handleContentToggle);
       document.removeEventListener("pc-review-product-remove", handleProductRemove);
+      document.removeEventListener("pc-review-refresh", handleReviewRefresh);
       window.removeEventListener("popstate", handlePopState);
+      unsubscribeFromProductOperationState?.();
+      unsubscribeFromProductOperationState = null;
+      freshnessMonitor?.destroy();
+      freshnessMonitor = null;
       document.body.classList.remove("pc-review-route");
     },
   };
@@ -317,6 +421,29 @@ export async function initReviewPage({ datasetNames } = {}) {
 function normalizeDatasetNames(datasetNames) {
   const values = Array.isArray(datasetNames) ? datasetNames : [datasetNames];
   return values.map((value) => String(value ?? "").trim()).filter(Boolean);
+}
+
+function normalizeDatasetKey(datasetName) {
+  return String(datasetName ?? "")
+    .trim()
+    .toUpperCase();
+}
+
+function mergeProductsByDatasetName(currentProducts, refreshedProducts, enabledDatasetNames) {
+  const currentByDatasetName = new Map(
+    currentProducts.map((product) => [normalizeDatasetKey(product?.datasetName), product])
+  );
+
+  for (const product of refreshedProducts) {
+    const key = normalizeDatasetKey(product?.datasetName);
+    if (key) {
+      currentByDatasetName.set(key, product);
+    }
+  }
+
+  return enabledDatasetNames
+    .map((datasetName) => currentByDatasetName.get(normalizeDatasetKey(datasetName)))
+    .filter(Boolean);
 }
 
 async function loadLookupsSafely() {

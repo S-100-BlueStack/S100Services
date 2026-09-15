@@ -27,7 +27,9 @@ export function renderAnalyzeSidebar({
   calcitePanel.heading = createHeading(enabledDatasetNames);
   content.replaceChildren(
     createDatasetManager(normalizedDatasetItems, { loading, productCatalog }),
-    loading ? createLoadingState(enabledDatasetNames) : createProductsContent(products)
+    loading
+      ? createLoadingState(enabledDatasetNames)
+      : createProductsContent(products, normalizedDatasetItems)
   );
 }
 
@@ -82,6 +84,38 @@ function createDatasetManager(datasetItems, { loading, productCatalog }) {
   container.appendChild(createDatasetList(datasetItems));
 
   return container;
+}
+
+function createWorkspaceRefreshButton(datasetItems) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "analyze-products__action-button analyze-workspace-refresh";
+  button.title =
+    "Refresh Product metadata, History, and validation content in this Analyze workspace.";
+  button.setAttribute(
+    "aria-label",
+    "Refresh Product metadata, History, and validation content in this Analyze workspace"
+  );
+  button.style.inlineSize = "1.85rem";
+  button.style.blockSize = "1.85rem";
+  button.style.minInlineSize = "1.85rem";
+  button.style.flex = "0 0 1.85rem";
+  button.style.display = "inline-flex";
+  button.style.alignItems = "center";
+  button.style.justifyContent = "center";
+  button.style.padding = "0";
+  button.disabled = !datasetItems.some((item) => item.enabled);
+
+  const icon = document.createElement("calcite-icon");
+  icon.icon = "refresh";
+  icon.scale = "s";
+  icon.setAttribute("aria-hidden", "true");
+  button.appendChild(icon);
+
+  button.addEventListener("click", () => {
+    button.dispatchEvent(new CustomEvent("pc-analyze-refresh", { bubbles: true }));
+  });
+  return button;
 }
 function createDatasetAddForm(productCatalog, datasetItems) {
   return createProductPickerForm({
@@ -194,9 +228,15 @@ function createLoadingState(datasetNames) {
   return container;
 }
 
-function createProductsContent(products) {
+function createProductsContent(products, datasetItems) {
   const container = document.createElement("div");
   container.className = "analyze-products";
+  container.appendChild(
+    createProductCollapseControls(container, datasetItems, {
+      showCollapseControls: products.length > 0,
+    })
+  );
+
   if (products.length === 0) {
     const empty = document.createElement("p");
     empty.className = "analyze-sidebar__empty";
@@ -205,8 +245,6 @@ function createProductsContent(products) {
 
     return container;
   }
-
-  container.appendChild(createProductCollapseControls(container));
 
   const list = document.createElement("div");
   list.className = "analyze-products__list";
@@ -218,9 +256,18 @@ function createProductsContent(products) {
   return container;
 }
 
-function createProductCollapseControls(container) {
+function createProductCollapseControls(
+  container,
+  datasetItems,
+  { showCollapseControls = true } = {}
+) {
   const actions = document.createElement("div");
   actions.className = "analyze-products__actions";
+  actions.appendChild(createWorkspaceRefreshButton(datasetItems));
+
+  if (!showCollapseControls) {
+    return actions;
+  }
 
   const openAllButton = document.createElement("button");
   openAllButton.type = "button";

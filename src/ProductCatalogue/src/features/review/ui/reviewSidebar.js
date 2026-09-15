@@ -30,10 +30,28 @@ export function createReviewSidebar({ productItems, loading, productCatalog }) {
   sidebar.append(
     header,
     createProductAddForm(productCatalog, productItems),
-    createProductList(productItems)
+    createProductList(productItems),
+    createWorkspaceRefreshButton(productItems, loading)
   );
 
   return sidebar;
+}
+
+function createWorkspaceRefreshButton(productItems, loading) {
+  const button = document.createElement("calcite-button");
+  button.className = "pc-review-workspace-refresh";
+  button.scale = "s";
+  button.appearance = "outline";
+  button.kind = "neutral";
+  button.iconStart = "refresh";
+  button.textContent = "Refresh";
+  button.title = "Refresh Product Review workspace data.";
+  button.setAttribute("aria-label", "Refresh Product Review workspace data");
+  button.disabled = loading || !productItems.some((item) => item.enabled);
+  button.addEventListener("click", () => {
+    button.dispatchEvent(new CustomEvent("pc-review-refresh", { bubbles: true }));
+  });
+  return button;
 }
 
 function createProductAddForm(productCatalog, productItems) {

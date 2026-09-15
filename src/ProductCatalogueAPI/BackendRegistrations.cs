@@ -34,6 +34,7 @@ public static class BackendRegistrations
         services.AddScoped<ProductRepository>();
         services.AddScoped<IProductRepository>(provider => provider.GetRequiredService<ProductRepository>());
         services.AddScoped<IProductWorkflowRepository>(provider => provider.GetRequiredService<ProductRepository>());
+        services.AddScoped<IProductWorkspaceFreshnessRepository, ProductWorkspaceFreshnessRepository>();
         services.AddScoped<IProductHistoryEventRepository, ProductHistoryEventRepository>();
         services.AddScoped<IProductHistoryEventService, ProductHistoryEventService>();
 
