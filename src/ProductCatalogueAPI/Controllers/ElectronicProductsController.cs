@@ -28,6 +28,9 @@ namespace ProductCatalogueAPI.Controllers
     [Route("[controller]")]
     public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository, IProductWorkflowRepository workflowRepository, IProductHistoryEventService historyEventService = null!) : ControllerBase
     {
+        private const string AoiCacheKeyPrefix = "electronic-products-aoi";
+        private static readonly TimeSpan AoiCacheLifetime = TimeSpan.FromHours(24);
+
         private readonly ILogger<ElectronicProductsController> _logger = logger;
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
         private readonly IMemoryCache _cache = cache;
@@ -74,6 +77,7 @@ namespace ProductCatalogueAPI.Controllers
             var geometryCount = 0;
             var responseItemCount = 0;
             var skippedProductCount = 0;
+            var cacheState = "None";
             var succeeded = false;
 
             try
@@ -81,12 +85,30 @@ namespace ProductCatalogueAPI.Controllers
                 if (!TryParseAoiProductSpecification(productSpecification, out var selectedProductSpecification))
                     return BadRequest(new ApiResponse { Success = false, Message = "productSpecification must be S57 or S101." });
 
+                var cacheKey = $"{AoiCacheKeyPrefix}:{selectedProductSpecification}";
+                cacheState = _cache.TryGetValue(cacheKey, out Lazy<Task<Dictionary<string, string>>>? cachedAois)
+                    ? "Hit"
+                    : "Miss";
+
+                cachedAois ??= _cache.GetOrCreate(cacheKey, entry => {
+                    entry.AbsoluteExpirationRelativeToNow = AoiCacheLifetime;
+                    return new Lazy<Task<Dictionary<string, string>>>(
+                        () => _electronicProductManager.GetDatasetAOIs(selectedProductSpecification.ToString()),
+                        LazyThreadSafetyMode.ExecutionAndPublication);
+                }) ?? throw new InvalidOperationException("Could not create the AOI cache entry.");
+
                 Dictionary<string, string> aois;
 
                 geometryRetrievalStopwatch.Start();
                 try
                 {
-                    aois = await _electronicProductManager.GetDatasetAOIs(selectedProductSpecification.ToString());
+                    aois = await cachedAois.Value;
+                }
+                catch
+                {
+                    // Do not retain a failed ArcGIS lookup task; the next request should be able to retry.
+                    _cache.Remove(cacheKey);
+                    throw;
                 }
                 finally
                 {
@@ -195,7 +217,7 @@ namespace ProductCatalogueAPI.Controllers
                     geometryCount,
                     responseItemCount,
                     skippedProductCount,
-                    "None"
+                    cacheState
                 );
             }
         }

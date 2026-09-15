@@ -105,7 +105,7 @@ namespace TestProductCatalogueAPI
             Assert.Equal(3, Assert.IsType<int>(completionEntry.Properties["GeometryCount"]));
             Assert.Equal(2, Assert.IsType<int>(completionEntry.Properties["ResponseItemCount"]));
             Assert.Equal(1, Assert.IsType<int>(completionEntry.Properties["SkippedProductCount"]));
-            Assert.Equal("None", Assert.IsType<string>(completionEntry.Properties["CacheState"]));
+            Assert.Equal("Miss", Assert.IsType<string>(completionEntry.Properties["CacheState"]));
             Assert.True(Assert.IsType<double>(completionEntry.Properties["ControllerDurationMs"]) >= 0d);
             Assert.True(Assert.IsType<double>(completionEntry.Properties["GeometryRetrievalMs"]) >= 0d);
             Assert.True(Assert.IsType<double>(completionEntry.Properties["ProductStateRetrievalMs"]) >= 0d);
@@ -138,6 +138,36 @@ namespace TestProductCatalogueAPI
             Assert.Equal(datasetName, response.Attributes?.DatasetName);
             Assert.Equal("IC-ENC rejected the dataset.", response.Attributes?.ErrorMessage);
             Assert.Equal(ProductSpecification.S57, repository.RequestedProductSpecification);
+        }
+
+        [Fact]
+        public async Task GlobalAoiActionCachesGeometryLookupPerProductSpecification() {
+            const string datasetName = "101DK0000001E";
+            var electronicProductManager = new FakeElectronicProductManager(
+                new Dictionary<string, string> { [datasetName] = "{\"rings\":[]}" },
+                new Dictionary<string, ElectronicProduct> { [datasetName] = CreateElectronicProduct(datasetName, 90_000, 3) }
+            );
+            var logger = new RecordingLogger<ElectronicProductsController>();
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(
+                logger,
+                cache,
+                new FakeProductManager(electronicProductManager),
+                new RecordingProductRepository(new Dictionary<string, ProductRecord?>()),
+                new InMemoryProductRepository()
+            ) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+
+            await controller.GetAllElectronicProductsAOI();
+            await controller.GetAllElectronicProductsAOI();
+
+            Assert.Equal(1, electronicProductManager.AoiCallCount);
+            var cacheStates = logger.Entries
+                .Where(entry => entry.Properties.ContainsKey("CacheState"))
+                .Select(entry => Assert.IsType<string>(entry.Properties["CacheState"]))
+                .ToArray();
+            Assert.Equal(new[] { "Miss", "Hit" }, cacheStates);
         }
 
         [Theory]
@@ -252,6 +282,7 @@ namespace TestProductCatalogueAPI
         {
             public IReadOnlyDictionary<string, string> Aois { get; } = aois;
             public string OutputFolder => string.Empty;
+            public int AoiCallCount { get; private set; }
 
             public ElectronicProduct? ElectronicProduct(string name) {
                 return products.GetValueOrDefault(name);
@@ -284,6 +315,7 @@ namespace TestProductCatalogueAPI
             }
 
             public Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification) {
+                AoiCallCount++;
                 return Task.FromResult(new Dictionary<string, string>(aois, StringComparer.OrdinalIgnoreCase));
             }
 
