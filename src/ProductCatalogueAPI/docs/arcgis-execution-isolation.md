@@ -1,5 +1,25 @@
 # ArcGIS execution isolation
 
+## Accepted implementation and deployment status
+
+Accepted integration commit: `aaf635571503c780517cfc3a76a4fa5e4894f447`. The implementation also
+contains AOI cache commit `8a8b77e32502b140890954d1be5143da7b90af01`.
+
+Dev-server acceptance on 2026-09-15 verified the production-equivalent process split: the IIS API and
+`ProductCatalogueWorker` were deployed from the same Release x64 framework-dependent publish output
+into separate directories. The Windows Service is registered as `ProductCatalogueWorker`, runs as
+LocalSystem, uses Automatic startup, and fixes the process role to `Worker` on the command line.
+
+Worker startup logs confirmed ArcGIS CoreHost initialization, `ArcGisExecutionLane: Background`, one
+Hangfire server and `HangfireWorkerCount: 1`. The Windows Service installer was also corrected for valid
+PowerShell `${LASTEXITCODE}` interpolation before installation and then completed successfully. A normal
+export completed through the worker. During a long export, S57/S101 AOI reads, Analyze/Review, another
+Product operation enqueue and other application pages remained responsive while background export
+execution stayed serialized. This closes the original API-starvation acceptance gate for the dev deployment.
+
+Reboot/startup-order behavior and permissions for every production remote resource remain deployment
+checks for each target environment; they are not inferred from the successful live-service smoke.
+
 ## Why ArcGIS work is serialized
 
 `ProductManagerGDB` owns one `Geodatabase` and one dedicated STA scheduler. ArcGIS operations for that owner are serialized because ArcGIS Core objects have thread and lifetime requirements. Do not increase scheduler concurrency or share a `ProductManagerGDB` across concurrent execution lanes.
@@ -20,6 +40,18 @@ The same `ProductCatalogueAPI` deployment supports two mutually exclusive roles:
 `Worker` is a generic host with no HTTP listener. It initializes ArcGIS Core and its own ProductManager, then processes jobs from the same Hangfire storage. `WorkerCount` is fixed at `1`, preserving serialized background ArcGIS execution and preventing exports for different datasets from running concurrently in the supported deployment.
 
 The process boundary is the isolation boundary. A long or stalled background scheduler cannot occupy the interactive scheduler because the two ProductManager instances, schedulers, geodatabase connections, ArcGIS hosts, and OS processes are distinct.
+
+## AOI read behavior
+
+The specification-scoped global AOI route caches the ArcGIS geometry dictionary for 24 hours per
+`ProductSpecification`. The cache stores one `Lazy<Task<Dictionary<string, string>>>` so concurrent
+requests share the same geometry lookup; a failed lookup is removed so the next request can retry.
+Current workflow/status state is still loaded from SQL on every request and is not frozen by the geometry
+cache.
+
+`GET /electronicproducts/{name}/aoi` remains a separate targeted path. It resolves exact source-aware
+Product identity and calls `GetDatasetBoundary` for that Product only. It does not use the global AOI cache,
+perform a bulk AOI scan, infer source identity from the dataset name, or fall back across specifications.
 
 ## Deployment
 
@@ -82,15 +114,20 @@ Startup: Automatic
 Process role: Worker
 ```
 
-The publish output includes `scripts/Install-ProductCatalogueWorker.ps1`. Run it from an elevated PowerShell session and point it at the worker deployment copy of `ProductCatalogueAPI.exe`:
+The publish output includes `scripts/Install-ProductCatalogueWorker.ps1`. Run it from an elevated PowerShell session and point it at the worker deployment copy of `ProductCatalogueAPI.exe`. For a first installation, prefer installing it stopped so registration and deployment configuration can be inspected before execution:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Install-ProductCatalogueWorker.ps1 `
-    -ExecutablePath F:\Applications\ProductCatalogueWorker\ProductCatalogueAPI.exe `
-    -StartService
+    -ExecutablePath F:\Applications\ProductCatalogueWorker\ProductCatalogueAPI.exe
+
+Get-CimInstance Win32_Service -Filter "Name='ProductCatalogueWorker'" |
+    Select-Object Name, DisplayName, StartName, StartMode, State, PathName
+
+sc.exe qfailure ProductCatalogueWorker
+Start-Service ProductCatalogueWorker
 ```
 
-The script registers the fixed Worker role on the service command line, configures LocalSystem and automatic startup, and configures three one-minute restart recovery actions. It fails if a service with the same name already exists rather than silently replacing an existing deployment.
+The script registers the fixed Worker role on the service command line, configures LocalSystem and automatic startup, and configures three one-minute restart recovery actions. It fails if a service with the same name already exists rather than silently replacing an existing deployment. `-StartService` remains available when the deployment configuration has already been validated. Automatic startup is intentional; delayed start is not used as a substitute for explicit dependency/recovery handling and should only be considered if reboot testing demonstrates an actual startup-order problem.
 
 For an upgrade, stop the service, deploy the new worker copy into the existing worker directory, then start the service again. Recreate the service only when its binary path or service registration must change.
 
@@ -103,9 +140,9 @@ sc.exe delete ProductCatalogueWorker
 
 `LocalSystem` presents the server computer credentials to remote resources. If connection files, artifacts, locks, compiler inputs/outputs, or other required paths live on network shares, grant the server machine account (for example `DOMAIN\DEVSERVER$`) the required access or use local paths. Do not assume an interactive developer account's mapped drives or user profile are available to the service.
 
-API and worker each initialize ArcGIS CoreHost in their own process. Running both on the same server or under the same Windows identity is not treated as shared ArcGIS object state; however, the deployed ArcGIS license must be proven to initialize successfully in both processes at the same time. This is a release acceptance check, not an assumption made by the host configuration.
+API and worker each initialize ArcGIS CoreHost in their own process. Running both on the same server or under the same Windows identity is not treated as shared ArcGIS object state. The dev-server acceptance proved simultaneous API/worker CoreHost initialization for that deployment; every target environment must still prove its own ArcGIS license and external-resource access.
 
-After deployment, the Hangfire dashboard should show one `product-catalogue-worker:<machine>:<process-id>` server. The API process must not appear as a Hangfire server.
+After deployment, the Hangfire dashboard should show one `product-catalogue-worker:<machine>:<process-id>` server. The API process must not appear as a Hangfire server. When the API is mounted as the IIS `/api` application, the dashboard registered at `/dashboard` is reached externally at `/api/dashboard/`. The accepted dev-server smoke verified the worker-only Hangfire execution model with one worker while the API remained responsive during export processing.
 
 ## Version and integrity guards
 

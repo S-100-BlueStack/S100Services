@@ -2,7 +2,8 @@
 
 ## Authority and scope
 
-Authoritative baseline: `345b79eef2a9225473d57db80243e731739cbc3a`.
+Implementation baseline: `345b79eef2a9225473d57db80243e731739cbc3a`.
+Accepted integration commit: `aaf635571503c780517cfc3a76a4fa5e4894f447`.
 
 The supplied `PC-workflow-frontend-adaptation-baseline-345b79ee.zip` was verified against the
 SHA-256 recorded in the supplied context before implementation:
@@ -11,43 +12,44 @@ SHA-256 recorded in the supplied context before implementation:
 0BA454DAEF73423724C3D2AA97FFF759AF356C00D35364953E7FD17205AA84D7
 ```
 
-The archive is the implementation source. `4dd91285...` and `2ec17a5c...` are comparison/history
-points, not replacement baselines. No repository HEAD or earlier candidate is used.
+The archive was the implementation source. `4dd91285...` and `2ec17a5c...` remain comparison/history
+points, not replacement baselines. The completed frontend adaptation was later integrated with the backend
+ArcGIS process-isolation work and the AOI cache commit `8a8b77e32502b140890954d1be5143da7b90af01`;
+the accepted combined repository state is `aaf635571503c780517cfc3a76a4fa5e4894f447`.
 This document supersedes older frontend descriptions of combined AOI transport, Export routes,
 export targets, job persistence, and workspace source resolution. The final Analyze/Review performance
-correction relies on an additive source-aware response from the existing targeted Product AOI route.
-No commit was made.
+correction relies on the additive source-aware targeted Product AOI route.
 
 ## Contract-impact matrix
 
 Paths in the evidence column are relative to `src/ProductCatalogueAPI` unless otherwise stated.
 
-| Contract                 | Authoritative implementation                                                                                                                     | Frontend decision                                                                                                                                                                                                                          |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Product listing          | `Controllers/ElectronicProductsController.cs`: lightweight listing contains dataset names without source specification                           | Change: Analyze/Review picker uses this endpoint only for selection. It is never used to infer Product source.                                                                                                                             |
-| S-57/S-101 bulk AOIs     | Same controller: `GET electronicproducts/aoi?productSpecification=S57` or `S101`, independently filtered by the server                           | Main-map registry loaders retain these endpoints. Analyze/Review no longer load either complete AOI catalog for workspace resolution.                                                                                                      |
-| Targeted Product AOI     | `GET electronicproducts/{name}/aoi` uniquely resolves the Product dataset identity and returns `Attributes.ProductSpecification`                 | Change: Analyze/Review resolve only the requested Product. Backend identity conflicts return 409; frontend identity/specification validation fails closed with no bulk fallback or dataset-name heuristic.                                 |
-| AOI fields               | `Models/ResponseTypes.cs`: Geometry plus Product attributes; targeted response also carries ProductSpecification                                 | Carry returned geometry and stable source identity. Popup metadata refresh supplies versions. Existing Main-map `layerDataApi.fetchAOI` behavior remains unchanged.                                                                        |
-| Public Product metadata  | Electronic product read returns S-128 edition/update plus current normalized state and related `Exports`                                         | Change: Analyze reads Product metadata and retains registry AOI geometry. Popup uses selected source label. Do not infer publication from a successful export.                                                                             |
-| Export metadata          | Related tracks use `Name`, `Type`, Edition, Update, Status, Date, ErrorMessage, ValidationArtifacts; S101 intentionally emits `Type=S100`        | Change: retain alias, support S101 normalization, preserve errors/artifacts and existing comparison grouping. Versions in a track can be candidate or published fallback; they are not proof of publication.                               |
-| Export start             | `Controllers/ExportController.cs`: POST `export/{name}/newedition`, `newupdate`, `cancel-export`, returning 202                                  | Change: remove obsolete `/jobs` suffix and target query; enable both supported Edition/Update leaves.                                                                                                                                      |
-| Specification selection  | `Services/Export/ExportProductResolver.cs`: exact catalogue product resolves S57 or S101; S128 maps to S101                                      | Change: registry declares expected standard for presentation/dispatch. Backend selects actual specification; no frontend cross-standard export override.                                                                                   |
-| Engines and mapping      | `ExportEngineRegistry`, `IsoIec8211ExportEngine`, normalized operation service; S57 requires a unique mapped S101 source                         | No engine selection UI: backend owns mapping and execution. Mapping ambiguity/missing source fails through the backend error contract. No inferred paired Product.                                                                         |
-| Unsupported combinations | GML/S122 and HDF5/S102 engines are unimplemented boundaries; controller does not support these product exports                                   | Deliberately unavailable. No All, S100 request target, bulk export, or inferred alternate source path.                                                                                                                                     |
-| Edition/Update semantics | Operation service builds isolated candidate revisions; Update requires a published edition; duplicate/incompatible workflow states rejected      | Change: status gates and candidate/non-publication copy. Backend retains final version, prior-index, mapping and candidate validation.                                                                                                     |
-| Completion/errors        | Export job result contains code/message/warning/error; successful export is `EXPORT_READY_FOR_DISTRIBUTION`                                      | Change: surface backend message, including “not published to S-128”; keep safe API result/error formatting. 404/409/503 and asynchronous validation failures do not become successes.                                                      |
-| Cancel Export            | Public operation `CancelExport`, direct `cancel-export` route; deletes an unverified candidate                                                   | Change wire route/type, preserve Cancel Export UI and internal rollback state/action IDs. Candidate existence is not separately exposed; backend remains final authority.                                                                  |
-| Job reads/recovery       | `Controllers/JobsController.cs`, `Services/Jobs`: `jobs/{id}`, `jobs/active?datasetName=...`; explicit lower-camel responses                     | Existing finite request timeout, bounded backoff, browser persistence and cross-tab discovery match. Change Update/CancelExport normalization and fail-closed malformed/identity/stale active-job handling.                                |
-| State reads              | Current projection backed by normalized workflow repository; ProductState enum has Idle, Exported, Frozen, InTransit and states 7–15             | Change palette coverage and action gates. InTransit (6) is not Frozen (5). Unknown states disable export. No legacy persistence contract restored.                                                                                         |
-| Product History          | `ProductStateHistory.product_state_history_id` -> ProductRecord.Id -> ProductHistoryResponse.Id                                                  | Existing deterministic shared normalizer matches. Change only source-aware loader admission/identity check for electronic products.                                                                                                        |
-| BE-108A                  | History envelope Data/TotalHits plus Events/EventTotalHits, StateRecordId association                                                            | No producer or association change. Empty Events is valid. No timestamp deduplication or Batch 2 recovery. AppendAsync return contract unchanged.                                                                                           |
-| Dashboard                | Existing server paging/sorting/filtering and activity state metadata remain public; ReportLinks are empty                                        | No change: retain FI-009 page size, FI-010 sort/cursors, History and canonical links. No invented activity-to-artifact association.                                                                                                        |
-| Validation files         | `electronicproducts/{name}/artifacts/history`, `electronicproducts/{name}/artifacts/{id}`; history includes track/revision/product/specification | Change: safe configured API-base download URLs; popup retains latest diagnostics; Analyze and Review expose history downloads, with independent content failures. No fabricated inline XML or distribution artifact endpoint.              |
-| Send / Upload            | `UploadController` and `UploadSingularProductJob`: only Disabled/Simulation mode, ReadyForDistribution precondition                              | Change state gate to 11. Preserve capability preflight and truthful simulation (“No data was sent”). Real upload/delivery and IC-ENC report retrieval remain unavailable.                                                                  |
-| Freeze/Unfreeze          | Upload routes still pass S-101 to AppendAsync                                                                                                    | S101 remains supported; S57 capability deliberately disabled because routing it through that contract would write the wrong specification. Backend unchanged.                                                                              |
-| Analyze/Review routes    | Existing `/Analyze?Datasets=...` and `/Review?Datasets=...`                                                                                      | No route change. Preserve source-aware resolution, ambiguity rejection, generation guards and Product picker behavior.                                                                                                                     |
-| Paper Charts/S102        | Synthetic mock endpoints only; no authoritative production read contract                                                                         | Runtime fixtures retired. The frontend bootstrap exposes only S57/S101; retained synthetic registry definitions are explicit test fixtures only.                                                                                           |
-| FI-016                   | Enum/lookup provides names and IDs; Dashboard metadata supplies its own activity semantics                                                       | Partial integration: current states get centralized theme colors and correct mutation semantics. No published AOI error-only/default-filter classification or source palette policy is supplied; final error-only preset remains deferred. |
+| Contract | Authoritative implementation | Frontend decision |
+| --- | --- | --- |
+| Product listing | `Controllers/ElectronicProductsController.cs`: lightweight listing contains dataset names without source specification | Change: Analyze/Review picker uses this endpoint only for selection. It is never used to infer Product source. |
+| S-57/S-101 bulk AOIs | Same controller: `GET electronicproducts/aoi?productSpecification=S57` or `S101`, independently filtered by the server; global geometry lookup is cached for 24 hours per Product specification while current workflow/status state is still read per request | Main-map registry loaders retain these endpoints. Analyze/Review no longer load either complete AOI catalog for workspace resolution. |
+| Targeted Product AOI | `GET electronicproducts/{name}/aoi` uniquely resolves the Product dataset identity and returns `Attributes.ProductSpecification` | Change: Analyze/Review resolve only the requested Product. Backend identity conflicts return 409; frontend identity/specification validation fails closed with no bulk fallback or dataset-name heuristic. |
+| AOI fields | `Models/ResponseTypes.cs`: Geometry plus Product attributes; targeted response also carries ProductSpecification | Carry returned geometry and stable source identity. Popup metadata refresh supplies versions. Existing Main-map `layerDataApi.fetchAOI` behavior remains unchanged. |
+| Public Product metadata | Electronic product read returns S-128 edition/update plus current normalized state and related `Exports` | Change: Analyze reads Product metadata and retains registry AOI geometry. Popup uses selected source label. Do not infer publication from a successful export. |
+| Export metadata | Related tracks use `Name`, `Type`, Edition, Update, Status, Date, ErrorMessage, ValidationArtifacts; S101 intentionally emits `Type=S100` | Change: retain alias, support S101 normalization, preserve errors/artifacts and existing comparison grouping. Versions in a track can be candidate or published fallback; they are not proof of publication. |
+| Export start | `Controllers/ExportController.cs`: POST `export/{name}/newedition`, `newupdate`, `cancel-export`, returning 202 | Change: remove obsolete `/jobs` suffix and target query; enable both supported Edition/Update leaves. |
+| Specification selection | `Services/Export/ExportProductResolver.cs`: exact catalogue product resolves S57 or S101; S128 maps to S101 | Change: registry declares expected standard for presentation/dispatch. Backend selects actual specification; no frontend cross-standard export override. |
+| Engines and mapping | `ExportEngineRegistry`, `IsoIec8211ExportEngine`, normalized operation service; S57 requires a unique mapped S101 source | No engine selection UI: backend owns mapping and execution. Mapping ambiguity/missing source fails through the backend error contract. No inferred paired Product. |
+| Unsupported combinations | GML/S122 and HDF5/S102 engines are unimplemented boundaries; controller does not support these product exports | Deliberately unavailable. No All, S100 request target, bulk export, or inferred alternate source path. |
+| Edition/Update semantics | Operation service builds isolated candidate revisions; Update requires a published edition; duplicate/incompatible workflow states rejected | Change: status gates and candidate/non-publication copy. Backend retains final version, prior-index, mapping and candidate validation. |
+| Completion/errors | Export job result contains code/message/warning/error; successful export is `EXPORT_READY_FOR_DISTRIBUTION` | Change: surface backend message, including “not published to S-128”; keep safe API result/error formatting. 404/409/503 and asynchronous validation failures do not become successes. |
+| Cancel Export | Public operation `CancelExport`, direct `cancel-export` route; deletes an unverified candidate | Change wire route/type, preserve Cancel Export UI and internal rollback state/action IDs. Candidate existence is not separately exposed; backend remains final authority. |
+| Job reads/recovery | `Controllers/JobsController.cs`, `Services/Jobs`: `jobs/{id}`, `jobs/active?datasetName=...`; explicit lower-camel responses | Existing finite request timeout, bounded backoff, browser persistence and cross-tab discovery match. Change Update/CancelExport normalization and fail-closed malformed/identity/stale active-job handling. |
+| State reads | Current projection backed by normalized workflow repository; ProductState enum has Idle, Exported, Frozen, InTransit and states 7–15 | Change palette coverage and action gates. InTransit (6) is not Frozen (5). Unknown states disable export. No legacy persistence contract restored. |
+| Product History | `ProductStateHistory.product_state_history_id` -> ProductRecord.Id -> ProductHistoryResponse.Id | Existing deterministic shared normalizer matches. Change only source-aware loader admission/identity check for electronic products. |
+| BE-108A | History envelope Data/TotalHits plus Events/EventTotalHits, StateRecordId association | No producer or association change. Empty Events is valid. No timestamp deduplication or Batch 2 recovery. AppendAsync return contract unchanged. |
+| Dashboard | Existing server paging/sorting/filtering and activity state metadata remain public; ReportLinks are empty | No change: retain FI-009 page size, FI-010 sort/cursors, History and canonical links. No invented activity-to-artifact association. |
+| Validation files | `electronicproducts/{name}/artifacts/history`, `electronicproducts/{name}/artifacts/{id}`; history includes track/revision/product/specification | Change: safe configured API-base download URLs; popup retains latest diagnostics; Analyze and Review expose history downloads, with independent content failures. No fabricated inline XML or distribution artifact endpoint. |
+| Send / Upload | `UploadController` and `UploadSingularProductJob`: only Disabled/Simulation mode, ReadyForDistribution precondition | Change state gate to 11. Preserve capability preflight and truthful simulation (“No data was sent”). Real upload/delivery and IC-ENC report retrieval remain unavailable. |
+| Freeze/Unfreeze | Upload routes still pass S-101 to AppendAsync | S101 remains supported; S57 capability deliberately disabled because routing it through that contract would write the wrong specification. Backend unchanged. |
+| Analyze/Review routes | Existing `/Analyze?Datasets=...` and `/Review?Datasets=...` | No route change. Preserve source-aware resolution, ambiguity rejection, generation guards and Product picker behavior. |
+| Paper Charts/S102 | Synthetic mock endpoints only; no authoritative production read contract | Runtime fixtures retired. The frontend bootstrap exposes only S57/S101; retained synthetic registry definitions are explicit test fixtures only. |
+| FI-016 | Enum/lookup provides names and IDs; Dashboard metadata supplies its own activity semantics | Partial integration: current states get centralized theme colors and correct mutation semantics. No published AOI error-only/default-filter classification or source palette policy is supplied; final error-only preset remains deferred. |
 
 ## Architecture and lifecycle
 
@@ -79,16 +81,23 @@ migrates only to S101 because authoritative baseline `fetchAOI()` defaulted to S
 S101 state wins. No filter state is copied into S57. The conservative Idle exclusion remains the
 default; saved explicit empty filter state takes precedence.
 
-Active jobs remain browser-cached projections of backend job discovery, not database locks. Mutation
-preflight fails closed on network errors, malformed responses, mismatched identities or superseded
-reads. Poll requests retain a 15-second timeout and retry intervals capped at 10 seconds. Tracking
-continues while final status is unknown; no timeout pretends the job has completed or unlocks it.
+Active jobs remain browser-cached projections of backend job discovery, not database locks. Concurrent
+same-Product active-job reconciliation shares one in-flight backend request, so popup watchers and
+mutation preflight cannot supersede each other. Mutation preflight still fails closed on network errors,
+malformed responses or mismatched identities. Poll requests retain a 15-second timeout and retry
+intervals capped at 10 seconds. Tracking continues while final status is unknown; no timeout pretends
+the job has completed or unlocks it.
 
 Validation diagnostics are read-only downloads. The URL normalizer admits only the public artifact
 route and rebases it against the configured API root; external schemes/hosts and unrelated paths
 are rejected. Track/revision identity is retained in history. Artifact failures do not discard
 successful Analyze metadata or Review History, and a History failure does not hide valid Review
 artifacts. Dashboard links are not manufactured from these Product-level lists.
+
+The normalized backend now executes Hangfire export work in a dedicated `Worker` process with its own
+`Background` ArcGIS/ProductManager lane. The HTTP API owns a separate `Interactive` lane and does not
+run a Hangfire server. Background exports remain serialized with `WorkerCount = 1`, so long export work
+cannot monopolize the API's ArcGIS scheduler.
 
 ## Preservation gate
 
@@ -110,29 +119,33 @@ for remaining preconditions. S57 Freeze/Unfreeze awaits a specification-correct 
 Real IC-ENC delivery/reports, production Paper Charts/S102, global timeline and Dashboard report-row
 associations remain unsupported. Validation file presence does not assert validation success.
 S57/S101 execution still requires the configured Windows/ArcGIS/compiler/validation prerequisites.
+The API and `ProductCatalogueWorker` must be deployed from the same backend publish artifact and use the
+same Hangfire/workflow configuration. The accepted dev-server deployment verified ArcGIS CoreHost in
+both processes, one `Background` Hangfire worker and responsive interactive API work during a long export.
 The new frontend must be deployed with the normalized backend; the old export routes are not fallback paths.
 
 ## Verification and local acceptance
 
-See the delivery inventory below for checks actually run. No dependency installation was performed.
-The normal Windows environment must run these frontend commands from the repository root:
+Final acceptance on 2026-09-15 used the normal Windows/deployment environment after integration onto
+`8a8b77e32502b140890954d1be5143da7b90af01` and before commit
+`aaf635571503c780517cfc3a76a4fa5e4894f447`:
 
-```powershell
-cd src/ProductCatalogue
-npm run format
-npm run check
-```
+- frontend normalized-workflow verification was reported green before the final integration;
+- the focused backend/process-isolation test set passed after the AOI-cache integration;
+- Release x64 framework-dependent publish completed and the same publish output was deployed to IIS API
+  and the dedicated worker directory;
+- `ProductCatalogueWorker` was installed as LocalSystem with Automatic startup and started successfully;
+- worker logs confirmed ArcGIS CoreHost initialization, `ProcessRole: Worker`, `ArcGisExecutionLane: Background`,
+  `RunsHangfireServer: true`, and `HangfireWorkerCount: 1`;
+- a normal export completed through the worker as expected;
+- long-export smoke kept S57/S101 AOI, Analyze/Review, another Product operation enqueue and other pages
+  responsive while background export execution remained serialized.
 
-With the repository's normal .NET/ArcGIS prerequisites available, run the relevant existing backend
-regressions from the repository root:
+The original Work candidate checks and inventory remain below as implementation evidence. Re-run
+`npm run check` and the relevant .NET tests after future changes; do not treat the accepted smoke as a
+replacement for regression verification.
 
-```powershell
-dotnet test tests/TestProductManager/TestProductManager.csproj --filter "FullyQualifiedName~ExportAsyncControllerTests|FullyQualifiedName~AoiResponseSerializationTests|FullyQualifiedName~ProductWorkflowArtifactTests|FullyQualifiedName~ProductHistory"
-```
-
-Confirm the local test project/prerequisite configuration in the authoritative Windows checkout.
-
-## Focused manual test plan
+## Focused regression checklist
 
 1. Fresh browser: load independent S57/S101 sources, inspect network specification parameters and
    distinct identities for overlapping AOIs; verify labels, scale/status/usage filters and Product search.
@@ -161,25 +174,26 @@ Confirm the local test project/prerequisite configuration in the authoritative W
 12. Run light/dark, overlap chooser, keyboard/Escape/focus/tooltip, branding, Denmark/Greenland Locator,
     notices and Product Collection smoke tests. Confirm operation states remain understandable without animation.
 
-## Suggested commit message
+## Accepted integration commit
 
 ```text
-Adapt Product Catalogue frontend to normalized product workflows
+aaf635571503c780517cfc3a76a4fa5e4894f447
+Implement normalized Product Catalogue workflows and isolate ArcGIS execution
 ```
 
 ## Delivery verification and inventory
 
 Checks actually completed in Work (Node v24.19.0):
 
-| Check                                                                     | Result                                      |
-| ------------------------------------------------------------------------- | ------------------------------------------- |
-| Supplied archive SHA-256 against context                                  | Match                                       |
-| Extracted authoritative baseline against every archive file               | Byte-for-byte match                         |
-| Full dependency-free frontend suite                                       | 634 passed, 0 failed, 0 skipped; 11 suites  |
-| Final focused normalized-workflow tests after diagnostic label adjustment | 19 passed, 0 failed                         |
-| `node --check` for changed/new JavaScript files                           | 62 files passed                             |
-| Backend/Core/backend tests and package manifests against baseline         | Unchanged                                   |
-| ZIP inventory and each member against final candidate                     | Exact match; repository-relative paths only |
+| Check | Result |
+| --- | --- |
+| Supplied archive SHA-256 against context | Match |
+| Extracted authoritative baseline against every archive file | Byte-for-byte match |
+| Full dependency-free frontend suite | 634 passed, 0 failed, 0 skipped; 11 suites |
+| Final focused normalized-workflow tests after diagnostic label adjustment | 19 passed, 0 failed |
+| `node --check` for changed/new JavaScript files | 62 files passed |
+| Backend/Core/backend tests and package manifests against baseline | Unchanged |
+| ZIP inventory and each member against final candidate | Exact match; repository-relative paths only |
 
 The complete suite used sequential test-file execution to obtain a complete TAP result in Work:
 
@@ -193,7 +207,8 @@ node --test src/features/products/tests/normalizedWorkflow.test.js
 absent, and no dependencies were installed merely to provide checks. .NET tests were not run:
 dotnet and the repository's Windows/ArcGIS prerequisites are unavailable. Browser/visual/manual
 acceptance was not performed in Work. LF line endings follow the supplied Prettier configuration.
-Run the exact Windows commands above before acceptance; no successful local build is claimed.
+These statements describe the Work candidate environment only; final Windows/deployment acceptance is
+recorded above.
 
 There are 64 changed files, 9 new files and no deleted files. The ZIP contains complete files only.
 
