@@ -1,3 +1,4 @@
+import { fetchProductArtifacts } from "../../data/api/productArtifactApi.js";
 import { fetchProductHistory } from "../../timeline/api/productHistoryApi.js";
 import {
   WORKSPACE_PRODUCT_RESOLUTION_STATUS,
@@ -15,6 +16,7 @@ export async function loadReviewHistories(
   {
     workspaceProductService = getDefaultWorkspaceProductService(),
     fetchHistory = fetchProductHistory,
+    fetchArtifacts = fetchProductArtifacts,
   } = {}
 ) {
   const names = normalizeDatasetNames(datasetNames);
@@ -28,19 +30,35 @@ export async function loadReviewHistories(
       }
 
       const productContext = resolution.product;
-      const history = await fetchHistory(datasetName, { productContext, workspaceProductService });
-
+      const [historyResult, artifactResult] = await Promise.allSettled([
+        fetchHistory(datasetName, { productContext, workspaceProductService }),
+        fetchArtifacts(datasetName, { productContext }),
+      ]);
+      const history = historyResult.status === "fulfilled" ? historyResult.value : null;
+      const historyError =
+        historyResult.status === "rejected"
+          ? (historyResult.reason?.message ?? "Product History could not be loaded.")
+          : null;
+      const validationArtifacts = artifactResult.status === "fulfilled" ? artifactResult.value : [];
+      const artifactError =
+        artifactResult.status === "rejected"
+          ? (artifactResult.reason?.message ?? "Validation files could not be loaded.")
+          : null;
       return {
+        validationArtifacts,
+        artifactError,
         datasetName,
         sourceId: productContext.sourceId,
         sourceLabel: productContext.sourceLabel,
         productType: productContext.productType,
         productContext,
-        loadState: history.endpointAvailable
-          ? REVIEW_PRODUCT_LOAD_STATE.LOADED
-          : REVIEW_PRODUCT_LOAD_STATE.UNAVAILABLE,
+        loadState: historyError
+          ? REVIEW_PRODUCT_LOAD_STATE.FAILED
+          : history?.endpointAvailable
+            ? REVIEW_PRODUCT_LOAD_STATE.LOADED
+            : REVIEW_PRODUCT_LOAD_STATE.UNAVAILABLE,
         history,
-        error: null,
+        error: historyError,
       };
     })
   );

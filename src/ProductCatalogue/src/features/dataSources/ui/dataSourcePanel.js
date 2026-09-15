@@ -178,6 +178,17 @@ function createSourceRow(source, state) {
     status.title = state.error;
   }
   copy.append(label, status);
+  if (state?.loading) {
+    const progress = document.createElement("calcite-progress");
+    progress.className = "pc-data-source-panel__progress";
+    progress.type = "indeterminate";
+    progress.scale = "s";
+    progress.setAttribute(
+      "aria-label",
+      `${source.label} ${state.enabled ? "refreshing" : "loading"}`
+    );
+    copy.appendChild(progress);
+  }
 
   const switchElement = document.createElement("calcite-switch");
   switchElement.scale = "s";

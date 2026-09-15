@@ -188,6 +188,7 @@ export async function triggerRollback(datasetName, anchorElement, { afterResult 
 }
 
 export async function triggerExport({
+  productContext,
   datasetName,
   actionId,
   target,
@@ -201,6 +202,7 @@ export async function triggerExport({
 }) {
   const exportLabel = createExportPresentationLabel({ presentationLabel, exportType });
   const dispatchValidation = validateExportDispatch({
+    productContext,
     actionId,
     target,
     exportType,
@@ -370,7 +372,7 @@ async function runConfirmedExportOperation({
 
     const result = await request(datasetName);
     if (result.success) {
-      noticeApiSuccess(`Export completed for ${datasetName}`, exportLabel);
+      noticeApiSuccess(`Export completed for ${datasetName}`, result.data?.message ?? exportLabel);
     } else {
       noticeApiFailure(result, {
         networkTitle: `Network error while exporting ${exportLabel} for ${datasetName}`,

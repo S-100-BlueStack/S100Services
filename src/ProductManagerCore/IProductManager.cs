@@ -45,7 +45,7 @@ namespace S100FC.ProductCatalogue
         /// <param name="exportType">The candidate revision type.</param>
         /// <param name="edition">The SQL-authoritative candidate edition.</param>
         /// <param name="update">The SQL-authoritative candidate update.</param>
-        /// <param name="cancellationToken">Signals cancellation before or after the ArcGIS-dispatched snapshot build.</param>
+        /// <param name="cancellationToken">Signals cancellation before dispatch and between substantial snapshot-processing phases. An ArcGIS call already in progress cannot be interrupted unless that API supports cancellation.</param>
         /// <returns>A read-only YAML dataset snapshot containing the requested candidate version.</returns>
         Task<YAML.Dataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default);
         Task<Dictionary<string, string>> GetDatasetAOIs();

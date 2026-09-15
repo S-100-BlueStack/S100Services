@@ -1,99 +1,63 @@
 # Products
 
-The Products feature contains shared product-facing frontend helpers that are not owned by the main map, Analyze, Review or Dashboard routes.
+Shared Product helpers serve Main map, Analyze, Review and Dashboard.
+The [normalized workflow contract review](../../../docs/normalized-workflow-frontend-adaptation.md)
+is the current integration reference against `345b79eef2a9225473d57db80243e731739cbc3a`.
 
-## Product catalog and workspace resolution
+## Catalog and identity
 
-`services/workspaceProductService.js` is the current shared Product catalog and resolution boundary for
-Analyze and Review. It combines independent providers:
+The shared Product picker uses the lightweight `GET electronicproducts` name list only for dataset-name
+selection. `workspaceProductService` resolves an opened Analyze/Review Product with the targeted
+`GET electronicproducts/{datasetName}/aoi` contract, whose response supplies authoritative
+`ProductSpecification` and source-owned geometry. Main-map S57/S101 layers continue to use their
+specification-scoped bulk AOI endpoints.
 
-```txt
-workspaceProductService
-  -> compatibility catalog provider (`GET /electronicproducts`)
-  -> Paper Charts registry provider when runtime-available
-  -> S-102 registry provider when runtime-available
-```
+Each resolved Product retains sourceId, productKey, datasetName and registry capabilities/content
+configuration. The frontend never derives source from dataset-name patterns. Globally unique datasetName
+remains the public route identity; a backend identity conflict or malformed targeted response fails closed
+instead of falling back to a bulk source catalog. Workspace availability respects deployment
+configuration but is independent of Main-map source toggles.
 
-`GET /electronicproducts` remains the lightweight compatibility catalog provider; it is not the permanent
-multi-source Product catalog architecture. Registry providers reuse their source loader/normalizer and
-preserve source-aware Product metadata. `datasetName` is the authoritative globally unique workspace
-identity while display/Product names remain separate metadata. A duplicate normalized `datasetName`
-across providers is invalid and fails closed as ambiguous rather than choosing the first or compatibility
-provider. One provider failure does not reject the full catalog, and generation guards prevent stale
-provider results from replacing newer state.
-
-The workspace catalog is independent of Main map enabled-source state. S-57 and S-101 remain unavailable
-as independent workspace providers until their authoritative backend read/catalog contracts exist.
-
-Analyze and Review reuse the shared Product picker UI over this catalog. Product name is the primary label,
-already-added Products are hidden, and source metadata remains available for compact secondary labeling.
-Typed input is intentionally preserved as a fallback where the existing workspace UI permits it.
-
-## Product operation jobs
-
-New Edition export and Cancel Export use the asynchronous Product Catalogue job contract; Cancel Export retains the legacy Rollback wire operation:
+## Jobs and mutations
 
 ```text
-POST /export/{datasetName}/newedition/jobs?exportTarget=S100
-POST /export/{datasetName}/rollback/jobs
+POST /export/{datasetName}/newedition
+POST /export/{datasetName}/newupdate
+POST /export/{datasetName}/cancel-export
 GET /jobs/{jobId}
-```
-
-The frontend persists active jobs in local storage, polls the status endpoint until a terminal status is returned and restores tracking after a reload. Persisted jobs are also projected into `productOperationState` as backend operations so mutation actions remain blocked while the job may still be active.
-
-Relevant files:
-
-```text
-src/features/data/api/exportApi.js
-src/features/data/api/productJobApi.js
-src/features/products/domain/productJob.js
-src/features/products/services/productJobService.js
-src/features/products/state/productOperationState.js
-```
-
-Terminal statuses are:
-
-```text
-Succeeded
-Failed
-Cancelled
-```
-
-Transient polling errors do not clear the persisted operation. This is intentional: the frontend must not unlock conflicting actions while the backend job may still be running.
-
-BE-104B only restores jobs created by this browser storage. Backend-provided active operation visibility across users and browsers remains a separate backend contract.
-
-## Terminology
-
-User-facing UI should use `Product` and `Products`, not `Dataset` or `Datasets`.
-
-Code can keep technical identifiers such as `datasetName` where required by backend contracts or normalized product attributes.
-
-## Cross-tab job synchronization
-
-Active job records are synchronized between same-origin browser tabs through local storage, `BroadcastChannel`, focus/pageshow/visibility reconciliation and a short fallback reconciliation interval. This keeps popup action availability current even when a browser drops or delays a storage event. Cross-user and cross-browser-profile visibility still requires the later backend active-operation contract.
-
-Operation precondition failures are returned as `PRODUCT_OPERATION_REJECTED` with a backend-owned safe message, for example when New Edition is requested while the product is already `Exported`. Unexpected internal failures remain sanitized as `EXPORT_FAILED` or `ROLLBACK_FAILED`.
-
-## Backend-authoritative active operations
-
-Cross-user and cross-computer operation visibility uses:
-
-```text
 GET /jobs/active?datasetName={datasetName}
 ```
 
-`productJobService.js` watches products currently represented by open popups. It immediately fetches active jobs, repeats the lookup while the popup remains open and starts normal job-status polling for every discovered job.
+The backend resolves specification from the exact Product; no exportTarget query is sent.
+Operations are ExportEdition, ExportUpdate and CancelExport. Export success means a generated,
+validated candidate, not publication to S-128. User-facing labels remain S-101/S-57 and Cancel Export.
+The S100 alias remains valid for Product export metadata only.
 
-The backend endpoint is the authoritative discovery source. Browser storage and `BroadcastChannel` only reduce latency between tabs in the same browser profile.
+Active jobs persist in browser storage and resume after reload. Cross-tab reconciliation combines
+storage, BroadcastChannel and focus/visibility updates; backend active-job discovery provides shared
+visibility. Every mutation verifies active jobs first. Concurrent verification for the same Product is
+coalesced so popup watchers and mutation preflight share one authoritative in-flight request instead of
+invalidating each other. Failed, malformed or mismatched responses cannot authorize a mutation. Status
+polls retain finite request timeouts and bounded backoff while keeping an unknown active job locked in
+the UI.
 
-The action layer also runs a backend preflight before Freeze, Unfreeze, Send, Export or Cancel Export. A failed active-state lookup is treated as unavailable operation state, and the frontend does not dispatch the mutation. This prevents a temporary status-service failure from being interpreted as “no active operation.”
+Known workflow states constrain export; backend mapping/version/candidate checks remain authoritative.
+Send is a capability-gated simulation from ReadyForDistribution, never real delivery.
+S57 Freeze/Unfreeze is unavailable because the current upload routes write S-101 explicitly.
+Paper Charts/S102 cannot dispatch electronic mutations or read electronic History/artifacts.
 
-## FI-011D workspace contract
+## History and diagnostics
 
-FI-011D makes Product Collection and workspace runtime identity source-aware while routes continue to
-project globally unique `datasetName` values only. `compatibility-aoi` remains an internal adapter, never
-a registry source or storage key. Paper Charts and S-102 resolve through registry-backed workspace
-providers and must not fall through to compatibility AOI/History calls. ProductContext separately models
-visible History/IC-ENC/Internal validation surfaces and backend implementation permission. FI-019 owns
-the later route migration.
+History uses registry loader permission and verifies the requested identity. Dashboard retains its
+one-argument backend History adapter. BE-108A Events/EventTotalHits and deterministic StateRecordId
+association are unchanged; no producers or timestamp deduplication are added.
+
+Validation artifact normalization is shared by popup metadata, Analyze and Review. Only current
+public diagnostic download routes are exposed; track/revision identity remains available in history.
+No general distribution download or IC-ENC report contract is fabricated.
+
+## Terminology
+
+Use Product/Products in UI text. Keep backend identifiers such as datasetName, exportTarget and
+internal rollback state where they are real contracts. Canonical routes remain
+`/Analyze?Datasets=...` and `/Review?Datasets=...`.

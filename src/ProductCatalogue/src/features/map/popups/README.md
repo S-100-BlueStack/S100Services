@@ -1,6 +1,7 @@
 # Popup actions
 
-Current implementation baseline: `60e4854389ab16d3bd280f653998ea10eaa0b6ab`.
+Current backend baseline: `345b79eef2a9225473d57db80243e731739cbc3a`.
+See the [normalized contract review](../../../../docs/normalized-workflow-frontend-adaptation.md).
 
 Popup actions are implemented as a custom DOM action bar instead of Esri `view.popup.actions`.
 FI-011C keeps the established action lifecycle while resolving every selected Product through a
@@ -23,18 +24,18 @@ The action UI provides:
 - `features/products/domain/productActionAvailability.js` is the domain-level source of truth for
   action visibility and availability.
 - `popupProductActions.js` owns confirmation, API calls, notices, operation lifecycle, and post-action
-  refresh for implemented compatibility operations.
+  refresh for implemented capability-gated operations.
 - `popupExportState.js` tracks popup-local export leaf state by deterministic Product identity.
 - `popupActionDom.js` creates and reconciles top-level action button DOM.
 - `popupActionDropdown.js` creates the dropdown, disabled tooltip, keyboard, focus, Escape, and
   outside-click behavior.
-- `createPopup.js` renders compatibility Product popup content and subscribes to export and
+- `createPopup.js` renders electronic Product popup content and subscribes to export and
   Product-operation state.
-- `features/dataSources/map/createDataSourcePopup.js` renders registry-backed source popups without
-  compatibility API refresh or job subscriptions.
+- `features/dataSources/map/createDataSourcePopup.js` selects the electronic popup for backend-refresh
+  capable sources and keeps mock popups free of electronic requests/subscriptions.
 - `popupExportConfig.js` creates declarative Edition/Update leaves from Product context.
-- `popupExportContract.js` owns the implemented compatibility dispatch guard.
-- `features/data/api/exportApi.js` starts asynchronous Export and Cancel Export jobs through the legacy Rollback job contract.
+- `popupExportContract.js` owns the source/capability/operation/specification dispatch guard.
+- `features/data/api/exportApi.js` starts ExportEdition, ExportUpdate and CancelExport jobs through direct routes.
 - `features/data/api/productJobApi.js` calls the job start and status endpoints.
 - `features/products/services/productJobService.js` persists, resumes, and polls active jobs.
 - `features/products/state/productOperationState.js` combines local operations with restored backend
@@ -62,13 +63,12 @@ Registry-backed Products must carry matching Graphic attributes and layer metada
 data-source map adapter. Attribute-only or stale source metadata fails closed. UI code must not infer
 a source from layer title, popup DOM, or dataset-name patterns.
 
-The combined AOI path participates through the internal `compatibility-aoi` adapter. This adapter ID
-is not a registry source, user toggle, or persisted source value. It may be removed when authoritative
-separate S-57 and S-101 Product/read contracts exist.
+The isolated legacy `compatibility-aoi` layer adapter is not a production source or fallback.
+Production S57/S101 now use independent registry-owned AOI contracts.
 
 ## Current action status
 
-Compatibility AOI retains the established actions:
+Electronic registry Products expose capability-gated actions:
 
 - `Freeze` / `Unfreeze`;
 - `Send to IC-ENC`;
@@ -76,19 +76,15 @@ Compatibility AOI retains the established actions:
 - `Analyze` and `History` through `Tools`;
 - `Export...`.
 
-Paper Charts and S-102 keep backend mutation and real Export capabilities disabled, but FI-011D
-enables the safe Product Collection, Analyze, Review, and History surfaces through independent
-ProductContext capabilities. Their `Export...` root remains a pair of disabled Edition/Update
-placeholders. `Tools` exposes Analyze and History; History opens the existing quick-panel shell and
-renders a source-specific unavailable state without a compatibility History request. Product
-Collection remains independent from `supportsPopupActions` and uses source-aware Product identity.
-Freeze, Unfreeze, Send to IC-ENC, Cancel Export, real Export dispatch, backend History, IC-ENC report
-loading, and internal-validation loading remain disabled.
+Synthetic Paper Charts and S-102 definitions are retained only for explicit source-boundary tests.
+They are no longer runtime-selectable or workspace-available. Their existing fail-closed ProductContext
+and disabled Export contracts remain useful regression fixtures and still cannot dispatch electronic
+backend mutations.
 
 The popup-header collection action re-resolves the currently selected Graphic through Product context
 before every add/remove mutation and guards both dataset name and source-aware identity. Selection
-changes therefore cannot let a stale button mutate a different Product. Paper Charts and S-102
-participate through the same ProductContext-based Collection contract. `Copy dataset name` remains
+changes therefore cannot let a stale button mutate a different Product. Synthetic source fixtures may
+exercise the same ProductContext-based Collection contract in tests. `Copy dataset name` remains
 independent from Product Collection capability.
 
 Unknown Product context or unknown capability fails closed and renders no backend-dependent action.
@@ -108,24 +104,23 @@ Export...
 There are no visible `All`, `S57`, `S100`, `S101`, `Paper Charts`, or `S-102` menu groups. Backend
 wire targets remain independent from labels and operation kinds.
 
-### Compatibility AOI
+### Electronic Products
 
-`Edition` remains the only implemented compatibility export. It keeps the baseline backend behavior:
+S57 and S101 expose Edition and Update against the selected Product's own specification:
 
 ```text
-POST /export/{name}/newedition/jobs?exportTarget=S100
+POST /export/{name}/newedition
+POST /export/{name}/newupdate
+POST /export/{name}/cancel-export
 ```
 
-The generic `Edition` label is a UI simplification only. FI-011C does not change the wire target to
-`All`, S-57, or S-101, and it does not invent a source split. `Update` remains a disabled placeholder
-because no implemented frontend/backend Update contract exists on the baseline.
+No target query or obsolete `/jobs` suffix is sent. Export creates an unverified candidate, not an
+S-128 publication. Backend mapping/version/candidate checks remain authoritative. S57 Freeze and
+Unfreeze remain disabled because the current upload routes explicitly write S-101.
 
-Separate source-correct S-57 and S-101 targets require authoritative independent Product/read
-contracts and are deferred.
+### Synthetic Paper Charts and S-102 fixtures
 
-### Paper Charts and S-102
-
-Both sources declare visible `Edition` and `Update` leaves with:
+These test-only source definitions declare visible `Edition` and `Update` leaves with:
 
 - `implemented: false`;
 - no backend target;
@@ -156,13 +151,13 @@ Export leaves keep these concerns separate:
 
 `popupExportConfig.js` resolves the handler registry and creates UI descriptors. UI code does not map
 source IDs to endpoints. `popupExportContract.js` remains a final direct-dispatch guard and currently
-allows only the established compatibility Edition operation with the S100 wire target.
+allows implemented Edition/Update leaves whose capability and specification match their Product context.
 
 ## Product action lifecycle
 
 `popupProductActions.js` owns implemented action execution.
 
-For synchronous mutations such as Freeze, Unfreeze, and Send:
+For synchronous mutations such as Freeze and Unfreeze:
 
 ```text
 confirm
@@ -173,7 +168,7 @@ confirm
 -> end local Product operation
 ```
 
-For asynchronous Export and Cancel Export (legacy Rollback job):
+For asynchronous Export, Cancel Export and Send simulation:
 
 ```text
 confirm
@@ -203,8 +198,16 @@ remains authoritative across users and computers.
 ## Product operation state
 
 `productOperationState.js` combines local operations and external operations restored or discovered
-from backend jobs. FI-011C does not change backend job identity, endpoint contracts, locking, version
-checks, or execution guards.
+from backend jobs. The normalized backend remains authoritative for job identity, specification resolution, locking,
+version checks and execution guards.
+
+## Source-local Product metadata
+
+Electronic popup metadata renders one column for the selected Product source. Matching export-track
+metadata may enrich that column with candidate edition/update, state, error and validation files, but
+related tracks for another Product Specification are not rendered as additional columns. For example,
+an S-57 Product never exposes an S-101 comparison column merely because the backend uses an S-101
+relationship during export mapping.
 
 ## Export state
 
@@ -227,11 +230,8 @@ backend-authoritative job.
 
 ## Cancel Export warnings
 
-A successful Cancel Export can return a warning from the legacy Rollback job, currently including:
-
-```text
-ROLLBACK_CLEANUP_FAILED
-```
+Terminal job responses may contain a safe backend warning. No legacy cleanup warning code is
+assumed to be produced by the normalized CancelExport implementation.
 
 The frontend treats this as a successful operation and shows a warning notice with the safe backend message.
 
@@ -271,7 +271,7 @@ The active-job lookup is not an atomic enqueue reservation. The backend dataset 
 
 Active job records are synchronized between same-origin browser tabs through local storage, `BroadcastChannel`, focus/pageshow/visibility reconciliation and a short fallback reconciliation interval. This keeps popup action availability responsive when a browser drops or delays a storage event. Cross-user and cross-computer visibility comes from the backend active-job endpoint.
 
-Operation precondition failures are returned as `PRODUCT_OPERATION_REJECTED` with a backend-owned safe message, for example when New Edition is requested while the product is already `Exported`. Unexpected internal failures remain sanitized as `EXPORT_FAILED` or `ROLLBACK_FAILED`.
+Operation precondition failures are returned as `PRODUCT_OPERATION_REJECTED` with a backend-owned safe message, for example when a candidate is already ReadyForDistribution. Validation and execution failures retain the safe code/message supplied by the current backend.
 
 ## Backend-authoritative active job visibility
 
@@ -321,7 +321,7 @@ The popup action bar is also retained during compatible refreshes. Action button
 
 This keeps normal auto, manual and product-job refreshes visually stable while preserving the previous behavior for structural or integrity edge cases.
 
-## Planned BE-108A Product History integration
+## BE-108A foundation and deferred producer design
 
 BE-108A does not change popup action runtime at this baseline. The approved design is recorded in:
 
@@ -331,7 +331,7 @@ src/ProductCatalogue/docs/be-108a-product-history-event-design.md
 
 ### Batch 1 boundary
 
-The later foundation batch prepares:
+The preserved Batch 1 foundation provides:
 
 - application-owned `OperationId`;
 - endpoint-specific Product History responses;

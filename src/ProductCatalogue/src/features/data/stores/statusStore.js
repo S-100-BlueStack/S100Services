@@ -55,9 +55,7 @@ export function getStatusIdByName(name) {
 export function isFrozenStatus(id) {
   const name = normalizeStatusName(getStatusName(id));
 
-  return (
-    name === "frozen" || name === "in transit" // TODO: Remove this when backend returns Frozen.
-  );
+  return normalizeStatusId(id) === 5 || name === "frozen";
 }
 
 function normalizeStatusId(id) {

@@ -2,7 +2,6 @@ import { loadStatuses } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { fetchProductCatalog } from "../../products/api/productCatalogApi.js";
 import { validateProductCatalogSelection } from "../../products/domain/productCatalog.js";
-import { hideLoader } from "../../../shared/ui/loader.js";
 import {
   addReviewProductItem,
   createReviewProductItems,
@@ -220,7 +219,6 @@ export async function initReviewPage({ datasetNames } = {}) {
   document.addEventListener("pc-review-product-remove", handleProductRemove);
 
   await waitForNextPaint();
-  hideLoader();
 
   renderCurrentReviewPage();
   await loadProductCatalogForPicker();

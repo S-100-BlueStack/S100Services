@@ -40,6 +40,9 @@ export async function fetchProductHistory(datasetName, options = {}) {
     );
   }
 
+  if (productContext.datasetName?.toLowerCase() !== normalizedDatasetName.toLowerCase())
+    throw new Error("Product History identity mismatch.");
+
   const historyConfiguration = getProductContentConfiguration(
     productContext,
     PRODUCT_CONTENT_TYPE.HISTORY
@@ -61,8 +64,11 @@ export async function fetchProductHistory(datasetName, options = {}) {
   }
 
   if (
-    !isCompatibilityProductContext(productContext) ||
-    historyConfiguration.loaderId !== "compatibility-history"
+    !(
+      isCompatibilityProductContext(productContext) &&
+      historyConfiguration.loaderId === "compatibility-history"
+    ) &&
+    historyConfiguration.loaderId !== "electronic-history"
   ) {
     throw new Error(
       `Product History loader is not configured for ${

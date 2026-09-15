@@ -34,122 +34,196 @@ function createMemoryStorage(initial = {}) {
   };
 }
 
-const developmentRegistry = createDataSourceRegistry({ isDevelopment: true });
-const productionRegistry = createDataSourceRegistry({ isDevelopment: false });
+const electronicRegistry = createDataSourceRegistry({
+  configuredSourceIds: [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101],
+});
+const s101OnlyRegistry = createDataSourceRegistry({
+  configuredSourceIds: [DATA_SOURCE_IDS.S101],
+});
+const unavailableElectronicRegistry = createDataSourceRegistry({ configuredSourceIds: [] });
+const mockFixtureRegistry = createDataSourceRegistry({
+  configuredSourceIds: [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102],
+  isDevelopment: true,
+});
+const retiredMockRegistry = createDataSourceRegistry({
+  configuredSourceIds: [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102],
+  isDevelopment: false,
+});
 
-test("first visit deterministically enables all configured and available sources", () => {
+test("first visit deterministically enables all configured and available electronic sources", () => {
   const result = readDataSourceSelection({
     storage: createMemoryStorage(),
-    registry: developmentRegistry,
+    registry: electronicRegistry,
   });
 
   assert.equal(result.status, "missing");
   assert.equal(result.isFirstVisit, true);
   assert.equal(result.shouldPersist, true);
   assert.equal(result.hasRuntimeSelectableSources, true);
-  assert.deepEqual(result.enabledSourceIds, [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]);
+  assert.deepEqual(result.enabledSourceIds, [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101]);
 });
 
 test("missing storage with zero runtime-selectable sources does not create initialized state", () => {
   const storage = createMemoryStorage();
   const persistence = createDataSourcePersistence({ storage });
-  const result = persistence.read(productionRegistry);
+  const result = persistence.read(retiredMockRegistry);
 
   assert.equal(result.status, "missing");
   assert.equal(result.isFirstVisit, true);
   assert.equal(result.shouldPersist, false);
   assert.equal(result.hasRuntimeSelectableSources, false);
   assert.deepEqual(result.enabledSourceIds, []);
-  assert.equal(persistence.write(productionRegistry, []), true);
+  assert.equal(persistence.write(retiredMockRegistry, []), true);
   assert.equal(storage.readRaw(DATA_SOURCE_STORAGE_KEY), null);
   assert.equal(storage.writes.length, 0);
+});
+
+test("non-persistable mock fixtures stay session-only and do not create stored selection", () => {
+  const storage = createMemoryStorage();
+  const persistence = createDataSourcePersistence({ storage });
+  const result = persistence.read(mockFixtureRegistry);
+
+  assert.deepEqual(result.enabledSourceIds, [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]);
+  assert.equal(result.shouldPersist, false);
+  assert.equal(
+    persistence.write(mockFixtureRegistry, [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]),
+    true
+  );
+  assert.equal(storage.readRaw(DATA_SOURCE_STORAGE_KEY), null);
 });
 
 test("a later deployment with selectable sources still applies first-visit defaults", () => {
   const storage = createMemoryStorage();
   const persistence = createDataSourcePersistence({ storage });
 
-  persistence.write(productionRegistry, []);
-  const laterResult = persistence.read(developmentRegistry);
+  persistence.write(retiredMockRegistry, []);
+  const laterResult = persistence.read(electronicRegistry);
 
   assert.equal(laterResult.status, "missing");
   assert.equal(laterResult.isFirstVisit, true);
-  assert.deepEqual(laterResult.enabledSourceIds, ["paper-charts", "s102"]);
+  assert.deepEqual(laterResult.enabledSourceIds, [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101]);
 });
 
-test("valid persisted state wins over registry defaults", () => {
+test("valid persisted electronic state wins over registry defaults", () => {
   const storage = createMemoryStorage({
     [DATA_SOURCE_STORAGE_KEY]: JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       initialized: true,
-      enabledSourceIds: [DATA_SOURCE_IDS.S102],
+      enabledSourceIds: [DATA_SOURCE_IDS.S101],
     }),
   });
 
-  const result = readDataSourceSelection({ storage, registry: developmentRegistry });
+  const result = readDataSourceSelection({ storage, registry: electronicRegistry });
   assert.equal(result.status, "valid");
-  assert.deepEqual(result.enabledSourceIds, [DATA_SOURCE_IDS.S102]);
+  assert.deepEqual(result.enabledSourceIds, [DATA_SOURCE_IDS.S101]);
   assert.equal(result.isFirstVisit, false);
 });
 
-test("an explicit all-off choice remains valid when choices were available", () => {
+test("an explicit all-off electronic choice remains valid when choices were available", () => {
   const storage = createMemoryStorage();
   const persistence = createDataSourcePersistence({ storage });
 
-  assert.equal(persistence.write(developmentRegistry, []), true);
-  const result = persistence.read(developmentRegistry);
+  assert.equal(persistence.write(electronicRegistry, []), true);
+  const result = persistence.read(electronicRegistry);
 
   assert.equal(result.status, "valid");
   assert.equal(result.isFirstVisit, false);
   assert.deepEqual(result.enabledSourceIds, []);
   assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY), {
-    schemaVersion: 1,
+    schemaVersion: 2,
     initialized: true,
     enabledSourceIds: [],
   });
 });
 
-test("temporary total unavailability does not overwrite a previous valid selection", () => {
+test("temporary total electronic unavailability does not overwrite previous selection intent", () => {
   const storage = createMemoryStorage();
   const persistence = createDataSourcePersistence({ storage });
 
-  persistence.write(developmentRegistry, [DATA_SOURCE_IDS.S102]);
+  persistence.write(electronicRegistry, [DATA_SOURCE_IDS.S57]);
   const original = storage.readRaw(DATA_SOURCE_STORAGE_KEY);
-  const unavailableResult = persistence.read(productionRegistry);
-  persistence.write(productionRegistry, []);
+  const unavailableResult = persistence.read(unavailableElectronicRegistry);
+  persistence.write(unavailableElectronicRegistry, []);
 
   assert.deepEqual(unavailableResult.enabledSourceIds, []);
-  assert.deepEqual(unavailableResult.preservedUnavailableSourceIds, [DATA_SOURCE_IDS.S102]);
+  assert.deepEqual(unavailableResult.preservedUnavailableSourceIds, [DATA_SOURCE_IDS.S57]);
   assert.equal(storage.readRaw(DATA_SOURCE_STORAGE_KEY), original);
 });
 
-test("known temporarily unavailable IDs survive writes for still-selectable sources", () => {
+test("known temporarily unavailable electronic IDs survive writes for still-selectable sources", () => {
   const storage = createMemoryStorage({
     [DATA_SOURCE_STORAGE_KEY]: JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       initialized: true,
-      enabledSourceIds: [DATA_SOURCE_IDS.S102],
+      enabledSourceIds: [DATA_SOURCE_IDS.S57],
     }),
   });
   const persistence = createDataSourcePersistence({ storage });
-  const paperOnlyRegistry = createDataSourceRegistry({
-    isDevelopment: true,
-    configuredSourceIds: [DATA_SOURCE_IDS.PAPER_CHARTS],
-  });
 
-  persistence.write(paperOnlyRegistry, [DATA_SOURCE_IDS.PAPER_CHARTS]);
+  persistence.write(s101OnlyRegistry, [DATA_SOURCE_IDS.S101]);
 
   assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY), {
-    schemaVersion: 1,
+    schemaVersion: 2,
     initialized: true,
-    enabledSourceIds: [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102],
+    enabledSourceIds: [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101],
+  });
+});
+
+test("retired Paper Charts and S-102 IDs are removed while electronic intent is preserved", () => {
+  const storage = createMemoryStorage({
+    [DATA_SOURCE_STORAGE_KEY]: JSON.stringify({
+      schemaVersion: 2,
+      initialized: true,
+      enabledSourceIds: [
+        DATA_SOURCE_IDS.PAPER_CHARTS,
+        DATA_SOURCE_IDS.S57,
+        DATA_SOURCE_IDS.S102,
+        DATA_SOURCE_IDS.S101,
+      ],
+    }),
+  });
+  const persistence = createDataSourcePersistence({ storage });
+  const result = persistence.read(s101OnlyRegistry);
+
+  assert.deepEqual(result.enabledSourceIds, [DATA_SOURCE_IDS.S101]);
+  assert.deepEqual(result.preservedUnavailableSourceIds, [DATA_SOURCE_IDS.S57]);
+  assert.equal(result.shouldPersist, true);
+
+  persistence.write(s101OnlyRegistry, result.enabledSourceIds);
+  assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY), {
+    schemaVersion: 2,
+    initialized: true,
+    enabledSourceIds: [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101],
+  });
+});
+
+test("retired fixture-only persisted state is cleaned even when no source is selectable", () => {
+  const storage = createMemoryStorage({
+    [DATA_SOURCE_STORAGE_KEY]: JSON.stringify({
+      schemaVersion: 2,
+      initialized: true,
+      enabledSourceIds: [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102],
+    }),
+  });
+  const persistence = createDataSourcePersistence({ storage });
+  const result = persistence.read(retiredMockRegistry);
+
+  assert.deepEqual(result.enabledSourceIds, []);
+  assert.deepEqual(result.preservedUnavailableSourceIds, []);
+  assert.equal(result.shouldPersist, true);
+
+  persistence.write(retiredMockRegistry, result.enabledSourceIds);
+  assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY), {
+    schemaVersion: 2,
+    initialized: true,
+    enabledSourceIds: [],
   });
 });
 
 test("invalid JSON and unsupported schema fail safely to deployment defaults", () => {
   const invalidJson = readDataSourceSelection({
     storage: createMemoryStorage({ [DATA_SOURCE_STORAGE_KEY]: "{" }),
-    registry: developmentRegistry,
+    registry: electronicRegistry,
   });
   const unsupported = readDataSourceSelection({
     storage: createMemoryStorage({
@@ -159,56 +233,66 @@ test("invalid JSON and unsupported schema fail safely to deployment defaults", (
         enabledSourceIds: [],
       }),
     }),
-    registry: developmentRegistry,
+    registry: electronicRegistry,
   });
 
   assert.equal(invalidJson.status, "invalid-json");
   assert.equal(unsupported.status, "unsupported-version");
-  assert.deepEqual(invalidJson.enabledSourceIds, ["paper-charts", "s102"]);
-  assert.deepEqual(unsupported.enabledSourceIds, ["paper-charts", "s102"]);
+  assert.deepEqual(invalidJson.enabledSourceIds, [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101]);
+  assert.deepEqual(unsupported.enabledSourceIds, [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101]);
 });
 
-test("unknown IDs are ignored while known unavailable IDs retain migration intent", () => {
+test("unknown and retired IDs are ignored while known unavailable electronic IDs retain intent", () => {
   const storage = createMemoryStorage({
     [DATA_SOURCE_STORAGE_KEY]: JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       initialized: true,
-      enabledSourceIds: ["unknown", "s57", "paper-charts"],
+      enabledSourceIds: [
+        "unknown",
+        DATA_SOURCE_IDS.S57,
+        DATA_SOURCE_IDS.PAPER_CHARTS,
+        DATA_SOURCE_IDS.S101,
+      ],
     }),
   });
 
-  const result = readDataSourceSelection({ storage, registry: developmentRegistry });
-  assert.deepEqual(result.enabledSourceIds, ["paper-charts"]);
-  assert.deepEqual(result.preservedUnavailableSourceIds, ["s57"]);
+  const result = readDataSourceSelection({ storage, registry: s101OnlyRegistry });
+  assert.deepEqual(result.enabledSourceIds, [DATA_SOURCE_IDS.S101]);
+  assert.deepEqual(result.preservedUnavailableSourceIds, [DATA_SOURCE_IDS.S57]);
   assert.equal(result.shouldPersist, true);
 });
 
-test("a new registry source stays disabled for an existing valid user state", () => {
+test("a new electronic registry source stays disabled for an existing valid user state", () => {
   const storage = createMemoryStorage({
     [DATA_SOURCE_STORAGE_KEY]: JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       initialized: true,
-      enabledSourceIds: [DATA_SOURCE_IDS.PAPER_CHARTS],
+      enabledSourceIds: [DATA_SOURCE_IDS.S101],
     }),
   });
-  const expandedRegistry = createDataSourceRegistry({ isDevelopment: true });
 
-  const result = readDataSourceSelection({ storage, registry: expandedRegistry });
-  assert.deepEqual(result.enabledSourceIds, [DATA_SOURCE_IDS.PAPER_CHARTS]);
+  const result = readDataSourceSelection({ storage, registry: electronicRegistry });
+  assert.deepEqual(result.enabledSourceIds, [DATA_SOURCE_IDS.S101]);
 });
 
-test("persistence writes only known source intent and never creates enc-products state", () => {
+test("persistence writes only persistable known source intent and never creates enc-products state", () => {
   const storage = createMemoryStorage();
   const persistence = createDataSourcePersistence({ storage });
 
   assert.equal(
-    persistence.write(developmentRegistry, ["enc-products", "s57", "paper-charts", "s102"]),
+    persistence.write(electronicRegistry, [
+      "enc-products",
+      DATA_SOURCE_IDS.S57,
+      DATA_SOURCE_IDS.PAPER_CHARTS,
+      DATA_SOURCE_IDS.S101,
+      DATA_SOURCE_IDS.S102,
+    ]),
     true
   );
   assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY), {
-    schemaVersion: 1,
+    schemaVersion: 2,
     initialized: true,
-    enabledSourceIds: ["paper-charts", "s102"],
+    enabledSourceIds: [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101],
   });
   assert.equal(storage.readJson("enc-products"), null);
 });

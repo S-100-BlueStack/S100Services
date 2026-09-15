@@ -48,6 +48,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="10.0.10" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Versioning" Version="5.1.0" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.5" />
     <PackageReference Include="S100Framework.Catalogues" Version="3.1.14" />
     <PackageReference Include="S100Framework.YAML" Version="3.7.1901.4" />
     <PackageReference Include="SharpZipLib" Version="1.4.2" />
@@ -68,6 +69,10 @@
 	<ItemGroup>
 		<None Update="s100ed9.gdb.zip">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="scripts\Install-ProductCatalogueWorker.ps1">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
 		</None>
 	</ItemGroup>
 

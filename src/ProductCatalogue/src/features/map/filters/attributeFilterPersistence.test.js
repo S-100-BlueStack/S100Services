@@ -27,7 +27,7 @@ describe("attributeFilterPersistence", () => {
       filterDefinitions: ["status"],
     });
 
-    const saved = readAttributeFilterSnapshot({ storage });
+    const saved = readAttributeFilterSnapshot({ storage, providerAliases: {} });
     assert.equal(saved.status, ATTRIBUTE_FILTER_SNAPSHOT_READ_STATUS.PARSED);
     assert.equal(service.applyFilterSnapshot(saved.snapshot), true);
     assert.deepEqual(writeAttributeFilterSnapshot(service, { storage }), {
@@ -52,7 +52,7 @@ describe("attributeFilterPersistence", () => {
       [STORAGE_KEY]: JSON.stringify({ version: 1, layers: [] }),
     });
     const firstService = createService();
-    const saved = readAttributeFilterSnapshot({ storage });
+    const saved = readAttributeFilterSnapshot({ storage, providerAliases: {} });
 
     firstService.replaceProvider({
       providerId: "s102",
@@ -64,7 +64,7 @@ describe("attributeFilterPersistence", () => {
     writeAttributeFilterSnapshot(firstService, { storage });
 
     const secondService = createService();
-    const canonical = readAttributeFilterSnapshot({ storage });
+    const canonical = readAttributeFilterSnapshot({ storage, providerAliases: {} });
     assert.equal(secondService.applyFilterSnapshot(canonical.snapshot), true);
     replaceCompatibilityProvider(secondService, 1);
 
@@ -110,7 +110,7 @@ describe("attributeFilterPersistence", () => {
       filterDefinitions: ["status"],
     });
 
-    const saved = readAttributeFilterSnapshot({ storage });
+    const saved = readAttributeFilterSnapshot({ storage, providerAliases: {} });
     assert.equal(service.applyFilterSnapshot(saved.snapshot), true);
     assert.equal(service.clearAll(), true);
     assert.deepEqual(writeAttributeFilterSnapshot(service, { storage }), {
@@ -143,7 +143,7 @@ describe("attributeFilterPersistence", () => {
       }),
     });
     const service = createService();
-    const saved = readAttributeFilterSnapshot({ storage });
+    const saved = readAttributeFilterSnapshot({ storage, providerAliases: {} });
 
     assert.equal(service.applyFilterSnapshot(saved.snapshot), true);
     assert.deepEqual(service.removeProvider("s102", { generation: 1 }), {
@@ -180,7 +180,7 @@ describe("attributeFilterPersistence", () => {
       [STORAGE_KEY]: JSON.stringify(persistedSnapshot),
     });
     const service = createService();
-    const saved = readAttributeFilterSnapshot({ storage });
+    const saved = readAttributeFilterSnapshot({ storage, providerAliases: {} });
 
     assert.equal(service.applyFilterSnapshot(saved.snapshot), true);
     assert.deepEqual(service.suspendProvider("paper-charts", { generation: 1 }), {

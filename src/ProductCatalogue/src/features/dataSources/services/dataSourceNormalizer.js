@@ -6,6 +6,9 @@ import {
 } from "../domain/productIdentity.js";
 
 export function normalizeDataSourcePayload(rawPayload, source) {
+  if (source?.normalizer?.type === "electronic-aoi") {
+    return normalizeElectronicAois(rawPayload, source);
+  }
   if (source?.normalizer?.type !== "geojson-products") {
     throw new Error(
       `Unsupported normalizer type for data source "${source?.label ?? source?.id ?? "unknown"}".`
@@ -205,4 +208,52 @@ function compactUndefinedValues(source) {
 function normalizeText(value) {
   const normalized = String(value ?? "").trim();
   return normalized || null;
+}
+
+function normalizeElectronicAois(payload, source) {
+  if (!Array.isArray(payload)) throw new Error(`${source.label} returned an invalid AOI response.`);
+  const features = payload.map((item) => {
+    const raw = item?.Attributes ?? item?.attributes;
+    const datasetName = normalizeText(raw?.DatasetName ?? raw?.datasetName);
+    if (!datasetName) throw new Error(`${source.label} returned an AOI without dataset identity.`);
+    const value = item.Geometry ?? item.geometry;
+    const geometry = typeof value === "string" ? JSON.parse(value) : value;
+    if (
+      !geometry ||
+      (!Array.isArray(geometry.rings) &&
+        !Array.isArray(geometry.paths) &&
+        !(Number.isFinite(geometry.x) && Number.isFinite(geometry.y)))
+    ) {
+      throw new Error(`${source.label} returned invalid Esri geometry.`);
+    }
+    return {
+      type: "Feature",
+      geometry,
+      properties: {
+        datasetName,
+        productKey: datasetName,
+        productSpecification: source.normalizer.specification,
+        status: raw.Status ?? raw.status,
+        displayScale: raw.DisplayScale ?? raw.displayScale,
+        usageBand: raw.UsageBand ?? raw.usageBand,
+        errorMessage: raw.ErrorMessage ?? raw.errorMessage,
+      },
+    };
+  });
+  const result = normalizeDataSourcePayload(
+    { type: "FeatureCollection", features },
+    { ...source, normalizer: { type: "geojson-products" } }
+  );
+  return {
+    ...result,
+    layers: result.layers.map((layer) => ({
+      ...layer,
+      data: {
+        features: layer.data.features.map((feature) => ({
+          geometry: feature.geometry,
+          attributes: feature.properties,
+        })),
+      },
+    })),
+  };
 }

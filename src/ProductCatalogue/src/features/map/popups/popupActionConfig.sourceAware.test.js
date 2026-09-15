@@ -157,12 +157,12 @@ test("compatibility AOI keeps Freeze/Send in the first row and Export/Cancel Exp
   assert.equal(cancelExportAction.label, "Cancel Export");
   assert.equal(cancelExportAction.icon, "x-circle");
   assert.equal(exportAction.label, "Export...");
-  assert.equal(exportAction.helpText, "Open S-101 export actions.");
+  assert.equal(exportAction.helpText, "Create S-101 export candidate.");
   assert.deepEqual(
     exportAction.items.map((item) => item.label),
     ["Edition", "Update"]
   );
-  assert.equal(exportAction.items[0].helpText, "Export a new S-101 Edition for this product.");
+  assert.equal(exportAction.items[0].helpText, "Create S-101 Edition export candidate.");
   assert.equal(tools.label, "Tools");
   assert.equal(tools.ariaLabel, "Tools");
   assert.equal(tools.icon, "wrench");
@@ -185,7 +185,7 @@ test("frozen compatibility AOI keeps Unfreeze/Send separate from Export/Cancel E
   );
 });
 
-test("compatibility local Edition loading uses S-101 presentation without changing the S100 scope", () => {
+test("compatibility local Edition loading uses S-101 presentation with the S101 scope", () => {
   if (!globalThis.document) {
     globalThis.document = new EventTarget();
   }
@@ -194,7 +194,7 @@ test("compatibility local Edition loading uses S-101 presentation without changi
   const started = beginPopupExportAction({
     productContext: selection.productContext,
     datasetName: selection.productContext.datasetName,
-    scope: "S100",
+    scope: "S101",
     exportType: "Edition",
     presentationLabel: "S-101 Edition",
   });

@@ -1,26 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { EXPORT_TARGET } from "../domain/exportTarget.js";
 import { buildExportRequestPath } from "./exportApi.js";
 
-test("S100 edition job path includes the readable export target", () => {
+test("edition route lets the backend resolve the product specification", () => {
   assert.equal(
-    buildExportRequestPath("101DK0040943E", "newedition", EXPORT_TARGET.S100),
-    "export/101DK0040943E/newedition/jobs?exportTarget=S100"
+    buildExportRequestPath("101DK0040943E", "newedition"),
+    "export/101DK0040943E/newedition"
   );
 });
 
 test("datasetName is URL encoded before the export job is started", () => {
   assert.equal(
-    buildExportRequestPath("101 DK/004?", "newedition", EXPORT_TARGET.S100),
-    "export/101%20DK%2F004%3F/newedition/jobs?exportTarget=S100"
+    buildExportRequestPath("101 DK/004?", "newedition"),
+    "export/101%20DK%2F004%3F/newedition"
   );
 });
 
-test("rollback uses the async job endpoint without an export target", () => {
+test("Cancel Export uses the current asynchronous route", () => {
   assert.equal(
-    buildExportRequestPath("101DK0040943E", "rollback"),
-    "export/101DK0040943E/rollback/jobs"
+    buildExportRequestPath("101DK0040943E", "cancel-export"),
+    "export/101DK0040943E/cancel-export"
   );
 });

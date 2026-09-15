@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
+using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.Operations;
 using ProductCatalogueAPI.Services.SevenCs;
@@ -91,6 +92,32 @@ public sealed class ExportOperationServiceTests
         Assert.Equal("101DK001", engine.LastRequest.SourceDatasetName);
     }
 
+    [Fact]
+    public async Task CancellationDuringSnapshotLeavesTrackInErrorAndNeverReportsSuccess() {
+        using var cancellation = new CancellationTokenSource();
+        var products = new RecordingElectronicProductManager {
+            CancelDuringSnapshot = cancellation
+        };
+        var repository = new RecordingWorkflowRepository();
+        var engine = new RecordingExportEngine();
+        var service = CreateService(products, repository, engine, new SummaryResponse());
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.ExecuteExportAsync(
+                "101DK001",
+                ExportRevisionType.NewEdition,
+                "developer",
+                cancellationToken: cancellation.Token
+            )
+        );
+
+        Assert.Equal(ProductState.Error, repository.Track.State);
+        Assert.Equal(ExportJobContract.OperationCancelledCode, repository.LastErrorCode);
+        Assert.Equal(1, products.SnapshotCalls);
+        Assert.Empty(repository.Revisions);
+        Assert.Equal(0, engine.ExportCalls);
+    }
+
     private static TestExportOperationService CreateService(RecordingElectronicProductManager products, RecordingWorkflowRepository repository, RecordingExportEngine engine, SummaryResponse validation, IReadOnlyList<SevenCsDiagnosticArtifact>? diagnostics = null) => new(
         new FakeProductManager(products), new ExportEngineRegistry([engine]), repository, new FakeSevenCsService(validation, diagnostics ?? []),
         new FixedTimeProvider(DateTimeOffset.Parse("2026-08-10T20:00:00Z")), "dataset-yaml");
@@ -111,11 +138,19 @@ public sealed class ExportOperationServiceTests
     {
         public int SnapshotCalls { get; private set; }
         public int AttachmentCalls { get; private set; }
+        public CancellationTokenSource? CancelDuringSnapshot { get; init; }
         public (int Edition, int Update) LastSnapshotVersion { get; private set; }
         public string? LastSnapshotDatasetName { get; private set; }
         public string OutputFolder => "output";
         public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(string datasetName, CancellationToken cancellationToken = default) => Task.FromResult<ElectronicProductVersion?>(new(datasetName, 4, 2));
-        public Task<YamlDataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default) { SnapshotCalls++; LastSnapshotDatasetName = name; LastSnapshotVersion = (edition, update); return Task.FromResult<YamlDataset>(null!); }
+        public Task<YamlDataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default) {
+            SnapshotCalls++;
+            LastSnapshotDatasetName = name;
+            LastSnapshotVersion = (edition, update);
+            CancelDuringSnapshot?.Cancel();
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult<YamlDataset>(null!);
+        }
         public Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign) { AttachmentCalls++; return Task.CompletedTask; }
         public Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml) { AttachmentCalls++; return Task.CompletedTask; }
         public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name) => null;

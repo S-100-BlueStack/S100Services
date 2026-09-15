@@ -23,7 +23,7 @@ test("only the implemented compatibility Edition tuple is dispatchable", () => {
   assert.equal(
     isSupportedExportAction({
       actionId: SUPPORTED_EXPORT_ACTION_ID,
-      target: EXPORT_TARGET.S100,
+      target: EXPORT_TARGET.S101,
       exportType: EXPORT_TYPE.EDITION,
       implemented: true,
       request,
@@ -71,7 +71,7 @@ test("stale backend target or operation metadata cannot enable another leaf", ()
   assert.equal(
     isSupportedExportAction({
       actionId: SUPPORTED_EXPORT_ACTION_ID,
-      target: EXPORT_TARGET.S100,
+      target: EXPORT_TARGET.S101,
       exportType: EXPORT_TYPE.UPDATE,
       implemented: true,
       request,
@@ -89,7 +89,7 @@ test("a Product context without export capability rejects otherwise valid metada
   assert.equal(
     isSupportedExportAction({
       actionId: SUPPORTED_EXPORT_ACTION_ID,
-      target: EXPORT_TARGET.S100,
+      target: EXPORT_TARGET.S101,
       exportType: EXPORT_TYPE.EDITION,
       implemented: true,
       request,

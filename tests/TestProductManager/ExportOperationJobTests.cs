@@ -44,6 +44,29 @@ public sealed class ExportOperationJobTests
         Assert.Equal(0, operations.ExportCalls);
     }
 
+    [Fact]
+    public async Task CancellationAfterExecutionStartsCannotRecordSuccessfulCompletion() {
+        using var cancellation = new CancellationTokenSource();
+        var context = new FakeExecutionContext();
+        var operations = new RecordingOperations { CancelDuringExport = cancellation };
+        var job = CreateJob(operations);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            job.ExecuteAsync(
+                Request(ExportOperationType.ExportEdition),
+                context,
+                cancellation.Token
+            )
+        );
+
+        Assert.True(context.Get<bool?>(ExportJobParameterNames.ExecutionStarted));
+        Assert.Equal(
+            ExportJobContract.OperationCancelledCode,
+            context.Get<string>(ExportJobParameterNames.ErrorCode)
+        );
+        Assert.Null(context.Get<string>(ExportJobParameterNames.ResultCode));
+    }
+
     private static ExportOperationJob CreateJob(RecordingOperations operations) => new(new FakeProductManager(new FakeElectronicProductManager(new ElectronicProductVersion("101DK001", 4, 2))), new FakeLockService(), operations, NullLogger<ExportOperationJob>.Instance);
     private static ExportOperationJobRequest Request(ExportOperationType operationType) => new("101DK001", operationType, "S101", 4, 2, "correlation", DateTimeOffset.Parse("2026-08-10T20:00:00Z"));
 
@@ -52,7 +75,15 @@ public sealed class ExportOperationJobTests
         public int ExportCalls { get; private set; }
         public int CancelCalls { get; private set; }
         public ExportRevisionType? LastRevisionType { get; private set; }
-        public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) { beforeMutation?.Invoke(); ExportCalls++; LastRevisionType = revisionType; return Task.FromResult(new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage)); }
+        public CancellationTokenSource? CancelDuringExport { get; init; }
+        public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) {
+            beforeMutation?.Invoke();
+            ExportCalls++;
+            LastRevisionType = revisionType;
+            CancelDuringExport?.Cancel();
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage));
+        }
         public Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) { beforeMutation?.Invoke(); CancelCalls++; return Task.FromResult(new ExportOperationResult(ExportOperationContract.CancelExportCompletedCode, ExportOperationContract.CancelExportCompletedMessage)); }
     }
 

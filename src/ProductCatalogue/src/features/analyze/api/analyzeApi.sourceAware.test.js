@@ -187,11 +187,13 @@ function createIdentityWorkspaceService() {
   const registry = createDataSourceRegistry({ isDevelopment: true });
   return createWorkspaceProductService({
     registry,
+    loadTargetedProduct: null,
     loadCompatibilityCatalog: async () => ({
       Data: [{ name: "1149E", datasetName: "101DK0041149E" }],
     }),
     loadSource: async (source) => {
-      if (source.id === "paper-charts") {
+      if (source.id === "s101") return [{ datasetName: "101DK0041149E", productName: "1149E" }];
+      if (source.id === "paper-charts" || source.id === "s57") {
         return [];
       }
       return [{ datasetName: "102DK0041149E", productName: "1149E" }];
@@ -224,6 +226,7 @@ test("Analyze resolves S-102 by authoritative datasetName and mixed routes keep 
   const calls = [];
   const get = async (endpoint) => {
     calls.push(endpoint);
+    if (endpoint.endsWith("/artifacts/history")) return { Data: [] };
     return {
       Data: {
         DatasetName: "101DK0041149E",
@@ -248,11 +251,14 @@ test("Analyze resolves S-102 by authoritative datasetName and mixed routes keep 
     workspaceProductService,
     get,
   });
-  assert.deepEqual(calls, ["electronicproducts/101DK0041149E/aoi"]);
+  assert.deepEqual(calls, [
+    "electronicproducts/101DK0041149E",
+    "electronicproducts/101DK0041149E/artifacts/history",
+  ]);
   assert.deepEqual(
     mixed.map((product) => [product.datasetName, product.sourceId]),
     [
-      ["101DK0041149E", "compatibility-aoi"],
+      ["101DK0041149E", "s101"],
       ["102DK0041149E", "s102"],
     ]
   );

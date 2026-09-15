@@ -1,9 +1,11 @@
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
+using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.ProductCatalogue;
 using S100FC.YAML;
+using System.Diagnostics;
 using System.Text;
 
 namespace ProductCatalogueAPI.Services.Operations;
@@ -48,7 +50,36 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
             exportStarted = true;
 
             var exportType = revisionType == ExportRevisionType.NewEdition ? ExportTypes.NewEdition : ExportTypes.Update;
-            var dataset = await _electronicProductManager.CreateExportSnapshotAsync(sourceDatasetName, exportType, edition, update, cancellationToken);
+            var snapshotStartedAt = Stopwatch.GetTimestamp();
+            _logger.LogInformation(
+                "Background ArcGIS export snapshot starting. DatasetName: {DatasetName}. SourceDatasetName: {SourceDatasetName}. ProductSpecification: {ProductSpecification}. OperationType: {OperationType}",
+                targetDatasetName,
+                sourceDatasetName,
+                productSpecification,
+                exportType
+            );
+
+            S100FC.YAML.Dataset dataset;
+            try {
+                dataset = await _electronicProductManager.CreateExportSnapshotAsync(
+                    sourceDatasetName,
+                    exportType,
+                    edition,
+                    update,
+                    cancellationToken
+                );
+            }
+            finally {
+                _logger.LogInformation(
+                    "Background ArcGIS export snapshot finished. DatasetName: {DatasetName}. SourceDatasetName: {SourceDatasetName}. ProductSpecification: {ProductSpecification}. OperationType: {OperationType}. Cancelled: {Cancelled}. DurationMs: {DurationMs}",
+                    targetDatasetName,
+                    sourceDatasetName,
+                    productSpecification,
+                    exportType,
+                    cancellationToken.IsCancellationRequested,
+                    Stopwatch.GetElapsedTime(snapshotStartedAt).TotalMilliseconds
+                );
+            }
             var datasetYaml = SerializeDataset(dataset);
             if (string.IsNullOrWhiteSpace(datasetYaml))
                 throw new ExportSourceUnavailableException(sourceDatasetName);
@@ -163,6 +194,10 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
 
     private static (string Code, string Message) GetPublicFailure(Exception exception) => exception switch {
         ExportValidationException validationException => (validationException.Code, validationException.PublicMessage),
+        OperationCanceledException => (
+            ExportJobContract.OperationCancelledCode,
+            ExportJobContract.OperationCancelledMessage
+        ),
         _ => (exception.GetType().Name, "The export failed. Contact support and provide the dataset name and failure time.")
     };
 }

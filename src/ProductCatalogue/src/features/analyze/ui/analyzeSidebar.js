@@ -424,13 +424,20 @@ function createInternalValidationReport(report, index) {
     summaryText.textContent = report.summary;
     content.appendChild(summaryText);
   }
+  if (report.url) {
+    const link = document.createElement("a");
+    link.href = report.url;
+    link.textContent = "Download validation file";
+    link.download = report.title || "";
+    content.appendChild(link);
+  }
   if (hasReportContent(report.content)) {
     const pre = document.createElement("pre");
     const code = document.createElement("code");
     code.textContent = formatInternalValidationReportContent(report);
     pre.appendChild(code);
     content.appendChild(pre);
-  } else if (!hasText(report.summary)) {
+  } else if (!report.url && !hasText(report.summary)) {
     content.appendChild(
       createInternalValidationStateMessage({
         title: "Report content unavailable",

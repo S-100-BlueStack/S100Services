@@ -8,7 +8,8 @@ export const PRODUCT_JOB_STATUS = Object.freeze({
 
 export const PRODUCT_JOB_OPERATION = Object.freeze({
   EXPORT_EDITION: "ExportEdition",
-  ROLLBACK: "Rollback",
+  EXPORT_UPDATE: "ExportUpdate",
+  ROLLBACK: "CancelExport",
   SEND_TO_ICENC: "SendToIcEnc",
 });
 
@@ -34,6 +35,12 @@ export function createProductJobRecord({
   const expectedOperationType = normalizeText(operationType);
   const normalizedOperationType = responseOperationType || expectedOperationType;
 
+  if (
+    response?.datasetName &&
+    datasetName &&
+    normalizeText(response.datasetName).toLowerCase() !== normalizeText(datasetName).toLowerCase()
+  )
+    return null;
   if (!jobId || !normalizedDatasetName || !normalizedOperationType) {
     return null;
   }
@@ -62,8 +69,9 @@ export function createProductJobRecord({
     label:
       isRollbackOperation(normalizedOperationType) ||
       isExportEditionOperation(normalizedOperationType)
-        ? createProductJobLabel(normalizedOperationType)
-        : normalizeText(label) || createProductJobLabel(normalizedOperationType),
+        ? createProductJobLabel(normalizedOperationType, response?.exportTarget ?? exportTarget)
+        : normalizeText(label) ||
+          createProductJobLabel(normalizedOperationType, response?.exportTarget ?? exportTarget),
     createdAt: normalizeText(response?.createdAt) || new Date().toISOString(),
     correlationId: normalizeNullableText(response?.correlationId),
     statusUrl: normalizeNullableText(response?.statusUrl),
@@ -155,12 +163,15 @@ export function createProductJobActionResult(statusResponse, { expectedOperation
   };
 }
 
-export function createProductJobLabel(operationType) {
+export function createProductJobLabel(operationType, specification) {
   if (isSendToIcEncOperation(operationType)) {
     return "Simulating IC-ENC send";
   }
 
-  return isRollbackOperation(operationType) ? "Canceling export" : "Exporting S-101 Edition";
+  if (isRollbackOperation(operationType)) return "Canceling export";
+  const label = specificationLabel(specification);
+  const kind = operationType === PRODUCT_JOB_OPERATION.EXPORT_UPDATE ? "Update" : "Edition";
+  return `Exporting ${label ? `${label} ` : ""}${kind}`;
 }
 
 export function createProductJobCompletionTitle(record, statusResponse) {
@@ -169,8 +180,10 @@ export function createProductJobCompletionTitle(record, statusResponse) {
     : isRollbackOperation(record?.operationType)
       ? "Cancel Export"
       : isExportEditionOperation(record?.operationType)
-        ? "S-101 Edition export"
-        : "Export";
+        ? `${specificationLabel(record?.exportTarget) ? `${specificationLabel(record.exportTarget)} ` : ""}Edition export`
+        : record?.operationType === PRODUCT_JOB_OPERATION.EXPORT_UPDATE
+          ? `${specificationLabel(record.exportTarget)} Update export`.trim()
+          : "Export";
   const status = normalizeText(statusResponse?.status);
 
   if (status.toLowerCase() === PRODUCT_JOB_STATUS.SUCCEEDED.toLowerCase()) {
@@ -192,8 +205,8 @@ function isExportEditionOperation(operationType) {
 }
 
 export function isRollbackOperation(operationType) {
-  return (
-    normalizeText(operationType).toLowerCase() === PRODUCT_JOB_OPERATION.ROLLBACK.toLowerCase()
+  return [PRODUCT_JOB_OPERATION.ROLLBACK.toLowerCase(), "rollback"].includes(
+    normalizeText(operationType).toLowerCase()
   );
 }
 
@@ -257,4 +270,8 @@ function normalizeNullableText(value) {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
+}
+
+function specificationLabel(value) {
+  return { S100: "S-101", S101: "S-101", S57: "S-57" }[value] ?? "";
 }

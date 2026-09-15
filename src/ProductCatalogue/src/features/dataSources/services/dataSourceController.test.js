@@ -102,7 +102,10 @@ function createMapAdapter() {
 function createHarness({
   enabledSourceIds = [],
   loadSource,
-  registry = createDataSourceRegistry({ isDevelopment: true }),
+  registry = createDataSourceRegistry({
+    configuredSourceIds: ["paper-charts", "s102"],
+    isDevelopment: true,
+  }),
   persistence = createPersistence(enabledSourceIds),
 } = {}) {
   const mapAdapter = createMapAdapter();
@@ -352,8 +355,11 @@ test("concurrent initialize calls share one initialization transaction", async (
   assert.deepEqual(harness.controller.getActiveSourceIds(), ["paper-charts", "s102"]);
 });
 
-test("initialization preserves selected intent when a default source activation fails", async () => {
-  const registry = createDataSourceRegistry({ isDevelopment: true });
+test("initialization keeps fixture defaults session-only when a source activation fails", async () => {
+  const registry = createDataSourceRegistry({
+    configuredSourceIds: ["paper-charts", "s102"],
+    isDevelopment: true,
+  });
   const storage = createMemoryStorage();
   const persistence = createDataSourcePersistence({ storage });
   const harness = createHarness({
@@ -371,18 +377,17 @@ test("initialization preserves selected intent when a default source activation 
 
   assert.equal(result.success, false);
   assert.deepEqual(harness.controller.getActiveSourceIds(), ["s102"]);
-  assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY), {
-    schemaVersion: 1,
-    initialized: true,
-    enabledSourceIds: ["paper-charts", "s102"],
-  });
+  assert.equal(storage.readJson(DATA_SOURCE_STORAGE_KEY), null);
 });
 
-test("reset preserves default intent when a source activation fails", async () => {
-  const registry = createDataSourceRegistry({ isDevelopment: true });
+test("reset keeps non-persistable fixture defaults out of storage when activation fails", async () => {
+  const registry = createDataSourceRegistry({
+    configuredSourceIds: ["paper-charts", "s102"],
+    isDevelopment: true,
+  });
   const storage = createMemoryStorage({
     [DATA_SOURCE_STORAGE_KEY]: JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       initialized: true,
       enabledSourceIds: [],
     }),
@@ -405,14 +410,17 @@ test("reset preserves default intent when a source activation fails", async () =
   assert.equal(result.success, false);
   assert.deepEqual(harness.controller.getActiveSourceIds(), ["s102"]);
   assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY), {
-    schemaVersion: 1,
+    schemaVersion: 2,
     initialized: true,
-    enabledSourceIds: ["paper-charts", "s102"],
+    enabledSourceIds: [],
   });
 });
 
 test("production initialization and resets do not create false initialized empty state", async () => {
-  const registry = createDataSourceRegistry({ isDevelopment: false });
+  const registry = createDataSourceRegistry({
+    configuredSourceIds: ["paper-charts", "s102"],
+    isDevelopment: false,
+  });
   const storage = createMemoryStorage();
   const persistence = createDataSourcePersistence({ storage });
   const harness = createHarness({ registry, persistence });
@@ -425,8 +433,11 @@ test("production initialization and resets do not create false initialized empty
   assert.deepEqual(harness.controller.getActiveSourceIds(), []);
 });
 
-test("development first visit still activates and persists Paper Charts and S-102", async () => {
-  const registry = createDataSourceRegistry({ isDevelopment: true });
+test("development first visit activates Paper Charts and S-102 without persisting fixtures", async () => {
+  const registry = createDataSourceRegistry({
+    configuredSourceIds: ["paper-charts", "s102"],
+    isDevelopment: true,
+  });
   const storage = createMemoryStorage();
   const persistence = createDataSourcePersistence({ storage });
   const harness = createHarness({ registry, persistence });
@@ -435,29 +446,31 @@ test("development first visit still activates and persists Paper Charts and S-10
 
   assert.equal(result.success, true);
   assert.deepEqual(harness.controller.getActiveSourceIds(), ["paper-charts", "s102"]);
-  assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY), {
-    schemaVersion: 1,
-    initialized: true,
-    enabledSourceIds: ["paper-charts", "s102"],
-  });
+  assert.equal(storage.readJson(DATA_SOURCE_STORAGE_KEY), null);
 });
 
-test("production initialization preserves selection intent from a previous deployment", async () => {
-  const registry = createDataSourceRegistry({ isDevelopment: false });
+test("production initialization cleans retired fixture selection from a previous deployment", async () => {
+  const registry = createDataSourceRegistry({
+    configuredSourceIds: ["paper-charts", "s102"],
+    isDevelopment: false,
+  });
   const storage = createMemoryStorage({
     [DATA_SOURCE_STORAGE_KEY]: JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       initialized: true,
       enabledSourceIds: ["paper-charts", "s102"],
     }),
   });
-  const original = storage.readRaw(DATA_SOURCE_STORAGE_KEY);
   const persistence = createDataSourcePersistence({ storage });
   const harness = createHarness({ registry, persistence });
 
   await harness.controller.initialize();
   await harness.controller.resetToDefaults({ reason: "local-reset" });
 
-  assert.equal(storage.readRaw(DATA_SOURCE_STORAGE_KEY), original);
+  assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY), {
+    schemaVersion: 2,
+    initialized: true,
+    enabledSourceIds: [],
+  });
   assert.deepEqual(harness.controller.getActiveSourceIds(), []);
 });

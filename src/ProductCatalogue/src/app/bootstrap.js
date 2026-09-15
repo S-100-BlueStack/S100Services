@@ -6,7 +6,7 @@ import { initReviewPage } from "../features/review/core/initReviewPage.js";
 import { createReviewDocumentTitle } from "../features/review/routing/reviewRoute.js";
 import { noticeError } from "../features/notices/services/noticeService.js";
 import { initializeProductJobTracking } from "../features/products/services/productJobService.js";
-import { hideLoader, setLoaderText, showLoader } from "../shared/ui/loader.js";
+import { hideLoader, setLoaderProgress, setLoaderText, showLoader } from "../shared/ui/loader.js";
 import { initMap } from "./initMap.js";
 import { initRefreshControls } from "./initRefreshControls.js";
 import { initUI } from "./initUI.js";
@@ -26,6 +26,9 @@ async function waitForCalcite() {
 export async function bootstrap() {
   const route = getCurrentRoute();
   document.title = createInitialDocumentTitle(route);
+  // Apply the persisted mode before any route-specific async startup so slow
+  // Product/AOI requests cannot expose a light-mode first paint for dark-mode users.
+  initializeTheme();
 
   if (route.name === "dashboard") {
     await bootstrapDashboardRoute(route);
@@ -126,6 +129,8 @@ async function bootstrapAnalyzeRoute(route) {
     await waitForNextPaint();
     await waitForCalcite();
 
+    setLoaderText("Loading analysis...");
+    setLoaderProgress(null);
     const app = await initAnalyzePage({
       datasetNames: route.datasetNames,
     });
@@ -161,6 +166,8 @@ async function bootstrapReviewRoute(route) {
     await waitForNextPaint();
     await waitForCalcite();
 
+    setLoaderText("Loading Product Review...");
+    setLoaderProgress(null);
     const app = await initReviewPage({
       datasetNames: route.datasetNames,
     });

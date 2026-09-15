@@ -1,3 +1,5 @@
+import { refreshOpenProductPopup } from "../../map/popups/popupRefreshBridge.js";
+import { reconcileSourceInteractions } from "../map/reconcileSourceInteractions.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { createDataSourceRegistry } from "../config/dataSourceRegistry.js";
 import { createDataSourcePersistence } from "../domain/dataSourcePersistence.js";
@@ -51,6 +53,18 @@ export function createDataSourceRuntime({
     productSearchIndex,
   });
   const productStateCoordinator = createDataSourceProductStateCoordinator({ lifecycle });
+  const unsubscribeRefreshInteractions = lifecycle.subscribe("refreshed", (detail) => {
+    queueMicrotask(() => {
+      const state = controller.getState(detail.sourceId);
+      if (!state?.enabled || state.generation !== detail.generation) return;
+      reconcileSourceInteractions({
+        ...detail,
+        view,
+        hoverManager,
+        refreshPopup: refreshOpenProductPopup,
+      });
+    });
+  });
   const panel = initDataSourcePanel({
     registry,
     controller,
@@ -66,6 +80,7 @@ export function createDataSourceRuntime({
     panel,
     destroy() {
       unsubscribeInteractionCleanup();
+      unsubscribeRefreshInteractions();
       productStateCoordinator.destroy();
       derivedStateCoordinator.destroy();
       panel.destroy();

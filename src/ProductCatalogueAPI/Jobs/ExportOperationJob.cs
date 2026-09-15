@@ -49,6 +49,14 @@ namespace ProductCatalogueAPI.Jobs
             ArgumentNullException.ThrowIfNull(request);
             ArgumentNullException.ThrowIfNull(context);
 
+            using var logScope = _logger.BeginScope(new Dictionary<string, object?> {
+                ["JobId"] = context.JobId,
+                ["DatasetName"] = request.DatasetName,
+                ["OperationType"] = request.OperationType,
+                ["CorrelationId"] = request.CorrelationId,
+                ["ExecutionLane"] = "Background"
+            });
+
             _logger.LogInformation(
                 "Product Manager job starting. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. ExpectedEdition: {ExpectedEdition}. ExpectedUpdate: {ExpectedUpdate}",
                 context.JobId,
@@ -203,6 +211,25 @@ namespace ProductCatalogueAPI.Jobs
                     result.Code,
                     result.Warning?.Code
                 );
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                context.SetJobParameter(
+                    ExportJobParameterNames.ErrorCode,
+                    ExportJobContract.OperationCancelledCode
+                );
+                context.SetJobParameter(
+                    ExportJobParameterNames.ErrorMessage,
+                    ExportJobContract.OperationCancelledMessage
+                );
+
+                _logger.LogWarning(
+                    "Product Manager job cancellation was observed before successful completion. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}",
+                    context.JobId,
+                    request.DatasetName,
+                    request.OperationType,
+                    request.CorrelationId
+                );
+                throw;
             }
             catch (S100CompilerPrerequisiteException ex) {
                 context.SetJobParameter(

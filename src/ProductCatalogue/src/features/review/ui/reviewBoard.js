@@ -140,6 +140,40 @@ function createReviewContentCard(product, contentType) {
         "IC-ENC report selection is ready in Product Review, but report metadata is not available in the Review model yet.",
     });
   }
+  if (
+    contentType === REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS &&
+    product.productContext?.contentConfiguration?.internalValidation?.loaderId ===
+      "electronic-artifacts"
+  ) {
+    const artifacts = product.validationArtifacts ?? [];
+    const card = createContentCardShell({
+      product,
+      contentType,
+      title: "Internal validation",
+      status: product.artifactError ? "Failed" : `${artifacts.length} files`,
+    });
+    if (product.artifactError || !artifacts.length) {
+      card.body.appendChild(
+        createProductHistoryStateMessage({
+          title: product.artifactError
+            ? "Validation files could not be loaded"
+            : "No validation files",
+          message:
+            product.artifactError ?? "No validation diagnostics were returned for this product.",
+        })
+      );
+    }
+    for (const artifact of artifacts) {
+      const row = document.createElement("p");
+      const link = document.createElement("a");
+      link.href = artifact.url;
+      link.textContent = `${artifact.productSpecificationLabel}: ${artifact.fileName}`;
+      link.download = artifact.fileName || "";
+      row.appendChild(link);
+      card.body.appendChild(row);
+    }
+    return card.root;
+  }
   if (contentType === REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS) {
     return createConfiguredReviewCard({
       product,

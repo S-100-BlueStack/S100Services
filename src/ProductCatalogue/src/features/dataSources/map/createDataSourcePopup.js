@@ -1,3 +1,4 @@
+import { createPopup } from "../../map/popups/createPopup.js";
 import { resolveProductContext } from "../../products/domain/productContext.js";
 import { createPopupActionBar } from "../../map/popups/popupActionBar.js";
 import { closePopupActionDropdown } from "../../map/popups/popupActionDropdown.js";
@@ -16,6 +17,7 @@ const DISPLAY_FIELDS = Object.freeze([
  * It deliberately has no compatibility API refresh or job subscriptions.
  */
 export function createDataSourcePopupTemplate(source) {
+  if (source.capabilities?.backendProductRefresh) return createPopup();
   return {
     title: `${source.label}: {datasetName}`,
     outFields: ["*"],

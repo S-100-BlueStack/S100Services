@@ -44,7 +44,7 @@ test("guard rejection happens before confirmation and export state", async () =>
   const result = await triggerExport({
     datasetName: DATASET_NAME,
     actionId: SUPPORTED_EXPORT_ACTION_ID,
-    target: EXPORT_TARGET.S100,
+    target: EXPORT_TARGET.S101,
     exportType: EXPORT_TYPE.UPDATE,
     implemented: true,
     request: async () => ({ success: true }),

@@ -1,3 +1,4 @@
+import { normalizeArtifactHistory } from "../../data/normalizers/productArtifact.js";
 import { apiGet } from "../../../shared/api/apiClient.js";
 import { normalizeProductExportMetadata } from "../../data/normalizers/productExportMetadata.js";
 import {
@@ -36,6 +37,9 @@ async function fetchAnalyzeProduct(datasetName, { workspaceProductService, get }
     return fetchCompatibilityAnalyzeProduct(datasetName, { productContext, get });
   }
 
+  if (productContext.capabilities?.backendProductRefresh) {
+    return fetchElectronicAnalyzeProduct(productContext, get);
+  }
   return createSourceAnalyzeProduct(productContext);
 }
 
@@ -74,8 +78,8 @@ function normalizeAnalyzeProduct(
     productContext,
     workspaceLoadState: "loaded",
     contentAvailability: createContentAvailability(productContext),
-    status: normalizeStatus(
-      readFirstDefined(product, ["status", "Status", "productState", "ProductState"]) ?? 4
+    status: normalizeOptionalStatus(
+      readFirstDefined(product, ["status", "Status", "productState", "ProductState"])
     ),
     edition: readFirstDefined(product, ["edition", "Edition"]) ?? "-",
     update: readFirstDefined(product, ["update", "Update", "updateNumber", "UpdateNumber"]) ?? "-",
@@ -256,4 +260,49 @@ function normalizeOptionalStatus(value) {
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function fetchElectronicAnalyzeProduct(productContext, get) {
+  const datasetName = productContext.datasetName;
+  const base = `${ANALYZE_PRODUCT_ENDPOINT}/${encodeURIComponent(datasetName)}`;
+  try {
+    const [metadata, artifacts] = await Promise.allSettled([
+      get(base, `Product metadata request failed for ${datasetName}`),
+      get(`${base}/artifacts/history`, `Validation artifact history failed for ${datasetName}`),
+    ]);
+    if (metadata.status === "rejected") throw metadata.reason;
+    if (metadata.value?.Success === false || metadata.value?.success === false) {
+      throw new Error("Product metadata is unavailable.");
+    }
+    const product = normalizeAnalyzeProduct(metadata.value, datasetName, { productContext });
+    if (product.datasetName.toLowerCase() !== datasetName.toLowerCase()) {
+      throw new Error("Product identity mismatch.");
+    }
+    product.aoiGeometry = productContext.data?.geometry ?? null;
+    product.internalValidationReports = [];
+    try {
+      if (artifacts.status === "rejected") throw artifacts.reason;
+      const history = normalizeArtifactHistory(artifacts.value);
+      product.internalValidationReports = history.map((artifact) => ({
+        id: artifact.id,
+        title: artifact.fileName,
+        status: "available",
+        source: artifact.productSpecificationLabel,
+        generatedAt: artifact.createdAtUtc,
+        format: artifact.mediaType,
+        url: artifact.url,
+        summary: `Validation diagnostic for ${artifact.datasetName}.`,
+        content: "",
+        raw: artifact,
+      }));
+    } catch (error) {
+      product.loadError = error?.message ?? "Validation artifact history could not be loaded.";
+    }
+    return product;
+  } catch (error) {
+    return createFailedAnalyzeProduct(datasetName, {
+      product: productContext,
+      error: error.message,
+    });
+  }
 }

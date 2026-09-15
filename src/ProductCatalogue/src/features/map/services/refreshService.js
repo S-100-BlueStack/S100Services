@@ -140,6 +140,16 @@ export function createRefreshService({
       });
 
       const layerConfigs = normalizeLayers(result);
+      if (layerConfigs.length === 0) {
+        return {
+          success: true,
+          source,
+          startedAt,
+          finishedAt: new Date(),
+          graphicsCount: 0,
+          layerCount: 0,
+        };
+      }
       const reconciliation = await tryReconcileLayers(layerConfigs);
 
       let activeLayers;
@@ -289,9 +299,6 @@ function normalizeLayers(result) {
   }
 
   const layers = result.layers.filter(Boolean);
-  if (layers.length === 0) {
-    throw new Error("No layers were returned from the data loader.");
-  }
 
   return layers;
 }

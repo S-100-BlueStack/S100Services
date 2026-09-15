@@ -1,4 +1,5 @@
-import { apiGet } from "../../../shared/api/apiClient.js";
+import { apiGet, apiRequest } from "../../../shared/api/apiClient.js";
+import { getApiResultErrorMessage } from "../../../shared/api/apiResult.js";
 import {
   createDataSourceRegistry,
   isWorkspaceAvailableDataSource,
@@ -14,6 +15,7 @@ import { normalizeProductCatalog } from "../domain/productCatalog.js";
 const PRODUCT_CATALOG_ENDPOINT = "electronicproducts";
 const COMPATIBILITY_PROVIDER_ID = "compatibility-aoi";
 const AMBIGUOUS_DATASET_NAME_REASON = "ambiguous-dataset-name";
+const TARGETED_PRODUCT_PROVIDER_ID = "targeted-product-aoi";
 
 export const WORKSPACE_PRODUCT_RESOLUTION_STATUS = Object.freeze({
   RESOLVED: "resolved",
@@ -33,6 +35,7 @@ export function createWorkspaceProductService({
   loadSource = createDataSourceLoader(),
   normalizeSource = normalizeDataSourcePayload,
   loadCompatibilityCatalog = fetchCompatibilityCatalogPayload,
+  loadTargetedProduct = fetchTargetedProductAoi,
 } = {}) {
   let committedSnapshot = null;
   let loadGeneration = 0;
@@ -72,6 +75,15 @@ export function createWorkspaceProductService({
       return createNotFoundResolution(datasetName);
     }
 
+    if (!force && !committedSnapshot && typeof loadTargetedProduct === "function") {
+      return resolveTargetedProduct({
+        datasetName: normalizedDatasetName,
+        registry,
+        normalizeSource,
+        loadTargetedProduct,
+      });
+    }
+
     if (force || !committedSnapshot) {
       try {
         await loadCatalog({ force });
@@ -80,27 +92,7 @@ export function createWorkspaceProductService({
       }
     }
 
-    const key = createDatasetKey(normalizedDatasetName);
-    const identityError = committedSnapshot?.identityErrorsByDatasetName.get(key) ?? null;
-    if (identityError) {
-      return createAmbiguousResolution(normalizedDatasetName, identityError, committedSnapshot);
-    }
-
-    const product = committedSnapshot?.resolutionsByDatasetName.get(key) ?? null;
-    if (product) {
-      return {
-        status: WORKSPACE_PRODUCT_RESOLUTION_STATUS.RESOLVED,
-        datasetName: product.datasetName,
-        product,
-        providerErrors: committedSnapshot.providerErrors,
-      };
-    }
-
-    if (committedSnapshot?.providerErrors.length) {
-      return createFailedResolution(normalizedDatasetName, committedSnapshot.providerErrors);
-    }
-
-    return createNotFoundResolution(normalizedDatasetName);
+    return resolveProductFromSnapshot(normalizedDatasetName, committedSnapshot);
   }
 
   function invalidate() {
@@ -113,6 +105,145 @@ export function createWorkspaceProductService({
     resolveProduct,
     invalidate,
   };
+}
+
+async function resolveTargetedProduct({
+  datasetName,
+  registry,
+  normalizeSource,
+  loadTargetedProduct,
+}) {
+  let result;
+  try {
+    result = await loadTargetedProduct(datasetName);
+  } catch (error) {
+    return createFailedResolution(datasetName, [
+      { providerId: TARGETED_PRODUCT_PROVIDER_ID, message: getErrorMessage(error) },
+    ]);
+  }
+
+  if (!result?.success) {
+    if (result?.status === 404) {
+      return createNotFoundResolution(datasetName);
+    }
+
+    return createFailedResolution(datasetName, [
+      {
+        providerId: TARGETED_PRODUCT_PROVIDER_ID,
+        message: getApiResultErrorMessage(result, `Product AOI request failed for ${datasetName}`),
+      },
+    ]);
+  }
+
+  try {
+    const aoi = getTargetedAoiPayload(result.data);
+    const attributes = aoi?.Attributes ?? aoi?.attributes;
+    const returnedDatasetName = normalizeText(readFirstDefined(attributes, ["datasetName"]));
+    if (
+      !returnedDatasetName ||
+      createDatasetKey(returnedDatasetName) !== createDatasetKey(datasetName)
+    ) {
+      throw new Error(`Product AOI identity mismatch for ${datasetName}.`);
+    }
+
+    const productSpecification = normalizeProductSpecification(
+      readFirstDefined(attributes, ["productSpecification"])
+    );
+    if (!productSpecification) {
+      throw new Error(`Product AOI for ${datasetName} did not include product specification.`);
+    }
+
+    const source = findElectronicWorkspaceSource(registry, productSpecification);
+    if (!source) {
+      throw new Error(
+        `No workspace source is configured for Product specification ${productSpecification}.`
+      );
+    }
+    if (!isWorkspaceAvailableDataSource(source)) {
+      return createNotFoundResolution(datasetName);
+    }
+
+    const normalized = normalizeSource([aoi], source);
+    const entries = createRegistryEntries(source, normalized);
+    if (entries.length !== 1) {
+      throw new Error(`Product AOI for ${datasetName} did not resolve to exactly one Product.`);
+    }
+
+    const product = entries[0].context;
+    if (createDatasetKey(product.datasetName) !== createDatasetKey(datasetName)) {
+      throw new Error(`Product AOI identity mismatch for ${datasetName}.`);
+    }
+
+    return {
+      status: WORKSPACE_PRODUCT_RESOLUTION_STATUS.RESOLVED,
+      datasetName: product.datasetName,
+      product,
+      providerErrors: [],
+    };
+  } catch (error) {
+    return createFailedResolution(datasetName, [
+      { providerId: TARGETED_PRODUCT_PROVIDER_ID, message: getErrorMessage(error) },
+    ]);
+  }
+}
+
+function resolveProductFromSnapshot(datasetName, snapshot) {
+  const key = createDatasetKey(datasetName);
+  const identityError = snapshot?.identityErrorsByDatasetName.get(key) ?? null;
+  if (identityError) {
+    return createAmbiguousResolution(datasetName, identityError, snapshot);
+  }
+
+  const product = snapshot?.resolutionsByDatasetName.get(key) ?? null;
+  if (product) {
+    return {
+      status: WORKSPACE_PRODUCT_RESOLUTION_STATUS.RESOLVED,
+      datasetName: product.datasetName,
+      product,
+      providerErrors: snapshot.providerErrors,
+    };
+  }
+
+  if (snapshot?.providerErrors.length) {
+    return createFailedResolution(datasetName, snapshot.providerErrors);
+  }
+
+  return createNotFoundResolution(datasetName);
+}
+
+function getTargetedAoiPayload(payload) {
+  if (payload?.Success === false || payload?.success === false) {
+    throw new Error("Product AOI response reported failure.");
+  }
+
+  const data = payload?.Data ?? payload?.data;
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Product AOI response did not contain a Product AOI.");
+  }
+  return data;
+}
+
+function findElectronicWorkspaceSource(registry, productSpecification) {
+  return (registry?.definitions ?? []).find(
+    (source) =>
+      source?.normalizer?.type === "electronic-aoi" &&
+      normalizeProductSpecification(source.normalizer.specification) === productSpecification
+  );
+}
+
+function normalizeProductSpecification(value) {
+  const normalized = String(value ?? "")
+    .trim()
+    .replace(/[\s_-]/g, "")
+    .toUpperCase();
+
+  if (normalized === "S57") {
+    return "S57";
+  }
+  if (normalized === "S101" || normalized === "S128") {
+    return "S101";
+  }
+  return null;
 }
 
 function createProviders({ registry, loadSource, normalizeSource, loadCompatibilityCatalog }) {
@@ -133,6 +264,11 @@ function createProviders({ registry, loadSource, normalizeSource, loadCompatibil
       },
     },
   ];
+
+  // Specification-filtered providers replace the untyped catalogue transport.
+  if (registry?.definitions?.some((source) => source.normalizer?.type === "electronic-aoi")) {
+    providers.length = 0;
+  }
 
   for (const source of registry?.definitions ?? []) {
     if (!isWorkspaceAvailableDataSource(source)) {
@@ -254,6 +390,8 @@ function createRegistryEntries(source, normalized) {
       contentConfiguration: source.contentConfiguration,
       data: {
         attributes: { ...attributes },
+        geometry:
+          source.normalizer?.type === "electronic-aoi" ? sourceFeatures[index]?.geometry : null,
         feature: sourceFeatures[index] ?? null,
       },
     });
@@ -371,6 +509,10 @@ function createNotFoundResolution(datasetName) {
 
 async function fetchCompatibilityCatalogPayload() {
   return apiGet(PRODUCT_CATALOG_ENDPOINT, "Product catalog request failed");
+}
+
+async function fetchTargetedProductAoi(datasetName) {
+  return apiRequest(`${PRODUCT_CATALOG_ENDPOINT}/${encodeURIComponent(datasetName)}/aoi`);
 }
 
 function createDatasetKey(value) {

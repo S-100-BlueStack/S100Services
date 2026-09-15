@@ -30,6 +30,7 @@ const REMOTE_DISCOVERY_GRACE_MS = 15_000;
 const activePolls = new Map();
 const syncedDatasetNames = new Set();
 const activeRemoteWatches = new Map();
+const activeSyncRequests = new Map();
 let initialized = false;
 let restoredTerminalHandler = null;
 let syncChannel = null;
@@ -119,24 +120,45 @@ export function synchronizeProductJobTracking() {
   return getStoredProductJobs();
 }
 
-export async function synchronizeActiveProductJobs(datasetName) {
+export function synchronizeActiveProductJobs(datasetName) {
   const normalizedDatasetName = normalizeDatasetKey(datasetName);
   if (!normalizedDatasetName) {
-    return {
+    return Promise.resolve({
       success: false,
       errorMessage: "Cannot synchronize active product jobs without a datasetName.",
-    };
+    });
   }
 
+  const existingRequest = activeSyncRequests.get(normalizedDatasetName);
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const request = synchronizeActiveProductJobsCore(datasetName, normalizedDatasetName).finally(
+    () => {
+      if (activeSyncRequests.get(normalizedDatasetName) === request) {
+        activeSyncRequests.delete(normalizedDatasetName);
+      }
+    }
+  );
+  activeSyncRequests.set(normalizedDatasetName, request);
+  return request;
+}
+
+async function synchronizeActiveProductJobsCore(datasetName, normalizedDatasetName) {
   const result = await fetchActiveProductJobs(datasetName);
   if (!result?.success) {
     return result;
   }
-  const responses = Array.isArray(result.data) ? result.data : [];
+  if (!Array.isArray(result.data)) {
+    return { success: false, errorMessage: "Invalid active-job response." };
+  }
+  const responses = result.data;
   const currentRecords = getStoredProductJobs();
   const currentByJobId = new Map(currentRecords.map((record) => [record.jobId, record]));
   const remoteRecords = responses
     .map((response) => {
+      if (!normalizeDatasetKey(response?.datasetName)) return null;
       const record = createProductJobRecord({
         response,
         datasetName,
@@ -153,6 +175,14 @@ export async function synchronizeActiveProductJobs(datasetName) {
       };
     })
     .filter(Boolean);
+  if (
+    remoteRecords.length !== responses.length ||
+    remoteRecords.some(
+      (record) => normalizeDatasetKey(record.datasetName) !== normalizedDatasetName
+    )
+  ) {
+    return { success: false, errorMessage: "Active-job identity could not be verified." };
+  }
   const remoteJobIds = new Set(remoteRecords.map((record) => record.jobId));
   const now = Date.now();
   const nextRecords = currentRecords.filter((record) => {
@@ -399,7 +429,12 @@ function createExternalProductOperation(record) {
     source: "backend",
     startedAt: record.createdAt,
     exportTarget: record.exportTarget,
-    exportType: sendOperation || rollbackOperation ? null : "Edition",
+    exportType:
+      sendOperation || rollbackOperation
+        ? null
+        : record.operationType === "ExportUpdate"
+          ? "Update"
+          : "Edition",
     status: record.status ?? null,
   };
 }

@@ -11,7 +11,10 @@ function createService() {
   return createWorkspaceProductService({
     registry: createDataSourceRegistry({ isDevelopment: true }),
     loadCompatibilityCatalog: async () => ({ Data: ["A&B"] }),
-    loadSource: async (source) => [{ datasetName: `${source.id}-product` }],
+    loadSource: async (source) =>
+      source.id === "s57"
+        ? []
+        : [{ datasetName: source.id === "s101" ? "A&B" : `${source.id}-product` }],
     normalizeSource: (entries, source) => ({
       products: entries.map((entry) => ({
         ...entry,
@@ -27,7 +30,7 @@ for (const routeName of ["analyze", "review"]) {
   test(`${routeName} route resolves source identity and isolates an invalid entry`, async () => {
     const service = createService();
     const catalog = await service.loadCatalog();
-    const sourceProduct = catalog.find((item) => item.sourceId !== "compatibility-aoi");
+    const sourceProduct = catalog.find((item) => item.sourceId === "paper-charts");
     assert.ok(sourceProduct);
     const names = [sourceProduct.datasetName, "MISSING", "A&B"];
     const options = { origin: "https://catalogue.example", baseUrl: "/" };
@@ -41,6 +44,7 @@ for (const routeName of ["analyze", "review"]) {
         workspaceProductService: service,
         get: async (endpoint) => {
           calls.push(endpoint);
+          if (endpoint.endsWith("/artifacts/history")) return { Data: [] };
           return { Data: { DatasetName: "A&B", Geometry: { rings: [] } } };
         },
       });
@@ -51,13 +55,17 @@ for (const routeName of ["analyze", "review"]) {
       assert.equal(results[0].productContext.sourceId, sourceProduct.sourceId);
       assert.equal(results[1].productContext, null);
       assert.equal(results[1].isMock, false);
-      assert.deepEqual(calls, ["electronicproducts/A%26B/aoi"]);
+      assert.deepEqual(calls, [
+        "electronicproducts/A%26B",
+        "electronicproducts/A%26B/artifacts/history",
+      ]);
     } else {
       const results = await loadReviewHistories(route.datasetNames, {
         workspaceProductService: service,
+        fetchArtifacts: async () => [],
         fetchHistory: async (name, { productContext }) => {
           calls.push([name, productContext.sourceId]);
-          return { endpointAvailable: productContext.sourceId === "compatibility-aoi", events: [] };
+          return { endpointAvailable: productContext.sourceId === "s101", events: [] };
         },
       });
       assert.deepEqual(
@@ -68,7 +76,7 @@ for (const routeName of ["analyze", "review"]) {
       assert.equal(results[1].productContext, null);
       assert.deepEqual(calls, [
         [sourceProduct.datasetName, sourceProduct.sourceId],
-        ["A&B", "compatibility-aoi"],
+        ["A&B", "s101"],
       ]);
     }
   });

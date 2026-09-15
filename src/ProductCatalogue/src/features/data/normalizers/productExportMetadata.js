@@ -1,7 +1,11 @@
-export const PRODUCT_EXPORT_STANDARD = Object.freeze({
-  S100: "S100",
-  S57: "S57",
-});
+import { normalizeProductArtifact } from "./productArtifact.js";
+import {
+  PRODUCT_EXPORT_STANDARD,
+  createProductExportStandardLabel,
+  normalizeProductExportStandard,
+} from "../../products/domain/productExportTrack.js";
+
+export { PRODUCT_EXPORT_STANDARD } from "../../products/domain/productExportTrack.js";
 
 const DEFAULT_STANDARD_ORDER = [PRODUCT_EXPORT_STANDARD.S100, PRODUCT_EXPORT_STANDARD.S57];
 
@@ -38,7 +42,7 @@ function getExportRecords(exportsValue) {
 
 function normalizeProductExportRecord(record) {
   const rawType = readFirstDefined(record, ["type", "Type", "standard", "Standard"]);
-  const standard = normalizeExportStandard(rawType);
+  const standard = normalizeProductExportStandard(rawType);
 
   if (!standard) {
     return null;
@@ -66,20 +70,7 @@ function normalizeValidationArtifacts(value) {
     return [];
   }
 
-  return value
-    .filter((artifact) => artifact && typeof artifact === "object")
-    .map((artifact) => ({
-      id: readFirstDefined(artifact, ["id", "Id"]),
-      fileName: readFirstDefined(artifact, ["fileName", "FileName"]),
-      mediaType: readFirstDefined(artifact, ["mediaType", "MediaType"]),
-      createdAtUtc: readFirstDefined(artifact, ["createdAtUtc", "CreatedAtUtc"]),
-      url: readFirstDefined(artifact, ["url", "Url"]),
-    }))
-    .filter((artifact) => artifact.url);
-}
-
-function createProductExportStandardLabel(standard) {
-  return standard === PRODUCT_EXPORT_STANDARD.S100 ? "S-101" : standard;
+  return value.map(normalizeProductArtifact).filter(Boolean);
 }
 
 function groupExportsByStandard(items) {
@@ -120,23 +111,6 @@ function getOrderedStandards(byStandard) {
     .sort();
 
   return [...knownStandards, ...unknownStandards];
-}
-
-function normalizeExportStandard(value) {
-  const text = String(value ?? "")
-    .trim()
-    .replace(/[\s_-]/g, "")
-    .toUpperCase();
-
-  if (text === "S100") {
-    return PRODUCT_EXPORT_STANDARD.S100;
-  }
-
-  if (text === "S57") {
-    return PRODUCT_EXPORT_STANDARD.S57;
-  }
-
-  return text || null;
 }
 
 function getDateTimeValue(value) {

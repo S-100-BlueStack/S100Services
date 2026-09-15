@@ -5,6 +5,7 @@ export function createDataSourceRefreshCoordinator({
   dataSourceController,
   refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_MS,
   timer = globalThis.window,
+  onRefreshComplete,
 } = {}) {
   let isRefreshing = false;
   let autoRefreshEnabled = true;
@@ -24,7 +25,7 @@ export function createDataSourceRefreshCoordinator({
 
     isRefreshing = true;
     try {
-      const [compatibilityResult, dataSourceResult] = await Promise.all([
+      const [compatibilityOutcome, dataSourceOutcome] = await Promise.allSettled([
         compatibilityRefreshService.refresh({ source }),
         dataSourceController.refreshActive({
           reason: `${source}-refresh`,
@@ -32,15 +33,26 @@ export function createDataSourceRefreshCoordinator({
         }),
       ]);
 
-      return {
+      const compatibilityResult =
+        compatibilityOutcome.status === "fulfilled"
+          ? compatibilityOutcome.value
+          : { success: false, error: compatibilityOutcome.reason };
+      const dataSourceResult =
+        dataSourceOutcome.status === "fulfilled"
+          ? dataSourceOutcome.value
+          : { success: false, error: dataSourceOutcome.reason };
+      const result = {
         success:
           compatibilityResult?.success !== false &&
+          dataSourceResult?.success !== false &&
           (dataSourceResult?.failedSourceIds?.length ?? 0) === 0,
         skipped: false,
         source,
         compatibilityResult,
         dataSourceResult,
       };
+      onRefreshComplete?.(result);
+      return result;
     } finally {
       isRefreshing = false;
     }

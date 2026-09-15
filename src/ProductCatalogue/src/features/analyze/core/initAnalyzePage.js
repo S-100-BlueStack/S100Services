@@ -6,7 +6,6 @@ import { registerPopupHoverSync } from "../../map/interactions/registerPopupHove
 import { noticeError, noticeWarning } from "../../notices/services/noticeService.js";
 import { fetchProductCatalog } from "../../products/api/productCatalogApi.js";
 import { validateProductCatalogSelection } from "../../products/domain/productCatalog.js";
-import { hideLoader } from "../../../shared/ui/loader.js";
 import { createLoaderProgressSession } from "../../../shared/ui/loaderProgressSession.js";
 import {
   addAnalyzeDatasetItem,
@@ -299,10 +298,6 @@ export async function initAnalyzePage({ datasetNames }) {
   cleanupViewPadding = applyAnalyzeViewPadding(view);
   cleanupKeyboardClose = bindAnalyzeKeyboardClose(view);
   await view.when();
-  // The bootstrap loader covers initial page and map setup. Hide it before
-  // data loading starts so the delayed Analyze loader can decide whether a
-  // loader is needed at all.
-  hideLoader();
 
   renderAnalyzeSidebar({
     datasetItems,

@@ -21,29 +21,39 @@ test("registry defines independent target sources without a permanent combined s
   assert.equal(registry.byId.has("enc-products"), false);
 });
 
-test("S-57 and S-101 remain known but unavailable for workspace resolution", () => {
+test("S-57 and S-101 have authoritative specification-filtered AOIs for workspace resolution", () => {
   const registry = createDataSourceRegistry({ isDevelopment: true });
   for (const sourceId of [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101]) {
     const source = registry.byId.get(sourceId);
-    assert.equal(source.availability.state, DATA_SOURCE_AVAILABILITY.UNAVAILABLE);
-    assert.equal(source.userSelectable, false);
-    assert.equal(source.loader, null);
-    assert.equal(source.workspace.supported, false);
-    assert.equal(isWorkspaceAvailableDataSource(source), false);
+    assert.equal(source.availability.state, DATA_SOURCE_AVAILABILITY.AVAILABLE);
+    assert.equal(source.userSelectable, true);
+    assert.equal(
+      source.loader.path,
+      `electronicproducts/aoi?productSpecification=${sourceId.toUpperCase()}`
+    );
+    assert.equal(source.workspace.supported, true);
+    assert.equal(isWorkspaceAvailableDataSource(source), true);
   }
 });
 
-test("development registry exposes Paper Charts and S-102 for Main-map and workspace use", () => {
+test("explicit synthetic fixture mode exposes Paper Charts and S-102 for tests", () => {
   const registry = createDataSourceRegistry({ isDevelopment: true });
   assert.deepEqual(
     getRuntimeSelectableDataSources(registry).map((source) => source.id),
-    [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]
+    [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101, DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]
   );
   assert.deepEqual(getDefaultEnabledSourceIds(registry), [
+    DATA_SOURCE_IDS.S57,
+    DATA_SOURCE_IDS.S101,
     DATA_SOURCE_IDS.PAPER_CHARTS,
     DATA_SOURCE_IDS.S102,
   ]);
-  for (const sourceId of [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]) {
+  for (const sourceId of [
+    DATA_SOURCE_IDS.S57,
+    DATA_SOURCE_IDS.S101,
+    DATA_SOURCE_IDS.PAPER_CHARTS,
+    DATA_SOURCE_IDS.S102,
+  ]) {
     assert.equal(isWorkspaceAvailableDataSource(registry.byId.get(sourceId)), true);
   }
 
@@ -58,10 +68,13 @@ test("development registry exposes Paper Charts and S-102 for Main-map and works
   });
 });
 
-test("mock sources remain unavailable outside Development without explicit opt-in", () => {
-  const registry = createDataSourceRegistry({ isDevelopment: false });
-  assert.deepEqual(getRuntimeSelectableDataSources(registry), []);
-  assert.deepEqual(getDefaultEnabledSourceIds(registry), []);
+test("runtime-default registry exposes only authoritative S-57 and S-101 sources", () => {
+  const registry = createDataSourceRegistry();
+  assert.deepEqual(
+    getRuntimeSelectableDataSources(registry).map((source) => source.id),
+    ["s57", "s101"]
+  );
+  assert.deepEqual(getDefaultEnabledSourceIds(registry), ["s57", "s101"]);
   assert.equal(
     isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.PAPER_CHARTS)),
     false
@@ -69,7 +82,7 @@ test("mock sources remain unavailable outside Development without explicit opt-i
   assert.equal(isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.S102)), false);
 });
 
-test("mock sources can be explicitly enabled outside Development", () => {
+test("synthetic fixture sources require explicit registry construction", () => {
   const registry = createDataSourceRegistry({
     isDevelopment: false,
     mockDataSourcesEnabled: true,
@@ -77,7 +90,7 @@ test("mock sources can be explicitly enabled outside Development", () => {
 
   assert.deepEqual(
     getRuntimeSelectableDataSources(registry).map((source) => source.id),
-    [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]
+    [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101, DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]
   );
   assert.equal(
     isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.PAPER_CHARTS)),
@@ -86,7 +99,7 @@ test("mock sources can be explicitly enabled outside Development", () => {
   assert.equal(isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.S102)), true);
 });
 
-test("mock data source build flag only enables explicit true values", () => {
+test("legacy mock flag parser only accepts explicit true values", () => {
   for (const value of [undefined, null, "", "false", "1", "yes", "invalid"]) {
     assert.equal(isMockDataSourcesFlagEnabled(value), false, String(value));
   }
@@ -110,7 +123,7 @@ test("configuration-disabled sources are not selectable or workspace-available",
   );
 });
 
-test("mock sources enable workspace surfaces while backend mutations remain disabled", () => {
+test("synthetic fixture sources keep their test-only capability model", () => {
   const registry = createDataSourceRegistry({ isDevelopment: true });
   const enabledWorkspaceCapabilities = [
     "productCollection",

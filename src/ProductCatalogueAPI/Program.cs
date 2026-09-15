@@ -1,27 +1,14 @@
 using Hangfire;
-using Hangfire.SqlServer;
-using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Mvc; // Required for ApiVersion
-using ProductCatalogueAPI.Data.Database;
-using ProductCatalogueAPI.Data.Repositories;
+using Microsoft.Extensions.Hosting;
 using ProductCatalogueAPI.Filters;
+using ProductCatalogueAPI.Hosting;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.OpenApi;
-using ProductCatalogueAPI.Services.Export;
-using ProductCatalogueAPI.Services.ExportRules;
-using ProductCatalogueAPI.Services.Graph;
-using ProductCatalogueAPI.Services.History;
-using ProductCatalogueAPI.Services.Locking;
-using ProductCatalogueAPI.Services.Jobs;
-using ProductCatalogueAPI.Services.Operations;
-using ProductCatalogueAPI.Services.MailImport;
-using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.S128;
 using Serilog;
 using Serilog.Events;
 using System.Reflection;
-using System.Security.Claims;
-using System.Text.Json;
 
 namespace ProductCatalogueAPI
 {
@@ -29,7 +16,16 @@ namespace ProductCatalogueAPI
     {
         private const string outputTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff}| [{Level:u3}] [{MachineName}] [{SourceContext}] {Message:lj} {NewLine}{Exception}";
 
+        [STAThread]
         public static async Task Main(string[] args) {
+            var processRole = ResolveProcessRole(args);
+            var processProfile = ProductCatalogueProcessProfile.For(processRole);
+
+            if (processRole == ProductCatalogueProcessRole.Worker) {
+                await RunWorkerAsync(args, processProfile);
+                return;
+            }
+
             var development = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")?.Equals("Development", StringComparison.OrdinalIgnoreCase) == true;
             var central_logpath = Environment.GetEnvironmentVariable("log_path");
             // Bootstrap logging
@@ -167,71 +163,11 @@ namespace ProductCatalogueAPI
 
 
             // Configure ArcGIS and ProductCatalogue services
-            await builder.Services.AddS100ProductCatalogue(builder.Configuration);
-
-
-            // Hangfire
-            var filePath = builder.Configuration.GetSection("Connections")["HangfireConnection"];
-
-            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
-                throw new InvalidOperationException($"Hangfire:ConnectionFile is not configured or insufficient access: {filePath}");
-            var connectionString = File.ReadAllText(filePath);
-            builder.Services.AddHangfire(config => {
-                config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-                    .UseSimpleAssemblyNameTypeSerializer()
-                    .UseRecommendedSerializerSettings()
-                    .UseFilter(new ExportJobMetadataClientFilter())
-                    .UseSqlServerStorage(
-                        nameOrConnectionString: connectionString,
-                        options: new SqlServerStorageOptions {
-                            CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
-                            SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
-                            QueuePollInterval = TimeSpan.FromSeconds(10),
-                            UseRecommendedIsolationLevel = true,
-                            DisableGlobalLocks = true
-                        });
-            });
-            Log.Information("Hangfire configured");
-            // System DB
-            // builder.Services.AddSingleton<IProductRepository, InMemoryProductRepository>();
-            //Log.Information("InMemory SystemDB configured");
-            builder.Services.AddSingleton<DbConnectionFactory>();
-            builder.Services.AddScoped<ProductRepository>();
-            builder.Services.AddScoped<IProductRepository>(services => services.GetRequiredService<ProductRepository>());
-            builder.Services.AddScoped<IProductWorkflowRepository>(services => services.GetRequiredService<ProductRepository>());
-            builder.Services.AddScoped<IProductHistoryEventRepository, ProductHistoryEventRepository>();
-            builder.Services.AddScoped<IProductHistoryEventService, ProductHistoryEventService>();
-            Log.Information("SystemDB configured");
-
-
-            // Locking service
-            builder.Services.AddSingleton<IDatasetLockService, DatasetLockService>();
-            // Independent product engines share no version or execution timeline.
-            builder.Services.AddSingleton<IExportEngine>(services => new IsoIec8211ExportEngine(
-                services.GetRequiredService<ILogger<IsoIec8211ExportEngine>>(),
-                builder.Configuration["ArtifactsPath"] ?? throw new InvalidOperationException("ArtifactsPath is not configured."),
-                S100CompilerConfiguration.ResolveExecutablePath(builder.Configuration)));
-            builder.Services.AddSingleton<IExportEngine, Hdf5ExportEngine>();
-            builder.Services.AddSingleton<IExportEngine, GmlExportEngine>();
-            builder.Services.AddSingleton<IExportEngineRegistry, ExportEngineRegistry>();
-            builder.Services.AddSingleton<IExportDecisionRuleSet, PendingS101ExportDecisionRuleSet>();
-            builder.Services.AddSingleton<IExportDecisionRuleSet, PendingS57ExportDecisionRuleSet>();
-            builder.Services.AddSingleton<IExportDecisionRuleSetRegistry, ExportDecisionRuleSetRegistry>();
-
-            builder.Services.AddSingleton<ISevenCsService, SevenCsService>();
-            builder.Services.AddSingleton(TimeProvider.System);
-            builder.Services.AddScoped<IExportOperationService, ExportOperationService>();
-            builder.Services.AddSingleton<IExportJobService, HangfireExportJobService>();
-            builder.Services.AddSingleton<IHangfireJobStorageAccessor>(_ => new HangfireJobStorageAccessor(JobStorage.Current));
-            builder.Services.AddSingleton<IJobStatusService, HangfireJobStatusService>();
-            builder.Services.AddTransient<ExportOperationJob>();
-            builder.Services.AddTransient<DetectProductChangesJob>();
-            builder.Services.AddTransient<ProcessChangeSummariesJob>();
-            // TODO: Move to service
-            builder.Services.AddHangfireServer();
-
-            // Caching
-            builder.Services.AddMemoryCache();
+            await builder.Services.AddS100ProductCatalogue(
+                builder.Configuration,
+                processProfile.ArcGisExecutionLane
+            );
+            builder.Services.AddProductCatalogueBackend(builder.Configuration, processProfile);
             // Mail-Handling
             //try {
             //    builder.Services
@@ -319,6 +255,85 @@ namespace ProductCatalogueAPI
             //}
 
             app.Run();
+        }
+
+        private static async Task RunWorkerAsync(
+            string[] args,
+            ProductCatalogueProcessProfile processProfile
+        ) {
+            var loggerConfiguration = new LoggerConfiguration()
+                .MinimumLevel.Information()
+                .Enrich.FromLogContext()
+                .Enrich.WithProperty("MachineName", Environment.MachineName)
+                .WriteTo.Console(outputTemplate: outputTemplate)
+                .WriteTo.File(
+                    path: Path.Combine(AppContext.BaseDirectory, "Logs", "ProductManagerWorker.log"),
+                    rollingInterval: RollingInterval.Infinite,
+                    retainedFileCountLimit: 1,
+                    shared: true,
+                    outputTemplate: outputTemplate
+                );
+
+            var centralLogRoot = Environment.GetEnvironmentVariable("log_path");
+            if (!string.IsNullOrWhiteSpace(centralLogRoot) && Path.Exists(centralLogRoot)) {
+                loggerConfiguration.WriteTo.File(
+                    path: Path.Combine(
+                        centralLogRoot,
+                        "productmanager.dev",
+                        "Logging",
+                        Environment.MachineName,
+                        "ProductManagerWorker.log"
+                    ),
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 365,
+                    shared: true,
+                    outputTemplate: outputTemplate
+                );
+            }
+
+            Log.Logger = loggerConfiguration.CreateLogger();
+
+            var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings {
+                Args = args,
+                ContentRootPath = AppContext.BaseDirectory
+            });
+            builder.Logging.ClearProviders();
+            builder.Logging.AddSerilog(Log.Logger, dispose: true);
+            builder.Services.AddProductCatalogueWorkerWindowsService();
+
+            var detectionState = DetectProductChangesState.FromConfiguration(builder.Configuration);
+            builder.Services.AddSingleton(detectionState);
+            await builder.Services.AddS100ProductCatalogue(
+                builder.Configuration,
+                processProfile.ArcGisExecutionLane
+            );
+            builder.Services.AddProductCatalogueBackend(builder.Configuration, processProfile);
+
+            using var host = builder.Build();
+            Log.Information(
+                "Product Catalogue background worker starting. ProcessRole: {ProcessRole}. ProcessId: {ProcessId}. ArcGisExecutionLane: {ArcGisExecutionLane}. HangfireWorkerCount: {HangfireWorkerCount}",
+                processProfile.Role,
+                Environment.ProcessId,
+                processProfile.ArcGisExecutionLane,
+                processProfile.HangfireWorkerCount
+            );
+            await host.RunAsync();
+        }
+
+        private static ProductCatalogueProcessRole ResolveProcessRole(string[] args) {
+            var environmentName = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+                ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            var configuration = new ConfigurationManager();
+            configuration.SetBasePath(AppContext.BaseDirectory);
+            configuration.AddJsonFile("appsettings.json", optional: true);
+            if (!string.IsNullOrWhiteSpace(environmentName))
+                configuration.AddJsonFile($"appsettings.{environmentName}.json", optional: true);
+            configuration.AddEnvironmentVariables();
+            configuration.AddCommandLine(args);
+
+            return ProductCatalogueProcessRoleResolver.Parse(
+                configuration[ProductCatalogueProcessRoleResolver.ConfigurationKey]
+            );
         }
 
         internal static WebApplicationBuilder CreateApplicationBuilder(

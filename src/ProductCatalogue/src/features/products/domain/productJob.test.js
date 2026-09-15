@@ -25,7 +25,7 @@ test("accepted export job response is normalized for persistent tracking", () =>
       correlationId: "correlation-123",
       statusUrl: "/jobs/job-123",
     },
-    datasetName: "fallback",
+    datasetName: "101DK0040943E",
     operationType: PRODUCT_JOB_OPERATION.EXPORT_EDITION,
     label: "Exporting S-101 Edition",
   });
@@ -239,7 +239,7 @@ test("legacy S100 export job identity maps to S-101 presentation", () => {
 });
 
 test("legacy Rollback job identity maps to Cancel Export presentation", () => {
-  assert.equal(PRODUCT_JOB_OPERATION.ROLLBACK, "Rollback");
+  assert.equal(PRODUCT_JOB_OPERATION.ROLLBACK, "CancelExport");
   assert.equal(isRollbackOperation("rollback"), true);
   assert.equal(createProductJobLabel(PRODUCT_JOB_OPERATION.ROLLBACK), "Canceling export");
 
@@ -252,7 +252,7 @@ test("legacy Rollback job identity maps to Cancel Export presentation", () => {
     status: "Running",
   });
 
-  assert.equal(restored.operationType, "Rollback");
+  assert.equal(restored.operationType, "CancelExport");
   assert.equal(restored.label, "Canceling export");
   assert.equal(
     createProductJobCompletionTitle(restored, { status: "Succeeded" }),

@@ -39,7 +39,10 @@ function createMemoryStorage(initial = {}) {
 }
 
 function createController({ storage = createMemoryStorage(), loadSource } = {}) {
-  const registry = createDataSourceRegistry({ isDevelopment: true });
+  const registry = createDataSourceRegistry({
+    configuredSourceIds: ["paper-charts", "s102"],
+    isDevelopment: true,
+  });
   const persistence = createDataSourcePersistence({ storage });
   const committedLayerIds = new Set();
   const candidates = new Map();
@@ -208,7 +211,7 @@ test("compatibility and runtime source initialization overlap without layer coll
   ]);
 });
 
-test("first-visit defaults apply even when compatibility loading fails", async () => {
+test("first-visit fixture defaults stay session-only when compatibility loading fails", async () => {
   const { controller, storage, committedLayerIds } = createController();
 
   const result = await runInitialDataStartup({
@@ -220,18 +223,14 @@ test("first-visit defaults apply even when compatibility loading fails", async (
 
   assert.equal(result.compatibility.status, "rejected");
   assert.deepEqual(controller.getActiveSourceIds(), ["paper-charts", "s102"]);
-  assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY), {
-    schemaVersion: 1,
-    initialized: true,
-    enabledSourceIds: ["paper-charts", "s102"],
-  });
+  assert.equal(storage.readJson(DATA_SOURCE_STORAGE_KEY), null);
   assert.deepEqual([...committedLayerIds].sort(), ["paper-charts-products", "s102-products"]);
 });
 
-test("persisted source selection restores even when compatibility loading fails", async () => {
+test("retired persisted fixture selection is cleaned when compatibility loading fails", async () => {
   const storage = createMemoryStorage({
     [DATA_SOURCE_STORAGE_KEY]: JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       initialized: true,
       enabledSourceIds: ["s102"],
     }),
@@ -246,8 +245,13 @@ test("persisted source selection restores even when compatibility loading fails"
   });
 
   assert.equal(result.compatibility.status, "rejected");
-  assert.deepEqual(controller.getActiveSourceIds(), ["s102"]);
-  assert.deepEqual([...committedLayerIds], ["s102-products"]);
+  assert.deepEqual(controller.getActiveSourceIds(), []);
+  assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY), {
+    schemaVersion: 2,
+    initialized: true,
+    enabledSourceIds: [],
+  });
+  assert.deepEqual([...committedLayerIds], []);
 });
 
 test("compatibility failure remains observable while independent source layers stay committed", async () => {

@@ -1,5 +1,6 @@
 using ArcGIS.Core.Data;
 using ProductCatalogueAPI.Jobs;
+using ProductCatalogueAPI.Hosting;
 using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Startup;
@@ -17,8 +18,13 @@ namespace ProductCatalogueAPI
         /// </summary>
         /// <param name="services">The service collection that receives the Product Catalogue registrations.</param>
         /// <param name="configuration">The application configuration containing the S-128 connection settings.</param>
+        /// <param name="executionLane">The diagnostic name of the process-owned ArcGIS execution lane.</param>
         /// <returns>A task that completes after the ArcGIS-backed product manager has been initialized.</returns>
-        public static async Task AddS100ProductCatalogue(this IServiceCollection services, ConfigurationManager configuration) {
+        public static async Task AddS100ProductCatalogue(
+            this IServiceCollection services,
+            ConfigurationManager configuration,
+            string executionLane = ProductCatalogueProcessProfile.InteractiveArcGisExecutionLane
+        ) {
             S128ConnectionPrerequisite connection;
             try {
                 connection = ProductCatalogueStartupPrerequisites.ValidateS128Connection(
@@ -49,9 +55,14 @@ namespace ProductCatalogueAPI
                         ),
                         _ => throw new InvalidOperationException("Unsupported S-128 connection type.")
                     };
-                });
+                }, executionLane);
 
                 services.AddSingleton(productManager);
+                Log.Information(
+                    "ArcGIS Product Manager initialized. ArcGisExecutionLane: {ArcGisExecutionLane}. ProcessId: {ProcessId}",
+                    executionLane,
+                    Environment.ProcessId
+                );
             }
             catch (Exception ex) {
                 Log.Error(

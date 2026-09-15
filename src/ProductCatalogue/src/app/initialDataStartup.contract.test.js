@@ -12,13 +12,18 @@ test("loadInitialData delegates compatibility and runtime sources to independent
   const source = await readAppFile("loadInitialData.js");
 
   assert.match(source, /import \{ runInitialDataStartup \} from "\.\/initialDataStartup\.js";/);
+  assert.match(source, /loadCompatibilityData:\s*async \(\) => \{/);
+  assert.match(source, /const result = await loadCompatibilityAoiData\(app, loaderProgress\);/);
+  assert.match(source, /sourceProgress\.begin\(\);/);
   assert.match(
     source,
-    /runInitialDataStartup\(\{[\s\S]*?loadCompatibilityData: \(\) => loadCompatibilityAoiData\(app, loaderProgress\),[\s\S]*?initializeRuntimeSources: \(\) => app\.dataSourceController\?\.initialize\?\.\(\)/
+    /initializeRuntimeSources:\s*\(\) => app\.dataSourceController\?\.initialize\?\.\(\)/
   );
-  assert.doesNotMatch(
-    source,
-    /await loadCompatibilityAoiData\([\s\S]*?await app\.dataSourceController\?\.initialize/
+
+  assert.ok(
+    source.indexOf("await loadCompatibilityAoiData(app, loaderProgress)") <
+      source.indexOf("sourceProgress.begin()"),
+    "source progress should begin only after compatibility AOI loading completes"
   );
 });
 
@@ -32,11 +37,8 @@ test("loadInitialData preserves separate failure handling for both startup pipel
   assert.match(source, /noticeError\("Data failed permanently", error\.message\)/);
 });
 
-test("compatibility notices prefer the AOI render summary over the shared map", async () => {
+test("startup notices count registry graphics after both tasks settle", async () => {
   const source = await readAppFile("loadInitialData.js");
 
-  assert.match(
-    source,
-    /getTotalGraphicsFromRenderSummary\(renderSummary\) \?\? getTotalGraphicsFromMap\(app\.map\)/
-  );
+  assert.match(source, /getTotalGraphicsFromMap\(app\.map\)/);
 });

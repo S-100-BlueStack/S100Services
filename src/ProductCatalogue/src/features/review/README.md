@@ -8,7 +8,7 @@ It currently supports:
 - Per-product content toggles
 - Product History cards
 - Placeholder cards for IC-ENC reports
-- Placeholder cards for internal validation reports
+- Public validation diagnostic downloads for supported electronic Products
 - Fixed content ordering and bounded content heights for comparison
 - Opening new Review tabs from the Product Collection tray
 
@@ -36,15 +36,14 @@ Review uses the same source-aware workspace catalog/resolver as Analyze:
 src/features/products/services/workspaceProductService.js
 ```
 
-The catalog merges the compatibility `GET /electronicproducts` provider with runtime-available registry
-workspace providers for Paper Charts and S-102. Product names remain the primary picker label while source
-metadata is retained by the runtime model. Provider failures are isolated and stale catalog generations
-cannot overwrite newer state.
+The picker loads the lightweight `GET electronicproducts` dataset-name list. Review resolves only each
+selected Product through `GET electronicproducts/{datasetName}/aoi`; the targeted response supplies the
+authoritative `ProductSpecification` used to select the registry source. Review therefore does not load
+the complete S57 and S101 AOI catalogs during workspace startup.
 
-The workspace catalog is not tied to Main map enabled-source localStorage. A source disabled on the Main
-map can still be added in an already open or directly opened Review workspace when its workspace provider
-is runtime-available. S-57 and S-101 remain absent as independent sources until authoritative read/catalog
-contracts exist.
+Workspace resolution is not tied to Main-map enabled-source localStorage and does not infer source from
+dataset-name conventions. Backend identity conflicts, malformed targeted responses and unavailable
+deployment-configured sources fail closed rather than falling through another source.
 
 ## Content model
 
@@ -62,14 +61,16 @@ Future report cards should use the same pattern.
 
 ## Backend integration
 
-The Review page currently reuses the existing Product History API and placeholder report cards.
+Review reads Product History and validation artifact history independently. A failed History request
+retains resolved Product context and successful diagnostics; failed artifacts do not discard History.
+IC-ENC reports remain unavailable. Diagnostic download URLs use the configured API base.
 
-When backend contracts are ready, add loaders/renderers per content type rather than hardcoding report-specific behavior into the core Review page.
+Content loaders remain capability-gated. No unsupported source may call an electronic backend route.
 
 ## FI-011D source-aware Review content
 
-Review uses the same workspace Product resolver/catalog as Analyze. Compatibility Product History
-continues to load through the existing history endpoint. Paper Charts and S-102 resolve as real
+Review uses the same workspace Product resolver/catalog as Analyze. S57/S101 Product History
+loads through the existing history endpoint with explicit source permission. Paper Charts and S-102 resolve as real
 workspace Products but History, IC-ENC reports, and Internal validation render declarative unavailable
 states without compatibility backend requests. Per-Product load state distinguishes `loaded`,
 `unavailable`, and `failed`, so mixed Review columns remain independent. Product removal/disable and

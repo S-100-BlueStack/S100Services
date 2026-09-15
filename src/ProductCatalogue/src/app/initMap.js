@@ -88,7 +88,7 @@ export function initMap() {
       // after this callback. Publishing visibility in a microtask keeps derived
       // filter/search state inside that same committed operation boundary.
       queueMicrotask(() => {
-        applyMapVisibility();
+        bindMapVisibility();
         filterPanel?.refresh?.();
       });
     },
@@ -174,6 +174,19 @@ export function initMap() {
   const refreshService = createDataSourceRefreshCoordinator({
     compatibilityRefreshService,
     dataSourceController: dataSourceRuntime.controller,
+    onRefreshComplete: (result) => {
+      if (result.success) {
+        updateLastUpdated();
+        if (result.source === "manual")
+          noticeSuccess("Data refreshed", null, { countAsUnread: false });
+      } else if (result.source === "manual") {
+        setLastUpdatedStatus(previousLastUpdatedStatus);
+        noticeError(
+          "Refresh incomplete",
+          "One or more sources could not be refreshed. Previous data may still be displayed."
+        );
+      }
+    },
   });
   return {
     map,

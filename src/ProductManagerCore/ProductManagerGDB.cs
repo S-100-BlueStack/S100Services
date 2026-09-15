@@ -24,13 +24,18 @@ namespace S100FC.ProductCatalogue
 {
     public class ProductManagerGDB : IProductManager, INauticalProductManager, IElectronicProductManager, IDisposable
     {
-        public static async Task<IProductManager> CreateInstanceAsync(Func<Geodatabase> creator) => await new ProductManagerGDB().InitializeAsync(creator);
+        public static async Task<IProductManager> CreateInstanceAsync(
+            Func<Geodatabase> creator,
+            string executionLane = "Unspecified"
+        ) => await new ProductManagerGDB(executionLane).InitializeAsync(creator);
 
         private bool _disposed = false;
 
         private readonly SingleThreadTaskScheduler _singleThreadTaskScheduler;
 
         private readonly TaskFactory _taskFactory;
+
+        private readonly string _executionLane;
 
         private Geodatabase? _geodatabase = default;
 
@@ -60,8 +65,14 @@ namespace S100FC.ProductCatalogue
         private readonly ConcurrentDictionary<string, S100FC.S128.FeatureTypes.ElectronicProduct> _preferredElectronicProductsByName = new();
         private ElectronicProductMappingIndex _productMappings = ElectronicProductMappingIndex.Empty;
 
-        private ProductManagerGDB() {
-            this._singleThreadTaskScheduler = new SingleThreadTaskScheduler();
+        private ProductManagerGDB(string executionLane) {
+            if (string.IsNullOrWhiteSpace(executionLane))
+                throw new ArgumentException("An ArcGIS execution lane name is required.", nameof(executionLane));
+
+            this._executionLane = executionLane.Trim();
+            this._singleThreadTaskScheduler = new SingleThreadTaskScheduler(
+                $"ArcGIS-{this._executionLane}"
+            );
             this._taskFactory = new TaskFactory(this._singleThreadTaskScheduler);
             this.OutputFolder = string.Empty;
         }
@@ -165,6 +176,42 @@ namespace S100FC.ProductCatalogue
             return this._taskFactory.StartNew(() => {
                 return function();
             });
+        }
+
+        private Task<TResult> DispatchMeasured<TResult>(
+            Func<TResult> function,
+            string operationType,
+            string? datasetName,
+            CancellationToken cancellationToken
+        ) {
+            var queuedAt = Stopwatch.GetTimestamp();
+            var correlationId = Activity.Current?.TraceId.ToString() ?? "unavailable";
+
+            return this._taskFactory.StartNew(() => {
+                var executionStartedAt = Stopwatch.GetTimestamp();
+                var succeeded = false;
+
+                try {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var result = function();
+                    succeeded = true;
+                    return result;
+                }
+                finally {
+                    var completedAt = Stopwatch.GetTimestamp();
+                    Log.Information(
+                        "ArcGIS operation completed. ExecutionLane: {ExecutionLane}. OperationType: {OperationType}. DatasetName: {DatasetName}. CorrelationId: {CorrelationId}. Success: {Success}. Cancelled: {Cancelled}. ArcGisQueueWaitMs: {ArcGisQueueWaitMs}. ArcGisExecutionMs: {ArcGisExecutionMs}",
+                        this._executionLane,
+                        operationType,
+                        datasetName ?? "unavailable",
+                        correlationId,
+                        succeeded,
+                        cancellationToken.IsCancellationRequested,
+                        Stopwatch.GetElapsedTime(queuedAt, executionStartedAt).TotalMilliseconds,
+                        Stopwatch.GetElapsedTime(executionStartedAt, completedAt).TotalMilliseconds
+                    );
+                }
+            }, cancellationToken);
         }
 
         #region IElectronicProductManager
@@ -314,12 +361,21 @@ namespace S100FC.ProductCatalogue
                 throw new ArgumentOutOfRangeException(nameof(update));
 
             cancellationToken.ThrowIfCancellationRequested();
-            var result = await this.GetElectronicProductAsync(name.ToUpperInvariant());
+            var result = await this.GetElectronicProductAsync(
+                name.ToUpperInvariant(),
+                cancellationToken
+            );
             result.ElectronicProduct.editionNumber = edition;
             result.ElectronicProduct.updateNumber = update;
 
             // applyEdits must remain false: SQL owns unverified candidate versions until IC-ENC acceptance.
-            var dataset = await this.CreateDatasetAsync(result.ElectronicProduct, result.Filter, exportType, applyEdits: false);
+            var dataset = await this.CreateDatasetAsync(
+                result.ElectronicProduct,
+                result.Filter,
+                exportType,
+                applyEdits: false,
+                cancellationToken: cancellationToken
+            );
             ExportSnapshotVersioning.ApplyCompilerCompatibleVersion(dataset, edition);
             cancellationToken.ThrowIfCancellationRequested();
             return dataset;
@@ -690,7 +746,7 @@ namespace S100FC.ProductCatalogue
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            return await this.Dispatch(() => {
+            return await this.DispatchMeasured(() => {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 using var surface = this._geodatabase!.OpenDataset<FeatureClass>(
@@ -738,7 +794,7 @@ namespace S100FC.ProductCatalogue
                 }
 
                 return SelectExactElectronicProductVersion(datasetName, candidates);
-            });
+            }, "ReadElectronicProductVersion", datasetName, cancellationToken);
         }
 
         private static QueryFilter CreateElectronicProductVersionQueryFilter() => new() {
@@ -795,8 +851,12 @@ namespace S100FC.ProductCatalogue
 
         IEnumerator IEnumerable.GetEnumerator() => this._preferredElectronicProductsByName.Keys.GetEnumerator();
 
-        private async Task<(ElectronicProduct ElectronicProduct, SpatialQueryFilter Filter)> GetElectronicProductAsync(string name) {
-            return await this.Dispatch(() => {
+        private async Task<(ElectronicProduct ElectronicProduct, SpatialQueryFilter Filter)> GetElectronicProductAsync(
+            string name,
+            CancellationToken cancellationToken = default
+        ) {
+            return await this.DispatchMeasured(() => {
+                cancellationToken.ThrowIfCancellationRequested();
                 using var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
                 using var cursorS128 = surface.Search(new QueryFilter {
                     WhereClause = "upper(ps) = 'S-128' AND code = 'ElectronicProduct'",
@@ -805,6 +865,7 @@ namespace S100FC.ProductCatalogue
 
                 var matches = new List<(ElectronicProduct Product, ArcGIS.Core.Geometry.Polygon Shape)>();
                 while (cursorS128.MoveNext()) {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var row = cursorS128.Current;
                     if (row.IsNull("attributebindings") || row is not ArcGIS.Core.Data.Feature feature)
                         continue;
@@ -836,10 +897,16 @@ namespace S100FC.ProductCatalogue
                 };
 
                 return (electronicProduct, filter);
-            });
+            }, "ResolveExportSourceProduct", name, cancellationToken);
         }
 
-        private async Task<YAML.Dataset> CreateDatasetAsync(ElectronicProduct electronicProduct, SpatialQueryFilter filter, ExportTypes exportType, bool applyEdits = true) {
+        private async Task<YAML.Dataset> CreateDatasetAsync(
+            ElectronicProduct electronicProduct,
+            SpatialQueryFilter filter,
+            ExportTypes exportType,
+            bool applyEdits = true,
+            CancellationToken cancellationToken = default
+        ) {
             var timestamp = DateTime.UtcNow;
 
             var featureCatalogue = S100FC.Catalogues.FeatureCatalogue.Catalogues.Single(e => e.ProductID.Equals("S-101"));
@@ -871,9 +938,11 @@ namespace S100FC.ProductCatalogue
             var featureTypes = new List<YAML.Feature>();
             var featureTypesAdded = new HashSet<string>();
 
-            return await this.Dispatch(() => {
+            return await this.DispatchMeasured(() => {
+                cancellationToken.ThrowIfCancellationRequested();
                 using var connection = this.OpenGeodatabase(uri);
                 var topology = connection.BuildTopology(filter)!;
+                cancellationToken.ThrowIfCancellationRequested();
 
                 // InformationTypes
                 try {
@@ -881,6 +950,7 @@ namespace S100FC.ProductCatalogue
 
                     using var informationCursor = informationType.Search();
                     while (informationCursor.MoveNext()) {
+                        cancellationToken.ThrowIfCancellationRequested();
                         var current = informationCursor.Current;
 
                         // var name = $"{current.UID()}";
@@ -912,6 +982,9 @@ namespace S100FC.ProductCatalogue
                         }
                     }
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                    throw;
+                }
                 catch (Exception ex) {
                     Log.Information("Table: informationtype: {message} ", ex.Message);
                 }
@@ -922,6 +995,7 @@ namespace S100FC.ProductCatalogue
 
                     using var featureCursor = featureType.Search();
                     while (featureCursor.MoveNext()) {
+                        cancellationToken.ThrowIfCancellationRequested();
                         var current = featureCursor.Current;
 
                         var name = current["UID"].ToString()!;  //$"{current.UID()}";
@@ -953,12 +1027,16 @@ namespace S100FC.ProductCatalogue
                         }
                     }
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                    throw;
+                }
                 catch (Exception ex) {
                     Log.Information("Table: featuretype: {message} ", ex.Message);
                 }
 
                 //  Features
                 foreach (var def in connection.GetDefinitions<FeatureClassDefinition>()) {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var tableName = def.GetAliasName();
 
                     var supported = tableName switch {
@@ -979,6 +1057,7 @@ namespace S100FC.ProductCatalogue
                     using var fc = connection.OpenDataset<FeatureClass>(def.GetName());
                     using var featureCursor = fc.Search(filter, true);
                     while (featureCursor.MoveNext()) {
+                        cancellationToken.ThrowIfCancellationRequested();
                         var current = (ArcGIS.Core.Data.Feature)featureCursor.Current;
                         var name = current["UID"].ToString()!;  //$"{current.UID()}";
 
@@ -1010,6 +1089,7 @@ namespace S100FC.ProductCatalogue
                             topology.matrix.Surfaces);
 
                         foreach (var featureMapping in featureMappings) {
+                            cancellationToken.ThrowIfCancellationRequested();
                             var geometry = featureMapping.Geometry;
 
                             var code = Convert.ToString(current["code"]);
@@ -1088,6 +1168,7 @@ namespace S100FC.ProductCatalogue
 
 
                                                         while (attachmentCursor.MoveNext()) {
+                                                            cancellationToken.ThrowIfCancellationRequested();
                                                             var curr = attachmentCursor.Current;
 
                                                             var json = curr.FindField("json") != -1
@@ -1130,6 +1211,9 @@ namespace S100FC.ProductCatalogue
                                             }
                                         }
                                     }
+                                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                                        throw;
+                                    }
                                     catch (Exception ex) {
                                         Log.Warning(ex, "Error deserializing informationbindings for feature {name}: {message}", name, ex.Message);
                                     }
@@ -1171,6 +1255,9 @@ namespace S100FC.ProductCatalogue
                                             }
                                         }
 
+                                    }
+                                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                                        throw;
                                     }
                                     catch (Exception ex) {
                                         Log.Warning(ex, "Error deserializing featurebindings for feature {name}: {message}", name, ex.Message);
@@ -1234,6 +1321,7 @@ namespace S100FC.ProductCatalogue
 
                 //  Geometries
                 foreach (var (geometry, name) in geometries.OrderBy(e => e.geometry.GeometryType)) {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (geometry.GeometryType == GeometryType.Polygon) continue;    // Skip polygons after topology
                     dataset?.AddGeometry(geometry, name!);
                     Log.Verbose("Adding {geometryType} with ID: {name}", geometry.GeometryType, name);
@@ -1243,6 +1331,7 @@ namespace S100FC.ProductCatalogue
 
                 // Add Spatial Association Informationbindings. Must be handled after curves are added to dataset.
                 foreach (var sa in spatialAssociations) {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var curve = dataset?.Curves?.FirstOrDefault(e => e.Name == sa.Key);
 
                     curve?.AddAssociation(sa.Value);
@@ -1251,6 +1340,7 @@ namespace S100FC.ProductCatalogue
                 // Apply Edits
 
                 if (applyEdits) {
+                    cancellationToken.ThrowIfCancellationRequested();
                     using var surface = this._geodatabase.OpenDataset<FeatureClass>(this.QualifyTableName("surface"));
 
                     this._geodatabase.ApplyEdits(() => {
@@ -1270,8 +1360,9 @@ namespace S100FC.ProductCatalogue
 
                     AddElectronicProduct(electronicProduct);
                 }
+                cancellationToken.ThrowIfCancellationRequested();
                 return dataset!;
-            });
+            }, $"CreateDataset:{exportType}", electronicProduct.datasetName, cancellationToken);
         }
 
         public async Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign) {
@@ -1708,7 +1799,9 @@ namespace S100FC.ProductCatalogue
                 ).TotalMilliseconds;
 
                 Log.Information(
-                    "AOI ArcGIS profiling completed. CorrelationId: {CorrelationId}. Success: {Success}. ArcGisDispatchTotalMs: {ArcGisDispatchTotalMs}. ArcGisQueueWaitMs: {ArcGisQueueWaitMs}. ArcGisExecutionMs: {ArcGisExecutionMs}. ArcGisOpenAndSearchMs: {ArcGisOpenAndSearchMs}. ArcGisCursorMoveNextMs: {ArcGisCursorMoveNextMs}. ArcGisAttributeReadMs: {ArcGisAttributeReadMs}. ArcGisDatasetNameReadMs: {ArcGisDatasetNameReadMs}. ArcGisGeometryReadMs: {ArcGisGeometryReadMs}. ArcGisRectangleSerializationMs: {ArcGisRectangleSerializationMs}. DatasetNameFastPathCount: {DatasetNameFastPathCount}. DatasetNameUnflattenFallbackCount: {DatasetNameUnflattenFallbackCount}. RowsScanned: {RowsScanned}. RowsAccepted: {RowsAccepted}. RowsSkippedMissingAttributes: {RowsSkippedMissingAttributes}. RowsSkippedMissingDatasetName: {RowsSkippedMissingDatasetName}. RowsFailed: {RowsFailed}. GeometryCount: {GeometryCount}",
+                    "AOI ArcGIS profiling completed. ExecutionLane: {ExecutionLane}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. Success: {Success}. ArcGisDispatchTotalMs: {ArcGisDispatchTotalMs}. ArcGisQueueWaitMs: {ArcGisQueueWaitMs}. ArcGisExecutionMs: {ArcGisExecutionMs}. ArcGisOpenAndSearchMs: {ArcGisOpenAndSearchMs}. ArcGisCursorMoveNextMs: {ArcGisCursorMoveNextMs}. ArcGisAttributeReadMs: {ArcGisAttributeReadMs}. ArcGisDatasetNameReadMs: {ArcGisDatasetNameReadMs}. ArcGisGeometryReadMs: {ArcGisGeometryReadMs}. ArcGisRectangleSerializationMs: {ArcGisRectangleSerializationMs}. DatasetNameFastPathCount: {DatasetNameFastPathCount}. DatasetNameUnflattenFallbackCount: {DatasetNameUnflattenFallbackCount}. RowsScanned: {RowsScanned}. RowsAccepted: {RowsAccepted}. RowsSkippedMissingAttributes: {RowsSkippedMissingAttributes}. RowsSkippedMissingDatasetName: {RowsSkippedMissingDatasetName}. RowsFailed: {RowsFailed}. GeometryCount: {GeometryCount}",
+                    this._executionLane,
+                    "GetDatasetAOIs",
                     correlationId,
                     succeeded,
                     dispatchTotalMs,
@@ -1786,13 +1879,17 @@ namespace S100FC.ProductCatalogue
         private readonly BlockingCollection<Task> _tasks;
         private readonly Thread _processingThread;
 
-        public SingleThreadTaskScheduler() {
+        public SingleThreadTaskScheduler(string threadName = "SingleThreadTaskScheduler") {
+            if (string.IsNullOrWhiteSpace(threadName))
+                throw new ArgumentException("A scheduler thread name is required.", nameof(threadName));
+
             this._tasks = [];
 
             this._processingThread = new Thread(this.ProcessTasks) {
                 IsBackground = true, // Allow the application to exit even if this thread is running
-                Name = "SingleThreadTaskScheduler"
+                Name = threadName
             };
+            this._processingThread.SetApartmentState(ApartmentState.STA);
             this._processingThread.Start();
         }
 

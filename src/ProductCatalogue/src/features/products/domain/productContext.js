@@ -1,4 +1,4 @@
-import { EXPORT_TARGET } from "../../data/domain/exportTarget.js";
+import { createElectronicExportConfiguration } from "./electronicProductContract.js";
 import { serializeProductIdentity } from "../../dataSources/domain/productIdentity.js";
 import {
   LAYER_KINDS,
@@ -8,7 +8,7 @@ import {
 } from "../../map/config/layerDefinitions.js";
 
 // This adapter ID is intentionally not part of the data source registry. It only
-// names the temporary combined AOI contract while separate S-57/S-101 reads are unavailable.
+// supports explicit legacy layer consumers. Production AOIs use registry-owned specifications.
 export const COMPATIBILITY_PRODUCT_SOURCE_ID = "compatibility-aoi";
 
 export const PRODUCT_OPERATION_CAPABILITY = Object.freeze({
@@ -44,7 +44,7 @@ const COMPATIBILITY_CAPABILITIES = Object.freeze({
   [PRODUCT_OPERATION_CAPABILITY.IC_ENC_REPORTS]: true,
   [PRODUCT_OPERATION_CAPABILITY.INTERNAL_VALIDATION]: true,
   [PRODUCT_OPERATION_CAPABILITY.EXPORT_EDITION]: true,
-  [PRODUCT_OPERATION_CAPABILITY.EXPORT_UPDATE]: false,
+  [PRODUCT_OPERATION_CAPABILITY.EXPORT_UPDATE]: true,
   [PRODUCT_OPERATION_CAPABILITY.POPUP_EXPORT]: true,
   [PRODUCT_OPERATION_CAPABILITY.PRODUCT_COLLECTION]: true,
   [PRODUCT_OPERATION_CAPABILITY.PRODUCT_SEARCH]: true,
@@ -53,43 +53,9 @@ const COMPATIBILITY_CAPABILITIES = Object.freeze({
   [PRODUCT_OPERATION_CAPABILITY.BACKEND_PRODUCT_REFRESH]: true,
 });
 
-const COMPATIBILITY_EXPORT_CONFIGURATION = Object.freeze({
-  visible: true,
-  displayLabel: "S-101",
-  helpText: "Open S-101 export actions.",
-  leaves: Object.freeze([
-    Object.freeze({
-      id: "export-edition",
-      label: "Edition",
-      operationKind: "Edition",
-      capability: PRODUCT_OPERATION_CAPABILITY.EXPORT_EDITION,
-      visible: true,
-      implemented: true,
-      backendTarget: EXPORT_TARGET.S100,
-      handlerId: "export-new-edition",
-      helpText: "Export a new S-101 Edition for this product.",
-      availabilityReason: null,
-      confirmation: Object.freeze({
-        title: "Export edition for {datasetName}",
-        message: "Are you sure you want to export a new Edition for {datasetName}?",
-        confirmText: "Export edition",
-      }),
-    }),
-    Object.freeze({
-      id: "export-update",
-      label: "Update",
-      operationKind: "Update",
-      capability: PRODUCT_OPERATION_CAPABILITY.EXPORT_UPDATE,
-      visible: true,
-      implemented: false,
-      backendTarget: null,
-      handlerId: null,
-      helpText: "S-101 Update export is currently disabled.",
-      availabilityReason:
-        "Export Update is not available until the backend provides an implemented update contract.",
-    }),
-  ]),
-});
+const COMPATIBILITY_EXPORT_CONFIGURATION = deepFreeze(
+  createElectronicExportConfiguration("S101", "S-101")
+);
 
 const COMPATIBILITY_CONTENT_CONFIGURATION = deepFreeze({
   [PRODUCT_CONTENT_TYPE.HISTORY]: {

@@ -10,6 +10,7 @@ export const ATTRIBUTE_FILTER_SNAPSHOT_READ_STATUS = Object.freeze({
 export function readAttributeFilterSnapshot({
   storage = getDefaultStorage(),
   storageKey = ATTRIBUTE_FILTER_CONFIG.storageKey,
+  providerAliases = ATTRIBUTE_FILTER_CONFIG.providerAliases,
 } = {}) {
   if (!storage?.getItem) {
     return createReadResult(ATTRIBUTE_FILTER_SNAPSHOT_READ_STATUS.UNAVAILABLE);
@@ -31,7 +32,7 @@ export function readAttributeFilterSnapshot({
   try {
     return createReadResult(ATTRIBUTE_FILTER_SNAPSHOT_READ_STATUS.PARSED, {
       exists: true,
-      snapshot: JSON.parse(raw),
+      snapshot: migrateFilterProviders(JSON.parse(raw), providerAliases),
     });
   } catch (error) {
     // Preserve the fact that a value existed so the panel can remove the
@@ -86,4 +87,33 @@ function createReadResult(status, { exists = false, snapshot = null, error = nul
 
 function getDefaultStorage() {
   return globalThis.window?.localStorage ?? globalThis.localStorage ?? null;
+}
+
+function migrateFilterProviders(snapshot, aliases) {
+  if (!aliases || Object.keys(aliases).length === 0) return snapshot;
+  let sources;
+  if (snapshot?.version === 1 && Array.isArray(snapshot.layers)) {
+    if (snapshot.layers.some((entry) => !entry?.layerId || !Array.isArray(entry.fields)))
+      return snapshot;
+    sources = snapshot.layers.map(({ layerId, fields }) => ({ providerId: layerId, fields }));
+    const legacyId = ATTRIBUTE_FILTER_CONFIG.compatibilityProvider.legacySnapshotProviderId;
+    if (!sources.some((entry) => entry.providerId === legacyId)) {
+      sources.push({ providerId: legacyId, fields: [] });
+    }
+  } else if (snapshot?.version === 2 && Array.isArray(snapshot.sources)) {
+    sources = snapshot.sources;
+  } else {
+    return snapshot;
+  }
+  const explicitIds = new Set(sources.map((entry) => entry?.providerId));
+  return {
+    version: 2,
+    sources: sources
+      .filter((entry) => !aliases[entry?.providerId] || !explicitIds.has(aliases[entry.providerId]))
+      .map((entry) =>
+        entry && aliases[entry.providerId]
+          ? { ...entry, providerId: aliases[entry.providerId] }
+          : entry
+      ),
+  };
 }

@@ -1,3 +1,4 @@
+import { reconcileGraphicsLayers } from "../../map/core/reconcileGraphicsLayers.js";
 import { getLayer, registerLayer, unregisterLayer } from "../../map/core/layerRegistry.js";
 import { clearPopupExportUiState } from "../../map/popups/popupExportState.js";
 import { createDataSourcePopupTemplate } from "./createDataSourcePopup.js";
@@ -68,6 +69,22 @@ export function createDataSourceMapAdapter({
     }
 
     const previousLayers = sourceLayers.get(candidate.sourceId) ?? [];
+    const reconciliation = reconcileGraphicsLayers({
+      currentLayers: previousLayers,
+      candidateLayers: candidate.layers,
+    });
+    if (reconciliation.success) {
+      // Stable Graphics keep the existing popup and its public action DOM alive.
+      destroyLayers(candidate.layers);
+      candidate.committed = true;
+      return {
+        committed: true,
+        layers: previousLayers,
+        hoverReady: Promise.allSettled(
+          previousLayers.map((layer) => hoverManager?.registerLayer?.(layer))
+        ),
+      };
+    }
     const addedLayers = [];
 
     try {

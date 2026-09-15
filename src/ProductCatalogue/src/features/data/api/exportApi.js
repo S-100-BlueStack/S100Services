@@ -1,50 +1,31 @@
-import { EXPORT_TARGET } from "../domain/exportTarget.js";
 import { PRODUCT_JOB_OPERATION } from "../../products/domain/productJob.js";
 import { runProductJob } from "../../products/services/productJobService.js";
 import { startProductJob } from "./productJobApi.js";
 
-export async function exportNewEdition(datasetName) {
-  if (!datasetName) {
-    return createMissingDatasetNameResult();
-  }
+export function exportNewEdition(datasetName) {
+  return runExport(datasetName, "newedition", PRODUCT_JOB_OPERATION.EXPORT_EDITION);
+}
 
+export function exportNewUpdate(datasetName) {
+  return runExport(datasetName, "newupdate", PRODUCT_JOB_OPERATION.EXPORT_UPDATE);
+}
+
+export function exportRollback(datasetName) {
+  return runExport(datasetName, "cancel-export", PRODUCT_JOB_OPERATION.ROLLBACK);
+}
+
+function runExport(datasetName, action, operationType) {
   return runProductJob({
     datasetName,
-    operationType: PRODUCT_JOB_OPERATION.EXPORT_EDITION,
-    exportTarget: EXPORT_TARGET.S100,
-    label: "Exporting S-101 Edition",
-    startJob: () =>
-      startProductJob(buildExportRequestPath(datasetName, "newedition", EXPORT_TARGET.S100)),
+    operationType,
+    // The backend resolves the product specification from the exact catalogue dataset.
+    startJob: () => startProductJob(buildExportRequestPath(datasetName, action)),
   });
 }
 
-export async function exportRollback(datasetName) {
-  if (!datasetName) {
-    return createMissingDatasetNameResult();
+export function buildExportRequestPath(datasetName, action) {
+  if (!["newedition", "newupdate", "cancel-export"].includes(action)) {
+    throw new Error("Unsupported export operation.");
   }
-
-  return runProductJob({
-    datasetName,
-    operationType: PRODUCT_JOB_OPERATION.ROLLBACK,
-    label: "Canceling export",
-    startJob: () => startProductJob(buildExportRequestPath(datasetName, "rollback")),
-  });
-}
-
-export function buildExportRequestPath(datasetName, action, exportTarget = null) {
-  const path = `export/${encodeURIComponent(datasetName)}/${action}/jobs`;
-
-  if (!exportTarget) {
-    return path;
-  }
-
-  const query = new URLSearchParams({ exportTarget });
-  return `${path}?${query.toString()}`;
-}
-
-function createMissingDatasetNameResult() {
-  return {
-    success: false,
-    errorMessage: "Cannot export product without a datasetName.",
-  };
+  return `export/${encodeURIComponent(datasetName)}/${action}`;
 }

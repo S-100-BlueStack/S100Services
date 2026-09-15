@@ -1,4 +1,4 @@
-import { exportNewEdition } from "../../data/api/exportApi.js";
+import { exportNewEdition, exportNewUpdate } from "../../data/api/exportApi.js";
 import { EXPORT_TARGET } from "../../data/domain/exportTarget.js";
 import { productContextSupportsCapability } from "../../products/domain/productContext.js";
 import { EXPORT_TYPE, SUPPORTED_EXPORT_ACTION_ID } from "./popupExportContract.js";
@@ -13,6 +13,7 @@ const EXPORT_ACTION_ICON = Object.freeze({
 
 const EXPORT_HANDLERS = Object.freeze({
   "export-new-edition": exportNewEdition,
+  "export-new-update": exportNewUpdate,
 });
 
 const ALLOWED_VISIBLE_OPERATION_KINDS = new Set([EXPORT_TYPE.EDITION, EXPORT_TYPE.UPDATE]);

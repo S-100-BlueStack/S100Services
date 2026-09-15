@@ -26,6 +26,25 @@ export const statusColorConfig = {
   },
 };
 
+for (const [id, rgb] of Object.entries({
+  6: "120,120,180",
+  7: "210,60,60",
+  8: "190,155,35",
+  9: "55,130,210",
+  10: "135,95,190",
+  11: "40,155,130",
+  12: "45,140,80",
+  13: "35,125,65",
+  14: "130,130,130",
+  15: "220,45,45",
+})) {
+  statusColorConfig[id] = {
+    fill: `rgba(${rgb},0.35)`,
+    outline: `rgba(${rgb},0.9)`,
+    header: `rgba(${rgb},0.25)`,
+  };
+}
+
 export const highlightConfig = [
   {
     name: "hover-highlight",

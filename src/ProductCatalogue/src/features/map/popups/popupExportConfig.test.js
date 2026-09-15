@@ -56,17 +56,17 @@ test("compatibility AOI renders only Edition and Update leaves", () => {
   );
 });
 
-test("compatibility Edition separates S-101 presentation from the existing S100 backend target", () => {
+test("compatibility Edition separates S-101 presentation from the S101 job specification", () => {
   const context = createCompatibilityContext();
   const [edition] = createPopupExportActions(context);
 
   assert.equal(context.exportConfiguration.displayLabel, "S-101");
-  assert.equal(context.exportConfiguration.helpText, "Open S-101 export actions.");
+  assert.equal(context.exportConfiguration.helpText, "Create S-101 export candidate.");
   assert.equal(edition.label, "Edition");
   assert.equal(edition.displayLabel, "S-101");
   assert.equal(edition.presentationLabel, "S-101 Edition");
-  assert.equal(edition.helpText, "Export a new S-101 Edition for this product.");
-  assert.equal(edition.backendTarget, EXPORT_TARGET.S100);
+  assert.equal(edition.helpText, "Create S-101 Edition export candidate.");
+  assert.equal(edition.backendTarget, EXPORT_TARGET.S101);
   assert.equal(edition.operationKind, EXPORT_TYPE.EDITION);
   assert.equal(edition.implemented, true);
   assert.equal(edition.enabled, true);
@@ -74,17 +74,27 @@ test("compatibility Edition separates S-101 presentation from the existing S100 
   assert.equal(isSupportedExportAction({ ...edition, productContext: context }), true);
 });
 
-test("compatibility Update remains a disabled placeholder without backend target", () => {
+test("compatibility Update uses the implemented backend contract", () => {
   const [, update] = createPopupExportActions(createCompatibilityContext());
 
   assert.equal(update.operationKind, EXPORT_TYPE.UPDATE);
   assert.equal(update.presentationLabel, "S-101 Update");
-  assert.equal(update.helpText, "S-101 Update export is currently disabled.");
-  assert.equal(update.implemented, false);
-  assert.equal(update.enabled, false);
-  assert.equal(update.backendTarget, null);
-  assert.equal(update.handler, null);
-  assert.match(update.availabilityReason, /backend provides an implemented update contract/i);
+  assert.equal(update.helpText, "Create S-101 Update export candidate.");
+  assert.equal(update.implemented, true);
+  assert.equal(update.enabled, true);
+  assert.equal(update.backendTarget, EXPORT_TARGET.S101);
+  assert.equal(typeof update.handler, "function");
+  assert.equal(update.availabilityReason, null);
+});
+
+test("S-57 export help stays source-specific without exposing S-128 implementation details", () => {
+  const context = createMockContext("s57");
+  const [edition, update] = createPopupExportActions(context);
+
+  assert.equal(context.exportConfiguration.helpText, "Create S-57 export candidate.");
+  assert.equal(edition.helpText, "Create S-57 Edition export candidate.");
+  assert.equal(update.helpText, "Create S-57 Update export candidate.");
+  assert.equal(context.exportConfiguration.helpText.includes("S-128"), false);
 });
 
 test("Paper Charts keeps source-specific parent help and disabled Edition/Update placeholders", () => {

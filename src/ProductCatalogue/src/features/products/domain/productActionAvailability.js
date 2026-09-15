@@ -1,3 +1,4 @@
+import { findProductExportMetadataItem } from "./productExportTrack.js";
 import {
   PRODUCT_OPERATION_CAPABILITY,
   getProductContextCapabilityReason,
@@ -8,15 +9,9 @@ const MISSING_DATASET_NAME_REASON = "The selected feature does not have a datase
 const EXPORT_RUNNING_REASON = "Wait until the current export finishes.";
 const PRODUCT_OPERATION_RUNNING_REASON = "Wait until the current product operation finishes.";
 const SEND_CAPABILITY_UNAVAILABLE_REASON = "Send to IC-ENC availability could not be verified.";
-const EXPORT_STATE_REASON = "New Edition is only available when product status is Idle.";
+const EXPORT_STATE_REASON = "Export is unavailable in the current workflow state.";
 const ROLLBACK_STATE_REASON =
-  "Cancel Export is only available when product status is Exported or Frozen.";
-
-const PRODUCT_STATE_ID = Object.freeze({
-  IDLE: 1,
-  EXPORTED: 2,
-  FROZEN: 5,
-});
+  "Cancel Export requires an unverified candidate for the selected source.";
 
 export function createProductActionAvailability({
   attributes,
@@ -31,6 +26,8 @@ export function createProductActionAvailability({
   const hasDatasetName = Boolean(datasetName);
   const productIsFrozen = Boolean(frozen);
   const productState = getProductState(attributes);
+  const selectedExport = findSelectedProductExport(attributes, productContext);
+  const selectedExportState = getProductState({ status: selectedExport?.status });
   const mutationContext = {
     hasDatasetName,
     exportHasRunningAction,
@@ -47,7 +44,9 @@ export function createProductActionAvailability({
     freeze: capabilityAvailability(
       productContext,
       PRODUCT_OPERATION_CAPABILITY.FREEZE,
-      createMutationAvailability(mutationContext)
+      productState.id === 6 || productState.name === "intransit"
+        ? unavailable("A product in transit cannot be frozen.")
+        : createMutationAvailability(mutationContext)
     ),
     unfreeze: capabilityAvailability(
       productContext,
@@ -69,7 +68,7 @@ export function createProductActionAvailability({
       PRODUCT_OPERATION_CAPABILITY.CANCEL_EXPORT,
       createRollbackAvailability({
         ...mutationContext,
-        productState,
+        selectedExportState,
       })
     ),
     exportRoot: capabilityAvailability(
@@ -124,7 +123,7 @@ export function createProductExportAvailability({
   if (productIsFrozen) {
     return unavailable("Unfreeze the product before exporting.");
   }
-  if (productState.known && !isIdleState(productState)) {
+  if (!productState.known || !isExportableState(productState)) {
     return unavailable(EXPORT_STATE_REASON);
   }
 
@@ -185,19 +184,21 @@ function createSendAvailability({
   if (frozen) {
     return unavailable("Unfreeze the product before sending.");
   }
-  if (productState.known && !isExportedState(productState)) {
-    return unavailable("IC-ENC send simulation is only available when product status is Exported.");
+  if (!productState.known || !isReadyForDistributionState(productState)) {
+    return unavailable(
+      "IC-ENC send simulation is only available when product status is ReadyForDistribution."
+    );
   }
 
   return createSendToIcEncCapabilityAvailability(capability);
 }
 
-function createRollbackAvailability({ productState, ...mutationContext }) {
+function createRollbackAvailability({ selectedExportState, ...mutationContext }) {
   const mutationAvailability = createMutationAvailability(mutationContext);
   if (mutationAvailability.disabled) {
     return mutationAvailability;
   }
-  if (productState.known && !isRollbackState(productState)) {
+  if (!selectedExportState.known || !isCancelableCandidateState(selectedExportState)) {
     return unavailable(ROLLBACK_STATE_REASON);
   }
 
@@ -315,21 +316,40 @@ function getProductState(attributes) {
   };
 }
 
-function isIdleState(productState) {
-  return productState.id === PRODUCT_STATE_ID.IDLE || productState.name === "idle";
-}
-
-function isExportedState(productState) {
-  return productState.id === PRODUCT_STATE_ID.EXPORTED || productState.name === "exported";
-}
-
-function isRollbackState(productState) {
+function isExportableState(productState) {
   return (
-    productState.id === PRODUCT_STATE_ID.EXPORTED ||
-    productState.id === PRODUCT_STATE_ID.FROZEN ||
-    productState.name === "exported" ||
-    productState.name === "frozen"
+    [1, 2, 7, 8, 13, 14, 15].includes(productState.id) ||
+    ["idle", "exported", "rejected", "changesdetected", "published", "cancelled", "error"].includes(
+      productState.name
+    )
   );
+}
+
+function isReadyForDistributionState(productState) {
+  return productState.id === 11 || productState.name === "readyfordistribution";
+}
+
+function isCancelableCandidateState(productState) {
+  return (
+    [11, 15].includes(productState.id) ||
+    ["readyfordistribution", "error"].includes(productState.name)
+  );
+}
+
+function findSelectedProductExport(attributes, productContext) {
+  const configuredTargets = (productContext?.exportConfiguration?.leaves ?? [])
+    .map((leaf) => leaf?.backendTarget)
+    .filter(Boolean);
+
+  return findProductExportMetadataItem(attributes?.exportMetadata, [
+    ...configuredTargets,
+    productContext?.sourceLabel,
+    productContext?.sourceId,
+    productContext?.productType,
+    attributes?.sourceLabel,
+    attributes?.sourceId,
+    attributes?.productType,
+  ]);
 }
 
 function normalizeText(value) {

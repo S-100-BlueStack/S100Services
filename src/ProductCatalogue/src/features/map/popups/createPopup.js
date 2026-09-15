@@ -14,6 +14,7 @@ import { onPopupExportStateChanged } from "./popupExportState.js";
 import { onProductOperationStateChanged } from "../../products/state/productOperationState.js";
 import { watchActiveProductJobs } from "../../products/services/productJobService.js";
 import { registerPopupRefreshHandler } from "./popupRefreshBridge.js";
+import { createPopupProductMetadataColumns } from "./popupProductMetadata.js";
 
 const GENERIC_POPUP_EXCLUDED_FIELDS = new Set([
   "featureKey",
@@ -47,6 +48,7 @@ export function createPopup() {
         ...(graphic.attributes ?? {}),
       };
       let latestRefreshId = 0;
+      let disposed = false;
       const productContext = resolveProductContext({
         graphic,
         attributes: currentAttributes,
@@ -98,7 +100,7 @@ export function createPopup() {
 
         // Ignore stale refreshes. This prevents an older popup-open refresh from
         // overwriting a newer freeze/unfreeze refresh.
-        if (refreshId !== latestRefreshId) {
+        if (disposed || !container.isConnected || refreshId !== latestRefreshId) {
           return false;
         }
         if (!result.success) {
@@ -118,13 +120,6 @@ export function createPopup() {
         return true;
       }
 
-      backendSync = initializePopupBackendSynchronization({
-        productContext,
-        datasetName: popupDatasetName,
-        refresh: refreshAndRender,
-        watchActiveProductJobs,
-        registerPopupRefreshHandler,
-      });
       const unsubscribeFromExportState = onPopupExportStateChanged(({ datasetName }) => {
         rerenderWhenDatasetMatches(datasetName);
       });
@@ -136,14 +131,31 @@ export function createPopup() {
       cleanupWhenDisconnected(
         container,
         combineCleanups(
+          () => {
+            disposed = true;
+            latestRefreshId += 1;
+          },
           unsubscribeFromExportState,
           unsubscribeFromProductOperationState,
-          backendSync.stopWatchingActiveJobs,
-          backendSync.stopRefreshingPopup
-        )
+          () => backendSync.stopWatchingActiveJobs?.(),
+          () => backendSync.stopRefreshingPopup?.()
+        ),
+        () => {
+          backendSync = initializePopupBackendSynchronization({
+            productContext,
+            datasetName: popupDatasetName,
+            refresh: refreshAndRender,
+            watchActiveProductJobs,
+            registerPopupRefreshHandler,
+          });
+          if (backendSync.enabled) {
+            void refreshAndRender({ showFailureNotice: false });
+          }
+        }
       );
 
       function rerenderWhenDatasetMatches(datasetName) {
+        if (disposed || !container.isConnected) return;
         const currentDatasetName =
           productContext?.datasetName ??
           readDatasetName(currentAttributes) ??
@@ -156,13 +168,6 @@ export function createPopup() {
       }
 
       render();
-
-      // Initial popup freshness should be silent on failure. A restored popup can be
-      // opened while a full map refresh is still retrying, and the full refresh flow
-      // owns the user-facing failure notice in that case.
-      if (backendSync.enabled) {
-        void refreshAndRender({ showFailureNotice: false });
-      }
 
       return container;
     },
@@ -329,8 +334,16 @@ function isComplexValue(value) {
   return typeof value === "object" && value !== null;
 }
 
-function cleanupWhenDisconnected(element, cleanup) {
-  let hasBeenConnected = element.isConnected;
+function cleanupWhenDisconnected(element, cleanup, onConnected) {
+  let hasBeenConnected = false;
+  const handleConnection = () => {
+    if (!hasBeenConnected && element.isConnected) {
+      hasBeenConnected = true;
+      // ArcGIS may prepare content without showing it. Start backend work only
+      // for an attached session, and keep initial freshness failures silent.
+      onConnected?.();
+    }
+  };
   let cleanupHasRun = false;
 
   const runCleanup = () => {
@@ -344,7 +357,7 @@ function cleanupWhenDisconnected(element, cleanup) {
 
   const observer = new MutationObserver(() => {
     if (element.isConnected) {
-      hasBeenConnected = true;
+      handleConnection();
       return;
     }
 
@@ -363,11 +376,8 @@ function cleanupWhenDisconnected(element, cleanup) {
     subtree: true,
   });
 
-  requestAnimationFrame(() => {
-    if (element.isConnected) {
-      hasBeenConnected = true;
-    }
-  });
+  handleConnection();
+  requestAnimationFrame(handleConnection);
 }
 
 function combineCleanups(...cleanups) {
@@ -413,7 +423,7 @@ function readDatasetName(attributes) {
 }
 
 function createProductMetadataTable(attributes) {
-  const columns = createProductMetadataColumns(attributes);
+  const columns = createPopupProductMetadataColumns(attributes);
   if (columns.length === 0) {
     return null;
   }
@@ -433,49 +443,6 @@ function createProductMetadataTable(attributes) {
 
   container.appendChild(table);
   return container;
-}
-
-function createProductMetadataColumns(attributes) {
-  const columns = [
-    {
-      key: "main",
-      label: "S-101",
-      item: createMainProductMetadataItem(attributes),
-    },
-  ];
-
-  const exportMetadata = attributes?.exportMetadata;
-  for (const standard of exportMetadata?.standards ?? []) {
-    const item = exportMetadata.byStandard?.[standard];
-    if (!item) {
-      continue;
-    }
-
-    columns.push({
-      key: `export:${standard}`,
-      label: createExportColumnLabel(item.label ?? standard, columns),
-      item,
-    });
-  }
-
-  return columns;
-}
-
-function createMainProductMetadataItem(attributes) {
-  return {
-    edition: readAttribute(attributes, ["edition", "Edition"]),
-    update: readAttribute(attributes, ["update", "Update"]),
-    status: readAttribute(attributes, ["status", "Status"]),
-    date: readAttribute(attributes, ["issueDate", "IssueDate"]),
-    errorMessage: readAttribute(attributes, ["errorMessage", "ErrorMessage"]),
-    validationArtifacts: [],
-  };
-}
-
-function createExportColumnLabel(standard, existingColumns) {
-  const label = String(standard ?? "").trim() || "Export";
-  const labelExists = existingColumns.some((column) => column.label === label);
-  return labelExists ? `${label} export` : label;
 }
 
 function createProductMetadataRows(columns) {

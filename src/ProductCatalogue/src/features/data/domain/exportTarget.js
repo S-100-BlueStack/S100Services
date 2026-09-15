@@ -1,5 +1,4 @@
 export const EXPORT_TARGET = Object.freeze({
-  ALL: "All",
-  S100: "S100",
+  S101: "S101",
   S57: "S57",
 });

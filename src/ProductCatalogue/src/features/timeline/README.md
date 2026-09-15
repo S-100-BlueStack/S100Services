@@ -245,7 +245,8 @@ The one-argument call is retained for compatibility/backend consumers such as Da
 resolve through the workspace catalog. Source-aware Main map, Analyze, and Review flows resolve Product
 identity before the History call and pass the resulting `ProductContext` explicitly.
 
-An explicit compatibility ProductContext uses the established compatibility History endpoint. Paper
+A resolved electronic-history ProductContext (S57/S101) or explicit compatibility context uses the
+established History endpoint. Requested dataset identity must match the context. Paper
 Charts and S-102 return `endpointAvailable: false` plus their source-specific unavailable reason and make
 no compatibility History request. An explicitly supplied `null`, invalid, unknown, or unresolved source
 context fails closed; it must never be treated as permission to fall back to compatibility History.
@@ -253,5 +254,5 @@ context fails closed; it must never be treated as permission to fall back to com
 Unsupported History is an `unavailable` source/content state, not a failed request. Actual compatibility
 backend failures remain `failed`. Main map History carries the selected Graphic's validated ProductContext
 through the History event, so a source switch cannot reinterpret stale mock content as compatibility
-content. Source deactivation closes an affected non-pinned mock History panel, while unrelated pinned
+content. Source deactivation closes an affected non-pinned source History panel, while unrelated pinned
 compatibility History remains independent.

@@ -45,6 +45,7 @@ export function createLoaderProgressSession({
     markDataReceived,
     startRendering,
     handleRenderProgress,
+    updateProgressStage,
     complete,
     fail,
     cleanup,
@@ -139,6 +140,17 @@ export function createLoaderProgressSession({
     if (shouldShowTechnicalLoadingStages() && stage && layerTitle) {
       setSessionText(`${stage} (${layerTitle})...`);
     }
+  }
+
+  function updateProgressStage({ progress, text, label = null } = {}) {
+    stopRetryCountdown();
+    stopSimulatedProgress();
+    stopSessionTextRotation();
+
+    if (text) {
+      setSessionText(text);
+    }
+    setSessionProgress(progress, { label });
   }
 
   function complete({ text = "Ready", hide = true } = {}) {

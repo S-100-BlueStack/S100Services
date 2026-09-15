@@ -11,12 +11,6 @@ export const EXPORT_TYPE = Object.freeze({
 
 export const SUPPORTED_EXPORT_ACTION_ID = "export-edition";
 
-const SUPPORTED_COMPATIBILITY_EXPORT = Object.freeze({
-  actionId: SUPPORTED_EXPORT_ACTION_ID,
-  target: EXPORT_TARGET.S100,
-  exportType: EXPORT_TYPE.EDITION,
-});
-
 export function isSupportedExportAction({
   id,
   actionId,
@@ -34,17 +28,31 @@ export function isSupportedExportAction({
   const resolvedTarget = backendTarget ?? target;
   const resolvedOperationKind = operationKind ?? exportType;
   const resolvedHandler = handler ?? request;
-  const contextAllowsEdition =
-    productContext === undefined ||
-    productContextSupportsCapability(productContext, PRODUCT_OPERATION_CAPABILITY.EXPORT_EDITION);
+  const capability =
+    resolvedOperationKind === EXPORT_TYPE.UPDATE
+      ? PRODUCT_OPERATION_CAPABILITY.EXPORT_UPDATE
+      : PRODUCT_OPERATION_CAPABILITY.EXPORT_EDITION;
+  const contextAllowsOperation =
+    productContext === undefined || productContextSupportsCapability(productContext, capability);
+  const configurationAllowsOperation =
+    productContext === undefined
+      ? resolvedTarget === EXPORT_TARGET.S101
+      : productContext?.exportConfiguration?.leaves?.some(
+          (leaf) =>
+            leaf.id === resolvedActionId &&
+            leaf.backendTarget === resolvedTarget &&
+            leaf.operationKind === resolvedOperationKind &&
+            leaf.implemented
+        );
 
   return (
-    contextAllowsEdition &&
-    resolvedActionId === SUPPORTED_COMPATIBILITY_EXPORT.actionId &&
+    contextAllowsOperation &&
+    configurationAllowsOperation &&
+    resolvedActionId === `export-${String(resolvedOperationKind).toLowerCase()}` &&
     implemented === true &&
     enabled !== false &&
-    resolvedTarget === SUPPORTED_COMPATIBILITY_EXPORT.target &&
-    resolvedOperationKind === SUPPORTED_COMPATIBILITY_EXPORT.exportType &&
+    [EXPORT_TARGET.S57, EXPORT_TARGET.S101].includes(resolvedTarget) &&
+    Object.values(EXPORT_TYPE).includes(resolvedOperationKind) &&
     typeof resolvedHandler === "function"
   );
 }

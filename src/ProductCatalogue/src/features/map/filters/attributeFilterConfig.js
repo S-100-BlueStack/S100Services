@@ -25,6 +25,8 @@ export const ATTRIBUTE_FILTER_FIELD_DEFINITIONS = Object.freeze([
 export const ATTRIBUTE_FILTER_CONFIG = Object.freeze({
   storageKey: "pc.attributeFilters.v3",
   stateVersion: 2,
+  // Baseline fetchAOI() read S101 exclusively; this is a one-time provider migration.
+  providerAliases: Object.freeze({ [PRODUCT_CORRECTIONS_LAYER_ID]: "s101" }),
   compatibilityProvider: Object.freeze({
     // Version 1 persisted only this compatibility layer/provider identity.
     legacySnapshotProviderId: PRODUCT_CORRECTIONS_LAYER_ID,

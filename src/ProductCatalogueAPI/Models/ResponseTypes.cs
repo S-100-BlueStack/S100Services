@@ -30,6 +30,8 @@ namespace ProductCatalogueAPI.Models
             [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public string? DatasetName { get; set; }
             [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public string? ProductSpecification { get; set; }
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public int? DisplayScale { get; set; }
             [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public int? UsageBand { get; set; }

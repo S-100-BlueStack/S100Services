@@ -113,6 +113,36 @@ namespace TestProductCatalogueAPI
         }
 
         [Fact]
+        public async Task GlobalAoiActionCachesGeometryLookupPerProductSpecification() {
+            const string datasetName = "101DK0000001E";
+            var electronicProductManager = new FakeElectronicProductManager(
+                new Dictionary<string, string> { [datasetName] = "{\"rings\":[]}" },
+                new Dictionary<string, ElectronicProduct> { [datasetName] = CreateElectronicProduct(datasetName, 90_000, 3) }
+            );
+            var logger = new RecordingLogger<ElectronicProductsController>();
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(
+                logger,
+                cache,
+                new FakeProductManager(electronicProductManager),
+                new RecordingProductRepository(new Dictionary<string, ProductRecord?>()),
+                new InMemoryProductRepository()
+            ) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+
+            await controller.GetAllElectronicProductsAOI();
+            await controller.GetAllElectronicProductsAOI();
+
+            Assert.Equal(1, electronicProductManager.BulkAoiCallCount);
+            var cacheStates = logger.Entries
+                .Where(entry => entry.Properties.ContainsKey("CacheState"))
+                .Select(entry => Assert.IsType<string>(entry.Properties["CacheState"]))
+                .ToArray();
+            Assert.Equal(new[] { "Miss", "Hit" }, cacheStates);
+        }
+
+        [Fact]
         public async Task GlobalAoiActionReturnsOnlyTheRequestedProductSpecification() {
             const string datasetName = "DK3AA01";
             var electronicProductManager = new FakeElectronicProductManager(
@@ -141,33 +171,82 @@ namespace TestProductCatalogueAPI
         }
 
         [Fact]
-        public async Task GlobalAoiActionCachesGeometryLookupPerProductSpecification() {
-            const string datasetName = "101DK0000001E";
+        public async Task TargetedAoiActionReturnsSourceAwareProductWithoutGlobalAoiScan() {
+            const string datasetName = "DK3AA01";
+            const string boundary = "{\"rings\":[[[10,55],[11,55],[11,56],[10,56],[10,55]]],\"spatialReference\":{\"wkid\":4326}}";
             var electronicProductManager = new FakeElectronicProductManager(
-                new Dictionary<string, string> { [datasetName] = "{\"rings\":[]}" },
-                new Dictionary<string, ElectronicProduct> { [datasetName] = CreateElectronicProduct(datasetName, 90_000, 3) }
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [datasetName] = boundary },
+                new Dictionary<string, ElectronicProduct>(StringComparer.OrdinalIgnoreCase) {
+                    [datasetName] = CreateElectronicProduct(datasetName, 90_000, 3, "S-57")
+                }
             );
+            var repository = new RecordingProductRepository(new Dictionary<string, ProductRecord?>(StringComparer.OrdinalIgnoreCase) {
+                [datasetName] = new ProductRecord {
+                    Name = datasetName,
+                    ProductSpecification = "S57",
+                    State = ProductState.Error,
+                    ErrorMessage = "Validation failed."
+                }
+            });
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(
+                new RecordingLogger<ElectronicProductsController>(),
+                cache,
+                new FakeProductManager(electronicProductManager),
+                repository,
+                new InMemoryProductRepository()
+            );
+            controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+
+            var result = await controller.GetElectronicProductAoi(datasetName);
+
+            var response = Assert.IsType<ApiResponse<AOIResponse>>(Assert.IsType<OkObjectResult>(result).Value);
+            Assert.True(response.Success);
+            Assert.Equal(1, response.TotalHits);
+            Assert.Equal(boundary, response.Data?.Geometry);
+            Assert.Equal(datasetName, response.Data?.Attributes?.DatasetName);
+            Assert.Equal("S57", response.Data?.Attributes?.ProductSpecification);
+            Assert.Equal(ProductStatus.Error, response.Data?.Attributes?.Status);
+            Assert.Equal("Validation failed.", response.Data?.Attributes?.ErrorMessage);
+            Assert.Equal(0, electronicProductManager.BulkAoiCallCount);
+            Assert.Equal(1, electronicProductManager.TargetedBoundaryCallCount);
+            Assert.Equal(1, repository.BatchCallCount);
+            Assert.Equal(ProductSpecification.S57, repository.RequestedProductSpecification);
+            Assert.Equal(new[] { datasetName }, repository.RequestedNames);
+        }
+
+        [Fact]
+        public async Task TargetedAoiActionFailsClosedWhenDatasetIdentityIsAmbiguous() {
+            const string datasetName = "AMBIGUOUS";
+            var electronicProductManager = new FakeElectronicProductManager(
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                new Dictionary<string, ElectronicProduct>(StringComparer.OrdinalIgnoreCase),
+                new ProductMappingIntegrityException("Dataset identity is ambiguous.")
+            );
+            var repository = new RecordingProductRepository(new Dictionary<string, ProductRecord?>());
             var logger = new RecordingLogger<ElectronicProductsController>();
             using var cache = new MemoryCache(new MemoryCacheOptions());
             var controller = new ElectronicProductsController(
                 logger,
                 cache,
                 new FakeProductManager(electronicProductManager),
-                new RecordingProductRepository(new Dictionary<string, ProductRecord?>()),
+                repository,
                 new InMemoryProductRepository()
-            ) {
-                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
-            };
+            );
+            controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
 
-            await controller.GetAllElectronicProductsAOI();
-            await controller.GetAllElectronicProductsAOI();
+            var result = await controller.GetElectronicProductAoi(datasetName);
 
-            Assert.Equal(1, electronicProductManager.AoiCallCount);
-            var cacheStates = logger.Entries
-                .Where(entry => entry.Properties.ContainsKey("CacheState"))
-                .Select(entry => Assert.IsType<string>(entry.Properties["CacheState"]))
-                .ToArray();
-            Assert.Equal(new[] { "Miss", "Hit" }, cacheStates);
+            var response = Assert.IsType<ApiResponse<AOIResponse>>(Assert.IsType<ConflictObjectResult>(result).Value);
+            Assert.False(response.Success);
+            Assert.Equal("The electronic product identity is ambiguous or invalid.", response.Message);
+            Assert.Equal(0, electronicProductManager.BulkAoiCallCount);
+            Assert.Equal(0, electronicProductManager.TargetedBoundaryCallCount);
+            Assert.Equal(0, repository.BatchCallCount);
+            Assert.Contains(
+                logger.Entries,
+                entry => entry.Level == LogLevel.Error && entry.Message.Contains("identity resolution failed", StringComparison.OrdinalIgnoreCase)
+            );
         }
 
         [Theory]
@@ -249,6 +328,18 @@ namespace TestProductCatalogueAPI
             Assert.Equal(expectedCorrelationId, observedCorrelationId);
         }
 
+        [Fact]
+        public async Task SingleThreadTaskSchedulerUsesStaForArcGisOwnership() {
+            using var scheduler = new SingleThreadTaskScheduler();
+            var taskFactory = new TaskFactory(scheduler);
+
+            var apartmentState = await taskFactory.StartNew(
+                () => Thread.CurrentThread.GetApartmentState()
+            );
+
+            Assert.Equal(ApartmentState.STA, apartmentState);
+        }
+
         private static ElectronicProduct CreateElectronicProduct(
             string datasetName,
             int optimumDisplayScale,
@@ -277,12 +368,14 @@ namespace TestProductCatalogueAPI
 
         private sealed class FakeElectronicProductManager(
             Dictionary<string, string> aois,
-            Dictionary<string, ElectronicProduct> products
+            Dictionary<string, ElectronicProduct> products,
+            ProductMappingIntegrityException? resolveExportProductError = null
         ) : IElectronicProductManager
         {
             public IReadOnlyDictionary<string, string> Aois { get; } = aois;
+            public int BulkAoiCallCount { get; private set; }
+            public int TargetedBoundaryCallCount { get; private set; }
             public string OutputFolder => string.Empty;
-            public int AoiCallCount { get; private set; }
 
             public ElectronicProduct? ElectronicProduct(string name) {
                 return products.GetValueOrDefault(name);
@@ -294,6 +387,16 @@ namespace TestProductCatalogueAPI
                 var actual = product?.productSpecification?.name?.Replace("-", string.Empty, StringComparison.OrdinalIgnoreCase);
                 return string.Equals(requested, actual, StringComparison.OrdinalIgnoreCase) ? product : null;
             }
+
+            public ElectronicProduct? ResolveExportProduct(string name) {
+                if (resolveExportProductError is not null)
+                    throw resolveExportProductError;
+
+                return products.GetValueOrDefault(name);
+            }
+
+            public ElectronicProduct? ResolveElectronicProduct(string name, string productSpecification) =>
+                ElectronicProduct(name, productSpecification);
 
             public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(
                 string datasetName,
@@ -311,11 +414,12 @@ namespace TestProductCatalogueAPI
             }
 
             public Task<Dictionary<string, string>> GetDatasetAOIs() {
+                BulkAoiCallCount++;
                 return Task.FromResult(new Dictionary<string, string>(aois, StringComparer.OrdinalIgnoreCase));
             }
 
             public Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification) {
-                AoiCallCount++;
+                BulkAoiCallCount++;
                 return Task.FromResult(new Dictionary<string, string>(aois, StringComparer.OrdinalIgnoreCase));
             }
 
@@ -351,7 +455,12 @@ namespace TestProductCatalogueAPI
             public Task<S100FC.YAML.Dataset> ReissueAsync(string name) => throw new NotSupportedException();
             public Task<S100FC.YAML.Dataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default) => throw new NotSupportedException();
             public Task<bool> IsDirtyAsync(string name) => throw new NotSupportedException();
-            public Task<string> GetDatasetBoundary(string name) => throw new NotSupportedException();
+            public Task<string> GetDatasetBoundary(string name) {
+                TargetedBoundaryCallCount++;
+                if (!aois.TryGetValue(name, out var boundary))
+                    throw new InvalidOperationException("No dataset rows found");
+                return Task.FromResult(boundary);
+            }
             public Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name) => throw new NotSupportedException();
             public Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc) => throw new NotSupportedException();
             public Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition) => throw new NotSupportedException();

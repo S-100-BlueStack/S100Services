@@ -3,7 +3,7 @@ import {
   getRuntimeSelectableDataSources,
 } from "../config/dataSourceRegistry.js";
 
-export const DATA_SOURCE_STORAGE_SCHEMA_VERSION = 1;
+export const DATA_SOURCE_STORAGE_SCHEMA_VERSION = 2;
 export const DATA_SOURCE_STORAGE_KEY = "productCatalogue.dataSources.v1";
 
 export function createDataSourcePersistence({
@@ -35,53 +35,102 @@ export function readDataSourceSelection({
 }) {
   const runtimeSelectableSources = getRuntimeSelectableDataSources(registry);
   const hasRuntimeSelectableSources = runtimeSelectableSources.length > 0;
+  const persistableIds = getPersistableSourceIds(registry);
+  const hasPersistableRuntimeSelectableSources = runtimeSelectableSources.some((source) =>
+    persistableIds.has(source.id)
+  );
   const defaults = getDefaultEnabledSourceIds(registry);
   let serialized;
 
   try {
     serialized = storage?.getItem?.(storageKey) ?? null;
   } catch {
-    return createFallbackResult("storage-error", defaults, hasRuntimeSelectableSources);
+    return createFallbackResult(
+      "storage-error",
+      defaults,
+      hasRuntimeSelectableSources,
+      hasPersistableRuntimeSelectableSources
+    );
   }
 
   if (serialized === null) {
-    return createFallbackResult("missing", defaults, hasRuntimeSelectableSources);
+    return createFallbackResult(
+      "missing",
+      defaults,
+      hasRuntimeSelectableSources,
+      hasPersistableRuntimeSelectableSources
+    );
   }
 
   let parsed;
   try {
     parsed = JSON.parse(serialized);
   } catch {
-    return createFallbackResult("invalid-json", defaults, hasRuntimeSelectableSources);
+    return createFallbackResult(
+      "invalid-json",
+      defaults,
+      hasRuntimeSelectableSources,
+      hasPersistableRuntimeSelectableSources
+    );
   }
 
   if (!parsed || typeof parsed !== "object") {
-    return createFallbackResult("invalid-shape", defaults, hasRuntimeSelectableSources);
+    return createFallbackResult(
+      "invalid-shape",
+      defaults,
+      hasRuntimeSelectableSources,
+      hasPersistableRuntimeSelectableSources
+    );
   }
 
-  if (parsed.schemaVersion !== DATA_SOURCE_STORAGE_SCHEMA_VERSION) {
-    return createFallbackResult("unsupported-version", defaults, hasRuntimeSelectableSources);
+  if (![1, DATA_SOURCE_STORAGE_SCHEMA_VERSION].includes(parsed.schemaVersion)) {
+    return createFallbackResult(
+      "unsupported-version",
+      defaults,
+      hasRuntimeSelectableSources,
+      hasPersistableRuntimeSelectableSources
+    );
   }
 
   if (parsed.initialized !== true || !Array.isArray(parsed.enabledSourceIds)) {
-    return createFallbackResult("invalid-shape", defaults, hasRuntimeSelectableSources);
+    return createFallbackResult(
+      "invalid-shape",
+      defaults,
+      hasRuntimeSelectableSources,
+      hasPersistableRuntimeSelectableSources
+    );
   }
 
   const selectableIds = new Set(runtimeSelectableSources.map((source) => source.id));
-  const knownIds = new Set(registry.definitions.map((source) => source.id));
   const normalizedPersistedIds = normalizeIds(parsed.enabledSourceIds);
-  const knownPersistedIds = normalizedPersistedIds.filter((id) => knownIds.has(id));
-  const enabledSourceIds = knownPersistedIds.filter((id) => selectableIds.has(id));
-  const preservedUnavailableSourceIds = knownPersistedIds.filter((id) => !selectableIds.has(id));
-  const hasInvalidOrUnknownIds =
+  const persistablePersistedIds = normalizedPersistedIds.filter((id) => persistableIds.has(id));
+  const enabledSourceIds = persistablePersistedIds.filter((id) => selectableIds.has(id));
+  if (parsed.schemaVersion === 1) {
+    for (const source of runtimeSelectableSources) {
+      if (
+        source.persistence?.persistSelection !== false &&
+        source.persistence?.enabledInSchema1 &&
+        !enabledSourceIds.includes(source.id)
+      ) {
+        enabledSourceIds.push(source.id);
+      }
+    }
+  }
+
+  const preservedUnavailableSourceIds = persistablePersistedIds.filter(
+    (id) => !selectableIds.has(id)
+  );
+  const hasInvalidUnknownOrRetiredIds =
     normalizedPersistedIds.length !== parsed.enabledSourceIds.length ||
-    knownPersistedIds.length !== normalizedPersistedIds.length;
+    persistablePersistedIds.length !== normalizedPersistedIds.length;
 
   return {
     status: "valid",
     enabledSourceIds,
     preservedUnavailableSourceIds,
-    shouldPersist: hasRuntimeSelectableSources && hasInvalidOrUnknownIds,
+    shouldPersist:
+      hasInvalidUnknownOrRetiredIds ||
+      (hasPersistableRuntimeSelectableSources && parsed.schemaVersion === 1),
     isFirstVisit: false,
     hasRuntimeSelectableSources,
   };
@@ -94,30 +143,34 @@ export function writeDataSourceSelection({
   enabledSourceIds,
 }) {
   const runtimeSelectableSources = getRuntimeSelectableDataSources(registry);
+  const persistableIds = getPersistableSourceIds(registry);
+  const selectableIds = new Set(runtimeSelectableSources.map((source) => source.id));
+  const hasPersistableRuntimeSelectableSources = runtimeSelectableSources.some((source) =>
+    persistableIds.has(source.id)
+  );
+  const persistedSelection = readPersistedSelection({ storage, storageKey });
 
-  // No persisted selection is created or rewritten when the deployment offers
-  // no choices. This keeps a future deployment with real loaders eligible for
-  // first-visit defaults and preserves prior selection intent during outages.
-  if (runtimeSelectableSources.length === 0) {
+  // Do not create initialized storage when the deployment has no persistable
+  // choices. Existing state may still be rewritten to remove retired/unknown
+  // source IDs while preserving intent for known unavailable sources.
+  if (!hasPersistableRuntimeSelectableSources && !persistedSelection) {
     return true;
   }
 
-  const selectableIds = new Set(runtimeSelectableSources.map((source) => source.id));
   const requestedEnabledIds = new Set(
-    normalizeIds(enabledSourceIds).filter((id) => selectableIds.has(id))
+    normalizeIds(enabledSourceIds).filter((id) => selectableIds.has(id) && persistableIds.has(id))
   );
   const preservedUnavailableIds = new Set(
-    readPersistedKnownUnavailableSourceIds({
-      storage,
-      storageKey,
-      registry,
-      selectableIds,
-    })
+    normalizeIds(persistedSelection?.enabledSourceIds).filter(
+      (id) => persistableIds.has(id) && !selectableIds.has(id)
+    )
   );
   const normalizedEnabledIds = registry.definitions
     .map((source) => source.id)
     .filter(
-      (sourceId) => requestedEnabledIds.has(sourceId) || preservedUnavailableIds.has(sourceId)
+      (sourceId) =>
+        persistableIds.has(sourceId) &&
+        (requestedEnabledIds.has(sourceId) || preservedUnavailableIds.has(sourceId))
     );
   const payload = {
     schemaVersion: DATA_SOURCE_STORAGE_SCHEMA_VERSION,
@@ -133,41 +186,51 @@ export function writeDataSourceSelection({
   }
 }
 
-function readPersistedKnownUnavailableSourceIds({ storage, storageKey, registry, selectableIds }) {
+function readPersistedSelection({ storage, storageKey }) {
   let parsed;
 
   try {
     const serialized = storage?.getItem?.(storageKey) ?? null;
     if (serialized === null) {
-      return [];
+      return null;
     }
     parsed = JSON.parse(serialized);
   } catch {
-    return [];
+    return null;
   }
 
   if (
     !parsed ||
     typeof parsed !== "object" ||
-    parsed.schemaVersion !== DATA_SOURCE_STORAGE_SCHEMA_VERSION ||
+    ![1, DATA_SOURCE_STORAGE_SCHEMA_VERSION].includes(parsed.schemaVersion) ||
     parsed.initialized !== true ||
     !Array.isArray(parsed.enabledSourceIds)
   ) {
-    return [];
+    return null;
   }
 
-  const knownIds = new Set(registry.definitions.map((source) => source.id));
-  return normalizeIds(parsed.enabledSourceIds).filter(
-    (id) => knownIds.has(id) && !selectableIds.has(id)
+  return parsed;
+}
+
+function getPersistableSourceIds(registry) {
+  return new Set(
+    registry.definitions
+      .filter((source) => source.persistence?.persistSelection !== false)
+      .map((source) => source.id)
   );
 }
 
-function createFallbackResult(status, enabledSourceIds, hasRuntimeSelectableSources) {
+function createFallbackResult(
+  status,
+  enabledSourceIds,
+  hasRuntimeSelectableSources,
+  hasPersistableRuntimeSelectableSources
+) {
   return {
     status,
     enabledSourceIds: [...enabledSourceIds],
     preservedUnavailableSourceIds: [],
-    shouldPersist: hasRuntimeSelectableSources,
+    shouldPersist: hasPersistableRuntimeSelectableSources,
     isFirstVisit: status === "missing",
     hasRuntimeSelectableSources,
   };

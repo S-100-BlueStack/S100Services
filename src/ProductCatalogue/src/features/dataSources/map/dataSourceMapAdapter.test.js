@@ -220,3 +220,48 @@ test("candidate validation rejects missing or inconsistent source identity", asy
   );
   assert.equal(map.layers.length, 0);
 });
+
+test("compatible source refresh retains the layer and selected Graphic identity", async () => {
+  const map = createMap();
+  let status = 8;
+  const adapter = createDataSourceMapAdapter({
+    map,
+    layerRegistry: createLayerRegistry(),
+    createLayer: async (_stagingMap, config) => {
+      const layer = createFakeLayer(config);
+      const graphic = layer.graphics[0];
+      graphic.attributes.featureKey = graphic.attributes.productIdentityKey;
+      graphic.attributes.status = status;
+      Object.assign(layer, {
+        title: config.title,
+        layerType: "graphics",
+        appLayerId: config.id,
+        appLayerKind: config.layerKind,
+        appLayerCapabilities: config.capabilities,
+        _index: new Map([[graphic.attributes.featureKey, graphic]]),
+      });
+      return layer;
+    },
+  });
+  const first = await adapter.prepareSource({
+    source,
+    normalized: createNormalized(source),
+    generation: 1,
+  });
+  adapter.commitSource(first, { isCurrent: () => true });
+  const layer = map.layers[0];
+  const selected = layer.graphics[0];
+  status = 11;
+  const second = await adapter.prepareSource({
+    source,
+    normalized: createNormalized(source),
+    generation: 2,
+  });
+  const stagedLayer = second.layers[0];
+  adapter.commitSource(second, { isCurrent: () => true });
+  assert.equal(map.layers[0], layer);
+  assert.equal(layer.graphics[0], selected);
+  assert.equal(selected.attributes.status, 11);
+  assert.equal(stagedLayer.destroyed, true);
+  assert.equal(layer.destroyed, false);
+});

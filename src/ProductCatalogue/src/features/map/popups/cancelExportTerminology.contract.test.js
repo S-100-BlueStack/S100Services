@@ -8,7 +8,7 @@ async function readSource(path) {
   return readFile(new URL(path, projectRoot), "utf8");
 }
 
-test("Cancel Export presentation preserves legacy rollback contracts", async () => {
+test("Cancel Export presentation uses the normalized CancelExport wire contract", async () => {
   const [
     actionConfig,
     productActions,
@@ -44,15 +44,15 @@ test("Cancel Export presentation preserves legacy rollback contracts", async () 
   assert.match(productActions, /Network error while canceling export for \${datasetName}/);
   assert.match(productActions, /Failed to cancel export for \${datasetName}/);
   assert.match(productActions, /Unexpected error while canceling export for \${datasetName}/);
-  assert.match(
-    actionAvailability,
-    /Cancel Export is only available when product status is Exported or Frozen\./
-  );
+  assert.match(actionAvailability, /Cancel Export requires an unverified candidate/);
 
-  assert.match(exportApi, /export async function exportRollback\(datasetName\)/);
-  assert.match(exportApi, /operationType: PRODUCT_JOB_OPERATION\.ROLLBACK/);
-  assert.match(exportApi, /buildExportRequestPath\(datasetName, "rollback"\)/);
-  assert.match(productJob, /ROLLBACK: "Rollback"/);
+  assert.match(exportApi, /export function exportRollback\(datasetName\)/);
+  assert.match(exportApi, /PRODUCT_JOB_OPERATION\.ROLLBACK/);
+  assert.match(
+    exportApi,
+    /runExport\(datasetName, "cancel-export", PRODUCT_JOB_OPERATION\.ROLLBACK\)/
+  );
+  assert.match(productJob, /ROLLBACK: "CancelExport"/);
   assert.match(operationState, /ROLLBACK: "rollback"/);
   assert.match(operationState, /\[PRODUCT_OPERATION_TYPE\.ROLLBACK\]: "Cancel Export"/);
   assert.match(tooltips, /rollback: "Cancel the current export for this product\."/);

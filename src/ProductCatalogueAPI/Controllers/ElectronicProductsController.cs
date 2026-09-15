@@ -10,6 +10,7 @@ using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Models;
 using ProductCatalogueAPI.OpenApi;
 using ProductCatalogueAPI.Services.Dashboard;
+using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.History;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
@@ -355,17 +356,32 @@ namespace ProductCatalogueAPI.Controllers
         /// Get a specific electronic product's AOI.
         /// </summary>
         /// <param name="name">The name of the dataset.</param>
-        /// <returns>The product's AOI.</returns>
+        /// <returns>The product's AOI and authoritative product specification.</returns>
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpGet("{name}/aoi", Name = "GetElectronicProductAoi")]
         public async Task<IActionResult> GetElectronicProductAoi(string name)
         {
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse<AOIResponse>();
-            var electronicProduct = this._electronicProductManager.ElectronicProduct(name);
 
-            if (electronicProduct == null)
+            ExportProductIdentity? identity;
+            try
+            {
+                identity = ExportProductResolver.Resolve(_electronicProductManager, name);
+            }
+            catch (ProductMappingIntegrityException ex)
+            {
+                _logger.LogError(ex, "Electronic Product AOI identity resolution failed. DatasetName: {DatasetName}.", name);
+                response.Success = false;
+                response.Message = "The electronic product identity is ambiguous or invalid.";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return Conflict(response);
+            }
+
+            if (identity is null)
             {
                 response.Success = false;
                 response.Message = $"No electronic product with name '{name}' was found.";
@@ -373,24 +389,42 @@ namespace ProductCatalogueAPI.Controllers
                 return NotFound(response);
             }
 
-            var boundary = await _electronicProductManager.GetDatasetBoundary(name);
+            var electronicProduct = _electronicProductManager.ElectronicProduct(
+                identity.DatasetName,
+                identity.ProductSpecification.ToString());
+            if (electronicProduct is null)
+            {
+                _logger.LogError(
+                    "Electronic Product AOI identity could not be re-resolved by specification. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.",
+                    identity.DatasetName,
+                    identity.ProductSpecification);
+                response.Success = false;
+                response.Message = "The electronic product identity could not be resolved consistently.";
+                response.DurationMs = sw.ElapsedMilliseconds;
+                return Conflict(response);
+            }
+
+            var boundary = await _electronicProductManager.GetDatasetBoundary(identity.DatasetName);
 
             if (boundary.IsNullOrEmpty())
             {
                 response.Success = false;
-                response.Message = $"No AOI could be found for electronic product with name '{name}'";
+                response.Message = $"No AOI could be found for electronic product with name '{identity.DatasetName}'";
                 response.DurationMs = sw.ElapsedMilliseconds;
                 return NotFound(response);
             }
 
-            var current = await _repository.GetCurrentByNameAsync(name);
+            var current = (await _repository.GetCurrentByNamesAsync(
+                [identity.DatasetName],
+                identity.ProductSpecification)).SingleOrDefault();
 
             var aoiResponse = new AOIResponse
             {
                 Geometry = boundary,
                 Attributes = new Attributes
                 {
-                    DatasetName = electronicProduct.datasetName,
+                    DatasetName = identity.DatasetName,
+                    ProductSpecification = identity.ProductSpecification.ToString(),
                     Status = Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString()),
                     // Products without a SQL workflow track remain idle until internal work begins.
                     DisplayScale = electronicProduct.optimumDisplayScale,

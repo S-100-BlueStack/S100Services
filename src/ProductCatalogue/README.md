@@ -1,6 +1,9 @@
 # Product Catalogue frontend
 
-Current reviewed runtime baseline before FI-011C: `60e4854389ab16d3bd280f653998ea10eaa0b6ab`.
+Current normalized backend baseline: `345b79eef2a9225473d57db80243e731739cbc3a`.
+
+Read the [current contract matrix and adaptation report](docs/normalized-workflow-frontend-adaptation.md)
+for source transport, Export, diagnostics and verification. It supersedes older backend-contract notes.
 
 Product Catalogue is an ArcGIS/Vite frontend for managing product corrections for nautical chart production. The app loads product correction data from backend APIs, renders them as ArcGIS graphics, and lets users perform product actions through a custom popup action bar.
 
@@ -45,11 +48,11 @@ The following flows are implemented and considered stable frontend behavior for 
 - popup details
 - custom popup action bar
 - Freeze / Unfreeze
-- Send to IC-ENC
+- capability-gated Send to IC-ENC simulation
 - source-aware popup actions resolved through central Product context
 - flat `Export... > Edition / Update` menu
-- compatibility AOI Edition export using the established S100 backend target
-- disabled Edition/Update placeholders for Paper Charts and S-102
+- independently resolved S-57 and S-101 Edition/Update candidate exports
+- retained synthetic Paper Charts/S-102 fixtures for explicit source-boundary tests only
 - Cancel Export
 - popup export loading/conflict state
 - backend-authoritative Product operation state with local caching and reload recovery
@@ -114,27 +117,17 @@ src/features/map/popups/README.md
 
 Current popup action endpoint status:
 
-- `Freeze` / `Unfreeze` use the existing product freeze-state API.
-- `Send to IC-ENC` uses the existing product upload/send API.
-- `Cancel Export` is enabled and calls the legacy `POST /export/{name}/rollback/jobs` contract.
-- Compatibility AOI `Export... > Edition` is enabled and calls `POST /export/{name}/newedition/jobs?exportTarget=S100`.
-- Compatibility AOI `Update` remains disabled because no implemented Update contract exists.
-- Paper Charts and S-102 expose disabled Edition/Update placeholders with no handler or backend target.
-- Job status uses `GET /jobs/{jobId}`.
-- Shared active-operation discovery uses `GET /jobs/active?datasetName={datasetName}`.
+- S101 Freeze/Unfreeze use the existing upload routes; S57 is capability-blocked because those routes write S-101.
+- Send to IC-ENC is Disabled or Simulation only and requires ReadyForDistribution.
+- Edition and Update use `POST /export/{name}/newedition` and `/newupdate`.
+- Cancel Export uses `POST /export/{name}/cancel-export` with operation type `CancelExport`.
+- The backend resolves specification from the exact Product. No exportTarget query or `/jobs` suffix is sent.
+- Synthetic Paper Charts/S102 fixtures remain non-runtime test data with no handler or backend target.
+- Status uses `GET /jobs/{jobId}`; active discovery uses `GET /jobs/active?datasetName=...`.
 
-BE-102 export target contract:
-
-- missing `exportTarget` defaults to `S100`;
-- parsing is case-insensitive;
-- canonical values are `All`, `S100`, and `S57`;
-- `Both`, numeric values, empty/whitespace values, and unknown text return `400` with `EXPORT_TARGET_INVALID` and `allowedTargets: ["All", "S100", "S57"]`;
-- `All` and `S57` return `422` with `EXPORT_TARGET_NOT_SUPPORTED` and `supportedTargets: ["S100"]`;
-- `GET /Lookup/exportformats` returns `[{ "Name": "All" }, { "Name": "S100" }, { "Name": "S57" }]`.
-
-The frontend derives the two visible leaves from Product context and declarative source export configuration. Labels, operation kinds, capabilities, backend targets, and handlers remain separate. A central dispatch guard allows only the established compatibility Edition/S100 tuple and runs before confirmation, loading state, and API dispatch.
-
-Deployment may be frontend-first or backend-first because missing target still defaults to `S100`; frontend-first is preferred so explicit target requests are visible before backend enforcement changes.
+The dispatch guard validates registry capability, operation kind, handler and matching specification.
+The old BE-102 target-selection description is not the current controller contract.
+Export generates an unverified candidate; successful generation does not publish to S-128.
 
 ### Product context and source-aware actions
 
@@ -144,9 +137,9 @@ Selected Graphics are resolved through:
 src/features/products/domain/productContext.js
 ```
 
-Registry-backed Products require matching Graphic and layer source metadata. The current combined AOI path participates through an explicit internal compatibility adapter, not a permanent registry source or persisted toggle. Unknown or inconsistent source metadata fails closed for backend-dependent actions.
+Registry-backed Products require matching Graphic and layer source metadata. Production S57/S101 layers use the registry; an explicit legacy layer adapter remains isolated and is not a source or fallback. Unknown or inconsistent source metadata fails closed for backend-dependent actions.
 
-`productActionAvailability.js` combines Product context capabilities with Product status, active operations, backend capability state, and popup Export state. Paper Charts and S-102 retain popup attributes and disabled Export placeholders without gaining backend mutations or real Export execution. FI-011D also enables Product Collection, Analyze, Review, and visible History/report/validation surfaces for those sources; unsupported backend content is represented as unavailable and never authorizes compatibility API calls.
+`productActionAvailability.js` combines Product context capabilities with Product status, active operations, backend capability state, and popup Export state. Synthetic Paper Charts/S-102 definitions remain available only to explicit source-boundary tests; the application runtime does not register them as selectable or workspace sources.
 
 ### Product operation state
 
@@ -177,13 +170,11 @@ Analyze and Review share the source-aware workspace Product boundary:
 src/features/products/services/workspaceProductService.js
 ```
 
-The workspace catalog merges independent providers:
+The workspace catalog merges independent S57 and S101 providers backed by specification-scoped AOIs.
+Paper Charts and S-102 synthetic definitions are retained only for explicit tests and are not runtime
+workspace providers.
 
-- the compatibility provider backed by `GET /electronicproducts`;
-- Paper Charts when its registry workspace provider is runtime-available;
-- S-102 when its registry workspace provider is runtime-available.
-
-The compatibility endpoint is therefore one provider, not the permanent Product catalog architecture.
+The untyped Product name-list endpoint is not used for production source discrimination.
 Registry-backed providers reuse their source loader and normalizer, preserve `sourceId`, `sourceLabel`,
 `productKey`, `datasetName`, and `productType`, isolate provider failures, and reject stale provider
 results through generation guards. `datasetName` is the authoritative globally unique workspace/route
@@ -193,12 +184,10 @@ instead of selecting a provider deterministically.
 
 The workspace catalog is deliberately independent of Main map enabled-source state. A runtime-available
 source can still resolve or appear in Analyze/Review after that source is disabled on the Main map.
-S-57 and S-101 do not contribute independent workspace Products until authoritative read/catalog
-contracts exist.
+S-57 and S-101 contribute independent workspace Products through their authoritative AOI contracts.
 
 The shared picker is reused by Analyze and Review. Product name remains the primary visible label and
-source metadata may be shown secondarily when useful. Existing route projection remains datasetName-only
-until FI-019.
+source metadata may be shown secondarily when useful. Canonical route projection remains datasetName-only; source identity stays internal.
 
 ### Main map filters
 
@@ -261,10 +250,9 @@ src/features/review
 ```
 
 Analyze and Review use `workspaceProductService` for source-aware Product catalog and route Product
-resolution. Compatibility Products retain their established backend loaders. Paper Charts and S-102
-resolve through runtime-available registry providers, so Analyze can use source-owned normalized data and
-geometry without calling the compatibility AOI endpoint. Review uses the same Product context to avoid
-cross-source History/report requests.
+resolution. Runtime Products come from the authoritative S-57 and S-101 registry providers and read current
+metadata and validation artifact history. Review uses the same Product context to avoid cross-source
+History/report requests. Synthetic Paper Charts/S-102 fixtures are available only to explicit tests.
 
 Analyze owns product analysis/report display and does not own mutation actions. Review owns multi-product
 review; mixed workspaces isolate Product/provider failures and distinguish unavailable content from failed
@@ -295,8 +283,9 @@ Product History deliberately exposes two call boundaries. The one-argument
 compatibility consumers such as Dashboard and calls the established backend History endpoint directly.
 Source-aware Main map, Analyze, and Review callers provide an already resolved `ProductContext`.
 
-Compatibility Product contexts use the same backend endpoint. Paper Charts and S-102 expose a visible
-History surface but return a source-specific unavailable model without a compatibility History request.
+S57/S101 and explicit compatibility Product contexts use the same backend History endpoint. Synthetic
+Paper Charts/S-102 test contexts retain their fail-closed unavailable History behavior without a compatibility
+History request, but those sources are no longer runtime-selectable.
 An explicitly unresolved/invalid source context fails closed and must never reinterpret the dataset name
 as a compatibility Product.
 
@@ -312,8 +301,7 @@ Some current behavior is intentionally frontend-only or placeholder-only:
 
 - popup export leaf/scope presentation state
 - same-browser job cache and cross-tab synchronization
-- disabled source-configured Edition/Update placeholders for compatibility Update, Paper Charts and S-102
-- truthful unavailable History, IC-ENC report, and Internal validation surfaces for Paper Charts and S-102
+- synthetic Paper Charts/S-102 source contracts retained for explicit fail-closed tests only
 - Dashboard report actions until IC-ENC/internal validation report IDs or URLs exist
 
 The backend active-job endpoint is the source of truth for shared visibility. Frontend state remains responsible for presentation, polling and responsive local reconciliation.
@@ -325,8 +313,6 @@ Do not implement the following fully until backend/database contracts are ready:
 - atomic Product operation claim before enqueue
 - external shared Hangfire worker migration
 - global map timeline
-- separate source-correct S-57 and S-101 Product/read and export contracts
-- compatibility and source-specific Update export endpoints
 - real Paper Charts and S-102 export endpoints
 - real Dashboard IC-ENC report links
 - real Dashboard internal validation report links
@@ -404,19 +390,15 @@ To activate a future source export operation:
 4. Keep endpoint mapping out of popup DOM and `popupActionConfig.js`.
 5. Add or adjust confirmation text and focused contract tests.
 
-Current implemented export leaf:
+Current implemented export leaves:
 
-```txt
-Export > Edition -> POST /export/{name}/newedition/jobs?exportTarget=S100
+```text
+Edition -> POST /export/{name}/newedition
+Update -> POST /export/{name}/newupdate
+Cancel Export -> POST /export/{name}/cancel-export
 ```
 
-The generic Edition label preserves the established compatibility wire target. It is not an `All` export and does not infer separate S-57/S-101 source ownership.
-
-Current implemented Cancel Export action:
-
-```txt
-Cancel Export -> POST /export/{name}/rollback/jobs
-```
+Each request is resolved to the Product's own specification by the normalized backend.
 
 ## Background job deployment direction
 
@@ -456,35 +438,17 @@ When adding a new logical map layer:
 4. Ensure popup/filter/display-scale behavior checks layer capabilities.
 5. Avoid enabling product actions unless the layer truly supports product correction mutations.
 
-## Mock data source configuration
+## Synthetic source fixtures
 
-Paper Charts and S-102 use synthetic fixtures until authoritative backend read contracts are available.
-They are enabled automatically in Vite Development builds. A production-mode test build can opt in with:
+Paper Charts and S-102 synthetic fixtures are no longer exposed by the application runtime. The
+zero-argument source registry used by the Main map and workspace services exposes only authoritative
+backend sources, currently S-57 and S-101. `VITE_ENABLE_MOCK_DATA_SOURCES` is no longer a frontend
+runtime/deployment switch.
 
-```dotenv
-VITE_ENABLE_MOCK_DATA_SOURCES=true
-```
-
-This is a non-secret Vite build-time setting. Rebuild and redeploy the frontend after changing it. Missing,
-blank, `false`, or unsupported values keep the mock sources disabled outside Development.
-
-The API has an independent runtime gate. Development enables the retained mock endpoints automatically.
-For a non-Development test deployment, set:
-
-```text
-MockDataSources:Enabled=true
-```
-
-The equivalent environment variable is:
-
-```text
-MockDataSources__Enabled=true
-```
-
-The repository default is `false`. Both frontend and backend opt-ins must be enabled for Paper Charts and
-S-102 to work end-to-end in a production-mode test deployment. These flags expose only the existing
-synthetic `/mock/paper-charts` and `/mock/s102` sources; they do not enable backend Product mutations,
-Export, History, or report contracts for those sources.
+The retained Paper Charts/S-102 registry definitions exist only for explicit unit-test construction.
+Backend `/mock/paper-charts` and `/mock/s102` endpoints are not called by the frontend runtime. Future
+production Paper Charts or S-102 support requires authoritative source contracts and a separate
+integration change.
 
 ## ArcGIS portal configuration
 
@@ -658,4 +622,7 @@ Recent frontend work has focused on:
 - FI-011C source-aware Product context, popup actions, and flat Export menu
 - FI-011D source-aware Product Collection, workspace resolution, and truthful History/report availability
 
-The frontend is ready for controlled user testing with asynchronous Export/Cancel Export, shared active-operation visibility and the manually verified BE-107 Dashboard pagination baseline `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`. BE-106 documents—but does not implement—the future move of worker execution to JobPlatform. The next planned backend package is BE-108 Product History failure hardening when its producer contract is ready. Remaining backend-dependent work includes atomic enqueue ownership, any later shared-worker implementation, report contracts, future export variants and the global timeline.
+The normalized workflow adaptation is implemented without committing. Dependency-free tests run in
+Work; the Windows `npm run format` / `npm run check` and manual acceptance plan remain required.
+BE-108A Batch 1 is preserved. Batch 2 producers/recovery, real distribution, production mock-source
+replacements, Dashboard report associations and global timeline remain separate backend work.

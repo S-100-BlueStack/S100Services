@@ -263,6 +263,7 @@ function createExportLeafAction({
     ...action,
     onClick: async ({ anchorElement }) => {
       await triggerExport({
+        productContext: context,
         datasetName,
         actionId: exportAction.id,
         target: exportAction.backendTarget,

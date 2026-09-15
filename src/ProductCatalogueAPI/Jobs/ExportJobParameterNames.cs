@@ -47,6 +47,8 @@ namespace ProductCatalogueAPI.Jobs
         public const string ProductOperationRejectedCode = "PRODUCT_OPERATION_REJECTED";
         public const string CompilerUnavailableCode = S100CompilerContract.UnavailableCode;
         public const string CompilerUnavailableMessage = S100CompilerContract.UnavailableMessage;
+        public const string OperationCancelledCode = "OPERATION_CANCELLED";
+        public const string OperationCancelledMessage = "The operation was cancelled before completion.";
         public const string ExportFailedCode = "EXPORT_FAILED";
         public const string ExportFailedMessage = "The export could not be completed.";
         public const string CancelExportFailedCode = "CANCEL_EXPORT_FAILED";

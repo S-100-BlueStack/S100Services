@@ -13,7 +13,7 @@ function isAbsoluteUrl(value) {
   return /^https?:\/\//i.test(value);
 }
 
-function buildUrl(path) {
+export function buildUrl(path) {
   const normalizedPath = String(path ?? "").replace(/^\/+/, "");
 
   if (!normalizedPath) {

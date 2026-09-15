@@ -1,3 +1,5 @@
+import { ATTRIBUTE_FILTER_CONFIG } from "../../map/filters/attributeFilterConfig.js";
+import { createElectronicExportConfiguration } from "../../products/domain/electronicProductContract.js";
 export const DATA_SOURCE_AVAILABILITY = Object.freeze({
   AVAILABLE: "available",
   UNAVAILABLE: "unavailable",
@@ -80,29 +82,34 @@ const DEFAULT_PRODUCT_SEARCH = Object.freeze({
   fields: Object.freeze(["datasetName", "productName", "productKey"]),
 });
 
+// Synthetic Paper Charts and S-102 fixtures are retained only for explicit test
+// construction. Runtime callers use the zero-argument factory and therefore
+// expose only authoritative backend sources.
 export function createDataSourceRegistry({
-  isDevelopment = Boolean(import.meta.env?.DEV),
-  mockDataSourcesEnabled = isMockDataSourcesFlagEnabled(
-    import.meta.env?.VITE_ENABLE_MOCK_DATA_SOURCES
-  ),
+  isDevelopment = false,
+  mockDataSourcesEnabled = false,
   configuredSourceIds,
 } = {}) {
   const configuredIds = normalizeConfiguredSourceIds(configuredSourceIds);
   const mockSourcesEnabled = isDevelopment || mockDataSourcesEnabled;
   const definitions = [
-    createUnavailableSource({
+    createElectronicSource({
       id: DATA_SOURCE_IDS.S57,
       label: "S-57",
       productType: "s57-product",
       configuredIds,
-      reason: "An authoritative S-57 read contract is not available yet.",
+      specification: "S57",
+      freezeSupported: false,
+      enabledInSchema1: false,
     }),
-    createUnavailableSource({
+    createElectronicSource({
       id: DATA_SOURCE_IDS.S101,
       label: "S-101",
       productType: "s101-product",
       configuredIds,
-      reason: "An authoritative S-101 read contract is not available yet.",
+      specification: "S101",
+      freezeSupported: true,
+      enabledInSchema1: true,
     }),
     createMockSource({
       id: DATA_SOURCE_IDS.PAPER_CHARTS,
@@ -158,45 +165,102 @@ export function isRuntimeSelectableDataSource(source) {
 
 export function isWorkspaceAvailableDataSource(source) {
   return Boolean(
+    source?.enabledByConfiguration &&
     source?.workspace?.supported &&
     source?.availability?.state === DATA_SOURCE_AVAILABILITY.AVAILABLE &&
     source?.loader
   );
 }
 
-function createUnavailableSource({ id, label, productType, configuredIds, reason }) {
+function createElectronicSource({
+  id,
+  label,
+  productType,
+  configuredIds,
+  specification,
+  freezeSupported,
+  enabledInSchema1,
+}) {
+  const enabledByConfiguration = isConfigured(id, configuredIds);
   return {
     id,
     label,
-    enabledByConfiguration: isConfigured(id, configuredIds),
-    availability: {
-      state: DATA_SOURCE_AVAILABILITY.UNAVAILABLE,
-      reason,
-    },
-    userSelectable: false,
-    defaultEnabled: true,
-    loader: null,
-    normalizer: GEOJSON_PRODUCT_NORMALIZER,
-    identityStrategy: SOURCE_AWARE_IDENTITY,
-    layerDefinitions: [],
-    capabilities: DISABLED_OPERATION_CAPABILITIES,
-    exportConfiguration: null,
-    contentConfiguration: createHiddenContentConfiguration(reason),
-    workspace: {
-      supported: false,
-      providerType: null,
-    },
-    filtering: {
-      supported: false,
-      definitions: [],
-      defaultExcludedValues: [],
-      useLookupOptions: false,
-    },
-    search: {
-      supported: false,
-      fields: DEFAULT_PRODUCT_SEARCH.fields,
-    },
     productType,
+    enabledByConfiguration,
+    availability: { state: DATA_SOURCE_AVAILABILITY.AVAILABLE, reason: null },
+    userSelectable: true,
+    defaultEnabled: true,
+    loader: {
+      type: "http-json",
+      path: `electronicproducts/aoi?productSpecification=${specification}`,
+      errorMessage: `${label} AOI request failed`,
+    },
+    normalizer: { type: "electronic-aoi", specification },
+    persistence: { enabledInSchema1, persistSelection: true },
+    identityStrategy: {
+      type: "stable-product-key",
+      fields: ["datasetName"],
+      allowFeatureId: false,
+      sourceAware: true,
+    },
+    layerDefinitions: [
+      {
+        id: `${id}-products`,
+        title: label,
+        type: "graphics",
+        dataFormat: "esri-json",
+        layerKind: "electronic-products",
+        capabilities: {
+          supportsPopup: true,
+          supportsPopupActions: true,
+          supportsProductActions: true,
+          supportsDisplayScale: true,
+          supportsAttributeFilters: true,
+          supportsProductHistory: true,
+          supportsOverlapPicker: true,
+          supportsProductSearch: true,
+        },
+      },
+    ],
+    capabilities: {
+      ...WORKSPACE_VISUALIZATION_CAPABILITIES,
+      freeze: freezeSupported,
+      unfreeze: freezeSupported,
+      sendToIcEnc: true,
+      cancelExport: true,
+      exportEdition: true,
+      exportUpdate: true,
+      backendProductRefresh: true,
+    },
+    exportConfiguration: createElectronicExportConfiguration(specification, label),
+    contentConfiguration: {
+      history: {
+        visible: true,
+        implemented: true,
+        loaderId: "electronic-history",
+        availabilityReason: null,
+      },
+      icEncReports: {
+        visible: true,
+        implemented: false,
+        loaderId: null,
+        availabilityReason: "The backend does not provide IC-ENC reports.",
+      },
+      internalValidation: {
+        visible: true,
+        implemented: true,
+        loaderId: "electronic-artifacts",
+        availabilityReason: null,
+      },
+    },
+    workspace: { supported: true, providerType: "registry-source" },
+    filtering: {
+      supported: true,
+      definitions: ["status", "displayScale", "usageBand"],
+      defaultExcludedValues: ATTRIBUTE_FILTER_CONFIG.global.defaultExcludedValues,
+      useLookupOptions: true,
+    },
+    search: DEFAULT_PRODUCT_SEARCH,
     refreshStrategy: ACTIVE_ONLY_REFRESH,
   };
 }
@@ -242,6 +306,7 @@ function createMockSource({
       ...GEOJSON_PRODUCT_NORMALIZER,
       datasetNameStrategy,
     }),
+    persistence: { persistSelection: false },
     identityStrategy: SOURCE_AWARE_IDENTITY,
     layerDefinitions: [
       {
@@ -301,23 +366,6 @@ function createUnavailableWorkspaceContentConfiguration(label) {
       loaderId: null,
       availabilityReason: `Internal validation is not available for ${label} yet.`,
     },
-  };
-}
-
-function createHiddenContentConfiguration(reason) {
-  return {
-    history: createHiddenContentEntry(reason),
-    icEncReports: createHiddenContentEntry(reason),
-    internalValidation: createHiddenContentEntry(reason),
-  };
-}
-
-function createHiddenContentEntry(availabilityReason) {
-  return {
-    visible: false,
-    implemented: false,
-    loaderId: null,
-    availabilityReason,
   };
 }
 

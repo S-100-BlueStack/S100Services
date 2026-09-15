@@ -61,11 +61,13 @@ function createIdentityWorkspaceService() {
   const registry = createDataSourceRegistry({ isDevelopment: true });
   return createWorkspaceProductService({
     registry,
+    loadTargetedProduct: null,
     loadCompatibilityCatalog: async () => ({
       Data: [{ name: "1149E", datasetName: "101DK0041149E" }],
     }),
     loadSource: async (source) => {
-      if (source.id === "paper-charts") {
+      if (source.id === "s101") return [{ datasetName: "101DK0041149E", productName: "1149E" }];
+      if (source.id === "paper-charts" || source.id === "s57") {
         return [];
       }
       return [{ datasetName: "102DK0041149E", productName: "1149E" }];
@@ -97,25 +99,25 @@ test("Review resolves same visible Product name independently by datasetName", a
   const historyCalls = [];
   const results = await loadReviewHistories(["101DK0041149E", "102DK0041149E"], {
     workspaceProductService,
+    fetchArtifacts: async () => [],
     fetchHistory: async (datasetName, { productContext }) => {
       historyCalls.push([datasetName, productContext.sourceId]);
       return {
-        endpointAvailable: productContext.sourceId === "compatibility-aoi",
-        availabilityReason:
-          productContext.sourceId === "compatibility-aoi" ? null : "History unavailable",
+        endpointAvailable: productContext.sourceId === "s101",
+        availabilityReason: productContext.sourceId === "s101" ? null : "History unavailable",
         events: [],
       };
     },
   });
 
   assert.deepEqual(historyCalls, [
-    ["101DK0041149E", "compatibility-aoi"],
+    ["101DK0041149E", "s101"],
     ["102DK0041149E", "s102"],
   ]);
   assert.deepEqual(
     results.map((product) => [product.datasetName, product.sourceId, product.loadState]),
     [
-      ["101DK0041149E", "compatibility-aoi", REVIEW_PRODUCT_LOAD_STATE.LOADED],
+      ["101DK0041149E", "s101", REVIEW_PRODUCT_LOAD_STATE.LOADED],
       ["102DK0041149E", "s102", REVIEW_PRODUCT_LOAD_STATE.UNAVAILABLE],
     ]
   );

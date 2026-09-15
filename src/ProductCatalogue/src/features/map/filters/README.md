@@ -21,9 +21,8 @@ filter provider.
 }
 ```
 
-`providerId` is the filter-state boundary. Runtime sources use their stable registry ID. The combined
-AOI compatibility path uses the Product-corrections layer adapter and is not persisted as a permanent
-source.
+`providerId` is the filter-state boundary. Runtime sources use their stable registry ID. Production S57/S101 now use registry provider IDs. The legacy fixed S101 Product-corrections
+provider is no longer rendered.
 
 Layer matching resolves provider ownership from committed layer objects and layer metadata. The
 service does not depend on layer titles or visible DOM state.
@@ -40,7 +39,7 @@ A source declares only the dimensions supported by its current data contract. Fa
 normalized attributes. Missing optional attributes omit the unsupported field for that provider
 without affecting other fields or sources.
 
-The compatibility provider may use authoritative lookup lists for status and usage labels. Runtime
+Electronic providers use authoritative lookup lists for status and usage labels. Runtime
 mock sources derive values from their loaded graphics and do not invent absent attributes.
 
 ## Isolation and lifecycle
@@ -87,12 +86,14 @@ panel immediately rewrites a successful migration as canonical version 2 state, 
 compatibility state, so persistence is independent of provider startup order. Invalid snapshots are
 rejected and removed before declarative first-visit defaults continue.
 
-The source first-visit contract and filter first-visit contract must evolve independently.
+The normalized adaptation migrates the formerly fixed S101 provider to s101 at the persistence
+read boundary. Explicit new s101 state wins; no state is copied into s57. The source first-visit
+contract and filter first-visit contract remain independent.
 
 ## Initial error-only view
 
-FI-011B preserves the established compatibility default exclusion. It does not define a new error
-status list because the authoritative status classification is not available.
+Electronic sources preserve the conservative Idle exclusion. The normalized enum/lookup now
+provides status IDs and names, but does not define an AOI error-only/default-filter classification.
 
 `ATTRIBUTE_FILTER_CONFIG.compatibilityProvider.errorOnlyStatusClassifier` is the explicit future
 integration point and remains `null`. FI-016 must supply the semantic error classification before an

@@ -33,7 +33,7 @@ Code can keep technical identifiers such as `datasetName` where required by back
 
 ## Failure state
 
-A resolved compatibility Product whose real Analyze request fails remains a resolved workspace Product,
+A resolved Product whose metadata request fails remains a resolved workspace Product,
 but its Analyze content is represented as failed. The model retains Product identity and `loadError`
 while leaving geometry, status, version metadata, XML/report content, validation reports, and raw
 payload empty. The sidebar uses the existing compact failed Product card instead of presenting
@@ -43,7 +43,7 @@ Analyze loads Products independently. A failed Product does not discard successf
 the same workspace, and failed Products do not create map graphics or trigger Product History requests.
 Request-generation checks remain the publication boundary for superseded loads.
 
-The development-only Paper Charts and S-102 workspace sources are separate source contracts. They keep
+The configured mock Paper Charts and S-102 workspace sources are separate source contracts. They keep
 their registry-owned attributes and geometry and do not fall through to the compatibility Analyze API.
 
 ## Map graphics
@@ -88,20 +88,16 @@ Analyze uses the shared source-aware workspace catalog/resolver in:
 src/features/products/services/workspaceProductService.js
 ```
 
-The picker/catalog combines the compatibility `GET /electronicproducts` provider with runtime-available
-registry workspace providers such as Paper Charts and S-102. Provider failures are isolated, source
-metadata is retained, and stale provider loads cannot publish over a newer catalog generation. The
-workspace contract requires globally unique normalized `datasetName` values; an actual cross-provider
-duplicate is treated as ambiguous and fails closed instead of selecting one Product.
+The picker loads only the lightweight `GET electronicproducts` dataset-name list. Selecting or directly
+opening a Product resolves that one Product through `GET electronicproducts/{datasetName}/aoi`; the
+response supplies authoritative `ProductSpecification` plus source-owned geometry. Analyze therefore
+does not load the complete S57 and S101 AOI catalogs merely to resolve workspace identity.
 
-The workspace catalog is independent of Main map source enablement. Disabling Paper Charts or S-102 on
-the Main map does not remove that runtime-available source from an already open or directly opened
-Analyze workspace.
-
-The picker keeps Product name as its primary text and retains typed input as a development fallback where
-the existing UI supports it. It does not fetch compatibility AOI geometry merely to populate choices;
-source-owned geometry is loaded only when the Product itself is resolved for Analyze. Review reuses the
-same workspace service and picker model.
+The workspace contract requires globally unique normalized `datasetName` values. The frontend does not
+infer S57/S101 from naming conventions: the backend performs unique identity resolution and a conflict,
+missing specification, identity mismatch or unavailable configured source fails closed. Main-map source
+toggles remain independent from workspace resolution. Review reuses the same targeted resolver and
+lightweight picker model.
 
 ## Internal validation reports
 
@@ -127,11 +123,11 @@ The current frontend-ready report shape is:
 
 Supported backend aliases are normalized in `api/analyzeApi.js` and `domain/internalValidationReports.js`.
 
-When the endpoint contract is finalized, keep this UI-facing shape stable and map backend-specific fields into it.
+Electronic validation records now come from public artifact history. Reports with `url` render diagnostic downloads; absent inline content is not fabricated.
 
 ## Backend integration
 
-Compatibility Analyze content is loaded from the established real backend endpoint and normalized in
+Electronic Analyze metadata and diagnostics are loaded from current public endpoints and normalized in
 `api/analyzeApi.js`. Request failure must remain a truthful failed Product state; do not add catch-based
 mock payload substitution.
 
@@ -143,9 +139,9 @@ requirement.
 ## FI-011D source-aware workspace loading
 
 Analyze resolves route `datasetName` values through the shared workspace Product service before
-loading Product content. Compatibility Products keep the established `/electronicproducts/{name}/aoi`
-path. A failed compatibility request keeps the resolved Product context but publishes a failed Analyze
-state with no fabricated geometry, status, report, or version payload. Paper Charts and S-102 use
+loading Product content. Electronic Products read `/electronicproducts/{name}` metadata and
+`/electronicproducts/{name}/artifacts/history`, retaining the resolved AOI geometry. Metadata failures
+publish a failed Product; independent artifact failures retain metadata and display a warning. Paper Charts and S-102 use
 registry-owned normalized attributes and GeoJSON geometry and never call the compatibility AOI endpoint.
 Mixed workspaces keep successful Products when another Product or provider fails. History, IC-ENC
 reports, and Internal validation distinguish `unavailable` from request `failed`. Existing

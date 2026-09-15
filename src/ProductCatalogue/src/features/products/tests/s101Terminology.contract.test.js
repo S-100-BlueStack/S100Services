@@ -8,9 +8,10 @@ async function readSource(relativePath) {
   return readFile(new URL(relativePath, productCatalogueRoot), "utf8");
 }
 
-test("S-101 presentation stays separate from the legacy S100 export wire target", async () => {
+test("S-101 presentation stays separate from the normalized product-resolved export contract", async () => {
   const [
     popup,
+    popupMetadata,
     metadata,
     exportApi,
     productContext,
@@ -28,6 +29,7 @@ test("S-101 presentation stays separate from the legacy S100 export wire target"
     popupCss,
   ] = await Promise.all([
     readSource("src/features/map/popups/createPopup.js"),
+    readSource("src/features/map/popups/popupProductMetadata.js"),
     readSource("src/features/data/normalizers/productExportMetadata.js"),
     readSource("src/features/data/api/exportApi.js"),
     readSource("src/features/products/domain/productContext.js"),
@@ -45,14 +47,20 @@ test("S-101 presentation stays separate from the legacy S100 export wire target"
     readSource("src/styles/popup.css"),
   ]);
 
-  assert.match(popup, /label: "S-101"/);
-  assert.match(popup, /createExportColumnLabel\(item\.label \?\? standard, columns\)/);
-  assert.match(metadata, /standard === PRODUCT_EXPORT_STANDARD\.S100 \? "S-101" : standard/);
-  assert.match(exportApi, /exportTarget: EXPORT_TARGET\.S100/);
-  assert.match(exportApi, /label: "Exporting S-101 Edition"/);
-  assert.match(productContext, /displayLabel: "S-101"/);
-  assert.match(productContext, /helpText: "Open S-101 export actions\."/);
-  assert.match(productContext, /backendTarget: EXPORT_TARGET\.S100/);
+  assert.match(
+    popup,
+    /import \{ createPopupProductMetadataColumns \} from "\.\/popupProductMetadata\.js";/
+  );
+  assert.match(popup, /createPopupProductMetadataColumns\(attributes\)/);
+  assert.match(
+    popupMetadata,
+    /label: attributes\?\.sourceLabel \?\? selectedExport\?\.label \?\? "Product"/
+  );
+  assert.match(metadata, /label: createProductExportStandardLabel\(standard\)/);
+  assert.doesNotMatch(exportApi, /exportTarget=/);
+  assert.match(exportApi, /PRODUCT_JOB_OPERATION\.EXPORT_EDITION/);
+  assert.match(productContext, /createElectronicExportConfiguration\("S101", "S-101"\)/);
+
   assert.match(
     exportConfig,
     /presentationLabel: createPresentationLabel\(displayLabel, operationKind\)/
@@ -92,9 +100,9 @@ test("S-101 presentation stays separate from the legacy S100 export wire target"
     /\.popup-action-bar__action\[data-popup-action-id="tools"\]\s*\{[^}]*margin-inline-start:\s*auto;/
   );
   assert.doesNotMatch(productActions, /target === ["']S100["']/);
-  assert.match(exportTarget, /S100: "S100"/);
-  assert.match(productJob, /"Exporting S-101 Edition"/);
-  assert.match(productJob, /"S-101 Edition export"/);
+  assert.match(exportTarget, /S101: "S101"/);
+  assert.match(productJob, /S101: "S-101"/);
+
   assert.match(tooltips, /"export-s100": "Open S-101 export actions\."/);
   assert.match(tooltips, /"s100-export-edition": "Export a new S-101 Edition for this product\."/);
   assert.match(tooltips, /"s100-export-update": "S-101 Update export is currently disabled\."/);
