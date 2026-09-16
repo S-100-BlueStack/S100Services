@@ -1,6 +1,6 @@
 # Product Catalogue UI/UX design backlog
 
-Documentation baseline: `c2bb13c0bce07907f16f35221025e89a7b211c06`  
+Documentation baseline: `32efa496f978e20baee834f0becdb95bdadadd98`  
 Review date: 2026-09-16
 
 This document formalizes the post-FI-022 Product Catalogue design review into independently implementable feature items. It is a design and task boundary document, not an implementation claim. The existing feature boundaries, source-aware Product identity, FI-024 targeted workspace resolution, FI-025 ArcGIS process isolation, FI-022 workspace freshness lifecycle, keyboard/focus behavior, and light/dark support remain preservation requirements unless a task explicitly changes them.
@@ -23,9 +23,9 @@ Saved filter presets are not part of this redesign. A later browser-local saved-
 
 The concrete need from the design review is faster selection of a Product when overlapping AOIs make the overlap picker cumbersome. That need supersedes the old FI-021 preferred experiment in which Ctrl/Cmd-click directly toggled Product Collection membership.
 
-For the first FI-021 implementation, Ctrl-click on Windows/Linux and Cmd-click on macOS should be explored as a direct-selection shortcut for the currently highlighted Product candidate. Normal click keeps the existing overlap picker and popup workflow. Shift-click remains unassigned because the map still has no stable range-selection model.
+FI-021 is accepted at `32efa496f978e20baee834f0becdb95bdadadd98`. Ctrl-click on Windows/Linux and Cmd-click on macOS directly selects the currently highlighted Product candidate only while that source-aware identity remains valid for the completed click. Normal click keeps the existing overlap picker and popup workflow. Shift-click remains unchanged.
 
-The shortcut must use the existing candidate/highlight ordering and Product context. It must not prefer S-101, S-57, or any other source by name. The former modifier-click Product Collection toggle remains deferred and unassigned unless a later UX review restores it as a separate requirement.
+The accepted shortcut uses stable Product/Graphic identity and current-candidate revalidation rather than source ordering. It does not prefer S-101, S-57, or any other source by name. The former modifier-click Product Collection toggle remains deferred and unassigned unless a later UX review restores it as a separate requirement. Keyboard-equivalent activation and visible discoverability remain separate FI-040 work.
 
 ### Loading progress
 
@@ -37,7 +37,7 @@ The frontend must not invent precise progress percentages that the backend canno
 
 | ID     | Area                            | Task                                                                                                  | Status                                    | Dependency / boundary                                                                                                                                                                                                                                                                                                            |
 | ------ | ------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FI-021 | Main map / overlap selection    | Add modifier-click direct selection for the highlighted Product candidate                             | Implemented; manual verification pending  | Normal click retains the overlap workflow. Ctrl/Cmd-click opens only the transiently highlighted Product after current-layer, Graphic-membership and click-generation validation; otherwise it falls back safely. Shift-click and Product Collection remain unchanged. Keyboard/discoverability requirements continue as FI-040. |
+| FI-021 | Main map / overlap selection    | Add modifier-click direct selection for the highlighted Product candidate                             | Done                                      | Accepted at `32efa496f978e20baee834f0becdb95bdadadd98`. Normal click retains the overlap workflow. Ctrl/Cmd-click opens only the transiently highlighted Product after current-layer, Graphic-membership and click-generation validation; otherwise it falls back safely. Shift-click and Product Collection remain unchanged. Keyboard/discoverability requirements continue as FI-040. |
 | FI-026 | Shared navigation / Preferences | Consolidate active-route state and shared navbar controls                                             | Ready                                     | Implement before duplicating route-specific navbar changes.                                                                                                                                                                                                                                                                      |
 | FI-027 | Main map search                 | Move Product search and geographic Locator into a navbar search area                                  | Design discovery first                    | Product search and Locator remain separate workflows; do not merge Product lookup with geographic search.                                                                                                                                                                                                                        |
 | FI-028 | Main map / Preferences          | Move Scale hiding into Preferences and make it opt-in                                                 | Ready                                     | Remove automatic/default-on behavior; preserve explicit user preference after it is chosen.                                                                                                                                                                                                                                      |
@@ -53,6 +53,8 @@ The frontend must not invent precise progress percentages that the backend canno
 | FI-038 | Review                          | Enable all Review content types by default and add bulk content toggles                               | Ready after FI-037                        | Bulk controls must coexist with per-Product controls and preserve user-selected state after subsequent refreshes.                                                                                                                                                                                                                |
 | FI-039 | Review performance              | Load only changed/new Products when Review composition changes                                        | Ready; regression-sensitive               | Preserve ordering, content toggles, generation guards, independent History/artifact failures, and full manual Refresh semantics.                                                                                                                                                                                                 |
 | FI-040 | Main map / accessibility        | Add modifier-selection keyboard equivalent and discoverability                                        | Deferred follow-up                        | Define an accessible highlighted-candidate activation path and compact visible shortcut cue while preserving the normal overlap picker as the complete non-shortcut workflow.                                                                                                                                                    |
+| FI-041 | Review / Product list           | Preserve Product-list scroll position when content toggles change                                     | Ready; UI bug                             | Fix scroll-to-top when History, IC-ENC, or Validation is toggled for a Product. Preserve focus, ordering, content selection, FI-022 freshness and keyboard interaction. Implement after FI-036 so sidebar restructuring is stable.                                                                                                  |
+| FI-042 | Main map / Filters              | Align Filter panel scrollbar styling                                                                  | Ready                                     | Reuse a shared/public Product Catalogue scrollbar treatment for the Filter panel outer scroller and nested attribute lists such as Status. Preserve overflow and filtering behavior in light/dark mode; avoid private Calcite internals.                                                                                          |
 
 ## FI-021 - modifier-click direct Product selection
 
@@ -76,6 +78,10 @@ Reduce overlap-picker friction when multiple Product sources occupy the same or 
 `hoverManager` continues to own transient hover and popup-locked highlight state. FI-021 exposes only stable identity for the transient hover and never treats the popup-locked Product as a hover candidate. Modifier state comes from the public ArcGIS click event's native pointer event. Generation-guarded hover hit tests prevent late results from replacing newer pointer, layer, popup, pointer-leave, or teardown state. The click interaction independently re-reads current interactive layers and validates stable Graphic membership after `hitTest`; click-session generation prevents older or destroyed interactions from publishing popup state.
 
 The bounded FI-021 pointer implementation intentionally does not add a keyboard equivalent or visible discoverability cue. These original design requirements are not satisfied or removed: FI-040 owns their focused design and implementation. Normal click remains the complete non-shortcut workflow, and existing keyboard, focus, Escape, and popup behavior is preserved until FI-040 is implemented.
+
+### Manual acceptance
+
+FI-021 was manually accepted on 2026-09-16 at `32efa496f978e20baee834f0becdb95bdadadd98`. Testing confirmed direct selection of either highlighted overlapping Product, normal-click picker fallback, stale source/filter/refresh rejection and rapid-click protection. Modifier timing remains tied to the actual click event; no sticky Ctrl/Cmd grace period is introduced. Existing map gestures remain authoritative, including rapid Ctrl + double-left-click navigation, which FI-021 intentionally does not intercept.
 
 ### Out of scope
 
@@ -308,17 +314,57 @@ Complete the FI-021 accessibility and learnability requirements without changing
 - preserve source-aware identity validation, current-candidate revalidation, popup lifecycle, focus, Escape, Product Collection, Product search, Locator, and light/dark behavior;
 - complete a focused interaction/accessibility design pass before implementation so highlight ownership, focus entry and cue placement are explicit.
 
+## FI-041 - preserve Review Product-list scroll position
+
+### Observed bug
+
+When the Review `Products` list is scrolled and the user toggles `History`, `IC-ENC`, or `Validation` for a visible Product, the Product-list scroller returns to the top. Content selection should not move the user's navigation position in the Product list.
+
+### Required behavior
+
+- preserve the Product-list scroll position when an individual Product's History, IC-ENC, or Validation toggle changes;
+- preserve the behavior for both pointer and keyboard activation;
+- keep focus on the activated control where the existing interaction model permits it;
+- preserve Product ordering and the newly selected content-toggle state;
+- do not introduce `scrollIntoView` or equivalent focus/scroll side effects;
+- preserve FI-022 automatic/manual freshness behavior and source-aware Review resolution;
+- remain compatible with the later FI-038 workspace-level bulk toggles.
+
+Prefer avoiding an unnecessary full Product-list rerender when the current Review architecture can update the affected Product in place. If a bounded rerender remains necessary, scroll restoration must be generation-safe and must not restore obsolete state after a newer composition change. FI-041 follows FI-036 so the compacted sidebar structure is the stable implementation target.
+
+### Regression coverage
+
+Test at least History, IC-ENC and Validation toggles from a non-zero scroll position, pointer and keyboard activation, focus retention, a position near the bottom of the list, and interaction with subsequent refresh/composition updates.
+
+## FI-042 - Filter panel scrollbar consistency
+
+### Goal
+
+Replace generic browser scrollbar presentation in the Main-map Filter UI with the same compact Product Catalogue scrollbar treatment used by Review Product lists and targeted for Analyze in FI-035.
+
+### Required behavior
+
+- apply the shared scrollbar styling to the Filter panel's outer scroll container when it overflows;
+- apply the same treatment to nested scrollable attribute sections such as the Status options list;
+- support both light and dark mode;
+- preserve existing overflow sizing, wheel/touchpad scrolling, keyboard scrolling, filter selection, counts and source-aware filter state;
+- use application-owned/public CSS and documented tokens only; do not target private Calcite shadow DOM;
+- expose the treatment through a neutral shared scrollbar class/tokens rather than coupling Filters to a Review-specific selector.
+
+FI-035 should establish or reuse the neutral shared scrollbar contract for Analyze. FI-042 should reuse that contract rather than duplicating Review-only CSS. If implementation order changes, FI-042 may establish the neutral contract first provided FI-035 can consume it unchanged.
+
 ## Recommended implementation sequence
 
-1. Complete FI-021 manual browser verification.
+1. FI-021 is complete and manually accepted at `32efa496f978e20baee834f0becdb95bdadadd98`.
 2. FI-026 shared navigation/Preferences consolidation.
 3. FI-028 Scale hiding preference, FI-031 non-empty source startup, and FI-032 Main-map workspace navigation.
 4. FI-027 navbar search design/implementation after the shared navbar structure is stable.
 5. FI-033 then FI-034 Dashboard compaction and automatic filtering.
-6. FI-035 Analyze compaction.
-7. FI-036, FI-037, FI-038, then FI-039 Review work so layout, controls, content defaults, and loading behavior are changed in controlled steps.
-8. FI-029 popup action-density analysis before any icon-only popup migration.
-9. FI-030 frontend completion polish may proceed independently; backend progress/chunk work waits for its contract discovery.
-10. FI-040 keyboard-equivalent activation and discoverability after its focused interaction/accessibility design pass.
+6. FI-035 Analyze compaction, including a neutral shared scrollbar treatment.
+7. FI-042 Filter-panel scrollbar consistency using that shared treatment.
+8. FI-036, FI-041, FI-037, FI-038, then FI-039 Review work so sidebar structure, scroll preservation, content layout, defaults and loading behavior are changed in controlled steps.
+9. FI-029 popup action-density analysis before any icon-only popup migration.
+10. FI-030 frontend completion polish may proceed independently; backend progress/chunk work waits for its contract discovery.
+11. FI-040 keyboard-equivalent activation and discoverability after its focused interaction/accessibility design pass.
 
 FI-016, FI-018, FI-020, and FI-023 keep their existing separate blockers/priorities and are not re-scoped by this UI/UX review.

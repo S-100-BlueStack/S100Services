@@ -1,4 +1,4 @@
-﻿# Frontend hardening tracker
+# Frontend hardening tracker
 
 ## Current normalized workflow adaptation
 
@@ -28,7 +28,7 @@ longer describe the active frontend.
 
 This document tracks frontend-only cleanup, hardening, and architecture improvements for Product Catalogue. The goal is to improve maintainability, reliability, and structure without changing the user-facing feature set unless an item explicitly tracks a feature foundation.
 
-Current reviewed repository baseline: `aaf635571503c780517cfc3a76a4fa5e4894f447`.
+Current reviewed repository baseline: `32efa496f978e20baee834f0becdb95bdadadd98`.
 BE-108A documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`.
 
 ## Backend worker-readiness note
@@ -138,7 +138,7 @@ BE-106 remains a historical readiness review, but its proposed JobPlatform depen
 | FI-018 | Open source readiness            | Remove organization-specific deployment assumptions                       | Future review                            | Audit branding, configuration, URLs, authentication assumptions, documentation, sample data, secrets, licenses, and deployment defaults so a third party can deploy the application without editing GST-specific source code.                                                                                                                                                                                                                                          |
 | FI-019 | Analyze / Review routing         | Replace path-concatenated Product URLs with canonical query routes        | Ready / canonical contract fixed         | Use `/Analyze?Datasets=ProductA,ProductB` and `/Review?Datasets=ProductA,ProductB`. Dataset names are globally unique across current and future sources, while internal runtime state remains source-aware.                                                                                                                                                                                                                                                            |
 | FI-020 | Popup / Related Products         | Navigate backend-linked Products across data sources                      | Blocked by backend relationship contract | Render only explicit backend/database-provided Product relationships. No source pair or relationship may be inferred; authoritative target identity, relation type, and display text must support any current or future source.                                                                                                                                                                                                                                        |
-| FI-021 | Main map / Overlap selection     | Add modifier-click direct selection for the highlighted Product candidate | Implemented; manual verification pending | Ctrl/Cmd-click snapshots the current transient hover identity, then revalidates returned Graphics against current overlap-enabled layers, stable layer membership and click-session generation before opening through the normal popup path. Invalid or stale state falls back safely; Shift-click and Product Collection remain unchanged. Keyboard-equivalent activation and visible shortcut discoverability are deferred to FI-040. See `ui-ux-design-backlog.md`. |
+| FI-021 | Main map / Overlap selection     | Add modifier-click direct selection for the highlighted Product candidate | Done                                     | Manually accepted and committed at `32efa496f978e20baee834f0becdb95bdadadd98`. Normal click retains the overlap picker; Ctrl/Cmd-click directly opens only the currently highlighted valid Product after current-layer, Graphic-membership and click-generation revalidation. Shift-click and Product Collection remain unchanged. Keyboard-equivalent activation and visible shortcut discoverability remain deferred to FI-040. See `ui-ux-design-backlog.md`. |
 | FI-022 | Analyze / Review                 | Keep open workspace Product content fresh after backend changes           | Done                                     | Accepted at `c2bb13c0bce07907f16f35221025e89a7b211c06`. Analyze/Review use lightweight workspace revisions for automatic targeted freshness, visibility/job-completion checks, and manual recovery Refresh while preserving source-aware resolution, generation guards, Review selections, FI-024 targeted AOI resolution, and FI-025 ArcGIS isolation.                                                                                                                |
 | FI-023 | Popup actions                    | Consume authoritative candidate/mutation capability snapshot              | Blocked by backend                       | The backend does not currently expose candidate presence as a complete mutation-capability contract. The current frontend therefore fails closed and enables Cancel Export only when the selected source track is in a known candidate-bearing state. Replace status inference with explicit backend capability/candidate presence when that contract exists; do not infer across S-57/S-101 tracks.                                                                   |
 | FI-024 | Analyze / Review performance     | Resolve workspace Product source without loading complete AOI catalogs    | Done                                     | Analyze/Review use `GET /electronicproducts` only for lightweight dataset-name picker choices, then resolve each selected Product through `GET /electronicproducts/{datasetName}/aoi`. The targeted response carries authoritative `ProductSpecification`; identity conflicts fail closed. Local/deployment smoke verified the workspace path without S-57/S-101 bulk AOI loading, dataset-name heuristics or bulk fallback.                                           |
@@ -158,6 +158,8 @@ BE-106 remains a historical readiness review, but its proposed JobPlatform depen
 | FI-038 | Review                           | Default all content types on and add bulk content toggles                 | Ready after FI-037                       | Enable History/IC-ENC/Validation by default and add workspace-level enable/disable-all controls while preserving per-Product overrides across refreshes. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                |
 | FI-039 | Review performance               | Load only changed/new Products when Review composition changes            | Ready; regression-sensitive              | Fix the current 1+2+3... History/artifact reload pattern on sequential additions. Preserve ordering, toggles, source-aware resolution, independent failures, generation guards, full manual Refresh, and FI-022 targeted freshness. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                     |
 | FI-040 | Main map / Accessibility         | Add modifier-selection keyboard equivalent and discoverability            | Deferred follow-up                       | Define and implement an accessible activation path for the highlighted Product plus a visible, compact shortcut cue. Preserve normal overlap-picker access so the pointer shortcut is never required to use the application. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                            |
+| FI-041 | Review / Product list            | Preserve Product-list scroll position when content toggles change         | Ready; UI bug                            | Toggling History, IC-ENC, or Validation for a Product must not reset the Review Product-list scroll position. Preserve focus, ordering, toggle state, FI-022 freshness and keyboard behavior; avoid unnecessary full-list rerenders where the existing architecture permits. See `ui-ux-design-backlog.md`.                                                                                                             |
+| FI-042 | Main map / Filters               | Align Filter panel scrollbar styling                                      | Ready                                    | Apply the shared Product Catalogue scrollbar treatment to the Filter panel and nested scrollable attribute sections such as Status in both light and dark mode. Preserve existing overflow, filter state and keyboard/wheel behavior; use public/shared CSS rather than private component internals. See `ui-ux-design-backlog.md`.                                                                                 |
 
 ## Planned order
 
@@ -174,22 +176,23 @@ BE-106 remains a historical readiness review, but its proposed JobPlatform depen
 11. Keep FI-011C as the committed central Product-context, capability-specific popup-action, and flat source-aware Edition/Update Export baseline at `391074743efc909ec97168e2be2820484edb8455`.
 12. Keep FI-011D as the committed source-aware Product Collection, workspace catalog/resolution, Analyze, Review, and truthful History/report baseline at `737677d7ecd0857312224fde3e5f9a76a0cb7148`; do not enable mock-source backend actions.
 13. Keep authoritative production S-57/S-101 transport blocked until the backend supplies separate read contracts and source discrimination.
-14. FI-012, FI-009, FI-013, FI-014, FI-015, FI-017 and FI-022 are complete; the latest accepted frontend baseline is `c2bb13c0bce07907f16f35221025e89a7b211c06`.
+14. FI-012, FI-009, FI-013, FI-014, FI-015, FI-017, FI-021 and FI-022 are complete; the latest accepted frontend baseline is `32efa496f978e20baee834f0becdb95bdadadd98`.
 15. Complete FI-016 only after the backend status list identifies authoritative error states and display semantics, then activate the final FI-011 error-only first-visit filter preset.
 16. Treat FI-018 as a later cross-repository release-readiness review after configurable branding and deployment settings are established.
 17. Preserve FI-022's accepted automatic workspace-freshness boundary at `c2bb13c0bce07907f16f35221025e89a7b211c06`: lightweight revision checks may trigger targeted content refresh, while manual Refresh remains a recovery/full-refresh path and heavy AOI/Analyze/History payloads are not blindly polled.
 18. Keep FI-023 fail closed until the backend exposes authoritative candidate/mutation capabilities; selected-source track state is only a conservative interim gate.
 19. Keep FI-024's accepted targeted-resolution boundary: Analyze/Review must not regress to S57/S101 bulk AOI calls, dataset-name heuristics or cross-source fallback.
 20. Keep FI-025's accepted process-isolation boundary: one API `Interactive` lane and one serialized worker `Background` lane. Do not mask ArcGIS starvation regressions with frontend polling, retry or timeout changes.
-21. Use `ui-ux-design-backlog.md` as the detailed design source for FI-021 and FI-026 through FI-040.
-22. Complete FI-021 manual verification; keep its keyboard-equivalent activation and visible shortcut discoverability as the separate FI-040 follow-up.
-23. Then implement FI-026 shared navigation/Preferences consolidation before repeating navbar changes independently on Dashboard, Analyze, or Review.
+21. Use `ui-ux-design-backlog.md` as the detailed design source for FI-021 and FI-026 through FI-042.
+22. FI-021 is manually accepted at `32efa496f978e20baee834f0becdb95bdadadd98`; keep keyboard-equivalent activation and visible shortcut discoverability as the separate FI-040 follow-up.
+23. Implement FI-026 shared navigation/Preferences consolidation next before repeating navbar changes independently on Dashboard, Analyze, or Review.
 24. Then take the low-risk Main-map behavior items FI-028, FI-031, and FI-032; FI-027 navbar search requires its short design pass after the shared navbar structure is stable.
 25. Complete Dashboard work as FI-033 then FI-034 so visual compaction is stable before Apply is removed.
-26. Complete Analyze compaction as FI-035 without changing FI-022 freshness or FI-024 targeted resolution.
-27. Complete Review work in controlled order: FI-036 sidebar compaction, FI-037 content layout/empty states, FI-038 defaults/bulk toggles, then FI-039 incremental composition loading.
-28. Complete FI-029's popup action-density analysis before any broad icon-only popup migration.
-29. FI-030 frontend completion polish may proceed independently; assign backend progress/chunk work only after discovery identifies a truthful contract.
+26. Complete Analyze compaction as FI-035 without changing FI-022 freshness or FI-024 targeted resolution; use or establish a shared/public scrollbar styling contract that FI-042 can reuse.
+27. Apply FI-042 Filter-panel scrollbar consistency after the shared scrollbar treatment is established.
+28. Complete Review work in controlled order: FI-036 sidebar compaction, FI-041 Product-list scroll preservation, FI-037 content layout/empty states, FI-038 defaults/bulk toggles, then FI-039 incremental composition loading.
+29. Complete FI-029's popup action-density analysis before any broad icon-only popup migration.
+30. FI-030 frontend completion polish may proceed independently; assign backend progress/chunk work only after discovery identifies a truthful contract.
 
 ## FI-009 Dashboard page size preference
 
@@ -791,7 +794,8 @@ fails.
 
 ## FI-021 modifier-click direct Product selection
 
-Status: Implemented; manual verification pending  
+Status: Done  
+Implementation commit: `32efa496f978e20baee834f0becdb95bdadadd98`  
 Design source: [UI/UX design backlog](ui-ux-design-backlog.md)
 
 The current design-review requirement is to reduce overlap-picker friction when multiple Product sources occupy the same or nearly identical AOI. This supersedes the earlier FI-021 preferred experiment in which Ctrl/Cmd-click toggled Product Collection membership.
@@ -815,10 +819,17 @@ The bounded FI-021 pointer implementation does not satisfy the original keyboard
 
 The former modifier-click Product Collection toggle remains deferred and unassigned unless a later UX review restores it as a separate requirement.
 
+### Manual acceptance
+
+Manually accepted on 2026-09-16 at `32efa496f978e20baee834f0becdb95bdadadd98`. The accepted browser behavior includes normal overlap-picker access, direct Ctrl/Cmd selection of either highlighted overlapping Product, source/filter/refresh stale-state rejection, rapid successive click protection, and unchanged Shift-click, Product Collection, Product search, Locator, popup keyboard/Escape and light/dark behavior.
+
+Modifier timing remains event-bound rather than sticky: changing Ctrl/Cmd state around the mouse interaction can legitimately change whether the shortcut or normal picker path is observed. FI-021 does not add a timing grace window. Existing map navigation is also preserved: rapid Ctrl + double-left-click may invoke the map's existing zoom gesture instead of Product selection. FI-021 intentionally does not suppress or replace that navigation gesture.
+
 ## Commit log
 
 | Date       | Commit                                   | Items                                          | Notes                                                                                                                                                                                                                             |
 | ---------- | ---------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-16 | 32efa496f978e20baee834f0becdb95bdadadd98 | FI-021                                         | Added source-aware Ctrl/Cmd modifier-click direct selection for the currently highlighted overlapping Product with post-hitTest current-state revalidation, stale hover/click guards, teardown safety and normal-click fallback; manually accepted on the Main map. |
 | 2026-09-16 | c2bb13c0bce07907f16f35221025e89a7b211c06 | FI-022                                         | Added automatic Analyze/Review workspace freshness with lightweight revision checks, targeted refresh, manual recovery Refresh, and the finalized compact Analyze Refresh control.                                                |
 | 2026-09-15 | aaf635571503c780517cfc3a76a4fa5e4894f447 | Normalized workflow / FI-024 / FI-025 / BE-007 | Committed the normalized frontend workflow adaptation, targeted Product AOI resolution, active-job race correction and dedicated API/worker ArcGIS execution isolation. Local tests and dev-server export/isolation smoke passed. |
 | 2026-09-15 | 8a8b77e32502b140890954d1be5143da7b90af01 | AOI refresh performance                        | Cached global electronic Product AOI geometry per Product specification while continuing to refresh workflow/status state; the targeted single-Product AOI route remains direct and uncached.                                     |
