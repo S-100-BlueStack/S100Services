@@ -10,8 +10,6 @@ body.pc-review-route #viewDiv,
 body.pc-review-route #filter-button,
 body.pc-review-route #filter-count,
 body.pc-review-route #refresh-button,
-body.pc-review-route #display-scale-toggle,
-body.pc-review-route #display-scale-toggle-wrapper,
 body.pc-review-route #last-updated {
   display: none;
 }

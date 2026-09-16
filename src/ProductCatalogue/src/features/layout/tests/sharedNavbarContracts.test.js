@@ -89,14 +89,17 @@ test("Preferences retains introduction, reset and route-safe map preference boun
   assert.doesNotMatch(onboarding, /#theme-toggle/);
 });
 
-test("Scale hiding and Notifications retain their established public controls", async () => {
-  const [navbar, notifications] = await Promise.all([
-    readProjectFile("public/components/navbar.html"),
-    readProjectFile("src/features/notices/ui/navbarNotifications.js"),
-  ]);
+test("Scale hiding moves out of the navbar while Notifications retain their public control", async () => {
+  const navbar = await readProjectFile("public/components/navbar.html");
 
-  assert.match(navbar, /id="display-scale-toggle"[\s\S]*?checked/);
+  assert.doesNotMatch(navbar, /id="display-scale-toggle"/);
+  assert.doesNotMatch(navbar, /Scale hiding/);
   assert.match(navbar, /id="notification-button"/);
+});
+
+test("Notifications retain their established state subscription", async () => {
+  const notifications = await readProjectFile("src/features/notices/ui/navbarNotifications.js");
+
   assert.match(notifications, /subscribeToNotices/);
   assert.match(notifications, /resetUnread\(\)/);
 });

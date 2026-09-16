@@ -3,6 +3,11 @@ import {
   isPreferencePersistenceEnabled,
   onPreferencePersistenceChanged,
 } from "../../preferences/state/preferencePersistenceState.js";
+import {
+  DEFAULT_DISPLAY_SCALE_HIDING_DISABLED,
+  parsePersistedDisplayScaleHidingDisabled,
+  serializeDisplayScaleHidingDisabled,
+} from "./displayScalePreference.js";
 const DISPLAY_SCALE_OVERRIDE_CHANGE_EVENT = "pc-display-scale-override-change";
 const DISPLAY_SCALE_OVERRIDE_STORAGE_KEY = "pc.displayScale.hidingDisabled";
 
@@ -71,7 +76,7 @@ export function onDisplayScaleOverrideChange(callback) {
 export function resetDisplayScaleHidingPreference() {
   removePersistedDisplayScaleHidingDisabled();
 
-  setDisplayScaleHidingDisabled(false, {
+  setDisplayScaleHidingDisabled(DEFAULT_DISPLAY_SCALE_HIDING_DISABLED, {
     source: "preferences",
   });
 }
@@ -86,14 +91,16 @@ function removePersistedDisplayScaleHidingDisabled() {
 
 function readPersistedDisplayScaleHidingDisabled() {
   if (!isPreferencePersistenceEnabled(PREFERENCE_PERSISTENCE_KEY.DISPLAY_SCALE_OVERRIDE)) {
-    return false;
+    return DEFAULT_DISPLAY_SCALE_HIDING_DISABLED;
   }
 
   try {
-    return window.localStorage.getItem(DISPLAY_SCALE_OVERRIDE_STORAGE_KEY) === "true";
+    return parsePersistedDisplayScaleHidingDisabled(
+      window.localStorage.getItem(DISPLAY_SCALE_OVERRIDE_STORAGE_KEY)
+    );
   } catch (error) {
     console.warn("Failed to read display scale hiding preference.", error);
-    return false;
+    return DEFAULT_DISPLAY_SCALE_HIDING_DISABLED;
   }
 }
 
@@ -103,7 +110,10 @@ function writePersistedDisplayScaleHidingDisabled(disabled) {
   }
 
   try {
-    window.localStorage.setItem(DISPLAY_SCALE_OVERRIDE_STORAGE_KEY, String(Boolean(disabled)));
+    window.localStorage.setItem(
+      DISPLAY_SCALE_OVERRIDE_STORAGE_KEY,
+      serializeDisplayScaleHidingDisabled(disabled)
+    );
   } catch (error) {
     console.warn("Failed to save display scale hiding preference.", error);
   }

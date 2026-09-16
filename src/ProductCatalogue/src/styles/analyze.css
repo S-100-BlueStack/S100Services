@@ -9,7 +9,6 @@ body.pc-analyze-route {
 .pc-analyze-route #filter-button,
 .pc-analyze-route #filter-count,
 .pc-analyze-route #refresh-button,
-.pc-analyze-route #display-scale-toggle,
 .pc-analyze-route #last-updated {
   display: none;
 }

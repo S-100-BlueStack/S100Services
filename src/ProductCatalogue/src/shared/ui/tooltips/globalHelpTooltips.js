@@ -20,12 +20,6 @@ const GLOBAL_HELP_RULES = [
     mode: "replace-generic",
   },
   {
-    selector: "#display-scale-toggle, #display-scale-toggle-wrapper",
-    title:
-      "Toggle scale hiding. When enabled, products outside their display scale range are hidden.",
-    mode: "replace-generic",
-  },
-  {
     selector: "#filter-button",
     title: "Open product filters for display scale, status and usage band.",
     mode: "replace-generic",

@@ -1,7 +1,6 @@
 import "@esri/calcite-components/components/calcite-slider";
 
 import { formatAttributeDisplayValue } from "../attributes/attributeDisplay.js";
-import { setDisplayScaleHidingDisabled } from "../scale/displayScaleOverrideState.js";
 import {
   PREFERENCE_PERSISTENCE_KEY,
   isPreferencePersistenceEnabled,
@@ -41,7 +40,6 @@ export function initAttributeFilterPanel({
   document.body.append(panel);
 
   let hasInitializedFilterState = false;
-  let wasDisplayScaleFilterActive = false;
   let renderScheduled = false;
 
   const isOpen = () => !panel.hidden;
@@ -115,7 +113,6 @@ export function initAttributeFilterPanel({
   function clearAllFilters() {
     filterService.clearAll();
     writeFilterSnapshot(filterService);
-    syncDisplayScaleFilterAutoDisable();
     applyVisibility?.();
     render();
   }
@@ -148,7 +145,6 @@ export function initAttributeFilterPanel({
     refreshBadge();
 
     if (initializedNow) {
-      syncDisplayScaleFilterAutoDisable();
       applyVisibility?.();
     }
   }
@@ -172,7 +168,6 @@ export function initAttributeFilterPanel({
 
   function commitFilterChange({ rerender = true } = {}) {
     writeFilterSnapshot(filterService);
-    syncDisplayScaleFilterAutoDisable();
     applyVisibility?.();
 
     if (rerender) {
@@ -190,16 +185,6 @@ export function initAttributeFilterPanel({
     const activeCount = filterService.getActiveFilterCount();
     badge.hidden = activeCount === 0;
     badge.textContent = String(activeCount);
-  }
-
-  function syncDisplayScaleFilterAutoDisable() {
-    const active = filterService.hasActiveDisplayScaleFilter();
-
-    if (active && !wasDisplayScaleFilterActive) {
-      setDisplayScaleHidingDisabled(true, { source: "displayScaleFilter" });
-    }
-
-    wasDisplayScaleFilterActive = active;
   }
 
   function handleButtonClick(event) {

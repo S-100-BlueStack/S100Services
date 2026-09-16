@@ -1,7 +1,11 @@
 import { noticeSuccess } from "../../notices/services/noticeService.js";
 import { resetDashboardPageSizePreference } from "../../dashboard/state/dashboardPageSizePreference.js";
 import { resetMapViewpoint } from "../../map/state/mapViewpointPersistence.js";
-import { resetDisplayScaleHidingPreference } from "../../map/scale/displayScaleOverrideState.js";
+import { bindDisplayScaleOverrideControl } from "../../map/scale/displayScaleOverrideControl.js";
+import {
+  isDisplayScaleHidingDisabled,
+  resetDisplayScaleHidingPreference,
+} from "../../map/scale/displayScaleOverrideState.js";
 import {
   applyTheme,
   getCurrentTheme,
@@ -33,10 +37,10 @@ const PREFERENCE_ITEMS = [
   },
   {
     key: PREFERENCE_PERSISTENCE_KEY.DISPLAY_SCALE_OVERRIDE,
-    resetAction: "reset-display-scale",
-    title: "Display scale setting",
-    description: "Save the display-scale hiding setting in this browser.",
-    resetLabel: "Reset",
+    title: "Save Scale hiding",
+    description: "Retain the Scale hiding setting in this browser.",
+    persistenceLabel: "Save Scale hiding setting in this browser",
+    noticeTitle: "Scale hiding",
     requiresMapContext: true,
   },
   {
@@ -88,7 +92,11 @@ export function initPreferencesPanel({
   };
 
   const isOpen = () => !panel.hidden;
+  let displayScaleControlHandle = null;
   const render = () => {
+    displayScaleControlHandle?.remove();
+    displayScaleControlHandle = null;
+
     const persistenceState = getPreferencePersistenceState();
     const availableItems = PREFERENCE_ITEMS.filter(
       (item) => !item.requiresMapContext || context.view
@@ -112,6 +120,7 @@ export function initPreferencesPanel({
         </button>
 
         ${renderThemeSelector(getCurrentTheme())}
+        ${context.view ? renderDisplayScaleSetting() : ""}
         ${availableItems.map((item) => renderPreferenceItem(item, persistenceState)).join("")}
         <button
           type="button"
@@ -123,6 +132,12 @@ export function initPreferencesPanel({
         </button>
       </div>
     `;
+
+    if (context.view) {
+      displayScaleControlHandle = bindDisplayScaleOverrideControl(
+        panel.querySelector("#preferences-scale-hiding")
+      );
+    }
   };
 
   const setOpen = (open) => {
@@ -151,7 +166,8 @@ export function initPreferencesPanel({
         break;
       case "reset-display-scale":
         resetDisplayScaleHidingPreference();
-        noticeSuccess("Display scale setting reset", null, { countAsUnread: false });
+        render();
+        noticeSuccess("Scale hiding reset", null, { countAsUnread: false });
         break;
       case "reset-theme":
         resetThemePreference(context.themeView ?? context.view);
@@ -206,7 +222,7 @@ export function initPreferencesPanel({
       (entry) => entry.key === switchElement.dataset.preferencePersistenceKey
     );
     noticeSuccess(
-      `${item?.title ?? "Preference"} persistence ${
+      `${item?.noticeTitle ?? item?.title ?? "Preference"} persistence ${
         switchElement.checked ? "enabled" : "disabled"
       }`,
       null,
@@ -241,6 +257,7 @@ export function initPreferencesPanel({
       activePanel?.updateContext(nextContext);
     },
     destroy() {
+      displayScaleControlHandle?.remove();
       document.removeEventListener("click", handleDocumentClick);
       window.removeEventListener("resize", handleResize);
       panel.remove();
@@ -313,6 +330,34 @@ function renderThemeOption(value, label, currentTheme) {
   `;
 }
 
+function renderDisplayScaleSetting() {
+  const scaleHidingEnabled = !isDisplayScaleHidingDisabled();
+
+  return `
+    <section class="pc-preferences-panel__setting">
+      <div class="pc-preferences-panel__copy">
+        <h3 id="preferences-scale-hiding-label">Scale hiding</h3>
+        <p id="preferences-scale-hiding-description">
+          Hide Products outside their configured display scale range.
+        </p>
+      </div>
+      <calcite-switch
+        id="preferences-scale-hiding"
+        class="pc-preferences-panel__switch"
+        label="Scale hiding"
+        aria-labelledby="preferences-scale-hiding-label"
+        aria-describedby="preferences-scale-hiding-description"
+        ${scaleHidingEnabled ? "checked" : ""}
+      ></calcite-switch>
+      <button
+        type="button"
+        class="pc-preferences-panel__reset"
+        data-preference-action="reset-display-scale"
+      >Reset</button>
+    </section>
+  `;
+}
+
 function renderPreferenceItem(item, persistenceState) {
   const checked = persistenceState[item.key] !== false;
   return `
@@ -324,14 +369,20 @@ function renderPreferenceItem(item, persistenceState) {
       <calcite-switch
         class="pc-preferences-panel__switch"
         data-preference-persistence-key="${escapeHtml(item.key)}"
-        label="${escapeHtml(`Save ${item.title.toLowerCase()} in this browser`)}"
+        label="${escapeHtml(
+          item.persistenceLabel ?? `Save ${item.title.toLowerCase()} in this browser`
+        )}"
         ${checked ? "checked" : ""}
       ></calcite-switch>
-      <button
-        type="button"
-        class="pc-preferences-panel__reset"
-        data-preference-action="${escapeHtml(item.resetAction)}"
-      >${escapeHtml(item.resetLabel)}</button>
+      ${
+        item.resetAction
+          ? `<button
+              type="button"
+              class="pc-preferences-panel__reset"
+              data-preference-action="${escapeHtml(item.resetAction)}"
+            >${escapeHtml(item.resetLabel)}</button>`
+          : ""
+      }
     </section>
   `;
 }

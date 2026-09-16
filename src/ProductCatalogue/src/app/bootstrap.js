@@ -12,7 +12,6 @@ import { initRefreshControls } from "./initRefreshControls.js";
 import { initUI } from "./initUI.js";
 import { loadInitialData } from "./loadInitialData.js";
 import { initializeTheme } from "../features/themes/themeService.js";
-import { initDisplayScaleOverrideControl } from "../features/map/scale/displayScaleOverrideControl.js";
 import { waitForCalciteComponents } from "../shared/ui/calciteComponentReady.js";
 import { getCurrentRoute } from "./routing/appRoute.js";
 
@@ -52,7 +51,6 @@ async function bootstrapMainRoute() {
 
   try {
     const ui = await initUI();
-    initDisplayScaleOverrideControl();
 
     const app = initMap();
     initRefreshControls(app);

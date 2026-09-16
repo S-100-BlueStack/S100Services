@@ -9,8 +9,6 @@ body.pc-dashboard-route #viewDiv,
 body.pc-dashboard-route #filter-button,
 body.pc-dashboard-route #filter-count,
 body.pc-dashboard-route #refresh-button,
-body.pc-dashboard-route #display-scale-toggle,
-body.pc-dashboard-route #display-scale-toggle-wrapper,
 body.pc-dashboard-route #last-updated {
   display: none;
 }
