@@ -126,8 +126,9 @@ export const ONBOARDING_STEPS = Object.freeze({
     {
       id: "main-theme",
       title: "Choose your theme",
-      description: "Switch between light and dark mode. Your choice can be saved in this browser.",
-      selectors: ["#theme-toggle"],
+      description:
+        "Open Preferences to switch between light and dark mode. Your choice can be saved in this browser.",
+      selectors: ["#preferences-button"],
       placement: "below",
     },
     {

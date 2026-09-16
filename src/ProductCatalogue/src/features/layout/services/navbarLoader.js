@@ -3,6 +3,8 @@ import { buildReviewUrl } from "../../review/routing/reviewRoute.js";
 import fallbackLogoUrl from "../../../assets/product-catalogue-logo.svg?no-inline";
 import { resolveBranding } from "../../../shared/config/brandingConfig.js";
 import { initializeNavbarBranding } from "./navbarBranding.js";
+import { getCurrentRoute } from "../../../app/routing/appRoute.js";
+import { applyNavbarRouteState } from "./navbarRouteState.js";
 
 export async function loadNavbar() {
   const res = await fetch(`${import.meta.env.BASE_URL}components/navbar.html`);
@@ -14,11 +16,11 @@ export async function loadNavbar() {
     document.querySelector("[data-navbar-logo]"),
     resolveBranding({ fallbackSrc: fallbackLogoUrl })
   );
-  initializeNavbarLinks();
+  initializeNavbarLinks(getCurrentRoute());
   initializeDocumentationButton();
 }
 
-function initializeNavbarLinks() {
+function initializeNavbarLinks(route) {
   const homeLink = document.querySelector("[data-nav-home-link]");
   const dashboardLink = document.querySelector("[data-nav-dashboard-link]");
   const analyzeLink = document.querySelector("[data-nav-analyze-link]");
@@ -39,6 +41,8 @@ function initializeNavbarLinks() {
   if (reviewLink) {
     reviewLink.href = buildReviewUrl([]);
   }
+
+  applyNavbarRouteState(document, route);
 }
 
 function initializeDocumentationButton() {

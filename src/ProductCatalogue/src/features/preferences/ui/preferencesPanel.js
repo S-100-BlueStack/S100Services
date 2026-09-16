@@ -2,8 +2,12 @@ import { noticeSuccess } from "../../notices/services/noticeService.js";
 import { resetDashboardPageSizePreference } from "../../dashboard/state/dashboardPageSizePreference.js";
 import { resetMapViewpoint } from "../../map/state/mapViewpointPersistence.js";
 import { resetDisplayScaleHidingPreference } from "../../map/scale/displayScaleOverrideState.js";
-import { resetThemePreference } from "../../themes/themeService.js";
-import { syncThemeToggle } from "../../themes/themeToggle.js";
+import {
+  applyTheme,
+  getCurrentTheme,
+  resetThemePreference,
+  themes,
+} from "../../themes/themeService.js";
 import {
   PREFERENCE_PERSISTENCE_KEY,
   getPreferencePersistenceState,
@@ -50,6 +54,7 @@ export function initPreferencesPanel({
   filterPanel,
   dataSourceController,
   onStartIntroduction,
+  themeView,
 } = {}) {
   if (activePanel) {
     activePanel.updateContext({
@@ -57,6 +62,7 @@ export function initPreferencesPanel({
       filterPanel,
       dataSourceController,
       onStartIntroduction,
+      themeView,
     });
     return activePanel.api;
   }
@@ -78,6 +84,7 @@ export function initPreferencesPanel({
     filterPanel: null,
     dataSourceController: null,
     onStartIntroduction: null,
+    themeView: null,
   };
 
   const isOpen = () => !panel.hidden;
@@ -104,6 +111,7 @@ export function initPreferencesPanel({
           <small>Show a short guide to the controls on this page.</small>
         </button>
 
+        ${renderThemeSelector(getCurrentTheme())}
         ${availableItems.map((item) => renderPreferenceItem(item, persistenceState)).join("")}
         <button
           type="button"
@@ -146,8 +154,8 @@ export function initPreferencesPanel({
         noticeSuccess("Display scale setting reset", null, { countAsUnread: false });
         break;
       case "reset-theme":
-        resetThemePreference(context.view);
-        syncThemeToggle();
+        resetThemePreference(context.themeView ?? context.view);
+        render();
         noticeSuccess("Theme reset", null, { countAsUnread: false });
         break;
       case "reset-all":
@@ -162,8 +170,8 @@ export function initPreferencesPanel({
         if (document.body.classList.contains("pc-dashboard-route")) {
           resetDashboardPageSizePreference();
         }
-        resetThemePreference(context.view);
-        syncThemeToggle();
+        resetThemePreference(context.themeView ?? context.view);
+        render();
         noticeSuccess("Preferences reset", null, { countAsUnread: false });
         break;
       default:
@@ -206,6 +214,15 @@ export function initPreferencesPanel({
     );
   });
 
+  panel.addEventListener("change", (event) => {
+    event.stopPropagation();
+    const target = getTargetElement(event);
+    const themeOption = target?.closest("input[data-preference-theme]");
+    if (!themeOption?.checked) return;
+
+    applyTheme(themeOption.value, context.themeView ?? context.view);
+  });
+
   const handleDocumentClick = (event) => {
     const target = getTargetElement(event);
     if (!target || panel.hidden || panel.contains(target) || button.contains(target)) return;
@@ -220,6 +237,9 @@ export function initPreferencesPanel({
 
   const api = {
     close: () => setOpen(false),
+    updateContext(nextContext = {}) {
+      activePanel?.updateContext(nextContext);
+    },
     destroy() {
       document.removeEventListener("click", handleDocumentClick);
       window.removeEventListener("resize", handleResize);
@@ -243,6 +263,14 @@ export function initPreferencesPanel({
       if (typeof nextContext.onStartIntroduction === "function") {
         context.onStartIntroduction = nextContext.onStartIntroduction;
       }
+      if (
+        Object.prototype.hasOwnProperty.call(nextContext, "themeView") &&
+        nextContext.themeView !== undefined
+      ) {
+        context.themeView = nextContext.themeView;
+      } else if (Object.prototype.hasOwnProperty.call(nextContext, "view")) {
+        context.themeView = nextContext.view;
+      }
       if (isOpen()) render();
     },
   };
@@ -251,9 +279,38 @@ export function initPreferencesPanel({
     filterPanel,
     dataSourceController,
     onStartIntroduction,
+    themeView,
   });
   render();
   return api;
+}
+
+function renderThemeSelector(currentTheme) {
+  return `
+    <fieldset class="pc-preferences-panel__theme">
+      <legend>Theme</legend>
+      <p>Choose the application appearance.</p>
+      <div class="pc-preferences-panel__theme-options">
+        ${renderThemeOption(themes.light, "Light", currentTheme)}
+        ${renderThemeOption(themes.dark, "Dark", currentTheme)}
+      </div>
+    </fieldset>
+  `;
+}
+
+function renderThemeOption(value, label, currentTheme) {
+  return `
+    <label class="pc-preferences-panel__theme-option">
+      <input
+        type="radio"
+        name="product-catalogue-theme"
+        value="${escapeHtml(value)}"
+        data-preference-theme
+        ${currentTheme === value ? "checked" : ""}
+      />
+      <span>${escapeHtml(label)}</span>
+    </label>
+  `;
 }
 
 function renderPreferenceItem(item, persistenceState) {
@@ -289,8 +346,11 @@ function ensurePreferencesButton() {
   const button = document.createElement("calcite-action");
   button.id = "preferences-button";
   button.icon = "gear";
+  button.text = "Preferences";
   button.label = "Preferences";
   button.title = "Preferences";
+  button.scale = "m";
+  button.setAttribute("aria-label", "Preferences");
   container.appendChild(button);
   return button;
 }
@@ -306,7 +366,7 @@ function getTargetElement(event) {
 }
 
 function createEmptyApi() {
-  return { close() {}, destroy() {} };
+  return { close() {}, updateContext() {}, destroy() {} };
 }
 
 function escapeHtml(value) {

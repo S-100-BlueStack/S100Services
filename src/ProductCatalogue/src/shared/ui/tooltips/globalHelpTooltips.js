@@ -36,8 +36,8 @@ const GLOBAL_HELP_RULES = [
     mode: "replace-generic",
   },
   {
-    selector: "#theme-toggle",
-    title: "Switch between light and dark mode.",
+    selector: "input[data-preference-theme]",
+    title: "Choose light or dark mode.",
     mode: "fill-empty",
   },
   {

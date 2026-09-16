@@ -87,7 +87,8 @@ test("connects map selection, popup actions, Product Collection and browser pref
     "[data-nav-analyze-link]",
     "[data-nav-review-link]",
   ]);
-  assert.deepEqual(themeStep.selectors, ["#theme-toggle"]);
+  assert.deepEqual(themeStep.selectors, ["#preferences-button"]);
+  assert.match(themeStep.description, /Preferences/);
   assert.deepEqual(preferencesStep.selectors, ["#preferences-button"]);
   assert.equal(preferencesStep.behavior.type, "wait-for-target-count");
   assert.deepEqual(preferencesStep.behavior.selectors, ["#preferences-panel:not([hidden])"]);

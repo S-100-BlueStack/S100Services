@@ -94,6 +94,64 @@
   color: var(--calcite-color-status-danger, #d83020);
 }
 
+.pc-preferences-panel__theme {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 10px;
+  border: 0;
+}
+
+.pc-preferences-panel__theme legend {
+  padding: 0;
+  color: var(--pc-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pc-preferences-panel__theme > p {
+  margin: 0;
+  color: var(--pc-text-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.pc-preferences-panel__theme-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.pc-preferences-panel__theme-option {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+  padding: 7px 9px;
+  color: var(--pc-text);
+  background: var(--pc-surface-alt);
+  border: 1px solid var(--pc-border);
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pc-preferences-panel__theme-option:has(input:checked) {
+  border-color: var(--calcite-color-brand, #0079c1);
+  box-shadow: inset 0 0 0 1px var(--calcite-color-brand, #0079c1);
+}
+
+.pc-preferences-panel__theme-option:has(input:focus-visible) {
+  outline: 2px solid var(--calcite-color-focus-color, #007ac2);
+  outline-offset: 2px;
+}
+
+.pc-preferences-panel__theme-option input {
+  margin: 0;
+  accent-color: var(--calcite-color-brand, #0079c1);
+}
+
 @media (max-width: 480px) {
   .pc-preferences-panel {
     right: 12px !important;

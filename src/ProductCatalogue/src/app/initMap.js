@@ -29,24 +29,23 @@ import { createSourceAwareProductSearchIndex } from "../features/map/search/sour
 import { createCompatibilityDerivedStateAdapter } from "../features/map/services/compatibilityDerivedStateAdapter.js";
 import { bindMapViewpointPersistence } from "../features/map/state/mapViewpointPersistence.js";
 import { initPreferencesPanel } from "../features/preferences/ui/preferencesPanel.js";
+import {
+  applyLastUpdatedPresentation,
+  createLastUpdatedPresentation,
+  createRefreshingPresentation,
+  readLastUpdatedPresentation,
+} from "../features/layout/services/lastUpdatedPresentation.js";
 function updateLastUpdated(date = new Date()) {
   const element = document.getElementById("last-updated");
-  if (!element) return;
-
-  element.textContent =
-    "Updated: " +
-    date.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  applyLastUpdatedPresentation(element, createLastUpdatedPresentation(date));
 }
 
-function setLastUpdatedStatus(text) {
+function setLastUpdatedPresentation(presentation) {
   const element = document.getElementById("last-updated");
-  if (element) element.textContent = text;
+  applyLastUpdatedPresentation(element, presentation);
 }
-function readLastUpdatedStatus() {
-  return document.getElementById("last-updated")?.textContent ?? "";
+function readCurrentLastUpdatedPresentation() {
+  return readLastUpdatedPresentation(document.getElementById("last-updated"));
 }
 export function initMap() {
   const map = createMap();
@@ -60,7 +59,7 @@ export function initMap() {
     filterService,
     productSearchIndex,
   });
-  let previousLastUpdatedStatus = "";
+  let previousLastUpdatedPresentation = null;
   let filterPanel = null;
   const cleanupPopupHoverSync = registerPopupHoverSync(view, hoverManager);
 
@@ -146,8 +145,8 @@ export function initMap() {
     onRefreshStart: ({ source }) => {
       if (source !== "manual") return;
       cancelActiveConfirmPopover({ restoreFocus: false });
-      previousLastUpdatedStatus = readLastUpdatedStatus();
-      setLastUpdatedStatus("Refreshing...");
+      previousLastUpdatedPresentation = readCurrentLastUpdatedPresentation();
+      setLastUpdatedPresentation(createRefreshingPresentation());
     },
     onRefreshSuccess: ({ source, graphicsCount, finishedAt }) => {
       updateLastUpdated(finishedAt);
@@ -159,7 +158,9 @@ export function initMap() {
     },
     onRefreshError: (error, { source } = {}) => {
       if (source === "manual") {
-        if (previousLastUpdatedStatus) setLastUpdatedStatus(previousLastUpdatedStatus);
+        if (previousLastUpdatedPresentation) {
+          setLastUpdatedPresentation(previousLastUpdatedPresentation);
+        }
         noticeError("Refresh failed", error.message);
         return;
       }
@@ -180,7 +181,9 @@ export function initMap() {
         if (result.source === "manual")
           noticeSuccess("Data refreshed", null, { countAsUnread: false });
       } else if (result.source === "manual") {
-        setLastUpdatedStatus(previousLastUpdatedStatus);
+        if (previousLastUpdatedPresentation) {
+          setLastUpdatedPresentation(previousLastUpdatedPresentation);
+        }
         noticeError(
           "Refresh incomplete",
           "One or more sources could not be refreshed. Previous data may still be displayed."

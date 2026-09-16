@@ -102,10 +102,23 @@
 
 .navbar-title-link:hover,
 .navbar-title-link:focus,
-.navbar-title-link:active {
+.navbar-title-link:active,
+.navbar-title-link[aria-current="page"] {
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+
+#last-updated {
+  display: inline-flex;
+  align-items: center;
+  min-width: 38px;
+  min-height: 32px;
+  color: #ffffff;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: help;
 }
 
 .navbar-switch-control {

@@ -12,7 +12,6 @@ import { initRefreshControls } from "./initRefreshControls.js";
 import { initUI } from "./initUI.js";
 import { loadInitialData } from "./loadInitialData.js";
 import { initializeTheme } from "../features/themes/themeService.js";
-import { registerThemeToggle } from "../features/themes/themeToggle.js";
 import { initDisplayScaleOverrideControl } from "../features/map/scale/displayScaleOverrideControl.js";
 import { waitForCalciteComponents } from "../shared/ui/calciteComponentReady.js";
 import { getCurrentRoute } from "./routing/appRoute.js";
@@ -58,7 +57,6 @@ async function bootstrapMainRoute() {
     const app = initMap();
     initRefreshControls(app);
     initializeTheme(app.view);
-    registerThemeToggle(app.view);
 
     showLoader("Preparing UI components...", {
       progress: 0.01,
@@ -109,7 +107,6 @@ async function bootstrapDashboardRoute(route) {
     });
 
     initializeTheme();
-    registerThemeToggle();
     hideLoader();
     ui.onboarding.setRouteReady();
   } catch (error) {
@@ -146,7 +143,7 @@ async function bootstrapAnalyzeRoute(route) {
     });
 
     initializeTheme(app.view);
-    registerThemeToggle(app.view);
+    ui.preferencesPanel.updateContext({ themeView: app.view });
     hideLoader();
     ui.onboarding.setRouteReady();
   } catch (error) {
@@ -182,7 +179,6 @@ async function bootstrapReviewRoute(route) {
     });
 
     initializeTheme();
-    registerThemeToggle();
     hideLoader();
     ui.onboarding.setRouteReady();
   } catch (error) {
