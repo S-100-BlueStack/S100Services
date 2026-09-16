@@ -24,3 +24,20 @@ export function resolveFeatureKey(attributes = {}, layerId = "") {
 export function getGraphicFeatureKey(graphic) {
   return graphic?.attributes?.featureKey ?? null;
 }
+
+export function getGraphicInteractionIdentity(graphic) {
+  const productIdentityKey = normalizeKeyPart(graphic?.attributes?.productIdentityKey);
+
+  if (productIdentityKey) {
+    return `product:${productIdentityKey}`;
+  }
+
+  const featureKey = normalizeKeyPart(graphic?.attributes?.featureKey);
+  const layerId = normalizeKeyPart(graphic?.layer?.appLayerId ?? graphic?.layer?.customId);
+
+  if (!featureKey || !layerId) {
+    return null;
+  }
+
+  return `feature:${layerId}:${featureKey}`;
+}

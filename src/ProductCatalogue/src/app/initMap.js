@@ -62,7 +62,7 @@ export function initMap() {
   });
   let previousLastUpdatedStatus = "";
   let filterPanel = null;
-  registerPopupHoverSync(view, hoverManager);
+  const cleanupPopupHoverSync = registerPopupHoverSync(view, hoverManager);
 
   const isGraphicAllowed = (graphic, layer) => filterService.matchesGraphic(graphic, layer);
   const applyMapVisibility = (layers = getAllLayers()) => {
@@ -131,7 +131,7 @@ export function initMap() {
     productSearch,
     locator,
   });
-  bindOverlapPicker(view);
+  const cleanupOverlapPicker = bindOverlapPicker(view, { hoverManager });
   const compatibilityRefreshService = createRefreshService({
     map,
     view,
@@ -213,12 +213,15 @@ export function initMap() {
     navbarPopoverCoordinator,
     destroy() {
       cleanupKeyboardClose?.();
+      cleanupOverlapPicker?.();
+      cleanupPopupHoverSync?.();
       refreshService.destroy?.();
       locator?.destroy?.();
       productSearch?.destroy?.();
       mainMapSearchControls?.destroy?.();
       filterPanel?.destroy?.();
       dataSourceRuntime.destroy();
+      hoverManager.destroy?.();
       navbarPopoverCoordinator.destroy();
       preferencesPanel?.destroy?.();
       productHistoryPanel?.destroy?.();

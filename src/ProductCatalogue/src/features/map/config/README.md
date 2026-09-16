@@ -63,6 +63,35 @@ This metadata is intentional. Popup rendering, filters, refresh restore, hover s
 lifecycle, and future multi-source workflows require stable frontend identity even when backend
 payload shapes differ.
 
+## Overlap and modifier-click interaction
+
+Normal map click uses the current interactive-layer hit test. Zero candidates close the popup, one
+candidate opens its normal Product popup, and multiple candidates open the existing overlap picker.
+The picker retains its established ordering and opens its selection through that same popup path.
+
+FI-021 adds a pointer-only shortcut without changing the normal workflow:
+
+- Ctrl-click on Windows/Linux and Cmd-click on macOS snapshots the current transient hover Product;
+- the snapshot is a stable source-aware Product/Graphic identity, not a layer or source preference;
+- the identity is matched against the current click's visible, unique candidates before selection;
+- no valid match falls back to normal click, including the overlap picker for multiple candidates;
+- popup-locked highlight is not a transient hover candidate;
+- Shift-click, Product Collection, Product search, and Locator are unchanged.
+
+Hover hit tests are generation guarded. Results captured before newer pointer movement, layer
+unregistration, popup locking, pointer leave, clearing, or teardown cannot become current hover
+state. The click flow also captures hover identity before awaiting its own hit test, so a late hover
+result cannot retroactively become that click's direct-selection target.
+
+After the click hit test completes, its Graphics are also checked against the current
+overlap-enabled layer set and the layer's current stable `featureKey` index or public graphics
+collection. A click-session generation prevents older clicks and destroyed interactions from
+publishing popup state.
+
+FI-021 does not remove or satisfy the original keyboard-equivalent activation and visible shortcut
+discoverability requirements. They are deferred to FI-040. Until then, normal click and the overlap
+picker remain the complete non-shortcut workflow, and existing keyboard/focus behavior is preserved.
+
 ## Product action safety
 
 Product mutation actions must only be shown for Products whose resolved Product context declares the

@@ -35,23 +35,24 @@ The frontend must not invent precise progress percentages that the backend canno
 
 ## Task matrix
 
-| ID | Area | Task | Status | Dependency / boundary |
-| --- | --- | --- | --- | --- |
-| FI-021 | Main map / overlap selection | Add modifier-click direct selection for the highlighted Product candidate | Ready for discovery and implementation | Preserve normal-click overlap picker, source-aware identity, map gestures, popup lifecycle, keyboard equivalent, and Product Collection semantics. |
-| FI-026 | Shared navigation / Preferences | Consolidate active-route state and shared navbar controls | Ready | Implement before duplicating route-specific navbar changes. |
-| FI-027 | Main map search | Move Product search and geographic Locator into a navbar search area | Design discovery first | Product search and Locator remain separate workflows; do not merge Product lookup with geographic search. |
-| FI-028 | Main map / Preferences | Move Scale hiding into Preferences and make it opt-in | Ready | Remove automatic/default-on behavior; preserve explicit user preference after it is chosen. |
-| FI-029 | Popup actions | Audit text-heavy popup actions and define a compact icon-first presentation | Design analysis first | Do not blindly remove labels from ambiguous, rare, or high-risk actions. Preserve tooltips, accessible names, confirmation dialogs, and keyboard behavior. |
-| FI-030 | Loading | Smooth loader completion and discover a real progress/chunk contract | Split frontend polish + backend discovery | Do not fake precise progress or introduce frontend polling/retry to mask backend execution. Preserve FI-025. |
-| FI-031 | Main map / Data sources | Prevent startup/reload with zero enabled Product sources | Ready | Allow zero sources during the current session, but restore at least one registry-selected/default available source on next application startup/reload. No source-name branching. |
-| FI-032 | Main map navigation | Open Dashboard, Analyze, and Review in new tabs from the Main map and fix false popup-blocked notices | Ready | New-tab behavior applies only when launched from the Main map. Navigation from Dashboard/Analyze/Review remains same-tab. |
-| FI-033 | Dashboard | Compact page chrome and range/refresh toolbar | Ready | Preserve BE-107 paging/filter/sort contracts and FI-009/FI-010 behavior. |
-| FI-034 | Dashboard | Auto-apply valid filter changes and remove the Apply action | Ready after FI-033 | Preserve debounce, stale-request protection, last-successful results, page reset, and cursor-generation invalidation. |
-| FI-035 | Analyze | Compact the Analyze sidebar and align scrollbar/list presentation | Ready | Preserve Product picker behavior, FI-022 freshness, source-aware resolution, manual Refresh, independent content failures, and keyboard behavior. |
-| FI-036 | Review | Compact Review sidebar controls and move Refresh above Products | Ready | Preserve Product composition, content toggles, FI-022 freshness, and source-aware resolution. |
-| FI-037 | Review | Reduce Product-content density, simplify empty states, and remove nested report scrolling | Ready after FI-036 | Preserve independent History/IC-ENC/validation failures and truthful unavailable states. |
-| FI-038 | Review | Enable all Review content types by default and add bulk content toggles | Ready after FI-037 | Bulk controls must coexist with per-Product controls and preserve user-selected state after subsequent refreshes. |
-| FI-039 | Review performance | Load only changed/new Products when Review composition changes | Ready; regression-sensitive | Preserve ordering, content toggles, generation guards, independent History/artifact failures, and full manual Refresh semantics. |
+| ID     | Area                            | Task                                                                                                  | Status                                    | Dependency / boundary                                                                                                                                                                                                                                                                                                            |
+| ------ | ------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FI-021 | Main map / overlap selection    | Add modifier-click direct selection for the highlighted Product candidate                             | Implemented; manual verification pending  | Normal click retains the overlap workflow. Ctrl/Cmd-click opens only the transiently highlighted Product after current-layer, Graphic-membership and click-generation validation; otherwise it falls back safely. Shift-click and Product Collection remain unchanged. Keyboard/discoverability requirements continue as FI-040. |
+| FI-026 | Shared navigation / Preferences | Consolidate active-route state and shared navbar controls                                             | Ready                                     | Implement before duplicating route-specific navbar changes.                                                                                                                                                                                                                                                                      |
+| FI-027 | Main map search                 | Move Product search and geographic Locator into a navbar search area                                  | Design discovery first                    | Product search and Locator remain separate workflows; do not merge Product lookup with geographic search.                                                                                                                                                                                                                        |
+| FI-028 | Main map / Preferences          | Move Scale hiding into Preferences and make it opt-in                                                 | Ready                                     | Remove automatic/default-on behavior; preserve explicit user preference after it is chosen.                                                                                                                                                                                                                                      |
+| FI-029 | Popup actions                   | Audit text-heavy popup actions and define a compact icon-first presentation                           | Design analysis first                     | Do not blindly remove labels from ambiguous, rare, or high-risk actions. Preserve tooltips, accessible names, confirmation dialogs, and keyboard behavior.                                                                                                                                                                       |
+| FI-030 | Loading                         | Smooth loader completion and discover a real progress/chunk contract                                  | Split frontend polish + backend discovery | Do not fake precise progress or introduce frontend polling/retry to mask backend execution. Preserve FI-025.                                                                                                                                                                                                                     |
+| FI-031 | Main map / Data sources         | Prevent startup/reload with zero enabled Product sources                                              | Ready                                     | Allow zero sources during the current session, but restore at least one registry-selected/default available source on next application startup/reload. No source-name branching.                                                                                                                                                 |
+| FI-032 | Main map navigation             | Open Dashboard, Analyze, and Review in new tabs from the Main map and fix false popup-blocked notices | Ready                                     | New-tab behavior applies only when launched from the Main map. Navigation from Dashboard/Analyze/Review remains same-tab.                                                                                                                                                                                                        |
+| FI-033 | Dashboard                       | Compact page chrome and range/refresh toolbar                                                         | Ready                                     | Preserve BE-107 paging/filter/sort contracts and FI-009/FI-010 behavior.                                                                                                                                                                                                                                                         |
+| FI-034 | Dashboard                       | Auto-apply valid filter changes and remove the Apply action                                           | Ready after FI-033                        | Preserve debounce, stale-request protection, last-successful results, page reset, and cursor-generation invalidation.                                                                                                                                                                                                            |
+| FI-035 | Analyze                         | Compact the Analyze sidebar and align scrollbar/list presentation                                     | Ready                                     | Preserve Product picker behavior, FI-022 freshness, source-aware resolution, manual Refresh, independent content failures, and keyboard behavior.                                                                                                                                                                                |
+| FI-036 | Review                          | Compact Review sidebar controls and move Refresh above Products                                       | Ready                                     | Preserve Product composition, content toggles, FI-022 freshness, and source-aware resolution.                                                                                                                                                                                                                                    |
+| FI-037 | Review                          | Reduce Product-content density, simplify empty states, and remove nested report scrolling             | Ready after FI-036                        | Preserve independent History/IC-ENC/validation failures and truthful unavailable states.                                                                                                                                                                                                                                         |
+| FI-038 | Review                          | Enable all Review content types by default and add bulk content toggles                               | Ready after FI-037                        | Bulk controls must coexist with per-Product controls and preserve user-selected state after subsequent refreshes.                                                                                                                                                                                                                |
+| FI-039 | Review performance              | Load only changed/new Products when Review composition changes                                        | Ready; regression-sensitive               | Preserve ordering, content toggles, generation guards, independent History/artifact failures, and full manual Refresh semantics.                                                                                                                                                                                                 |
+| FI-040 | Main map / accessibility        | Add modifier-selection keyboard equivalent and discoverability                                        | Deferred follow-up                        | Define an accessible highlighted-candidate activation path and compact visible shortcut cue while preserving the normal overlap picker as the complete non-shortcut workflow.                                                                                                                                                    |
 
 ## FI-021 - modifier-click direct Product selection
 
@@ -59,19 +60,22 @@ The frontend must not invent precise progress percentages that the backend canno
 
 Reduce overlap-picker friction when multiple Product sources occupy the same or nearly identical AOI.
 
-### Intended interaction
+### Implemented interaction
 
 - normal click keeps the existing overlap picker and Product popup workflow;
-- Ctrl-click on Windows/Linux and Cmd-click on macOS directly selects the Product candidate that the existing interaction model currently considers highlighted;
+- Ctrl-click on Windows/Linux and Cmd-click on macOS snapshots the current transient hover identity before asynchronous click hit testing;
+- returned Graphics are revalidated against current overlap-enabled layers, current stable layer membership, visibility and click-session generation after the asynchronous hit test;
+- the highlighted identity must still match one of those current candidates, otherwise the normal overlap workflow is used;
 - the shortcut opens/selects that Product through the normal Product-context and popup path rather than implementing a second selection workflow;
-- when only one candidate is present, the modifier may use the same direct-selection path without creating a special source rule;
+- one current candidate still opens normally, including when no valid highlighted identity exists;
 - no implementation may hard-code S-57/S-101 preference or infer source identity from DatasetName;
-- Shift-click remains unused in the first implementation;
-- keyboard users need an equivalent way to activate the highlighted candidate without using a pointing-device modifier.
+- Shift-click remains unchanged.
 
-### Discovery questions
+### Interaction ownership and stale-state safety
 
-Before implementation, identify exactly where the current candidate highlight/order is owned and whether ArcGIS modifier events can be consumed without conflicting with pan/zoom/navigation gestures. Define the visible discoverability cue and confirm how the shortcut behaves when no candidate is highlighted.
+`hoverManager` continues to own transient hover and popup-locked highlight state. FI-021 exposes only stable identity for the transient hover and never treats the popup-locked Product as a hover candidate. Modifier state comes from the public ArcGIS click event's native pointer event. Generation-guarded hover hit tests prevent late results from replacing newer pointer, layer, popup, pointer-leave, or teardown state. The click interaction independently re-reads current interactive layers and validates stable Graphic membership after `hitTest`; click-session generation prevents older or destroyed interactions from publishing popup state.
+
+The bounded FI-021 pointer implementation intentionally does not add a keyboard equivalent or visible discoverability cue. These original design requirements are not satisfied or removed: FI-040 owns their focused design and implementation. Normal click remains the complete non-shortcut workflow, and existing keyboard, focus, Escape, and popup behavior is preserved until FI-040 is implemented.
 
 ### Out of scope
 
@@ -289,9 +293,24 @@ Adding Products sequentially to Review currently reloads every enabled Product e
 
 Add tests that count Product/history/artifact loader calls for add, enable, disable, remove, route replacement, manual Refresh, and stale/superseded generations. A sequence of three single-Product additions should not cause 1 + 2 + 3 History/artifact request sets.
 
+## FI-040 - modifier-selection keyboard equivalent and discoverability
+
+### Goal
+
+Complete the FI-021 accessibility and learnability requirements without changing its accepted pointer shortcut or normal overlap workflow.
+
+### Requirements
+
+- define a keyboard-accessible way to activate the currently highlighted Product candidate;
+- provide a compact visible cue that makes Ctrl/Cmd-click and the keyboard equivalent discoverable;
+- preserve normal click and the overlap picker as the complete non-shortcut workflow;
+- do not require pointer modifier use to access any Product;
+- preserve source-aware identity validation, current-candidate revalidation, popup lifecycle, focus, Escape, Product Collection, Product search, Locator, and light/dark behavior;
+- complete a focused interaction/accessibility design pass before implementation so highlight ownership, focus entry and cue placement are explicit.
+
 ## Recommended implementation sequence
 
-1. FI-021 modifier-click direct Product selection.
+1. Complete FI-021 manual browser verification.
 2. FI-026 shared navigation/Preferences consolidation.
 3. FI-028 Scale hiding preference, FI-031 non-empty source startup, and FI-032 Main-map workspace navigation.
 4. FI-027 navbar search design/implementation after the shared navbar structure is stable.
@@ -300,5 +319,6 @@ Add tests that count Product/history/artifact loader calls for add, enable, disa
 7. FI-036, FI-037, FI-038, then FI-039 Review work so layout, controls, content defaults, and loading behavior are changed in controlled steps.
 8. FI-029 popup action-density analysis before any icon-only popup migration.
 9. FI-030 frontend completion polish may proceed independently; backend progress/chunk work waits for its contract discovery.
+10. FI-040 keyboard-equivalent activation and discoverability after its focused interaction/accessibility design pass.
 
 FI-016, FI-018, FI-020, and FI-023 keep their existing separate blockers/priorities and are not re-scoped by this UI/UX review.

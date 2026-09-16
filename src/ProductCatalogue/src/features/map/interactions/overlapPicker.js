@@ -3,52 +3,47 @@ import { layerSupportsCapability } from "../config/layerDefinitions.js";
 import { statusColorConfig } from "../../../shared/config/colorsConfig.js";
 import { formatStatusDisplayValue } from "../attributes/attributeDisplay.js";
 import { applyHeaderColor, resetHeaderColor } from "../popups/popupHeaderController.js";
+import {
+  createProductClickSession,
+  getValidUniqueClickCandidates,
+  handleProductClick,
+} from "./productClickInteraction.js";
 
-let activeClickHandle = null;
+let activeClickCleanup = null;
 
-export function bindOverlapPicker(view) {
-  if (activeClickHandle) {
-    activeClickHandle.remove();
-    activeClickHandle = null;
-  }
+export function bindOverlapPicker(view, { hoverManager } = {}) {
+  activeClickCleanup?.();
+  activeClickCleanup = null;
 
   // We need full control over feature clicks because the default popup only
   // opens one selected feature, which is not enough when features overlap.
   view.popupEnabled = false;
+  const clickSession = createProductClickSession();
 
-  activeClickHandle = view.on("click", async (event) => {
-    const interactiveLayers = getInteractiveLayers();
-
-    if (interactiveLayers.length === 0) {
-      closePopup(view);
-      return;
-    }
-
-    const response = await view.hitTest(event, {
-      include: interactiveLayers,
-    });
-
-    const graphics = getUniqueGraphics(response.results);
-
-    if (graphics.length === 0) {
-      closePopup(view);
-      return;
-    }
-
-    if (graphics.length === 1) {
-      openGraphicPopup(view, {
-        graphic: graphics[0],
-        location: event.mapPoint,
-      });
-
-      return;
-    }
-
-    openOverlapPickerPopup(view, {
-      graphics,
-      location: event.mapPoint,
+  const clickHandle = view.on("click", (event) => {
+    const isCurrent = clickSession.begin();
+    void handleProductClick({
+      event,
+      view,
+      getInteractiveLayers,
+      getClickCandidates: getValidUniqueClickCandidates,
+      getHighlightedIdentity: () => hoverManager?.getHighlightedGraphicIdentity?.() ?? null,
+      openGraphic: (options) => openGraphicPopup(view, options),
+      openOverlap: (options) => openOverlapPickerPopup(view, options),
+      closePopup: () => closePopup(view),
+      isCurrent,
     });
   });
+
+  const cleanup = () => {
+    clickSession.destroy();
+    clickHandle.remove?.();
+    if (activeClickCleanup === cleanup) {
+      activeClickCleanup = null;
+    }
+  };
+  activeClickCleanup = cleanup;
+  return cleanup;
 }
 
 function getInteractiveLayers() {
@@ -62,53 +57,13 @@ function getInteractiveLayers() {
   });
 }
 
-function getUniqueGraphics(results) {
-  const graphics = [];
-  const seen = new Set();
-
-  for (const result of results) {
-    const graphic = result.graphic;
-
-    if (!graphic?.attributes || graphic.visible === false || graphic.layer?.visible === false) {
-      continue;
-    }
-
-    const key = getUniqueGraphicKey(graphic);
-
-    if (seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    graphics.push(graphic);
-  }
-
-  return graphics;
-}
-
-function getUniqueGraphicKey(graphic) {
-  const featureKey = graphic.attributes?.featureKey;
-  const layerId = graphic.layer?.appLayerId ?? graphic.layer?.customId;
-
-  if (featureKey && layerId) {
-    return `${layerId}:${featureKey}`;
-  }
-
-  return graphic.uid;
-}
-
-function openOverlapPickerPopup(view, { graphics, location }) {
+function openOverlapPickerPopup(view, { graphics, location, onSelect }) {
   resetHeaderColor(view);
   view.popup.actions = [];
 
   const content = createOverlapPickerContent({
     graphics,
-    onSelect: (graphic) => {
-      openGraphicPopup(view, {
-        graphic,
-        location,
-      });
-    },
+    onSelect,
   });
 
   openPopup(view, {

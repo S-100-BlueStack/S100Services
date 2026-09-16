@@ -1,4 +1,4 @@
-import { getGraphicFeatureKey } from "../core/featureIdentity.js";
+import { getGraphicFeatureKey, getGraphicInteractionIdentity } from "../core/featureIdentity.js";
 
 export function createHoverManager(view) {
   const layers = new Set();
@@ -12,8 +12,14 @@ export function createHoverManager(view) {
   let frameRequested = false;
   let lockedGraphic = null;
   let lockedHighlight = null;
+  let hoverGeneration = 0;
+  let destroyed = false;
 
   function registerLayer(layer) {
+    if (destroyed) {
+      return Promise.resolve(null);
+    }
+
     layers.add(layer);
     const existingPromise = layerViewPromises.get(layer);
     if (existingPromise) {
@@ -40,6 +46,7 @@ export function createHoverManager(view) {
     }
 
     const wasRegistered = layers.delete(layer);
+    hoverGeneration += 1;
     layerViews.delete(layer);
     layerViewPromises.delete(layer);
 
@@ -61,7 +68,8 @@ export function createHoverManager(view) {
     }
   }
 
-  view.on("pointer-move", (event) => {
+  const pointerMoveHandle = view.on("pointer-move", (event) => {
+    hoverGeneration += 1;
     pointerEvent = event;
 
     if (!frameRequested) {
@@ -70,13 +78,28 @@ export function createHoverManager(view) {
     }
   });
 
+  const pointerLeaveHandle = view.on("pointer-leave", () => {
+    hoverGeneration += 1;
+    pointerEvent = null;
+    clearHighlight();
+  });
+
   async function runHitTest() {
     frameRequested = false;
 
-    if (!pointerEvent || layers.size === 0) return;
-    const hit = await view.hitTest(pointerEvent, {
+    if (destroyed || !pointerEvent || layers.size === 0) return;
+
+    const requestedEvent = pointerEvent;
+    const requestedGeneration = hoverGeneration;
+    const hit = await view.hitTest(requestedEvent, {
       include: [...layers],
     });
+
+    // Pointer movement, layer reconciliation and popup locking can all supersede
+    // an in-flight hit test. A late result must not restore obsolete hover state.
+    if (destroyed || requestedGeneration !== hoverGeneration || requestedEvent !== pointerEvent) {
+      return;
+    }
 
     if (!hit.results.length) {
       clearHighlight();
@@ -85,7 +108,12 @@ export function createHoverManager(view) {
     const result = hit.results[0];
     const graphic = result.graphic;
 
-    if (!graphic) {
+    if (
+      !graphic ||
+      !layers.has(graphic.layer) ||
+      graphic.visible === false ||
+      graphic.layer?.visible === false
+    ) {
       clearHighlight();
       return;
     }
@@ -129,6 +157,7 @@ export function createHoverManager(view) {
   }
 
   function setLockedFeature(graphic) {
+    hoverGeneration += 1;
     clearHighlight();
     lockedGraphic = graphic;
 
@@ -144,6 +173,8 @@ export function createHoverManager(view) {
   }
 
   function clearLockedFeature() {
+    hoverGeneration += 1;
+
     if (lockedHighlight) {
       lockedHighlight.remove();
       lockedHighlight = null;
@@ -154,6 +185,8 @@ export function createHoverManager(view) {
   }
 
   function clear() {
+    hoverGeneration += 1;
+    pointerEvent = null;
     layers.clear();
     layerViews.clear();
     layerViewPromises.clear();
@@ -178,6 +211,24 @@ export function createHoverManager(view) {
     );
   }
 
+  function getHighlightedGraphicIdentity() {
+    return getGraphicInteractionIdentity(highlightedGraphic);
+  }
+
+  function destroy() {
+    if (destroyed) {
+      return;
+    }
+
+    destroyed = true;
+    hoverGeneration += 1;
+    pointerEvent = null;
+    frameRequested = false;
+    pointerMoveHandle?.remove?.();
+    pointerLeaveHandle?.remove?.();
+    clear();
+  }
+
   return {
     registerLayer,
     unregisterLayer,
@@ -187,6 +238,8 @@ export function createHoverManager(view) {
     getLockedFeatureKey,
     getLockedLayerId,
     getLockedSourceId,
+    getHighlightedGraphicIdentity,
     clear,
+    destroy,
   };
 }
