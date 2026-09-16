@@ -19,7 +19,7 @@ longer describe the active frontend.
 | FI-003 / FI-002 diagnostics          | Analyze and Review read public validation artifact history; IC-ENC reports unavailable.                                                                                                              |
 | FI-016                               | Normalized state IDs/colors/gates integrated; final AOI error-only classification/preset still deferred.                                                                                             |
 | BE-108A Batch 1                      | Preserved unchanged; no Batch 2 producers or recovery.                                                                                                                                               |
-| FI-009/010/012├ö├ç├┤015/017├ö├ç├┤019 | Existing accepted behavior preserved through the normalized-workflow integration; task-specific historical acceptance remains authoritative.                                                         |
+| FI-009/010/012/013/014/015/017/019 | Existing accepted behavior preserved through the normalized-workflow integration; task-specific historical acceptance remains authoritative.                                                         |
 | FI-024 targeted workspace AOI        | Done. Analyze/Review resolve only the requested Product through the targeted AOI route; local/deployment smoke confirmed no workspace bulk-AOI dependency.                                           |
 | FI-025 ArcGIS execution isolation    | Done. API `Interactive` ArcGIS ownership and the serialized `Background` Hangfire worker are process-isolated and deployment-smoke verified.                                                         |
 | Normalized smoke hardening           | Source-local loading feedback, early persisted theme application, selected-source Cancel Export gating and coalesced same-Product active-job verification are committed in the accepted integration. |
@@ -28,7 +28,7 @@ longer describe the active frontend.
 
 This document tracks frontend-only cleanup, hardening, and architecture improvements for Product Catalogue. The goal is to improve maintainability, reliability, and structure without changing the user-facing feature set unless an item explicitly tracks a feature foundation.
 
-Current reviewed repository baseline: `6bc8d1181beabda254ba19dd483d29ec41cadf41`.
+Current reviewed repository baseline: `fce91ee3ee54361f3a0fe79e3dd95c8c1905a718`.
 BE-108A documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`.
 
 ## Backend worker-readiness note
@@ -145,7 +145,7 @@ BE-106 remains a historical readiness review, but its proposed JobPlatform depen
 | FI-025 | Backend integration              | Isolate long-running export ArcGIS work from interactive API reads        | Done                                     | Accepted at `aaf635571503c780517cfc3a76a4fa5e4894f447`. API `Interactive` ArcGIS ownership is process-isolated from one serialized Hangfire `Background` worker. Dev-server smoke verified normal export plus responsiveness during a long export for AOI, Analyze/Review, another Product operation enqueue and other pages.                                                                                                                                                                          |
 | FI-026 | Shared navigation / Preferences  | Consolidate active-route state and shared navbar controls                 | Done                                     | Manually accepted and committed at `6bc8d1181beabda254ba19dd483d29ec41cadf41`. Shared navbar routing persists the active underline with `aria-current="page"`; Main-map controls use the FI-026 order; last successful refresh is compact with full timestamp help; visible Help and standalone Theme actions are removed; Light/Dark selection uses the existing service inside shared Preferences. FI-028 still owns Scale hiding migration and behavior. See `ui-ux-design-backlog.md`.             |
 | FI-027 | Main map search                  | Move Product search and geographic Locator into a navbar search area      | Design discovery first                   | Keep Product search and Locator as separate workflows even if they share navbar presentation. Resolve responsive/search-mode UX before implementation. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                  |
-| FI-028 | Main map / Preferences           | Move Scale hiding into Preferences and make it opt-in                     | Implemented; manual verification pending | Scale hiding is removed from the navbar and is now an immediate Main-map Preferences setting. Missing or malformed saved state defaults to OFF, valid explicit prior choices retain the existing storage key/format, reset returns to OFF, and Display scale filtering/source refresh no longer mutate the setting. FI-026 shared navigation and Theme behavior remain unchanged; FI-043 still owns the comprehensive onboarding refresh. See `ui-ux-design-backlog.md`.                               |
+| FI-028 | Main map / Preferences           | Move Scale hiding into Preferences and make it opt-in                     | Done                                     | Manually accepted and committed at `fce91ee3ee54361f3a0fe79e3dd95c8c1905a718`. Scale hiding is removed from the navbar and is now an immediate Main-map Preferences setting. Missing or malformed saved state defaults to OFF, valid explicit prior choices retain the existing storage key/format, reset returns to OFF, and Display scale filtering/source refresh no longer mutate the setting. FI-026 shared navigation and Theme behavior remain unchanged; FI-043 still owns the comprehensive onboarding refresh. See `ui-ux-design-backlog.md`. |
 | FI-029 | Popup actions                    | Audit text-heavy popup actions for a compact icon-first presentation      | Design analysis first                    | Evaluate recognition, ambiguity, risk, confirmation, tooltip/accessibility, keyboard use, and popup width before deciding which labels can be removed. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                  |
 | FI-030 | Loading                          | Smooth loader completion and discover a truthful progress/chunk contract  | Frontend polish + backend discovery      | Show completion at 100% briefly without inventing precise progress. Discover any backend/data chunk contract separately and preserve FI-025 isolation. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                  |
 | FI-031 | Main map / Data sources          | Prevent startup/reload with zero enabled Product sources                  | Ready                                    | Zero sources may exist during a session, but restored startup state must enable one registry-selected/default available source rather than opening on a blank map. No source-name branching. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                            |
@@ -161,6 +161,7 @@ BE-106 remains a historical readiness review, but its proposed JobPlatform depen
 | FI-041 | Review / Product list            | Preserve Product-list scroll position when content toggles change         | Ready; UI bug                            | Toggling History, IC-ENC, or Validation for a Product must not reset the Review Product-list scroll position. Preserve focus, ordering, toggle state, FI-022 freshness and keyboard behavior; avoid unnecessary full-list rerenders where the existing architecture permits. See `ui-ux-design-backlog.md`.                                                                                                                                                                                            |
 | FI-042 | Main map / Filters               | Align Filter panel scrollbar styling                                      | Ready                                    | Apply the shared Product Catalogue scrollbar treatment to the Filter panel and nested scrollable attribute sections such as Status in both light and dark mode. Preserve existing overflow, filter state and keyboard/wheel behavior; use public/shared CSS rather than private component internals. See `ui-ux-design-backlog.md`.                                                                                                                                                                    |
 | FI-043 | Introduction / Onboarding        | Refresh onboarding after the UI/UX redesign                               | Deferred                                 | Run one consolidated onboarding audit after the active UI/UX redesign wave settles. Cover accepted workflows and final control placement, including FI-021 Ctrl/Cmd-click selection, FI-026 shared navigation/Preferences, FI-027/FI-028 navbar and preference changes, workspace navigation, and Dashboard/Analyze/Review redesigns. FI-040 continues to own modifier-selection keyboard/discoverability behavior; FI-043 only teaches the final accepted interaction. See `ui-ux-design-backlog.md`. |
+| FI-044 | Shared Preferences / UX          | Clarify Preferences information architecture and saved-state controls    | Ready                                    | Separate Introduction, actual Settings, and Saved preferences so runtime values are not confused with browser persistence. Align Theme and Scale hiding presentation, give saved Scale hiding a consistent clear/reset affordance, define unambiguous reset semantics, and preserve FI-026/FI-028 route/state contracts. FI-043 must audit onboarding against the final Preferences structure. See `ui-ux-design-backlog.md`. |
 
 ## Planned order
 
@@ -177,24 +178,26 @@ BE-106 remains a historical readiness review, but its proposed JobPlatform depen
 11. Keep FI-011C as the committed central Product-context, capability-specific popup-action, and flat source-aware Edition/Update Export baseline at `391074743efc909ec97168e2be2820484edb8455`.
 12. Keep FI-011D as the committed source-aware Product Collection, workspace catalog/resolution, Analyze, Review, and truthful History/report baseline at `737677d7ecd0857312224fde3e5f9a76a0cb7148`; do not enable mock-source backend actions.
 13. Keep authoritative production S-57/S-101 transport blocked until the backend supplies separate read contracts and source discrimination.
-14. FI-012, FI-009, FI-013, FI-014, FI-015, FI-017, FI-021, FI-022 and FI-026 are complete; the latest accepted frontend baseline is `6bc8d1181beabda254ba19dd483d29ec41cadf41`.
+14. FI-012, FI-009, FI-013, FI-014, FI-015, FI-017, FI-021, FI-022, FI-026 and FI-028 are complete; the latest accepted frontend baseline is `fce91ee3ee54361f3a0fe79e3dd95c8c1905a718`.
 15. Complete FI-016 only after the backend status list identifies authoritative error states and display semantics, then activate the final FI-011 error-only first-visit filter preset.
 16. Treat FI-018 as a later cross-repository release-readiness review after configurable branding and deployment settings are established.
 17. Preserve FI-022's accepted automatic workspace-freshness boundary at `c2bb13c0bce07907f16f35221025e89a7b211c06`: lightweight revision checks may trigger targeted content refresh, while manual Refresh remains a recovery/full-refresh path and heavy AOI/Analyze/History payloads are not blindly polled.
 18. Keep FI-023 fail closed until the backend exposes authoritative candidate/mutation capabilities; selected-source track state is only a conservative interim gate.
 19. Keep FI-024's accepted targeted-resolution boundary: Analyze/Review must not regress to S57/S101 bulk AOI calls, dataset-name heuristics or cross-source fallback.
 20. Keep FI-025's accepted process-isolation boundary: one API `Interactive` lane and one serialized worker `Background` lane. Do not mask ArcGIS starvation regressions with frontend polling, retry or timeout changes.
-21. Use `ui-ux-design-backlog.md` as the detailed design source for FI-021 and FI-026 through FI-043.
+21. Use `ui-ux-design-backlog.md` as the detailed design source for FI-021 and FI-026 through FI-044.
 22. FI-021 is manually accepted at `32efa496f978e20baee834f0becdb95bdadadd98`; keep keyboard-equivalent activation and visible shortcut discoverability as the separate FI-040 follow-up.
 23. FI-026 shared navigation/Preferences consolidation is manually accepted at `6bc8d1181beabda254ba19dd483d29ec41cadf41`; keep its shared route, theme, Preferences and compact timestamp contracts as the prerequisite for later navbar work.
-24. Then take the low-risk Main-map behavior items FI-028, FI-031, and FI-032; FI-027 navbar search requires its short design pass after the shared navbar structure is stable.
-25. Complete Dashboard work as FI-033 then FI-034 so visual compaction is stable before Apply is removed.
-26. Complete Analyze compaction as FI-035 without changing FI-022 freshness or FI-024 targeted resolution; use or establish a shared/public scrollbar styling contract that FI-042 can reuse.
-27. Apply FI-042 Filter-panel scrollbar consistency after the shared scrollbar treatment is established.
-28. Complete Review work in controlled order: FI-036 sidebar compaction, FI-041 Product-list scroll preservation, FI-037 content layout/empty states, FI-038 defaults/bulk toggles, then FI-039 incremental composition loading.
-29. Complete FI-029's popup action-density analysis before any broad icon-only popup migration.
-30. FI-030 frontend completion polish may proceed independently; assign backend progress/chunk work only after discovery identifies a truthful contract.
-31. After the active UI/UX redesign work is accepted, complete FI-043 as one consolidated onboarding audit. It must teach the final accepted interactions without taking ownership from FI-040 or resetting unrelated route onboarding state unnecessarily.
+24. FI-028 Scale hiding preference behavior is manually accepted at `fce91ee3ee54361f3a0fe79e3dd95c8c1905a718`; preserve its OFF-by-default, explicit-persistence, route-safe and filter-independent state contracts.
+25. Next take FI-031 non-empty source startup and FI-032 Main-map workspace navigation; FI-027 navbar search still requires its short design pass after the shared navbar structure is stable.
+26. Complete Dashboard work as FI-033 then FI-034 so visual compaction is stable before Apply is removed.
+27. Complete Analyze compaction as FI-035 without changing FI-022 freshness or FI-024 targeted resolution; use or establish a shared/public scrollbar styling contract that FI-042 can reuse.
+28. Apply FI-042 Filter-panel scrollbar consistency after the shared scrollbar treatment is established.
+29. Complete Review work in controlled order: FI-036 sidebar compaction, FI-041 Product-list scroll preservation, FI-037 content layout/empty states, FI-038 defaults/bulk toggles, then FI-039 incremental composition loading.
+30. Complete FI-029's popup action-density analysis before any broad icon-only popup migration.
+31. FI-030 frontend completion polish may proceed independently; assign backend progress/chunk work only after discovery identifies a truthful contract.
+32. FI-044 Preferences information-architecture/usability work may proceed as a bounded shared-UI task after the immediate FI-031/FI-032 behavior items; it is not a blocker for them, but it should settle before FI-043 audits final onboarding.
+33. After the active UI/UX redesign work is accepted, complete FI-043 as one consolidated onboarding audit. It must teach the final accepted interactions without taking ownership from FI-040 or resetting unrelated route onboarding state unnecessarily.
 
 ## FI-009 Dashboard page size preference
 
@@ -220,7 +223,7 @@ Manual acceptance verified persistence, reset behavior, Previous/Next paging, ra
 
 ## FI-011 independent Product-standard data sources and source-aware workflows
 
-Status: In progress Ôö£├│├ö├®┬╝├ö├ç├ÿ FI-011A, FI-011B, FI-011C, and FI-011D committed; production S-57/S-101 transport and final status/guidance/regression work remain  
+Status: In progress - FI-011A, FI-011B, FI-011C, and FI-011D committed; production S-57/S-101 transport and final status/guidance/regression work remain  
 FI-011D implementation commit: `737677d7ecd0857312224fde3e5f9a76a0cb7148`
 
 ### Current implementation state
@@ -387,14 +390,14 @@ They are not production contracts and must not define future backend fields or c
 
 ### Remaining FI-011 packages
 
-1. **FI-011A Ôö£├│├ö├®┬╝├ö├ç├ÿ Configurable source foundation:** implemented and manually accepted at the committed
+1. **FI-011A - Configurable source foundation:** implemented and manually accepted at the committed
    baseline.
-2. **FI-011B Ôö£├│├ö├®┬╝├ö├ç├ÿ Source-aware Filters, Search and Navbar Coordination:** implemented in the committed
+2. **FI-011B - Source-aware Filters, Search and Navbar Coordination:** implemented in the committed
    baseline; does not complete FI-011.
-3. **FI-011C Ôö£├│├ö├®┬╝├ö├ç├ÿ Source-aware Popup Actions and Export Menu:** implemented in the committed baseline
+3. **FI-011C - Source-aware Popup Actions and Export Menu:** implemented in the committed baseline
    `391074743efc909ec97168e2be2820484edb8455`; central Product context, capability-specific actions,
    flat Edition/Update menu, and disabled mock-source placeholders.
-4. **FI-011D Ôö£├│├ö├®┬╝├ö├ç├ÿ Source-aware workspace and history propagation:** implemented and committed at
+4. **FI-011D - Source-aware workspace and history propagation:** implemented and committed at
    `737677d7ecd0857312224fde3e5f9a76a0cb7148`; Product Collection, shared workspace catalog/resolution,
    Analyze, Review, and truthful History/report unavailable states are source-aware without cross-source
    compatibility calls.
@@ -478,10 +481,10 @@ The initial user-facing Locator contains one logical source:
 
 ```text
 Places
-Ôö£├│├ö├ç├ÿ├ö├ç├ÿÔö£├│├ö├ç├ÿ├ö├®┬╝Ôö£├│├ö├ç├ÿ├ö├®┬╝ ArcGIS World Geocoder
-    Ôö£├│├ö├ç├ÿÔö╝├┤Ôö£├│├ö├ç├ÿ├ö├®┬╝Ôö£├│├ö├ç├ÿ├ö├®┬╝ sourceCountry=DNK,GRL
-    Ôö£├│├ö├ç├ÿÔö╝├┤Ôö£├│├ö├ç├ÿ├ö├®┬╝Ôö£├│├ö├ç├ÿ├ö├®┬╝ category=Address,Postal,Populated Place
-    Ôö£├│├ö├ç├ÿ├ö├ç├ÿÔö£├│├ö├ç├ÿ├ö├®┬╝Ôö£├│├ö├ç├ÿ├ö├®┬╝ configured fallback zoom scale
+`- ArcGIS World Geocoder
+   |- sourceCountry=DNK,GRL
+   |- category=Address,Postal,Populated Place
+   `- configured fallback zoom scale
 ```
 
 Denmark and Greenland are search scope, not separate user-visible sources. This removes the `Search in...` selector and country grouping from the first version while still excluding the Faroe Islands and worldwide fallback.
@@ -831,6 +834,7 @@ Modifier timing remains event-bound rather than sticky: changing Ctrl/Cmd state 
 
 | Date       | Commit                                   | Items                                          | Notes                                                                                                                                                                                                                                                                                                          |
 | ---------- | ---------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-16 | fce91ee3ee54361f3a0fe79e3dd95c8c1905a718 | FI-028                                         | Moved Scale hiding from the Main-map navbar into Preferences, changed absent/invalid persisted state to opt-in OFF, preserved explicit legacy values, separated runtime value from persistence enablement, removed Display scale filter auto-mutation, and retained FI-026 shared Preferences/Theme behavior. Manually accepted before commit. |
 | 2026-09-16 | 6bc8d1181beabda254ba19dd483d29ec41cadf41 | FI-026                                         | Consolidated shared active-route navigation, Main-map navbar ordering, compact last-refresh presentation and Light/Dark selection in Preferences; visible Help/Theme navbar actions were removed while onboarding replay remained available. Manually accepted across Main map, Dashboard, Analyze and Review. |
 | 2026-09-16 | 32efa496f978e20baee834f0becdb95bdadadd98 | FI-021                                         | Added source-aware Ctrl/Cmd modifier-click direct selection for the currently highlighted overlapping Product with post-hitTest current-state revalidation, stale hover/click guards, teardown safety and normal-click fallback; manually accepted on the Main map.                                            |
 | 2026-09-16 | c2bb13c0bce07907f16f35221025e89a7b211c06 | FI-022                                         | Added automatic Analyze/Review workspace freshness with lightweight revision checks, targeted refresh, manual recovery Refresh, and the finalized compact Analyze Refresh control.                                                                                                                             |

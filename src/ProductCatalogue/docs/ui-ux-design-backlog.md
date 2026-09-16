@@ -1,6 +1,6 @@
 # Product Catalogue UI/UX design backlog
 
-Documentation baseline: `6bc8d1181beabda254ba19dd483d29ec41cadf41`  
+Documentation baseline: `fce91ee3ee54361f3a0fe79e3dd95c8c1905a718`  
 Review date: 2026-09-16
 
 This document formalizes the post-FI-022 Product Catalogue design review into independently implementable feature items. It is a design and task boundary document, not an implementation claim. The existing feature boundaries, source-aware Product identity, FI-024 targeted workspace resolution, FI-025 ArcGIS process isolation, FI-022 workspace freshness lifecycle, keyboard/focus behavior, and light/dark support remain preservation requirements unless a task explicitly changes them.
@@ -40,7 +40,7 @@ The frontend must not invent precise progress percentages that the backend canno
 | FI-021 | Main map / overlap selection    | Add modifier-click direct selection for the highlighted Product candidate                             | Done                                      | Accepted at `32efa496f978e20baee834f0becdb95bdadadd98`. Normal click retains the overlap workflow. Ctrl/Cmd-click opens only the transiently highlighted Product after current-layer, Graphic-membership and click-generation validation; otherwise it falls back safely. Shift-click and Product Collection remain unchanged. Keyboard/discoverability requirements continue as FI-040. |
 | FI-026 | Shared navigation / Preferences | Consolidate active-route state and shared navbar controls                                             | Done                                      | Manually accepted at `6bc8d1181beabda254ba19dd483d29ec41cadf41`. Shared route state, compact refresh presentation and Theme/Preferences ownership are implemented once in the common navbar shell; FI-028 still owns Scale hiding migration.                                                                                                                                             |
 | FI-027 | Main map search                 | Move Product search and geographic Locator into a navbar search area                                  | Design discovery first                    | Product search and Locator remain separate workflows; do not merge Product lookup with geographic search.                                                                                                                                                                                                                                                                                |
-| FI-028 | Main map / Preferences          | Move Scale hiding into Preferences and make it opt-in                                                 | Implemented; manual verification pending  | The actual Main-map setting now lives in Preferences and defaults OFF without an explicit valid saved value. Existing explicit choices remain compatible, persistence enablement remains separate, reset returns to OFF, and filters/source lifecycle never select the preference. FI-043 retains the final onboarding refresh.                                                          |
+| FI-028 | Main map / Preferences          | Move Scale hiding into Preferences and make it opt-in                                                 | Done                                      | Manually accepted at `fce91ee3ee54361f3a0fe79e3dd95c8c1905a718`. The actual Main-map setting lives in Preferences and defaults OFF without an explicit valid saved value. Existing explicit choices remain compatible, persistence enablement remains separate, reset returns to OFF, and filters/source lifecycle never select the preference. FI-043 retains the final onboarding refresh. |
 | FI-029 | Popup actions                   | Audit text-heavy popup actions and define a compact icon-first presentation                           | Design analysis first                     | Do not blindly remove labels from ambiguous, rare, or high-risk actions. Preserve tooltips, accessible names, confirmation dialogs, and keyboard behavior.                                                                                                                                                                                                                               |
 | FI-030 | Loading                         | Smooth loader completion and discover a real progress/chunk contract                                  | Split frontend polish + backend discovery | Do not fake precise progress or introduce frontend polling/retry to mask backend execution. Preserve FI-025.                                                                                                                                                                                                                                                                             |
 | FI-031 | Main map / Data sources         | Prevent startup/reload with zero enabled Product sources                                              | Ready                                     | Allow zero sources during the current session, but restore at least one registry-selected/default available source on next application startup/reload. No source-name branching.                                                                                                                                                                                                         |
@@ -56,6 +56,7 @@ The frontend must not invent precise progress percentages that the backend canno
 | FI-041 | Review / Product list           | Preserve Product-list scroll position when content toggles change                                     | Ready; UI bug                             | Fix scroll-to-top when History, IC-ENC, or Validation is toggled for a Product. Preserve focus, ordering, content selection, FI-022 freshness and keyboard interaction. Implement after FI-036 so sidebar restructuring is stable.                                                                                                                                                       |
 | FI-042 | Main map / Filters              | Align Filter panel scrollbar styling                                                                  | Ready                                     | Reuse a shared/public Product Catalogue scrollbar treatment for the Filter panel outer scroller and nested attribute lists such as Status. Preserve overflow and filtering behavior in light/dark mode; avoid private Calcite internals.                                                                                                                                                 |
 | FI-043 | Introduction / Onboarding       | Refresh onboarding after the UI/UX redesign                                                           | Deferred                                  | Perform one consolidated route-by-route onboarding audit after the active redesign wave settles. Explain the final accepted workflows and controls, including FI-021 Ctrl/Cmd-click selection. FI-040 remains the owner of modifier-selection keyboard/discoverability behavior; FI-043 updates guidance only after that interaction contract is known.                                  |
+| FI-044 | Shared Preferences / UX         | Improve Preferences information architecture and saved-state usability                                 | Ready                                     | Group Introduction, actual Settings, and Saved preferences; make Theme and Scale hiding semantics visually clear; align reset/clear affordances across persisted items; preserve FI-026 shared Theme and FI-028 Scale hiding state/persistence boundaries. FI-043 audits onboarding after the final structure is accepted. |
 
 ## FI-021 - modifier-click direct Product selection
 
@@ -134,7 +135,8 @@ The design pass should decide whether the navbar exposes two adjacent compact co
 
 ## FI-028 - Scale hiding as an opt-in preference
 
-Status: Implemented; manual verification pending.
+Status: Done  
+Implementation commit: `fce91ee3ee54361f3a0fe79e3dd95c8c1905a718`
 
 ### Requirements
 
@@ -155,6 +157,10 @@ Implementation discovery must distinguish the user preference from the actual ma
 - Scale hiding value and persistence enablement remain separate controls. Disabling persistence removes the explicit stored value but still permits session changes; re-enabling follows the existing persistence lifecycle.
 - Individual reset and reset-all remove the explicit value and leave Scale hiding OFF. Display scale attribute filters, filter restore/clear, source reconciliation, and refresh no longer mutate either the runtime setting or its persisted value.
 - Existing display-scale visibility, source-aware filtering, FI-026 shared navigation/Preferences/Theme behavior, and introduction replay remain intact. FI-043 remains responsible for the later comprehensive onboarding refresh.
+
+### Manual acceptance
+
+FI-028 was functionally accepted and committed on 2026-09-16 at `fce91ee3ee54361f3a0fe79e3dd95c8c1905a718`. The accepted behavior keeps Scale hiding as an explicit Main-map setting with OFF as the no-preference default, preserves existing explicit stored values, keeps persistence enablement separate from the runtime value, and prevents Display scale filters/source lifecycle from changing the preference. The follow-up Preferences information-architecture issues observed during acceptance are tracked separately as FI-044 rather than reopening FI-028.
 
 ## FI-029 - popup action-density review
 
@@ -393,7 +399,8 @@ Review every Main map, Dashboard, Analyze and Review onboarding step against the
 - teach the accepted FI-021 Ctrl-click on Windows/Linux and Cmd-click on macOS shortcut for direct selection of the currently highlighted valid overlapping Product, while keeping normal click/overlap-picker guidance intact;
 - reflect FI-026 active navigation, shared Preferences ownership, compact refresh presentation and Theme location;
 - reflect the final FI-027 Product search / Locator presentation if that redesign is implemented;
-- reflect FI-028 Scale hiding placement and semantics after that task is accepted;
+- reflect FI-028 Scale hiding placement and semantics;
+- reflect the final FI-044 Preferences grouping, labels, reset semantics and persistence presentation if FI-044 is accepted before the onboarding audit;
 - reflect FI-032 Main-map workspace-launch behavior where it is relevant to guidance;
 - re-check Dashboard, Analyze and Review guidance after FI-033 through FI-039 and FI-041 are accepted;
 - re-check labels, targets, ordering, selectors, placement, waiting/ready behavior, accessible copy and route prerequisites against the final DOM;
@@ -407,19 +414,103 @@ Preserve replay from Preferences, first-time route state, keyboard/focus/Escape 
 
 Add/update focused onboarding tests around final target selectors, step order, route versions, interaction prerequisites and fallback behavior. Complete a manual route-by-route introduction pass in both themes after implementation.
 
+## FI-044 - Preferences information architecture and usability
+
+### Goal
+
+Make Preferences easier to understand by separating immediate application behavior from browser-local persistence. The panel should read as a small settings surface rather than exposing storage mechanics and runtime settings as one undifferentiated list.
+
+### Observed usability problem
+
+After FI-026 and FI-028, Preferences contains three different concepts in one visual flow:
+
+- `Start introduction`, which is an action rather than a preference value;
+- actual application settings such as Theme and Scale hiding, which change the running UI immediately;
+- persistence controls such as Map view, Filters, Scale hiding, and Theme, which decide what the browser remembers.
+
+This makes repeated names such as `Theme` and `Scale hiding` appear to mean the same thing even though one control changes runtime behavior and the other controls persistence. The saved Scale hiding row also lacks the reset/clear affordance shown by neighboring persisted preferences, which makes the persistence section look inconsistent.
+
+### Information architecture
+
+Organize the panel into three compact semantic groups:
+
+```text
+Introduction
+  Start introduction
+
+Settings
+  Theme
+  Scale hiding
+
+Saved preferences
+  Map view
+  Filters
+  Scale hiding
+  Theme
+
+Reset available preferences
+```
+
+This structure is an information-architecture target, not a requirement to use large cards or the exact indentation above. Keep the existing compact, angular Product Catalogue presentation.
+
+Use `Saved preferences` or equally precise browser-persistence terminology in UI copy. Do not call this `Cache` unless a future feature actually manages cached data.
+
+### Settings semantics
+
+- Settings controls change current runtime behavior immediately.
+- Theme remains a shared setting on every route where shared Preferences is available.
+- Scale hiding remains a Main-map-only setting and keeps the FI-028 positive ON/OFF semantics.
+- Do not duplicate Theme or Scale hiding domain state inside the Preferences UI.
+- Preserve FI-028's OFF default, legacy storage compatibility, and filter/source independence.
+
+### Saved-preference semantics
+
+- Persistence controls decide whether the corresponding state is remembered in this browser; they must not be presented as the setting itself.
+- Map view and Filters remain Main-map-only persistence entries.
+- Theme persistence remains shared.
+- Scale hiding persistence remains separate from the actual Scale hiding value.
+- The saved Scale hiding row must have a reset/clear affordance consistent with the other saved preferences when there is meaningful stored state to remove.
+- Define reset wording and behavior explicitly so two controls do not both say `Reset` while performing materially different operations. If clearing only stored state differs from resetting the live value, use distinct copy such as `Clear saved value` rather than relying on position to explain the difference.
+- `Reset available preferences` must retain a clear aggregate meaning after the grouping change and must not reset route-unavailable state.
+
+### Route, interaction, and visual boundaries
+
+- Preserve FI-026 route-safe Preferences ownership: non-Main-map routes must not instantiate Main-map-only services merely to render Preferences.
+- Preserve introduction replay, outside-click close, Escape handling, focus restoration, keyboard operation and accessible labels/state.
+- Keep the panel compact; use headings, separators and spacing rather than large cards or excessive vertical chrome.
+- Support light and dark mode with existing public application/Calcite styling contracts only.
+- Do not target private Calcite shadow DOM.
+
+### Regression coverage
+
+Cover at minimum:
+
+- correct grouping and order of Introduction, Settings, and Saved preferences;
+- Theme setting and Theme persistence remain distinct and functional;
+- Scale hiding setting and Scale hiding persistence remain distinct and functional;
+- saved Scale hiding exposes the selected reset/clear affordance and its behavior is unambiguous;
+- Main-map-only items remain absent on Dashboard, Analyze and Review;
+- reset-all affects only preferences available on the current route according to the established contract;
+- FI-026 Theme/navigation/Preferences lifecycle and FI-028 Scale hiding state/persistence behavior do not regress;
+- keyboard, Escape/outside close, focus restoration, light/dark and compact layout remain correct.
+
+FI-043 remains the owner of the final onboarding audit. After FI-044 is accepted, FI-043 should teach the resulting Preferences organization rather than the current transitional layout.
+
 ## Recommended implementation sequence
 
 1. FI-021 is complete and manually accepted at `32efa496f978e20baee834f0becdb95bdadadd98`.
 2. FI-026 shared navigation/Preferences consolidation is complete and manually accepted at `6bc8d1181beabda254ba19dd483d29ec41cadf41`.
-3. FI-028 Scale hiding preference, FI-031 non-empty source startup, and FI-032 Main-map workspace navigation.
-4. FI-027 navbar search design/implementation after the shared navbar structure is stable.
-5. FI-033 then FI-034 Dashboard compaction and automatic filtering.
-6. FI-035 Analyze compaction, including a neutral shared scrollbar treatment.
-7. FI-042 Filter-panel scrollbar consistency using that shared treatment.
-8. FI-036, FI-041, FI-037, FI-038, then FI-039 Review work so sidebar structure, scroll preservation, content layout, defaults and loading behavior are changed in controlled steps.
-9. FI-029 popup action-density analysis before any icon-only popup migration.
-10. FI-030 frontend completion polish may proceed independently; backend progress/chunk work waits for its contract discovery.
-11. FI-040 keyboard-equivalent activation and discoverability after its focused interaction/accessibility design pass.
-12. FI-043 consolidated onboarding refresh after the active UI/UX redesign work has settled; teach only final accepted interactions and preserve route-specific onboarding state.
+3. FI-028 Scale hiding preference is complete and manually accepted at `fce91ee3ee54361f3a0fe79e3dd95c8c1905a718`.
+4. FI-031 non-empty source startup and FI-032 Main-map workspace navigation are the next bounded behavior items.
+5. FI-027 navbar search design/implementation follows its short design pass after the shared navbar structure is stable.
+6. FI-033 then FI-034 Dashboard compaction and automatic filtering.
+7. FI-035 Analyze compaction, including a neutral shared scrollbar treatment.
+8. FI-042 Filter-panel scrollbar consistency using that shared treatment.
+9. FI-036, FI-041, FI-037, FI-038, then FI-039 Review work so sidebar structure, scroll preservation, content layout, defaults and loading behavior are changed in controlled steps.
+10. FI-029 popup action-density analysis before any icon-only popup migration.
+11. FI-030 frontend completion polish may proceed independently; backend progress/chunk work waits for its contract discovery.
+12. FI-040 keyboard-equivalent activation and discoverability after its focused interaction/accessibility design pass.
+13. FI-044 Preferences information architecture may proceed as a bounded shared-UI task after the immediate FI-031/FI-032 work; it does not block those behavior changes.
+14. FI-043 consolidated onboarding refresh follows the accepted final Preferences/UI structure; teach only final accepted interactions and preserve route-specific onboarding state.
 
 FI-016, FI-018, FI-020, and FI-023 keep their existing separate blockers/priorities and are not re-scoped by this UI/UX review.
