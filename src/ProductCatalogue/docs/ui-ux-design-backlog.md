@@ -1,6 +1,6 @@
 # Product Catalogue UI/UX design backlog
 
-Documentation baseline: `32efa496f978e20baee834f0becdb95bdadadd98`  
+Documentation baseline: `6bc8d1181beabda254ba19dd483d29ec41cadf41`  
 Review date: 2026-09-16
 
 This document formalizes the post-FI-022 Product Catalogue design review into independently implementable feature items. It is a design and task boundary document, not an implementation claim. The existing feature boundaries, source-aware Product identity, FI-024 targeted workspace resolution, FI-025 ArcGIS process isolation, FI-022 workspace freshness lifecycle, keyboard/focus behavior, and light/dark support remain preservation requirements unless a task explicitly changes them.
@@ -38,7 +38,7 @@ The frontend must not invent precise progress percentages that the backend canno
 | ID     | Area                            | Task                                                                                                  | Status                                    | Dependency / boundary                                                                                                                                                                                                                                                                                                                                                                    |
 | ------ | ------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | FI-021 | Main map / overlap selection    | Add modifier-click direct selection for the highlighted Product candidate                             | Done                                      | Accepted at `32efa496f978e20baee834f0becdb95bdadadd98`. Normal click retains the overlap workflow. Ctrl/Cmd-click opens only the transiently highlighted Product after current-layer, Graphic-membership and click-generation validation; otherwise it falls back safely. Shift-click and Product Collection remain unchanged. Keyboard/discoverability requirements continue as FI-040. |
-| FI-026 | Shared navigation / Preferences | Consolidate active-route state and shared navbar controls                                             | Implemented; manual verification pending  | Shared route state and Preferences ownership are implemented once in the common navbar shell.                                                                                                                                                                                                                                                                                            |
+| FI-026 | Shared navigation / Preferences | Consolidate active-route state and shared navbar controls                                             | Done                                      | Manually accepted at `6bc8d1181beabda254ba19dd483d29ec41cadf41`. Shared route state, compact refresh presentation and Theme/Preferences ownership are implemented once in the common navbar shell; FI-028 still owns Scale hiding migration. |
 | FI-027 | Main map search                 | Move Product search and geographic Locator into a navbar search area                                  | Design discovery first                    | Product search and Locator remain separate workflows; do not merge Product lookup with geographic search.                                                                                                                                                                                                                                                                                |
 | FI-028 | Main map / Preferences          | Move Scale hiding into Preferences and make it opt-in                                                 | Ready                                     | Remove automatic/default-on behavior; preserve explicit user preference after it is chosen.                                                                                                                                                                                                                                                                                              |
 | FI-029 | Popup actions                   | Audit text-heavy popup actions and define a compact icon-first presentation                           | Design analysis first                     | Do not blindly remove labels from ambiguous, rare, or high-risk actions. Preserve tooltips, accessible names, confirmation dialogs, and keyboard behavior.                                                                                                                                                                                                                               |
@@ -55,6 +55,7 @@ The frontend must not invent precise progress percentages that the backend canno
 | FI-040 | Main map / accessibility        | Add modifier-selection keyboard equivalent and discoverability                                        | Deferred follow-up                        | Define an accessible highlighted-candidate activation path and compact visible shortcut cue while preserving the normal overlap picker as the complete non-shortcut workflow.                                                                                                                                                                                                            |
 | FI-041 | Review / Product list           | Preserve Product-list scroll position when content toggles change                                     | Ready; UI bug                             | Fix scroll-to-top when History, IC-ENC, or Validation is toggled for a Product. Preserve focus, ordering, content selection, FI-022 freshness and keyboard interaction. Implement after FI-036 so sidebar restructuring is stable.                                                                                                                                                       |
 | FI-042 | Main map / Filters              | Align Filter panel scrollbar styling                                                                  | Ready                                     | Reuse a shared/public Product Catalogue scrollbar treatment for the Filter panel outer scroller and nested attribute lists such as Status. Preserve overflow and filtering behavior in light/dark mode; avoid private Calcite internals.                                                                                                                                                 |
+| FI-043 | Introduction / Onboarding       | Refresh onboarding after the UI/UX redesign                                                          | Deferred                                  | Perform one consolidated route-by-route onboarding audit after the active redesign wave settles. Explain the final accepted workflows and controls, including FI-021 Ctrl/Cmd-click selection. FI-040 remains the owner of modifier-selection keyboard/discoverability behavior; FI-043 updates guidance only after that interaction contract is known. |
 
 ## FI-021 - modifier-click direct Product selection
 
@@ -89,7 +90,8 @@ The earlier Ctrl/Cmd-click Product Collection toggle experiment is no longer the
 
 ## FI-026 - shared navigation and Preferences consolidation
 
-Status: Implemented; manual verification pending.
+Status: Done  
+Implementation commit: `6bc8d1181beabda254ba19dd483d29ec41cadf41`
 
 ### Goal
 
@@ -113,6 +115,10 @@ The shared navbar now applies one persistent underline and `aria-current="page"`
 The visible Help and standalone Theme actions are absent from the shared navbar. Light and Dark remain backed by the existing theme service and persistence key and are selected immediately inside the shared Preferences panel on every route. Introduction replay and the underlying onboarding/help implementation remain available.
 
 Scale hiding remains unchanged in the navbar. FI-028 still exclusively owns moving it into Preferences, changing its default, and removing automatic preference changes.
+
+### Manual acceptance
+
+FI-026 was manually accepted on 2026-09-16 at `6bc8d1181beabda254ba19dd483d29ec41cadf41`. Browser verification covered active-route underline/current-page semantics on Main map, Dashboard, Analyze and Review; the Main-map control order and compact refresh timestamp; Light/Dark selection and persistence through Preferences on all routes; absence of the visible Help/standalone Theme actions; unchanged Scale hiding; introduction replay; Notifications; panel Escape/focus behavior; and compact light/dark navbar presentation. No FI-026 regression was found in that pass.
 
 ## FI-027 - navbar search consolidation
 
@@ -363,10 +369,37 @@ Replace generic browser scrollbar presentation in the Main-map Filter UI with th
 
 FI-035 should establish or reuse the neutral shared scrollbar contract for Analyze. FI-042 should reuse that contract rather than duplicating Review-only CSS. If implementation order changes, FI-042 may establish the neutral contract first provided FI-035 can consume it unchanged.
 
+## FI-043 - onboarding refresh after the UI/UX redesign
+
+### Goal
+
+Run one consolidated onboarding review after the active Product Catalogue UI/UX redesign work has settled, so the introduction teaches the application users actually see instead of being patched independently after every intermediate design task.
+
+### Required audit
+
+Review every Main map, Dashboard, Analyze and Review onboarding step against the final accepted UI and workflows. At minimum:
+
+- teach the accepted FI-021 Ctrl-click on Windows/Linux and Cmd-click on macOS shortcut for direct selection of the currently highlighted valid overlapping Product, while keeping normal click/overlap-picker guidance intact;
+- reflect FI-026 active navigation, shared Preferences ownership, compact refresh presentation and Theme location;
+- reflect the final FI-027 Product search / Locator presentation if that redesign is implemented;
+- reflect FI-028 Scale hiding placement and semantics after that task is accepted;
+- reflect FI-032 Main-map workspace-launch behavior where it is relevant to guidance;
+- re-check Dashboard, Analyze and Review guidance after FI-033 through FI-039 and FI-041 are accepted;
+- re-check labels, targets, ordering, selectors, placement, waiting/ready behavior, accessible copy and route prerequisites against the final DOM;
+- preserve Product search and Locator as separate workflows even when their presentation changes.
+
+FI-040 remains the owner of the modifier-selection keyboard equivalent and visible discoverability cue. FI-043 must not invent that behavior. If FI-040 is accepted before this audit, onboarding should teach its final keyboard path as well as Ctrl/Cmd-click; otherwise onboarding must describe only the interaction that actually exists.
+
+### Lifecycle and regression boundary
+
+Preserve replay from Preferences, first-time route state, keyboard/focus/Escape behavior, light/dark mode and RDP/VDI-safe static guidance. Version onboarding state only where the final changed flow requires users to see revised guidance; avoid resetting unrelated route completion state solely because another route changed.
+
+Add/update focused onboarding tests around final target selectors, step order, route versions, interaction prerequisites and fallback behavior. Complete a manual route-by-route introduction pass in both themes after implementation.
+
 ## Recommended implementation sequence
 
 1. FI-021 is complete and manually accepted at `32efa496f978e20baee834f0becdb95bdadadd98`.
-2. FI-026 shared navigation/Preferences consolidation.
+2. FI-026 shared navigation/Preferences consolidation is complete and manually accepted at `6bc8d1181beabda254ba19dd483d29ec41cadf41`.
 3. FI-028 Scale hiding preference, FI-031 non-empty source startup, and FI-032 Main-map workspace navigation.
 4. FI-027 navbar search design/implementation after the shared navbar structure is stable.
 5. FI-033 then FI-034 Dashboard compaction and automatic filtering.
@@ -376,5 +409,6 @@ FI-035 should establish or reuse the neutral shared scrollbar contract for Analy
 9. FI-029 popup action-density analysis before any icon-only popup migration.
 10. FI-030 frontend completion polish may proceed independently; backend progress/chunk work waits for its contract discovery.
 11. FI-040 keyboard-equivalent activation and discoverability after its focused interaction/accessibility design pass.
+12. FI-043 consolidated onboarding refresh after the active UI/UX redesign work has settled; teach only final accepted interactions and preserve route-specific onboarding state.
 
 FI-016, FI-018, FI-020, and FI-023 keep their existing separate blockers/priorities and are not re-scoped by this UI/UX review.
