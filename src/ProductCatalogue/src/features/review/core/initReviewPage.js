@@ -24,6 +24,7 @@ import {
   setReviewRouteUrl,
 } from "../routing/reviewRoute.js";
 import { renderReviewPage } from "../ui/reviewPage.js";
+import { captureReviewProductListInteraction } from "../ui/reviewProductListInteraction.js";
 
 export async function initReviewPage({ datasetNames } = {}) {
   let productItems = createReviewProductItems(datasetNames);
@@ -44,13 +45,14 @@ export async function initReviewPage({ datasetNames } = {}) {
   document.body.classList.add("pc-review-route");
   document.title = createReviewDocumentTitle(enabledDatasetNames);
 
-  const renderCurrentReviewPage = () => {
+  const renderCurrentReviewPage = ({ productListInteraction = null } = {}) => {
     renderReviewPage({
       productItems,
       products: currentProducts,
       loading: isLoadingReviewProducts,
       error: reviewError,
       productCatalog,
+      productListInteraction,
     });
   };
 
@@ -277,13 +279,14 @@ export async function initReviewPage({ datasetNames } = {}) {
       return;
     }
 
+    const productListInteraction = captureReviewProductListInteraction();
     productItems = toggleReviewProductContentType(
       productItems,
       itemId,
       contentType,
       event.detail?.enabled
     );
-    renderCurrentReviewPage();
+    renderCurrentReviewPage({ productListInteraction });
   };
 
   const handleReviewRefresh = async () => {

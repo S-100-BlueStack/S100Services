@@ -45,6 +45,35 @@ Workspace resolution is not tied to Main-map enabled-source localStorage and doe
 dataset-name conventions. Backend identity conflicts, malformed targeted responses and unavailable
 deployment-configured sources fail closed rather than falling through another source.
 
+## FI-036 compact sidebar presentation
+
+The route already identifies Product Review, so the sidebar omits the repeated visible workspace
+eyebrow, title, and explanatory description while retaining an accessible `Product Review workspace
+controls` landmark name. The shared Product picker keeps its accessible `Add product` name but suppresses
+its normal visible label and instructional help for Review. Loading, catalog failure, invalid Product,
+and already-selected Product messages remain visible when relevant.
+
+Review explicitly opts the shared Product picker into its anchored results-overlay presentation. The
+listbox is positioned relative to the picker control and overlays the `Products` section without
+changing sidebar layout. Analyze and other picker consumers retain the default in-flow presentation.
+
+The existing manual Refresh action is an icon-only native button in the `Products` header immediately
+before the counter. Its event, accessible name, title, loading/disabled rules, and FI-022 full-refresh
+lifecycle are unchanged. The sidebar retains the shared `pc-scrollbar` contract and does not change
+Product composition, content toggles, targeted source resolution, automatic freshness, routing, or
+independent content failures.
+
+## FI-041 Product-list interaction preservation
+
+Per-Product History, IC-ENC, and Validation toggles still update the authoritative Review state and
+rerender the board and sidebar. Before that specific synchronous render, Review captures the Product
+list's `scrollTop` plus the focused Product/content-type identity. The accepted replacement DOM restores
+the scroll offset and focuses the corresponding toggle with `preventScroll` immediately after render.
+
+The snapshot is passed only through the current content-toggle render call. It is not global, delayed,
+or reused by add/remove, route replacement, manual Refresh, automatic freshness, or teardown, so an old
+interaction cannot restore state into a newer Review composition or session.
+
 ## Content model
 
 Review content types should stay dynamic.

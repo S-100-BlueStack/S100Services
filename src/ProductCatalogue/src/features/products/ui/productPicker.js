@@ -15,6 +15,7 @@ export function createProductPickerForm({
   placeholder = "Search or type product name",
   helpText = "Select an existing product, or type a product name manually.",
   showDefaultHelp = true,
+  overlayResults = false,
   products = [],
   excludedProductNames = [],
   loading = false,
@@ -80,7 +81,14 @@ export function createProductPickerForm({
   if (showLabel) {
     form.appendChild(label);
   }
-  form.append(row, results, help);
+  if (overlayResults) {
+    const control = document.createElement("div");
+    control.className = "pc-product-picker__control pc-product-picker__control--overlay";
+    control.append(row, help, results);
+    form.appendChild(control);
+  } else {
+    form.append(row, results, help);
+  }
 
   const setMessage = (message) => {
     help.textContent = message;

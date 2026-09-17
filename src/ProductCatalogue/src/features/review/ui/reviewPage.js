@@ -3,6 +3,7 @@ import {
   normalizeReviewProductItems,
 } from "../domain/reviewProductList.js";
 import { createReviewBoard } from "./reviewBoard.js";
+import { restoreReviewProductListInteraction } from "./reviewProductListInteraction.js";
 import { createReviewSidebar } from "./reviewSidebar.js";
 
 export function renderReviewPage({
@@ -11,6 +12,7 @@ export function renderReviewPage({
   loading = false,
   error = null,
   productCatalog = createEmptyProductCatalogState(),
+  productListInteraction = null,
 }) {
   const page = getOrCreateReviewPage();
   const normalizedProductItems = normalizeReviewProductItems(productItems);
@@ -30,6 +32,7 @@ export function renderReviewPage({
       error,
     })
   );
+  restoreReviewProductListInteraction(productListInteraction, { page });
 }
 
 function getOrCreateReviewPage() {

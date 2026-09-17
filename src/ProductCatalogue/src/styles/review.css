@@ -26,40 +26,16 @@ body.pc-review-route #last-updated {
 
 .pc-review-sidebar {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: 14px;
+  padding: 10px;
   background: var(--pc-surface);
   border-right: 1px solid var(--pc-border);
 }
 
-.pc-review-sidebar__header {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.pc-review-sidebar__eyebrow {
-  color: var(--pc-text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.pc-review-sidebar__title {
-  margin: 0;
-  color: var(--pc-text);
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 1.25;
-}
-
-.pc-review-sidebar__description,
-.pc-review-product-form__help,
 .pc-review-product-list__empty {
   margin: 0;
   color: var(--pc-text-muted);
@@ -68,10 +44,11 @@ body.pc-review-route #last-updated {
 }
 
 .pc-review-product-form {
+  z-index: 1;
   display: grid;
   gap: 6px;
   min-width: 0;
-  padding: 12px;
+  padding: 10px;
   background: var(--pc-surface-alt);
   border: 1px solid var(--pc-border);
 }
@@ -123,6 +100,7 @@ body.pc-review-route #last-updated {
 
 .pc-review-product-form__button:focus-visible,
 .pc-review-product-form__input:focus-visible,
+.pc-review-product-list__refresh-button:focus-visible,
 .pc-review-product-list__remove-button:focus-visible,
 .pc-review-content-card__action-button:focus-visible {
   outline: 2px solid var(--pc-focus-ring);
@@ -135,7 +113,7 @@ body.pc-review-route #last-updated {
   gap: 8px;
   min-height: 0;
   min-width: 0;
-  padding: 12px;
+  padding: 10px;
   background: var(--pc-surface-alt);
   border: 1px solid var(--pc-border);
 }
@@ -146,6 +124,37 @@ body.pc-review-route #last-updated {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
+}
+
+.pc-review-product-list__header-controls {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pc-review-product-list__refresh-button {
+  display: inline-flex;
+  flex: 0 0 1.85rem;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  color: var(--pc-button-secondary-text);
+  background: transparent;
+  border: 1px solid var(--pc-button-secondary-border);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.pc-review-product-list__refresh-button:hover:not(:disabled) {
+  color: var(--pc-text);
+  background: var(--pc-button-secondary-bg-hover);
+}
+
+.pc-review-product-list__refresh-button:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .pc-review-product-list__title {
@@ -552,7 +561,7 @@ body.pc-review-route #last-updated {
   }
 
   .pc-review-sidebar {
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto;
     max-height: 42dvh;
     overflow: auto;
     border-right: 0;
