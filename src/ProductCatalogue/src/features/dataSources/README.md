@@ -95,6 +95,10 @@ Filter state remains separate at `pc.attributeFilters.v3`, schema 2. The old fix
 filter state migrates to s101, never s57, with explicit new state taking precedence. Pending state
 survives temporary activation failure. Authoritative source removal clears its filter intent.
 
+## FI-031 manual acceptance
+
+FI-031 was manually accepted in the browser on 2026-09-17 at `c1ed794374e56383a7362f3eadb2d16b07dfdb17`. The accepted behavior keeps zero enabled Product sources valid for the current session, then recovers an explicitly empty restored selection to exactly one eligible selection-persistable registry fallback on the next full startup. A later reload preserves that recovered selection instead of expanding back to all defaults. Existing non-empty restoration, ordinary source activation/deactivation, source refresh, Filters, Product search, popup/Product Collection, Preferences, Theme, Scale hiding, keyboard/focus behavior, and light/dark presentation remained unchanged in the acceptance pass.
+
 ## Synthetic fixture boundary
 
 The application runtime no longer enables Paper Charts or S-102 mocks in Development or through a
