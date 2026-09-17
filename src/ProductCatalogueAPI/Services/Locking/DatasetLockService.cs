@@ -1,5 +1,22 @@
+using ProductCatalogueAPI.Data.Models;
+
 namespace ProductCatalogueAPI.Services.Locking
 {
+    /// <summary>Builds the shared lock key for one canonical product track.</summary>
+    public static class ProductTrackLockKey
+    {
+        /// <summary>Returns a stable key that distinguishes dataset name and product specification.</summary>
+        /// <param name="datasetName">The dataset name whose track is being changed.</param>
+        /// <param name="productSpecification">The independently versioned product specification.</param>
+        /// <returns>A normalized dataset/specification lock key.</returns>
+        public static string For(string datasetName, ProductSpecification productSpecification) {
+            if (string.IsNullOrWhiteSpace(datasetName))
+                throw new ArgumentException("A dataset name is required.", nameof(datasetName));
+
+            return $"{datasetName.Trim().ToUpperInvariant()}-{productSpecification}";
+        }
+    }
+
     public interface IDatasetLockService
     {
         Task<IAsyncDisposable?> TryAcquireAsync(

@@ -13,7 +13,7 @@ namespace ProductCatalogueAPI.Jobs;
 /// <param name="productRepository">Persists the successful scan watermark.</param>
 /// <param name="workflowRepository">Persists independent product tracks and change summaries.</param>
 /// <param name="productManager">Provides catalogue products and pending geodatabase edits.</param>
-/// <param name="datasetLockService">Serializes summary updates for each source dataset.</param>
+/// <param name="datasetLockService">Serializes summary updates for each canonical dataset/specification track.</param>
 /// <param name="timeProvider">Supplies the scan timestamp and work-date boundary.</param>
 /// <param name="logger">Receives scan diagnostics.</param>
 /// <param name="detectionState">The immutable startup decision that guards scheduled and persisted invocations.</param>
@@ -42,19 +42,19 @@ public sealed class DetectProductChangesJob(IProductRepository productRepository
         }
 
         var electronicProductManager = _productManager.ElectronicProductManager;
-        var pendingEdits = await electronicProductManager.GetPendingEditsAsync(sinceUtc.Value);
+        Dictionary<string, Dictionary<string, ArchiveRow>> pendingEdits;
+        try {
+            pendingEdits = await electronicProductManager.GetPendingEditsAsync(sinceUtc.Value);
+        }
+        catch (ArchiveChangeClassificationException ex) {
+            _logger.LogError(ex, "Change detection could not classify every archive row. The successful-run watermark was preserved. ConnectionName: {ConnectionName}. UnclassifiedRowCount: {UnclassifiedRowCount}.", ex.ConnectionName, ex.RowCount);
+            throw new InvalidOperationException("Change detection could not classify every archive row. The successful-run watermark was preserved.", ex);
+        }
         var scanCompleted = true;
         foreach (var (datasetName, dirtyFeatures) in pendingEdits) {
             cancellationToken.ThrowIfCancellationRequested();
             if (dirtyFeatures.Count == 0)
                 continue;
-
-            await using var datasetLock = await _datasetLockService.TryAcquireAsync($"{datasetName}-change-summary", cancellationToken);
-            if (datasetLock is null) {
-                _logger.LogWarning("Skipped change-summary update because the dataset lock is held. DatasetName: {DatasetName}.", datasetName);
-                scanCompleted = false;
-                continue;
-            }
 
             var targets = new List<(string DatasetName, ProductSpecification ProductSpecification)> {
                 (datasetName, ProductSpecification.S101)
@@ -63,7 +63,16 @@ public sealed class DetectProductChangesJob(IProductRepository productRepository
                 .Where(product => !string.IsNullOrWhiteSpace(product.datasetName))
                 .Select(product => (product.datasetName!.Trim(), ProductSpecification.S57)));
 
-            foreach (var target in targets.Distinct()) {
+            foreach (var target in targets
+                .GroupBy(target => ProductTrackLockKey.For(target.DatasetName, target.ProductSpecification), StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())) {
+                await using var datasetLock = await _datasetLockService.TryAcquireAsync(ProductTrackLockKey.For(target.DatasetName, target.ProductSpecification), cancellationToken);
+                if (datasetLock is null) {
+                    _logger.LogWarning("Skipped change-summary update because the product track lock is held. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.", target.DatasetName, target.ProductSpecification);
+                    scanCompleted = false;
+                    continue;
+                }
+
                 var publicVersion = await electronicProductManager.ReadElectronicProductVersionAsync(target.DatasetName, target.ProductSpecification.ToString(), cancellationToken);
                 if (publicVersion is null) {
                     _logger.LogError("Skipped change-summary update because the mapped S-128 product was not found. SourceDatasetName: {SourceDatasetName}. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.", datasetName, target.DatasetName, target.ProductSpecification);
@@ -73,7 +82,7 @@ public sealed class DetectProductChangesJob(IProductRepository productRepository
 
                 var track = await _workflowRepository.GetOrCreateTrackAsync(publicVersion.DatasetName, target.ProductSpecification, ExportEngineKind.IsoIec8211, publicVersion.Edition ?? 0, publicVersion.Update ?? 0, cancellationToken);
                 await MergeDailySummaryAsync(track, dirtyFeatures, scanStartedUtc, cancellationToken);
-                if (track.State != ProductState.Frozen)
+                if (!track.IsManuallyFrozen)
                     await _workflowRepository.SetStateAsync(track.Id, ProductState.ChangesDetected, "system", scanStartedUtc, cancellationToken: cancellationToken);
             }
         }

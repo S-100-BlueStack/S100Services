@@ -31,7 +31,7 @@ public sealed class ProcessChangeSummariesJob(IProductWorkflowRepository workflo
             return;
         }
 
-        await using var datasetLock = await _datasetLockService.TryAcquireAsync($"{summary.DatasetName}-{summary.ProductSpecification}", cancellationToken);
+        await using var datasetLock = await _datasetLockService.TryAcquireAsync(ProductTrackLockKey.For(summary.DatasetName, summary.ProductSpecification), cancellationToken);
         if (datasetLock is null) {
             _logger.LogWarning("Change-summary export skipped because its independent track lock is held. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.", summary.DatasetName, summary.ProductSpecification);
             return;
@@ -39,8 +39,8 @@ public sealed class ProcessChangeSummariesJob(IProductWorkflowRepository workflo
 
         // Freezing is an intentional operator hold, so defer this summary without failing the batch.
         var track = await _workflowRepository.GetTrackAsync(summary.DatasetName, summary.ProductSpecification, cancellationToken);
-        if (track?.State == ProductState.Frozen) {
-            _logger.LogInformation("Change-summary export deferred because the product track is frozen. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}. TrackId: {TrackId}.", summary.DatasetName, summary.ProductSpecification, summary.TrackId);
+        if (track?.IsManuallyFrozen == true) {
+            _logger.LogInformation("Change-summary export deferred because the product track has a manual freeze hold. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}. TrackId: {TrackId}.", summary.DatasetName, summary.ProductSpecification, summary.TrackId);
             return;
         }
 
@@ -49,10 +49,10 @@ public sealed class ProcessChangeSummariesJob(IProductWorkflowRepository workflo
         }
         catch (ExportOperationRejectedException) {
             var currentTrack = await _workflowRepository.GetTrackAsync(summary.DatasetName, summary.ProductSpecification, cancellationToken);
-            if (currentTrack?.State != ProductState.Frozen)
+            if (currentTrack?.IsManuallyFrozen != true)
                 throw;
 
-            _logger.LogInformation("Change-summary export deferred because the product track became frozen during processing. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}. TrackId: {TrackId}.", summary.DatasetName, summary.ProductSpecification, summary.TrackId);
+            _logger.LogInformation("Change-summary export deferred because the product track acquired a manual freeze hold during processing. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}. TrackId: {TrackId}.", summary.DatasetName, summary.ProductSpecification, summary.TrackId);
             return;
         }
 

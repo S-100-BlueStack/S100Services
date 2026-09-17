@@ -114,6 +114,9 @@ public sealed class ProductExportTrackRecord
 
     /// <summary>Gets or sets the latest user-safe failure message recorded for this track.</summary>
     public string? ErrorMessage { get; set; }
+
+    /// <summary>Gets or sets whether an independent manual hold is active for this track.</summary>
+    public bool IsManuallyFrozen { get; set; }
 }
 
 /// <summary>

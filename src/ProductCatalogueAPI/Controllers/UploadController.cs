@@ -18,6 +18,7 @@ namespace ProductCatalogueAPI.Controllers
     public class UploadController(
         ILogger<UploadController> logger,
         IProductRepository productRepository,
+        IProductWorkflowRepository workflowRepository,
         IDatasetLockService datasetLockService,
         ISendToIcEncJobService sendToIcEncJobService,
         IOptionsMonitor<SendToIcEncOptions> sendToIcEncOptions,
@@ -26,6 +27,7 @@ namespace ProductCatalogueAPI.Controllers
     {
         private readonly ILogger<UploadController> _logger = logger;
         private readonly IProductRepository _productRepository = productRepository;
+        private readonly IProductWorkflowRepository _workflowRepository = workflowRepository;
         private readonly IDatasetLockService _datasetLockService = datasetLockService;
         private readonly ISendToIcEncJobService _sendToIcEncJobService = sendToIcEncJobService;
         private readonly IOptionsMonitor<SendToIcEncOptions> _sendToIcEncOptions = sendToIcEncOptions;
@@ -150,32 +152,33 @@ namespace ProductCatalogueAPI.Controllers
             CancellationToken cancellationToken
         ) {
             await using var datasetLock = await _datasetLockService.TryAcquireAsync(
-                datasetName,
+                ProductTrackLockKey.For(datasetName, ProductSpecification.S101),
                 cancellationToken
             );
 
             if (datasetLock == null)
                 return Conflict($"Dataset {datasetName} is already being processed.");
 
-            var product = await _productRepository.GetCurrentByNameAsync(datasetName);
+            var track = await _workflowRepository.GetTrackAsync(datasetName, ProductSpecification.S101, cancellationToken);
 
-            if (product == null)
+            if (track == null)
                 return NotFound();
 
-            if (product.State == ProductState.Frozen)
+            if (track.IsManuallyFrozen || track.State == ProductState.Frozen)
                 return BadRequest($"Product {datasetName} is already frozen.");
 
-            if (product.State == ProductState.InTransit)
+            if (track.State == ProductState.InTransit)
                 return BadRequest($"Product {datasetName} is currently in transit and cannot be frozen.");
 
-            await _productRepository.AppendAsync(
-                datasetName,
-                ProductState.Frozen,
-                "S-101",
-                (uint)product.EditionNo,
-                (uint?)product.UpdateNo,
-                User?.Identity?.Name
+            var changed = await _workflowRepository.SetManualFreezeAsync(
+                track.Id,
+                User?.Identity?.Name,
+                _timeProvider.GetUtcNow().UtcDateTime,
+                cancellationToken
             );
+
+            if (!changed)
+                return BadRequest($"Product {datasetName} is already frozen.");
 
             return Ok();
         }
@@ -191,29 +194,30 @@ namespace ProductCatalogueAPI.Controllers
             CancellationToken cancellationToken
         ) {
             await using var datasetLock = await _datasetLockService.TryAcquireAsync(
-                datasetName,
+                ProductTrackLockKey.For(datasetName, ProductSpecification.S101),
                 cancellationToken
             );
 
             if (datasetLock == null)
                 return Conflict($"Dataset {datasetName} is already being processed.");
 
-            var product = await _productRepository.GetCurrentByNameAsync(datasetName);
+            var track = await _workflowRepository.GetTrackAsync(datasetName, ProductSpecification.S101, cancellationToken);
 
-            if (product == null)
+            if (track == null)
                 return NotFound();
 
-            if (product.State != ProductState.Frozen)
+            if (!track.IsManuallyFrozen)
                 return BadRequest($"Product {datasetName} is not frozen and cannot be unfrozen.");
 
-            await _productRepository.AppendAsync(
-                datasetName,
-                ProductState.Idle,
-                "S-101",
-                (uint)product.EditionNo,
-                (uint?)product.UpdateNo,
-                User?.Identity?.Name
+            var changed = await _workflowRepository.ClearManualFreezeAsync(
+                track.Id,
+                User?.Identity?.Name,
+                _timeProvider.GetUtcNow().UtcDateTime,
+                cancellationToken
             );
+
+            if (!changed)
+                return BadRequest($"Product {datasetName} is not frozen and cannot be unfrozen.");
 
             return Ok();
         }

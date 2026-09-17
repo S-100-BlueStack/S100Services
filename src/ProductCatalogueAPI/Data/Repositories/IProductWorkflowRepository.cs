@@ -22,6 +22,12 @@ public interface IProductWorkflowRepository
     /// <summary>Changes a track state and appends immutable history without altering published S-128 version values.</summary>
     Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default);
 
+    /// <summary>Creates an independent manual hold without changing the underlying workflow state.</summary>
+    Task<bool> SetManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes an independent manual hold and leaves the underlying workflow state unchanged.</summary>
+    Task<bool> ClearManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default);
+
     /// <summary>Clears an unverified candidate and records a cancelled workflow state.</summary>
     Task CancelCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default);
 
@@ -43,7 +49,7 @@ public interface IProductWorkflowRepository
     /// <summary>Gets one validation diagnostic after verifying that it belongs to the requested dataset.</summary>
     Task<ProductArtifactContent?> GetValidationArtifactAsync(string datasetName, Guid artifactId, CancellationToken cancellationToken = default);
 
-    /// <summary>Gets the open daily summary for a track and work date.</summary>
+    /// <summary>Gets the daily summary for a track and work date, including a closed row that can be reopened by new detection results.</summary>
     Task<ProductChangeSummary?> GetOpenChangeSummaryAsync(Guid trackId, DateOnly workDate, CancellationToken cancellationToken = default);
 
     /// <summary>Upserts the complete, lock-protected daily summary and its normalized changes.</summary>
