@@ -110,11 +110,6 @@ const GLOBAL_HELP_RULES = [
     mode: "replace-generic",
   },
   {
-    selector: ".pc-dashboard-range-apply",
-    title: "Apply the selected dashboard date range.",
-    mode: "replace-generic",
-  },
-  {
     selector: ".pc-dashboard-range-date-button",
     title: (element) => {
       const openHelp = `${getAriaLabel(element) || "Range date"}. Open the date picker.`;

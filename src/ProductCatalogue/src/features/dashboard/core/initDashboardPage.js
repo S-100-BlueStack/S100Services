@@ -12,7 +12,11 @@ import {
   resetDashboardPaging,
   selectDashboardSort,
 } from "../domain/dashboardQuery.js";
-import { createDashboardRange } from "../domain/dashboardRange.js";
+import {
+  createDashboardRange,
+  createDashboardRangeFromDraft,
+  getDashboardRangeKey,
+} from "../domain/dashboardRange.js";
 import {
   onDashboardPageSizePreferenceReset,
   readDashboardPageSizePreference,
@@ -43,6 +47,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
   let loadRequestId = 0;
   const activeRequestControllers = new Set();
   let searchDebounceId = null;
+  let rangeAutoApplyId = null;
 
   document.body.classList.add("pc-dashboard-route");
   document.title = createDashboardDocumentTitle(currentRange);
@@ -154,23 +159,49 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
     }
   };
 
-  const handleRangeChange = async (event) => {
-    const preset = event.detail?.preset;
-
-    if (!preset) {
+  const clearPendingRangeAutoApply = () => {
+    if (rangeAutoApplyId === null) {
       return;
     }
 
-    await loadDashboard(
-      createDashboardRange(preset, {
-        from: event.detail?.from,
-        to: event.detail?.to,
-      }),
-      { updateUrl: true, resetPage: true }
-    );
+    window.clearTimeout(rangeAutoApplyId);
+    rangeAutoApplyId = null;
+  };
+
+  const scheduleRangeAutoApply = () => {
+    clearPendingRangeAutoApply();
+    rangeAutoApplyId = window.setTimeout(() => {
+      rangeAutoApplyId = null;
+      void loadDashboard(currentRange, {
+        updateUrl: false,
+        abortPrevious: false,
+      });
+    }, 0);
+  };
+
+  const handleRangeChange = (event) => {
+    const nextRange = createDashboardRangeFromDraft(event.detail?.draft);
+
+    if (!nextRange || getDashboardRangeKey(nextRange) === getDashboardRangeKey(currentRange)) {
+      return;
+    }
+
+    if (searchDebounceId !== null) {
+      window.clearTimeout(searchDebounceId);
+      searchDebounceId = null;
+    }
+
+    currentRange = nextRange;
+    pagingState = resetDashboardPaging();
+    loadRequestId += 1;
+    abortActiveRequests();
+    setDashboardRouteUrl(currentRange);
+    document.title = createDashboardDocumentTitle(currentRange);
+    scheduleRangeAutoApply();
   };
 
   const handleFilterChange = (event) => {
+    clearPendingRangeAutoApply();
     const debounce = Boolean(event.detail?.debounce);
     currentFilters = normalizeDashboardFilters(event.detail?.filters ?? currentFilters);
     pagingState = resetDashboardPaging();
@@ -201,6 +232,8 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
   };
 
   const handlePageChange = async (event) => {
+    clearPendingRangeAutoApply();
+
     if (
       sortRollbackState ||
       searchDebounceId !== null ||
@@ -230,6 +263,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
   };
 
   const handleSortChange = async (event) => {
+    clearPendingRangeAutoApply();
     const nextSort = selectDashboardSort(currentSort, event.detail?.sortBy);
     if (nextSort === currentSort) {
       return;
@@ -247,6 +281,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
   };
 
   const handlePageSizeChange = async (event, { persist = true } = {}) => {
+    clearPendingRangeAutoApply();
     const nextPageSize = normalizeDashboardPageSize(event?.detail?.pageSize);
     if (nextPageSize === currentPageSize) {
       return;
@@ -272,10 +307,12 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
   });
 
   const handleRefresh = async () => {
+    clearPendingRangeAutoApply();
     await loadDashboard(currentRange, { updateUrl: false });
   };
 
   const handlePopState = async () => {
+    clearPendingRangeAutoApply();
     const route = getCurrentDashboardRoute();
     await loadDashboard(
       createDashboardRange(route.rangePreset, {
@@ -305,11 +342,13 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
       return currentDashboard;
     },
     refresh() {
+      clearPendingRangeAutoApply();
       return loadDashboard(currentRange, { updateUrl: false });
     },
     destroy() {
       loadRequestId += 1;
       abortActiveRequests();
+      clearPendingRangeAutoApply();
 
       if (searchDebounceId !== null) {
         window.clearTimeout(searchDebounceId);

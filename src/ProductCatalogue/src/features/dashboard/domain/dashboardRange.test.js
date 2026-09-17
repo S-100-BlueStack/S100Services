@@ -3,8 +3,11 @@ import { describe, it } from "node:test";
 import {
   DASHBOARD_RANGE_PRESETS,
   createDashboardRange,
+  createDashboardRangeDraftFromRange,
+  createDashboardRangeFromDraft,
   formatDashboardDateTimeInputValue,
   formatDashboardRangeDateTime,
+  getDashboardRangeKey,
   normalizeDashboardRangePreset,
 } from "./dashboardRange.js";
 
@@ -100,6 +103,76 @@ describe("dashboardRange", () => {
 
     assert.equal(range.preset, DASHBOARD_RANGE_PRESETS.sinceYesterday);
     assert.equal(range.fromQueryValue, "2026-07-07");
+  });
+
+  it("preserves historical malformed To compatibility for direct route range creation", () => {
+    const range = createDashboardRange(
+      DASHBOARD_RANGE_PRESETS.custom,
+      { from: "2026-07-01T08:15", to: "invalid" },
+      new Date("2026-07-08T10:30:00.000Z")
+    );
+
+    assert.equal(range.preset, DASHBOARD_RANGE_PRESETS.custom);
+    assert.equal(range.fromQueryValue, "2026-07-01T08:15:00");
+    assert.equal(range.toQueryValue, null);
+  });
+
+  it("resolves the existing Dashboard draft contract without a fallback range", () => {
+    const now = new Date("2026-07-08T10:30:00.000Z");
+    const openEnded = createDashboardRangeFromDraft(
+      {
+        fromDate: "2026-07-01",
+        fromTime: "08:15",
+        toDate: "",
+        toTime: "",
+      },
+      now
+    );
+
+    assert.equal(openEnded.fromQueryValue, "2026-07-01T08:15:00");
+    assert.equal(openEnded.toQueryValue, null);
+    assert.equal(getDashboardRangeKey(openEnded), "custom|2026-07-01T08:15:00|");
+    assert.equal(createDashboardRangeFromDraft(null, now), null);
+    assert.equal(
+      createDashboardRangeFromDraft(
+        { fromDate: "2026-07-08", fromTime: "10:00", toDate: "2026-07-08", toTime: "09:00" },
+        now
+      ),
+      null
+    );
+    assert.equal(
+      createDashboardRangeFromDraft(
+        { fromDate: "2026-07-01", fromTime: "08:15", toDate: "", toTime: "23:59" },
+        now
+      ),
+      null
+    );
+  });
+
+  it("preserves default times when a committed date has no explicit time", () => {
+    const range = createDashboardRangeFromDraft({
+      fromDate: "2026-07-01",
+      fromTime: "",
+      toDate: "2026-07-07",
+      toTime: "",
+    });
+
+    assert.equal(range.fromQueryValue, "2026-07-01T00:00:00");
+    assert.equal(range.toQueryValue, "2026-07-07T23:59:00");
+  });
+
+  it("round-trips applied ranges into editable drafts", () => {
+    const range = createDashboardRange(DASHBOARD_RANGE_PRESETS.custom, {
+      from: "2026-07-01T08:15",
+      to: "2026-07-07T16:45",
+    });
+
+    assert.deepEqual(createDashboardRangeDraftFromRange(range), {
+      fromDate: "2026-07-01",
+      fromTime: "08:15",
+      toDate: "2026-07-07",
+      toTime: "16:45",
+    });
   });
 
   it("formats dashboard date/time values in Europe/Copenhagen", () => {

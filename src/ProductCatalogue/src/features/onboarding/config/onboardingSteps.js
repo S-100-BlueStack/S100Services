@@ -158,7 +158,7 @@ export const ONBOARDING_STEPS = Object.freeze({
       id: "dashboard-range",
       title: "Set the activity range",
       description:
-        "Choose From and optional To values, then select Apply. Refresh reloads the applied range without changing it, and the adjacent time shows the last successful load.",
+        "Committed valid From and optional To changes load automatically. Refresh reloads the applied range without changing it, and the adjacent time shows the last successful load.",
       selectors: [".pc-dashboard-range-builder", ".pc-dashboard-header__actions"],
       placement: "left",
     },

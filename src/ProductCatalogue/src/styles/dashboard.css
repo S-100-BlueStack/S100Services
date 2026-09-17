@@ -69,8 +69,7 @@ body.pc-dashboard-route #last-updated {
 }
 
 .pc-dashboard-refresh-button,
-.pc-dashboard-link-button,
-.pc-dashboard-range-apply {
+.pc-dashboard-link-button {
   border-radius: 0;
   font: inherit;
   cursor: pointer;
@@ -307,29 +306,13 @@ body.pc-dashboard-route #last-updated {
   white-space: nowrap;
 }
 
-.pc-dashboard-range-apply {
-  min-height: 30px;
-  padding: 5px 10px;
-  color: #ffffff;
-  background: #0079c1;
-  border: 1px solid #0079c1;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
 .pc-dashboard-link-button:hover:not(:disabled) {
   color: var(--pc-text);
   background: var(--pc-button-secondary-bg-hover);
 }
 
-.pc-dashboard-range-apply:hover:not(:disabled) {
-  background: color-mix(in srgb, #0079c1 88%, #ffffff);
-}
-
 .pc-dashboard-refresh-button:disabled,
-.pc-dashboard-link-button:disabled,
-.pc-dashboard-range-apply:disabled {
+.pc-dashboard-link-button:disabled {
   cursor: default;
   opacity: 0.52;
 }
@@ -337,8 +320,7 @@ body.pc-dashboard-route #last-updated {
 .pc-dashboard-refresh-button:focus-visible,
 .pc-dashboard-link-button:focus-visible,
 .pc-dashboard-range-field__input:focus-visible,
-.pc-dashboard-date-picker__clear:focus-visible,
-.pc-dashboard-range-apply:focus-visible {
+.pc-dashboard-date-picker__clear:focus-visible {
   outline: 2px solid var(--pc-focus-ring, var(--calcite-color-brand));
   outline-offset: 2px;
 }

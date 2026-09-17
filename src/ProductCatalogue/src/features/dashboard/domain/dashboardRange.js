@@ -61,24 +61,10 @@ export function createDashboardRange(
   }
 
   if (normalizedPreset === DASHBOARD_RANGE_PRESETS.custom) {
-    const customFrom = parseDashboardRangeInput(from, {
-      dateOnlyDefaultTime: { hour: 0, minute: 0, second: 0 },
-    });
-    const customTo = parseDashboardRangeInput(to, {
-      dateOnlyDefaultTime: { hour: 23, minute: 59, second: 0 },
-    });
+    const customRange = createCustomDashboardRange({ from, to }, normalizedNow);
 
-    if (customFrom && (!customTo || customFrom <= customTo)) {
-      return createRange({
-        preset: DASHBOARD_RANGE_PRESETS.custom,
-        label: "Selected range",
-        from: customFrom,
-        // An empty To keeps the range open-ended so Refresh always includes the latest backend data.
-        to: customTo ?? normalizedNow,
-        // The backend interprets offset-free datetime values as Europe/Copenhagen.
-        fromQueryValue: formatDashboardQueryDateTime(customFrom),
-        toQueryValue: customTo ? formatDashboardQueryDateTime(customTo) : null,
-      });
+    if (customRange) {
+      return customRange;
     }
   }
 
@@ -137,6 +123,51 @@ export function formatDashboardDateTimeInputValue(value, { timeZone = DASHBOARD_
   return `${formatDateOnly(parts)}T${pad2(parts.hour)}:${pad2(parts.minute)}`;
 }
 
+export function createDashboardRangeDraftFromRange(range) {
+  const fromParts = splitDashboardRangeInputValue(
+    range?.fromQueryValue
+      ? normalizeRangeInputValueForDraft(range.fromQueryValue, "00:00")
+      : formatDashboardDateTimeInputValue(range?.from, { timeZone: range?.timeZone })
+  );
+  const toParts = splitDashboardRangeInputValue(
+    range?.toQueryValue ? normalizeRangeInputValueForDraft(range.toQueryValue, "23:59") : ""
+  );
+
+  return {
+    fromDate: fromParts.date,
+    fromTime: fromParts.time,
+    toDate: toParts.date,
+    toTime: toParts.time,
+  };
+}
+
+export function createDashboardRangeFromDraft(draft, now = new Date()) {
+  const normalizedDraft = normalizeDashboardRangeDraft(draft);
+
+  if (!normalizedDraft.fromDate || (!normalizedDraft.toDate && normalizedDraft.toTime)) {
+    return null;
+  }
+
+  const from = buildDashboardRangeDraftDateTimeValue({
+    date: normalizedDraft.fromDate,
+    time: normalizedDraft.fromTime,
+    defaultTime: "00:00",
+  });
+  const to = buildDashboardRangeDraftDateTimeValue({
+    date: normalizedDraft.toDate,
+    time: normalizedDraft.toTime,
+    defaultTime: "23:59",
+  });
+
+  return createCustomDashboardRange({ from, to }, normalizeDate(now) ?? new Date(), {
+    requireValidTo: true,
+  });
+}
+
+export function getDashboardRangeKey(range) {
+  return [range?.preset ?? "", range?.fromQueryValue ?? "", range?.toQueryValue ?? ""].join("|");
+}
+
 export function createDashboardRangeDisplayLabel({
   label,
   fromIso,
@@ -170,6 +201,84 @@ function createRange({ preset, label, from, to, fromQueryValue, toQueryValue }) 
       toIso,
       timeZone: DASHBOARD_TIME_ZONE,
     }),
+  };
+}
+
+function createCustomDashboardRange({ from, to }, now, { requireValidTo = false } = {}) {
+  const hasToInput = typeof to === "string" ? Boolean(to.trim()) : to != null;
+  const customFrom = parseDashboardRangeInput(from, {
+    dateOnlyDefaultTime: { hour: 0, minute: 0, second: 0 },
+  });
+  const customTo = parseDashboardRangeInput(to, {
+    dateOnlyDefaultTime: { hour: 23, minute: 59, second: 0 },
+  });
+
+  if (
+    !customFrom ||
+    (requireValidTo && hasToInput && !customTo) ||
+    (customTo && customFrom > customTo)
+  ) {
+    return null;
+  }
+
+  return createRange({
+    preset: DASHBOARD_RANGE_PRESETS.custom,
+    label: "Selected range",
+    from: customFrom,
+    // An empty To keeps the range open-ended so Refresh always includes the latest backend data.
+    to: customTo ?? now,
+    // The backend interprets offset-free datetime values as Europe/Copenhagen.
+    fromQueryValue: formatDashboardQueryDateTime(customFrom),
+    toQueryValue: customTo ? formatDashboardQueryDateTime(customTo) : null,
+  });
+}
+
+function normalizeDashboardRangeDraft(draft) {
+  return {
+    fromDate: normalizeDashboardRangeDraftPart(draft?.fromDate),
+    fromTime: normalizeDashboardRangeDraftPart(draft?.fromTime),
+    toDate: normalizeDashboardRangeDraftPart(draft?.toDate),
+    toTime: normalizeDashboardRangeDraftPart(draft?.toTime),
+  };
+}
+
+function normalizeDashboardRangeDraftPart(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function buildDashboardRangeDraftDateTimeValue({ date, time, defaultTime }) {
+  if (!date) {
+    return null;
+  }
+
+  return `${date}T${time || defaultTime}`;
+}
+
+function normalizeRangeInputValueForDraft(value, defaultTime) {
+  const normalizedValue = String(value ?? "").trim();
+
+  if (!normalizedValue) {
+    return "";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
+    return `${normalizedValue}T${defaultTime}`;
+  }
+
+  return normalizedValue;
+}
+
+function splitDashboardRangeInputValue(value) {
+  const normalizedValue = String(value ?? "").trim();
+
+  if (!normalizedValue) {
+    return { date: "", time: "" };
+  }
+
+  const [datePart, timePart = ""] = normalizedValue.split("T");
+  return {
+    date: datePart,
+    time: timePart.slice(0, 5),
   };
 }
 

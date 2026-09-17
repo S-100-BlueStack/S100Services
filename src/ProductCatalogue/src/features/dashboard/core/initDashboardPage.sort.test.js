@@ -63,6 +63,11 @@ async function createHarness() {
     controller,
     emit: (name, detail) => document.emit(`pc-dashboard-${name}`, detail),
     latest: () => renders.at(-1),
+    runTimers() {
+      const callbacks = [...timers.values()];
+      timers.clear();
+      callbacks.forEach((callback) => callback());
+    },
   };
 }
 
@@ -89,8 +94,11 @@ function payload(id, nextCursor = `${id}-next`) {
   };
 }
 
-async function succeed(harness, action, id) {
+async function succeed(harness, action, id, { runTimers = false } = {}) {
   const pending = action();
+  if (runTimers) {
+    harness.runTimers();
+  }
   harness.requests.at(-1).resolve(payload(id));
   await pending;
   return harness.requests.at(-1);
@@ -180,14 +188,22 @@ test("sort survives filters, search, range, page size, refresh and cursor naviga
   await succeed(h, () => h.emit("sort-change", { sortBy: "status" }), "sorted");
   const actions = [
     () => h.emit("filter-change", { filters: { status: "failed", search: "alpha" } }),
-    () => h.emit("range-change", { preset: "last-7-days" }),
+    () =>
+      h.emit("range-change", {
+        draft: {
+          fromDate: "2026-07-01",
+          fromTime: "00:00",
+          toDate: "2026-07-07",
+          toTime: "23:59",
+        },
+      }),
     () => h.emit("page-size-change", { pageSize: 25 }),
     () => h.emit("refresh"),
     () => h.emit("page-change", { direction: "next" }),
     () => h.emit("page-change", { direction: "previous" }),
   ];
-  for (const action of actions) {
-    const request = await succeed(h, action, "next");
+  for (const [index, action] of actions.entries()) {
+    const request = await succeed(h, action, "next", { runTimers: index === 1 });
     assertSort(request.state, "status", "asc");
   }
   assert.deepEqual(h.persistedSizes, [25]);

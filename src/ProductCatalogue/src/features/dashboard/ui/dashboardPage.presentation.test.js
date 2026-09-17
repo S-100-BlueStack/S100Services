@@ -15,7 +15,7 @@ test("Dashboard chrome is visually compact while retaining one semantic page hea
   assert.match(source, /title: "Activity list",[\s\S]*?visuallyHiddenTitle: true,/);
 });
 
-test("Dashboard toolbar has an accessible icon Refresh and no visible preset shortcuts", async () => {
+test("Dashboard toolbar has accessible icon Refresh without visible preset shortcuts", async () => {
   const source = await readFile(new URL("dashboardPage.js", dashboardUiDirectory), "utf8");
 
   assert.match(source, /const button = document\.createElement\("button"\);/);
@@ -44,11 +44,64 @@ test("optional To remains clearable without a separate permanent Clear action", 
   assert.match(source, /clearButton\.textContent = "Clear date";/);
 });
 
-test("range groups keep semantic labels and explicit Apply behavior", async () => {
+test("range groups keep semantic labels and have no Apply control", async () => {
   const source = await readFile(new URL("dashboardPage.js", dashboardUiDirectory), "utf8");
 
   assert.match(source, /field\.setAttribute\("role", "group"\);/);
   assert.match(source, /field\.setAttribute\("aria-labelledby", labelElement\.id\);/);
-  assert.match(source, /button\.textContent = "Apply";/);
+  assert.doesNotMatch(
+    source,
+    /createRangeApplyButton|pc-dashboard-range-apply|textContent = "Apply"/
+  );
   assert.match(source, /new CustomEvent\("pc-dashboard-range-change"/);
+});
+
+test("range controls keep keyboard time editing local until the range interaction commits", async () => {
+  const source = await readFile(new URL("dashboardPage.js", dashboardUiDirectory), "utf8");
+
+  assert.match(
+    source,
+    /datePicker\.onDateChange = \(dateValue\) => \{[\s\S]*?syncRangeDateTimeDraft\([\s\S]*?commitDashboardRangeDraft\(\);/
+  );
+  assert.match(source, /let timeEditingByKeyboard = false;/);
+  assert.match(
+    source,
+    /timeInput\.addEventListener\("keydown", \(\) => \{\n {4}timeEditingByKeyboard = true;/
+  );
+  assert.match(
+    source,
+    /timeInput\.addEventListener\("input", \(\) => \{[\s\S]*?syncRangeDateTimeDraft\([\s\S]*?\n {2}\}\);/
+  );
+  assert.match(
+    source,
+    /if \(!timeEditingByKeyboard\) \{\n {6}scheduleDashboardTimeCommit\(timeInput\);/
+  );
+  assert.match(
+    source,
+    /wrapper\.addEventListener\("focusout", \(event\) => \{[\s\S]*?wrapper\.contains\(event\.relatedTarget\)[\s\S]*?commitDashboardRangeDraft\(\);/
+  );
+  assert.match(
+    source,
+    /activeElement !== timeInput &&[\s\S]*?rangeBuilder\.contains\(activeElement\)[\s\S]*?return;/
+  );
+  assert.match(source, /detail: \{ draft: \{ \.\.\.dashboardRangeDraft \} \}/);
+});
+
+test("Refresh participates in Dashboard focus restoration after a range auto-apply", async () => {
+  const source = await readFile(new URL("dashboardPage.js", dashboardUiDirectory), "utf8");
+
+  assert.match(source, /button\.dataset\.dashboardFocusKey = "refresh";/);
+  assert.match(source, /const focusKey = activeElement\.dataset\.dashboardFocusKey;/);
+  assert.match(source, /\[data-dashboard-focus-key=/);
+});
+
+test("range rerenders retain invalid drafts until the applied range changes", async () => {
+  const source = await readFile(new URL("dashboardPage.js", dashboardUiDirectory), "utf8");
+
+  assert.match(source, /const appliedRangeKey = getDashboardRangeKey\(range\);/);
+  assert.match(
+    source,
+    /dashboardRangeDraft === null \|\| dashboardRangeDraftAppliedKey !== appliedRangeKey/
+  );
+  assert.match(source, /button\.focus\(\{ preventScroll: true \}\);/);
 });

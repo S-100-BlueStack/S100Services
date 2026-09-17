@@ -1,12 +1,12 @@
 # Dashboard
 
-Current reviewed runtime baseline: `01f22a605e8e4d29a8da187306af1dc04b8540ef`.
+FI-034 implementation baseline: `49d9a67e98d6183b24ea0731fa9292b7b1a49950`.
 
 FI-001 introduces a separate read-only Dashboard route at `/dashboard`. The Dashboard is intentionally isolated from the main map, Product Collection, Analyze and Review state. It summarizes operational activity for a selected range and links users onward to product-level Review or Analyze pages.
 
 ## Current status
 
-FI-001 and BE-107 remain complete, and the Dashboard presentation/runtime contract is currently reviewed through manually accepted FI-033 at `01f22a605e8e4d29a8da187306af1dc04b8540ef`. BE-107 adds bounded server-side filtering and cursor pagination without changing the route or the existing range semantics.
+FI-001 and BE-107 remain complete, FI-033 is manually accepted, and FI-034 is implemented with manual verification pending. BE-107 adds bounded server-side filtering and cursor pagination without changing the route or the existing range semantics.
 
 Implemented scope:
 
@@ -16,7 +16,7 @@ Implemented scope:
 - Danish operational time handling through backend-provided `Europe/Copenhagen` range metadata.
 - Always-visible Danish local `From` and optional `To` date/time controls.
 - Compact Dashboard-owned date picker for date selection so month/year navigation stays predictable.
-- `Apply` loads data for the currently selected range.
+- Committed valid date and time changes apply automatically; invalid or incomplete drafts remain editable without requesting or changing the route.
 - Compact icon-only `Refresh` reloads the currently applied range and retains an accessible name and hover help.
 - An adjacent `HH:MM` value represents only the most recent accepted successful Dashboard load.
 - Summary cards for operational activity counts.
@@ -53,7 +53,7 @@ GET electronicproducts/dashboard?from=2026-07-01&pageSize=50&cursor={continuatio
 
 Range query values are sent in Danish operational time. The Dashboard header always shows `From` and optional `To` date/time fields.
 
-The range UI no longer exposes preset shortcut buttons, but the default and historical preset route values remain compatible. Selecting a `From` date defaults its time to `00:00`; selecting a `To` date defaults its time to `23:59`. Leaving `To` empty keeps the range open-ended, so refresh requests continue to include the latest backend activity. Open a populated optional To date picker and choose `Clear date`, or focus its trigger and press `Delete` or `Backspace`, to clear both date and time without a separate permanent Clear action.
+The range UI no longer exposes preset shortcut buttons or an Apply action, but the default and historical preset route values remain compatible. Selecting a `From` date defaults its time to `00:00`; selecting a `To` date defaults its time to `23:59`. A committed valid draft applies once through the shared Dashboard request lifecycle. Leaving `To` empty keeps the range open-ended, so refresh requests continue to include the latest backend activity. Open a populated optional To date picker and choose `Clear date`, or focus its trigger and press `Delete` or `Backspace`, to clear both date and time and automatically apply the open-ended range.
 
 The backend interprets offset-free datetime values as `Europe/Copenhagen` wall time, not UTC.
 
@@ -161,17 +161,19 @@ The source backend state can still appear in activity details as `Source state` 
 The Dashboard does not use separate preset modes. It uses one always-visible range builder:
 
 ```txt
-[From date] [From time] [To date] [To time] [Apply] [Refresh icon] [HH:MM]
+[From date] [From time] [To date] [To time] [Refresh icon] [HH:MM]
 ```
 
 Behavior:
 
-- `From` is required before `Apply` can load data.
+- `From` is required before a draft can apply.
 - `To` is optional.
-- `Apply` loads the selected range and updates the URL query.
-- `Refresh` reloads the currently applied range.
+- A valid date selection applies automatically and updates the URL query through the existing `pushState` route path. Native time `input` events update only the editable draft. Keyboard time editing commits when focus leaves the range group; pointer-driven native time-picker changes commit after the browser focus transition settles, unless focus moved directly to another range control.
+- The committed range becomes the controller's applied state immediately, while its request/render is queued to the next browser task. This lets the focus/click that committed the edit finish first, and a directly following Refresh/filter/sort/page-size action coalesces with the pending range load instead of issuing a duplicate request.
+- Invalid or incomplete drafts do not request, change the URL, clear results, or publish an API error. A later committed edit that completes a valid draft applies the complete draft.
+- `Refresh` reloads the currently applied range, never an invalid in-progress draft.
 - The last-successful timestamp updates only with an accepted successful response. Failed, aborted, and stale responses retain the previous timestamp and rendered result.
-- The contextual date-picker action, `Delete`, or `Backspace` clears the optional To date and paired time so Apply serializes the existing open-ended range contract.
+- The contextual date-picker action, `Delete`, or `Backspace` clears the optional To date and paired time and applies the existing open-ended range contract once; route and API serialization continue to omit `to`.
 - `Since yesterday` and `Last 7 days` remain accepted route/domain values for existing bookmarks and default-range behavior even though their shortcut buttons are no longer visible.
 - The custom date picker is Dashboard-owned and should stay compact because it lives in the route header.
 
@@ -188,7 +190,7 @@ The active filters are:
 - reports
 - product
 
-Search is debounced by 300 ms. Debounced search edits supersede older responses through request identity checks without routinely aborting the previous browser request. Immediate range, select-filter, page and manual-refresh actions abort stale in-flight requests. Filter, range, and page-size changes reset pagination to the first page. Previous/Next navigation keeps a client-side cursor stack, while the cursor values themselves remain backend-owned and opaque. A page-size change invalidates the current cursor chain before the replacement request starts, so cursors created for another page-size generation cannot be reused even if the replacement request fails.
+Search is debounced by 300 ms. Discrete filters and summary-row actions remain immediate. A committed range supersedes a pending search timer because its request already contains the latest filter draft; this avoids a duplicate delayed load. Debounced search edits supersede older responses through request identity checks without routinely aborting the previous browser request. Immediate range, select-filter, page and manual-refresh actions abort stale in-flight requests. Filter, range, and page-size changes reset pagination to the first page and invalidate cursor history while preserving the active sort and page size. Previous/Next navigation keeps a client-side cursor stack, while the cursor values themselves remain backend-owned and opaque. A page-size change invalidates the current cursor chain before the replacement request starts, so cursors created for another page-size generation cannot be reused even if the replacement request fails.
 
 Summary cards, status summary and operation summary always represent the complete filtered result. They are never calculated from only the visible page. `Paging.Total` is the complete filtered activity count; `Paging.Returned` is the number of rows on the current page.
 
@@ -196,9 +198,13 @@ The backend currently obtains the complete date-bounded JobTable history through
 
 The Dashboard keeps the last successful result visible while a request loads. If a refresh/filter request fails, the existing result stays visible with a compact error banner. The failed request does not silently switch to demo data. A failed page request restores the prior cursor state so the page controls remain consistent with the visible result.
 
+The controller remains the single owner of applied range, route publication, request identity, `AbortController`, paging/cursor state, sort rollback, page-size generation and last-successful `HH:MM`. The UI owns the editable range draft. Rerenders preserve that draft while its applied range key is unchanged; a successful commit or Back/Forward route change synchronizes the controls from the newly applied range. Dashboard History and FI-032 navigation are unchanged.
+
 ## Verification
 
 Automated coverage includes backend filtering/paging semantics, complete-result summaries, filter options, backward-compatible unpaged requests, stable equal-timestamp ordering, report filters, empty results, query validation, frontend query serialization, cursor history, paging normalization and search-value preservation.
+
+FI-034 automated coverage adds draft validation without fallback, keyboard/pointer time commit boundaries, focus-safe next-task range application, duplicate/coalescing suppression, open-ended To clearing, invalid route/request suppression, manual Refresh against applied state, page/cursor reset, sort/page-size preservation, search debounce interleaving, stale/failure retention and accepted-success timestamp publication. Manual browser verification remains pending.
 
 Manual verification by the project owner confirmed that Dashboard pagination works as intended at commit `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
 

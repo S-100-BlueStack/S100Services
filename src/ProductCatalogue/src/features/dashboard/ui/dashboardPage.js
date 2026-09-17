@@ -21,9 +21,10 @@ import {
   DASHBOARD_PAGE_SIZE_OPTIONS,
 } from "../domain/dashboardQuery.js";
 import {
-  DASHBOARD_RANGE_PRESETS,
-  formatDashboardDateTimeInputValue,
+  createDashboardRangeDraftFromRange,
+  createDashboardRangeFromDraft,
   formatDashboardRangeDateTime,
+  getDashboardRangeKey,
 } from "../domain/dashboardRange.js";
 import { createDashboardLoadPresentation } from "./dashboardLoadPresentation.js";
 
@@ -70,6 +71,7 @@ const REPORT_OPTIONS = [
 
 let dashboardFilters = createDefaultDashboardFilters();
 let dashboardRangeDraft = null;
+let dashboardRangeDraftAppliedKey = null;
 let dashboardHistoryState = createDashboardHistoryState();
 let dashboardHistoryKeyboardHandlersRegistered = false;
 let dashboardHistoryLookupLoadPromise = null;
@@ -158,7 +160,7 @@ function createHeader({ range, loading, lastSuccessfulLoadAt }) {
 
   const actions = document.createElement("div");
   actions.className = "pc-dashboard-header__actions";
-  actions.append(createRangeControls(range), createRangeApplyButton());
+  actions.appendChild(createRangeControls(range));
   actions.appendChild(createRefreshStatus({ loading, lastSuccessfulLoadAt }));
 
   header.append(title, actions);
@@ -170,7 +172,12 @@ function createRangeControls(range) {
   wrapper.className = "pc-dashboard-range-builder";
   wrapper.setAttribute("aria-label", "Dashboard range");
 
-  dashboardRangeDraft ??= createDashboardRangeDraftFromRange(range);
+  const appliedRangeKey = getDashboardRangeKey(range);
+
+  if (dashboardRangeDraft === null || dashboardRangeDraftAppliedKey !== appliedRangeKey) {
+    dashboardRangeDraft = createDashboardRangeDraftFromRange(range);
+    dashboardRangeDraftAppliedKey = appliedRangeKey;
+  }
 
   wrapper.append(
     createRangeDateTimeField({
@@ -190,6 +197,14 @@ function createRangeControls(range) {
       required: false,
     })
   );
+
+  wrapper.addEventListener("focusout", (event) => {
+    if (event.relatedTarget && wrapper.contains(event.relatedTarget)) {
+      return;
+    }
+
+    commitDashboardRangeDraft();
+  });
 
   return wrapper;
 }
@@ -220,6 +235,7 @@ function createRangeDateTimeField({ idPrefix, label, dateKey, timeKey, defaultTi
   timeInput.step = "60";
   timeInput.value = dashboardRangeDraft?.[timeKey] ?? "";
   timeInput.setAttribute("aria-label", `${label} time`);
+  let timeEditingByKeyboard = false;
   datePicker.onDateChange = (dateValue) => {
     if (dateValue && !timeInput.value) {
       timeInput.value = defaultTime;
@@ -230,8 +246,16 @@ function createRangeDateTimeField({ idPrefix, label, dateKey, timeKey, defaultTi
     }
 
     syncRangeDateTimeDraft({ dateKey, timeKey, dateValue, timeValue: timeInput.value });
-    updateDashboardRangeApplyButtons();
+    commitDashboardRangeDraft();
   };
+
+  timeInput.addEventListener("keydown", () => {
+    timeEditingByKeyboard = true;
+  });
+
+  timeInput.addEventListener("pointerdown", () => {
+    timeEditingByKeyboard = false;
+  });
 
   timeInput.addEventListener("input", () => {
     syncRangeDateTimeDraft({
@@ -240,7 +264,19 @@ function createRangeDateTimeField({ idPrefix, label, dateKey, timeKey, defaultTi
       dateValue: getDashboardDateButtonValue(datePicker.button),
       timeValue: timeInput.value,
     });
-    updateDashboardRangeApplyButtons();
+  });
+
+  timeInput.addEventListener("change", () => {
+    syncRangeDateTimeDraft({
+      dateKey,
+      timeKey,
+      dateValue: getDashboardDateButtonValue(datePicker.button),
+      timeValue: timeInput.value,
+    });
+
+    if (!timeEditingByKeyboard) {
+      scheduleDashboardTimeCommit(timeInput);
+    }
   });
 
   field.append(labelElement, datePicker.root, timeInput);
@@ -279,6 +315,7 @@ function createRangeDatePicker({ id, label, dateKey, timeKey, required }) {
     : () => {
         setDashboardDateButtonValue(button, "");
         closeDashboardDatePickers();
+        button.focus({ preventScroll: true });
         result.onDateChange?.("");
       };
 
@@ -293,6 +330,7 @@ function createRangeDatePicker({ id, label, dateKey, timeKey, required }) {
       onSelect: (nextDate) => {
         setDashboardDateButtonValue(button, nextDate);
         closeDashboardDatePickers();
+        button.focus({ preventScroll: true });
         result.onDateChange?.(nextDate);
       },
       onClear: clearValue,
@@ -326,6 +364,7 @@ function createRangeDatePicker({ id, label, dateKey, timeKey, required }) {
         onSelect: (nextDate) => {
           setDashboardDateButtonValue(button, nextDate);
           closeDashboardDatePickers();
+          button.focus({ preventScroll: true });
           result.onDateChange?.(nextDate);
         },
         onClear: clearValue,
@@ -342,6 +381,7 @@ function createRangeDatePicker({ id, label, dateKey, timeKey, required }) {
     onSelect: (nextDate) => {
       setDashboardDateButtonValue(button, nextDate);
       closeDashboardDatePickers();
+      button.focus({ preventScroll: true });
       result.onDateChange?.(nextDate);
     },
     onClear: clearValue,
@@ -590,91 +630,6 @@ function formatDashboardCalendarMonthTitle({ year, month }) {
   return new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(date);
 }
 
-function createRangeApplyButton() {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "pc-dashboard-range-apply";
-  button.textContent = "Apply";
-  button.disabled = !isDashboardRangeDraftValid(dashboardRangeDraft);
-  button.title = button.disabled
-    ? "Select From, and keep To after From when used."
-    : "Load dashboard activity for the selected range.";
-  button.addEventListener("click", () => {
-    if (!isDashboardRangeDraftValid(dashboardRangeDraft)) {
-      return;
-    }
-
-    const fromValue = buildDashboardRangeDraftDateTimeValue({
-      date: dashboardRangeDraft.fromDate,
-      time: dashboardRangeDraft.fromTime,
-      defaultTime: "00:00",
-    });
-    const toValue = buildDashboardRangeDraftDateTimeValue({
-      date: dashboardRangeDraft.toDate,
-      time: dashboardRangeDraft.toTime,
-      defaultTime: "23:59",
-    });
-
-    document.dispatchEvent(
-      new CustomEvent("pc-dashboard-range-change", {
-        detail: {
-          preset: DASHBOARD_RANGE_PRESETS.custom,
-          from: fromValue,
-          to: toValue,
-        },
-      })
-    );
-  });
-
-  return button;
-}
-
-function createDashboardRangeDraftFromRange(range) {
-  const fromParts = splitDashboardRangeInputValue(
-    range.fromQueryValue
-      ? normalizeRangeInputValueForDraft(range.fromQueryValue, "00:00")
-      : formatDashboardDateTimeInputValue(range.from, { timeZone: range.timeZone })
-  );
-  const toParts = splitDashboardRangeInputValue(
-    range.toQueryValue ? normalizeRangeInputValueForDraft(range.toQueryValue, "23:59") : ""
-  );
-
-  return {
-    fromDate: fromParts.date,
-    fromTime: fromParts.time,
-    toDate: toParts.date,
-    toTime: toParts.time,
-  };
-}
-
-function normalizeRangeInputValueForDraft(value, defaultTime) {
-  const normalizedValue = String(value ?? "").trim();
-
-  if (!normalizedValue) {
-    return "";
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
-    return `${normalizedValue}T${defaultTime}`;
-  }
-
-  return normalizedValue;
-}
-
-function splitDashboardRangeInputValue(value) {
-  const normalizedValue = String(value ?? "").trim();
-
-  if (!normalizedValue) {
-    return { date: "", time: "" };
-  }
-
-  const [datePart, timePart = ""] = normalizedValue.split("T");
-  return {
-    date: datePart,
-    time: timePart.slice(0, 5),
-  };
-}
-
 function createEmptyDashboardRangeDraft() {
   return {
     fromDate: "",
@@ -684,51 +639,38 @@ function createEmptyDashboardRangeDraft() {
   };
 }
 
-function isDashboardRangeDraftValid(draft) {
-  if (!draft?.fromDate) {
-    return false;
-  }
-
-  if (!draft.toDate) {
-    return !draft.toTime;
-  }
-
-  const fromValue = buildDashboardRangeDraftDateTimeValue({
-    date: draft.fromDate,
-    time: draft.fromTime,
-    defaultTime: "00:00",
-  });
-  const toValue = buildDashboardRangeDraftDateTimeValue({
-    date: draft.toDate,
-    time: draft.toTime,
-    defaultTime: "23:59",
-  });
-
-  return Boolean(fromValue && toValue && fromValue <= toValue);
-}
-
-function buildDashboardRangeDraftDateTimeValue({ date, time, defaultTime }) {
-  if (!date) {
-    return null;
-  }
-
-  return `${date}T${time || defaultTime}`;
-}
-
-function updateDashboardRangeApplyButtons() {
-  const isValid = isDashboardRangeDraftValid(dashboardRangeDraft);
-  const title = isValid
-    ? "Load dashboard activity for the selected range."
-    : "Select From, and keep To after From when used.";
-
-  document.querySelectorAll(".pc-dashboard-range-apply").forEach((button) => {
-    if (!(button instanceof HTMLButtonElement)) {
+function scheduleDashboardTimeCommit(timeInput) {
+  window.setTimeout(() => {
+    if (!timeInput.isConnected) {
       return;
     }
 
-    button.disabled = !isValid;
-    button.title = title;
-  });
+    const rangeBuilder = timeInput.closest(".pc-dashboard-range-builder");
+    const activeElement = document.activeElement;
+
+    if (
+      rangeBuilder &&
+      activeElement &&
+      activeElement !== timeInput &&
+      rangeBuilder.contains(activeElement)
+    ) {
+      return;
+    }
+
+    commitDashboardRangeDraft();
+  }, 0);
+}
+
+function commitDashboardRangeDraft() {
+  if (!createDashboardRangeFromDraft(dashboardRangeDraft)) {
+    return;
+  }
+
+  document.dispatchEvent(
+    new CustomEvent("pc-dashboard-range-change", {
+      detail: { draft: { ...dashboardRangeDraft } },
+    })
+  );
 }
 
 function captureDashboardControlFocus() {
@@ -746,16 +688,18 @@ function captureDashboardControlFocus() {
 
   const sortKey = activeElement.dataset.dashboardSortKey;
   const filterKey = activeElement.dataset.dashboardFilterKey;
+  const focusKey = activeElement.dataset.dashboardFocusKey;
   const rangeInputId = activeElement.id?.startsWith("dashboard-range-") ? activeElement.id : null;
   const pageSizeControl = activeElement.hasAttribute("data-dashboard-page-size");
 
-  if (!sortKey && !filterKey && !rangeInputId && !pageSizeControl) {
+  if (!sortKey && !filterKey && !focusKey && !rangeInputId && !pageSizeControl) {
     return null;
   }
 
   return {
     sortKey,
     filterKey,
+    focusKey,
     rangeInputId,
     pageSizeControl,
     selectionStart: activeElement instanceof HTMLInputElement ? activeElement.selectionStart : null,
@@ -774,7 +718,9 @@ function restoreDashboardControlFocus(focusState) {
       ? `#${CSS.escape(focusState.rangeInputId)}`
       : focusState.pageSizeControl
         ? "[data-dashboard-page-size]"
-        : `[data-dashboard-filter-key="${focusState.filterKey}"]`;
+        : focusState.focusKey
+          ? `[data-dashboard-focus-key="${CSS.escape(focusState.focusKey)}"]`
+          : `[data-dashboard-filter-key="${focusState.filterKey}"]`;
   const nextElement = document.querySelector(selector);
 
   if (
@@ -805,6 +751,7 @@ function createRefreshStatus({ loading, lastSuccessfulLoadAt }) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "pc-dashboard-refresh-button";
+  button.dataset.dashboardFocusKey = "refresh";
   button.disabled = loading;
   button.setAttribute("aria-label", "Refresh dashboard");
   button.title = "Reload dashboard activity for the applied range.";
