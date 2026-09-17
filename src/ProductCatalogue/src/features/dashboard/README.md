@@ -16,9 +16,9 @@ Implemented scope:
 - Danish operational time handling through backend-provided `Europe/Copenhagen` range metadata.
 - Always-visible Danish local `From` and optional `To` date/time controls.
 - Compact Dashboard-owned date picker for date selection so month/year navigation stays predictable.
-- Quick range action buttons for `Since yesterday` and `Last 7 days` that fill the range fields without loading data.
 - `Apply` loads data for the currently selected range.
-- `Refresh` reloads the currently applied range.
+- Compact icon-only `Refresh` reloads the currently applied range and retains an accessible name and hover help.
+- An adjacent `HH:MM` value represents only the most recent accepted successful Dashboard load.
 - Summary cards for operational activity counts.
 - Compact activity list with product links.
 - Debounced server-side search.
@@ -53,7 +53,7 @@ GET electronicproducts/dashboard?from=2026-07-01&pageSize=50&cursor={continuatio
 
 Range query values are sent in Danish operational time. The Dashboard header always shows `From` and optional `To` date/time fields.
 
-`Since yesterday` and `Last 7 days` are quick actions that only fill the fields; they do not load data until the user selects `Apply`. Selecting a `From` date defaults its time to `00:00`; selecting a `To` date defaults its time to `23:59`. Leaving `To` empty keeps the range open-ended, so refresh requests continue to include the latest backend activity.
+The range UI no longer exposes preset shortcut buttons, but the default and historical preset route values remain compatible. Selecting a `From` date defaults its time to `00:00`; selecting a `To` date defaults its time to `23:59`. Leaving `To` empty keeps the range open-ended, so refresh requests continue to include the latest backend activity. Open a populated optional To date picker and choose `Clear date`, or focus its trigger and press `Delete` or `Backspace`, to clear both date and time without a separate permanent Clear action.
 
 The backend interprets offset-free datetime values as `Europe/Copenhagen` wall time, not UTC.
 
@@ -161,18 +161,18 @@ The source backend state can still appear in activity details as `Source state` 
 The Dashboard does not use separate preset modes. It uses one always-visible range builder:
 
 ```txt
-[Refresh] [Apply] [Since yesterday] [Last 7 days] [From date] [From time] [To date] [To time]
+[From date] [From time] [To date] [To time] [Apply] [Refresh icon] [HH:MM]
 ```
 
 Behavior:
 
 - `From` is required before `Apply` can load data.
 - `To` is optional.
-- `Since yesterday` sets `From` to yesterday at `00:00` and clears `To`.
-- `Last 7 days` sets `From` to seven calendar days back at `00:00` and clears `To`.
-- Quick range actions do not load data directly.
 - `Apply` loads the selected range and updates the URL query.
 - `Refresh` reloads the currently applied range.
+- The last-successful timestamp updates only with an accepted successful response. Failed, aborted, and stale responses retain the previous timestamp and rendered result.
+- The contextual date-picker action, `Delete`, or `Backspace` clears the optional To date and paired time so Apply serializes the existing open-ended range contract.
+- `Since yesterday` and `Last 7 days` remain accepted route/domain values for existing bookmarks and default-range behavior even though their shortcut buttons are no longer visible.
 - The custom date picker is Dashboard-owned and should stay compact because it lives in the route header.
 
 ## Server-side filtering and cursor paging

@@ -22,10 +22,10 @@ import {
 } from "../domain/dashboardQuery.js";
 import {
   DASHBOARD_RANGE_PRESETS,
-  createDashboardRange,
   formatDashboardDateTimeInputValue,
   formatDashboardRangeDateTime,
 } from "../domain/dashboardRange.js";
+import { createDashboardLoadPresentation } from "./dashboardLoadPresentation.js";
 
 const SUMMARY_CARDS = [
   {
@@ -87,6 +87,7 @@ export function renderDashboardPage({
   sortBy = "time",
   sortDirection = "desc",
   pagingMatchesPageSize = true,
+  lastSuccessfulLoadAt = null,
 }) {
   ensureDashboardHistoryKeyboardHandlers();
   const focusState = captureDashboardControlFocus();
@@ -103,11 +104,12 @@ export function renderDashboardPage({
     sortBy,
     sortDirection,
     pagingMatchesPageSize,
+    lastSuccessfulLoadAt,
   };
 
   const page = getOrCreateDashboardPage();
   page.replaceChildren(
-    createHeader({ range, dashboard, loading }),
+    createHeader({ range, loading, lastSuccessfulLoadAt }),
     createBody({
       range,
       dashboard,
@@ -146,42 +148,21 @@ function getOrCreateDashboardPage() {
   return page;
 }
 
-function createHeader({ range, dashboard, loading }) {
+function createHeader({ range, loading, lastSuccessfulLoadAt }) {
   const header = document.createElement("header");
   header.className = "pc-dashboard-header";
 
-  const text = document.createElement("div");
-  text.className = "pc-dashboard-header__text";
-
-  const eyebrow = document.createElement("div");
-  eyebrow.className = "pc-dashboard-header__eyebrow";
-  eyebrow.textContent = "Operational overview";
-
   const title = document.createElement("h1");
-  title.className = "pc-dashboard-header__title";
+  title.className = "pc-dashboard-visually-hidden";
   title.textContent = "Dashboard";
-
-  const meta = document.createElement("p");
-  meta.className = "pc-dashboard-header__meta";
-  meta.textContent = createHeaderMeta(range, dashboard);
-
-  text.append(eyebrow, title, meta);
 
   const actions = document.createElement("div");
   actions.className = "pc-dashboard-header__actions";
-  actions.append(
-    createRefreshButton(loading),
-    createRangeApplyButton(),
-    createRangeControls(range)
-  );
+  actions.append(createRangeControls(range), createRangeApplyButton());
+  actions.appendChild(createRefreshStatus({ loading, lastSuccessfulLoadAt }));
 
-  header.append(text, actions);
+  header.append(title, actions);
   return header;
-}
-
-function createHeaderMeta(range, dashboard) {
-  const displayRange = dashboard?.range ?? range;
-  return displayRange.displayLabel;
 }
 
 function createRangeControls(range) {
@@ -192,16 +173,6 @@ function createRangeControls(range) {
   dashboardRangeDraft ??= createDashboardRangeDraftFromRange(range);
 
   wrapper.append(
-    createQuickRangeButton({
-      label: "Since yesterday",
-      description: "Fill From with yesterday at 00:00 and leave To open-ended.",
-      preset: DASHBOARD_RANGE_PRESETS.sinceYesterday,
-    }),
-    createQuickRangeButton({
-      label: "Last 7 days",
-      description: "Fill From with seven calendar days ago at 00:00 and leave To open-ended.",
-      preset: DASHBOARD_RANGE_PRESETS.last7Days,
-    }),
     createRangeDateTimeField({
       idPrefix: "dashboard-range-from",
       label: "From",
@@ -223,28 +194,16 @@ function createRangeControls(range) {
   return wrapper;
 }
 
-function createQuickRangeButton({ label, description, preset }) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "pc-dashboard-range-action";
-  button.textContent = label;
-  button.title = description;
-  button.addEventListener("click", () => {
-    dashboardRangeDraft = createDashboardRangeDraftFromRange(createDashboardRange(preset));
-    updateDashboardRangeInputsFromDraft();
-    updateDashboardRangeApplyButtons();
-  });
-
-  return button;
-}
-
 function createRangeDateTimeField({ idPrefix, label, dateKey, timeKey, defaultTime, required }) {
   const field = document.createElement("div");
   field.className = "pc-dashboard-range-field";
+  field.setAttribute("role", "group");
 
   const labelElement = document.createElement("span");
+  labelElement.id = `${idPrefix}-label`;
   labelElement.className = "pc-dashboard-range-field__label";
   labelElement.textContent = label;
+  field.setAttribute("aria-labelledby", labelElement.id);
 
   const datePicker = createRangeDatePicker({
     id: `${idPrefix}-date`,
@@ -315,6 +274,13 @@ function createRangeDatePicker({ id, label, dateKey, timeKey, required }) {
     button,
     onDateChange: null,
   };
+  const clearValue = required
+    ? null
+    : () => {
+        setDashboardDateButtonValue(button, "");
+        closeDashboardDatePickers();
+        result.onDateChange?.("");
+      };
 
   root.dataset.viewDate = getDashboardDateButtonValue(button) || getTodayDateValue();
 
@@ -329,8 +295,21 @@ function createRangeDatePicker({ id, label, dateKey, timeKey, required }) {
         closeDashboardDatePickers();
         result.onDateChange?.(nextDate);
       },
+      onClear: clearValue,
     });
   });
+
+  if (!required) {
+    button.setAttribute("aria-keyshortcuts", "Delete Backspace");
+    button.addEventListener("keydown", (event) => {
+      if (event.key !== "Delete" && event.key !== "Backspace") {
+        return;
+      }
+
+      event.preventDefault();
+      clearValue();
+    });
+  }
 
   panel.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -349,33 +328,13 @@ function createRangeDatePicker({ id, label, dateKey, timeKey, required }) {
           closeDashboardDatePickers();
           result.onDateChange?.(nextDate);
         },
+        onClear: clearValue,
       });
     },
     { passive: false }
   );
 
   root.append(button, panel);
-
-  if (!required) {
-    const clearButton = document.createElement("button");
-    clearButton.type = "button";
-    clearButton.className = "pc-dashboard-range-date-clear";
-    clearButton.textContent = "Clear";
-    clearButton.title = `Clear ${label} date`;
-    clearButton.setAttribute("aria-label", `Clear ${label} date`);
-    clearButton.addEventListener("click", () => {
-      setDashboardDateButtonValue(button, "");
-      syncRangeDateTimeDraft({
-        dateKey,
-        timeKey,
-        dateValue: "",
-        timeValue: "",
-      });
-      setDashboardRangeInputValue("dashboard-range-to-time", "");
-      updateDashboardRangeApplyButtons();
-    });
-    root.appendChild(clearButton);
-  }
 
   renderDashboardDatePickerPanel({
     root,
@@ -385,6 +344,7 @@ function createRangeDatePicker({ id, label, dateKey, timeKey, required }) {
       closeDashboardDatePickers();
       result.onDateChange?.(nextDate);
     },
+    onClear: clearValue,
   });
 
   return result;
@@ -399,7 +359,7 @@ function syncRangeDateTimeDraft({ dateKey, timeKey, dateValue, timeValue }) {
   };
 }
 
-function toggleDashboardDatePicker({ root, button, panel, onSelect }) {
+function toggleDashboardDatePicker({ root, button, panel, onSelect, onClear }) {
   const willOpen = panel.hidden;
   closeDashboardDatePickers(root);
 
@@ -410,7 +370,7 @@ function toggleDashboardDatePicker({ root, button, panel, onSelect }) {
 
   root.dataset.viewDate =
     getDashboardDateButtonValue(button) || root.dataset.viewDate || getTodayDateValue();
-  renderDashboardDatePickerPanel({ root, panel, onSelect });
+  renderDashboardDatePickerPanel({ root, panel, onSelect, onClear });
 
   root.classList.add("is-open");
   panel.hidden = false;
@@ -456,7 +416,7 @@ function ensureDashboardDatePickerDismissHandlers() {
   });
 }
 
-function renderDashboardDatePickerPanel({ root, panel, onSelect }) {
+function renderDashboardDatePickerPanel({ root, panel, onSelect, onClear }) {
   const view =
     parseDashboardDateValue(root.dataset.viewDate) ?? parseDashboardDateValue(getTodayDateValue());
   const selectedDate = getDashboardDateButtonValue(
@@ -474,7 +434,7 @@ function renderDashboardDatePickerPanel({ root, panel, onSelect }) {
 
   const previousButton = createDashboardDatePickerNavButton("Previous month", "\u2039");
   previousButton.addEventListener("click", () => {
-    shiftDashboardDatePickerMonth({ root, panel, delta: -1, onSelect });
+    shiftDashboardDatePickerMonth({ root, panel, delta: -1, onSelect, onClear });
   });
 
   const title = document.createElement("div");
@@ -483,7 +443,7 @@ function renderDashboardDatePickerPanel({ root, panel, onSelect }) {
 
   const nextButton = createDashboardDatePickerNavButton("Next month", "\u203a");
   nextButton.addEventListener("click", () => {
-    shiftDashboardDatePickerMonth({ root, panel, delta: 1, onSelect });
+    shiftDashboardDatePickerMonth({ root, panel, delta: 1, onSelect, onClear });
   });
 
   header.append(previousButton, title, nextButton);
@@ -538,6 +498,16 @@ function renderDashboardDatePickerPanel({ root, panel, onSelect }) {
   }
 
   panel.append(header, weekdays, days);
+
+  if (onClear && selectedDate) {
+    const clearButton = document.createElement("button");
+    clearButton.type = "button";
+    clearButton.className = "pc-dashboard-date-picker__clear";
+    clearButton.textContent = "Clear date";
+    clearButton.setAttribute("aria-label", "Clear optional To date");
+    clearButton.addEventListener("click", onClear);
+    panel.appendChild(clearButton);
+  }
 }
 
 function createDashboardDatePickerNavButton(label, text) {
@@ -549,12 +519,12 @@ function createDashboardDatePickerNavButton(label, text) {
   return button;
 }
 
-function shiftDashboardDatePickerMonth({ root, panel, delta, onSelect }) {
+function shiftDashboardDatePickerMonth({ root, panel, delta, onSelect, onClear }) {
   const view =
     parseDashboardDateValue(root.dataset.viewDate) ?? parseDashboardDateValue(getTodayDateValue());
   const shiftedView = shiftDashboardMonth(view.year, view.month, delta);
   root.dataset.viewDate = formatDashboardDateValue({ ...shiftedView, day: 1 });
-  renderDashboardDatePickerPanel({ root, panel, onSelect });
+  renderDashboardDatePickerPanel({ root, panel, onSelect, onClear });
 }
 
 function shiftDashboardMonth(year, month, delta) {
@@ -745,29 +715,6 @@ function buildDashboardRangeDraftDateTimeValue({ date, time, defaultTime }) {
   return `${date}T${time || defaultTime}`;
 }
 
-function updateDashboardRangeInputsFromDraft() {
-  setDashboardRangeInputValue("dashboard-range-from-date", dashboardRangeDraft?.fromDate ?? "");
-  setDashboardRangeInputValue("dashboard-range-from-time", dashboardRangeDraft?.fromTime ?? "");
-  setDashboardRangeInputValue("dashboard-range-to-date", dashboardRangeDraft?.toDate ?? "");
-  setDashboardRangeInputValue("dashboard-range-to-time", dashboardRangeDraft?.toTime ?? "");
-}
-
-function setDashboardRangeInputValue(id, value) {
-  const element = document.getElementById(id);
-
-  if (element instanceof HTMLInputElement) {
-    element.value = value;
-    return;
-  }
-
-  if (
-    element instanceof HTMLButtonElement &&
-    element.classList.contains("pc-dashboard-range-date-button")
-  ) {
-    setDashboardDateButtonValue(element, value);
-  }
-}
-
 function updateDashboardRangeApplyButtons() {
   const isValid = isDashboardRangeDraftValid(dashboardRangeDraft);
   const title = isValid
@@ -851,17 +798,41 @@ function restoreDashboardControlFocus(focusState) {
   }
 }
 
-function createRefreshButton(loading) {
+function createRefreshStatus({ loading, lastSuccessfulLoadAt }) {
+  const status = document.createElement("div");
+  status.className = "pc-dashboard-refresh-status";
+
   const button = document.createElement("button");
   button.type = "button";
   button.className = "pc-dashboard-refresh-button";
   button.disabled = loading;
-  button.textContent = loading ? "Loading..." : "Refresh";
+  button.setAttribute("aria-label", "Refresh dashboard");
+  button.title = "Reload dashboard activity for the applied range.";
+
+  const icon = document.createElement("calcite-icon");
+  icon.icon = "refresh";
+  icon.scale = "s";
+  icon.setAttribute("aria-hidden", "true");
+  button.appendChild(icon);
+
   button.addEventListener("click", () => {
     document.dispatchEvent(new CustomEvent("pc-dashboard-refresh"));
   });
 
-  return button;
+  status.appendChild(button);
+
+  if (lastSuccessfulLoadAt) {
+    const presentation = createDashboardLoadPresentation(lastSuccessfulLoadAt);
+    const timestamp = document.createElement("time");
+    timestamp.className = "pc-dashboard-last-load";
+    timestamp.dateTime = new Date(lastSuccessfulLoadAt).toISOString();
+    timestamp.textContent = presentation.text;
+    timestamp.title = presentation.title;
+    timestamp.setAttribute("aria-label", presentation.ariaLabel);
+    status.appendChild(timestamp);
+  }
+
+  return status;
 }
 
 function createBody({
@@ -1087,6 +1058,7 @@ function createActivityList(
         ? `${activities.length} / ${sourceActivityCount}`
         : activities.length,
     status: loading ? "Refreshing" : null,
+    visuallyHiddenTitle: true,
   });
 
   const tableWrapper = document.createElement("div");
@@ -1980,12 +1952,13 @@ function sumSummaryRowCounts(rows) {
   return rows.reduce((total, row) => total + (Number(row.count) || 0), 0);
 }
 
-function createPanelHeader({ title, count, status = null }) {
+function createPanelHeader({ title, count, status = null, visuallyHiddenTitle = false }) {
   const header = document.createElement("header");
   header.className = "pc-dashboard-panel__header";
 
   const heading = document.createElement("h2");
   heading.className = "pc-dashboard-panel__title";
+  heading.classList.toggle("pc-dashboard-visually-hidden", visuallyHiddenTitle);
   heading.textContent = title;
 
   const meta = document.createElement("div");

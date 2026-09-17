@@ -106,7 +106,7 @@ const GLOBAL_HELP_RULES = [
   },
   {
     selector: ".pc-dashboard-refresh-button",
-    title: "Reload dashboard activity for the selected range.",
+    title: "Reload dashboard activity for the applied range.",
     mode: "replace-generic",
   },
   {
@@ -115,19 +115,13 @@ const GLOBAL_HELP_RULES = [
     mode: "replace-generic",
   },
   {
-    selector: ".pc-dashboard-range-action",
-    title: (element) =>
-      element.title || `Fill the dashboard range with ${getElementText(element)}.`,
-    mode: "fill-empty",
-  },
-  {
     selector: ".pc-dashboard-range-date-button",
-    title: (element) => `${getAriaLabel(element) || "Range date"}. Open the date picker.`,
-    mode: "replace-generic",
-  },
-  {
-    selector: ".pc-dashboard-range-date-clear",
-    title: "Clear the To date and keep the range open-ended.",
+    title: (element) => {
+      const openHelp = `${getAriaLabel(element) || "Range date"}. Open the date picker.`;
+      return element.hasAttribute("aria-keyshortcuts")
+        ? `${openHelp} Press Delete or Backspace to clear the optional date.`
+        : openHelp;
+    },
     mode: "replace-generic",
   },
   {
@@ -138,6 +132,11 @@ const GLOBAL_HELP_RULES = [
   {
     selector: ".pc-dashboard-date-picker__day",
     title: (element) => `Select ${element.dataset.dateValue || getElementText(element)}.`,
+    mode: "replace-generic",
+  },
+  {
+    selector: ".pc-dashboard-date-picker__clear",
+    title: "Clear the optional To date and keep the range open-ended.",
     mode: "replace-generic",
   },
   {

@@ -39,6 +39,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
   let pageSizeGeneration = 0;
   let currentDashboardPageSizeGeneration = 0;
   let currentDashboardPageNumber = 1;
+  let lastSuccessfulLoadAt = null;
   let loadRequestId = 0;
   const activeRequestControllers = new Set();
   let searchDebounceId = null;
@@ -61,6 +62,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
         : currentDashboardPageNumber,
       canGoPrevious: pagingMatchesPageSize && pagingState.cursorHistory.length > 0,
       pagingMatchesPageSize,
+      lastSuccessfulLoadAt,
     });
   };
 
@@ -125,6 +127,7 @@ export async function initDashboardPage({ rangePreset, from, to } = {}) {
       currentDashboardPageSizeGeneration = requestPageSizeGeneration;
       currentDashboardPageNumber = pagingState.cursorHistory.length + 1;
       currentFilters = normalizeDashboardFilters(currentFilters, dashboard.filterOptions);
+      lastSuccessfulLoadAt = new Date();
       render();
       return { status: "succeeded" };
     } catch (error) {

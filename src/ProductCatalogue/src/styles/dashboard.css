@@ -24,49 +24,27 @@ body.pc-dashboard-route #last-updated {
   background: var(--pc-surface-alt);
 }
 
+.pc-dashboard-visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 .pc-dashboard-header {
   position: relative;
   z-index: 20;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  display: flex;
   align-items: center;
   min-width: 0;
-  padding: 12px 14px;
+  padding: 7px 10px;
   background: var(--pc-surface);
   border-bottom: 1px solid var(--pc-border);
-}
-
-.pc-dashboard-header__text {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.pc-dashboard-header__eyebrow {
-  color: var(--pc-text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.pc-dashboard-header__title {
-  margin: 0;
-  color: var(--pc-text);
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.pc-dashboard-header__meta {
-  margin: 0;
-  overflow: hidden;
-  color: var(--pc-text-muted);
-  font-size: 12px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .pc-dashboard-header__actions {
@@ -74,7 +52,8 @@ body.pc-dashboard-route #last-updated {
   flex-wrap: nowrap;
   gap: 6px;
   align-items: center;
-  justify-content: flex-end;
+  width: 100%;
+  justify-content: flex-start;
   min-width: 0;
   max-width: 100%;
 }
@@ -89,7 +68,6 @@ body.pc-dashboard-route #last-updated {
   max-width: 100%;
 }
 
-.pc-dashboard-range-action,
 .pc-dashboard-refresh-button,
 .pc-dashboard-link-button,
 .pc-dashboard-range-apply {
@@ -113,7 +91,7 @@ body.pc-dashboard-route #last-updated {
   align-items: center;
   min-height: 30px;
   padding: 0 2px;
-  color: var(--pc-text-muted);
+  color: var(--pc-text);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -158,28 +136,6 @@ body.pc-dashboard-route #last-updated {
 
 .pc-dashboard-range-date-button.is-empty {
   color: var(--pc-text-muted);
-}
-
-.pc-dashboard-range-date-clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 30px;
-  padding: 4px 6px;
-  color: var(--pc-button-secondary-text);
-  background: var(--pc-button-secondary-bg);
-  border: 1px solid var(--pc-button-secondary-border);
-  border-radius: 0;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.pc-dashboard-range-date-clear:hover {
-  color: var(--pc-text);
-  background: var(--pc-button-secondary-bg-hover);
 }
 
 .pc-dashboard-date-picker__panel {
@@ -292,16 +248,63 @@ body.pc-dashboard-route #last-updated {
   background: #0079c1;
   border-color: #0079c1;
 }
-.pc-dashboard-range-action,
-.pc-dashboard-refresh-button {
-  min-height: 30px;
-  padding: 5px 10px;
+
+.pc-dashboard-date-picker__clear {
+  width: 100%;
+  min-height: 26px;
+  margin-top: 6px;
+  padding: 3px 7px;
   color: var(--pc-button-secondary-text);
   background: var(--pc-button-secondary-bg);
   border: 1px solid var(--pc-button-secondary-border);
-  font-size: 12px;
+  border-radius: 0;
+  font: inherit;
+  font-size: 11px;
   font-weight: 700;
-  line-height: 1.2;
+  cursor: pointer;
+}
+
+.pc-dashboard-date-picker__clear:hover {
+  color: var(--pc-text);
+  background: var(--pc-button-secondary-bg-hover);
+}
+
+.pc-dashboard-refresh-button {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 30px;
+  align-items: center;
+  justify-content: center;
+  inline-size: 30px;
+  block-size: 30px;
+  min-inline-size: 30px;
+  padding: 0;
+  color: var(--pc-button-secondary-text);
+  background: transparent;
+  border: 0;
+}
+
+.pc-dashboard-refresh-button:hover:not(:disabled) {
+  color: var(--pc-text);
+  background: var(--pc-button-secondary-bg-hover);
+}
+
+.pc-dashboard-refresh-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: center;
+  min-height: 30px;
+}
+
+.pc-dashboard-last-load {
+  min-width: 38px;
+  color: var(--pc-text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .pc-dashboard-range-apply {
@@ -315,8 +318,6 @@ body.pc-dashboard-route #last-updated {
   line-height: 1.2;
 }
 
-.pc-dashboard-range-action:hover:not(:disabled),
-.pc-dashboard-refresh-button:hover:not(:disabled),
 .pc-dashboard-link-button:hover:not(:disabled) {
   color: var(--pc-text);
   background: var(--pc-button-secondary-bg-hover);
@@ -326,7 +327,6 @@ body.pc-dashboard-route #last-updated {
   background: color-mix(in srgb, #0079c1 88%, #ffffff);
 }
 
-.pc-dashboard-range-action:disabled,
 .pc-dashboard-refresh-button:disabled,
 .pc-dashboard-link-button:disabled,
 .pc-dashboard-range-apply:disabled {
@@ -334,11 +334,10 @@ body.pc-dashboard-route #last-updated {
   opacity: 0.52;
 }
 
-.pc-dashboard-range-action:focus-visible,
 .pc-dashboard-refresh-button:focus-visible,
 .pc-dashboard-link-button:focus-visible,
 .pc-dashboard-range-field__input:focus-visible,
-.pc-dashboard-range-date-clear:focus-visible,
+.pc-dashboard-date-picker__clear:focus-visible,
 .pc-dashboard-range-apply:focus-visible {
   outline: 2px solid var(--pc-focus-ring, var(--calcite-color-brand));
   outline-offset: 2px;
@@ -501,6 +500,12 @@ body.pc-dashboard-route #last-updated {
 .pc-dashboard-activity {
   grid-template-rows: auto auto minmax(0, 1fr);
   height: 100%;
+}
+
+.pc-dashboard-activity > .pc-dashboard-panel__header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 10px;
 }
 
 .pc-dashboard-filters {
@@ -861,7 +866,6 @@ body.pc-dashboard-route #last-updated {
   }
 
   .pc-dashboard-header {
-    grid-template-columns: 1fr;
     align-items: start;
   }
 
@@ -881,10 +885,6 @@ body.pc-dashboard-route #last-updated {
   .pc-dashboard-custom-range__validation {
     max-width: none;
     text-align: left;
-  }
-
-  .pc-dashboard-header__meta {
-    white-space: normal;
   }
 
   .pc-dashboard-filters {
