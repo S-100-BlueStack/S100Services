@@ -48,7 +48,15 @@ activation leaves no partial representation. Candidate layers are discarded on f
 Source removal closes owned popup/hover state, clears that source's filter/search state and removes
 its Collection items without cancelling backend jobs. Reactivation fetches fresh data.
 
-Startup and refresh coordinate independent lookup/source outcomes before publishing completion.
+Startup and refresh coordinate independent lookup/source outcomes before publishing completion. A valid
+restored selection that resolves to no enabled available source selects exactly one eligible
+selection-persistable source using the registry's default and definition ordering. Session-only sources
+remain valid first-visit defaults but are not restored-state fallbacks. Recovery runs only during
+controller initialization;
+disabling the final source remains valid for the rest of the current session. A newer source-selection
+mutation supersedes an older in-flight startup activation and owns subsequent persistence. Normal
+controller persistence records registry-ordered `requestedEnabled` selection intent, so another source
+that is still loading is not dropped; failed explicit activation is rolled back before that intent is saved.
 
 ## Filters and Product search
 
@@ -76,9 +84,12 @@ Source state keeps `productCatalogue.dataSources.v1`, now schema 2:
 New visits use configured available defaults. Version 1 migration retains previously fixed S101
 but leaves newly available S57 for explicit activation. Retired synthetic fixture IDs can remain in
 older persisted payloads but cannot become active because runtime registry construction no longer
-enables those sources. Schema-2 all-off remains all-off. Known configured-out sources retain intent;
-unknown IDs are sanitized. Reset uses deployment defaults. Nothing copies a combined source identity
-into two standards.
+enables those sources. A schema-2 all-off selection remains valid in-session; the next startup enables
+one available selection-persistable registry fallback. Session-only synthetic fixtures are never FI-031
+restored-state fallbacks. Known configured-out sources retain intent and cannot be activated while
+unavailable; unknown IDs are sanitized. If no eligible source is available, startup truthfully remains
+all-off. Reset still uses deployment defaults. Nothing copies a combined source identity into two
+standards.
 
 Filter state remains separate at `pc.attributeFilters.v3`, schema 2. The old fixed S101 provider's
 filter state migrates to s101, never s57, with explicit new state taking precedence. Pending state

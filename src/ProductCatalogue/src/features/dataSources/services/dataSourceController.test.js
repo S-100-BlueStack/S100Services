@@ -18,20 +18,31 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function createPersistence(enabledSourceIds = []) {
+function createPersistence(
+  enabledSourceIds = [],
+  { status = "valid", shouldPersist = false, isFirstVisit = false } = {}
+) {
   const writes = [];
+  let currentEnabledSourceIds = [...enabledSourceIds];
+  let currentStatus = status;
+  let currentShouldPersist = shouldPersist;
+  let currentIsFirstVisit = isFirstVisit;
   return {
     writes,
     read() {
       return {
-        status: "valid",
-        enabledSourceIds: [...enabledSourceIds],
-        shouldPersist: false,
-        isFirstVisit: false,
+        status: currentStatus,
+        enabledSourceIds: [...currentEnabledSourceIds],
+        shouldPersist: currentShouldPersist,
+        isFirstVisit: currentIsFirstVisit,
       };
     },
     write(_registry, ids) {
-      writes.push([...ids]);
+      currentEnabledSourceIds = [...ids];
+      currentStatus = "valid";
+      currentShouldPersist = false;
+      currentIsFirstVisit = false;
+      writes.push([...currentEnabledSourceIds]);
       return true;
     },
   };
@@ -144,7 +155,235 @@ test("initialization restores exact persisted state and keeps sources independen
   assert.deepEqual(harness.controller.getActiveSourceIds(), ["s102"]);
   assert.equal(harness.controller.getState("paper-charts").enabled, false);
   assert.equal(harness.controller.getState("s102").enabled, true);
-  assert.deepEqual(harness.persistence.writes.at(-1), ["s102"]);
+  assert.deepEqual(harness.persistence.writes, []);
+});
+
+test("initialization recovers an explicit empty state through one registry-selected source", async () => {
+  const registry = createDataSourceRegistry({
+    configuredSourceIds: ["s57", "s101"],
+  });
+  const harness = createHarness({ registry, enabledSourceIds: [] });
+
+  const result = await harness.controller.initialize();
+
+  assert.equal(result.success, true);
+  assert.deepEqual(harness.controller.getActiveSourceIds(), ["s57"]);
+  assert.deepEqual(harness.persistence.writes, [["s57"]]);
+  assert.equal(harness.mapAdapter.rendered.has("s101"), false);
+});
+
+test("initialization does not recover through session-only runtime sources", async () => {
+  const calls = [];
+  const registry = createDataSourceRegistry({
+    configuredSourceIds: ["paper-charts", "s102"],
+    isDevelopment: true,
+  });
+  const persistence = createPersistence([], { shouldPersist: true });
+  const harness = createHarness({
+    registry,
+    persistence,
+    loadSource: async (source) => {
+      calls.push(source.id);
+      return { sourceId: source.id };
+    },
+  });
+
+  const result = await harness.controller.initialize();
+
+  assert.equal(result.success, true);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(harness.controller.getActiveSourceIds(), []);
+  assert.deepEqual(persistence.writes, [[]]);
+});
+
+test("concurrent startup deactivation persists remaining requested selection across reload", async () => {
+  const requests = new Map([
+    ["s57", deferred()],
+    ["s101", deferred()],
+  ]);
+  const registry = createDataSourceRegistry({ configuredSourceIds: ["s57", "s101"] });
+  const persistence = createPersistence(["s57", "s101"], {
+    status: "missing",
+    shouldPersist: true,
+    isFirstVisit: true,
+  });
+  const harness = createHarness({
+    registry,
+    persistence,
+    loadSource: async (source) => requests.get(source.id).promise,
+  });
+
+  const initialization = harness.controller.initialize();
+  assert.equal(harness.controller.getState("s57").requestedEnabled, true);
+  assert.equal(harness.controller.getState("s101").requestedEnabled, true);
+  assert.equal(harness.controller.getState("s101").loading, true);
+  assert.deepEqual(harness.controller.getActiveSourceIds(), []);
+
+  await harness.controller.deactivateSource("s57");
+  assert.deepEqual(persistence.writes, [["s101"]]);
+
+  requests.get("s57").resolve({ sourceId: "s57" });
+  requests.get("s101").resolve({ sourceId: "s101" });
+  await initialization;
+
+  assert.deepEqual(harness.controller.getActiveSourceIds(), ["s101"]);
+  assert.deepEqual(persistence.writes, [["s101"]]);
+
+  const restoredCalls = [];
+  const reloaded = createHarness({
+    registry,
+    persistence,
+    loadSource: async (source) => {
+      restoredCalls.push(source.id);
+      return { sourceId: source.id };
+    },
+  });
+
+  await reloaded.controller.initialize();
+
+  assert.deepEqual(reloaded.controller.getActiveSourceIds(), ["s101"]);
+  assert.deepEqual(restoredCalls, ["s101"]);
+});
+
+test("explicit activation during fallback loading persists all requested sources", async () => {
+  const fallbackRequest = deferred();
+  const explicitRequest = deferred();
+  const registry = createDataSourceRegistry({ configuredSourceIds: ["s57", "s101"] });
+  const persistence = createPersistence([]);
+  const harness = createHarness({
+    registry,
+    persistence,
+    loadSource: async (source) =>
+      source.id === "s57" ? fallbackRequest.promise : explicitRequest.promise,
+  });
+
+  const initialization = harness.controller.initialize();
+  assert.equal(harness.controller.getState("s57").loading, true);
+  const explicitActivation = harness.controller.activateSource("s101");
+
+  explicitRequest.resolve({ sourceId: "s101" });
+  await explicitActivation;
+
+  assert.deepEqual(persistence.writes, [["s57", "s101"]]);
+
+  fallbackRequest.resolve({ sourceId: "s57" });
+  await initialization;
+
+  assert.deepEqual(harness.controller.getActiveSourceIds(), ["s57", "s101"]);
+  assert.deepEqual(persistence.writes, [["s57", "s101"]]);
+});
+
+test("disabling the final source remains valid until a later startup", async () => {
+  const storage = createMemoryStorage({
+    [DATA_SOURCE_STORAGE_KEY]: JSON.stringify({
+      schemaVersion: 2,
+      initialized: true,
+      enabledSourceIds: ["s57"],
+    }),
+  });
+  const registry = createDataSourceRegistry({
+    configuredSourceIds: ["s57", "s101"],
+  });
+  const persistence = createDataSourcePersistence({ storage });
+  const firstSession = createHarness({ registry, persistence });
+
+  await firstSession.controller.initialize();
+  await firstSession.controller.deactivateSource("s57");
+
+  assert.deepEqual(firstSession.controller.getActiveSourceIds(), []);
+  assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY).enabledSourceIds, []);
+
+  const reloadedSession = createHarness({ registry, persistence });
+  await reloadedSession.controller.initialize();
+
+  assert.deepEqual(reloadedSession.controller.getActiveSourceIds(), ["s57"]);
+  assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY).enabledSourceIds, ["s57"]);
+});
+
+test("a newer in-session disable supersedes an in-flight startup fallback", async () => {
+  const pending = deferred();
+  const persistence = createPersistence([]);
+  const registry = createDataSourceRegistry({ configuredSourceIds: ["s57"] });
+  const harness = createHarness({
+    registry,
+    persistence,
+    loadSource: async () => pending.promise,
+  });
+
+  const initialization = harness.controller.initialize();
+  await harness.controller.deactivateSource("s57");
+  pending.resolve({ sourceId: "s57" });
+  const result = await initialization;
+
+  assert.equal(result.results[0].stale, true);
+  assert.deepEqual(harness.controller.getActiveSourceIds(), []);
+  assert.deepEqual(persistence.writes, [[]]);
+
+  const reloaded = createHarness({ registry, persistence });
+  await reloaded.controller.initialize();
+
+  assert.deepEqual(reloaded.controller.getActiveSourceIds(), ["s57"]);
+  assert.deepEqual(persistence.writes, [[], ["s57"]]);
+});
+
+test("fallback activation failure does not fan out to additional sources", async () => {
+  const calls = [];
+  const registry = createDataSourceRegistry({
+    configuredSourceIds: ["s57", "s101"],
+  });
+  const harness = createHarness({
+    registry,
+    enabledSourceIds: [],
+    loadSource: async (source) => {
+      calls.push(source.id);
+      throw new Error("fallback failure");
+    },
+  });
+
+  const result = await harness.controller.initialize();
+
+  assert.equal(result.success, false);
+  assert.deepEqual(calls, ["s57"]);
+  assert.deepEqual(harness.controller.getActiveSourceIds(), []);
+  assert.deepEqual(harness.persistence.writes, [["s57"]]);
+});
+
+test("startup fallback ignores unavailable persisted intent and preserves it in storage", async () => {
+  const storage = createMemoryStorage({
+    [DATA_SOURCE_STORAGE_KEY]: JSON.stringify({
+      schemaVersion: 2,
+      initialized: true,
+      enabledSourceIds: ["s57"],
+    }),
+  });
+  const registry = createDataSourceRegistry({ configuredSourceIds: ["s101"] });
+  const persistence = createDataSourcePersistence({ storage });
+  const harness = createHarness({ registry, persistence });
+
+  await harness.controller.initialize();
+
+  assert.deepEqual(harness.controller.getActiveSourceIds(), ["s101"]);
+  assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY).enabledSourceIds, ["s57", "s101"]);
+});
+
+test("startup remains empty when no source is currently available", async () => {
+  const storage = createMemoryStorage({
+    [DATA_SOURCE_STORAGE_KEY]: JSON.stringify({
+      schemaVersion: 2,
+      initialized: true,
+      enabledSourceIds: ["s57"],
+    }),
+  });
+  const registry = createDataSourceRegistry({ configuredSourceIds: [] });
+  const persistence = createDataSourcePersistence({ storage });
+  const harness = createHarness({ registry, persistence });
+
+  const result = await harness.controller.initialize();
+
+  assert.equal(result.success, true);
+  assert.deepEqual(result.results, []);
+  assert.deepEqual(harness.controller.getActiveSourceIds(), []);
+  assert.deepEqual(storage.readJson(DATA_SOURCE_STORAGE_KEY).enabledSourceIds, ["s57"]);
 });
 
 test("activation failure rolls back only the affected source", async () => {
@@ -164,6 +403,30 @@ test("activation failure rolls back only the affected source", async () => {
   assert.equal(harness.controller.getState("paper-charts").enabled, false);
   assert.equal(harness.mapAdapter.rendered.has("paper-charts"), false);
   assert.equal(harness.notices.length, 1);
+  assert.deepEqual(harness.persistence.writes.at(-1), ["s102"]);
+});
+
+test("startup activation failure preserves startup selection intent", async () => {
+  const registry = createDataSourceRegistry({ configuredSourceIds: ["s57", "s101"] });
+  const persistence = createPersistence(["s57", "s101"], {
+    status: "missing",
+    shouldPersist: true,
+    isFirstVisit: true,
+  });
+  const harness = createHarness({
+    registry,
+    persistence,
+    loadSource: async (source) => {
+      if (source.id === "s57") throw new Error("startup failure");
+      return { sourceId: source.id };
+    },
+  });
+
+  const result = await harness.controller.initialize();
+
+  assert.equal(result.success, false);
+  assert.deepEqual(harness.controller.getActiveSourceIds(), ["s101"]);
+  assert.deepEqual(persistence.writes, [["s57", "s101"]]);
 });
 
 test("failed refresh retains the last successful representation and enabled state", async () => {

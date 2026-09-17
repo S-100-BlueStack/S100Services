@@ -4,6 +4,7 @@ import {
   getRuntimeSelectableDataSources,
   isRuntimeSelectableDataSource,
 } from "../config/dataSourceRegistry.js";
+import { resolveStartupDataSourceSelection } from "../domain/dataSourceStartupSelection.js";
 
 export function createDataSourceController({
   registry,
@@ -23,6 +24,7 @@ export function createDataSourceController({
   let initialized = false;
   let initializationPromise = null;
   let destroyed = false;
+  let selectionRevision = 0;
 
   function initialize() {
     assertNotDestroyed();
@@ -42,8 +44,14 @@ export function createDataSourceController({
   }
 
   async function initializeController() {
+    const initializationSelectionRevision = selectionRevision;
     const persistedSelection = persistence.read(registry);
-    const targetIds = new Set(persistedSelection.enabledSourceIds);
+    const startupSelection = resolveStartupDataSourceSelection({
+      persistedSelection,
+      runtimeSelectableSources: getRuntimeSelectableDataSources(registry),
+      defaultEnabledSourceIds: getDefaultEnabledSourceIds(registry),
+    });
+    const targetIds = new Set(startupSelection.enabledSourceIds);
     const results = await Promise.all(
       getRuntimeSelectableDataSources(registry).map((source) => {
         if (!targetIds.has(source.id)) {
@@ -60,11 +68,16 @@ export function createDataSourceController({
 
     initialized = true;
 
-    // Persist the selected intent rather than only successful activations. A
-    // temporary loader failure must not silently convert first-visit defaults
-    // or an existing valid selection into an explicit all-off choice.
-    persistence.write(registry, persistedSelection.enabledSourceIds);
-    emitStateChanged({ type: "initialized", persistedSelection });
+    // Persist startup intent only when restoration or fallback changed stored
+    // state. A newer user mutation owns persistence and must not be overwritten
+    // when an older startup activation settles.
+    if (
+      selectionRevision === initializationSelectionRevision &&
+      (persistedSelection.shouldPersist || startupSelection.recoveredFromEmpty)
+    ) {
+      persistence.write(registry, startupSelection.enabledSourceIds);
+    }
+    emitStateChanged({ type: "initialized", persistedSelection, startupSelection });
     return createSummary("initialized", results);
   }
 
@@ -78,6 +91,9 @@ export function createDataSourceController({
   ) {
     assertNotDestroyed();
     const source = requireRuntimeSource(sourceId);
+    if (persist) {
+      selectionRevision += 1;
+    }
     const state = sourceStates.get(source.id);
     const operation = beginOperation(source.id);
     const wasEnabled = state.enabled;
@@ -212,6 +228,9 @@ export function createDataSourceController({
     if (!source) {
       return { sourceId, success: false, skipped: true, reason: "unknown-source" };
     }
+    if (persist) {
+      selectionRevision += 1;
+    }
 
     const operation = invalidateOperation(source.id);
     lifecycle?.emit?.("deactivating", {
@@ -269,6 +288,7 @@ export function createDataSourceController({
 
   async function resetToDefaults({ reason = "local-reset", silent = false } = {}) {
     assertNotDestroyed();
+    selectionRevision += 1;
     const defaultIds = new Set(getDefaultEnabledSourceIds(registry));
     const selectableSources = getRuntimeSelectableDataSources(registry);
 
@@ -391,7 +411,10 @@ export function createDataSourceController({
   }
 
   function persistCurrentState() {
-    persistence.write(registry, getActiveSourceIds());
+    const requestedSourceIds = registry.definitions
+      .filter((source) => sourceStates.get(source.id)?.requestedEnabled)
+      .map((source) => source.id);
+    persistence.write(registry, requestedSourceIds);
   }
 
   function requireRuntimeSource(sourceId) {
