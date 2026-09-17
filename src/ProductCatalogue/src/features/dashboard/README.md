@@ -1,12 +1,12 @@
 # Dashboard
 
-Current reviewed runtime baseline: `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+Current reviewed runtime baseline: `01f22a605e8e4d29a8da187306af1dc04b8540ef`.
 
 FI-001 introduces a separate read-only Dashboard route at `/dashboard`. The Dashboard is intentionally isolated from the main map, Product Collection, Analyze and Review state. It summarizes operational activity for a selected range and links users onward to product-level Review or Analyze pages.
 
 ## Current status
 
-FI-001 and BE-107 are complete and manually verified at `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`. BE-107 adds bounded server-side filtering and cursor pagination without changing the route or the existing range semantics.
+FI-001 and BE-107 remain complete, and the Dashboard presentation/runtime contract is currently reviewed through manually accepted FI-033 at `01f22a605e8e4d29a8da187306af1dc04b8540ef`. BE-107 adds bounded server-side filtering and cursor pagination without changing the route or the existing range semantics.
 
 Implemented scope:
 
@@ -201,6 +201,10 @@ The Dashboard keeps the last successful result visible while a request loads. If
 Automated coverage includes backend filtering/paging semantics, complete-result summaries, filter options, backward-compatible unpaged requests, stable equal-timestamp ordering, report filters, empty results, query validation, frontend query serialization, cursor history, paging normalization and search-value preservation.
 
 Manual verification by the project owner confirmed that Dashboard pagination works as intended at commit `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+
+## FI-033 manual acceptance
+
+FI-033 was manually accepted in the browser on 2026-09-17 and committed at `01f22a605e8e4d29a8da187306af1dc04b8540ef`. The accepted Dashboard removes redundant visible page chrome and preset shortcuts, keeps one compact From/To/Apply toolbar, and places an icon-only Refresh control with the last-successful `HH:MM` immediately after Apply. The final Refresh implementation is a semantic native button containing the public Calcite refresh icon; the application owns its symmetric 30x30 hit area, hover/focus presentation, tooltip and accessible name without styling Calcite shadow DOM. The timestamp updates only when the existing request-generation boundary accepts a successful response and is unchanged by failed, aborted or stale requests. Optional To remains open-ended when cleared through the contextual date-picker action or Delete/Backspace. Explicit Apply remains until FI-034. Browser acceptance also covered paging/page size, sorting, filters, Dashboard History, FI-032 navigation, responsive layout, keyboard/focus behavior, and light/dark mode. The local frontend check passed and formatting was run before commit.
 
 ## Server-side activity sorting
 
