@@ -34,6 +34,6 @@ changing overflow, sizing, wheel, touch, or keyboard behavior. It must not be ap
 Calcite or ArcGIS shadow-DOM internals.
 
 Analyze uses the contract for its outer sidebar content scroller and bounded Product list. Existing
-Review scroll surfaces use the same class, preserving their established appearance. Future features,
-including the separately scoped Filter-panel work, can consume the class without depending on Analyze
-or Review selectors.
+Review scroll surfaces use the same class, preserving their established appearance. The Main-map
+Filter panel uses it for its outer scroller and nested checkbox option lists without depending on
+Analyze or Review selectors.

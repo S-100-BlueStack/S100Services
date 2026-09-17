@@ -32,7 +32,7 @@ export function initAttributeFilterPanel({
 
   const panel = document.createElement("section");
   panel.id = "attribute-filter-panel";
-  panel.className = "pc-filter-panel";
+  panel.className = "pc-filter-panel pc-scrollbar";
   panel.hidden = true;
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-modal", "false");
@@ -469,7 +469,7 @@ function renderCheckboxField(filterService, providerId, fieldName, values, openF
           data-field-name="${escapeHtml(fieldName)}"
         >Clear</button>
       </div>
-      <div class="pc-filter-options">
+      <div class="pc-filter-options pc-scrollbar">
         ${values
           .map(
             (entry) => `
