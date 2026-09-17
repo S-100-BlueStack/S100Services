@@ -1,6 +1,7 @@
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
 import { buildReviewUrl } from "../../review/routing/reviewRoute.js";
 import fallbackLogoUrl from "../../../assets/product-catalogue-logo.svg?no-inline";
+import { applyWorkspaceLinkNavigation } from "../../../app/routing/workspaceNavigation.js";
 import { resolveBranding } from "../../../shared/config/brandingConfig.js";
 import { initializeNavbarBranding } from "./navbarBranding.js";
 import { getCurrentRoute } from "../../../app/routing/appRoute.js";
@@ -32,14 +33,17 @@ function initializeNavbarLinks(route) {
 
   if (dashboardLink) {
     dashboardLink.href = getAppUrl("dashboard/");
+    applyWorkspaceLinkNavigation(dashboardLink, route, "dashboard");
   }
 
   if (analyzeLink) {
     analyzeLink.href = buildAnalyzeUrl([]);
+    applyWorkspaceLinkNavigation(analyzeLink, route, "analyze");
   }
 
   if (reviewLink) {
     reviewLink.href = buildReviewUrl([]);
+    applyWorkspaceLinkNavigation(reviewLink, route, "review");
   }
 
   applyNavbarRouteState(document, route);

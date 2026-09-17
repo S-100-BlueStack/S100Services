@@ -26,3 +26,8 @@ Authoritative Main-map source deactivation removes only Collection items owned b
 successful guarded activation/refresh reconciles existing items against the committed source Product
 set and prunes stale references; it never auto-adds Products. Failed activation, failed refresh, and
 filter changes do not remove Collection state. Workspace windows are independent after opening.
+
+Main-map Collection actions resolve their canonical Analyze/Review URL before opening a new tab. The
+shared workspace navigation policy uses the actual `window.open` result: an accepted open leaves the
+Collection unchanged and emits no blocked-popup notice, while a null or failed open reports the
+existing notice without retrying or falling back to same-tab navigation.

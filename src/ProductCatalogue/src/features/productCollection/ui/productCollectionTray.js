@@ -1,4 +1,5 @@
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
+import { launchWorkspaceUrl } from "../../../app/routing/workspaceNavigation.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { buildReviewUrl } from "../../review/routing/reviewRoute.js";
 import {
@@ -121,14 +122,18 @@ function createActions(datasetNames) {
       label: "Review",
       title: "Open Product Review in a new tab with the current collection",
       onClick: () => {
-        openCollectionUrl(buildReviewUrl(datasetNames), "Product Review page was blocked");
+        openCollectionUrl(
+          buildReviewUrl(datasetNames),
+          "review",
+          "Product Review page was blocked"
+        );
       },
     }),
     createActionButton({
       label: "Analyze",
       title: "Open Analyze in a new tab with the current collection",
       onClick: () => {
-        openCollectionUrl(buildAnalyzeUrl(datasetNames), "Analyze page was blocked");
+        openCollectionUrl(buildAnalyzeUrl(datasetNames), "analyze", "Analyze page was blocked");
       },
     })
   );
@@ -148,17 +153,25 @@ function createActionButton({ label, title, onClick }) {
   return button;
 }
 
-function openCollectionUrl(url, errorTitle) {
+export function openCollectionUrl(
+  url,
+  destinationRoute,
+  errorTitle,
+  { launch = launchWorkspaceUrl, showError = noticeError } = {}
+) {
   if (!url) {
-    noticeError(
+    showError(
       "Workspace link unavailable",
       "Product names containing commas cannot be shared in a workspace URL."
     );
-    return;
+    return false;
   }
-  const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
+  const result = launch(url, destinationRoute);
 
-  if (!openedWindow) {
-    noticeError(errorTitle, "Allow popups for this site and try again.");
+  if (!result.opened) {
+    showError(errorTitle, "Allow popups for this site and try again.");
+    return false;
   }
+
+  return true;
 }

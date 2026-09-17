@@ -1,4 +1,5 @@
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
+import { launchWorkspaceUrl } from "../../../app/routing/workspaceNavigation.js";
 import { changeFreezeState, uploadProduct } from "../../data/api/productApi.js";
 import { exportRollback } from "../../data/api/exportApi.js";
 import { getSendToIcEncCapability } from "../../data/stores/capabilityStore.js";
@@ -43,9 +44,9 @@ export function openAnalyzePage(datasetName) {
     );
     return;
   }
-  const openedWindow = window.open(analyzeUrl, "_blank", "noopener,noreferrer");
+  const result = launchWorkspaceUrl(analyzeUrl, "analyze");
 
-  if (!openedWindow) {
+  if (!result.opened) {
     noticeError("Analyze page was blocked", "Allow popups for this site and try again.");
   }
 }
