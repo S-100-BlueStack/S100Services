@@ -39,7 +39,7 @@ export function createReviewBoard({ productItems, enabledDatasetNames, products,
   }
 
   const columns = document.createElement("div");
-  columns.className = "pc-review-board__columns";
+  columns.className = "pc-review-board__columns pc-scrollbar";
   const productsByDatasetName = new Map(
     products.map((product) => [normalizeKey(product.datasetName), product])
   );
@@ -92,7 +92,7 @@ function createProductReviewColumn(productItem, product) {
   header.append(title, meta);
 
   const content = document.createElement("div");
-  content.className = "pc-review-column__content";
+  content.className = "pc-review-column__content pc-scrollbar";
 
   for (const contentType of getEnabledReviewContentTypes(productItem)) {
     content.appendChild(createReviewContentCard(product, contentType));
@@ -296,7 +296,7 @@ function createContentCardShell({ product, contentType, title, status }) {
   statusElement.textContent = status;
 
   const body = document.createElement("div");
-  body.className = "pc-review-content-card__body";
+  body.className = "pc-review-content-card__body pc-scrollbar";
 
   header.append(titleElement, statusElement);
   card.append(header, body);

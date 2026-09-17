@@ -80,6 +80,20 @@ It should not show product mutation actions.
 
 Product actions belong in the popup action bar so the action model stays consistent across the app.
 
+### FI-035 compact presentation
+
+The route already identifies Analyze, so the Calcite panel keeps an accessible `Analyze workspace`
+region name without rendering a duplicate visible panel heading. The Product picker keeps its
+accessible `Add product` name while its normal label and instructional help are suppressed. Loading,
+catalog failure, invalid Product, and already-selected Product messages remain visible when relevant.
+
+The `Products` composition list uses a responsive bounded viewport sized for approximately three
+normal rows. Product names may wrap instead of forcing a fixed row height. Both that list and the
+outer Analyze content scroller use the shared `pc-scrollbar` application contract. The narrower
+desktop sidebar remains full width at the existing narrow-screen breakpoint. These presentation
+changes do not alter Product composition, routing, targeted source resolution, workspace freshness,
+manual Refresh, or independent content failure behavior.
+
 ## Shared workspace Product picker
 
 Analyze uses the shared source-aware workspace catalog/resolver in:

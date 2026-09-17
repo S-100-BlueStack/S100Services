@@ -6,7 +6,7 @@ import {
 
 export function createReviewSidebar({ productItems, loading, productCatalog }) {
   const sidebar = document.createElement("aside");
-  sidebar.className = "pc-review-sidebar";
+  sidebar.className = "pc-review-sidebar pc-scrollbar";
   sidebar.setAttribute("aria-label", "Review products");
   sidebar.setAttribute("aria-busy", loading ? "true" : "false");
 
@@ -99,7 +99,7 @@ function createProductList(productItems) {
   }
 
   const list = document.createElement("div");
-  list.className = "pc-review-product-list__items";
+  list.className = "pc-review-product-list__items pc-scrollbar";
   list.setAttribute("role", "list");
 
   for (const productItem of productItems) {

@@ -545,51 +545,6 @@ body.pc-review-route #last-updated {
   color: var(--calcite-color-brand, #0079c1);
 }
 
-.pc-review-board__columns,
-.pc-review-column__content,
-.pc-review-content-card__body,
-.pc-review-product-list__items,
-.pc-review-sidebar {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--pc-text-muted) 38%, transparent) transparent;
-}
-
-.pc-review-board__columns::-webkit-scrollbar,
-.pc-review-column__content::-webkit-scrollbar,
-.pc-review-content-card__body::-webkit-scrollbar,
-.pc-review-product-list__items::-webkit-scrollbar,
-.pc-review-sidebar::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
-}
-
-.pc-review-board__columns::-webkit-scrollbar-track,
-.pc-review-column__content::-webkit-scrollbar-track,
-.pc-review-content-card__body::-webkit-scrollbar-track,
-.pc-review-product-list__items::-webkit-scrollbar-track,
-.pc-review-sidebar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.pc-review-board__columns::-webkit-scrollbar-thumb,
-.pc-review-column__content::-webkit-scrollbar-thumb,
-.pc-review-content-card__body::-webkit-scrollbar-thumb,
-.pc-review-product-list__items::-webkit-scrollbar-thumb,
-.pc-review-sidebar::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--pc-text-muted) 34%, transparent);
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-
-.pc-review-board__columns::-webkit-scrollbar-thumb:hover,
-.pc-review-column__content::-webkit-scrollbar-thumb:hover,
-.pc-review-content-card__body::-webkit-scrollbar-thumb:hover,
-.pc-review-product-list__items::-webkit-scrollbar-thumb:hover,
-.pc-review-sidebar::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--pc-text-muted) 52%, transparent);
-  background-clip: content-box;
-}
-
 @media (max-width: 900px) {
   .pc-review-page {
     grid-template-columns: 1fr;

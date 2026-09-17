@@ -11,8 +11,10 @@ export function createProductPickerForm({
   id,
   eventName,
   labelText = "Add product",
+  showLabel = true,
   placeholder = "Search or type product name",
   helpText = "Select an existing product, or type a product name manually.",
+  showDefaultHelp = true,
   products = [],
   excludedProductNames = [],
   loading = false,
@@ -45,7 +47,11 @@ export function createProductPickerForm({
   input.spellcheck = false;
   input.setAttribute("aria-autocomplete", "list");
   input.setAttribute("aria-expanded", "false");
-  input.setAttribute("aria-labelledby", labelId);
+  if (showLabel) {
+    input.setAttribute("aria-labelledby", labelId);
+  } else {
+    input.setAttribute("aria-label", labelText);
+  }
 
   const button = document.createElement("button");
   button.className = "pc-product-picker__button";
@@ -66,13 +72,19 @@ export function createProductPickerForm({
     error,
     productCount: normalizedProducts.length,
     requireCatalogMatch,
+    showDefaultHelp,
   });
+  help.hidden = !help.textContent;
 
   row.append(input, button);
-  form.append(label, row, results, help);
+  if (showLabel) {
+    form.appendChild(label);
+  }
+  form.append(row, results, help);
 
   const setMessage = (message) => {
     help.textContent = message;
+    help.hidden = !message;
     help.classList.toggle("is-error", Boolean(message));
   };
 
@@ -83,14 +95,18 @@ export function createProductPickerForm({
       error,
       productCount: normalizedProducts.length,
       requireCatalogMatch,
+      showDefaultHelp,
     });
+    help.hidden = !help.textContent;
     help.classList.remove("is-error");
   };
 
   const closeResults = () => {
     results.hidden = true;
     input.setAttribute("aria-expanded", "false");
-    input.setAttribute("aria-labelledby", labelId);
+    if (showLabel) {
+      input.setAttribute("aria-labelledby", labelId);
+    }
   };
 
   const openResults = () => {
@@ -270,13 +286,24 @@ function createStateMessage(message) {
   return state;
 }
 
-function createHelpText({ helpText, loading, error, productCount, requireCatalogMatch }) {
+function createHelpText({
+  helpText,
+  loading,
+  error,
+  productCount,
+  requireCatalogMatch,
+  showDefaultHelp,
+}) {
   if (loading) {
     return "Loading product catalog. Typed input still works after catalog load.";
   }
 
   if (error) {
     return "Product catalog could not be loaded. Typed input still works.";
+  }
+
+  if (!showDefaultHelp) {
+    return "";
   }
 
   if (productCount > 0) {
