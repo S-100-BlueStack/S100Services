@@ -31,3 +31,7 @@ Main-map Collection actions resolve their canonical Analyze/Review URL before op
 shared workspace navigation policy uses the actual `window.open` result: an accepted open leaves the
 Collection unchanged and emits no blocked-popup notice, while a null or failed open reports the
 existing notice without retrying or falling back to same-tab navigation.
+
+## FI-032 manual acceptance
+
+FI-032 was manually accepted in the browser on 2026-09-17 and committed at `11491d15272b165b63da58dece83cb0c0776077b`. Main-map Product Collection Analyze/Review actions open the canonical workspace URL in a new tab, keep the Collection and Main-map state intact, and emit the blocked-popup notice only when the browser open actually fails. Successful action-based launches detach `window.opener`; workspace-to-workspace navigation remains same-tab through the shared navigation policy. The local frontend check passed and formatting was run before commit.
