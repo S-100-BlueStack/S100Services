@@ -1,12 +1,12 @@
 # Dashboard
 
-FI-034 implementation baseline: `49d9a67e98d6183b24ea0731fa9292b7b1a49950`.
+Current reviewed Dashboard baseline: `6a29ee5abee23b5ce741a69732d9f67ad805b95d`.
 
 FI-001 introduces a separate read-only Dashboard route at `/dashboard`. The Dashboard is intentionally isolated from the main map, Product Collection, Analyze and Review state. It summarizes operational activity for a selected range and links users onward to product-level Review or Analyze pages.
 
 ## Current status
 
-FI-001 and BE-107 remain complete, FI-033 is manually accepted, and FI-034 is implemented with manual verification pending. BE-107 adds bounded server-side filtering and cursor pagination without changing the route or the existing range semantics.
+FI-001 and BE-107 remain complete, and FI-033/FI-034 are manually accepted through `6a29ee5abee23b5ce741a69732d9f67ad805b95d`. BE-107 adds bounded server-side filtering and cursor pagination without changing the route or the existing range semantics.
 
 Implemented scope:
 
@@ -169,6 +169,7 @@ Behavior:
 - `From` is required before a draft can apply.
 - `To` is optional.
 - A valid date selection applies automatically and updates the URL query through the existing `pushState` route path. Native time `input` events update only the editable draft. Keyboard time editing commits when focus leaves the range group; pointer-driven native time-picker changes commit after the browser focus transition settles, unless focus moved directly to another range control.
+- Native time controls require a complete valid `HH:MM` value before the draft can apply. An incomplete browser-owned value such as `15:--` stays draft-only, sends no request, and is intentionally not normalized to `15:00`; an application-owned time control is deferred unless later user feedback justifies that UX change.
 - The committed range becomes the controller's applied state immediately, while its request/render is queued to the next browser task. This lets the focus/click that committed the edit finish first, and a directly following Refresh/filter/sort/page-size action coalesces with the pending range load instead of issuing a duplicate request.
 - Invalid or incomplete drafts do not request, change the URL, clear results, or publish an API error. A later committed edit that completes a valid draft applies the complete draft.
 - `Refresh` reloads the currently applied range, never an invalid in-progress draft.
@@ -204,9 +205,13 @@ The controller remains the single owner of applied range, route publication, req
 
 Automated coverage includes backend filtering/paging semantics, complete-result summaries, filter options, backward-compatible unpaged requests, stable equal-timestamp ordering, report filters, empty results, query validation, frontend query serialization, cursor history, paging normalization and search-value preservation.
 
-FI-034 automated coverage adds draft validation without fallback, keyboard/pointer time commit boundaries, focus-safe next-task range application, duplicate/coalescing suppression, open-ended To clearing, invalid route/request suppression, manual Refresh against applied state, page/cursor reset, sort/page-size preservation, search debounce interleaving, stale/failure retention and accepted-success timestamp publication. Manual browser verification remains pending.
+FI-034 automated coverage adds draft validation without fallback, keyboard/pointer time commit boundaries, focus-safe next-task range application, duplicate/coalescing suppression, open-ended To clearing, invalid route/request suppression, manual Refresh against applied state, page/cursor reset, sort/page-size preservation, search debounce interleaving, stale/failure retention and accepted-success timestamp publication. Manual browser verification is complete; the accepted native time contract requires a complete valid `HH:MM` value before application.
 
 Manual verification by the project owner confirmed that Dashboard pagination works as intended at commit `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+
+## FI-034 manual acceptance
+
+FI-034 was manually accepted in the browser on 2026-09-17 and committed at `6a29ee5abee23b5ce741a69732d9f67ad805b95d`. The accepted Dashboard has no Apply control: valid committed range edits apply automatically while invalid or incomplete drafts preserve the last applied route, result and `HH:MM`. Keyboard entry in native time fields can be completed without an intermediate request/rerender or focus reset; focus can move between the range controls on the first interaction, and leaving the range group commits one valid draft. Native time values must be complete valid `HH:MM` values. Browser-owned incomplete values such as `15:--` remain draft-only and are not interpreted as `15:00`. Optional To clearing, manual Refresh against applied state, 300 ms search debounce, immediate discrete filters/summary actions, page reset/cursor invalidation, sort/page-size preservation, Back/Forward, Dashboard History, FI-032 navigation, responsive layout and light/dark behavior were preserved. The local frontend check passed and formatting was run before commit.
 
 ## FI-033 manual acceptance
 
