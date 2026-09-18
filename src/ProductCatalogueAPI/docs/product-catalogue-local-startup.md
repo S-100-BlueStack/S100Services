@@ -23,6 +23,10 @@ From the repository root (C:\Users\Bnnnnn\source\repos\S-100-Bluestack\S100Servi
 .\src\ProductCatalogueAPI\scripts\Manage-LocalProductCatalogueWorker.ps1
 ```
 
+The script runs with "-Environment Development" to respect appsettings.Development.json.
+
+If using Local MSSQL DB (Server=(localdb)\\MSSQLLocalDB) the connection string must be added to a .txt-file and the connection string in appsettings the path to that .txt-file.
+
 ## Step 5
 
 In Visual Studio, select:
