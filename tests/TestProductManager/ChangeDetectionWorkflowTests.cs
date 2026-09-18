@@ -30,6 +30,54 @@ public sealed class ChangeDetectionWorkflowTests
     }
 
     [Fact]
+    public async Task DetectJobReopensAClosedSummaryWhenMoreChangesArriveOnTheSameWorkDate() {
+        var repository = new InMemoryProductRepository();
+        var products = new FakeElectronicProductManager();
+        var job = new DetectProductChangesJob(repository, repository, new FakeProductManager(products), new FakeLockService(), new FixedTimeProvider(), NullLogger<DetectProductChangesJob>.Instance, EnabledDetectionState());
+
+        await job.RunAsync(CancellationToken.None);
+        var firstSummary = Assert.Single(await repository.GetOpenChangeSummariesAsync(), summary => summary.ProductSpecification == ProductSpecification.S101);
+        await repository.CloseChangeSummaryAsync(firstSummary.Id, DateTime.UtcNow);
+        Assert.Empty(await repository.GetOpenChangeSummariesAsync());
+
+        await job.RunAsync(CancellationToken.None);
+
+        var reopenedSummary = Assert.Single(await repository.GetOpenChangeSummariesAsync(), summary => summary.ProductSpecification == ProductSpecification.S101);
+        Assert.Equal(firstSummary.Id, reopenedSummary.Id);
+        Assert.Contains("attributes.categoryOfLight", reopenedSummary.Yaml);
+    }
+
+    [Fact]
+    public async Task ManualFreezePreservesStateAllowsDetectionAndDefersSummaryProcessing() {
+        var repository = new InMemoryProductRepository();
+        var track = await repository.GetOrCreateTrackAsync("101DK001", ProductSpecification.S101, ExportEngineKind.IsoIec8211, 4, 2);
+        await repository.SetStateAsync(track.Id, ProductState.Exported, "system", DateTime.UtcNow);
+        await repository.SetManualFreezeAsync(track.Id, "operator", DateTime.UtcNow);
+        var products = new FakeElectronicProductManager();
+        var detectionJob = new DetectProductChangesJob(repository, repository, new FakeProductManager(products), new FakeLockService(), new FixedTimeProvider(), NullLogger<DetectProductChangesJob>.Instance, EnabledDetectionState());
+
+        await detectionJob.RunAsync(CancellationToken.None);
+
+        Assert.True(track.IsManuallyFrozen);
+        Assert.Equal(ProductState.Exported, track.State);
+        var operations = new SuccessfulRecordingOperations();
+        var processingJob = new ProcessChangeSummariesJob(repository, new ExportDecisionRuleSetRegistry([new NewEditionS101DecisionRuleSet()]), operations, new FakeLockService(), TimeProvider.System, NullLogger<ProcessChangeSummariesJob>.Instance);
+
+        await processingJob.RunAsync(CancellationToken.None);
+
+        Assert.Equal(0, operations.Calls);
+        Assert.NotEmpty(await repository.GetOpenChangeSummariesAsync());
+
+        Assert.True(await repository.ClearManualFreezeAsync(track.Id, "operator", DateTime.UtcNow));
+        await processingJob.RunAsync(CancellationToken.None);
+
+        Assert.Equal(1, operations.Calls);
+        Assert.False(track.IsManuallyFrozen);
+        Assert.Equal(ProductState.Exported, track.State);
+        Assert.Empty(await repository.GetOpenChangeSummariesAsync());
+    }
+
+    [Fact]
     public async Task ChangeSummaryJobDefaultsToNewEditionWhenRulesArePending() {
         var repository = new InMemoryProductRepository();
         var track = await repository.GetOrCreateTrackAsync("101DK001", ProductSpecification.S101, ExportEngineKind.IsoIec8211, 4, 2);

@@ -388,46 +388,51 @@ namespace TestProductCatalogueAPI
 
         [Fact]
         [Trait("Package", "PC-006")]
-        public async Task FreezeFlowStillUsesDatasetLockAndAppendsAuthoritativeVersion() {
+        public async Task FreezeFlowUsesCanonicalTrackLockAndPersistsIndependentHold() {
             var repository = new RecordingProductRepository(Product(ProductState.Idle));
+            var workflowRepository = new InMemoryProductRepository();
+            var track = await workflowRepository.GetOrCreateTrackAsync(DatasetName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 5, 0);
             var locks = new AcquiredLockService();
             var controller = Controller(
                 repository,
                 locks,
                 new RecordingSendJobService(),
-                SendToIcEncMode.Disabled
+                SendToIcEncMode.Disabled,
+                workflowRepository
             );
 
             var result = await controller.FreezeProduct(DatasetName, CancellationToken.None);
 
             Assert.IsType<OkResult>(result);
             Assert.Equal(1, locks.AcquireCalls);
-            Assert.Equal(1, repository.AppendCalls);
-            Assert.Equal(ProductState.Frozen, repository.LastAppendState);
-            Assert.Equal((uint)5, repository.LastAppendEdition);
-            Assert.Equal((uint?)0, repository.LastAppendUpdate);
+            Assert.Equal(0, repository.AppendCalls);
+            Assert.True(track.IsManuallyFrozen);
+            Assert.Equal(ProductState.Idle, track.State);
         }
 
         [Fact]
         [Trait("Package", "PC-006")]
-        public async Task UnfreezeFlowStillUsesDatasetLockAndAppendsAuthoritativeVersion() {
-            var repository = new RecordingProductRepository(Product(ProductState.Frozen));
+        public async Task UnfreezeFlowUsesCanonicalTrackLockAndRevealsUnderlyingState() {
+            var repository = new RecordingProductRepository(Product(ProductState.Idle));
+            var workflowRepository = new InMemoryProductRepository();
+            var track = await workflowRepository.GetOrCreateTrackAsync(DatasetName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 5, 0);
+            await workflowRepository.SetManualFreezeAsync(track.Id, "operator", DateTime.UtcNow);
             var locks = new AcquiredLockService();
             var controller = Controller(
                 repository,
                 locks,
                 new RecordingSendJobService(),
-                SendToIcEncMode.Disabled
+                SendToIcEncMode.Disabled,
+                workflowRepository
             );
 
             var result = await controller.UnfreezeProduct(DatasetName, CancellationToken.None);
 
             Assert.IsType<OkResult>(result);
             Assert.Equal(1, locks.AcquireCalls);
-            Assert.Equal(1, repository.AppendCalls);
-            Assert.Equal(ProductState.Idle, repository.LastAppendState);
-            Assert.Equal((uint)5, repository.LastAppendEdition);
-            Assert.Equal((uint?)0, repository.LastAppendUpdate);
+            Assert.Equal(0, repository.AppendCalls);
+            Assert.False(track.IsManuallyFrozen);
+            Assert.Equal(ProductState.Idle, track.State);
         }
 
         [Theory]
@@ -495,11 +500,13 @@ namespace TestProductCatalogueAPI
             RecordingProductRepository repository,
             IDatasetLockService locks,
             ISendToIcEncJobService jobs,
-            SendToIcEncMode mode
+            SendToIcEncMode mode,
+            IProductWorkflowRepository? workflowRepository = null
         ) {
             var controller = new UploadController(
                 NullLogger<UploadController>.Instance,
                 repository,
+                workflowRepository ?? new InMemoryProductRepository(),
                 locks,
                 jobs,
                 new StaticOptionsMonitor<SendToIcEncOptions>(new SendToIcEncOptions { Mode = mode }),

@@ -133,7 +133,12 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
             SELECT DISTINCT p.dataset_name
             FROM dbo.Product p
             INNER JOIN dbo.ProductExportTrack t ON t.product_id = p.product_id
-            WHERE t.state IN @States;
+            WHERE t.state IN @States
+               OR EXISTS (
+                    SELECT 1
+                    FROM dbo.ProductExportTrackFreezeHold freeze
+                    WHERE freeze.product_export_track_id = t.product_export_track_id
+               );
             """, new { States = new[] { ProductState.Frozen, ProductState.InTransit, ProductState.Exporting, ProductState.Validating } });
         return [.. result];
     }
@@ -147,8 +152,9 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
             WHERE NOT EXISTS (
                 SELECT 1
                 FROM dbo.ProductExportTrack t
+                LEFT JOIN dbo.ProductExportTrackFreezeHold freeze ON freeze.product_export_track_id = t.product_export_track_id
                 WHERE t.product_id = p.product_id
-                  AND t.state IN @States
+                  AND (t.state IN @States OR freeze.product_export_track_id IS NOT NULL)
             );
             """, new { States = new[] { ProductState.Frozen, ProductState.InTransit, ProductState.Exporting, ProductState.Validating } });
         return [.. result];
@@ -358,6 +364,39 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
     }
 
     /// <inheritdoc/>
+    public async Task<bool> SetManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        using var connection = _connectionFactory.Create();
+        return await connection.QuerySingleAsync<bool>(new CommandDefinition("""
+            INSERT INTO dbo.ProductExportTrackFreezeHold
+                (product_export_track_id, frozen_at_utc, frozen_by)
+            SELECT @TrackId, @OccurredAtUtc, @Owner
+            WHERE EXISTS (
+                SELECT 1
+                FROM dbo.ProductExportTrack
+                WHERE product_export_track_id = @TrackId
+            )
+              AND NOT EXISTS (
+                SELECT 1
+                FROM dbo.ProductExportTrackFreezeHold WITH (UPDLOCK, HOLDLOCK)
+                WHERE product_export_track_id = @TrackId
+            );
+
+            SELECT CONVERT(bit, CASE WHEN @@ROWCOUNT = 1 THEN 1 ELSE 0 END);
+            """, new { TrackId = trackId, Owner = owner, OccurredAtUtc = occurredAtUtc }, cancellationToken: cancellationToken));
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> ClearManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        using var connection = _connectionFactory.Create();
+        return await connection.QuerySingleAsync<bool>(new CommandDefinition("""
+            DELETE FROM dbo.ProductExportTrackFreezeHold
+            WHERE product_export_track_id = @TrackId;
+
+            SELECT CONVERT(bit, CASE WHEN @@ROWCOUNT = 1 THEN 1 ELSE 0 END);
+            """, new { TrackId = trackId }, cancellationToken: cancellationToken));
+    }
+
+    /// <inheritdoc/>
     public async Task<Guid?> GetLatestRevisionIdAsync(Guid trackId, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
         return await connection.QuerySingleOrDefaultAsync<Guid?>(new CommandDefinition("""
@@ -427,7 +466,7 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
     /// <inheritdoc/>
     public async Task<ProductChangeSummary?> GetOpenChangeSummaryAsync(Guid trackId, DateOnly workDate, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
-        var header = await connection.QuerySingleOrDefaultAsync<ChangeSummaryHeader>(new CommandDefinition(ChangeSummaryHeaderSql + " AND s.product_export_track_id = @TrackId AND s.work_date = @WorkDate", new { TrackId = trackId, WorkDate = workDate.ToDateTime(TimeOnly.MinValue) }, cancellationToken: cancellationToken));
+        var header = await connection.QuerySingleOrDefaultAsync<ChangeSummaryHeader>(new CommandDefinition($"{ChangeSummaryHeaderSql}\nWHERE s.product_export_track_id = @TrackId AND s.work_date = @WorkDate", new { TrackId = trackId, WorkDate = workDate.ToDateTime(TimeOnly.MinValue) }, cancellationToken: cancellationToken));
         return header is null ? null : await LoadSummaryAsync(connection, header, cancellationToken);
     }
 
@@ -441,7 +480,11 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
             USING (SELECT @TrackId AS product_export_track_id, @WorkDate AS work_date) AS source
               ON target.product_export_track_id = source.product_export_track_id AND target.work_date = source.work_date
             WHEN MATCHED THEN
-              UPDATE SET summary_yaml = @Yaml, first_detected_at_utc = @FirstDetectedAtUtc, last_detected_at_utc = @LastDetectedAtUtc
+              UPDATE SET summary_yaml = @Yaml,
+                         first_detected_at_utc = @FirstDetectedAtUtc,
+                         last_detected_at_utc = @LastDetectedAtUtc,
+                         is_closed = 0,
+                         closed_at_utc = NULL
             WHEN NOT MATCHED THEN
               INSERT (product_change_summary_id, product_export_track_id, work_date, summary_yaml, first_detected_at_utc, last_detected_at_utc, is_closed)
               VALUES (@SummaryId, source.product_export_track_id, source.work_date, @Yaml, @FirstDetectedAtUtc, @LastDetectedAtUtc, 0)
@@ -480,7 +523,7 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
     /// <inheritdoc/>
     public async Task<IReadOnlyList<ProductChangeSummary>> GetOpenChangeSummariesAsync(CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
-        var headers = (await connection.QueryAsync<ChangeSummaryHeader>(new CommandDefinition(ChangeSummaryHeaderSql, cancellationToken: cancellationToken))).ToArray();
+        var headers = (await connection.QueryAsync<ChangeSummaryHeader>(new CommandDefinition($"{ChangeSummaryHeaderSql}\nWHERE s.is_closed = 0", cancellationToken: cancellationToken))).ToArray();
         var summaries = new List<ProductChangeSummary>(headers.Length);
         foreach (var header in headers)
             summaries.Add(await LoadSummaryAsync(connection, header, cancellationToken));
@@ -525,37 +568,43 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
 
     private const string CurrentRecordsSql = """
         WITH RankedTracks AS (
-            SELECT h.product_state_history_id AS Id, p.dataset_name AS Name, t.state AS State,
+            SELECT h.product_state_history_id AS Id, p.dataset_name AS Name,
+                   CASE WHEN freeze.product_export_track_id IS NULL THEN t.state ELSE 5 END AS State,
                    t.product_specification AS ProductSpecification,
                    COALESCE(t.candidate_edition, t.published_edition) AS EditionNo,
                    COALESCE(t.candidate_update, t.published_update) AS UpdateNo,
                    h.owner AS Owner, h.error_code AS ErrorCode, h.error_message AS ErrorMessage,
                    h.occurred_at_utc AS Date_From,
                    CAST('9999-12-31T00:00:00' AS datetime2) AS Date_to,
+                   CONVERT(bit, CASE WHEN freeze.product_export_track_id IS NULL THEN 0 ELSE 1 END) AS IsManuallyFrozen,
                    ROW_NUMBER() OVER (PARTITION BY p.product_id ORDER BY CASE t.product_specification WHEN 'S101' THEN 0 ELSE 1 END, t.updated_at_utc DESC) AS RowNumber
             FROM dbo.Product p
             INNER JOIN dbo.ProductExportTrack t ON t.product_id = p.product_id
+            LEFT JOIN dbo.ProductExportTrackFreezeHold freeze ON freeze.product_export_track_id = t.product_export_track_id
             OUTER APPLY (
                 SELECT TOP 1 * FROM dbo.ProductStateHistory h
                 WHERE h.product_export_track_id = t.product_export_track_id
                 ORDER BY h.occurred_at_utc DESC, h.product_state_history_id DESC
             ) h
         )
-        SELECT Id, Name, State, ProductSpecification, EditionNo, UpdateNo, Owner, Date_From, Date_to, ErrorCode, ErrorMessage
+        SELECT Id, Name, State, ProductSpecification, EditionNo, UpdateNo, Owner, Date_From, Date_to, ErrorCode, ErrorMessage, IsManuallyFrozen
         FROM RankedTracks
         WHERE RowNumber = 1
         """;
 
     private const string CurrentTrackRecordsSql = """
-        SELECT h.product_state_history_id AS Id, p.dataset_name AS Name, t.state AS State,
+        SELECT h.product_state_history_id AS Id, p.dataset_name AS Name,
+               CASE WHEN freeze.product_export_track_id IS NULL THEN t.state ELSE 5 END AS State,
                t.product_specification AS ProductSpecification,
                COALESCE(t.candidate_edition, t.published_edition) AS EditionNo,
                COALESCE(t.candidate_update, t.published_update) AS UpdateNo,
                h.owner AS Owner, h.error_code AS ErrorCode, h.error_message AS ErrorMessage,
                h.occurred_at_utc AS Date_From,
-               CAST('9999-12-31T00:00:00' AS datetime2) AS Date_to
+               CAST('9999-12-31T00:00:00' AS datetime2) AS Date_to,
+               CONVERT(bit, CASE WHEN freeze.product_export_track_id IS NULL THEN 0 ELSE 1 END) AS IsManuallyFrozen
         FROM dbo.Product p
         INNER JOIN dbo.ProductExportTrack t ON t.product_id = p.product_id
+        LEFT JOIN dbo.ProductExportTrackFreezeHold freeze ON freeze.product_export_track_id = t.product_export_track_id
         OUTER APPLY (
             SELECT TOP 1 * FROM dbo.ProductStateHistory h
             WHERE h.product_export_track_id = t.product_export_track_id
@@ -579,9 +628,11 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
                t.product_specification AS ProductSpecification, t.export_engine AS Engine,
                t.state AS State, t.published_edition AS PublishedEdition, t.published_update AS PublishedUpdate,
                t.candidate_edition AS CandidateEdition, t.candidate_update AS CandidateUpdate, t.updated_at_utc AS UpdatedAtUtc,
+               CONVERT(bit, CASE WHEN freeze.product_export_track_id IS NULL THEN 0 ELSE 1 END) AS IsManuallyFrozen,
                h.error_code AS ErrorCode, h.error_message AS ErrorMessage
         FROM dbo.ProductExportTrack t
         INNER JOIN dbo.Product p ON p.product_id = t.product_id
+        LEFT JOIN dbo.ProductExportTrackFreezeHold freeze ON freeze.product_export_track_id = t.product_export_track_id
         OUTER APPLY (
             SELECT TOP 1 error_code, error_message
             FROM dbo.ProductStateHistory h
@@ -602,7 +653,6 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
         FROM dbo.ProductChangeSummary s
         INNER JOIN dbo.ProductExportTrack t ON t.product_export_track_id = s.product_export_track_id
         INNER JOIN dbo.Product p ON p.product_id = t.product_id
-        WHERE s.is_closed = 0
         """;
 
     private sealed class ChangeSummaryHeader
@@ -628,6 +678,7 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     private readonly Dictionary<string, DateTime> _lastSuccessfulRuns = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<(string Name, ProductSpecification Specification), ProductExportTrackRecord> _tracks = new();
     private readonly Dictionary<Guid, ProductChangeSummary> _summaries = [];
+    private readonly HashSet<Guid> _closedSummaryIds = [];
     private readonly List<(Guid Id, ProductRevisionWrite Revision)> _revisions = [];
     private readonly List<(Guid Id, ProductArtifactWrite Artifact)> _artifacts = [];
 
@@ -701,6 +752,32 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     public Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.State = state; track.UpdatedAtUtc = occurredAtUtc; track.ErrorCode = errorCode; track.ErrorMessage = errorMessage; } return Task.CompletedTask; }
 
     /// <inheritdoc/>
+    public Task<bool> SetManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        lock (_gate) {
+            var track = FindTrack(trackId);
+            if (track.IsManuallyFrozen)
+                return Task.FromResult(false);
+
+            track.IsManuallyFrozen = true;
+            track.UpdatedAtUtc = occurredAtUtc;
+            return Task.FromResult(true);
+        }
+    }
+
+    /// <inheritdoc/>
+    public Task<bool> ClearManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        lock (_gate) {
+            var track = FindTrack(trackId);
+            if (!track.IsManuallyFrozen)
+                return Task.FromResult(false);
+
+            track.IsManuallyFrozen = false;
+            track.UpdatedAtUtc = occurredAtUtc;
+            return Task.FromResult(true);
+        }
+    }
+
+    /// <inheritdoc/>
     public Task CancelCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.State = ProductState.Cancelled; track.CandidateEdition = null; track.CandidateUpdate = null; track.UpdatedAtUtc = occurredAtUtc; } return Task.CompletedTask; }
 
     /// <inheritdoc/>
@@ -764,13 +841,25 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     public Task<ProductChangeSummary?> GetOpenChangeSummaryAsync(Guid trackId, DateOnly workDate, CancellationToken cancellationToken = default) { lock (_gate) return Task.FromResult(_summaries.Values.SingleOrDefault(summary => summary.TrackId == trackId && summary.WorkDate == workDate)); }
 
     /// <inheritdoc/>
-    public Task SaveChangeSummaryAsync(ProductChangeSummary summary, CancellationToken cancellationToken = default) { lock (_gate) _summaries[summary.Id] = summary; return Task.CompletedTask; }
+    public Task SaveChangeSummaryAsync(ProductChangeSummary summary, CancellationToken cancellationToken = default) {
+        lock (_gate) {
+            var existing = _summaries.Values.SingleOrDefault(item => item.TrackId == summary.TrackId && item.WorkDate == summary.WorkDate);
+            if (existing is not null && existing.Id != summary.Id) {
+                _summaries.Remove(existing.Id);
+                _closedSummaryIds.Remove(existing.Id);
+            }
+
+            _summaries[summary.Id] = summary;
+            _closedSummaryIds.Remove(summary.Id);
+        }
+        return Task.CompletedTask;
+    }
 
     /// <inheritdoc/>
-    public Task<IReadOnlyList<ProductChangeSummary>> GetOpenChangeSummariesAsync(CancellationToken cancellationToken = default) { lock (_gate) return Task.FromResult<IReadOnlyList<ProductChangeSummary>>([.. _summaries.Values]); }
+    public Task<IReadOnlyList<ProductChangeSummary>> GetOpenChangeSummariesAsync(CancellationToken cancellationToken = default) { lock (_gate) return Task.FromResult<IReadOnlyList<ProductChangeSummary>>([.. _summaries.Values.Where(summary => !_closedSummaryIds.Contains(summary.Id))]); }
 
     /// <inheritdoc/>
-    public Task CloseChangeSummaryAsync(Guid summaryId, DateTime closedAtUtc, CancellationToken cancellationToken = default) { lock (_gate) _summaries.Remove(summaryId); return Task.CompletedTask; }
+    public Task CloseChangeSummaryAsync(Guid summaryId, DateTime closedAtUtc, CancellationToken cancellationToken = default) { lock (_gate) _closedSummaryIds.Add(summaryId); return Task.CompletedTask; }
 
     private ProductExportTrackRecord FindTrack(Guid trackId) => _tracks.Values.Single(track => track.Id == trackId);
     private static ProductRecord SelectPreferredCurrent(IGrouping<string, ProductRecord> group) => group.OrderBy(product => NormalizeProductSpecification(product.ProductSpecification) == "S101" ? 0 : 1).ThenByDescending(product => product.Date_From).First();

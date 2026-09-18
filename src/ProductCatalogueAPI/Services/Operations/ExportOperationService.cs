@@ -169,6 +169,8 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
     }
 
     private static void EnsureExportCanStart(ProductExportTrackRecord track) {
+        if (track.IsManuallyFrozen)
+            throw new ExportOperationRejectedException($"An export could not be created now because the {track.ProductSpecification} product has a manual freeze hold.");
         if (track.State is ProductState.Frozen or ProductState.InTransit or ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or ProductState.AcceptedForDistribution)
             throw new ExportOperationRejectedException($"An export could not be created now. Current {track.ProductSpecification} state: {track.State}.");
     }

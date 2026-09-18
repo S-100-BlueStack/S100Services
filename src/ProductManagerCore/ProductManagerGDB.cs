@@ -581,6 +581,7 @@ namespace S100FC.ProductCatalogue
                 $")";
 
             string[] tableNames = ["point", "pointset", "curve", "surface"];
+            var unclassifiedArchiveRows = 0;
 
             foreach (var baseTableName in tableNames) {
                 using var fc = connection.OpenDataset<FeatureClass>(
@@ -616,11 +617,13 @@ namespace S100FC.ProductCatalogue
                     if (string.IsNullOrWhiteSpace(id)) {
 
                         Log.Warning("Row in {tableName} for connection {connectionName} is missing UID. Skipping geometry check.", baseTableName, connectionName);
+                        unclassifiedArchiveRows++;
                         continue;
                     }
 
                     if (row is not ArcGIS.Core.Data.Feature feature) {
                         Log.Warning("Row with UID {id} in {tableName} for connection {connectionName} is not a feature. Skipping geometry check.", id, baseTableName, connectionName);
+                        unclassifiedArchiveRows++;
                         continue;
                     }
 
@@ -628,6 +631,7 @@ namespace S100FC.ProductCatalogue
 
                     if (changedShape == null || changedShape.IsEmpty) {
                         Log.Warning("Feature with UID {id} in {tableName} for connection {connectionName} has no geometry. Skipping.", id, baseTableName, connectionName);
+                        unclassifiedArchiveRows++;
                         continue;
                     }
 
@@ -664,6 +668,9 @@ namespace S100FC.ProductCatalogue
                     uniqueChangedFeatureIds.Count,
                     affectedProducts.Count);
             }
+
+            if (unclassifiedArchiveRows > 0)
+                throw new ArchiveChangeClassificationException(connectionName, unclassifiedArchiveRows);
         }
 
         /// <summary>Reads the UIDs that still exist in the current feature class version.</summary>

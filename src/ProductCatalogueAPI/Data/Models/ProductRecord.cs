@@ -13,6 +13,8 @@
         public DateTime Date_to { get; set; }
         public string? ErrorCode { get; set; }
         public string? ErrorMessage { get; set; }
+        /// <summary>Gets or sets whether an independent manual hold is active for this track.</summary>
+        public bool IsManuallyFrozen { get; set; }
     }
 
     public enum ProductState : int

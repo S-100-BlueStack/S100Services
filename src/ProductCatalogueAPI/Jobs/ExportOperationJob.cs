@@ -67,8 +67,10 @@ namespace ProductCatalogueAPI.Jobs
                 request.ExpectedUpdate
             );
 
+            var productSpecification = ParseProductSpecification(request.ProductSpecification);
+
             await using var datasetLock = await _datasetLockService.TryAcquireAsync(
-                $"{request.DatasetName}-{request.ProductSpecification}",
+                ProductTrackLockKey.For(request.DatasetName, productSpecification),
                 cancellationToken
             );
 
@@ -90,8 +92,6 @@ namespace ProductCatalogueAPI.Jobs
             var executionStarted = context.GetJobParameter<bool?>(
                 ExportJobParameterNames.ExecutionStarted
             ) == true;
-            var productSpecification = ParseProductSpecification(request.ProductSpecification);
-
             if (executionStarted) {
                 _logger.LogError(
                     "Product Manager job execution guard was already set. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}",
