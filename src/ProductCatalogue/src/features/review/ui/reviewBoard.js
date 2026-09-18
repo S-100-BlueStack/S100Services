@@ -1,9 +1,5 @@
 import "@esri/calcite-components/components/calcite-icon";
 import {
-  PRODUCT_CONTENT_TYPE,
-  getProductContentConfiguration,
-} from "../../products/domain/productContext.js";
-import {
   createProductHistoryBanner,
   createProductHistoryStateMessage,
   formatHistoryTimestamp,
@@ -13,6 +9,12 @@ import {
   getEnabledReviewContentTypes,
   getReviewContentTypeDefinitions,
 } from "../domain/reviewProductList.js";
+import {
+  REVIEW_CONTENT_PRESENTATION_STATE,
+  getReviewHistoryPresentation,
+  getReviewIcEncPresentation,
+  getReviewValidationPresentation,
+} from "./reviewContentPresentation.js";
 export function createReviewBoard({ productItems, enabledDatasetNames, products, loading, error }) {
   const board = document.createElement("section");
   board.className = "pc-review-board";
@@ -131,113 +133,50 @@ function createReviewContentCard(product, contentType) {
     return createHistoryReviewCard(product);
   }
   if (contentType === REVIEW_CONTENT_TYPES.IC_ENC_REPORTS) {
-    return createConfiguredReviewCard({
+    return createStateReviewCard({
       product,
       contentType,
-      productContentType: PRODUCT_CONTENT_TYPE.IC_ENC_REPORTS,
       title: "IC-ENC reports",
-      pendingMessage:
-        "IC-ENC report selection is ready in Product Review, but report metadata is not available in the Review model yet.",
+      presentation: getReviewIcEncPresentation(product),
     });
   }
-  if (
-    contentType === REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS &&
-    product.productContext?.contentConfiguration?.internalValidation?.loaderId ===
-      "electronic-artifacts"
-  ) {
+  if (contentType === REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS) {
+    const presentation = getReviewValidationPresentation(product);
     const artifacts = product.validationArtifacts ?? [];
     const card = createContentCardShell({
       product,
       contentType,
       title: "Internal validation",
-      status: product.artifactError ? "Failed" : `${artifacts.length} files`,
+      status: presentation.status,
     });
-    if (product.artifactError || !artifacts.length) {
-      card.body.appendChild(
-        createProductHistoryStateMessage({
-          title: product.artifactError
-            ? "Validation files could not be loaded"
-            : "No validation files",
-          message:
-            product.artifactError ?? "No validation diagnostics were returned for this product.",
-        })
-      );
+    if (presentation.state !== REVIEW_CONTENT_PRESENTATION_STATE.CONTENT) {
+      card.body.appendChild(createContentStateMessage(presentation.message));
+      return card.root;
     }
     for (const artifact of artifacts) {
-      const row = document.createElement("p");
-      const link = document.createElement("a");
-      link.href = artifact.url;
-      link.textContent = `${artifact.productSpecificationLabel}: ${artifact.fileName}`;
-      link.download = artifact.fileName || "";
-      row.appendChild(link);
-      card.body.appendChild(row);
+      card.body.appendChild(createValidationArtifactRow(artifact));
     }
     return card.root;
   }
-  if (contentType === REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS) {
-    return createConfiguredReviewCard({
-      product,
-      contentType,
-      productContentType: PRODUCT_CONTENT_TYPE.INTERNAL_VALIDATION,
-      title: "Internal validation",
-      pendingMessage:
-        "Internal validation report selection is ready in Product Review, but the backend endpoint is not available yet.",
-    });
-  }
-  return createPendingReviewCard({
+  return createStateReviewCard({
     product,
     contentType,
     title: "Review content",
-    status: "Unknown",
-    message: "This review content type does not have a renderer yet.",
-  });
-}
-
-function createConfiguredReviewCard({
-  product,
-  contentType,
-  productContentType,
-  title,
-  pendingMessage,
-}) {
-  if (product.error) {
-    return createPendingReviewCard({
-      product,
-      contentType,
-      title,
-      status: "Failed",
-      message: product.error,
-    });
-  }
-
-  const configuration = getProductContentConfiguration(product.productContext, productContentType);
-  if (configuration.visible && !configuration.implemented) {
-    return createPendingReviewCard({
-      product,
-      contentType,
-      title,
+    presentation: {
+      state: REVIEW_CONTENT_PRESENTATION_STATE.UNAVAILABLE,
       status: "Unavailable",
-      message:
-        configuration.availabilityReason ??
-        `${title} are not available for this Product source yet.`,
-    });
-  }
-
-  return createPendingReviewCard({
-    product,
-    contentType,
-    title,
-    status: "Pending",
-    message: pendingMessage,
+      message: "This review content type is not available.",
+    },
   });
 }
 
 function createHistoryReviewCard(product) {
+  const presentation = getReviewHistoryPresentation(product);
   const card = createContentCardShell({
     product,
     contentType: REVIEW_CONTENT_TYPES.HISTORY,
     title: "History",
-    status: createHistoryStatusText(product),
+    status: presentation.status,
   });
 
   if (product.history?.endpointAvailable) {
@@ -257,28 +196,24 @@ function createHistoryReviewCard(product) {
     );
     card.header.appendChild(actions);
   }
-  card.body.appendChild(createHistoryContent(product));
+  card.body.appendChild(createHistoryContent(product, presentation));
 
   return card.root;
 }
 
-function createPendingReviewCard({ product, contentType, title, status, message }) {
+function createStateReviewCard({ product, contentType, title, presentation }) {
   const card = createContentCardShell({
     product,
     contentType,
     title,
-    status,
+    status: presentation.status,
   });
 
-  card.body.appendChild(
-    createProductHistoryStateMessage({
-      title: `${title} unavailable`,
-      message,
-    })
-  );
+  card.body.appendChild(createContentStateMessage(presentation.message));
 
   return card.root;
 }
+
 function createContentCardShell({ product, contentType, title, status }) {
   const card = document.createElement("section");
   card.className = `pc-review-content-card pc-review-content-card--${normalizeType(contentType)}`;
@@ -296,7 +231,10 @@ function createContentCardShell({ product, contentType, title, status }) {
   statusElement.textContent = status;
 
   const body = document.createElement("div");
-  body.className = "pc-review-content-card__body pc-scrollbar";
+  body.className = "pc-review-content-card__body";
+  if (contentType === REVIEW_CONTENT_TYPES.HISTORY) {
+    body.classList.add("pc-review-content-card__body--scrollable", "pc-scrollbar");
+  }
 
   header.append(titleElement, statusElement);
   card.append(header, body);
@@ -305,6 +243,24 @@ function createContentCardShell({ product, contentType, title, status }) {
     header,
     body,
   };
+}
+
+function createContentStateMessage(message) {
+  const element = document.createElement("p");
+  element.className = "pc-review-content-card__state";
+  element.textContent = message;
+  return element;
+}
+
+function createValidationArtifactRow(artifact) {
+  const row = document.createElement("p");
+  row.className = "pc-review-content-card__artifact";
+  const link = document.createElement("a");
+  link.href = artifact.url;
+  link.textContent = `${artifact.productSpecificationLabel}: ${artifact.fileName}`;
+  link.download = artifact.fileName || "";
+  row.appendChild(link);
+  return row;
 }
 
 function createCardActionButton({ label, text, onClick }) {
@@ -326,29 +282,9 @@ function setHistoryEventsOpen(card, open) {
   }
 }
 
-function createHistoryContent(product) {
-  if (product.error) {
-    return createProductHistoryStateMessage({
-      title: "History could not be loaded",
-      message: product.error,
-    });
-  }
-  if (!product.history) {
-    return createProductHistoryStateMessage({
-      title: "History unavailable",
-      message: `History for ${product.datasetName} was not loaded.`,
-    });
-  }
-  if (!product.history.events.length) {
-    return createProductHistoryStateMessage({
-      title: product.history.endpointAvailable
-        ? "No historical changes found"
-        : "Historical changes are not available yet",
-      message: product.history.endpointAvailable
-        ? "No history events were returned for this product."
-        : (product.history.availabilityReason ??
-          "The history UI is ready, but the backend endpoint has not been implemented yet."),
-    });
+function createHistoryContent(product, presentation) {
+  if (presentation.state !== REVIEW_CONTENT_PRESENTATION_STATE.CONTENT) {
+    return createContentStateMessage(presentation.message);
   }
 
   const fragment = document.createDocumentFragment();
@@ -469,16 +405,6 @@ function normalizeDetailLabel(label) {
     .toLowerCase();
 }
 
-function createHistoryStatusText(product) {
-  if (product.error) {
-    return "Failed";
-  }
-  if (!product.history || !product.history.endpointAvailable) {
-    return "Unavailable";
-  }
-
-  return `${product.history.events.length} event${product.history.events.length === 1 ? "" : "s"}`;
-}
 function getEventIcon(type) {
   switch (type) {
     case "freeze":

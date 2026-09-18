@@ -275,7 +275,7 @@ body.pc-review-route #last-updated {
 }
 
 .pc-review-board {
-  --pc-review-history-card-height: 500px;
+  --pc-review-history-card-max-height: clamp(240px, 50dvh, 500px);
 
   min-width: 0;
   min-height: 0;
@@ -352,18 +352,16 @@ body.pc-review-route #last-updated {
 
 .pc-review-content-card {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
   min-width: 0;
   min-height: 0;
-  max-height: 500px;
   background: var(--pc-surface);
   border-bottom: 1px solid var(--pc-border);
 }
 
 .pc-review-content-card--history {
-  height: var(--pc-review-history-card-height);
-  min-height: var(--pc-review-history-card-height);
-  max-height: var(--pc-review-history-card-height);
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: var(--pc-review-history-card-max-height);
 }
 
 .pc-review-content-card__header {
@@ -412,9 +410,34 @@ body.pc-review-route #last-updated {
 }
 
 .pc-review-content-card__body {
+  min-width: 0;
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
   padding: 0;
+}
+
+.pc-review-content-card__body--scrollable {
+  overflow: auto;
+}
+
+.pc-review-content-card__state,
+.pc-review-content-card__artifact {
+  min-width: 0;
+  margin: 0;
+  padding: 9px 10px;
+  color: var(--pc-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.pc-review-content-card__artifact + .pc-review-content-card__artifact {
+  border-top: 1px solid color-mix(in srgb, var(--pc-border) 72%, transparent);
+}
+
+.pc-review-content-card__artifact a {
+  color: var(--calcite-color-brand, #0079c1);
+  overflow-wrap: anywhere;
 }
 
 .pc-review-history-list {
@@ -498,10 +521,12 @@ body.pc-review-route #last-updated {
 }
 
 .pc-review-history-event__description {
+  min-width: 0;
   margin: 0;
   color: var(--pc-text);
   font-size: 12px;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .pc-review-history-event__details {

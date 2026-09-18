@@ -84,7 +84,20 @@ The current frontend content types are:
 2. IC-ENC reports
 3. Internal validation reports
 
-The ordering is fixed so product columns remain comparable even when individual products have different content toggles enabled. History uses bounded height so long histories do not push later content types out of alignment.
+The ordering is fixed so product columns remain comparable even when individual products have different content toggles enabled.
+
+## FI-037 content layout and states
+
+History cards use their natural content height up to a viewport-aware `clamp(240px, 50dvh, 500px)`
+maximum. History keeps the only intentional content-card scroller after that bound; short histories no
+longer reserve a fixed-height region. IC-ENC and Internal validation bodies render at natural height,
+and the Product-column content container owns vertical overflow for those cards.
+
+Each content-card header remains the state discriminator: `Unavailable`, `Failed`, an empty count, or
+an available content count. The body adds one concise message for states without content instead of a
+second heading/message pair. IC-ENC remains unavailable without inventing a report contract. Validation
+request failures retain their safe error text, and available diagnostic artifacts retain their download
+links. These presentation rules do not add a loader or refresh lifecycle.
 
 Future report cards should use the same pattern.
 
