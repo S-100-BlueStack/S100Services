@@ -4,10 +4,12 @@ import { statusColorConfig } from "../../../shared/config/colorsConfig.js";
 import { formatStatusDisplayValue } from "../attributes/attributeDisplay.js";
 import { applyHeaderColor, resetHeaderColor } from "../popups/popupHeaderController.js";
 import {
+  bindProductKeyboardActivation,
   createProductClickSession,
   getValidUniqueClickCandidates,
   handleProductClick,
 } from "./productClickInteraction.js";
+import { bindDirectSelectionShortcutHint } from "./directSelectionShortcutHint.js";
 
 let activeClickCleanup = null;
 
@@ -18,10 +20,10 @@ export function bindOverlapPicker(view, { hoverManager } = {}) {
   // We need full control over feature clicks because the default popup only
   // opens one selected feature, which is not enough when features overlap.
   view.popupEnabled = false;
-  const clickSession = createProductClickSession();
+  const interactionSession = createProductClickSession();
 
   const clickHandle = view.on("click", (event) => {
-    const isCurrent = clickSession.begin();
+    const isCurrent = interactionSession.begin();
     void handleProductClick({
       event,
       view,
@@ -35,9 +37,20 @@ export function bindOverlapPicker(view, { hoverManager } = {}) {
     });
   });
 
+  const cleanupKeyboardActivation = bindProductKeyboardActivation({
+    view,
+    beginInteraction: () => interactionSession.begin(),
+    getInteractiveLayers,
+    getHighlightedIdentity: () => hoverManager?.getHighlightedGraphicIdentity?.() ?? null,
+    openGraphic: (options) => openGraphicPopup(view, options),
+  });
+  const cleanupShortcutHint = bindDirectSelectionShortcutHint(view, { hoverManager });
+
   const cleanup = () => {
-    clickSession.destroy();
+    interactionSession.destroy();
     clickHandle.remove?.();
+    cleanupKeyboardActivation();
+    cleanupShortcutHint();
     if (activeClickCleanup === cleanup) {
       activeClickCleanup = null;
     }

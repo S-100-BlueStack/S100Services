@@ -85,6 +85,43 @@ test("popup-locked highlight is not exposed as a transient hover candidate", asy
   hoverManager.destroy();
 });
 
+test("transient highlight subscriptions clear when popup locking takes ownership", async () => {
+  const frames = [];
+  const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (callback) => {
+    frames.push(callback);
+    return frames.length;
+  };
+
+  try {
+    const layer = { visible: true };
+    const graphic = createGraphic(layer, "selected-after-hover");
+    const view = createView([Promise.resolve({ results: [{ graphic }] })]);
+    const hoverManager = createHoverManager(view);
+    const identities = [];
+    await hoverManager.registerLayer(layer);
+    const unsubscribe = hoverManager.subscribeHighlightedGraphicIdentity((identity) => {
+      identities.push(identity);
+    });
+
+    view.emit("pointer-move", { x: 1, y: 1 });
+    frames.shift()();
+    await flushPromises();
+
+    assert.equal(identities.at(-1), `product:${graphic.attributes.productIdentityKey}`);
+
+    hoverManager.setLockedFeature(graphic);
+
+    assert.equal(hoverManager.getHighlightedGraphicIdentity(), null);
+    assert.equal(identities.at(-1), null);
+
+    unsubscribe();
+    hoverManager.destroy();
+  } finally {
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+  }
+});
+
 function createView(hitTestResults) {
   const handlers = new Map();
   const highlighted = [];

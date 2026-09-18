@@ -10,3 +10,20 @@
   opacity: 0;
   box-shadow: none;
 }
+
+.map-direct-selection-hint {
+  max-width: min(30rem, calc(100vw - 2rem));
+  padding: 0.25rem 0.45rem;
+  border: 1px solid var(--pc-border);
+  border-radius: 0;
+  background: var(--pc-surface);
+  color: var(--pc-text);
+  box-shadow: var(--pc-shadow);
+  font-size: 0.75rem;
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+.map-direct-selection-hint[hidden] {
+  display: none;
+}

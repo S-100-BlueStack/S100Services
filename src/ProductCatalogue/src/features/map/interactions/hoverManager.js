@@ -4,6 +4,7 @@ export function createHoverManager(view) {
   const layers = new Set();
   const layerViews = new Map();
   const layerViewPromises = new Map();
+  const highlightedIdentityListeners = new Set();
 
   let highlight = null;
   let highlightedGraphic = null;
@@ -14,6 +15,7 @@ export function createHoverManager(view) {
   let lockedHighlight = null;
   let hoverGeneration = 0;
   let destroyed = false;
+  let publishedHighlightedIdentity = null;
 
   function registerLayer(layer) {
     if (destroyed) {
@@ -144,6 +146,7 @@ export function createHoverManager(view) {
     highlight = layerView.highlight(graphic, {
       name: "hover-highlight",
     });
+    publishHighlightedIdentity();
   }
 
   function clearHighlight() {
@@ -154,6 +157,7 @@ export function createHoverManager(view) {
 
     highlightedGraphic = null;
     lastGraphicUid = null;
+    publishHighlightedIdentity();
   }
 
   function setLockedFeature(graphic) {
@@ -215,6 +219,30 @@ export function createHoverManager(view) {
     return getGraphicInteractionIdentity(highlightedGraphic);
   }
 
+  function subscribeHighlightedGraphicIdentity(listener) {
+    if (destroyed || typeof listener !== "function") {
+      return () => {};
+    }
+
+    highlightedIdentityListeners.add(listener);
+    listener(getHighlightedGraphicIdentity());
+
+    return () => highlightedIdentityListeners.delete(listener);
+  }
+
+  function publishHighlightedIdentity() {
+    const identity = getHighlightedGraphicIdentity();
+
+    if (identity === publishedHighlightedIdentity) {
+      return;
+    }
+
+    publishedHighlightedIdentity = identity;
+    for (const listener of highlightedIdentityListeners) {
+      listener(identity);
+    }
+  }
+
   function destroy() {
     if (destroyed) {
       return;
@@ -227,6 +255,7 @@ export function createHoverManager(view) {
     pointerMoveHandle?.remove?.();
     pointerLeaveHandle?.remove?.();
     clear();
+    highlightedIdentityListeners.clear();
   }
 
   return {
@@ -239,6 +268,7 @@ export function createHoverManager(view) {
     getLockedLayerId,
     getLockedSourceId,
     getHighlightedGraphicIdentity,
+    subscribeHighlightedGraphicIdentity,
     clear,
     destroy,
   };

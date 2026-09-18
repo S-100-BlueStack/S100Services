@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  bindProductKeyboardActivation,
   createProductClickSession,
   getValidUniqueClickCandidates,
   handleProductClick,
+  handleProductKeyboardActivation,
   resolveProductClickDecision,
 } from "./productClickInteraction.js";
 
@@ -283,6 +285,261 @@ test("Shift-click does not invoke direct-selection semantics", async () => {
   assert.equal(interaction.overlaps.length, 1);
 });
 
+test("Ctrl/Cmd+Enter opens exactly the current highlighted Product", () => {
+  for (const modifier of ["ctrlKey", "metaKey"]) {
+    const first = createGraphic("s57", `first-${modifier}`);
+    const highlighted = createGraphic("s101", `highlighted-${modifier}`);
+    const opened = [];
+
+    const decision = handleProductKeyboardActivation({
+      event: createKeyboardEvent({ [modifier]: true }),
+      getInteractiveLayers: () => [first.layer, highlighted.layer],
+      getHighlightedIdentity: () => getIdentity(highlighted),
+      openGraphic: (options) => opened.push(options),
+    });
+
+    assert.equal(decision.reason, "highlighted-keyboard-selection");
+    assert.equal(opened.length, 1);
+    assert.equal(opened[0].graphic, highlighted);
+    assert.equal(opened[0].location, highlighted.geometry.extent.center);
+  }
+});
+
+test("keyboard direct selection does not select an arbitrary Product without a transient highlight", () => {
+  const graphic = createGraphic("s57", "only");
+  const opened = [];
+
+  const decision = handleProductKeyboardActivation({
+    event: createKeyboardEvent({ ctrlKey: true }),
+    getInteractiveLayers: () => [graphic.layer],
+    getHighlightedIdentity: () => null,
+    openGraphic: (options) => opened.push(options),
+  });
+
+  assert.equal(decision.type, "none");
+  assert.deepEqual(opened, []);
+});
+
+test("a popup-locked Product cannot become the keyboard candidate when transient identity is absent", () => {
+  const popupLocked = createGraphic("s57", "locked");
+  const opened = [];
+
+  const decision = handleProductKeyboardActivation({
+    event: createKeyboardEvent({ metaKey: true }),
+    getInteractiveLayers: () => [popupLocked.layer],
+    getHighlightedIdentity: () => null,
+    openGraphic: (options) => opened.push(options),
+  });
+
+  assert.equal(decision.type, "none");
+  assert.equal(opened.length, 0);
+});
+
+test("stale highlighted identity is rejected by keyboard activation", () => {
+  const stale = createGraphic("s57", "stale");
+  const current = createGraphic("s101", "current");
+  const opened = [];
+
+  const decision = handleProductKeyboardActivation({
+    event: createKeyboardEvent({ ctrlKey: true }),
+    getInteractiveLayers: () => [current.layer],
+    getHighlightedIdentity: () => getIdentity(stale),
+    openGraphic: (options) => opened.push(options),
+  });
+
+  assert.equal(decision.type, "none");
+  assert.equal(opened.length, 0);
+});
+
+test("a hidden highlighted Graphic is rejected by keyboard activation", () => {
+  const highlighted = createGraphic("s57", "hidden-keyboard", { visible: false });
+  const opened = [];
+
+  const decision = handleProductKeyboardActivation({
+    event: createKeyboardEvent({ ctrlKey: true }),
+    getInteractiveLayers: () => [highlighted.layer],
+    getHighlightedIdentity: () => getIdentity(highlighted),
+    openGraphic: (options) => opened.push(options),
+  });
+
+  assert.equal(decision.type, "none");
+  assert.equal(opened.length, 0);
+});
+
+test("source or layer removal rejects keyboard activation", () => {
+  const highlighted = createGraphic("s57", "removed-source");
+  const opened = [];
+
+  const decision = handleProductKeyboardActivation({
+    event: createKeyboardEvent({ ctrlKey: true }),
+    getInteractiveLayers: () => [],
+    getHighlightedIdentity: () => getIdentity(highlighted),
+    openGraphic: (options) => opened.push(options),
+  });
+
+  assert.equal(decision.type, "none");
+  assert.equal(opened.length, 0);
+});
+
+test("Graphic removal from a retained layer rejects keyboard activation", () => {
+  const highlighted = createGraphic("s57", "removed-graphic");
+  const opened = [];
+  highlighted.layer._index.delete(highlighted.attributes.featureKey);
+  highlighted.layer.graphics = [];
+
+  const decision = handleProductKeyboardActivation({
+    event: createKeyboardEvent({ ctrlKey: true }),
+    getInteractiveLayers: () => [highlighted.layer],
+    getHighlightedIdentity: () => getIdentity(highlighted),
+    openGraphic: (options) => opened.push(options),
+  });
+
+  assert.equal(decision.type, "none");
+  assert.equal(opened.length, 0);
+});
+
+test("layer replacement never opens the stale Graphic and may resolve the current stable identity", () => {
+  const stale = createGraphic("s57", "replacement");
+  const replacementLayer = createLayer("s57");
+  const replacement = createGraphic("s57", "replacement", { layer: replacementLayer });
+  const opened = [];
+
+  const decision = handleProductKeyboardActivation({
+    event: createKeyboardEvent({ metaKey: true }),
+    getInteractiveLayers: () => [replacementLayer],
+    getHighlightedIdentity: () => getIdentity(stale),
+    openGraphic: (options) => opened.push(options),
+  });
+
+  assert.notEqual(replacement, stale);
+  assert.equal(decision.graphic, replacement);
+  assert.equal(opened[0].graphic, replacement);
+});
+
+test("pointer and keyboard direct activation resolve the same stable current identity", () => {
+  const stale = createGraphic("s57", "shared-path");
+  const replacementLayer = createLayer("s57");
+  const replacement = createGraphic("s57", "shared-path", { layer: replacementLayer });
+  const pointerDecision = resolveProductClickDecision({
+    event: createEvent({ ctrlKey: true }),
+    graphics: [createGraphic("s101", "other"), replacement],
+    highlightedIdentity: getIdentity(stale),
+  });
+  const opened = [];
+  const keyboardDecision = handleProductKeyboardActivation({
+    event: createKeyboardEvent({ ctrlKey: true }),
+    getInteractiveLayers: () => [replacementLayer],
+    getHighlightedIdentity: () => getIdentity(stale),
+    openGraphic: (options) => opened.push(options),
+  });
+
+  assert.equal(pointerDecision.graphic, replacement);
+  assert.equal(keyboardDecision.graphic, replacement);
+  assert.equal(opened[0].graphic, replacement);
+});
+
+test("superseded or destroyed interaction generations cannot publish keyboard activation", () => {
+  for (const retire of ["supersede", "destroy"]) {
+    const session = createProductClickSession();
+    const graphic = createGraphic("s57", retire);
+    const isCurrent = session.begin();
+    const opened = [];
+
+    if (retire === "supersede") {
+      session.begin();
+    } else {
+      session.destroy();
+    }
+
+    const decision = handleProductKeyboardActivation({
+      event: createKeyboardEvent({ ctrlKey: true }),
+      getInteractiveLayers: () => [graphic.layer],
+      getHighlightedIdentity: () => getIdentity(graphic),
+      openGraphic: (options) => opened.push(options),
+      isCurrent,
+    });
+
+    assert.equal(decision.type, "none");
+    assert.equal(opened.length, 0);
+  }
+});
+
+test("keyboard activation supersedes an older in-flight pointer click through the shared session", async () => {
+  const session = createProductClickSession();
+  const pointerHit = createDeferred();
+  const pointerInteraction = createInteraction({
+    graphics: [createGraphic("s57", "pointer-old")],
+    hitTestPromise: pointerHit.promise,
+    isCurrent: session.begin(),
+  });
+  const pendingPointer = handleProductClick(pointerInteraction.options);
+  const keyboardGraphic = createGraphic("s101", "keyboard-new");
+  const keyboardOpened = [];
+
+  const keyboardDecision = handleProductKeyboardActivation({
+    event: createKeyboardEvent({ metaKey: true }),
+    getInteractiveLayers: () => [keyboardGraphic.layer],
+    getHighlightedIdentity: () => getIdentity(keyboardGraphic),
+    openGraphic: (options) => keyboardOpened.push(options),
+    isCurrent: session.begin(),
+  });
+  pointerHit.resolve({ results: pointerInteraction.results });
+
+  assert.equal(keyboardDecision.type, "graphic");
+  assert.equal(keyboardOpened[0].graphic, keyboardGraphic);
+  assert.equal((await pendingPointer).type, "stale");
+  assert.equal(pointerInteraction.opened.length, 0);
+});
+
+test("keyboard binding is map-scoped, ignores repeat, and stops only handled activation", () => {
+  const graphic = createGraphic("s57", "keyboard-binding");
+  const view = createKeyboardView();
+  const session = createProductClickSession();
+  const opened = [];
+  let beginCount = 0;
+  const cleanup = bindProductKeyboardActivation({
+    view,
+    beginInteraction: () => {
+      beginCount += 1;
+      return session.begin();
+    },
+    getInteractiveLayers: () => [graphic.layer],
+    getHighlightedIdentity: () => getIdentity(graphic),
+    openGraphic: (options) => opened.push(options),
+  });
+
+  const plainEnter = createKeyboardEvent();
+  view.emit("key-down", plainEnter);
+  const repeated = createKeyboardEvent({ ctrlKey: true, repeat: true });
+  view.emit("key-down", repeated);
+  const handled = createKeyboardEvent({ ctrlKey: true });
+  view.emit("key-down", handled);
+
+  assert.equal(beginCount, 1);
+  assert.equal(opened.length, 1);
+  assert.equal(plainEnter.propagationStopped, false);
+  assert.equal(repeated.propagationStopped, false);
+  assert.equal(handled.propagationStopped, true);
+
+  cleanup();
+  view.emit("key-down", createKeyboardEvent({ ctrlKey: true }));
+  assert.equal(opened.length, 1);
+});
+
+test("Shift+Ctrl/Cmd+Enter does not invoke direct keyboard activation", () => {
+  const graphic = createGraphic("s57", "shift-keyboard");
+  const opened = [];
+  const decision = handleProductKeyboardActivation({
+    event: createKeyboardEvent({ ctrlKey: true, shiftKey: true }),
+    getInteractiveLayers: () => [graphic.layer],
+    getHighlightedIdentity: () => getIdentity(graphic),
+    openGraphic: (options) => opened.push(options),
+  });
+
+  assert.equal(decision.type, "ignored");
+  assert.equal(opened.length, 0);
+});
+
 test("overlap-picker selection uses the same normal Product popup callback", async () => {
   const selected = createGraphic("s101", "B");
   const interaction = createInteraction({
@@ -365,6 +622,12 @@ function createGraphic(
       featureKey,
       productIdentityKey: featureKey,
     },
+    geometry: {
+      type: "polygon",
+      extent: {
+        center: { x: productKey.length, y: sourceId.length },
+      },
+    },
     layer,
   };
 
@@ -396,6 +659,46 @@ function createEvent(modifiers = {}) {
       metaKey: false,
       shiftKey: false,
       ...modifiers,
+    },
+  };
+}
+
+function createKeyboardEvent({
+  key = "Enter",
+  repeat = false,
+  ctrlKey = false,
+  metaKey = false,
+  shiftKey = false,
+} = {}) {
+  return {
+    key,
+    repeat,
+    propagationStopped: false,
+    native: {
+      ctrlKey,
+      metaKey,
+      shiftKey,
+    },
+    stopPropagation() {
+      this.propagationStopped = true;
+    },
+  };
+}
+
+function createKeyboardView() {
+  const handlers = new Map();
+
+  return {
+    on(type, handler) {
+      handlers.set(type, handler);
+      return {
+        remove() {
+          handlers.delete(type);
+        },
+      };
+    },
+    emit(type, event) {
+      handlers.get(type)?.(event);
     },
   };
 }

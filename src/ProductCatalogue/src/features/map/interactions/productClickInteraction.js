@@ -79,11 +79,83 @@ export async function handleProductClick({
   return decision;
 }
 
-export function resolveProductClickDecision({ event, graphics, highlightedIdentity }) {
-  if (isDirectSelectionModifier(event) && highlightedIdentity) {
-    const highlightedGraphic = graphics.find((graphic) => {
-      return getGraphicInteractionIdentity(graphic) === highlightedIdentity;
+export function bindProductKeyboardActivation({
+  view,
+  beginInteraction,
+  getInteractiveLayers,
+  getHighlightedIdentity,
+  openGraphic,
+}) {
+  const keyDownHandle = view.on("key-down", (event) => {
+    if (!isDirectSelectionKeyboardShortcut(event) || event.repeat === true) {
+      return;
+    }
+
+    const isCurrent = beginInteraction();
+    const decision = handleProductKeyboardActivation({
+      event,
+      getInteractiveLayers,
+      getHighlightedIdentity,
+      openGraphic,
+      isCurrent,
     });
+
+    if (decision.type === "graphic") {
+      // The map owns this shortcut. Stop ArcGIS from also interpreting the
+      // handled key without suppressing unrelated keyboard interaction.
+      event.stopPropagation?.();
+    }
+  });
+
+  return () => keyDownHandle.remove?.();
+}
+
+export function handleProductKeyboardActivation({
+  event,
+  getInteractiveLayers,
+  getHighlightedIdentity,
+  openGraphic,
+  isCurrent = () => true,
+}) {
+  if (!isDirectSelectionKeyboardShortcut(event) || event.repeat === true) {
+    return { type: "ignored" };
+  }
+
+  const highlightedIdentity = getHighlightedIdentity?.();
+
+  if (!highlightedIdentity || !isCurrent()) {
+    return { type: "none" };
+  }
+
+  const currentInteractiveLayers = getInteractiveLayers();
+  const graphics = getCurrentInteractiveLayerCandidates(currentInteractiveLayers);
+  const graphic = resolveHighlightedDirectSelection(graphics, highlightedIdentity);
+
+  if (!graphic) {
+    return { type: "none" };
+  }
+
+  if (!isCurrent()) {
+    return { type: "stale" };
+  }
+
+  const location = getGraphicPopupLocation(graphic);
+
+  if (!location) {
+    return { type: "none" };
+  }
+
+  openGraphic({ graphic, location });
+  return {
+    type: "graphic",
+    graphic,
+    reason: "highlighted-keyboard-selection",
+  };
+}
+
+export function resolveProductClickDecision({ event, graphics, highlightedIdentity }) {
+  if (isDirectSelectionModifier(event)) {
+    const highlightedGraphic = resolveHighlightedDirectSelection(graphics, highlightedIdentity);
 
     if (highlightedGraphic) {
       return {
@@ -113,6 +185,17 @@ export function resolveProductClickDecision({ event, graphics, highlightedIdenti
   };
 }
 
+export function resolveHighlightedDirectSelection(graphics, highlightedIdentity) {
+  if (!highlightedIdentity) {
+    return null;
+  }
+
+  return (
+    graphics.find((graphic) => getGraphicInteractionIdentity(graphic) === highlightedIdentity) ??
+    null
+  );
+}
+
 export function isDirectSelectionModifier(event) {
   const nativeEvent = event?.native;
 
@@ -121,6 +204,10 @@ export function isDirectSelectionModifier(event) {
   }
 
   return nativeEvent.ctrlKey === true || nativeEvent.metaKey === true;
+}
+
+export function isDirectSelectionKeyboardShortcut(event) {
+  return event?.key === "Enter" && isDirectSelectionModifier(event);
 }
 
 export function getValidUniqueClickCandidates(results, { currentInteractiveLayers } = {}) {
@@ -154,14 +241,26 @@ export function getValidUniqueClickCandidates(results, { currentInteractiveLayer
   return graphics;
 }
 
+export function getCurrentInteractiveLayerCandidates(currentInteractiveLayers = []) {
+  const results = [];
+
+  for (const layer of currentInteractiveLayers) {
+    for (const graphic of getLayerGraphics(layer)) {
+      results.push({ graphic });
+    }
+  }
+
+  return getValidUniqueClickCandidates(results, { currentInteractiveLayers });
+}
+
 export function createProductClickSession() {
   let generation = 0;
   let active = true;
 
   return {
     begin() {
-      const clickGeneration = ++generation;
-      return () => active && clickGeneration === generation;
+      const interactionGeneration = ++generation;
+      return () => active && interactionGeneration === generation;
     },
     destroy() {
       if (!active) {
@@ -204,4 +303,27 @@ function isCurrentLayerGraphic(layer, graphic) {
 
   const graphicsArray = layerGraphics?.toArray?.();
   return Array.isArray(graphicsArray) && graphicsArray.includes(graphic);
+}
+
+function getLayerGraphics(layer) {
+  const layerGraphics = layer?.graphics;
+
+  if (Array.isArray(layerGraphics)) {
+    return layerGraphics;
+  }
+
+  const graphicsArray = layerGraphics?.toArray?.();
+  return Array.isArray(graphicsArray) ? graphicsArray : [];
+}
+
+function getGraphicPopupLocation(graphic) {
+  const geometry = graphic?.geometry;
+
+  if (!geometry) {
+    return null;
+  }
+
+  // Prefer extent.center so polygon activation does not rely on the deprecated
+  // geometry.centroid property in newer ArcGIS SDK versions.
+  return geometry.extent?.center ?? geometry;
 }

@@ -63,13 +63,13 @@ This metadata is intentional. Popup rendering, filters, refresh restore, hover s
 lifecycle, and future multi-source workflows require stable frontend identity even when backend
 payload shapes differ.
 
-## Overlap and modifier-click interaction
+## Overlap and direct Product selection
 
 Normal map click uses the current interactive-layer hit test. Zero candidates close the popup, one
 candidate opens its normal Product popup, and multiple candidates open the existing overlap picker.
 The picker retains its established ordering and opens its selection through that same popup path.
 
-FI-021 adds a pointer-only shortcut without changing the normal workflow:
+FI-021 keeps its accepted pointer shortcut unchanged:
 
 - Ctrl-click on Windows/Linux and Cmd-click on macOS snapshots the current transient hover Product;
 - the snapshot is a stable source-aware Product/Graphic identity, not a layer or source preference;
@@ -85,12 +85,38 @@ result cannot retroactively become that click's direct-selection target.
 
 After the click hit test completes, its Graphics are also checked against the current
 overlap-enabled layer set and the layer's current stable `featureKey` index or public graphics
-collection. A click-session generation prevents older clicks and destroyed interactions from
+collection. The shared interaction generation prevents older clicks and destroyed interactions from
 publishing popup state.
 
-FI-021 does not remove or satisfy the original keyboard-equivalent activation and visible shortcut
-discoverability requirements. They are deferred to FI-040. Until then, normal click and the overlap
-picker remain the complete non-shortcut workflow, and existing keyboard/focus behavior is preserved.
+FI-040 adds the keyboard equivalent through the public MapView `key-down` event:
+
+- Ctrl+Enter on Windows/Linux and Cmd+Enter on macOS acts only while the map interaction surface has
+  keyboard focus and a transient highlighted Product identity exists;
+- modifier state comes from that actual keyboard event, and repeated keydown events are ignored;
+- the current interactive layers and their current public Graphic collections are re-read at
+  activation time, then filtered through the same current-layer/Graphic-membership validation used
+  by pointer selection;
+- pointer and keyboard direct selection use the same stable-identity resolver and the same normal
+  Product popup callback; no pointer click is synthesized and no second popup workflow exists;
+- a stale Graphic object is never opened after source/layer/Graphic replacement. A current
+  replacement Graphic with the same stable Product identity remains eligible, matching FI-021;
+- the same interaction generation is shared by click and keyboard activation, so either interaction
+  supersedes older in-flight click work and teardown invalidates both paths;
+- missing, popup-locked, hidden, removed, disabled, stale, or otherwise invalid transient identity
+  fails closed and does not choose another Product.
+
+A compact application-owned hint is added through the public MapView UI only while a transient hover
+candidate exists:
+
+```text
+Ctrl/Cmd-click or Ctrl/Cmd+Enter to open highlighted Product
+```
+
+The hint is a non-interactive accessible note with matching native title/help text. It is removed
+with the overlap-interaction lifecycle and disappears when transient highlight ownership is cleared,
+including popup locking, pointer leave, source/layer cleanup, and teardown. It does not claim
+`aria-keyshortcuts` because the hint itself is not the keyboard owner. Normal click and the overlap
+picker remain the complete non-shortcut workflow.
 
 ## Product action safety
 
