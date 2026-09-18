@@ -1,5 +1,6 @@
 import { createProductPickerForm } from "../../products/ui/productPicker.js";
 import {
+  getReviewContentTypeAggregateState,
   getReviewContentTypeDefinitions,
   isReviewContentTypeEnabled,
 } from "../domain/reviewProductList.js";
@@ -12,10 +13,56 @@ export function createReviewSidebar({ productItems, loading, productCatalog }) {
 
   sidebar.append(
     createProductAddForm(productCatalog, productItems),
+    createWorkspaceContentControls(productItems),
     createProductList(productItems, loading)
   );
 
   return sidebar;
+}
+
+function createWorkspaceContentControls(productItems) {
+  const section = document.createElement("fieldset");
+  section.className = "pc-review-workspace-content";
+
+  const legend = document.createElement("legend");
+  legend.className = "pc-review-workspace-content__title";
+  legend.textContent = "Content";
+  section.appendChild(legend);
+
+  const controls = document.createElement("div");
+  controls.className = "pc-review-workspace-content__controls";
+
+  for (const definition of getReviewContentTypeDefinitions()) {
+    controls.appendChild(createWorkspaceContentToggle(productItems, definition));
+  }
+
+  section.appendChild(controls);
+  return section;
+}
+
+function createWorkspaceContentToggle(productItems, definition) {
+  const aggregateState = getReviewContentTypeAggregateState(productItems, definition.id);
+  const label = document.createElement("label");
+  label.className = "pc-review-workspace-content__toggle";
+  label.title = `Toggle ${definition.label} for all Review Products.`;
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = aggregateState === "all-enabled";
+  checkbox.indeterminate = aggregateState === "mixed";
+  checkbox.disabled = aggregateState === "empty";
+  checkbox.dataset.reviewWorkspaceContentType = definition.id;
+  checkbox.setAttribute("aria-label", `${definition.label} for all Review Products`);
+
+  const text = document.createElement("span");
+  text.textContent = definition.shortLabel;
+
+  checkbox.addEventListener("change", () => {
+    dispatchReviewWorkspaceContentToggle(label, definition.id, checkbox.checked);
+  });
+
+  label.append(checkbox, text);
+  return label;
 }
 
 function createWorkspaceRefreshButton(productItems, loading) {
@@ -215,6 +262,18 @@ function dispatchReviewContentToggle(target, id, contentType, enabled) {
       bubbles: true,
       detail: {
         id,
+        contentType,
+        enabled,
+      },
+    })
+  );
+}
+
+function dispatchReviewWorkspaceContentToggle(target, contentType, enabled) {
+  target.dispatchEvent(
+    new CustomEvent("pc-review-content-bulk-toggle", {
+      bubbles: true,
+      detail: {
         contentType,
         enabled,
       },

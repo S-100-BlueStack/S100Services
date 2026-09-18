@@ -5,7 +5,7 @@ Product Review is a workspace for comparing product-specific data that does not 
 It currently supports:
 
 - Multiple products in one Review page
-- Per-product content toggles
+- Workspace and per-product content toggles
 - Product History cards
 - Placeholder cards for IC-ENC reports
 - Public validation diagnostic downloads for supported electronic Products
@@ -85,6 +85,25 @@ The current frontend content types are:
 3. Internal validation reports
 
 The ordering is fixed so product columns remain comparable even when individual products have different content toggles enabled.
+
+## FI-038 content defaults and workspace controls
+
+New Review Product state enables History, IC-ENC, and Internal validation by default. The compact
+`Content` controls apply one content type at a time to every composed Product and expose native checked,
+unchecked, or indeterminate state from the current per-Product selections. The controls are disabled
+when the Review composition is empty.
+
+Each content type also has a session-local workspace intent. It starts enabled and changes only when
+the corresponding workspace control is used. A subsequently added Product inherits those three current
+intent values; an individual Product override does not change them. Product visibility remains a
+separate state and is never inferred from content selection.
+
+Manual Refresh, FI-022 targeted freshness, and content payload replacement retain Product selection
+and workspace intent. Adding or removing Products preserves surviving Product selections; only new
+Products are initialized from workspace intent. Authoritative route/composition replacement starts a
+new Review state and resets the intent to the all-enabled default. Bulk rerenders retain the Product-list
+scroll offset and return focus to the initiating workspace control without delayed restoration or
+`scrollIntoView()`.
 
 ## FI-037 content layout and states
 

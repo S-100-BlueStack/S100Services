@@ -10,12 +10,15 @@ import {
 import { hideLoader } from "../../../shared/ui/loader.js";
 import {
   addReviewProductItem,
+  createReviewWorkspaceContentIntent,
   createReviewProductItems,
   getEnabledReviewDatasetNames,
   normalizeReviewProductItems,
   removeReviewProductItem,
   toggleReviewProductContentType,
+  toggleAllReviewProductContentTypes,
   toggleReviewProductItem,
+  updateReviewWorkspaceContentIntent,
 } from "../domain/reviewProductList.js";
 import { loadReviewHistories } from "../services/reviewHistoryLoader.js";
 import {
@@ -25,9 +28,11 @@ import {
 } from "../routing/reviewRoute.js";
 import { renderReviewPage } from "../ui/reviewPage.js";
 import { captureReviewProductListInteraction } from "../ui/reviewProductListInteraction.js";
+import { captureReviewWorkspaceContentInteraction } from "../ui/reviewWorkspaceContentInteraction.js";
 
 export async function initReviewPage({ datasetNames } = {}) {
   let productItems = createReviewProductItems(datasetNames);
+  let workspaceContentIntent = createReviewWorkspaceContentIntent();
   let currentProducts = [];
   let productCatalog = createProductCatalogState();
   let loadRequestId = 0;
@@ -45,7 +50,10 @@ export async function initReviewPage({ datasetNames } = {}) {
   document.body.classList.add("pc-review-route");
   document.title = createReviewDocumentTitle(enabledDatasetNames);
 
-  const renderCurrentReviewPage = ({ productListInteraction = null } = {}) => {
+  const renderCurrentReviewPage = ({
+    productListInteraction = null,
+    workspaceContentInteraction = null,
+  } = {}) => {
     renderReviewPage({
       productItems,
       products: currentProducts,
@@ -53,6 +61,7 @@ export async function initReviewPage({ datasetNames } = {}) {
       error: reviewError,
       productCatalog,
       productListInteraction,
+      workspaceContentInteraction,
     });
   };
 
@@ -171,7 +180,9 @@ export async function initReviewPage({ datasetNames } = {}) {
     let nextProductItems = productItems;
 
     for (const datasetName of validation.valid) {
-      nextProductItems = addReviewProductItem(nextProductItems, datasetName);
+      nextProductItems = addReviewProductItem(nextProductItems, datasetName, {
+        contentTypeIntent: workspaceContentIntent,
+      });
     }
 
     await loadReviewProductItems(nextProductItems, {
@@ -180,6 +191,7 @@ export async function initReviewPage({ datasetNames } = {}) {
   };
 
   const replaceDatasetNamesInReview = async (nextDatasetNames, { updateUrl = true } = {}) => {
+    workspaceContentIntent = createReviewWorkspaceContentIntent();
     await loadReviewProductItems(createReviewProductItems(nextDatasetNames), {
       updateUrl,
     });
@@ -289,6 +301,27 @@ export async function initReviewPage({ datasetNames } = {}) {
     renderCurrentReviewPage({ productListInteraction });
   };
 
+  const handleWorkspaceContentToggle = (event) => {
+    const contentType = event.detail?.contentType;
+
+    if (!contentType) {
+      return;
+    }
+
+    const workspaceContentInteraction = captureReviewWorkspaceContentInteraction();
+    workspaceContentIntent = updateReviewWorkspaceContentIntent(
+      workspaceContentIntent,
+      contentType,
+      event.detail?.enabled
+    );
+    productItems = toggleAllReviewProductContentTypes(
+      productItems,
+      contentType,
+      event.detail?.enabled
+    );
+    renderCurrentReviewPage({ workspaceContentInteraction });
+  };
+
   const handleReviewRefresh = async () => {
     await loadReviewProductItems(productItems, { updateUrl: false });
   };
@@ -313,6 +346,7 @@ export async function initReviewPage({ datasetNames } = {}) {
   document.addEventListener("pc-review-product-add", handleProductAdd);
   document.addEventListener("pc-review-product-toggle", handleProductToggle);
   document.addEventListener("pc-review-content-toggle", handleContentToggle);
+  document.addEventListener("pc-review-content-bulk-toggle", handleWorkspaceContentToggle);
   document.addEventListener("pc-review-product-remove", handleProductRemove);
   document.addEventListener("pc-review-refresh", handleReviewRefresh);
 
@@ -344,6 +378,7 @@ export async function initReviewPage({ datasetNames } = {}) {
       document.removeEventListener("pc-review-product-add", handleProductAdd);
       document.removeEventListener("pc-review-product-toggle", handleProductToggle);
       document.removeEventListener("pc-review-content-toggle", handleContentToggle);
+      document.removeEventListener("pc-review-content-bulk-toggle", handleWorkspaceContentToggle);
       document.removeEventListener("pc-review-product-remove", handleProductRemove);
       document.removeEventListener("pc-review-refresh", handleReviewRefresh);
       window.removeEventListener("popstate", handlePopState);

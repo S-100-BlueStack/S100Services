@@ -122,3 +122,25 @@ test("Review content toggles use the bounded Product-list snapshot", async () =>
     /restoreReviewProductListInteraction\(productListInteraction, \{ page \}\);/
   );
 });
+
+test("Review workspace content controls use native aggregate checkbox state", async () => {
+  const [sidebarSource, coreSource, pageSource] = await Promise.all([
+    readFile(new URL("reviewSidebar.js", reviewUiDirectory), "utf8"),
+    readFile(
+      new URL("src/features/review/core/initReviewPage.js", productCatalogueDirectory),
+      "utf8"
+    ),
+    readFile(new URL("reviewPage.js", reviewUiDirectory), "utf8"),
+  ]);
+
+  assert.match(sidebarSource, /legend\.textContent = "Content";/);
+  assert.match(sidebarSource, /checkbox\.checked = aggregateState === "all-enabled";/);
+  assert.match(sidebarSource, /checkbox\.indeterminate = aggregateState === "mixed";/);
+  assert.match(sidebarSource, /checkbox\.disabled = aggregateState === "empty";/);
+  assert.match(sidebarSource, /checkbox\.dataset\.reviewWorkspaceContentType = definition\.id;/);
+  assert.match(sidebarSource, /`\$\{definition\.label\} for all Review Products`/);
+  assert.match(sidebarSource, /new CustomEvent\("pc-review-content-bulk-toggle"/);
+  assert.match(coreSource, /captureReviewWorkspaceContentInteraction\(\)/);
+  assert.match(pageSource, /restoreReviewWorkspaceContentInteraction/);
+  assert.doesNotMatch(coreSource, /scrollIntoView/);
+});
