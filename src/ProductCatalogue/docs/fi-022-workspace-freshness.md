@@ -76,7 +76,7 @@ FI-022 adds no npm or NuGet dependency and no database migration. It reuses the 
 
 ## FI-039 incremental Review reconciliation
 
-Status: **Implemented; manual verification pending**.
+Status: **Done**. FI-039 manually accepted at `1a77af904ec1a41726bcec357b72610c74e793ca`.
 
 Review composition edits now retain surviving Product payloads and pending requests under one
 `createReviewProductSession` generation owner. Additions seed only their own revisions through
@@ -99,6 +99,8 @@ from crossing remove/re-add membership boundaries or acknowledging replacement m
 normal current-composition check retries as needed. Additional Product priming remains independently owned,
 so unrelated new-Product primes are not cancelled. No additional timer, Review data-generation owner or
 backend endpoint is introduced.
+
+FI-039 was manually accepted on 2026-09-18 at `1a77af904ec1a41726bcec357b72610c74e793ca`. The merged commit is the authoritative post-FI-039 source because it also contains colleague changes.
 
 See [FI-039 implementation and verification](fi-039-incremental-review.md) for generation boundaries,
 source-aware identity, independent failure behavior, regression counts and the manual checklist.

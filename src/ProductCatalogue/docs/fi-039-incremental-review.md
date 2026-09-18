@@ -1,11 +1,12 @@
 # FI-039 — Incremental Review Product loading and reconciliation
 
-Status: **Implemented; manual verification pending**.
+Status: **Done**.  
+Accepted commit: `1a77af904ec1a41726bcec357b72610c74e793ca`.
 
 ## Authoritative input
 
-Baseline: `1033721e4c6300bb92dd66a96dc072fda04fb152`.
-No commit was created. V3 uses the verified v2 candidate as controlled input:
+Implementation baseline: `1033721e4c6300bb92dd66a96dc072fda04fb152`.
+The accepted V3 implementation is present in merged repository commit `1a77af904ec1a41726bcec357b72610c74e793ca`. That commit also contains colleague changes and is the authoritative post-FI-039 baseline. V3 used the verified v2 candidate as controlled input:
 `75A57343D28CFF056D1137C43E7DC1E7690C0D3E2D2FBFC038AA3ACB5CB448FB`.
 The v1 implementation input remains:
 `A8C86171B1C9073F2B630BF691440AECDBD5AE39BA5B140FAB08B6FCB205A01C`.
@@ -160,7 +161,7 @@ full check and manual verification remain authoritative.
 9. Repeat relevant interactions in light/dark mode and a narrow viewport; open a direct canonical Review
    URL and reload it. Run local formatting and `npm run check` before accepting/committing.
 
-## Remaining uncertainty and delivery
+## Pre-acceptance uncertainty and delivery
 
 Live DOM/layout, real backend timing, downloads and deployment behavior still require the checklist.
 Tests use real session/domain/freshness/loader code with controlled I/O; page event tests substitute
@@ -178,7 +179,7 @@ fix(review): guard freshness observations across composition changes (FI-039)
 
 ## V2 correction: atomic freshness eligibility acknowledgement
 
-Status remains **Implemented; manual verification pending**.
+At this correction stage the status remained **Implemented; manual verification pending**.
 
 A targeted refresh now requires its selected records to represent every distinct normalized name in
 the requested changed set. Otherwise it returns false before starting any Product loads. After the
@@ -220,7 +221,7 @@ freshness request and confirm B updates after re-enable without unrelated Produc
 
 ## V3 correction: freshness observation membership ownership
 
-Status remains **Implemented; manual verification pending**.
+At this correction stage the status remained **Implemented; manual verification pending**.
 
 `workspaceFreshnessMonitor` now has a composition-observation epoch that is deliberately separate from
 `lifecycleGeneration`. Each `check()` captures the current epoch. `retain()` increments it whenever the
@@ -247,3 +248,9 @@ Correction-focused verification in this delivery passed **16 tests, 0 failures**
 0 failed** remains the controlled-input verification record; the full repository suite was not rerun in
 this changed-files-only environment. `node --check` passed on every JavaScript file included in the v3
 ZIP. No dependency, package manifest, lockfile, polling cadence, backend endpoint or UI behavior changed.
+
+## Final manual acceptance
+
+FI-039 was manually accepted on 2026-09-18 and committed at `1a77af904ec1a41726bcec357b72610c74e793ca`. Acceptance followed the incremental Review browser checklist: existing Product content remains stable while adding new Products, removing a Product does not reload survivors, ordinary disable/re-enable reuses retained payload where valid, and the icon-only manual Refresh remains the explicit full enabled-composition reload. The automated deferred-promise coverage remains authoritative for timing-sensitive stale-publication races that are not practical to reproduce deterministically in a browser, including disable during freshness and old FI-022 observations spanning remove/re-add membership boundaries.
+
+The local frontend check passed and formatting was run before commit. Because the accepted commit also includes colleague merge changes, future implementation context must use the merged commit itself rather than reconstructing repository state from the FI-039 candidate ZIP.
