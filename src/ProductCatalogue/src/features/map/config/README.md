@@ -118,6 +118,8 @@ including popup locking, pointer leave, source/layer cleanup, and teardown. It d
 `aria-keyshortcuts` because the hint itself is not the keyboard owner. Normal click and the overlap
 picker remain the complete non-shortcut workflow.
 
+FI-040 was manually accepted on 2026-09-18 at `33f0089810b1ba8c8a053727e8828f5b519e66c9`. The accepted browser behavior preserves the normal overlap picker and FI-021 pointer shortcut while adding the map-focused keyboard accelerator and contextual discoverability cue described above.
+
 ## Product action safety
 
 Product mutation actions must only be shown for Products whose resolved Product context declares the
