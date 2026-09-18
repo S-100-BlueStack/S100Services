@@ -30,7 +30,7 @@ export function createReviewBoard({ productItems, enabledDatasetNames, products,
     );
     return board;
   }
-  if (loading) {
+  if (loading && products.every((product) => product.loadState === "loading")) {
     board.appendChild(createLoadingState(enabledDatasetNames));
     return board;
   }
@@ -95,6 +95,13 @@ function createProductReviewColumn(productItem, product) {
 
   const content = document.createElement("div");
   content.className = "pc-review-column__content pc-scrollbar";
+
+  if (product.loadState === "loading") {
+    column.setAttribute("aria-busy", "true");
+    content.appendChild(createLoadingState([productItem.datasetName]));
+    column.append(header, content);
+    return column;
+  }
 
   for (const contentType of getEnabledReviewContentTypes(productItem)) {
     content.appendChild(createReviewContentCard(product, contentType));

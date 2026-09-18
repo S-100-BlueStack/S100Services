@@ -49,7 +49,9 @@ Analyze and Review create a route-local freshness monitor with these rules:
 - changed Products are refreshed without replacing unaffected Product content;
 - the monitor commits a changed revision only after the corresponding refresh publishes successfully, so a transient refresh failure is retried later;
 - if the initial revision snapshot fails, the first recovered freshness observation refreshes the affected workspace Products before accepting a new baseline;
-- route/Product-composition changes prime a new revision baseline and supersede stale checks;
+- full route/manual loads prime a new revision baseline and supersede stale checks; Review composition edits preserve surviving baselines and prime only newly loaded Products;
+- each Review freshness observation captures the current composition-retention epoch; `retain()` advances that epoch, so an observation started before an add/remove/enable/disable boundary is discarded before it can call `onChanged` or update revision bookkeeping;
+- additional Product priming keeps its existing per-Product ownership and is not invalidated merely because another Product is added;
 - destroying the workspace invalidates late freshness responses.
 
 Analyze retains its current map layers during automatic content refresh. Its Product cards, Product History, validation artifacts and metadata are replaced for changed Products only. The normal route/manual load path remains responsible for AOI/layer reconstruction and map zoom behavior.
@@ -72,15 +74,31 @@ Unsupported Product sources remain fail-closed through `Available=false`; the fr
 
 FI-022 adds no npm or NuGet dependency and no database migration. It reuses the normalized Product workflow tables and the existing BE-108A audit table.
 
-## Deferred follow-up: incremental Review composition loading
+## FI-039 incremental Review reconciliation
 
-Review currently treats Product-list composition changes as full workspace loads. Adding, enabling, disabling, or removing a Product calls the shared Review load path, clears the currently rendered Product payloads, and reloads every enabled Product through `loadReviewHistories()`. Because each Product load resolves the Product and independently requests Product History and validation artifacts, sequentially adding Products produces cumulative request work: one Product load, then two, then three, and so on.
+Status: **Implemented; manual verification pending**.
 
-This behavior predates FI-022 and is separate from the lightweight freshness polling contract. It should be corrected in a focused Review performance task rather than by weakening the FI-022 freshness behavior. The follow-up should:
+Review composition edits now retain surviving Product payloads and pending requests under one
+`createReviewProductSession` generation owner. Additions seed only their own revisions through
+`primeAdditional` before loading. This leaves changed-revision detection for surviving Products intact.
+`retain` removes revision bookkeeping for removed Products without a network request. Disabled retained
+Products keep their last revision baseline; they are not polled until enabled again. Additional-prime
+failure recovery is scoped to the affected Products. Analyze retains the default enabled-name behavior.
 
-- load only newly added or newly enabled Products when existing Product payloads remain valid;
-- remove disabled/removed Product payloads without reloading unaffected Products;
-- preserve Product order and user-selected Review content toggles;
-- retain source-aware Product resolution and existing independent History/artifact failure behavior;
-- preserve generation/stale-result protection when composition changes rapidly;
-- keep an explicit full reload path for manual Refresh and route replacement where appropriate.
+Full Review initial/route/manual loads still use `prime`. Automatic refresh uses the same Review session
+owner as composition changes, reloads only changed Products, and acknowledges only owned results.
+A Product already loading declines freshness publication for retry instead of starting duplicate work.
+The acknowledgement is atomic for the entire requested changed set. If any requested Product is no
+longer enabled/present, Review declines the whole observation before starting Product loads. It also
+rechecks eligibility and record ownership before acknowledging completed work. Disabled Products keep
+their previous revision baseline/recovery obligation, so enabling them allows a later normal check to
+retry. Removed Products lose their revision bookkeeping through `retain`. Review `retain()` also advances
+a composition-observation epoch: a freshness response captured before an add/remove/enable/disable edit
+is discarded before `onChanged` and before any revision baseline update. This prevents old observations
+from crossing remove/re-add membership boundaries or acknowledging replacement membership state. The next
+normal current-composition check retries as needed. Additional Product priming remains independently owned,
+so unrelated new-Product primes are not cancelled. No additional timer, Review data-generation owner or
+backend endpoint is introduced.
+
+See [FI-039 implementation and verification](fi-039-incremental-review.md) for generation boundaries,
+source-aware identity, independent failure behavior, regression counts and the manual checklist.

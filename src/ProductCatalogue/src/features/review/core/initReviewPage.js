@@ -1,3 +1,4 @@
+import { createReviewProductSession } from "./reviewProductSession.js";
 import { loadStatuses } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { fetchProductCatalog } from "../../products/api/productCatalogApi.js";
@@ -35,15 +36,13 @@ export async function initReviewPage({ datasetNames } = {}) {
   let workspaceContentIntent = createReviewWorkspaceContentIntent();
   let currentProducts = [];
   let productCatalog = createProductCatalogState();
-  let loadRequestId = 0;
   let productCatalogRequestId = 0;
-  let lookupsLoaded = false;
+  let lookupsPromise = null;
   let isLoadingReviewProducts = false;
-  let reviewError = null;
   let freshnessMonitor = null;
   let unsubscribeFromProductOperationState = null;
-  let activeWorkspaceLoadRequestId = null;
-  let targetedRefreshRequestId = 0;
+  let disposed = false;
+  let hasLoadedComposition = false;
 
   const enabledDatasetNames = getEnabledReviewDatasetNames(productItems);
 
@@ -58,7 +57,6 @@ export async function initReviewPage({ datasetNames } = {}) {
       productItems,
       products: currentProducts,
       loading: isLoadingReviewProducts,
-      error: reviewError,
       productCatalog,
       productListInteraction,
       workspaceContentInteraction,
@@ -91,73 +89,44 @@ export async function initReviewPage({ datasetNames } = {}) {
     renderCurrentReviewPage();
   };
 
-  const loadReviewProductItems = async (nextProductItems, { updateUrl = true } = {}) => {
-    const requestId = ++loadRequestId;
-    activeWorkspaceLoadRequestId = requestId;
+  const productSession = createReviewProductSession({
+    loadProduct: async (datasetName) => {
+      const [product] = await loadReviewHistories([datasetName]);
+      return product;
+    },
+    prepare: async (datasetNames, { full }) => {
+      await Promise.all([
+        ensureLookupsLoaded(),
+        full
+          ? freshnessMonitor?.prime(datasetNames)
+          : freshnessMonitor?.primeAdditional(datasetNames),
+      ]);
+    },
+    onChange: ({ products, loading }) => {
+      currentProducts = products;
+      isLoadingReviewProducts = loading;
+      renderCurrentReviewPage();
+    },
+  });
+
+  const loadReviewProductItems = async (
+    nextProductItems,
+    { updateUrl = true, full = false } = {}
+  ) => {
+    if (disposed) return;
     const validatedProductItems = validateReviewProductItems(nextProductItems);
     productItems = validatedProductItems.items;
     notifyRejectedCatalogProducts(validatedProductItems);
     const enabledNextDatasetNames = getEnabledReviewDatasetNames(productItems);
 
-    if (updateUrl) {
-      setReviewRouteUrl(enabledNextDatasetNames);
-    }
-
+    // Route publication belongs to the synchronous authoritative composition edit,
+    // never to an eventual Product completion from an older composition.
+    setReviewRouteUrl(enabledNextDatasetNames, { replace: !updateUrl });
     document.title = createReviewDocumentTitle(enabledNextDatasetNames);
-
-    isLoadingReviewProducts = enabledNextDatasetNames.length > 0;
-    reviewError = null;
-    renderCurrentReviewPage();
-
-    currentProducts = [];
-
-    if (enabledNextDatasetNames.length === 0) {
-      await freshnessMonitor?.prime([]);
-      if (activeWorkspaceLoadRequestId === requestId) {
-        activeWorkspaceLoadRequestId = null;
-      }
-      if (!updateUrl) setReviewRouteUrl([], { replace: true });
-      isLoadingReviewProducts = false;
-      renderCurrentReviewPage();
-      return;
-    }
-
-    await freshnessMonitor?.prime(enabledNextDatasetNames);
-    if (requestId !== loadRequestId) {
-      return;
-    }
-
-    try {
-      await ensureLookupsLoaded();
-      const products = await loadReviewHistories(enabledNextDatasetNames);
-
-      if (requestId !== loadRequestId) {
-        return;
-      }
-
-      // The request generation has been checked, so a stale load cannot rewrite a newer URL.
-      if (!updateUrl) setReviewRouteUrl(enabledNextDatasetNames, { replace: true });
-      currentProducts = products;
-      isLoadingReviewProducts = false;
-      renderCurrentReviewPage();
-    } catch (error) {
-      if (requestId !== loadRequestId) {
-        return;
-      }
-
-      currentProducts = [];
-      isLoadingReviewProducts = false;
-      reviewError = error instanceof Error ? error.message : "Unknown review error.";
-      renderCurrentReviewPage();
-      noticeError(
-        "Product Review failed",
-        error instanceof Error ? error.message : "Unknown review error"
-      );
-    } finally {
-      if (activeWorkspaceLoadRequestId === requestId) {
-        activeWorkspaceLoadRequestId = null;
-      }
-    }
+    const fullLoad = full || !hasLoadedComposition;
+    hasLoadedComposition = true;
+    freshnessMonitor?.retain();
+    await productSession.reconcile(productItems, { full: fullLoad });
   };
 
   const addDatasetNamesToReview = async (datasetNamesToAdd, { updateUrl = true } = {}) => {
@@ -193,61 +162,13 @@ export async function initReviewPage({ datasetNames } = {}) {
   const replaceDatasetNamesInReview = async (nextDatasetNames, { updateUrl = true } = {}) => {
     workspaceContentIntent = createReviewWorkspaceContentIntent();
     await loadReviewProductItems(createReviewProductItems(nextDatasetNames), {
+      full: true,
       updateUrl,
     });
   };
 
   const loadReviewDatasetNames = async (nextDatasetNames, options = {}) => {
     await replaceDatasetNamesInReview(nextDatasetNames, options);
-  };
-
-  const refreshReviewProducts = async (datasetNamesToRefresh) => {
-    if (activeWorkspaceLoadRequestId !== null) {
-      return false;
-    }
-
-    const enabledNames = getEnabledReviewDatasetNames(productItems);
-    const enabledKeys = new Set(enabledNames.map(normalizeDatasetKey));
-    const refreshNames = normalizeDatasetNames(datasetNamesToRefresh).filter((datasetName) =>
-      enabledKeys.has(normalizeDatasetKey(datasetName))
-    );
-
-    if (refreshNames.length === 0) {
-      return true;
-    }
-
-    const refreshRequestId = ++targetedRefreshRequestId;
-    const workspaceLoadRequestId = loadRequestId;
-    try {
-      await ensureLookupsLoaded();
-      const refreshedProducts = await loadReviewHistories(refreshNames);
-      if (
-        refreshRequestId !== targetedRefreshRequestId ||
-        workspaceLoadRequestId !== loadRequestId ||
-        activeWorkspaceLoadRequestId !== null
-      ) {
-        return false;
-      }
-
-      currentProducts = mergeProductsByDatasetName(
-        currentProducts,
-        refreshedProducts,
-        enabledNames
-      );
-      reviewError = null;
-      renderCurrentReviewPage();
-      return true;
-    } catch (error) {
-      if (
-        refreshRequestId !== targetedRefreshRequestId ||
-        workspaceLoadRequestId !== loadRequestId
-      ) {
-        return false;
-      }
-
-      console.warn("[Review] Automatic workspace refresh failed", error);
-      return false;
-    }
   };
 
   const handleProductAdd = async (event) => {
@@ -323,12 +244,13 @@ export async function initReviewPage({ datasetNames } = {}) {
   };
 
   const handleReviewRefresh = async () => {
-    await loadReviewProductItems(productItems, { updateUrl: false });
+    await loadReviewProductItems(productItems, { updateUrl: false, full: true });
   };
 
   freshnessMonitor = createWorkspaceFreshnessMonitor({
     getDatasetNames: () => getEnabledReviewDatasetNames(productItems),
-    onChanged: (changedDatasetNames) => refreshReviewProducts(changedDatasetNames),
+    getRetainedDatasetNames: () => productItems.map((item) => item.datasetName),
+    onChanged: (changedDatasetNames) => productSession.refresh(changedDatasetNames),
   });
   unsubscribeFromProductOperationState = onProductOperationStateChanged(({ datasetName } = {}) => {
     if (!datasetName || getProductOperationState(datasetName).running) {
@@ -350,14 +272,6 @@ export async function initReviewPage({ datasetNames } = {}) {
   document.addEventListener("pc-review-product-remove", handleProductRemove);
   document.addEventListener("pc-review-refresh", handleReviewRefresh);
 
-  await waitForNextPaint();
-  hideLoader();
-
-  renderCurrentReviewPage();
-  await loadProductCatalogForPicker();
-  await loadReviewProductItems(productItems, { updateUrl: false });
-  freshnessMonitor.start();
-
   const handlePopState = async () => {
     const route = getCurrentReviewRoute();
     await loadReviewDatasetNames(route.datasetNames, { updateUrl: false });
@@ -365,15 +279,24 @@ export async function initReviewPage({ datasetNames } = {}) {
 
   window.addEventListener("popstate", handlePopState);
 
+  await waitForNextPaint();
+  hideLoader();
+
+  renderCurrentReviewPage();
+  await loadProductCatalogForPicker();
+  if (!hasLoadedComposition) {
+    await loadReviewProductItems(productItems, { updateUrl: false, full: true });
+  }
+  freshnessMonitor.start();
+
   return {
     get products() {
       return currentProducts;
     },
     loadReviewDatasetNames,
     destroy() {
-      loadRequestId += 1;
-      targetedRefreshRequestId += 1;
-      activeWorkspaceLoadRequestId = null;
+      disposed = true;
+      productSession.destroy();
       productCatalogRequestId += 1;
       document.removeEventListener("pc-review-product-add", handleProductAdd);
       document.removeEventListener("pc-review-product-toggle", handleProductToggle);
@@ -446,13 +369,9 @@ export async function initReviewPage({ datasetNames } = {}) {
     }
   }
 
-  async function ensureLookupsLoaded() {
-    if (lookupsLoaded) {
-      return;
-    }
-
-    await loadLookupsSafely();
-    lookupsLoaded = true;
+  function ensureLookupsLoaded() {
+    lookupsPromise ??= loadLookupsSafely();
+    return lookupsPromise;
   }
 }
 
@@ -465,23 +384,6 @@ function normalizeDatasetKey(datasetName) {
   return String(datasetName ?? "")
     .trim()
     .toUpperCase();
-}
-
-function mergeProductsByDatasetName(currentProducts, refreshedProducts, enabledDatasetNames) {
-  const currentByDatasetName = new Map(
-    currentProducts.map((product) => [normalizeDatasetKey(product?.datasetName), product])
-  );
-
-  for (const product of refreshedProducts) {
-    const key = normalizeDatasetKey(product?.datasetName);
-    if (key) {
-      currentByDatasetName.set(key, product);
-    }
-  }
-
-  return enabledDatasetNames
-    .map((datasetName) => currentByDatasetName.get(normalizeDatasetKey(datasetName)))
-    .filter(Boolean);
 }
 
 async function loadLookupsSafely() {

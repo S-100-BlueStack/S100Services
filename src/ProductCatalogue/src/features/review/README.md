@@ -134,8 +134,7 @@ Review uses the same workspace Product resolver/catalog as Analyze. S57/S101 Pro
 loads through the existing history endpoint with explicit source permission. Paper Charts and S-102 resolve as real
 workspace Products but History, IC-ENC reports, and Internal validation render declarative unavailable
 states without compatibility backend requests. Per-Product load state distinguishes `loaded`,
-`unavailable`, and `failed`, so mixed Review columns remain independent. Product removal/disable and
-existing request guards continue to invalidate stale publication. Main-map source visibility does not
+`unavailable`, and `failed`, so mixed Review columns remain independent. Product removal invalidates its request ownership; disabling retains its session payload without rendering a column. Full-generation and record-ownership guards prevent stale publication. Main-map source visibility does not
 control an already opened Review workspace.
 
 ## Public route
@@ -143,3 +142,53 @@ control an already opened Review workspace.
 The canonical route is `/Review?Datasets=ProductA,ProductB`. See
 [workspace routing](../../shared/routing/README.md) for the shared URL boundary, local picker
 synchronization, and temporary legacy-path compatibility. Content toggles remain local state.
+
+## FI-039 incremental reconciliation
+
+Status: **Implemented; manual verification pending**.
+
+`core/reviewProductSession.js` now owns the single authoritative Review data generation. The page
+coordinator supplies the latest Product items and receives render snapshots; it has no separate full
+or automatic-refresh publication counter. The catalog request counter remains scoped to picker data.
+The existing FI-022 monitor owns revision observations only, not Review content publication.
+
+Ordinary composition edits reconcile records by the normalized route/picker dataset-name alias. Once
+FI-024 resolves that alias, payload storage uses `serializeProductIdentity(productContext)` (sourceId
+and productKey). The targeted AOI response remains authoritative for ProductSpecification and registry
+capabilities. No array-position identity, source-name branching, bulk AOI fallback, or cross-source
+payload merge is introduced. Source changes discovered during a changed-Product reload replace only
+that record. The baseline exposes metadata invalidation through the opaque FI-022 revision; no
+additional metadata comparison or speculative reload contract is invented.
+
+- Add creates records only for genuinely new Products. Multiple new loads run concurrently, each
+  with one targeted AOI resolution and the existing independent History/artifact requests. Existing
+  pending records are retained, so rapid additions cannot start another load for the same Product.
+- Remove discards that record, its payload and revision bookkeeping. Remaining records preserve their
+  payload references and current ordering. Late removed-record completions cannot publish.
+- Disable hides the column but retains its payload and pending ownership. Re-enable reuses it; only
+  an enabled record without a payload/request needs an initial load. The monitor retains disabled
+  Products' revision baselines so a later observed change still refreshes them when enabled.
+- Manual Refresh remains a full load of all currently enabled Products. It clears cached payloads,
+  invalidates pending operations and primes a full revision baseline. Disabled Products retain their
+  selection state but need a new payload on subsequent enable, matching the full-load boundary.
+- Direct initial loading and authoritative route replacement create a full generation. Route replacement
+  resets FI-038 intent/selections through the existing domain functions. Manual Refresh preserves them.
+- FI-022 loads only changed enabled Products through the same session owner. Additional Products prime
+  only their own lightweight revisions before payload loading, without resetting survivors' baselines.
+  No polling loop is added. Concurrent revision checks and overlapping additional primes are coalesced.
+  A changed-Product request already being loaded is declined for retry at the next normal check.
+- Publication requires the current generation, the same retained record and that record's current
+  operation. Checks run before requests start and after completion, including error/finally paths.
+  Full replacement, remove/re-add and teardown therefore suppress stale data, errors and loading state.
+
+FI-038 state still comes exclusively from `reviewProductList.js` and the page's workspace intent.
+Payload reconciliation never reconstructs selections or updates workspace intent. FI-041 interaction
+snapshots remain local to their original synchronous toggle render. Loaded columns stay present while
+new columns show loading; the existing icon-only Refresh remains disabled during visible loading.
+Independent Product/History/artifact failures and FI-037 content-state distinctions remain intact.
+
+Behavior tests cover exact loader counts, independent failure, mixed content intent, ordering, enable/
+disable, full Refresh, changed-only freshness, removal/re-add, overlapping refresh/add/remove, route
+replacement, teardown and out-of-order completions using deferred promises. Page-event tests exercise
+the actual coordinator with explicit browser/API test boundaries. See
+[the implementation and manual verification record](../../../docs/fi-039-incremental-review.md).

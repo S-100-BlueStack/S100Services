@@ -6,6 +6,7 @@ const UNAVAILABLE_REVISION = "__workspace_unavailable__";
 
 export function createWorkspaceFreshnessMonitor({
   getDatasetNames,
+  getRetainedDatasetNames = getDatasetNames,
   onChanged,
   fetchFreshness = fetchWorkspaceFreshness,
   intervalMs = DEFAULT_WORKSPACE_FRESHNESS_INTERVAL_MS,
@@ -23,13 +24,27 @@ export function createWorkspaceFreshnessMonitor({
   let revisions = new Map();
   let intervalId = null;
   let inFlightCheck = null;
+  let inFlightPrime = null;
+  const additionalPrimes = new Map();
+  const additionalRecoveryKeys = new Set();
   let lifecycleGeneration = 0;
+  let compositionEpoch = 0;
   let recoveryRefreshRequired = false;
   let started = false;
   let disposed = false;
 
-  const prime = async (datasetNames = getDatasetNames()) => {
+  const prime = (datasetNames = getDatasetNames()) => {
+    const promise = runPrime(datasetNames);
+    inFlightPrime = promise;
+    return promise.finally(() => {
+      if (inFlightPrime === promise) inFlightPrime = null;
+    });
+  };
+
+  const runPrime = async (datasetNames) => {
     const generation = ++lifecycleGeneration;
+    additionalPrimes.clear();
+    additionalRecoveryKeys.clear();
     const names = normalizeDatasetNames(datasetNames);
 
     if (disposed) {
@@ -60,8 +75,78 @@ export function createWorkspaceFreshnessMonitor({
     }
   };
 
+  // Additions seed only their own revisions without resetting surviving baselines
+  // or invalidating an unrelated changed-Product refresh.
+  const primeAdditional = (datasetNames) => {
+    if (disposed) return Promise.resolve(false);
+    const names = normalizeDatasetNames(datasetNames);
+    const missing = names.filter((name) => !additionalPrimes.has(normalizeDatasetKey(name)));
+    if (missing.length > 0) {
+      const generation = lifecycleGeneration;
+      const promise = (async () => {
+        await inFlightPrime;
+        if (disposed || generation !== lifecycleGeneration) return false;
+        try {
+          const items = await fetchFreshness(missing);
+          if (disposed || generation !== lifecycleGeneration) return false;
+          const nextRevisions = createRevisionMap(items, missing);
+          const retained = new Set(
+            normalizeDatasetNames(getRetainedDatasetNames()).map(normalizeDatasetKey)
+          );
+          for (const name of missing) {
+            const key = normalizeDatasetKey(name);
+            if (!retained.has(key) || additionalPrimes.get(key) !== promise) continue;
+            if (nextRevisions.has(key)) {
+              revisions.set(key, nextRevisions.get(key));
+              additionalRecoveryKeys.delete(key);
+            } else {
+              additionalRecoveryKeys.add(key);
+            }
+          }
+          return true;
+        } catch (error) {
+          if (!disposed && generation === lifecycleGeneration) {
+            for (const name of missing) {
+              const key = normalizeDatasetKey(name);
+              if (additionalPrimes.get(key) === promise) additionalRecoveryKeys.add(key);
+            }
+            console.warn("[Workspace freshness] Additional revision check failed", error);
+          }
+          return false;
+        }
+      })();
+      for (const name of missing) additionalPrimes.set(normalizeDatasetKey(name), promise);
+      void promise.finally(() => {
+        for (const name of missing) {
+          const key = normalizeDatasetKey(name);
+          if (additionalPrimes.get(key) === promise) additionalPrimes.delete(key);
+        }
+      });
+    }
+    return Promise.all(names.map((name) => additionalPrimes.get(normalizeDatasetKey(name))));
+  };
+
+  const retain = () => {
+    // Any authoritative composition/eligibility edit invalidates observations
+    // captured before this retention boundary. Additional Product priming keeps
+    // its existing per-record ownership and is intentionally not invalidated.
+    compositionEpoch += 1;
+    const names = normalizeDatasetNames(getRetainedDatasetNames());
+    const keys = new Set(names.map(normalizeDatasetKey));
+    pruneRevisions(revisions, names);
+    for (const key of additionalRecoveryKeys) {
+      if (!keys.has(key)) additionalRecoveryKeys.delete(key);
+    }
+    for (const key of additionalPrimes.keys()) {
+      if (!keys.has(key)) additionalPrimes.delete(key);
+    }
+  };
+
   const check = () => {
     if (disposed || isDocumentHidden(documentRef)) {
+      return Promise.resolve(false);
+    }
+    if (inFlightPrime || additionalPrimes.size > 0) {
       return Promise.resolve(false);
     }
     if (inFlightCheck) {
@@ -70,33 +155,41 @@ export function createWorkspaceFreshnessMonitor({
 
     const names = normalizeDatasetNames(getDatasetNames());
     if (names.length === 0) {
-      revisions = new Map();
-      recoveryRefreshRequired = false;
+      pruneRevisions(revisions, normalizeDatasetNames(getRetainedDatasetNames()));
       return Promise.resolve(true);
     }
 
     const generation = lifecycleGeneration;
-    inFlightCheck = runCheck(names, generation).finally(() => {
+    const observationEpoch = compositionEpoch;
+    inFlightCheck = runCheck(names, generation, observationEpoch).finally(() => {
       inFlightCheck = null;
     });
     return inFlightCheck;
   };
 
-  const runCheck = async (names, generation) => {
+  const runCheck = async (names, generation, observationEpoch) => {
     try {
       const items = await fetchFreshness(names);
-      if (disposed || generation !== lifecycleGeneration) {
+      if (disposed || generation !== lifecycleGeneration || observationEpoch !== compositionEpoch) {
         return false;
       }
 
       const nextRevisions = createRevisionMap(items, names);
       const changedDatasetNames = recoveryRefreshRequired
         ? names.filter((datasetName) => nextRevisions.has(normalizeDatasetKey(datasetName)))
-        : [];
+        : names.filter(
+            (datasetName) =>
+              additionalRecoveryKeys.has(normalizeDatasetKey(datasetName)) &&
+              nextRevisions.has(normalizeDatasetKey(datasetName))
+          );
 
       for (const datasetName of recoveryRefreshRequired ? [] : names) {
         const key = normalizeDatasetKey(datasetName);
-        if (!nextRevisions.has(key)) {
+        if (
+          additionalPrimes.has(key) ||
+          changedDatasetNames.includes(datasetName) ||
+          !nextRevisions.has(key)
+        ) {
           continue;
         }
 
@@ -111,7 +204,7 @@ export function createWorkspaceFreshnessMonitor({
         }
       }
 
-      pruneRevisions(revisions, names);
+      pruneRevisions(revisions, normalizeDatasetNames(getRetainedDatasetNames()));
 
       if (changedDatasetNames.length === 0) {
         recoveryRefreshRequired = false;
@@ -119,10 +212,18 @@ export function createWorkspaceFreshnessMonitor({
       }
 
       const accepted = await onChanged(changedDatasetNames);
-      if (disposed || generation !== lifecycleGeneration || accepted === false) {
+      if (
+        disposed ||
+        generation !== lifecycleGeneration ||
+        observationEpoch !== compositionEpoch ||
+        accepted === false
+      ) {
         return false;
       }
 
+      for (const name of changedDatasetNames) {
+        additionalRecoveryKeys.delete(normalizeDatasetKey(name));
+      }
       if (recoveryRefreshRequired) {
         revisions = nextRevisions;
         recoveryRefreshRequired = false;
@@ -137,7 +238,11 @@ export function createWorkspaceFreshnessMonitor({
 
       return true;
     } catch (error) {
-      if (!disposed && generation === lifecycleGeneration) {
+      if (
+        !disposed &&
+        generation === lifecycleGeneration &&
+        observationEpoch === compositionEpoch
+      ) {
         console.warn("[Workspace freshness] Revision check failed", error);
       }
       return false;
@@ -171,6 +276,8 @@ export function createWorkspaceFreshnessMonitor({
 
     disposed = true;
     lifecycleGeneration += 1;
+    additionalPrimes.clear();
+    additionalRecoveryKeys.clear();
     revisions = new Map();
     recoveryRefreshRequired = false;
     documentRef?.removeEventListener?.("visibilitychange", handleVisibilityChange);
@@ -183,6 +290,8 @@ export function createWorkspaceFreshnessMonitor({
 
   return {
     prime,
+    primeAdditional,
+    retain,
     check,
     start,
     destroy,
