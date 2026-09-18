@@ -1,53 +1,84 @@
 import { createProductPickerForm } from "../../products/ui/productPicker.js";
 import {
+  getReviewContentTypeAggregateState,
   getReviewContentTypeDefinitions,
   isReviewContentTypeEnabled,
 } from "../domain/reviewProductList.js";
 
 export function createReviewSidebar({ productItems, loading, productCatalog }) {
   const sidebar = document.createElement("aside");
-  sidebar.className = "pc-review-sidebar";
-  sidebar.setAttribute("aria-label", "Review products");
+  sidebar.className = "pc-review-sidebar pc-scrollbar";
+  sidebar.setAttribute("aria-label", "Product Review workspace controls");
   sidebar.setAttribute("aria-busy", loading ? "true" : "false");
 
-  const header = document.createElement("div");
-  header.className = "pc-review-sidebar__header";
-
-  const eyebrow = document.createElement("div");
-  eyebrow.className = "pc-review-sidebar__eyebrow";
-  eyebrow.textContent = "Workspace";
-
-  const title = document.createElement("h1");
-  title.className = "pc-review-sidebar__title";
-  title.textContent = "Product Review";
-
-  const description = document.createElement("p");
-  description.className = "pc-review-sidebar__description";
-  description.textContent =
-    "Collect products and choose which review content to compare side by side.";
-
-  header.append(eyebrow, title, description);
   sidebar.append(
-    header,
     createProductAddForm(productCatalog, productItems),
-    createProductList(productItems),
-    createWorkspaceRefreshButton(productItems, loading)
+    createWorkspaceContentControls(productItems),
+    createProductList(productItems, loading)
   );
 
   return sidebar;
 }
 
+function createWorkspaceContentControls(productItems) {
+  const section = document.createElement("fieldset");
+  section.className = "pc-review-workspace-content";
+
+  const legend = document.createElement("legend");
+  legend.className = "pc-review-workspace-content__title";
+  legend.textContent = "Content";
+  section.appendChild(legend);
+
+  const controls = document.createElement("div");
+  controls.className = "pc-review-workspace-content__controls";
+
+  for (const definition of getReviewContentTypeDefinitions()) {
+    controls.appendChild(createWorkspaceContentToggle(productItems, definition));
+  }
+
+  section.appendChild(controls);
+  return section;
+}
+
+function createWorkspaceContentToggle(productItems, definition) {
+  const aggregateState = getReviewContentTypeAggregateState(productItems, definition.id);
+  const label = document.createElement("label");
+  label.className = "pc-review-workspace-content__toggle";
+  label.title = `Toggle ${definition.label} for all Review Products.`;
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = aggregateState === "all-enabled";
+  checkbox.indeterminate = aggregateState === "mixed";
+  checkbox.disabled = aggregateState === "empty";
+  checkbox.dataset.reviewWorkspaceContentType = definition.id;
+  checkbox.setAttribute("aria-label", `${definition.label} for all Review Products`);
+
+  const text = document.createElement("span");
+  text.textContent = definition.shortLabel;
+
+  checkbox.addEventListener("change", () => {
+    dispatchReviewWorkspaceContentToggle(label, definition.id, checkbox.checked);
+  });
+
+  label.append(checkbox, text);
+  return label;
+}
+
 function createWorkspaceRefreshButton(productItems, loading) {
-  const button = document.createElement("calcite-button");
-  button.className = "pc-review-workspace-refresh";
-  button.scale = "s";
-  button.appearance = "outline";
-  button.kind = "neutral";
-  button.iconStart = "refresh";
-  button.textContent = "Refresh";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "pc-review-product-list__refresh-button";
   button.title = "Refresh Product Review workspace data.";
   button.setAttribute("aria-label", "Refresh Product Review workspace data");
   button.disabled = loading || !productItems.some((item) => item.enabled);
+
+  const icon = document.createElement("calcite-icon");
+  icon.icon = "refresh";
+  icon.scale = "s";
+  icon.setAttribute("aria-hidden", "true");
+  button.appendChild(icon);
+
   button.addEventListener("click", () => {
     button.dispatchEvent(new CustomEvent("pc-review-refresh", { bubbles: true }));
   });
@@ -59,8 +90,10 @@ function createProductAddForm(productCatalog, productItems) {
     id: "review-product-input",
     eventName: "pc-review-product-add",
     labelText: "Add product",
+    showLabel: false,
     placeholder: "Search or type product name",
-    helpText: "Add one product at a time, or paste multiple names from a Review URL.",
+    showDefaultHelp: false,
+    overlayResults: true,
     products: productCatalog?.products ?? [],
     excludedProductNames: productItems.map((item) => item.datasetName),
     loading: productCatalog?.loading ?? false,
@@ -70,7 +103,7 @@ function createProductAddForm(productCatalog, productItems) {
   });
 }
 
-function createProductList(productItems) {
+function createProductList(productItems, loading) {
   const section = document.createElement("section");
   section.className = "pc-review-product-list";
   section.setAttribute("aria-label", "Selected review products");
@@ -86,7 +119,11 @@ function createProductList(productItems) {
   count.className = "pc-review-product-list__count";
   count.textContent = createProductCountText(productItems);
 
-  header.append(title, count);
+  const controls = document.createElement("div");
+  controls.className = "pc-review-product-list__header-controls";
+  controls.append(createWorkspaceRefreshButton(productItems, loading), count);
+
+  header.append(title, controls);
   section.appendChild(header);
 
   if (productItems.length === 0) {
@@ -99,7 +136,7 @@ function createProductList(productItems) {
   }
 
   const list = document.createElement("div");
-  list.className = "pc-review-product-list__items";
+  list.className = "pc-review-product-list__items pc-scrollbar";
   list.setAttribute("role", "list");
 
   for (const productItem of productItems) {
@@ -182,6 +219,8 @@ function createContentTypeToggle(productItem, definition) {
   checkbox.type = "checkbox";
   checkbox.checked = isReviewContentTypeEnabled(productItem, definition.id);
   checkbox.disabled = !productItem.enabled;
+  checkbox.dataset.reviewProductId = productItem.id;
+  checkbox.dataset.reviewContentType = definition.id;
   checkbox.setAttribute("aria-label", `${definition.label} for ${productItem.datasetName}`);
 
   const text = document.createElement("span");
@@ -223,6 +262,18 @@ function dispatchReviewContentToggle(target, id, contentType, enabled) {
       bubbles: true,
       detail: {
         id,
+        contentType,
+        enabled,
+      },
+    })
+  );
+}
+
+function dispatchReviewWorkspaceContentToggle(target, contentType, enabled) {
+  target.dispatchEvent(
+    new CustomEvent("pc-review-content-bulk-toggle", {
+      bubbles: true,
+      detail: {
         contentType,
         enabled,
       },

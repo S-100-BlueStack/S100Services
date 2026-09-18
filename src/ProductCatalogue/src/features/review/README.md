@@ -5,7 +5,7 @@ Product Review is a workspace for comparing product-specific data that does not 
 It currently supports:
 
 - Multiple products in one Review page
-- Per-product content toggles
+- Workspace and per-product content toggles
 - Product History cards
 - Placeholder cards for IC-ENC reports
 - Public validation diagnostic downloads for supported electronic Products
@@ -45,6 +45,35 @@ Workspace resolution is not tied to Main-map enabled-source localStorage and doe
 dataset-name conventions. Backend identity conflicts, malformed targeted responses and unavailable
 deployment-configured sources fail closed rather than falling through another source.
 
+## FI-036 compact sidebar presentation
+
+The route already identifies Product Review, so the sidebar omits the repeated visible workspace
+eyebrow, title, and explanatory description while retaining an accessible `Product Review workspace
+controls` landmark name. The shared Product picker keeps its accessible `Add product` name but suppresses
+its normal visible label and instructional help for Review. Loading, catalog failure, invalid Product,
+and already-selected Product messages remain visible when relevant.
+
+Review explicitly opts the shared Product picker into its anchored results-overlay presentation. The
+listbox is positioned relative to the picker control and overlays the `Products` section without
+changing sidebar layout. Analyze and other picker consumers retain the default in-flow presentation.
+
+The existing manual Refresh action is an icon-only native button in the `Products` header immediately
+before the counter. Its event, accessible name, title, loading/disabled rules, and FI-022 full-refresh
+lifecycle are unchanged. The sidebar retains the shared `pc-scrollbar` contract and does not change
+Product composition, content toggles, targeted source resolution, automatic freshness, routing, or
+independent content failures.
+
+## FI-041 Product-list interaction preservation
+
+Per-Product History, IC-ENC, and Validation toggles still update the authoritative Review state and
+rerender the board and sidebar. Before that specific synchronous render, Review captures the Product
+list's `scrollTop` plus the focused Product/content-type identity. The accepted replacement DOM restores
+the scroll offset and focuses the corresponding toggle with `preventScroll` immediately after render.
+
+The snapshot is passed only through the current content-toggle render call. It is not global, delayed,
+or reused by add/remove, route replacement, manual Refresh, automatic freshness, or teardown, so an old
+interaction cannot restore state into a newer Review composition or session.
+
 ## Content model
 
 Review content types should stay dynamic.
@@ -55,7 +84,39 @@ The current frontend content types are:
 2. IC-ENC reports
 3. Internal validation reports
 
-The ordering is fixed so product columns remain comparable even when individual products have different content toggles enabled. History uses bounded height so long histories do not push later content types out of alignment.
+The ordering is fixed so product columns remain comparable even when individual products have different content toggles enabled.
+
+## FI-038 content defaults and workspace controls
+
+New Review Product state enables History, IC-ENC, and Internal validation by default. The compact
+`Content` controls apply one content type at a time to every composed Product and expose native checked,
+unchecked, or indeterminate state from the current per-Product selections. The controls are disabled
+when the Review composition is empty.
+
+Each content type also has a session-local workspace intent. It starts enabled and changes only when
+the corresponding workspace control is used. A subsequently added Product inherits those three current
+intent values; an individual Product override does not change them. Product visibility remains a
+separate state and is never inferred from content selection.
+
+Manual Refresh, FI-022 targeted freshness, and content payload replacement retain Product selection
+and workspace intent. Adding or removing Products preserves surviving Product selections; only new
+Products are initialized from workspace intent. Authoritative route/composition replacement starts a
+new Review state and resets the intent to the all-enabled default. Bulk rerenders retain the Product-list
+scroll offset and return focus to the initiating workspace control without delayed restoration or
+`scrollIntoView()`.
+
+## FI-037 content layout and states
+
+History cards use their natural content height up to a viewport-aware `clamp(240px, 50dvh, 500px)`
+maximum. History keeps the only intentional content-card scroller after that bound; short histories no
+longer reserve a fixed-height region. IC-ENC and Internal validation bodies render at natural height,
+and the Product-column content container owns vertical overflow for those cards.
+
+Each content-card header remains the state discriminator: `Unavailable`, `Failed`, an empty count, or
+an available content count. The body adds one concise message for states without content instead of a
+second heading/message pair. IC-ENC remains unavailable without inventing a report contract. Validation
+request failures retain their safe error text, and available diagnostic artifacts retain their download
+links. These presentation rules do not add a loader or refresh lifecycle.
 
 Future report cards should use the same pattern.
 

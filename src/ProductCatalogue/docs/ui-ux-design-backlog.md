@@ -1,6 +1,6 @@
 # Product Catalogue UI/UX design backlog
 
-Documentation baseline: `6a29ee5abee23b5ce741a69732d9f67ad805b95d`  
+Documentation baseline: `54a3f89e83ad18c18875921f562f81c58b9d3d8d`  
 Review date: 2026-09-17
 
 This document formalizes the post-FI-022 Product Catalogue design review into independently implementable feature items. It is a design and task boundary document, not an implementation claim. The existing feature boundaries, source-aware Product identity, FI-024 targeted workspace resolution, FI-025 ArcGIS process isolation, FI-022 workspace freshness lifecycle, keyboard/focus behavior, and light/dark support remain preservation requirements unless a task explicitly changes them.
@@ -47,14 +47,14 @@ The frontend must not invent precise progress percentages that the backend canno
 | FI-032 | Main map navigation             | Open Dashboard, Analyze, and Review in new tabs from the Main map and fix false popup-blocked notices | Done                                      | Manually accepted at `11491d15272b165b63da58dece83cb0c0776077b`. Main-map workspace links/actions open new tabs through one shared route-aware policy; workspace-to-workspace navigation stays same-tab. Navbar links retain base-aware `href`, normal modifier/context-menu behavior and active-route semantics. Product Collection/popup launches preserve canonical Product composition and Main state, and blocked-popup notices follow the actual browser-open result rather than a `noopener`-induced null handle. FI-026/FI-028/FI-031 remain unchanged.                                                                                                                                                                                                                            |
 | FI-033 | Dashboard                       | Compact page chrome and range/refresh toolbar                                                         | Done                                      | Manually accepted at `01f22a605e8e4d29a8da187306af1dc04b8540ef`. Redundant visible Dashboard chrome and preset shortcuts are removed; the compact From/To/Apply row places a centered icon-only Refresh button and last-successful `HH:MM` immediately after Apply. Refresh uses a native button with the public Calcite refresh icon rather than styling Calcite shadow DOM. Open-ended To remains available through contextual/keyboard clearing, explicit Apply remains for FI-034, and BE-107 paging/filtering, FI-009/FI-010 behavior, Dashboard History and FI-032 navigation remain unchanged.                                                                                                                                                                                      |
 | FI-034 | Dashboard                       | Auto-apply valid filter changes and remove the Apply action                                           | Done                                      | Manually accepted at `6a29ee5abee23b5ce741a69732d9f67ad805b95d`. Apply is removed; valid committed date/time changes auto-apply through the existing request lifecycle while invalid/incomplete drafts stay editable without requesting or updating the route. Native time controls require a complete valid `HH:MM`; incomplete values such as `15:--` remain draft-only and are intentionally not auto-completed. Keyboard editing and pointer picker transitions are focus-safe, optional To clearing applies the open range, discrete filters remain immediate, search remains debounced, and paging/cursor reset, sort/page size, last-successful results, FI-033 `HH:MM`, manual Refresh, History and FI-032 navigation are preserved.                                               |
-| FI-035 | Analyze                         | Compact the Analyze sidebar and align scrollbar/list presentation                                     | Ready                                     | Preserve Product picker behavior, FI-022 freshness, source-aware resolution, manual Refresh, independent content failures, and keyboard behavior.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| FI-036 | Review                          | Compact Review sidebar controls and move Refresh above Products                                       | Ready                                     | Preserve Product composition, content toggles, FI-022 freshness, and source-aware resolution.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| FI-037 | Review                          | Reduce Product-content density, simplify empty states, and remove nested report scrolling             | Ready after FI-036                        | Preserve independent History/IC-ENC/validation failures and truthful unavailable states.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| FI-038 | Review                          | Enable all Review content types by default and add bulk content toggles                               | Ready after FI-037                        | Bulk controls must coexist with per-Product controls and preserve user-selected state after subsequent refreshes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| FI-035 | Analyze                         | Compact the Analyze sidebar and align scrollbar/list presentation                                     | Done                                      | Manually accepted at `ec11aa1fdbd732eca651cdc2a265657405ec80f0`. Redundant visible Analyze/Product-picker copy is removed while accessible/contextual messaging remains; the sidebar and Product-list are compacted; `Product list` is renamed to `Products`; and the neutral shared `pc-scrollbar` contract now serves Analyze and existing Review scroll surfaces. FI-022 freshness, FI-024 targeted resolution, source-aware identity, manual Refresh, routing, failures and keyboard/focus behavior are preserved.                                                                                                                                                                                                                                                                     |
+| FI-036 | Review                          | Compact Review sidebar controls and move Refresh above Products                                       | Done                                      | Manually accepted at `9c07f8a7fb93cd80bbbab59a3d47719e3667863c`. Redundant visible Review/sidebar Product-picker copy is removed while accessible/contextual messaging remains; Review Product search results use an anchored overlay; and the single manual Refresh action is icon-only in the `Products` header immediately before its counter. Product composition, toggles, FI-022 freshness, FI-024/source-aware resolution, routing, failures and shared scrolling remain unchanged.                                                                                                                                                                                                                                                                                                 |
+| FI-037 | Review                          | Reduce Product-content density, simplify empty states, and remove nested report scrolling             | Done                                      | Manually accepted at `ee37173e31525d990412b3dff7205ec5af4371e8`. History uses natural content height with a viewport-aware cap and retains the only intentional content-card scroller. IC-ENC/Validation bodies render at natural height under the Product-column scroller. Header status/count plus concise body copy preserves unavailable, failed, available-empty and available-content semantics, and validation artifact links remain available. |
+| FI-038 | Review                          | Enable all Review content types by default and add bulk content toggles                               | Done                                      | Manually accepted at `54a3f89e83ad18c18875921f562f81c58b9d3d8d`. History/IC-ENC/Validation default ON for new Product state. Workspace controls operate independently per content type with native checked/unchecked/mixed state; explicit bulk actions update session-local workspace intent inherited by later Products, while individual overrides leave that intent unchanged. Refreshes preserve selections/intent and Product enabled state remains independent. |
 | FI-039 | Review performance              | Load only changed/new Products when Review composition changes                                        | Ready; regression-sensitive               | Preserve ordering, content toggles, generation guards, independent History/artifact failures, and full manual Refresh semantics.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | FI-040 | Main map / accessibility        | Add modifier-selection keyboard equivalent and discoverability                                        | Deferred follow-up                        | Define an accessible highlighted-candidate activation path and compact visible shortcut cue while preserving the normal overlap picker as the complete non-shortcut workflow.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| FI-041 | Review / Product list           | Preserve Product-list scroll position when content toggles change                                     | Ready; UI bug                             | Fix scroll-to-top when History, IC-ENC, or Validation is toggled for a Product. Preserve focus, ordering, content selection, FI-022 freshness and keyboard interaction. Implement after FI-036 so sidebar restructuring is stable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| FI-042 | Main map / Filters              | Align Filter panel scrollbar styling                                                                  | Ready                                     | Reuse a shared/public Product Catalogue scrollbar treatment for the Filter panel outer scroller and nested attribute lists such as Status. Preserve overflow and filtering behavior in light/dark mode; avoid private Calcite internals.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| FI-041 | Review / Product list           | Preserve Product-list scroll position when content toggles change                                     | Done                                      | Manually accepted at `9c07f8a7fb93cd80bbbab59a3d47719e3667863c`. History, IC-ENC and Validation toggles pass a synchronous Product-list scroll/focus snapshot through their authoritative rerender. The replacement list restores `scrollTop` and stable Product/content-type focus with `preventScroll`; no delayed or cross-render state is retained. Ordering, content selection, FI-022 freshness, other composition changes and keyboard interaction remain unchanged.                                                                                                                                                                                                                                                                                                                |
+| FI-042 | Main map / Filters              | Align Filter panel scrollbar styling                                                                  | Done                                      | Manually accepted at `e235a15b6d86dc3c5313a4a151fa8c5146612a3a`. Reuses the accepted FI-035 neutral shared `pc-scrollbar` contract on the Filter panel outer scroller and generated checkbox option lists such as Status. Existing overflow ownership, filtering state, counts, persistence, wheel/keyboard behavior and public Calcite boundaries remain unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | FI-043 | Introduction / Onboarding       | Refresh onboarding after the UI/UX redesign                                                           | Deferred                                  | Perform one consolidated route-by-route onboarding audit after the active redesign wave settles. Explain the final accepted workflows and controls, including FI-021 Ctrl/Cmd-click selection. FI-040 remains the owner of modifier-selection keyboard/discoverability behavior; FI-043 updates guidance only after that interaction contract is known.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | FI-044 | Shared Preferences / UX         | Improve Preferences information architecture and saved-state usability                                | Ready                                     | Group Introduction, actual Settings, and Saved preferences; make Theme and Scale hiding semantics visually clear; align reset/clear affordances across persisted items; preserve FI-026 shared Theme and FI-028 Scale hiding state/persistence boundaries. FI-043 audits onboarding after the final structure is accepted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
@@ -350,13 +350,57 @@ FI-034 was manually accepted in the browser on 2026-09-17 and committed at `6a29
 - make the Analyze sidebar narrower while retaining readable report/history content and responsive behavior;
 - preserve the current compact icon Refresh location established by FI-022.
 
+### Implementation status
+
+Status: Done  
+Implementation commit: `ec11aa1fdbd732eca651cdc2a265657405ec80f0`
+
+- The redundant visible dynamic Analyze heading is removed while the panel retains an application-owned accessible region name.
+- The normal visible Product-picker label/help is suppressed only for Analyze; the shared picker keeps backward-compatible defaults so Review and other consumers retain their existing presentation until their own tasks change it. Contextual loading, catalog failure and validation messaging remains available.
+- `.analyze-dataset-manager` spacing and the desktop sidebar width are reduced, while the existing narrow/mobile full-width behavior is retained.
+- `Product list` is renamed to `Products`, and the Product-list viewport uses responsive sizing for approximately three ordinary Product rows rather than a fixed row count. Long Product names remain readable and keep their existing native tooltip behavior.
+- The neutral shared `.pc-scrollbar` contract owns the compact scrollbar presentation formerly coupled to Review. Analyze uses it for the outer sidebar scroller and Product list; existing Review scroll surfaces use the same class without changing their overflow ownership or interaction behavior. FI-042 can now reuse this contract directly.
+- No Analyze route, Product composition, source resolution, targeted AOI lookup, metadata/artifact loading, FI-022 freshness generation, manual Refresh, independent-failure or stale-result lifecycle was changed.
+
+### Manual acceptance
+
+FI-035 was manually accepted on 2026-09-17 and committed at `ec11aa1fdbd732eca651cdc2a265657405ec80f0`. Acceptance confirmed the compact Analyze presentation, Product-list/sidebar scrolling, preserved Product picker and Refresh behavior, readable Product names, responsive presentation, keyboard/focus/Escape behavior, canonical Analyze route behavior, and light/dark presentation. The local frontend check passed and formatting was run before commit.
+
 ## FI-036 - Review sidebar compaction
 
 ### Requirements
 
 Remove or visually suppress redundant `Workspace`, `Product Review`, `Collect products and...`, `Add product`, and normal `Add one product at a time...` text while retaining accessible names and contextual failure/help messaging.
 
-Move the existing Review Refresh action above the `Products` list so it is available near the composition controls instead of at the bottom of the sidebar. Do not change automatic FI-022 freshness behavior.
+Move the existing Review Refresh action into the `Products` header so it is available near the
+composition controls instead of at the bottom of the sidebar. Do not change automatic FI-022 freshness
+behavior.
+
+### Implementation status
+
+Status: Done  
+Implementation commit: `9c07f8a7fb93cd80bbbab59a3d47719e3667863c`
+
+- The visible `Workspace` eyebrow, `Product Review` sidebar heading, and
+  `Collect products and choose which review content to compare side by side.` description are removed.
+  The Review page and sidebar retain application-owned accessible names.
+- Review now uses the FI-035 shared Product-picker presentation options to suppress the normal visible
+  `Add product` label and normal explanatory help. Loading, catalog failure, invalid Product, and
+  already-selected Product messages remain available.
+- Review explicitly opts into the shared Product picker's anchored overlay presentation. The result
+  listbox is positioned relative to the picker control and overlays the content below without changing
+  the sidebar's layout; Analyze and other consumers retain the default presentation.
+- The existing single Refresh action is now an icon-only native button in the `Products` header,
+  immediately before the counter. Its event, accessible name, title, loading/disabled rules, keyboard
+  behavior, and FI-022 manual-refresh lifecycle are unchanged.
+- Sidebar gaps and padding are reduced without changing Product rows, content toggles, scrolling
+  ownership, or the shared `pc-scrollbar` contract.
+- No Review route, Product composition, source resolution, targeted AOI lookup, History/artifact
+  loading, automatic freshness, independent-failure, or stale-result lifecycle was changed.
+
+### Manual acceptance
+
+FI-036 was manually accepted on 2026-09-17 and committed at `9c07f8a7fb93cd80bbbab59a3d47719e3667863c`. Acceptance confirmed the compact Review sidebar, overlay Product-search results without layout displacement, the single icon-only Refresh action immediately before the Product counter, preserved picker/contextual messaging, keyboard/focus/Escape behavior, responsive light/dark presentation, canonical Review routing, and unchanged FI-022/FI-024 behavior. The local frontend check passed and formatting was run before commit.
 
 ## FI-037 - Review Product-content layout and empty states
 
@@ -377,7 +421,47 @@ Remove duplicated unavailable/no-files headings inside report boxes. Standardize
 
 Do not stack a status label, an unavailable heading, and a second paragraph that all communicate the same fact. Preserve truthful distinction between `not implemented/unavailable`, `request failed`, and `available but no reports` where the backend contract actually distinguishes those states; simplify presentation without collapsing materially different failures into a false `no reports` result.
 
+### Implementation status
+
+Status: Done  
+Implementation commit: `ee37173e31525d990412b3dff7205ec5af4371e8`
+
+- History cards now use natural content height up to `clamp(240px, 50dvh, 500px)`. Only a History body that exceeds that bound becomes an intentional `pc-scrollbar` surface; one or a few events no longer reserve a fixed 500 px area.
+- IC-ENC and Validation cards no longer have a generic maximum height or body-level vertical overflow. Their content renders at natural height and the existing Product-column scroller remains the vertical overflow owner.
+- Report state bodies use one concise message instead of a nested heading/message panel. Header status/count remains the semantic discriminator: `Unavailable`, `Failed`, `0 events`/`0 files`, or the available content count.
+- IC-ENC remains fail-closed and displays `No IC-ENC reports found for this product.` Validation unavailable/empty states display `No validation reports found for this product.` Request failures retain the existing safe error text, and available validation artifacts retain their download links.
+- No Review state, content defaults, Product ordering/composition, routing, loading, refresh, source resolution, Product picker, manual Refresh, or FI-041 scroll/focus lifecycle changed. FI-038 and FI-039 remain unimplemented.
+
+### Manual acceptance
+
+FI-037 was manually accepted on 2026-09-18 and committed at `ee37173e31525d990412b3dff7205ec5af4371e8`. Acceptance confirmed natural compact History sizing for small timelines, bounded scrolling for large timelines, Product-column-owned scrolling for IC-ENC/Validation, truthful unavailable/failed/empty/content states, preserved validation downloads, safe long-text wrapping, FI-041 scroll/focus behavior, FI-036 picker/Refresh presentation, responsive light/dark presentation, and unchanged FI-022/FI-024 behavior. The local frontend check passed and formatting was run before commit.
+
 ## FI-038 - Review content defaults and bulk toggles
+
+### Implementation status
+
+Status: Done  
+Implementation commit: `54a3f89e83ad18c18875921f562f81c58b9d3d8d`
+
+History, IC-ENC, and Validation are enabled for every newly initialized Review Product. A compact
+`Content` fieldset above the Product list provides one native checkbox per content type. Each checkbox
+is checked when every composed Product enables the type, unchecked when none do, indeterminate when
+selections differ, and disabled for an empty composition. Bulk changes affect only that content type
+and preserve the initiating control's focus plus the Product-list scroll offset across the synchronous
+authoritative rerender.
+
+Each type has independent session-local workspace intent, initially ON. An explicit bulk action updates
+that intent and every current Product. Later individual overrides update only their Product and can make
+the aggregate control mixed; they do not alter what a subsequently added Product inherits. Product
+enabled/disabled state remains separate from content selection.
+
+Manual Refresh, FI-022 targeted freshness, and retained-composition content reloads preserve all
+per-Product selections and workspace intent. Product removal discards only that Product's state;
+addition preserves surviving selections and initializes only the new Product from current intent.
+Authoritative route/composition replacement follows the existing Review session boundary and restores
+the all-ON defaults. No browser/URL persistence or second refresh lifecycle is introduced.
+
+FI-039 remains unimplemented: Product additions still use the existing full composition load behavior.
 
 ### Requirements
 
@@ -387,6 +471,10 @@ Do not stack a status label, an unavailable heading, and a second paragraph that
 - after a user customizes individual Products, ordinary FI-022 freshness refreshes must preserve those selections;
 - define whether adding a new Product after a bulk toggle follows the global toggle's current state or the default-on state, and cover the chosen behavior with tests;
 - preserve Product enable/disable state independently from content-type enablement.
+
+### Manual acceptance
+
+FI-038 was manually accepted on 2026-09-18 and committed at `54a3f89e83ad18c18875921f562f81c58b9d3d8d`. Acceptance confirmed all-three-on defaults, independent History/IC-ENC/Validation workspace controls, native mixed state, session-local workspace intent inheritance for new Products, preservation of mixed per-Product selections through manual/FI-022 refresh, independent Product visibility, bulk-control focus/scroll behavior, and continued FI-036/FI-037/FI-041 behavior. FI-039 incremental loading remains deliberately unimplemented. The local frontend check passed and formatting was run before commit.
 
 ## FI-039 - incremental Review composition loading
 
@@ -444,15 +532,40 @@ When the Review `Products` list is scrolled and the user toggles `History`, `IC-
 
 Prefer avoiding an unnecessary full Product-list rerender when the current Review architecture can update the affected Product in place. If a bounded rerender remains necessary, scroll restoration must be generation-safe and must not restore obsolete state after a newer composition change. FI-041 follows FI-036 so the compacted sidebar structure is the stable implementation target.
 
+### Implementation status
+
+Status: Done  
+Implementation commit: `9c07f8a7fb93cd80bbbab59a3d47719e3667863c`
+
+Review content selection also changes the Review board, so the established authoritative page render
+remains in place. The content-toggle handler captures only the current Product-list `scrollTop` and the
+focused Product/content-type identity immediately before that synchronous render. After the accepted
+replacement DOM is published, the corresponding list receives the offset and the replacement toggle is
+focused with `preventScroll`.
+
+The snapshot is a call-local value passed only through that content-toggle render. No timeout, global
+sticky state, `scrollIntoView`, second lifecycle, or asynchronous restoration is used. Add/remove,
+Product enable/disable, route replacement, manual Refresh, FI-022 automatic freshness, and teardown do
+not reuse the snapshot. Repeated toggles therefore cannot accumulate stale restoration work.
+
 ### Regression coverage
 
 Test at least History, IC-ENC and Validation toggles from a non-zero scroll position, pointer and keyboard activation, focus retention, a position near the bottom of the list, and interaction with subsequent refresh/composition updates.
+
+Focused dependency-free coverage exercises all three content types near the bottom of a long Product
+list, replacement-toggle focus with `preventScroll`, and repeated snapshots with different offsets. A
+presentation contract also verifies that native checkbox `change` events from pointer or keyboard use
+the same bounded capture/render/restore path.
+
+### Manual acceptance
+
+FI-041 was manually accepted on 2026-09-17 and committed together with FI-036 at `9c07f8a7fb93cd80bbbab59a3d47719e3667863c`. Acceptance confirmed that History, IC-ENC and Validation toggles preserve Product-list scroll position and usable focus for pointer and keyboard activation, including repeated toggles, while Product enable/disable, add/remove, manual Refresh, FI-022 freshness and route behavior retain their existing semantics. The local frontend check passed and formatting was run before commit.
 
 ## FI-042 - Filter panel scrollbar consistency
 
 ### Goal
 
-Replace generic browser scrollbar presentation in the Main-map Filter UI with the same compact Product Catalogue scrollbar treatment used by Review Product lists and targeted for Analyze in FI-035.
+Replace generic browser scrollbar presentation in the Main-map Filter UI with the accepted compact Product Catalogue scrollbar treatment now shared by Analyze and Review.
 
 ### Required behavior
 
@@ -463,7 +576,22 @@ Replace generic browser scrollbar presentation in the Main-map Filter UI with th
 - use application-owned/public CSS and documented tokens only; do not target private Calcite shadow DOM;
 - expose the treatment through a neutral shared scrollbar class/tokens rather than coupling Filters to a Review-specific selector.
 
-FI-035 should establish or reuse the neutral shared scrollbar contract for Analyze. FI-042 should reuse that contract rather than duplicating Review-only CSS. If implementation order changes, FI-042 may establish the neutral contract first provided FI-035 can consume it unchanged.
+FI-035 established the neutral shared `pc-scrollbar` contract and was accepted at `ec11aa1fdbd732eca651cdc2a265657405ec80f0`. FI-042 reuses that contract rather than duplicating Analyze- or Review-specific CSS.
+
+### Implementation status
+
+Status: Done  
+Implementation commit: `e235a15b6d86dc3c5313a4a151fa8c5146612a3a`
+
+- `#attribute-filter-panel` keeps its existing outer overflow ownership and now also carries `pc-scrollbar`.
+- Every generated `.pc-filter-options` checkbox list keeps its existing nested overflow ownership and now also carries `pc-scrollbar`, including Status when rendered as a value-filter list.
+- The accepted shared scrollbar CSS is reused unchanged; FI-042 adds no Filter-specific scrollbar selectors or tokens.
+- Filter state, source/provider isolation, counts, persistence, rerender lifecycle, wheel/touchpad/keyboard behavior, Calcite controls and light/dark semantics are unchanged.
+- Browser-specific scrollbar rendering, including overlay scrollbars, remains platform-dependent.
+
+### Manual acceptance
+
+FI-042 was manually accepted on 2026-09-17 and committed at `e235a15b6d86dc3c5313a4a151fa8c5146612a3a`. Acceptance confirmed the shared scrollbar presentation on the outer Filter panel and nested option lists, including Status, in light/dark mode and normal overflow conditions, while preserving wheel/keyboard interaction, filter selection/state, source activation/deactivation behavior, and Analyze/Review scrollbar presentation. The local frontend check passed and formatting was run before commit.
 
 ## FI-043 - onboarding refresh after the UI/UX redesign
 
@@ -583,9 +711,9 @@ FI-043 remains the owner of the final onboarding audit. After FI-044 is accepted
 4. FI-031 non-empty source startup remains complete at `c1ed794374e56383a7362f3eadb2d16b07dfdb17`, and FI-032 Main-map workspace navigation is complete and manually accepted at `11491d15272b165b63da58dece83cb0c0776077b`.
 5. FI-033 Dashboard visual compaction remains accepted at `01f22a605e8e4d29a8da187306af1dc04b8540ef`, and FI-034 automatic filtering is complete and manually accepted at `6a29ee5abee23b5ce741a69732d9f67ad805b95d`.
 6. FI-027 navbar search remains a separate design-discovery item and can follow its short design pass without blocking the Dashboard sequence.
-7. FI-035 Analyze compaction, including a neutral shared scrollbar treatment.
-8. FI-042 Filter-panel scrollbar consistency using that shared treatment.
-9. FI-036, FI-041, FI-037, FI-038, then FI-039 Review work so sidebar structure, scroll preservation, content layout, defaults and loading behavior are changed in controlled steps.
+7. FI-035 Analyze compaction is complete and manually accepted at `ec11aa1fdbd732eca651cdc2a265657405ec80f0`; preserve its neutral shared `pc-scrollbar` contract and FI-022/FI-024 boundaries.
+8. FI-042 Filter-panel scrollbar consistency is complete and manually accepted at `e235a15b6d86dc3c5313a4a151fa8c5146612a3a`; preserve the shared treatment while the Review sequence proceeds.
+9. FI-038 is complete and manually accepted at `54a3f89e83ad18c18875921f562f81c58b9d3d8d`. Continue with FI-039 incremental Product loading/reconciliation while preserving Review content intent, presentation, scroll/focus and freshness contracts.
 10. FI-029 popup action-density analysis before any icon-only popup migration.
 11. FI-030 frontend completion polish may proceed independently; backend progress/chunk work waits for its contract discovery.
 12. FI-040 keyboard-equivalent activation and discoverability after its focused interaction/accessibility design pass.

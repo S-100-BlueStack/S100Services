@@ -622,7 +622,7 @@ function applyAnalyzeViewPadding(view) {
     pendingAnimationFrame = null;
 
     const panel = document.getElementById("analyze-sidebar-panel");
-    const panelWidth = panel?.getBoundingClientRect?.().width ?? 420;
+    const panelWidth = panel?.getBoundingClientRect?.().width ?? 368;
     const isNarrowScreen = window.matchMedia("(max-width: 700px)").matches;
     view.padding = {
       left: isNarrowScreen ? 0 : Math.min(panelWidth + 24, window.innerWidth * 0.45),

@@ -107,3 +107,10 @@ counts, field controls, and reset actions. Inactive providers are absent.
 The panel registers as `filters` with the shared navbar-popover coordinator. Open, close, trigger
 toggle, outside click, Escape, keyboard navigation, and focus restoration therefore use the same
 lifecycle as other overlapping navbar popovers.
+
+## FI-042 scrollbar presentation
+
+The outer Filter panel scroller and the nested checkbox option lists use the neutral shared
+`pc-scrollbar` contract established by FI-035. The class styles only application-owned elements that
+already own overflow; it does not change panel or option-list sizing, overflow ownership, filtering
+state, rerender behavior, or private Calcite internals.

@@ -24,7 +24,8 @@ export function renderAnalyzeSidebar({
     datasetNames === undefined
       ? getEnabledAnalyzeDatasetNames(normalizedDatasetItems)
       : normalizeDatasetNames(datasetNames);
-  calcitePanel.heading = createHeading(enabledDatasetNames);
+  calcitePanel.heading = "";
+  calcitePanel.removeAttribute("heading");
   content.replaceChildren(
     createDatasetManager(normalizedDatasetItems, { loading, productCatalog }),
     loading
@@ -52,10 +53,11 @@ function getOrCreateAnalyzePanel() {
   shellPanel.width = "m";
 
   const panel = document.createElement("calcite-panel");
-  panel.heading = "Analyze";
+  panel.setAttribute("role", "region");
+  panel.setAttribute("aria-label", "Analyze workspace");
 
   const content = document.createElement("div");
-  content.className = "analyze-sidebar__content";
+  content.className = "analyze-sidebar__content pc-scrollbar";
   panel.appendChild(content);
   shellPanel.appendChild(panel);
   shell.appendChild(shellPanel);
@@ -63,17 +65,6 @@ function getOrCreateAnalyzePanel() {
   return shellPanel;
 }
 
-function createHeading(datasetNames) {
-  if (datasetNames.length === 0) {
-    return "Analyze";
-  }
-
-  if (datasetNames.length === 1) {
-    return `Analyze ${datasetNames[0]}`;
-  }
-
-  return `Analyze ${datasetNames.length} products`;
-}
 function createDatasetManager(datasetItems, { loading, productCatalog }) {
   const container = document.createElement("section");
   container.className = "analyze-dataset-manager";
@@ -122,8 +113,9 @@ function createDatasetAddForm(productCatalog, datasetItems) {
     id: "analyze-dataset-input",
     eventName: "pc-analyze-dataset-add",
     labelText: "Add product",
+    showLabel: false,
     placeholder: "Search or type product name",
-    helpText: "Add one product at a time, or enter comma-separated product names.",
+    showDefaultHelp: false,
     products: productCatalog.products,
     excludedProductNames: datasetItems.map((item) => item.name),
     loading: productCatalog.loading,
@@ -143,7 +135,7 @@ function createDatasetList(datasetItems) {
 
   const title = document.createElement("span");
   title.className = "analyze-dataset-list__title";
-  title.textContent = "Product list";
+  title.textContent = "Products";
   const count = document.createElement("span");
   count.className = "analyze-dataset-list__count";
   count.textContent =
@@ -162,6 +154,7 @@ function createDatasetList(datasetItems) {
   } else {
     const list = document.createElement("div");
     list.className = "analyze-dataset-list__items";
+    list.classList.add("pc-scrollbar");
     list.setAttribute("role", "list");
 
     for (const datasetItem of datasetItems) {
@@ -195,6 +188,7 @@ function createDatasetListItem(datasetItem) {
   const name = document.createElement("span");
   name.className = "analyze-dataset-list__item-name";
   name.textContent = datasetItem.name;
+  name.title = datasetItem.name;
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.className = "analyze-dataset-list__remove-button";

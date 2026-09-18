@@ -25,3 +25,15 @@ popover. The participant restores focus to the correct trigger after keyboard or
 Only intentionally registered navbar popovers participate. Product search, Preferences, Product
 History, popup action menus, and other independent panels keep their existing close priorities and
 are not closed automatically.
+
+## Shared scrollbar contract
+
+Add `pc-scrollbar` to an application-owned element that already owns overflow. The neutral class
+provides the compact Product Catalogue scrollbar colors and dimensions in light and dark mode without
+changing overflow, sizing, wheel, touch, or keyboard behavior. It must not be applied to private
+Calcite or ArcGIS shadow-DOM internals.
+
+Analyze uses the contract for its outer sidebar content scroller and bounded Product list. Existing
+Review scroll surfaces use the same class, preserving their established appearance. The Main-map
+Filter panel uses it for its outer scroller and nested checkbox option lists without depending on
+Analyze or Review selectors.

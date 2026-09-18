@@ -22,6 +22,22 @@
   min-width: 0;
 }
 
+.pc-product-picker__control--overlay {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pc-product-picker__control--overlay .pc-product-picker__results {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: calc(100% + 4px);
+  inset-inline: 0;
+  box-sizing: border-box;
+}
+
 .pc-product-picker__input {
   box-sizing: border-box;
   min-width: 0;

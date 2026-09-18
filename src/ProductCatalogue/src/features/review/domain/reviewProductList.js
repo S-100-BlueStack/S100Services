@@ -17,14 +17,14 @@ const REVIEW_CONTENT_TYPE_DEFINITIONS = Object.freeze([
     label: "IC-ENC reports",
     shortLabel: "IC-ENC",
     description: "IC-ENC report content for this product.",
-    defaultEnabled: false,
+    defaultEnabled: true,
   }),
   Object.freeze({
     id: REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS,
     label: "Internal validation reports",
     shortLabel: "Validation",
     description: "Internal validation reports for this product.",
-    defaultEnabled: false,
+    defaultEnabled: true,
   }),
 ]);
 
@@ -66,7 +66,11 @@ export function normalizeReviewProductItems(productItems) {
   return normalizedItems;
 }
 
-export function addReviewProductItem(productItems, datasetName) {
+export function addReviewProductItem(
+  productItems,
+  datasetName,
+  { contentTypeIntent = createDefaultReviewContentTypes() } = {}
+) {
   const items = normalizeReviewProductItems(productItems);
   const normalizedDatasetName = normalizeDatasetName(datasetName);
 
@@ -100,7 +104,7 @@ export function addReviewProductItem(productItems, datasetName) {
       id,
       datasetName: normalizedDatasetName,
       enabled: true,
-      contentTypes: createDefaultReviewContentTypes(),
+      contentTypes: normalizeReviewContentTypes(contentTypeIntent),
     },
   ];
 }
@@ -140,6 +144,22 @@ export function toggleReviewProductContentType(productItems, itemId, contentType
   });
 }
 
+export function toggleAllReviewProductContentTypes(productItems, contentTypeId, enabled) {
+  const normalizedContentTypeId = normalizeReviewContentTypeId(contentTypeId);
+
+  if (!normalizedContentTypeId) {
+    return normalizeReviewProductItems(productItems);
+  }
+
+  return normalizeReviewProductItems(productItems).map((item) => ({
+    ...item,
+    contentTypes: {
+      ...item.contentTypes,
+      [normalizedContentTypeId]: Boolean(enabled),
+    },
+  }));
+}
+
 export function removeReviewProductItem(productItems, itemId) {
   return normalizeReviewProductItems(productItems).filter((item) => item.id !== itemId);
 }
@@ -152,6 +172,45 @@ export function getEnabledReviewDatasetNames(productItems) {
 
 export function getReviewContentTypeDefinitions() {
   return REVIEW_CONTENT_TYPE_DEFINITIONS.map((definition) => ({ ...definition }));
+}
+
+export function createReviewWorkspaceContentIntent(contentTypes = null) {
+  return normalizeReviewContentTypes(contentTypes);
+}
+
+export function updateReviewWorkspaceContentIntent(contentTypes, contentTypeId, enabled) {
+  const normalizedContentTypeId = normalizeReviewContentTypeId(contentTypeId);
+  const normalizedContentTypes = normalizeReviewContentTypes(contentTypes);
+
+  if (!normalizedContentTypeId) {
+    return normalizedContentTypes;
+  }
+
+  return {
+    ...normalizedContentTypes,
+    [normalizedContentTypeId]: Boolean(enabled),
+  };
+}
+
+export function getReviewContentTypeAggregateState(productItems, contentTypeId) {
+  const normalizedContentTypeId = normalizeReviewContentTypeId(contentTypeId);
+  const items = normalizeReviewProductItems(productItems);
+
+  if (!normalizedContentTypeId || items.length === 0) {
+    return "empty";
+  }
+
+  const enabledCount = items.filter((item) => item.contentTypes[normalizedContentTypeId]).length;
+
+  if (enabledCount === items.length) {
+    return "all-enabled";
+  }
+
+  if (enabledCount === 0) {
+    return "all-disabled";
+  }
+
+  return "mixed";
 }
 
 export function getEnabledReviewContentTypes(productItem) {
