@@ -730,12 +730,16 @@ namespace ProductCatalogueAPI.Controllers
                 {
                     Id = r.Id,
                     Name = r.Name,
+                    ProductSpecification = r.ProductSpecification,
                     Edition = r.EditionNo,
                     Update = r.UpdateNo,
                     Status = Enum.Parse<ProductStatus>(r.State.ToString()),
                     From = r.Date_From,
                     To = r.Date_to,
-                    Owner = TrimUsername(r.Owner)
+                    Owner = TrimUsername(r.Owner),
+                    ErrorCode = r.ErrorCode,
+                    ErrorMessage = r.ErrorMessage,
+                    IsManuallyFrozen = r.IsManuallyFrozen
                 })
             ];
             response.TotalHits = historyRows.Length;
