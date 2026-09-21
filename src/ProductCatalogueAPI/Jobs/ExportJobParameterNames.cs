@@ -37,6 +37,10 @@ namespace ProductCatalogueAPI.Jobs
         public const string ProductVersionUnavailableMessage = "The product does not have a usable edition and update version.";
         public const string ProductVersionChangedCode = "PRODUCT_VERSION_CHANGED";
         public const string ProductVersionChangedMessage = "The product changed after the job was created.";
+        public const string NewDatasetRequiredCode = "NEW_DATASET_REQUIRED";
+        public const string NewDatasetRequiredMessage = "The first export must use the NewDataset operation when the product edition is zero.";
+        public const string NewDatasetInvalidVersionCode = "NEW_DATASET_INVALID_VERSION";
+        public const string NewDatasetInvalidVersionMessage = "NewDataset is only valid when the product edition is zero.";
         public const string ProductDataIntegrityErrorCode = "PRODUCT_DATA_INTEGRITY_ERROR";
         public const string ProductDataIntegrityStartMessage = "The product data is ambiguous and the operation cannot be started.";
         public const string ProductDataIntegrityJobMessage = "The product data is ambiguous and the operation could not be started.";

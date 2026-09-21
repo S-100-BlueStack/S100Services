@@ -5,6 +5,9 @@ namespace ProductCatalogueAPI.Services.Operations;
 /// <summary>Identifies a background export workflow operation.</summary>
 public enum ExportOperationType
 {
+    /// <summary>Builds the first dataset when the authoritative edition is zero.</summary>
+    NewDataset,
+
     /// <summary>Builds a new edition candidate.</summary>
     ExportEdition,
 

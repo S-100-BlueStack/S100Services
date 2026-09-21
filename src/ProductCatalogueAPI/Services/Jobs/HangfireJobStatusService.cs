@@ -224,7 +224,7 @@ namespace ProductCatalogueAPI.Services.Jobs
 
             if (string.IsNullOrWhiteSpace(datasetName) ||
                 string.IsNullOrWhiteSpace(correlationId) ||
-                operationType is not ("ExportEdition" or "ExportUpdate" or "CancelExport" or "SendToIcEnc"))
+                operationType is not ("NewDataset" or "ExportEdition" or "ExportUpdate" or "CancelExport" or "SendToIcEnc"))
                 return null;
 
             var exportTarget = ReadOptional<string>(

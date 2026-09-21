@@ -166,12 +166,32 @@ namespace ProductCatalogueAPI.Jobs
                 );
             }
 
+            if (currentVersion.Edition == 0 &&
+                (request.OperationType is ExportOperationType.ExportEdition or ExportOperationType.ExportUpdate)) {
+                throw CreateSafeFailure(
+                    context,
+                    ExportJobContract.NewDatasetRequiredCode,
+                    ExportJobContract.NewDatasetRequiredMessage
+                );
+            }
+
+            if (request.OperationType == ExportOperationType.NewDataset && currentVersion.Edition != 0) {
+                throw CreateSafeFailure(
+                    context,
+                    ExportJobContract.NewDatasetInvalidVersionCode,
+                    ExportJobContract.NewDatasetInvalidVersionMessage
+                );
+            }
+
             try {
                 cancellationToken.ThrowIfCancellationRequested();
                 Action markExecutionStarted = () =>
                     context.SetJobParameter(ExportJobParameterNames.ExecutionStarted, true);
 
                 var result = request.OperationType switch {
+                    ExportOperationType.NewDataset => await _exportOperationService.ExecuteExportAsync(
+                        request.DatasetName, ExportRevisionType.NewEdition,
+                        user: null, cancellationToken: cancellationToken, beforeMutation: markExecutionStarted),
                     ExportOperationType.ExportEdition => await _exportOperationService.ExecuteExportAsync(
                         request.DatasetName, ExportRevisionType.NewEdition,
                         user: null, cancellationToken: cancellationToken, beforeMutation: markExecutionStarted),
@@ -280,7 +300,7 @@ namespace ProductCatalogueAPI.Jobs
             }
             catch (Exception ex) {
                 var (code, message) = request.OperationType switch {
-                    ExportOperationType.ExportEdition or ExportOperationType.ExportUpdate => (
+                    ExportOperationType.NewDataset or ExportOperationType.ExportEdition or ExportOperationType.ExportUpdate => (
                         ExportJobContract.ExportFailedCode,
                         ExportJobContract.ExportFailedMessage
                     ),
