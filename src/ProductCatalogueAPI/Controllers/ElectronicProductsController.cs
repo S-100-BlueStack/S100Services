@@ -336,7 +336,12 @@ namespace ProductCatalogueAPI.Controllers
             var exports = new List<ProductExport>();
             foreach (var track in tracks)
             {
-                var latestRevisionId = await _workflowRepository.GetLatestRevisionIdAsync(track.Id);
+                // A track is retained after CancelExport so its state history remains auditable.
+                // It is not a current export unless it still has a candidate or a published version.
+                var hasActiveCandidate = track.CandidateEdition.HasValue && track.CandidateUpdate.HasValue;
+                var latestRevisionId = hasActiveCandidate
+                    ? await _workflowRepository.GetLatestRevisionIdAsync(track.Id)
+                    : null;
                 var artifacts = latestRevisionId is Guid revisionId
                     ? await _workflowRepository.GetValidationArtifactsAsync(revisionId)
                     : [];
@@ -828,6 +833,9 @@ namespace ProductCatalogueAPI.Controllers
             return [.. tracks
                 .DistinctBy(track => track.Id)
                 .Where(track => track.ProductSpecification is ProductSpecification.S57 or ProductSpecification.S101)
+                .Where(track => (track.CandidateEdition.HasValue && track.CandidateUpdate.HasValue)
+                    || track.PublishedEdition > 0
+                    || track.PublishedUpdate > 0)
                 .OrderBy(track => track.ProductSpecification)];
         }
 

@@ -62,7 +62,7 @@ public sealed class ExportOperationServiceTests
     }
 
     [Fact]
-    public async Task CancelExportClearsOnlyTheSqlCandidateAndFilesystemOutput() {
+    public async Task CancelExportRestoresThePreviousStateAndClearsOnlyTheSqlCandidateAndFilesystemOutput() {
         var repository = new RecordingWorkflowRepository { CandidateEdition = 5, CandidateUpdate = 0, InitialState = ProductState.ReadyForDistribution };
         var products = new RecordingElectronicProductManager();
         var engine = new RecordingExportEngine();
@@ -71,9 +71,31 @@ public sealed class ExportOperationServiceTests
         var result = await service.ExecuteCancelExportAsync("101DK001", "developer");
 
         Assert.Equal(ExportOperationContract.CancelExportCompletedCode, result.Code);
-        Assert.Equal(ProductState.Cancelled, repository.Track.State);
+        Assert.Equal(ProductState.ReadyForDistribution, repository.Track.State);
         Assert.Null(repository.Track.CandidateEdition);
+        Assert.Null(repository.Track.CandidatePreviousState);
         Assert.Equal(1, engine.DeleteCalls);
+        Assert.Equal(0, products.SnapshotCalls);
+        Assert.Equal(0, products.AttachmentCalls);
+    }
+
+    [Fact]
+    public async Task CancelExportRestoresPreviousStateAndPreservesManualFreezeHold() {
+        var repository = new RecordingWorkflowRepository { CandidateEdition = 5, CandidateUpdate = 0, InitialState = ProductState.ChangesDetected };
+        var track = await repository.GetTrackAsync("101DK001", ProductSpecification.S101);
+        track!.IsManuallyFrozen = true;
+        var products = new RecordingElectronicProductManager();
+        var engine = new RecordingExportEngine();
+        var service = CreateService(products, repository, engine, new SummaryResponse());
+
+        await service.ExecuteCancelExportAsync("101DK001", "developer");
+
+        Assert.Equal(ProductState.ChangesDetected, repository.Track.State);
+        Assert.True(repository.Track.IsManuallyFrozen);
+        Assert.Null(repository.Track.CandidateEdition);
+        Assert.Null(repository.Track.CandidatePreviousState);
+        Assert.Equal(1, engine.DeleteCalls);
+        Assert.Equal(0, products.SnapshotCalls);
         Assert.Equal(0, products.AttachmentCalls);
     }
 
@@ -202,11 +224,11 @@ public sealed class ExportOperationServiceTests
 
         public Task<ProductExportTrackRecord?> GetTrackAsync(string datasetName, ProductSpecification productSpecification, CancellationToken cancellationToken = default) => Task.FromResult<ProductExportTrackRecord?>(EnsureTrack(datasetName, productSpecification));
         public Task<ProductExportTrackRecord> GetOrCreateTrackAsync(string datasetName, ProductSpecification productSpecification, ExportEngineKind engine, int publishedEdition, int publishedUpdate, CancellationToken cancellationToken = default) => Task.FromResult(EnsureTrack(datasetName, productSpecification));
-        public Task BeginExportAsync(Guid trackId, int candidateEdition, int candidateUpdate, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { Track.State = ProductState.Exporting; Track.CandidateEdition = candidateEdition; Track.CandidateUpdate = candidateUpdate; return Task.CompletedTask; }
+        public Task BeginExportAsync(Guid trackId, int candidateEdition, int candidateUpdate, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { Track.CandidatePreviousState = Track.State; Track.State = ProductState.Exporting; Track.CandidateEdition = candidateEdition; Track.CandidateUpdate = candidateUpdate; return Task.CompletedTask; }
         public Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default) { Track.State = state; LastErrorCode = errorCode; LastErrorMessage = errorMessage; return Task.CompletedTask; }
         public Task<bool> SetManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { var changed = !Track.IsManuallyFrozen; Track.IsManuallyFrozen = true; return Task.FromResult(changed); }
         public Task<bool> ClearManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { var changed = Track.IsManuallyFrozen; Track.IsManuallyFrozen = false; return Task.FromResult(changed); }
-        public Task CancelCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { Track.State = ProductState.Cancelled; Track.CandidateEdition = null; Track.CandidateUpdate = null; return Task.CompletedTask; }
+        public Task CancelCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { Track.State = Track.CandidatePreviousState ?? ProductState.Idle; Track.CandidateEdition = null; Track.CandidateUpdate = null; Track.CandidatePreviousState = null; return Task.CompletedTask; }
         public Task<Guid> AddRevisionAsync(ProductRevisionWrite revision, CancellationToken cancellationToken = default) { Revisions.Add(revision); return Task.FromResult(Guid.NewGuid()); }
         public Task AddArtifactAsync(ProductArtifactWrite artifact, CancellationToken cancellationToken = default) { Artifacts.Add(artifact); return Task.CompletedTask; }
         public Task<ProductChangeSummary?> GetOpenChangeSummaryAsync(Guid trackId, DateOnly workDate, CancellationToken cancellationToken = default) => Task.FromResult<ProductChangeSummary?>(null);

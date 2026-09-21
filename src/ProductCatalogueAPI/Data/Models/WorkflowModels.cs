@@ -106,6 +106,9 @@ public sealed class ProductExportTrackRecord
     /// <summary>Gets or sets the unverified candidate update, when one exists.</summary>
     public int? CandidateUpdate { get; set; }
 
+    /// <summary>Gets or sets the workflow state that existed immediately before the current candidate started.</summary>
+    public ProductState? CandidatePreviousState { get; set; }
+
     /// <summary>Gets or sets the last UTC workflow update time.</summary>
     public DateTime UpdatedAtUtc { get; set; }
 
