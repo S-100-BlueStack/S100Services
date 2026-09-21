@@ -72,6 +72,7 @@ export function createAttributeFilterService({
         getStatuses,
         getUsages,
       }),
+      defaultExcludedValues: cloneDefaultExcludedValues(defaultExcludedValues),
       order: Number(order) || 0,
     };
 
@@ -91,7 +92,7 @@ export function createAttributeFilterService({
       } else if (snapshotApplied && snapshotProviderIds.has(id)) {
         filtersByProvider.delete(id);
       } else {
-        applyDefaultExcludedValues(id, defaultExcludedValues);
+        applyDefaultExcludedValues(id, provider.defaultExcludedValues);
       }
     }
 
@@ -270,6 +271,25 @@ export function createAttributeFilterService({
 
     emit({ type: "filters-cleared", providerId: null });
     return true;
+  }
+
+  function resetToDefaults() {
+    const before = JSON.stringify(getFilterSnapshot());
+
+    filtersByProvider.clear();
+    pendingSnapshotFilters.clear();
+    snapshotProviderIds.clear();
+    snapshotApplied = false;
+
+    for (const provider of providers.values()) {
+      applyDefaultExcludedValues(provider.id, provider.defaultExcludedValues);
+    }
+
+    const changed = JSON.stringify(getFilterSnapshot()) !== before;
+    if (changed) {
+      emit({ type: "filters-reset", providerId: null });
+    }
+    return changed;
   }
 
   function getSelectedValues(providerId, fieldName) {
@@ -593,6 +613,7 @@ export function createAttributeFilterService({
     setRangeFilter,
     clearFilter,
     clearAll,
+    resetToDefaults,
     getSelectedValues,
     getRangeFilter,
     getActiveFilterCount,
@@ -607,6 +628,17 @@ export function createAttributeFilterService({
     getProviderGeneration,
     subscribe,
   };
+}
+
+function cloneDefaultExcludedValues(defaults) {
+  if (!Array.isArray(defaults)) {
+    return [];
+  }
+
+  return defaults.map((entry) => ({
+    fieldName: entry?.fieldName,
+    values: Array.isArray(entry?.values) ? [...entry.values] : [],
+  }));
 }
 
 function buildFacets({ layers, definitions, useLookupOptions, getStatuses, getUsages }) {

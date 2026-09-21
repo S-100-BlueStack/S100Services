@@ -60,6 +60,45 @@ describe("attributeFilterService", () => {
     assert.equal(service.getLayerMetadata(COMPATIBILITY_PROVIDER_ID).visibleCount, 1);
   });
 
+  it("resets current filters to declarative defaults instead of Clear all state", () => {
+    const service = createService();
+    replaceCompatibilityProvider(service, createCompatibilityLayer());
+
+    service.clearAll();
+    assert.equal(service.getSelectedValues(COMPATIBILITY_PROVIDER_ID, "status"), null);
+    assert.equal(service.getLayerMetadata(COMPATIBILITY_PROVIDER_ID).visibleCount, 2);
+
+    assert.equal(service.resetToDefaults(), true);
+    assert.deepEqual([...service.getSelectedValues(COMPATIBILITY_PROVIDER_ID, "status")], ["2"]);
+    assert.equal(service.getLayerMetadata(COMPATIBILITY_PROVIDER_ID).visibleCount, 1);
+    assert.deepEqual(service.getFilterSnapshot(), {
+      version: 2,
+      sources: [
+        {
+          providerId: COMPATIBILITY_PROVIDER_ID,
+          fields: [{ fieldName: "status", mode: "values", values: ["2"] }],
+        },
+      ],
+    });
+  });
+
+  it("drops pending snapshot intent so delayed providers receive declarative defaults after Reset", () => {
+    const service = createService();
+    assert.equal(
+      service.applyFilterSnapshot({
+        version: 2,
+        sources: [{ providerId: COMPATIBILITY_PROVIDER_ID, fields: [] }],
+      }),
+      true
+    );
+
+    assert.equal(service.resetToDefaults(), true);
+    replaceCompatibilityProvider(service, createCompatibilityLayer());
+
+    assert.deepEqual([...service.getSelectedValues(COMPATIBILITY_PROVIDER_ID, "status")], ["2"]);
+    assert.equal(service.getLayerMetadata(COMPATIBILITY_PROVIDER_ID).visibleCount, 1);
+  });
+
   it("migrates an empty version 1 snapshot when a runtime source arrives first", () => {
     const service = createService();
     service.replaceProvider({

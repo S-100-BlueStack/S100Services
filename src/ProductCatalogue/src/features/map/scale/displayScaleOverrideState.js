@@ -1,4 +1,8 @@
 import {
+  readSavedPreferenceStatus,
+  notifySavedPreferenceChanged,
+} from "../../preferences/state/savedPreferenceStatus.js";
+import {
   PREFERENCE_PERSISTENCE_KEY,
   isPreferencePersistenceEnabled,
   onPreferencePersistenceChanged,
@@ -42,6 +46,7 @@ export function setDisplayScaleHidingDisabled(disabled, { source = "manual" } = 
   }
 
   displayScaleHidingDisabled = nextDisabled;
+  notifySavedPreferenceChanged();
 
   document.dispatchEvent(
     new CustomEvent(DISPLAY_SCALE_OVERRIDE_CHANGE_EVENT, {
@@ -81,9 +86,10 @@ export function resetDisplayScaleHidingPreference() {
   });
 }
 
-function removePersistedDisplayScaleHidingDisabled() {
+export function removePersistedDisplayScaleHidingDisabled() {
   try {
     window.localStorage.removeItem(DISPLAY_SCALE_OVERRIDE_STORAGE_KEY);
+    notifySavedPreferenceChanged();
   } catch (error) {
     console.warn("Failed to remove display scale hiding preference.", error);
   }
@@ -114,7 +120,18 @@ function writePersistedDisplayScaleHidingDisabled(disabled) {
       DISPLAY_SCALE_OVERRIDE_STORAGE_KEY,
       serializeDisplayScaleHidingDisabled(disabled)
     );
+    notifySavedPreferenceChanged();
   } catch (error) {
     console.warn("Failed to save display scale hiding preference.", error);
   }
+}
+
+export function getSavedDisplayScaleStatus() {
+  return readSavedPreferenceStatus(DISPLAY_SCALE_OVERRIDE_STORAGE_KEY, (value) =>
+    value === "false"
+      ? "Saved: ON"
+      : value === "true"
+        ? "Saved: OFF"
+        : "Saved value invalid (default: OFF)"
+  );
 }

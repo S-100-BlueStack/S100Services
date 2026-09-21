@@ -62,6 +62,11 @@ while retaining explicit unfiltered intent for every known active or pending pro
 providers therefore publish with `fields: []` and cannot revive old migrated values or first-visit
 defaults. The panel persists that canonical state immediately.
 
+Preferences `Reset filters` is intentionally different from the Filter panel `Clear all`. Reset
+returns current providers to their declarative first-visit defaults, clears old snapshot intent, and
+lets later providers receive their configured defaults. For electronic sources this restores the
+conservative Idle exclusion. Persistence still follows the Filters Auto-save choice.
+
 The service records the latest source operation generation. A stale activation or refresh cannot
 publish facets after a newer replacement or removal.
 

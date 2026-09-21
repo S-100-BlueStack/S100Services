@@ -1,3 +1,7 @@
+import {
+  readSavedPreferenceStatus,
+  notifySavedPreferenceChanged,
+} from "../../preferences/state/savedPreferenceStatus.js";
 import { watch } from "@arcgis/core/core/reactiveUtils.js";
 import {
   PREFERENCE_PERSISTENCE_KEY,
@@ -107,6 +111,7 @@ export async function resetMapViewpoint(view) {
 export function clearStoredMapViewpoint() {
   try {
     window.localStorage.removeItem(MAP_VIEWPOINT_STORAGE_KEY);
+    notifySavedPreferenceChanged();
     return true;
   } catch (error) {
     console.warn("[Map viewpoint] Failed to clear saved viewpoint", error);
@@ -158,6 +163,7 @@ function saveMapViewpoint(view) {
 
   try {
     window.localStorage.setItem(MAP_VIEWPOINT_STORAGE_KEY, JSON.stringify(viewpoint));
+    notifySavedPreferenceChanged();
     return true;
   } catch (error) {
     console.warn("[Map viewpoint] Failed to save viewpoint", error);
@@ -238,4 +244,8 @@ function isValidLongitude(value) {
 
 function isValidLatitude(value) {
   return Number.isFinite(value) && value >= -90 && value <= 90;
+}
+
+export function getSavedMapViewpointStatus() {
+  return readSavedPreferenceStatus(MAP_VIEWPOINT_STORAGE_KEY, () => "Saved map view");
 }

@@ -100,13 +100,23 @@
   white-space: nowrap;
 }
 
-.navbar-title-link:hover,
-.navbar-title-link:focus,
-.navbar-title-link:active,
 .navbar-title-link[aria-current="page"] {
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+
+.navbar-title-link:hover {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.navbar-title-link:focus-visible {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  outline: none;
 }
 
 #last-updated {

@@ -30,11 +30,6 @@ const GLOBAL_HELP_RULES = [
     mode: "replace-generic",
   },
   {
-    selector: "input[data-preference-theme]",
-    title: "Choose light or dark mode.",
-    mode: "fill-empty",
-  },
-  {
     selector: "#notification-button",
     title: "Open notifications and recent system messages.",
     mode: "replace-generic",

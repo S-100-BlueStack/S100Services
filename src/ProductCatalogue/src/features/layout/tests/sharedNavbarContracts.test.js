@@ -27,7 +27,7 @@ test("Main-map FI-026 controls use the required compact relative order", async (
   );
 });
 
-test("shared navbar exposes semantic routes and retains inactive-link hover styling", async () => {
+test("shared navbar uses underline for current, hover and keyboard focus without an outline", async () => {
   const [navbar, loader, headerStyles] = await Promise.all([
     readProjectFile("public/components/navbar.html"),
     readProjectFile("src/features/layout/services/navbarLoader.js"),
@@ -38,8 +38,21 @@ test("shared navbar exposes semantic routes and retains inactive-link hover styl
     assert.match(navbar, new RegExp(`data-nav-route="${routeName}"`));
   }
   assert.match(loader, /applyNavbarRouteState\(document, route\)/);
-  assert.match(headerStyles, /\.navbar-title-link:hover/);
-  assert.match(headerStyles, /\.navbar-title-link\[aria-current="page"\]/);
+  assert.match(
+    headerStyles,
+    /\.navbar-title-link\[aria-current="page"\][^{]*\{[^}]*text-decoration:\s*underline;/
+  );
+  assert.match(headerStyles, /\.navbar-title-link:hover[^{]*\{[^}]*text-decoration:\s*underline;/);
+  assert.doesNotMatch(headerStyles, /\.navbar-title-link:hover[^{{]*\{{[^}}]*background\s*:/);
+  assert.match(
+    headerStyles,
+    /\.navbar-title-link:focus-visible[^{]*\{[^}]*text-decoration:\s*underline;[^}]*outline:\s*none;/
+  );
+  assert.doesNotMatch(headerStyles, /\.navbar-title-link:focus\s*\{/);
+  assert.doesNotMatch(
+    headerStyles,
+    /\.navbar-title-link:active[^{]*\{[^}]*text-decoration:\s*underline;/
+  );
 });
 
 test("navbar omits visible Help and standalone Theme controls", async () => {
@@ -58,18 +71,20 @@ test("manual refresh keeps and restores the complete last-successful timestamp p
   assert.match(initMap, /setLastUpdatedPresentation\(previousLastUpdatedPresentation\)/);
 });
 
-test("Preferences owns immediate Light and Dark selection through the existing theme service", async () => {
+test("Preferences owns one immediate Theme switch through the existing theme service", async () => {
   const [preferences, bootstrap] = await Promise.all([
     readProjectFile("src/features/preferences/ui/preferencesPanel.js"),
     readProjectFile("src/app/bootstrap.js"),
   ]);
 
-  assert.match(preferences, /renderThemeOption\(themes\.light, "Light", currentTheme\)/);
-  assert.match(preferences, /renderThemeOption\(themes\.dark, "Dark", currentTheme\)/);
-  assert.match(
-    preferences,
-    /applyTheme\(themeOption\.value, context\.themeView \?\? context\.view\)/
-  );
+  assert.match(preferences, /renderThemeSetting\(getCurrentTheme\(\)\)/);
+  assert.match(preferences, /id="preferences-dark-mode"/);
+  assert.match(preferences, /label="Dark theme"/);
+  assert.match(preferences, /icon="brightness"/);
+  assert.match(preferences, /icon="moon"/);
+  assert.match(preferences, /toggleTheme\(context\.themeView \?\? context\.view\)/);
+  assert.doesNotMatch(preferences, /data-preference-action="toggle-theme"/);
+  assert.doesNotMatch(preferences, /data-preference-theme|type="radio"/);
   assert.match(preferences, /getCurrentTheme\(\)/);
   assert.match(bootstrap, /ui\.preferencesPanel\.updateContext\(\{ themeView: app\.view \}\)/);
   assert.doesNotMatch(bootstrap, /registerThemeToggle/);
@@ -83,7 +98,7 @@ test("Preferences retains introduction, reset and route-safe map preference boun
 
   assert.match(preferences, /data-preference-action="start-introduction"/);
   assert.match(preferences, /data-preference-action="reset-all"/);
-  assert.match(preferences, /!item\.requiresMapContext \|\| context\.view/);
+  assert.match(preferences, /!item\.requiresMapContext \|\| context\.mapPreferences/);
   assert.match(preferences, /resetDisplayScaleHidingPreference\(\)/);
   assert.match(onboarding, /selectors: \["#preferences-button"\]/);
   assert.doesNotMatch(onboarding, /#theme-toggle/);

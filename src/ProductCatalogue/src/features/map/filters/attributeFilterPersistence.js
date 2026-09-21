@@ -1,3 +1,7 @@
+import {
+  readSavedPreferenceStatus,
+  notifySavedPreferenceChanged,
+} from "../../preferences/state/savedPreferenceStatus.js";
 import { ATTRIBUTE_FILTER_CONFIG } from "./attributeFilterConfig.js";
 
 export const ATTRIBUTE_FILTER_SNAPSHOT_READ_STATUS = Object.freeze({
@@ -54,6 +58,7 @@ export function writeAttributeFilterSnapshot(
 
   try {
     storage.setItem(storageKey, JSON.stringify(filterService.getFilterSnapshot()));
+    notifySavedPreferenceChanged();
     return { written: true, error: null };
   } catch (error) {
     return { written: false, error };
@@ -70,6 +75,7 @@ export function removeAttributeFilterSnapshot({
 
   try {
     storage.removeItem(storageKey);
+    notifySavedPreferenceChanged();
     return { removed: true, error: null };
   } catch (error) {
     return { removed: false, error };
@@ -116,4 +122,8 @@ function migrateFilterProviders(snapshot, aliases) {
           : entry
       ),
   };
+}
+
+export function getSavedAttributeFilterStatus() {
+  return readSavedPreferenceStatus(ATTRIBUTE_FILTER_CONFIG.storageKey, () => "Saved filter data");
 }

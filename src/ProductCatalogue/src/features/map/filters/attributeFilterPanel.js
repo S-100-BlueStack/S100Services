@@ -117,6 +117,13 @@ export function initAttributeFilterPanel({
     render();
   }
 
+  function resetFiltersToDefaults() {
+    filterService.resetToDefaults();
+    writeFilterSnapshot(filterService);
+    applyVisibility?.();
+    render();
+  }
+
   function render() {
     renderScheduled = false;
     const providerIds = filterService.getLayerIds();
@@ -379,6 +386,7 @@ export function initAttributeFilterPanel({
     refresh: render,
     close,
     clearAllFilters,
+    resetFiltersToDefaults,
     destroy() {
       persistenceHandle?.remove?.();
       unsubscribeFilters();
@@ -719,6 +727,7 @@ function createEmptyApi() {
     refresh() {},
     close: () => false,
     clearAllFilters() {},
+    resetFiltersToDefaults() {},
     destroy() {},
   };
 }

@@ -626,3 +626,36 @@ The normalized workflow adaptation is implemented without committing. Dependency
 Work; the Windows `npm run format` / `npm run check` and manual acceptance plan remain required.
 BE-108A Batch 1 is preserved. Batch 2 producers/recovery, real distribution, production mock-source
 replacements, Dashboard report associations and global timeline remain separate backend work.
+
+## Shared Preferences
+
+FI-044 status: **Done**.  
+Implementation commit: `79616f8af0cda91db8e4b1fa90c0248aef4fef41`.  
+Accepted merged baseline: `82f69c1d082773c110b48404d716d99cdc32de02`.
+
+The shared panel presents **Theme** as a standard runtime setting with a Light (sun) / Dark (moon) icon-flanked switch, alongside Main-map-only Scale hiding when available, followed by **Saved preferences**. The Introduction replay is a separate secondary button at the bottom of the panel rather than part of the settings hierarchy. Redundant visible Introduction and Settings headings are intentionally omitted.
+Theme remains owned by `themeService.js` on every shared-navigation route. Main map injects
+`createMainMapPreferences` for Scale hiding, Map view and Filters; the shared panel imports no
+Main-map service. Main-map startup modules load only in the Main-map bootstrap branch.
+Scale hiding remains opt-in OFF with the existing strict saved boolean format and immediate
+visibility behavior. Workspace Preferences does not initialize Main-map Scale hiding or filters.
+
+Auto-save ON remembers the preference. Auto-save OFF removes that preference's stored value
+without changing its current runtime value. There is no separate saved-value status or clear action.
+**Reset** invokes the named owner's existing runtime reset without changing Auto-save. Theme reset
+selects Light (and saves when enabled); Scale hiding reset selects OFF and removes storage.
+Map view retains its existing reset/save behavior. Filters Reset restores the declarative
+first-visit defaults (including the conservative Idle exclusion) rather than the Filter panel's
+explicit `Clear all` state. Dashboard page-size reset clears storage and restores 50.
+The aggregate reset retains its existing route scope, explicitly including Main-map source defaults.
+
+Changes update controls in place, preserving focus. Context replacement uses application-owned
+focus identity. Escape and click-away preserve route lifecycle priorities and focus restoration.
+Theme uses one compact public `calcite-switch`, visually framed by the public `brightness` (Light) and `moon` (Dark) icons while `themeService.js` remains the state owner.
+The active route, pointer hover and keyboard `:focus-visible` use the compact underline affordance; the previous full-link highlight/outline remains removed. Plain pointer focus does not retain an underline, so route state still settles immediately after navigation.
+The existing Introduction callback/lifecycle is unchanged. FI-043 remains the deferred owner of
+the consolidated onboarding-content refresh.
+
+FI-044 was manually accepted on 2026-09-21. Browser verification confirmed the final compact Theme switch with Light/sun and Dark/moon endpoints, the secondary Introduction button, restored navbar hover/current-route underline behavior, and Filters Reset restoring the conservative Idle default. The implementation was committed at `79616f8af0cda91db8e4b1fa90c0248aef4fef41` and is preserved in merged baseline `82f69c1d082773c110b48404d716d99cdc32de02`. Local frontend check passed and formatting was run before commit.
+
+See [FI-044 verification and manual checklist](docs/fi-044-verification.md).

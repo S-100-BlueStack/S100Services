@@ -1,4 +1,8 @@
 import {
+  readSavedPreferenceStatus,
+  notifySavedPreferenceChanged,
+} from "../../preferences/state/savedPreferenceStatus.js";
+import {
   DASHBOARD_DEFAULT_PAGE_SIZE,
   normalizeDashboardPageSize,
 } from "../domain/dashboardQuery.js";
@@ -28,6 +32,7 @@ export function writeDashboardPageSizePreference(pageSize, storage = getBrowserS
 
   try {
     storage.setItem(DASHBOARD_PAGE_SIZE_STORAGE_KEY, String(normalizedPageSize));
+    notifySavedPreferenceChanged();
   } catch (error) {
     console.warn("[Dashboard] Failed to save page size.", error);
   }
@@ -38,6 +43,7 @@ export function writeDashboardPageSizePreference(pageSize, storage = getBrowserS
 export function resetDashboardPageSizePreference(storage = getBrowserStorage()) {
   try {
     storage?.removeItem(DASHBOARD_PAGE_SIZE_STORAGE_KEY);
+    notifySavedPreferenceChanged();
   } catch (error) {
     console.warn("[Dashboard] Failed to clear saved page size.", error);
   }
@@ -75,4 +81,12 @@ function dispatchDashboardPageSizePreferenceReset() {
 
 function getBrowserStorage() {
   return typeof window === "undefined" ? null : window.localStorage;
+}
+
+export function getSavedDashboardPageSizeStatus() {
+  return readSavedPreferenceStatus(DASHBOARD_PAGE_SIZE_STORAGE_KEY, (value) =>
+    ["25", "50", "100", "200"].includes(value)
+      ? `Saved: ${value} rows`
+      : "Saved value invalid (default: 50)"
+  );
 }
