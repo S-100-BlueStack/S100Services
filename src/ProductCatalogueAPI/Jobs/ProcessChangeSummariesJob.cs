@@ -44,8 +44,28 @@ public sealed class ProcessChangeSummariesJob(IProductWorkflowRepository workflo
             return;
         }
 
+        var revisionType = decision.RevisionType.Value;
+        var operationType = revisionType == ExportRevisionType.Update
+            ? ExportOperationType.ExportUpdate
+            : ExportOperationType.ExportEdition;
+        if (track?.PublishedEdition == 0) {
+            // An imported product with edition zero has no edition history yet. Its first
+            // export is a NewDataset operation, but it uses the NewEdition build pipeline.
+            operationType = ExportOperationType.NewDataset;
+            revisionType = ExportRevisionType.NewEdition;
+        }
+
+        _logger.LogInformation(
+            "Change-summary export selected. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}. OperationType: {OperationType}. RevisionType: {RevisionType}. PublishedEdition: {PublishedEdition}.",
+            summary.DatasetName,
+            summary.ProductSpecification,
+            operationType,
+            revisionType,
+            track?.PublishedEdition
+        );
+
         try {
-            await _exportOperations.ExecuteExportAsync(summary.DatasetName, decision.RevisionType.Value, "system", summary.Yaml, cancellationToken);
+            await _exportOperations.ExecuteExportAsync(summary.DatasetName, revisionType, "system", summary.Yaml, cancellationToken);
         }
         catch (ExportOperationRejectedException) {
             var currentTrack = await _workflowRepository.GetTrackAsync(summary.DatasetName, summary.ProductSpecification, cancellationToken);
