@@ -1,7 +1,9 @@
 # FI-044 verification and manual checklist
 
-Status: **Implemented; manual verification pending**.
-No commit was created. No dependency or lockfile changes were made.
+Status: **Done**.  
+Implementation commit: `79616f8af0cda91db8e4b1fa90c0248aef4fef41`.  
+Accepted merged baseline: `82f69c1d082773c110b48404d716d99cdc32de02`.  
+No dependency or lockfile changes were made.
 
 ## Authoritative input
 
@@ -107,16 +109,9 @@ The V5 changed-files ZIP does not contain the complete baseline import graph, so
 the focused Node suites that require unchanged files such as `src/shared/config/layerIds.js`. The V4
 22/22 filter-service result remains applicable because V5 does not change filter runtime code.
 
-Not run: `npm run check`, Prettier, ESLint or Vite build, because project `node_modules` is absent.
-Browser rendering was not verified: the available Playwright package has no Chromium executable.
-No dependency or browser installation was attempted.
+In the implementation environment, `npm run check`, Prettier, ESLint and Vite build were not available because project `node_modules` was absent, and browser rendering was not available because the Playwright package had no Chromium executable. No dependency or browser installation was attempted there.
 
-Run locally from `src/ProductCatalogue`:
-
-```shell
-npm run format
-npm run check
-```
+During final local acceptance, formatting was run and `npm run check` passed before commit.
 
 ## Manual browser checklist
 
@@ -163,12 +158,6 @@ Perform each row independently:
 
 ## Delivery
 
-The candidate ZIP contains complete changed/new files rooted at `src/ProductCatalogue/...`. V7 retains the accepted V5 navbar feedback and V4 filter-reset correction. Relative to V6, only Preferences Theme/Introduction presentation changes: Theme is labelled `Theme` with Light/Dark endpoint icons around the existing switch, and Start introduction is a real secondary button at the bottom. No baseline file is deleted. Prior
-accepted statuses and commit history through FI-040 are retained. This candidate is not manually
-accepted.
+The final FI-044 implementation was manually accepted and committed at `79616f8af0cda91db8e4b1fa90c0248aef4fef41`. The accepted implementation includes the final V7 runtime/UI behavior plus the V8 test-contract update; no runtime behavior changed in V8. The later merge commit `82f69c1d082773c110b48404d716d99cdc32de02` preserves FI-044 together with colleague changes and is the authoritative post-FI-044 repository baseline.
 
-Suggested commit message:
-
-```text
-fix(preferences): simplify saved preferences and route navigation state (FI-044)
-```
+Manual acceptance confirmed the final navbar hover/current-route underline behavior, Theme switch with Light/sun and Dark/moon endpoints, secondary Start introduction button, route-safe shared Preferences, independent Auto-save/Reset semantics, and Filters Reset restoring the conservative Idle exclusion. Local frontend check passed and formatting was run before commit.

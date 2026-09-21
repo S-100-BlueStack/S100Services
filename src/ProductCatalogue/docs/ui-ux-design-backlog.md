@@ -1,6 +1,6 @@
 # Product Catalogue UI/UX design backlog
 
-Documentation baseline: `8acfec141ff508fde5484119af7a3f01ab084bd7`  
+Documentation baseline: `82f69c1d082773c110b48404d716d99cdc32de02`  
 Review date: 2026-09-17
 
 This document formalizes the post-FI-022 Product Catalogue design review into independently implementable feature items. It is a design and task boundary document, not an implementation claim. The existing feature boundaries, source-aware Product identity, FI-024 targeted workspace resolution, FI-025 ArcGIS process isolation, FI-022 workspace freshness lifecycle, keyboard/focus behavior, and light/dark support remain preservation requirements unless a task explicitly changes them.
@@ -56,7 +56,7 @@ The frontend must not invent precise progress percentages that the backend canno
 | FI-041 | Review / Product list           | Preserve Product-list scroll position when content toggles change                                     | Done                                      | Manually accepted at `9c07f8a7fb93cd80bbbab59a3d47719e3667863c`. History, IC-ENC and Validation toggles pass a synchronous Product-list scroll/focus snapshot through their authoritative rerender. The replacement list restores `scrollTop` and stable Product/content-type focus with `preventScroll`; no delayed or cross-render state is retained. Ordering, content selection, FI-022 freshness, other composition changes and keyboard interaction remain unchanged.                                                                                                                                                                                                                                                                                                                |
 | FI-042 | Main map / Filters              | Align Filter panel scrollbar styling                                                                  | Done                                      | Manually accepted at `e235a15b6d86dc3c5313a4a151fa8c5146612a3a`. Reuses the accepted FI-035 neutral shared `pc-scrollbar` contract on the Filter panel outer scroller and generated checkbox option lists such as Status. Existing overflow ownership, filtering state, counts, persistence, wheel/keyboard behavior and public Calcite boundaries remain unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | FI-043 | Introduction / Onboarding       | Refresh onboarding after the UI/UX redesign                                                           | Deferred                                  | Perform one consolidated route-by-route onboarding audit after the active redesign wave settles. Explain the final accepted workflows and controls, including FI-021 Ctrl/Cmd-click selection. FI-040 remains the owner of modifier-selection keyboard/discoverability behavior; FI-043 updates guidance only after that interaction contract is known.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| FI-044 | Shared Preferences / UX         | Improve Preferences information architecture and saved-state usability                                | Implemented; manual verification pending  | Theme is a standard `Theme` runtime switch with Light/sun and Dark/moon endpoint icons, Scale hiding remains Main-map-only, Saved preferences uses Auto-save as the sole saved-state control, and Introduction is a separate bottom secondary button. Reset stays independent; navbar current-route and focus presentation remain distinct. Main-map capability injection and route isolation are preserved. See `fi-044-verification.md`.                                                                                                                                                                                                                                                                                                                                                 |
+| FI-044 | Shared Preferences / UX         | Improve Preferences information architecture and saved-state usability                                | Done                                      | Manually accepted at `79616f8af0cda91db8e4b1fa90c0248aef4fef41`. Theme is a standard `Theme` runtime switch with Light/sun and Dark/moon endpoint icons, Scale hiding remains Main-map-only, Saved preferences uses Auto-save as the sole saved-state control, and Introduction is a separate bottom secondary button. Reset stays independent; Filters Reset restores declarative defaults including Idle exclusion; navbar current-route and hover/focus-visible presentation remain distinct. Main-map capability injection and route isolation are preserved. See `fi-044-verification.md`.                                                                                                                                                                                            |
 
 ## FI-021 - modifier-click direct Product selection
 
@@ -766,15 +766,17 @@ FI-043 remains the owner of the final onboarding audit. After FI-044 is accepted
 10. FI-029 popup action-density analysis before any icon-only popup migration.
 11. FI-030 frontend completion polish may proceed independently; backend progress/chunk work waits for its contract discovery.
 12. FI-040 keyboard-equivalent activation and discoverability is complete and manually accepted at `33f0089810b1ba8c8a053727e8828f5b519e66c9`; preserve FI-021 pointer behavior, shared direct-selection validation and contextual hint lifecycle.
-13. FI-044 Preferences information architecture is implemented; manual verification is pending before the final FI-043 onboarding audit.
+13. FI-044 Preferences information architecture is complete and manually accepted at `79616f8af0cda91db8e4b1fa90c0248aef4fef41`. Preserve its runtime-setting ownership, Auto-save/Reset semantics, route isolation, default filter-reset behavior and compact navigation feedback.
 14. FI-043 consolidated onboarding refresh follows the accepted final Preferences/UI structure; teach only final accepted interactions and preserve route-specific onboarding state.
 
 FI-016, FI-018, FI-020, and FI-023 keep their existing separate blockers/priorities and are not re-scoped by this UI/UX review.
 
 ## FI-044 shared Preferences information architecture
 
-Status: **Implemented; manual verification pending**.
-Implementation baseline: `a45317fd4968e0aef543014049d312060763d52d`.
+Status: **Done**.  
+Implementation baseline: `a45317fd4968e0aef543014049d312060763d52d`.  
+Implementation commit: `79616f8af0cda91db8e4b1fa90c0248aef4fef41`.  
+Accepted merged baseline: `82f69c1d082773c110b48404d716d99cdc32de02`.
 
 Preferences now presents these compact concepts in this order:
 
@@ -795,5 +797,9 @@ Ordinary Theme, Auto-save and Reset actions update controls in place. Theme is a
 The FI-026 navbar regression was caused by plain focus being visually conflated with the current route. Route ownership remains exclusive to `aria-current="page"`; pointer hover and keyboard `:focus-visible` use underline feedback without a full-link background/outline, while plain pointer focus adds no underline. Route state still removes the old `aria-current` immediately without blurring focus.
 
 FI-026, FI-028, FI-031 and FI-040 contracts and acceptance history remain preserved. FI-043 remains deferred and owns the final onboarding-content refresh.
+
+### Manual acceptance
+
+FI-044 was manually accepted on 2026-09-21 at `79616f8af0cda91db8e4b1fa90c0248aef4fef41`. Browser testing confirmed the final Theme row with Light/sun and Dark/moon endpoints, the secondary Start introduction button, route-safe Preferences on Analyze/Review/Dashboard, navbar underline feedback without stale active-route appearance, and Filters Reset restoring the default Idle exclusion. Auto-save OFF removes saved state without changing runtime; Reset remains independent of Auto-save. The merged repository baseline `82f69c1d082773c110b48404d716d99cdc32de02` is authoritative after colleague changes. Local frontend check passed and formatting was run before commit.
 
 See [FI-044 verification and manual checklist](fi-044-verification.md).
