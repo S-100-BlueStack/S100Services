@@ -56,3 +56,18 @@ test("resolves the shared shell fallback as the Main-map route", () => {
   assert.equal(resolvePrimaryRouteName({ name: "unknown" }), "main");
   assert.equal(resolvePrimaryRouteName(null), "main");
 });
+
+test("moving away from Main map immediately leaves only the destination current", () => {
+  const root = createNavbarRoot();
+  const mainLink = root.links.find((link) => link.dataset.navRoute === "main");
+  const analyzeLink = root.links.find((link) => link.dataset.navRoute === "analyze");
+
+  applyNavbarRouteState(root, { name: "main" });
+  mainLink.focused = true;
+  applyNavbarRouteState(root, { name: "analyze" });
+
+  assert.equal(mainLink.getAttribute("aria-current"), null);
+  assert.equal(mainLink.focused, true, "route state must not remove keyboard focus");
+  assert.equal(analyzeLink.getAttribute("aria-current"), "page");
+  assert.equal(root.links.filter((link) => link.getAttribute("aria-current") === "page").length, 1);
+});

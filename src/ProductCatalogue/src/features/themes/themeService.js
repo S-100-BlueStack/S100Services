@@ -1,3 +1,7 @@
+import {
+  readSavedPreferenceStatus,
+  notifySavedPreferenceChanged,
+} from "../preferences/state/savedPreferenceStatus.js";
 import lightThemeUrl from "@arcgis/core/assets/esri/themes/light/main.css?url";
 import darkThemeUrl from "@arcgis/core/assets/esri/themes/dark/main.css?url";
 import {
@@ -83,6 +87,7 @@ export function applyTheme(theme, view = null) {
   applyArcgisTheme(normalizedTheme);
   applyAttributionTheme(view, normalizedTheme);
   writeStoredTheme(normalizedTheme);
+  notifySavedPreferenceChanged();
 }
 
 export function getStoredTheme() {
@@ -125,15 +130,27 @@ function writeStoredTheme(theme) {
 
   try {
     localStorage.setItem(THEME_STORAGE_KEY, normalizeTheme(theme));
+    notifySavedPreferenceChanged();
   } catch (error) {
     console.warn("Failed to save theme preference.", error);
   }
 }
 
-function removeStoredTheme() {
+export function removeStoredTheme() {
   try {
     localStorage.removeItem(THEME_STORAGE_KEY);
+    notifySavedPreferenceChanged();
   } catch (error) {
     console.warn("Failed to remove theme preference.", error);
   }
+}
+
+export function getSavedThemeStatus() {
+  return readSavedPreferenceStatus(THEME_STORAGE_KEY, (value) =>
+    value === themes.dark
+      ? "Saved: Dark"
+      : value === themes.light
+        ? "Saved: Light"
+        : "Saved value invalid (default: Light)"
+  );
 }

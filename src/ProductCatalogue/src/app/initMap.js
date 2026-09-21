@@ -1,3 +1,4 @@
+import { createMainMapPreferences } from "../features/map/state/mainMapPreferences.js";
 import { loadAppData } from "../features/data/services/dataLoader.js";
 import { createDataSourceRuntime } from "../features/dataSources/core/createDataSourceRuntime.js";
 import { createDataSourceRefreshCoordinator } from "../features/dataSources/services/dataSourceRefreshCoordinator.js";
@@ -99,8 +100,8 @@ export function initMap() {
   });
   navbarPopoverCoordinator.start();
   const preferencesPanel = initPreferencesPanel({
+    mapPreferences: createMainMapPreferences({ view, filterPanel }),
     view,
-    filterPanel,
     dataSourceController: dataSourceRuntime.controller,
   });
   const productHistoryPanel = initProductHistoryPanel({ view });

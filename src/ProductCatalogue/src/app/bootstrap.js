@@ -7,10 +7,8 @@ import { createReviewDocumentTitle } from "../features/review/routing/reviewRout
 import { noticeError } from "../features/notices/services/noticeService.js";
 import { initializeProductJobTracking } from "../features/products/services/productJobService.js";
 import { hideLoader, setLoaderProgress, setLoaderText, showLoader } from "../shared/ui/loader.js";
-import { initMap } from "./initMap.js";
 import { initRefreshControls } from "./initRefreshControls.js";
 import { initUI } from "./initUI.js";
-import { loadInitialData } from "./loadInitialData.js";
 import { initializeTheme } from "../features/themes/themeService.js";
 import { waitForCalciteComponents } from "../shared/ui/calciteComponentReady.js";
 import { getCurrentRoute } from "./routing/appRoute.js";
@@ -52,6 +50,11 @@ async function bootstrapMainRoute() {
   try {
     const ui = await initUI();
 
+    // Main-map modules own eager state subscriptions and must not load on workspace routes.
+    const [{ initMap }, { loadInitialData }] = await Promise.all([
+      import("./initMap.js"),
+      import("./loadInitialData.js"),
+    ]);
     const app = initMap();
     initRefreshControls(app);
     initializeTheme(app.view);

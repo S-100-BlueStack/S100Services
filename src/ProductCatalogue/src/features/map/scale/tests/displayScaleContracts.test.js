@@ -33,11 +33,14 @@ test("Main-map Preferences separates Scale hiding behavior from persistence", as
 
   assert.match(preferences, /id="preferences-scale-hiding"/);
   assert.match(preferences, /bindDisplayScaleOverrideControl/);
-  assert.match(preferences, /context\.view \? renderDisplayScaleSetting\(\) : ""/);
+  assert.match(
+    preferences,
+    /context\.mapPreferences \? renderDisplayScaleSetting\(context\.mapPreferences\) : ""/
+  );
   assert.match(preferences, /data-preference-persistence-key=/);
   assert.match(preferences, /Save Scale hiding/);
-  assert.match(preferences, /data-preference-action="reset-display-scale"/);
-  assert.match(preferences, /renderThemeSelector\(getCurrentTheme\(\)\)/);
+  assert.match(preferences, /resetAction: "reset-display-scale"/);
+  assert.match(preferences, /renderThemeSetting\(getCurrentTheme\(\)\)/);
 });
 
 test("Display scale filters and source reconciliation do not mutate Scale hiding", async () => {
@@ -78,4 +81,23 @@ test("existing map visibility still composes Scale hiding with source-aware filt
     visibility,
     /graphic\.visible = visibleAtScale && isGraphicAllowed\(graphic, layer\)/
   );
+});
+
+test("Preferences filter Reset is distinct from the Filter panel Clear all action", async () => {
+  const [mapPreferences, filterPanel, filterService] = await Promise.all([
+    readProjectFile("src/features/map/state/mainMapPreferences.js"),
+    readProjectFile("src/features/map/filters/attributeFilterPanel.js"),
+    readProjectFile("src/features/map/filters/attributeFilterService.js"),
+  ]);
+
+  assert.match(
+    mapPreferences,
+    /resetFilters:\s*\(\) => filterPanel\?\.resetFiltersToDefaults\?\.\(\)/
+  );
+  assert.match(
+    filterPanel,
+    /function resetFiltersToDefaults\(\)[\s\S]*filterService\.resetToDefaults\(\)/
+  );
+  assert.match(filterPanel, /function clearAllFilters\(\)[\s\S]*filterService\.clearAll\(\)/);
+  assert.match(filterService, /function resetToDefaults\(\)[\s\S]*applyDefaultExcludedValues/);
 });
