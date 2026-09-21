@@ -73,6 +73,38 @@ namespace TestProductCatalogueAPI
 
         [Fact]
         [Trait("Package", "PC-006")]
+        public async Task SimulationEndpointAllowsManualSendWhenSevenCsValidationFailed() {
+            var repository = new RecordingProductRepository(Product(
+                ProductState.Error,
+                errorCode: SendToIcEncContract.SevenCsValidationFailedCode
+            ));
+            var jobs = new RecordingSendJobService();
+            var controller = Controller(repository, new ThrowingLockService(), jobs, SendToIcEncMode.Simulation);
+
+            var result = await controller.UploadSingularProduct(DatasetName, CancellationToken.None);
+
+            var accepted = Assert.IsType<AcceptedResult>(result);
+            Assert.Equal(StatusCodes.Status202Accepted, accepted.StatusCode);
+            Assert.True(jobs.LastRequest!.AllowSevenCsValidationFailure);
+            Assert.Equal(1, jobs.EnqueueCalls);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task SimulationEndpointStillRejectsUnrelatedErrorStates() {
+            var repository = new RecordingProductRepository(Product(ProductState.Error, errorCode: "EXPORT_FAILED"));
+            var jobs = new RecordingSendJobService();
+            var controller = Controller(repository, new ThrowingLockService(), jobs, SendToIcEncMode.Simulation);
+
+            var result = await controller.UploadSingularProduct(DatasetName, CancellationToken.None);
+
+            var response = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(StatusCodes.Status409Conflict, response.StatusCode);
+            Assert.Equal(0, jobs.EnqueueCalls);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
         public async Task MissingProductReturnsNotFoundWithoutEnqueueOrMutation() {
             var repository = new RecordingProductRepository(null);
             var jobs = new RecordingSendJobService();
@@ -185,6 +217,39 @@ namespace TestProductCatalogueAPI
             Assert.Equal(SendToIcEncContract.CompletedMessage, context.Get<string>(ExportJobParameterNames.ResultMessage));
             Assert.Null(context.Get<string>(ExportJobParameterNames.ErrorCode));
             Assert.Equal(0, repository.AppendCalls);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task SimulationJobHonorsExplicitSevenCsValidationOverride() {
+            var repository = new RecordingProductRepository(Product(
+                ProductState.Error,
+                errorCode: SendToIcEncContract.SevenCsValidationFailedCode
+            ));
+            var context = new RecordingExecutionContext();
+            var job = Job(repository, SendToIcEncMode.Simulation);
+
+            await job.ExecuteAsync(Request(allowSevenCsValidationFailure: true), context, CancellationToken.None);
+
+            Assert.Equal(SendToIcEncContract.SimulationCompletedOutcome, context.Get<string>(ExportJobParameterNames.OperationOutcome));
+            Assert.Null(context.Get<string>(ExportJobParameterNames.ErrorCode));
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task SimulationJobRejectsSevenCsValidationFailureWithoutExplicitOverride() {
+            var repository = new RecordingProductRepository(Product(
+                ProductState.Error,
+                errorCode: SendToIcEncContract.SevenCsValidationFailedCode
+            ));
+            var context = new RecordingExecutionContext();
+            var job = Job(repository, SendToIcEncMode.Simulation);
+
+            var exception = await Assert.ThrowsAsync<SendToIcEncJobException>(() =>
+                job.ExecuteAsync(Request(), context, CancellationToken.None)
+            );
+
+            Assert.Equal(SendToIcEncContract.InvalidStateCode, exception.Code);
         }
 
         [Fact]
@@ -530,26 +595,29 @@ namespace TestProductCatalogueAPI
             NullLogger<UploadSingularProductJob>.Instance
         );
 
-        private static SendToIcEncJobRequest Request() => new(
+        private static SendToIcEncJobRequest Request(bool allowSevenCsValidationFailure = false) => new(
             DatasetName,
             SendToIcEncMode.Simulation,
             5,
             0,
             "correlation-1",
-            DateTimeOffset.Parse("2026-08-03T08:00:00Z")
+            DateTimeOffset.Parse("2026-08-03T08:00:00Z"),
+            allowSevenCsValidationFailure
         );
 
         private static ProductRecord Product(
             ProductState state = ProductState.ReadyForDistribution,
             int edition = 5,
-            int update = 0
+            int update = 0,
+            string? errorCode = null
         ) => new() {
             Id = Guid.NewGuid(),
             Name = DatasetName,
             State = state,
             ProductSpecification = "S-101",
             EditionNo = edition,
-            UpdateNo = update
+            UpdateNo = update,
+            ErrorCode = errorCode
         };
 
         private sealed class RecordingSendJobService : ISendToIcEncJobService

@@ -42,7 +42,9 @@ namespace ProductCatalogueAPI.Services.Jobs
                     StatusUrl = statusUrl,
                     Mode = SendToIcEncContract.SimulationMode,
                     DeliveryStatus = SendToIcEncContract.NotDeliveredStatus,
-                    Message = SendToIcEncContract.AcceptedMessage
+                    Message = request.AllowSevenCsValidationFailure
+                        ? SendToIcEncContract.ManualValidationOverrideAcceptedMessage
+                        : SendToIcEncContract.AcceptedMessage
                 };
             }
             catch (JobEnqueueException) {

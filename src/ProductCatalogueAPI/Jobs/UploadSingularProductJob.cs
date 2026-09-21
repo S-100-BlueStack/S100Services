@@ -77,11 +77,23 @@ namespace ProductCatalogueAPI.Jobs
                     );
                 }
 
-                if (product.State != ProductState.ReadyForDistribution) {
+                var allowsSevenCsValidationOverride = request.AllowSevenCsValidationFailure &&
+                    product.State == ProductState.Error &&
+                    string.Equals(product.ErrorCode, SendToIcEncContract.SevenCsValidationFailedCode, StringComparison.Ordinal);
+                if (product.State != ProductState.ReadyForDistribution && !allowsSevenCsValidationOverride) {
                     throw CreateSafeFailure(
                         context,
                         SendToIcEncContract.InvalidStateCode,
                         SendToIcEncContract.InvalidStateJobMessage
+                    );
+                }
+
+                if (allowsSevenCsValidationOverride) {
+                    _logger.LogWarning(
+                        "IC-ENC send simulation executing with manual SevenCs validation override. JobId: {JobId}. DatasetName: {DatasetName}. CorrelationId: {CorrelationId}",
+                        context.JobId,
+                        request.DatasetName,
+                        request.CorrelationId
                     );
                 }
 
