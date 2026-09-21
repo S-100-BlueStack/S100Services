@@ -255,7 +255,11 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
         using var connection = _connectionFactory.Create();
         var affected = await connection.ExecuteAsync(new CommandDefinition("""
             UPDATE dbo.ProductExportTrack
-            SET state = @State, candidate_edition = @CandidateEdition, candidate_update = @CandidateUpdate, updated_at_utc = @OccurredAtUtc
+            SET candidate_previous_state = state,
+                state = @State,
+                candidate_edition = @CandidateEdition,
+                candidate_update = @CandidateUpdate,
+                updated_at_utc = @OccurredAtUtc
             WHERE product_export_track_id = @TrackId
               AND state NOT IN (@Frozen, @InTransit, @Exporting, @Validating);
 
@@ -303,19 +307,59 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
     /// <inheritdoc/>
     public async Task CancelCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
+        connection.Open();
+        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+
+        var candidate = await connection.QuerySingleOrDefaultAsync<CandidateCancellationState>(new CommandDefinition("""
+            SELECT candidate_previous_state AS PreviousState,
+                   candidate_edition AS CandidateEdition,
+                   candidate_update AS CandidateUpdate
+            FROM dbo.ProductExportTrack WITH (UPDLOCK, HOLDLOCK)
+            WHERE product_export_track_id = @TrackId;
+            """, new { TrackId = trackId }, transaction, cancellationToken: cancellationToken));
+
+        if (candidate is null || !candidate.CandidateEdition.HasValue || !candidate.CandidateUpdate.HasValue)
+            throw new InvalidOperationException("The product track has no candidate export to cancel.");
+
+        var previousState = candidate.PreviousState ?? ProductState.Idle;
+        var restoredAtUtc = occurredAtUtc.AddTicks(1);
+
         await connection.ExecuteAsync(new CommandDefinition("""
             INSERT INTO dbo.ProductStateHistory
                 (product_state_history_id, product_export_track_id, state, edition_number, update_number, owner, occurred_at_utc)
-            SELECT @HistoryId, product_export_track_id, @State,
-                   COALESCE(candidate_edition, published_edition), COALESCE(candidate_update, published_update),
+            SELECT @CancelledHistoryId, product_export_track_id, @CancelledState,
+                   candidate_edition, candidate_update,
                    @Owner, @OccurredAtUtc
             FROM dbo.ProductExportTrack
             WHERE product_export_track_id = @TrackId;
 
             UPDATE dbo.ProductExportTrack
-            SET state = @State, candidate_edition = NULL, candidate_update = NULL, updated_at_utc = @OccurredAtUtc
+            SET state = @PreviousState,
+                candidate_edition = NULL,
+                candidate_update = NULL,
+                candidate_previous_state = NULL,
+                updated_at_utc = @RestoredAtUtc
             WHERE product_export_track_id = @TrackId;
-            """, new { TrackId = trackId, State = ProductState.Cancelled, Owner = owner, OccurredAtUtc = occurredAtUtc, HistoryId = Guid.NewGuid() }, cancellationToken: cancellationToken));
+
+            INSERT INTO dbo.ProductStateHistory
+                (product_state_history_id, product_export_track_id, state, edition_number, update_number, owner, occurred_at_utc)
+            SELECT @RestoredHistoryId, product_export_track_id, @PreviousState,
+                   published_edition, published_update,
+                   @Owner, @RestoredAtUtc
+            FROM dbo.ProductExportTrack
+            WHERE product_export_track_id = @TrackId;
+            """, new {
+                TrackId = trackId,
+                CancelledState = ProductState.Cancelled,
+                CancelledHistoryId = Guid.NewGuid(),
+                PreviousState = previousState,
+                RestoredHistoryId = Guid.NewGuid(),
+                Owner = owner,
+                OccurredAtUtc = occurredAtUtc,
+                RestoredAtUtc = restoredAtUtc
+            }, transaction, cancellationToken: cancellationToken));
+
+        transaction.Commit();
     }
 
     /// <inheritdoc/>
@@ -627,7 +671,8 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
         SELECT t.product_export_track_id AS Id, p.dataset_name AS DatasetName,
                t.product_specification AS ProductSpecification, t.export_engine AS Engine,
                t.state AS State, t.published_edition AS PublishedEdition, t.published_update AS PublishedUpdate,
-               t.candidate_edition AS CandidateEdition, t.candidate_update AS CandidateUpdate, t.updated_at_utc AS UpdatedAtUtc,
+               t.candidate_edition AS CandidateEdition, t.candidate_update AS CandidateUpdate,
+               t.candidate_previous_state AS CandidatePreviousState, t.updated_at_utc AS UpdatedAtUtc,
                CONVERT(bit, CASE WHEN freeze.product_export_track_id IS NULL THEN 0 ELSE 1 END) AS IsManuallyFrozen,
                h.error_code AS ErrorCode, h.error_message AS ErrorMessage
         FROM dbo.ProductExportTrack t
@@ -654,6 +699,13 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
         INNER JOIN dbo.ProductExportTrack t ON t.product_export_track_id = s.product_export_track_id
         INNER JOIN dbo.Product p ON p.product_id = t.product_id
         """;
+
+    private sealed class CandidateCancellationState
+    {
+        public ProductState? PreviousState { get; set; }
+        public int? CandidateEdition { get; set; }
+        public int? CandidateUpdate { get; set; }
+    }
 
     private sealed class ChangeSummaryHeader
     {
@@ -746,7 +798,7 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     }
 
     /// <inheritdoc/>
-    public Task BeginExportAsync(Guid trackId, int candidateEdition, int candidateUpdate, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.State = ProductState.Exporting; track.CandidateEdition = candidateEdition; track.CandidateUpdate = candidateUpdate; track.UpdatedAtUtc = occurredAtUtc; } return Task.CompletedTask; }
+    public Task BeginExportAsync(Guid trackId, int candidateEdition, int candidateUpdate, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.CandidatePreviousState = track.State; track.State = ProductState.Exporting; track.CandidateEdition = candidateEdition; track.CandidateUpdate = candidateUpdate; track.UpdatedAtUtc = occurredAtUtc; } return Task.CompletedTask; }
 
     /// <inheritdoc/>
     public Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.State = state; track.UpdatedAtUtc = occurredAtUtc; track.ErrorCode = errorCode; track.ErrorMessage = errorMessage; } return Task.CompletedTask; }
@@ -778,7 +830,7 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     }
 
     /// <inheritdoc/>
-    public Task CancelCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.State = ProductState.Cancelled; track.CandidateEdition = null; track.CandidateUpdate = null; track.UpdatedAtUtc = occurredAtUtc; } return Task.CompletedTask; }
+    public Task CancelCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.State = track.CandidatePreviousState ?? ProductState.Idle; track.CandidateEdition = null; track.CandidateUpdate = null; track.CandidatePreviousState = null; track.UpdatedAtUtc = occurredAtUtc; } return Task.CompletedTask; }
 
     /// <inheritdoc/>
     public Task<Guid> AddRevisionAsync(ProductRevisionWrite revision, CancellationToken cancellationToken = default) {
