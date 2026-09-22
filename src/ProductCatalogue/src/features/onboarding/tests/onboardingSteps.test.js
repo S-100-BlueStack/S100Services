@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
-
 import {
   ONBOARDING_STEPS,
   getOnboardingFlowVersion,
@@ -8,160 +8,232 @@ import {
   getOnboardingWelcomeContent,
 } from "../config/onboardingSteps.js";
 import { calculatePopoverPosition } from "../ui/onboardingUi.js";
-test("defines a compact flow for every Product Catalogue route", () => {
-  assert.equal(getOnboardingSteps("main").length, 8);
-  assert.equal(getOnboardingSteps("dashboard").length, 5);
-  assert.equal(getOnboardingSteps("analyze").length, 4);
-  assert.equal(getOnboardingSteps("review").length, 4);
-  assert.deepEqual(getOnboardingSteps("unknown"), []);
-});
-test("defines route-specific welcome copy", () => {
-  assert.equal(getOnboardingWelcomeContent("main").title, "Welcome to Product Catalogue");
-  assert.equal(getOnboardingWelcomeContent("dashboard").title, "Welcome to Dashboard");
-  assert.equal(getOnboardingWelcomeContent("analyze").title, "Welcome to Analyze");
-  assert.equal(getOnboardingWelcomeContent("review").title, "Welcome to Product Review");
-});
-test("bumps only the Main-map onboarding flow version for FI-012", () => {
-  assert.equal(getOnboardingFlowVersion("main"), 3);
-  assert.equal(getOnboardingFlowVersion("dashboard"), 2);
-  assert.equal(getOnboardingFlowVersion("analyze"), 2);
-  assert.equal(getOnboardingFlowVersion("review"), 2);
-});
-test("uses unique step identifiers and complete user-facing copy", () => {
-  const steps = Object.values(ONBOARDING_STEPS).flat();
-  const ids = steps.map((step) => step.id);
 
+const expected = {
+  main: [
+    "navigation",
+    "product-search",
+    "locator",
+    "data-sources",
+    "filters",
+    "map",
+    "shortcuts",
+    "popup-actions",
+    "product-collection",
+    "preferences",
+    "saved-preferences",
+  ],
+  dashboard: [
+    "navigation",
+    "range",
+    "refresh",
+    "filters",
+    "sorting",
+    "paging",
+    "activity-links",
+    "preferences",
+    "saved-preferences",
+  ],
+  analyze: [
+    "navigation",
+    "product-picker",
+    "product-list",
+    "product-cards",
+    "refresh",
+    "preferences",
+    "saved-preferences",
+  ],
+  review: [
+    "navigation",
+    "product-picker",
+    "workspace-content",
+    "product-list",
+    "refresh",
+    "comparison-board",
+    "preferences",
+    "saved-preferences",
+  ],
+};
+
+for (const [route, suffixes] of Object.entries(expected)) {
+  test(`${route} has deterministic, non-blocking route-specific coverage`, () => {
+    const steps = getOnboardingSteps(route);
+    assert.deepEqual(
+      steps.map((step) => step.id),
+      suffixes.map((id) => `${route}-${id}`)
+    );
+    assert.match(getOnboardingWelcomeContent(route).title, /Welcome/);
+    for (const step of steps) {
+      assert.ok(step.title && step.description && step.selectors.length);
+      assert.equal(step.behavior, undefined);
+      assert.doesNotMatch(step.selectors.join(" "), /nth-child|shadow| input|theme-toggle/);
+      assert.doesNotMatch(
+        step.description,
+        /Apply button|preset|Since yesterday|Last 7 days|localStorage|backend|generation/i
+      );
+    }
+    const copy = steps.map((step) => step.description).join(" ");
+    assert.match(copy, /Light \(sun\).*Dark \(moon\)/);
+    assert.match(copy, /Auto-save/);
+    assert.match(copy, /Reset restores defaults independently/);
+    assert.match(copy, /Start introduction/);
+    if (route !== "main") {
+      assert.doesNotMatch(copy, /Scale hiding|Ctrl|Cmd/);
+      assert.doesNotMatch(
+        steps.flatMap((step) => step.selectors).join(" "),
+        /viewDiv|filter-button|data-sources|product-search|locator|popup/
+      );
+    }
+  });
+}
+
+test("preserves route completion versions and rejects unknown route steps", () => {
+  assert.equal(getOnboardingFlowVersion("main"), 3);
+  for (const route of ["dashboard", "analyze", "review"])
+    assert.equal(getOnboardingFlowVersion(route), 2);
+  assert.deepEqual(getOnboardingSteps("unknown"), []);
+  const ids = Object.values(ONBOARDING_STEPS)
+    .flat()
+    .map((step) => step.id);
   assert.equal(new Set(ids).size, ids.length);
-  for (const step of steps) {
-    assert.ok(step.title.trim());
-    assert.ok(step.description.trim());
-    assert.ok(Array.isArray(step.selectors));
-    assert.ok(step.selectors.length > 0);
-    assert.equal(typeof step.placement, "string");
-    assert.equal("activeSurfaceSelectors" in step, false);
-    assert.doesNotMatch(step.description, /backend/i);
+});
+
+test("separates Product search and Locator and teaches the accepted direct-selection shortcut", () => {
+  const steps = getOnboardingSteps("main");
+  assert.match(
+    steps.find((step) => step.id === "main-product-search").description,
+    /loaded active Products/
+  );
+  assert.match(
+    steps.find((step) => step.id === "main-locator").description,
+    /without selecting a Product/
+  );
+  assert.match(
+    steps.find((step) => step.id === "main-map").description,
+    /Click normally.*overlap picker/
+  );
+  const shortcut = steps.find((step) => step.id === "main-shortcuts").description;
+  assert.match(shortcut, /Ctrl-click on Windows\/Linux.*Cmd-click on macOS/);
+  assert.match(shortcut, /current transient highlighted Product/);
+  assert.match(shortcut, /map focus, Ctrl\+Enter \/ Cmd\+Enter/);
+  assert.match(shortcut, /compact map hint/);
+  assert.doesNotMatch(shortcut, /Collection/);
+  assert.match(steps[0].description, /new tab/);
+
+  const dataSourceStep = steps.find((step) => step.id === "main-data-sources");
+  assert.match(dataSourceStep.description, /enable or disable Product sources/);
+  assert.doesNotMatch(dataSourceStep.description, /at least one|keep .* enabled|must .* enabled/i);
+  assert.deepEqual(dataSourceStep.reveal, {
+    triggerSelector: "#data-sources-button",
+    openSelector: ".pc-data-source-panel",
+  });
+  assert.deepEqual(dataSourceStep.selectors, [".pc-data-source-panel"]);
+
+  const filterStep = steps.find((step) => step.id === "main-filters");
+  assert.deepEqual(filterStep.reveal, {
+    triggerSelector: "#filter-button",
+    openSelector: "#attribute-filter-panel",
+  });
+  assert.deepEqual(filterStep.selectors, ["#attribute-filter-panel"]);
+
+  const preferences = steps.find((step) => step.id === "main-preferences");
+  assert.match(preferences.description, /Scale hiding.*defaults to off/);
+});
+
+test("conditional workspace guidance uses route-stable empty-state anchors", () => {
+  const dashboard = getOnboardingSteps("dashboard");
+  const analyze = getOnboardingSteps("analyze");
+  const review = getOnboardingSteps("review");
+
+  const dashboardLinks = dashboard.find((step) => step.id === "dashboard-activity-links");
+  assert.deepEqual(dashboardLinks.selectors, [".pc-dashboard-activity-table"]);
+  assert.match(dashboardLinks.description, /When activity rows are available/);
+
+  const analyzeCards = analyze.find((step) => step.id === "analyze-product-cards");
+  assert.deepEqual(analyzeCards.selectors, [".analyze-products"]);
+  assert.match(analyzeCards.description, /When Products are loaded/);
+
+  const reviewProducts = review.find((step) => step.id === "review-product-list");
+  assert.deepEqual(reviewProducts.selectors, [".pc-review-product-list"]);
+  assert.match(reviewProducts.description, /Products appear in this list when added/);
+
+  const reviewBoard = review.find((step) => step.id === "review-comparison-board");
+  assert.deepEqual(reviewBoard.selectors, [".pc-review-board"]);
+  assert.match(reviewBoard.description, /when available/);
+
+  for (const step of [dashboardLinks, analyzeCards, reviewProducts, reviewBoard]) {
+    assert.doesNotMatch(
+      step.selectors.join(" "),
+      /__item|pc-review-column|analyze-product-card|activity-links/
+    );
   }
 });
-test("connects map selection, popup actions, Product Collection and browser preferences", () => {
-  const [
-    searchStep,
-    filterStep,
-    mapStep,
-    popupStep,
-    collectionStep,
-    workspaceStep,
-    themeStep,
-    preferencesStep,
-  ] = getOnboardingSteps("main");
-  assert.match(searchStep.selectors[0], /input/);
-  assert.equal(searchStep.placement, "adjacent-horizontal");
-  assert.equal(searchStep.selectorMode, "all");
-  assert.equal(searchStep.maximumTargets, 2);
-  assert.ok(searchStep.selectors.includes("#main-map-locator-button"));
-  assert.match(searchStep.description, /Product search/);
-  assert.match(searchStep.description, /Locator/);
-  assert.match(searchStep.description, /only moves the map/);
-  assert.equal(filterStep.selectors[0], "#filter-button");
-  assert.equal(mapStep.highlight, false);
-  assert.equal(mapStep.selectors[0], "[data-onboarding-target='product-search']");
-  assert.equal(mapStep.placement, "adjacent-left");
-  assert.equal(mapStep.behavior.type, "wait-for-popup");
-  assert.equal(mapStep.behavior.waitingNextLabel, "Open a Product");
-  assert.equal(popupStep.placement, "adjacent-left");
-  assert.deepEqual(popupStep.positionSelectors, mapStep.selectors);
-  assert.equal(popupStep.selectorMode, "all");
-  assert.equal(popupStep.behavior.type, "require-popup");
-  assert.equal(popupStep.behavior.fallbackStepId, "main-map");
-  assert.ok(popupStep.selectors.includes(".popup-copy-btn"));
-  assert.ok(popupStep.selectors.includes(".popup-product-collection-btn"));
-  assert.ok(popupStep.selectors.includes(".popup-action-bar"));
-  assert.equal(collectionStep.placement, "adjacent-left");
-  assert.deepEqual(collectionStep.positionSelectors, mapStep.selectors);
-  assert.equal(collectionStep.selectors[0], ".popup-product-collection-btn");
-  assert.equal(collectionStep.behavior.type, "wait-for-collection");
-  assert.deepEqual(collectionStep.behavior.readySelectors, [".pc-product-collection-tray"]);
-  assert.equal(collectionStep.selectors.includes("[data-nav-analyze-link]"), false);
-  assert.equal(workspaceStep.selectorMode, "all");
-  assert.deepEqual(workspaceStep.selectors, [
-    "[data-nav-dashboard-link]",
-    "[data-nav-analyze-link]",
-    "[data-nav-review-link]",
-  ]);
-  assert.deepEqual(themeStep.selectors, ["#preferences-button"]);
-  assert.match(themeStep.description, /Preferences/);
-  assert.deepEqual(preferencesStep.selectors, ["#preferences-button"]);
-  assert.equal(preferencesStep.behavior.type, "wait-for-target-count");
-  assert.deepEqual(preferencesStep.behavior.selectors, ["#preferences-panel:not([hidden])"]);
-  assert.deepEqual(preferencesStep.behavior.readySelectors, ["#preferences-panel"]);
-  assert.equal(preferencesStep.behavior.autoAdvance, false);
-  assert.equal(preferencesStep.behavior.readyNextLabel, "Finish");
-});
-test("covers the primary Dashboard workflow without route navigation", () => {
-  const steps = getOnboardingSteps("dashboard");
-  assert.deepEqual(
-    steps.map((step) => step.id),
-    [
-      "dashboard-range",
-      "dashboard-summary",
-      "dashboard-filters",
-      "dashboard-activity-links",
-      "dashboard-breakdowns",
-    ]
-  );
-  assert.equal(steps[0].selectors[0], ".pc-dashboard-range-builder");
-  assert.equal(steps[2].selectors[0], ".pc-dashboard-filters");
-  assert.equal(steps[3].selectors[0], ".pc-dashboard-activity-links");
-  assert.equal(steps[4].selectors[0], ".pc-dashboard-grid__aside");
-  assert.ok(steps.every((step) => !step.behavior));
-});
-test("requires an Analyze Product and keeps guidance beside the sidebar", () => {
-  const steps = getOnboardingSteps("analyze");
-  assert.deepEqual(
-    steps.map((step) => step.id),
-    [
-      "analyze-product-picker",
-      "analyze-product-list",
-      "analyze-product-cards",
-      "analyze-reports-history",
-    ]
-  );
-  assert.ok(steps.every((step) => step.placement === "adjacent-horizontal"));
-  assert.equal(steps[0].behavior.type, "wait-for-target-count");
-  assert.equal(steps[0].behavior.minimumCount, 1);
-  assert.deepEqual(steps[0].behavior.selectors, [".analyze-product-card"]);
-  assert.equal(steps[2].behavior.type, "require-target-count");
-  assert.equal(steps[3].behavior.type, "require-target-count");
-});
-test("requires two Review Products and highlights two columns", () => {
-  const steps = getOnboardingSteps("review");
-  assert.deepEqual(
-    steps.map((step) => step.id),
-    [
-      "review-product-picker",
-      "review-product-list",
-      "review-comparison-board",
-      "review-product-content",
-    ]
-  );
-  assert.equal(steps[0].placement, "adjacent-horizontal");
-  assert.equal(steps[0].behavior.type, "wait-for-target-count");
-  assert.equal(steps[0].behavior.minimumCount, 2);
-  assert.deepEqual(steps[0].behavior.selectors, [".pc-review-column"]);
-  assert.equal(steps[2].selectors[0], ".pc-review-column");
-  assert.equal(steps[2].selectorMode, "all");
-  assert.equal(steps[2].maximumTargets, 2);
-  assert.equal(steps[2].placement, "target-top-right");
-  assert.equal(steps[2].behavior.type, "require-target-count");
-});
-test("keeps map, popup and collection guidance anchored to Product search", () => {
-  const [, , mapStep, popupStep, collectionStep] = getOnboardingSteps("main");
 
-  assert.equal(mapStep.placement, "adjacent-left");
-  assert.equal(popupStep.placement, mapStep.placement);
-  assert.equal(collectionStep.placement, mapStep.placement);
-  assert.deepEqual(popupStep.positionSelectors, mapStep.selectors);
-  assert.deepEqual(collectionStep.positionSelectors, mapStep.selectors);
+test("Preferences guidance opens the real shared panel and targets runtime then saved content", () => {
+  for (const route of ["main", "dashboard", "analyze", "review"]) {
+    const steps = getOnboardingSteps(route);
+    const runtime = steps.find((step) => step.id === `${route}-preferences`);
+    const saved = steps.find((step) => step.id === `${route}-saved-preferences`);
+    const reveal = { triggerSelector: "#preferences-button", openSelector: "#preferences-panel" };
+
+    assert.deepEqual(runtime.reveal, reveal);
+    assert.deepEqual(saved.reveal, reveal);
+    assert.deepEqual(runtime.selectors, ["#preferences-panel"]);
+    assert.deepEqual(saved.selectors, [".pc-preferences-panel__group"]);
+    assert.equal(runtime.placement, "left");
+    assert.equal(saved.placement, "left");
+  }
 });
+
+test("all configured targets exist in authoritative application-owned renderers", async () => {
+  const paths = [
+    "public/components/navbar.html",
+    "index.html",
+    "src/features/map/search/mainMapSearchControls.js",
+    "src/features/map/locator/mainMapLocator.js",
+    "src/features/map/filters/attributeFilterPanel.js",
+    "src/features/dataSources/ui/dataSourcePanel.js",
+    "src/features/preferences/ui/preferencesPanel.js",
+    "src/features/productCollection/ui/productCollectionTray.js",
+    "src/features/dashboard/ui/dashboardPage.js",
+    "src/features/analyze/ui/analyzeSidebar.js",
+    "src/features/review/ui/reviewSidebar.js",
+    "src/features/review/ui/reviewBoard.js",
+  ];
+  const sources = (
+    await Promise.all(
+      paths.map((path) => readFile(new URL(`../../../../${path}`, import.meta.url), "utf8"))
+    )
+  ).join("\n");
+  for (const step of Object.values(ONBOARDING_STEPS).flat()) {
+    const selectors = [
+      ...step.selectors,
+      ...(step.reveal ? [step.reveal.triggerSelector, step.reveal.openSelector] : []),
+    ];
+    for (const selector of selectors) {
+      if (selector.startsWith("[")) assert.match(sources, /onboardingTarget = "product-search"/);
+      else assert.ok(sources.includes(selector.slice(1)), `${step.id}: ${selector}`);
+    }
+  }
+});
+
+test("onboarding import graph cannot initialize main-map or workspace services", async () => {
+  const visited = new Set();
+  async function visit(url) {
+    if (visited.has(url.href)) return;
+    visited.add(url.href);
+    const source = await readFile(url, "utf8");
+    assert.doesNotMatch(source, /@arcgis|@esri|MapView|fetch\(|apiGet|scaleVisibility/);
+    for (const [, specifier] of source.matchAll(/from\s+["']([^"']+)["']/g)) {
+      assert.ok(specifier.startsWith("."));
+      const dependency = new URL(specifier, url);
+      assert.ok(dependency.pathname.includes("/features/onboarding/"));
+      await visit(dependency);
+    }
+  }
+  await visit(new URL("../services/onboardingService.js", import.meta.url));
+});
+
 test("places map guidance to the upper left of Product search", () => {
   const position = calculatePopoverPosition({
     popoverRect: { width: 340, height: 190 },
@@ -251,4 +323,38 @@ test("places Review guidance inside the top-right of the highlighted columns", (
     top: 82,
     left: 788,
   });
+});
+
+test("workspace guidance reflects automatic ranges, current content controls and refresh", () => {
+  const descriptions = (route) =>
+    getOnboardingSteps(route)
+      .map((step) => step.description)
+      .join(" ");
+  assert.match(descriptions("dashboard"), /valid committed changes apply automatically/);
+  assert.match(descriptions("dashboard"), /last successful load/);
+  assert.match(descriptions("dashboard"), /sortable column/);
+  assert.match(descriptions("dashboard"), /page size/);
+  assert.doesNotMatch(
+    getOnboardingSteps("dashboard").find((step) => step.id === "dashboard-filters").description,
+    /summary row/
+  );
+  assert.match(descriptions("analyze"), /Open all and Collapse all/);
+  assert.match(descriptions("analyze"), /Refresh.*enabled Products/);
+  assert.match(descriptions("review"), /History, IC-ENC and Validation for all Products/);
+  assert.match(descriptions("review"), /override the workspace choices/);
+  assert.match(descriptions("review"), /Scroll within a Product column/);
+});
+
+test("places below-target guidance above a low control when it fits there", () => {
+  assert.deepEqual(
+    calculatePopoverPosition({
+      popoverRect: { width: 300, height: 180 },
+      targetRect: { left: 15, right: 310, top: 420, bottom: 455, width: 295, height: 35 },
+      placement: "below",
+      viewportWidth: 340,
+      viewportHeight: 480,
+      minimumTop: 60,
+    }),
+    { centered: false, top: 228, left: 15 }
+  );
 });

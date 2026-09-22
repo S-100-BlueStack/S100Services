@@ -323,14 +323,27 @@ Controlled user testing showed that users need concise explanations of what acti
 
 The frontend provides hover help/tooltips for common clickable controls and icon-only actions. Tooltip text should explain consequence or context, not just duplicate the visible label. New clickable controls should include explicit text, an `aria-label`, or a tooltip entry in the global hover-help registry.
 
-The compact introduction flow is implemented and manually verified on Main map, Dashboard, Analyze and Review:
+FI-043 status: **Implemented; manual verification pending**.
 
-- each route has independent first-time state and can be replayed from Preferences
-- Main map covers Product search, filters, popup actions, Product Collection, workspace navigation, Theme and Preferences
-- Analyze requires a loaded Product before dependent guidance continues
-- Review requires two loaded Products before side-by-side comparison guidance continues
-- static text and disabled states carry the workflow in RDP/VDI environments without depending on animation
-- the flow remains optional and does not automatically navigate between routes
+One shared Introduction owner provides route-specific guidance on Main map, Dashboard, Analyze
+and Review. Start introduction at the bottom of Preferences replays the current route. Existing
+route completion/dismissal state is preserved.
+
+- Main map separates Product search from Locator and covers sources, filters, hover/normal click,
+  overlap selection, optional Ctrl/Cmd-click and Ctrl+Enter/Cmd+Enter on the current transient
+  highlighted Product, popup actions, Product Collection and workspace navigation.
+- Dashboard covers automatic valid range changes, Refresh/last-successful time, filtering,
+  sorting, page size and Product workflow links.
+- Analyze covers composition, enabled Products, cards/content and Refresh. Review covers
+  composition, workspace History/IC-ENC/Validation toggles, per-Product overrides and Refresh.
+- All routes explain FI-044 Theme, Auto-save and independent Reset. Only Main map describes
+  Scale hiding. Relevant Data sources, Filters and Preferences panels open through their existing
+  application-owned triggers for the step; the tour never changes settings or Product state, and
+  panels opened by the tour are closed when their guidance ends.
+- Missing/hidden targets are skipped. Native Back/Next buttons remain keyboard accessible;
+  Escape closes directly and restores focus. Re-entry and route teardown supersede old callbacks.
+
+See [FI-043 baseline audit, target ownership and manual verification](docs/fi-043-onboarding-refresh.md).
 
 ## Refresh behavior
 
@@ -350,8 +363,8 @@ Dashboard is a separate route at `/dashboard`.
 
 Dashboard can show:
 
-- an always-visible range builder with `From`, optional `To`, `Refresh` and `Apply`
-- quick range actions for `Since yesterday` and `Last 7 days`
+- compact `From` and optional `To` date/time controls that apply valid committed changes automatically
+- `Refresh` and the last-successful load time
 - read-only operational summary cards
 - compact activity list
 - status summary
@@ -653,8 +666,8 @@ Changes update controls in place, preserving focus. Context replacement uses app
 focus identity. Escape and click-away preserve route lifecycle priorities and focus restoration.
 Theme uses one compact public `calcite-switch`, visually framed by the public `brightness` (Light) and `moon` (Dark) icons while `themeService.js` remains the state owner.
 The active route, pointer hover and keyboard `:focus-visible` use the compact underline affordance; the previous full-link highlight/outline remains removed. Plain pointer focus does not retain an underline, so route state still settles immediately after navigation.
-The existing Introduction callback/lifecycle is unchanged. FI-043 remains the deferred owner of
-the consolidated onboarding-content refresh.
+The FI-044 Introduction callback is preserved. FI-043 updates its shared content and lifecycle;
+manual verification is pending. See `docs/fi-043-onboarding-refresh.md`.
 
 FI-044 was manually accepted on 2026-09-21. Browser verification confirmed the final compact Theme switch with Light/sun and Dark/moon endpoints, the secondary Introduction button, restored navbar hover/current-route underline behavior, and Filters Reset restoring the conservative Idle default. The implementation was committed at `79616f8af0cda91db8e4b1fa90c0248aef4fef41` and is preserved in merged baseline `82f69c1d082773c110b48404d716d99cdc32de02`. Local frontend check passed and formatting was run before commit.
 

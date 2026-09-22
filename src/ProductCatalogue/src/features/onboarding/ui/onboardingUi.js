@@ -43,6 +43,19 @@ export function createWelcomeDialog({
     if (action === "dismiss") onDismiss();
   });
 
+  dialog.addEventListener("keydown", (event) => {
+    if (event.key !== "Tab") return;
+    const buttons = [...dialog.querySelectorAll("button")];
+    const first = buttons[0];
+    const last = buttons.at(-1);
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  });
   startButton?.focus();
 
   return {
@@ -63,6 +76,8 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
   popover.setAttribute("role", "dialog");
   popover.setAttribute("aria-modal", "false");
   popover.setAttribute("aria-live", "polite");
+  popover.setAttribute("aria-labelledby", "pc-onboarding-step-title");
+  popover.setAttribute("aria-describedby", "pc-onboarding-step-description");
 
   popover.innerHTML = `
     <button
@@ -75,8 +90,8 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
       <span aria-hidden="true">×</span>
     </button>
     <div class="pc-onboarding-popover__meta"></div>
-    <h2 class="pc-onboarding-popover__title"></h2>
-    <p class="pc-onboarding-popover__description"></p>
+    <h2 id="pc-onboarding-step-title" class="pc-onboarding-popover__title"></h2>
+    <p id="pc-onboarding-step-description" class="pc-onboarding-popover__description"></p>
     <div class="pc-onboarding-popover__actions">
       <span class="pc-onboarding-popover__spacer"></span>
       <button type="button" class="pc-onboarding-button pc-onboarding-button--secondary" data-action="back">Back</button>
@@ -87,6 +102,10 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
   document.body.append(highlightLayer, popover);
 
   popover.addEventListener("click", (event) => {
+    // Tour interaction is owned by the onboarding surface. Do not let these clicks
+    // reach application outside-click handlers and close a panel that the current
+    // onboarding step intentionally revealed.
+    event.stopPropagation();
     const action = getAction(event);
     if (action === "back") onBack();
     if (action === "next") onNext();
@@ -135,6 +154,9 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
         nextButton.focus({ preventScroll: true });
       }
     },
+    containsFocus() {
+      return popover.contains(document.activeElement);
+    },
     reposition(targets, step, positionTargets = []) {
       positionTourElements({
         popover,
@@ -147,47 +169,6 @@ export function createTourPopover({ onBack, onNext, onRequestClose }) {
     remove() {
       highlightLayer.remove();
       popover.remove();
-    },
-  };
-}
-
-export function createStopIntroductionDialog({ onContinue, onStop }) {
-  const overlay = document.createElement("div");
-  overlay.className = "pc-onboarding-stop";
-  overlay.setAttribute("role", "presentation");
-
-  const dialog = document.createElement("section");
-  dialog.className = "pc-onboarding-stop__dialog";
-  dialog.setAttribute("role", "alertdialog");
-  dialog.setAttribute("aria-modal", "true");
-  dialog.setAttribute("aria-labelledby", "pc-onboarding-stop-title");
-  dialog.setAttribute("aria-describedby", "pc-onboarding-stop-description");
-  dialog.innerHTML = `
-    <h2 id="pc-onboarding-stop-title">Stop introduction?</h2>
-    <p id="pc-onboarding-stop-description">
-      You can start the introduction again from Preferences.
-    </p>
-    <div class="pc-onboarding-stop__actions">
-      <button type="button" class="pc-onboarding-button pc-onboarding-button--secondary" data-action="continue">Continue introduction</button>
-      <button type="button" class="pc-onboarding-button pc-onboarding-button--primary" data-action="stop">Stop introduction</button>
-    </div>
-  `;
-
-  overlay.appendChild(dialog);
-  document.body.appendChild(overlay);
-
-  const continueButton = dialog.querySelector("[data-action='continue']");
-  continueButton?.focus({ preventScroll: true });
-
-  dialog.addEventListener("click", (event) => {
-    const action = getAction(event);
-    if (action === "continue") onContinue();
-    if (action === "stop") onStop();
-  });
-
-  return {
-    remove() {
-      overlay.remove();
     },
   };
 }
@@ -205,13 +186,15 @@ function positionTourElements({ popover, highlightLayer, targets, positionTarget
   popover.classList.remove("is-centered");
   popover.style.removeProperty("transform");
 
+  const minimumTop = getApplicationContentTop();
+  popover.style.maxHeight = `${Math.max(0, window.innerHeight - minimumTop - 12)}px`;
   const position = calculatePopoverPosition({
     popoverRect: popover.getBoundingClientRect(),
     targetRect: anchorRect,
     placement: step?.placement,
     viewportWidth: window.innerWidth,
     viewportHeight: window.innerHeight,
-    minimumTop: getApplicationContentTop(),
+    minimumTop,
   });
 
   if (position.centered) {
@@ -433,6 +416,7 @@ function createPlacementCandidates({ targetRect, popoverRect, margin, placement 
         left: targetRect.left + (targetRect.width - popoverRect.width) / 2,
       },
       { top: targetRect.bottom + margin, left: targetRect.left },
+      { top: targetRect.top - popoverRect.height - margin, left: targetRect.left },
     ],
     auto: [
       { top: targetRect.bottom + margin, left: targetRect.left },

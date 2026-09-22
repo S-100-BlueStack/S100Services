@@ -43,7 +43,7 @@ test("shared navbar uses underline for current, hover and keyboard focus without
     /\.navbar-title-link\[aria-current="page"\][^{]*\{[^}]*text-decoration:\s*underline;/
   );
   assert.match(headerStyles, /\.navbar-title-link:hover[^{]*\{[^}]*text-decoration:\s*underline;/);
-  assert.doesNotMatch(headerStyles, /\.navbar-title-link:hover[^{{]*\{{[^}}]*background\s*:/);
+  assert.doesNotMatch(headerStyles, /\.navbar-title-link:hover[^{]*\{[^}]*background\s*:/);
   assert.match(
     headerStyles,
     /\.navbar-title-link:focus-visible[^{]*\{[^}]*text-decoration:\s*underline;[^}]*outline:\s*none;/
@@ -100,7 +100,9 @@ test("Preferences retains introduction, reset and route-safe map preference boun
   assert.match(preferences, /data-preference-action="reset-all"/);
   assert.match(preferences, /!item\.requiresMapContext \|\| context\.mapPreferences/);
   assert.match(preferences, /resetDisplayScaleHidingPreference\(\)/);
-  assert.match(onboarding, /selectors: \["#preferences-button"\]/);
+  assert.match(onboarding, /selectors: \["#preferences-panel"\]/);
+  assert.match(onboarding, /triggerSelector: "#preferences-button"/);
+  assert.match(onboarding, /selectors: \["\.pc-preferences-panel__group"\]/);
   assert.doesNotMatch(onboarding, /#theme-toggle/);
 });
 

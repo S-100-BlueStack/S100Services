@@ -1,130 +1,59 @@
-const INTERACTION_TYPE = Object.freeze({
-  WAIT_FOR_POPUP: "wait-for-popup",
-  REQUIRE_POPUP: "require-popup",
-  WAIT_FOR_COLLECTION: "wait-for-collection",
-  WAIT_FOR_TARGET_COUNT: "wait-for-target-count",
-  REQUIRE_TARGET_COUNT: "require-target-count",
-});
-
-export function createOnboardingStepPresentation(
-  step,
-  { popupOpen = false, collectionVisible = false, targetCount = 0 } = {}
-) {
-  const behavior = step?.behavior;
-
-  if (!behavior) {
-    return createDefaultPresentation(step);
-  }
-
-  switch (behavior.type) {
-    case INTERACTION_TYPE.WAIT_FOR_POPUP:
-      return {
-        ...createDefaultPresentation(step),
-        nextDisabled: !popupOpen,
-        nextLabel: popupOpen
-          ? behavior.readyNextLabel || "Continue"
-          : behavior.waitingNextLabel || "Open a Product",
-        nextTitle: popupOpen
-          ? null
-          : behavior.waitingNextTitle || "Select a Product on the map to continue.",
-        focusNext: popupOpen,
-      };
-
-    case INTERACTION_TYPE.REQUIRE_POPUP:
-    case INTERACTION_TYPE.REQUIRE_TARGET_COUNT:
-      return createDefaultPresentation(step);
-
-    case INTERACTION_TYPE.WAIT_FOR_COLLECTION:
-      if (collectionVisible) {
-        return {
-          ...createDefaultPresentation(
-            createReadyStep(step, behavior, {
-              defaultDescription: step.description,
-              defaultSelectors: step.selectors,
-            })
-          ),
-          nextLabel: behavior.readyNextLabel || "Next",
-        };
-      }
-
-      return {
-        ...createDefaultPresentation(step),
-        nextDisabled: true,
-        nextLabel: behavior.waitingNextLabel || "Add to Collection",
-        nextTitle: behavior.waitingNextTitle || "Add a Product to the Collection to continue.",
-        focusNext: false,
-      };
-
-    case INTERACTION_TYPE.WAIT_FOR_TARGET_COUNT: {
-      const requirementMet = isTargetCountRequirementMet(step, targetCount);
-      const presentationStep = requirementMet
-        ? createReadyStep(step, behavior, {
-            defaultDescription: step.description,
-            defaultSelectors: step.selectors,
-          })
-        : step;
-
-      return {
-        ...createDefaultPresentation(presentationStep),
-        nextDisabled: !requirementMet,
-        nextLabel: requirementMet
-          ? behavior.readyNextLabel || "Continue"
-          : behavior.waitingNextLabel || "Continue",
-        nextTitle: requirementMet ? null : behavior.waitingNextTitle || null,
-        focusNext: requirementMet,
-      };
+export function resolveOnboardingTarget(step, { reveal = false } = {}) {
+  for (const selector of step.selectors) {
+    // All targets are application-owned light DOM, including slotted content.
+    for (const target of document.querySelectorAll(selector)) {
+      if (!isVisibleOnboardingElement(target)) continue;
+      if (reveal)
+        target.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "instant" });
+      if (hasVisibleArea(target)) return target;
     }
-
-    default:
-      return createDefaultPresentation(step);
   }
+  return null;
 }
 
-export function isInteractiveOnboardingStep(step) {
-  return Boolean(step?.behavior?.type);
+export function isVisibleOnboardingElement(element) {
+  if (
+    !(element instanceof HTMLElement) ||
+    !element.isConnected ||
+    !element.getClientRects().length
+  ) {
+    return false;
+  }
+  for (let current = element; current; current = current.parentElement) {
+    const style = window.getComputedStyle(current);
+    if (
+      current.hidden ||
+      current.getAttribute("aria-hidden") === "true" ||
+      style.visibility === "hidden" ||
+      style.display === "none"
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
-export function isPopupRequiredOnboardingStep(step) {
-  return step?.behavior?.type === INTERACTION_TYPE.REQUIRE_POPUP;
-}
-
-export function isPopupWaitOnboardingStep(step) {
-  return step?.behavior?.type === INTERACTION_TYPE.WAIT_FOR_POPUP;
-}
-
-export function isCollectionWaitOnboardingStep(step) {
-  return step?.behavior?.type === INTERACTION_TYPE.WAIT_FOR_COLLECTION;
-}
-
-export function isTargetCountWaitOnboardingStep(step) {
-  return step?.behavior?.type === INTERACTION_TYPE.WAIT_FOR_TARGET_COUNT;
-}
-
-export function isTargetCountRequiredOnboardingStep(step) {
-  return step?.behavior?.type === INTERACTION_TYPE.REQUIRE_TARGET_COUNT;
-}
-
-export function isTargetCountRequirementMet(step, targetCount) {
-  const minimumCount = Math.max(1, Number(step?.behavior?.minimumCount) || 1);
-  return Number(targetCount) >= minimumCount;
-}
-
-function createReadyStep(step, behavior, { defaultDescription, defaultSelectors }) {
-  return {
-    ...step,
-    description: behavior.readyDescription || defaultDescription,
-    selectors: behavior.readySelectors || defaultSelectors,
-    selectorMode: behavior.readySelectorMode ?? step.selectorMode,
-    placement: behavior.readyPlacement || step.placement,
-  };
-}
-
-function createDefaultPresentation(step) {
-  return {
-    step,
-    nextDisabled: false,
-    nextLabel: null,
-    nextTitle: null,
-    focusNext: true,
-  };
+function hasVisibleArea(target) {
+  const rect = target.getBoundingClientRect();
+  let left = Math.max(0, rect.left);
+  let top = Math.max(0, rect.top);
+  const header = document.getElementById("header");
+  if (header && !header.contains(target)) {
+    top = Math.max(top, header.getBoundingClientRect().bottom);
+  }
+  let right = Math.min(window.innerWidth, rect.right);
+  let bottom = Math.min(window.innerHeight, rect.bottom);
+  for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+    const style = window.getComputedStyle(parent);
+    const bounds = parent.getBoundingClientRect();
+    if (/auto|scroll|hidden|clip/.test(style.overflowX)) {
+      left = Math.max(left, bounds.left);
+      right = Math.min(right, bounds.right);
+    }
+    if (/auto|scroll|hidden|clip/.test(style.overflowY)) {
+      top = Math.max(top, bounds.top);
+      bottom = Math.min(bottom, bounds.bottom);
+    }
+  }
+  return right > left && bottom > top;
 }
