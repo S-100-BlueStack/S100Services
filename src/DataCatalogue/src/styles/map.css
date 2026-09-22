@@ -1,0 +1,340 @@
+.data-catalogue-workspace {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.data-catalogue-map {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #d7e3ef;
+}
+
+.data-catalogue-map__view {
+  position: absolute;
+  inset: 0;
+}
+
+.data-catalogue-map__screen-reader-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+  white-space: nowrap;
+}
+
+.data-catalogue-map-status {
+  position: absolute;
+  z-index: 5;
+  top: 1rem;
+  left: 50%;
+  width: min(26rem, calc(100vw - 2rem));
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--dc-border);
+  border-radius: 0;
+  background: var(--dc-overlay);
+  box-shadow: var(--dc-shadow);
+  transform: translateX(-50%);
+  backdrop-filter: blur(12px);
+}
+
+.data-catalogue-map-status[hidden] {
+  display: none;
+}
+
+.data-catalogue-app--startup-blocked .data-catalogue-map-status {
+  display: none;
+}
+
+.data-catalogue-map-status[data-status="error"] {
+  border-color: rgba(155, 28, 49, 0.42);
+}
+
+.data-catalogue-map-status[data-status="warning"] {
+  border-color: rgba(255, 174, 0, 0.55);
+}
+
+.data-catalogue-map-status__title {
+  margin: 0;
+  color: var(--dc-header-bg);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.data-catalogue-map-status__message {
+  margin: 0.25rem 0 0;
+  color: var(--dc-text);
+  font-size: 0.85rem;
+}
+
+.data-catalogue-aoi-popup-summary {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--dc-border);
+}
+
+.data-catalogue-aoi-popup-summary__title {
+  margin: 0;
+  color: var(--dc-header-bg);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.data-catalogue-aoi-popup-summary__message,
+.data-catalogue-aoi-popup-summary__hint {
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 0.82rem;
+}
+
+.data-catalogue-aoi-popup-summary__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.data-catalogue-aoi-popup-summary__metric {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.45rem;
+  border: 1px solid var(--dc-border);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.data-catalogue-aoi-popup-summary__metric-value {
+  color: var(--dc-header-bg);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.data-catalogue-aoi-popup-summary__metric-label {
+  color: var(--dc-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.15;
+}
+
+.data-catalogue-cluster-picker {
+  display: grid;
+  gap: 6px;
+  min-width: 320px;
+  max-width: 380px;
+  padding: 4px 2px;
+  color: var(--dc-popup-text, var(--dc-text));
+  background: var(--dc-popup-surface, transparent);
+}
+
+.data-catalogue-cluster-picker__message {
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 0.82rem;
+}
+
+.data-catalogue-cluster-picker__list {
+  display: grid;
+  gap: 6px;
+}
+
+.data-catalogue-cluster-picker__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 54px;
+  padding: 9px 10px;
+  color: var(--dc-popup-text, var(--dc-text));
+  background: var(--dc-popup-surface-alt, rgba(255, 255, 255, 0.72));
+  border: 1px solid var(--dc-popup-border, var(--dc-border));
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.data-catalogue-cluster-picker__item:hover,
+.data-catalogue-cluster-picker__item:focus-visible {
+  background: var(--dc-button-secondary-bg-hover, rgba(69, 97, 120, 0.12));
+  outline: none;
+}
+
+.data-catalogue-cluster-picker__content {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.data-catalogue-cluster-picker__job-title {
+  overflow: hidden;
+  color: var(--dc-popup-text, var(--dc-text));
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-catalogue-cluster-picker__job-subtitle {
+  overflow: hidden;
+  color: var(--dc-popup-text-muted, var(--dc-text-muted));
+  font-size: 12px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-catalogue-cluster-picker__priority-marker {
+  flex: 0 0 auto;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-top: 0.2rem;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 999px;
+  background: var(--dc-color-priority-medium-bg);
+}
+
+.data-catalogue-cluster-picker__priority-marker[data-priority="low"] {
+  background: var(--dc-color-priority-low-bg);
+}
+
+.data-catalogue-cluster-picker__priority-marker[data-priority="medium"] {
+  background: var(--dc-color-priority-medium-bg);
+}
+
+.data-catalogue-cluster-picker__priority-marker[data-priority="high"] {
+  background: var(--dc-color-priority-high-bg);
+}
+
+@media (max-width: 54rem) {
+  .data-catalogue-map-status {
+    top: 0.75rem;
+  }
+}
+/* =========================================================
+   ArcGIS popup theme integration
+   Feed popup-related Calcite tokens into ArcGIS popup surfaces so
+   the SDK UI follows the same theme as the rest of the app.
+   ========================================================= */
+
+.esri-popup {
+  --calcite-color-background: var(--dc-popup-surface);
+  --calcite-color-foreground-1: var(--dc-popup-surface);
+  --calcite-color-foreground-2: var(--dc-popup-surface-alt);
+  --calcite-color-foreground-3: var(--dc-popup-surface-alt);
+
+  --calcite-color-surface-1: var(--dc-popup-surface);
+  --calcite-color-surface-2: var(--dc-popup-surface-alt);
+  --calcite-color-surface-3: var(--dc-popup-surface-alt);
+
+  --calcite-color-border-1: var(--dc-popup-border);
+  --calcite-color-border-2: var(--dc-popup-border);
+  --calcite-color-border-3: var(--dc-popup-border);
+
+  --calcite-color-text-1: var(--dc-popup-text);
+  --calcite-color-text-2: var(--dc-popup-text);
+  --calcite-color-text-3: var(--dc-popup-text-muted);
+
+  --calcite-ui-background: var(--dc-popup-surface);
+  --calcite-ui-foreground-1: var(--dc-popup-surface);
+  --calcite-ui-foreground-2: var(--dc-popup-surface-alt);
+  --calcite-ui-foreground-3: var(--dc-popup-surface-alt);
+  --calcite-ui-border-1: var(--dc-popup-border);
+  --calcite-ui-border-2: var(--dc-popup-border);
+  --calcite-ui-border-3: var(--dc-popup-border);
+  --calcite-ui-text-1: var(--dc-popup-text);
+  --calcite-ui-text-2: var(--dc-popup-text);
+  --calcite-ui-text-3: var(--dc-popup-text-muted);
+
+  --calcite-action-bar-background-color: var(--dc-popup-surface);
+  --calcite-action-background-color: transparent;
+  --calcite-action-background-color-hover: var(--dc-popup-surface-alt);
+  --calcite-action-background-color-press: var(--dc-popup-surface-alt);
+  --calcite-action-text-color: var(--dc-popup-text);
+  --calcite-action-text-color-press: var(--dc-popup-text);
+}
+
+.esri-popup__main-container {
+  background: var(--dc-popup-surface);
+  color: var(--dc-popup-text);
+}
+
+.esri-popup__content {
+  margin: 0;
+  background: var(--dc-popup-surface);
+  color: var(--dc-popup-text);
+}
+
+.esri-popup__content p {
+  margin: 0;
+}
+
+.esri-popup__header-title {
+  color: var(--dc-popup-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.esri-popup__footer,
+.esri-popup__button-container,
+.esri-popup__action-menu {
+  background: var(--dc-popup-surface);
+  color: var(--dc-popup-text);
+  border-color: var(--dc-popup-border);
+}
+
+.esri-popup__action.is-disabled,
+.esri-popup__action[disabled] {
+  color: var(--dc-popup-text-muted);
+  opacity: 0.65;
+}
+
+html.calcite-mode-dark .data-catalogue-map {
+  background: #1f2933;
+}
+
+.data-catalogue-aoi-popup-summary,
+.data-catalogue-cluster-picker {
+  color: var(--dc-popup-text);
+  background: var(--dc-popup-surface);
+}
+
+.data-catalogue-aoi-popup-summary__metric,
+.data-catalogue-cluster-picker__item {
+  color: var(--dc-popup-text);
+  background: var(--dc-popup-surface-alt);
+  border-color: var(--dc-popup-border);
+}
+
+.data-catalogue-aoi-popup-summary__title,
+.data-catalogue-aoi-popup-summary__metric-value,
+.data-catalogue-cluster-picker__job-title {
+  color: var(--dc-popup-text);
+}
+
+.data-catalogue-aoi-popup-summary__message,
+.data-catalogue-aoi-popup-summary__hint,
+.data-catalogue-aoi-popup-summary__metric-label,
+.data-catalogue-cluster-picker__message,
+.data-catalogue-cluster-picker__job-subtitle {
+  color: var(--dc-popup-text-muted);
+}
+/* =========================================================
+   Accessibility / map focus cleanup
+   ========================================================= */
+
+.esri-view-surface:focus::after,
+.esri-view-surface:focus-visible::after,
+.esri-ui:focus::after,
+.esri-ui:focus-visible::after {
+  display: none;
+  opacity: 0;
+  box-shadow: none;
+}

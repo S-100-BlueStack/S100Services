@@ -1,0 +1,104 @@
+.data-catalogue-overlay-panel {
+  position: absolute;
+  z-index: 10;
+  top: 0;
+  width: min(31rem, calc(100vw - 2rem));
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  overflow: auto;
+  border: 1px solid var(--dc-border);
+  border-top: 0;
+  border-left: 0;
+  border-radius: 0;
+  background: var(--dc-overlay);
+  box-shadow: var(--dc-shadow);
+  backdrop-filter: blur(14px);
+}
+
+.data-catalogue-overlay-panel[hidden] {
+  display: none;
+}
+
+.data-catalogue-jobs-overlay {
+  --dc-jobs-panel-padding: 0.85rem;
+  top: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  display: block;
+  gap: 0;
+  height: auto;
+  max-height: none;
+  padding: 0 var(--dc-jobs-panel-padding) var(--dc-jobs-panel-padding);
+  overflow-y: auto;
+}
+
+.data-catalogue-jobs-overlay .data-catalogue-overlay-panel__header {
+  position: sticky;
+  top: 0;
+  z-index: 7;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: start;
+  gap: 0.75rem;
+  margin: 0 calc(-1 * var(--dc-jobs-panel-padding)) 0;
+  padding: var(--dc-jobs-panel-padding);
+  border-bottom: 1px solid var(--dc-border);
+  background: var(--dc-overlay);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.data-catalogue-overlay-panel__header-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.15rem;
+  justify-self: end;
+  flex: 0 0 auto;
+}
+
+.data-catalogue-overlay-panel__back,
+.data-catalogue-overlay-panel__close {
+  --calcite-color-foreground-1: transparent;
+}
+
+.data-catalogue-overlay-panel__title-group {
+  min-width: 0;
+}
+
+.data-catalogue-overlay-panel__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.data-catalogue-overlay-panel__subtitle {
+  margin: 0.2rem 0 0;
+  color: var(--dc-text-muted);
+  font-size: 0.85rem;
+}
+
+.data-catalogue-overlay-panel__description {
+  margin: 0;
+  color: var(--dc-text);
+  font-size: 0.92rem;
+}
+
+.data-catalogue-overlay-panel__close {
+  --calcite-color-foreground-1: transparent;
+}
+
+@media (max-width: 54rem) {
+  .data-catalogue-overlay-panel {
+    top: auto;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    left: 0.75rem;
+    width: auto;
+    max-height: 50%;
+    border: 1px solid var(--dc-border);
+  }
+}
