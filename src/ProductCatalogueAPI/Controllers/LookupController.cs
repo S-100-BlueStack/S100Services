@@ -1,10 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Models;
+using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Services.Export;
+using System.Text.RegularExpressions;
 
 namespace ProductCatalogueAPI.Controllers
 {
@@ -39,18 +40,10 @@ namespace ProductCatalogueAPI.Controllers
         [HttpGet("productstates")]
         public IActionResult GetProductStates() {
             var values = Enum.GetValues<ResponseTypes.ProductStatus>()
-                .Select(e => new {
-                    Id = (int)e,
-                    Name = e switch {
-                        //ResponseTypes.ProductStatus.Ready => e.ToString(),
-                        //ResponseTypes.ProductStatus.NewEdition => "New edition",
-                        //ResponseTypes.ProductStatus.NewUpdate => "New update",
-                        //ResponseTypes.ProductStatus.Invalid => e.ToString(),
-                        //ResponseTypes.ProductStatus.InTransit => "In transit",
-
-                        _ => e.ToString()
-                    }
-                });
+              .Select(e => new {
+                  Id = (int)e,
+                  Name = Regex.Replace(e.ToString(), "(?<!^)([A-Z])", " $1")
+              });
 
             return Ok(values);
         }

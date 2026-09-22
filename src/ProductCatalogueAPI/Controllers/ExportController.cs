@@ -83,6 +83,11 @@ public sealed class ExportController(ILogger<ExportController> logger, IProductM
         if (!version.Edition.HasValue || !version.Update.HasValue)
             return JobProblem(StatusCodes.Status409Conflict, ExportJobContract.ProductVersionUnavailableCode, ExportJobContract.ProductVersionUnavailableMessage);
 
+        if (version.Edition.Value == 0 && (operationType is ExportOperationType.ExportEdition or ExportOperationType.ExportUpdate))
+            operationType = ExportOperationType.NewDataset;
+        else if (operationType == ExportOperationType.NewDataset && version.Edition.Value != 0)
+            return JobProblem(StatusCodes.Status409Conflict, ExportJobContract.NewDatasetInvalidVersionCode, ExportJobContract.NewDatasetInvalidVersionMessage);
+
         var request = new ExportOperationJobRequest(version.DatasetName, operationType, product.ProductSpecification.ToString(), version.Edition, version.Update, correlationId, _timeProvider.GetUtcNow());
         try {
             var response = _exportJobService.Enqueue(request);

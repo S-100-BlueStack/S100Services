@@ -29,6 +29,19 @@ public sealed class ExportAsyncControllerTests
     }
 
     [Fact]
+    public async Task FirstExportUsesNewDatasetOperationWhenEditionIsZero() {
+        var jobs = new RecordingJobService();
+        var controller = CreateController(jobs, edition: 0, update: 0);
+
+        var result = await controller.NewEdition("101DK001", CancellationToken.None);
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Equal(ExportOperationType.NewDataset, jobs.Request!.OperationType);
+        Assert.Equal(0, jobs.Request.ExpectedEdition);
+        Assert.Equal(0, jobs.Request.ExpectedUpdate);
+    }
+
+    [Fact]
     public async Task CancelExportQueuesS57FromTheCatalogueProduct() {
         var jobs = new RecordingJobService();
         var controller = CreateController(jobs);
@@ -65,8 +78,8 @@ public sealed class ExportAsyncControllerTests
         Assert.Equal("S101", jobs.Request!.ProductSpecification);
     }
 
-    private static ExportController CreateController(RecordingJobService jobs) {
-        var controller = new ExportController(NullLogger<ExportController>.Instance, new FakeProductManager(new FakeElectronicProductManager()), jobs, TimeProvider.System) {
+    private static ExportController CreateController(RecordingJobService jobs, int edition = 4, int update = 2) {
+        var controller = new ExportController(NullLogger<ExportController>.Instance, new FakeProductManager(new FakeElectronicProductManager(edition, update)), jobs, TimeProvider.System) {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
         controller.HttpContext.TraceIdentifier = "trace";
@@ -85,10 +98,10 @@ public sealed class ExportAsyncControllerTests
         public IElectronicProductManager ElectronicProductManager { get; } = electronicProductManager;
     }
 
-    private sealed class FakeElectronicProductManager : IElectronicProductManager
+    private sealed class FakeElectronicProductManager(int edition, int update) : IElectronicProductManager
     {
         public string OutputFolder => string.Empty;
-        public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(string datasetName, CancellationToken cancellationToken = default) => Task.FromResult<ElectronicProductVersion?>(new(datasetName, 4, 2));
+        public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(string datasetName, CancellationToken cancellationToken = default) => Task.FromResult<ElectronicProductVersion?>(new(datasetName, edition, update));
         public IEnumerator<string> GetEnumerator() => Array.Empty<string>().AsEnumerable().GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name) => null;

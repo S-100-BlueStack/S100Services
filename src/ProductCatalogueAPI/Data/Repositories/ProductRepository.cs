@@ -661,10 +661,15 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
                t.product_specification AS ProductSpecification, h.edition_number AS EditionNo,
                h.update_number AS UpdateNo, h.owner AS Owner, h.error_code AS ErrorCode,
                h.error_message AS ErrorMessage, h.occurred_at_utc AS Date_From,
-               COALESCE(LEAD(h.occurred_at_utc) OVER (PARTITION BY h.product_export_track_id ORDER BY h.occurred_at_utc), @MaxDate) AS Date_to
+               COALESCE(LEAD(h.occurred_at_utc) OVER (
+                   PARTITION BY h.product_export_track_id
+                   ORDER BY h.occurred_at_utc, h.product_state_history_id
+               ), @MaxDate) AS Date_to,
+               CONVERT(bit, CASE WHEN freeze.product_export_track_id IS NULL THEN 0 ELSE 1 END) AS IsManuallyFrozen
         FROM dbo.ProductStateHistory h
         INNER JOIN dbo.ProductExportTrack t ON t.product_export_track_id = h.product_export_track_id
         INNER JOIN dbo.Product p ON p.product_id = t.product_id
+        LEFT JOIN dbo.ProductExportTrackFreezeHold freeze ON freeze.product_export_track_id = t.product_export_track_id
         """;
 
     private const string TrackSelectBaseSql = """

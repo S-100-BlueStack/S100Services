@@ -37,6 +37,10 @@ namespace ProductCatalogueAPI.Jobs
         public const string ProductVersionUnavailableMessage = "The product does not have a usable edition and update version.";
         public const string ProductVersionChangedCode = "PRODUCT_VERSION_CHANGED";
         public const string ProductVersionChangedMessage = "The product changed after the job was created.";
+        public const string NewDatasetRequiredCode = "NEW_DATASET_REQUIRED";
+        public const string NewDatasetRequiredMessage = "The first export must use the NewDataset operation when the product edition is zero.";
+        public const string NewDatasetInvalidVersionCode = "NEW_DATASET_INVALID_VERSION";
+        public const string NewDatasetInvalidVersionMessage = "NewDataset is only valid when the product edition is zero.";
         public const string ProductDataIntegrityErrorCode = "PRODUCT_DATA_INTEGRITY_ERROR";
         public const string ProductDataIntegrityStartMessage = "The product data is ambiguous and the operation cannot be started.";
         public const string ProductDataIntegrityJobMessage = "The product data is ambiguous and the operation could not be started.";
@@ -81,6 +85,8 @@ namespace ProductCatalogueAPI.Jobs
         public const string InvalidStateCode = "SEND_TO_ICENC_PRODUCT_STATE_INVALID";
         public const string InvalidStateStartMessage = "The product must be ReadyForDistribution before an IC-ENC send simulation can start.";
         public const string InvalidStateJobMessage = "The product state changed before the IC-ENC send simulation started.";
+        public const string SevenCsValidationFailedCode = "SEVENCS_VALIDATION_FAILED";
+        public const string ManualValidationOverrideAcceptedMessage = "IC-ENC send simulation was manually allowed despite SevenCs validation findings. No data will be delivered.";
         public const string SetupFailedCode = "SEND_SIMULATION_SETUP_FAILED";
         public const string SetupFailedMessage = "The IC-ENC send simulation could not be prepared.";
         public const string FailedCode = "SEND_SIMULATION_FAILED";

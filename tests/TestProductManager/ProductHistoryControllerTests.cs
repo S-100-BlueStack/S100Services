@@ -20,7 +20,7 @@ public class ProductHistoryControllerTests
     public async Task HistoryPreservesLegacyEnvelopeFieldsAndAddsOnlyFinalizedExplicitEvents()
     {
         var states = new InMemoryProductRepository();
-        await states.AppendAsync("101DK001", ProductState.Exported, "S-101", 2, 1, @"PROD\user");
+        await states.AppendAsync("101DK001", ProductState.Exported, "S-101", 2, 1, @"PROD\user", errorCode: "TEST_ERROR", errorMessage: "Test error message");
         var stateId = Assert.Single(await states.GetHistoryByNameAsync("101DK001")).Id;
         var events = new HistoryMemoryRepository();
         var service = ProductHistoryEventTests.CreateService(events);
@@ -36,10 +36,13 @@ public class ProductHistoryControllerTests
         Assert.Equal(1, response.TotalHits);
         Assert.Equal(stateId, state.Id);
         Assert.Equal("101DK001", state.Name);
+        Assert.Equal("S-101", state.ProductSpecification);
         Assert.Equal(2, state.Edition);
         Assert.Equal(1, state.Update);
         Assert.Equal(ProductStatus.Exported, state.Status);
         Assert.Equal("USER", state.Owner);
+        Assert.Equal("TEST_ERROR", state.ErrorCode);
+        Assert.Equal("Test error message", state.ErrorMessage);
         Assert.Equal(1, response.EventTotalHits);
         Assert.Equal(stateId, Assert.Single(response.Events).StateRecordId);
         Assert.True(response.Success);

@@ -8,6 +8,7 @@ namespace ProductCatalogueAPI.Jobs
         int ExpectedEdition,
         int ExpectedUpdate,
         string CorrelationId,
-        DateTimeOffset CreatedAtUtc
+        DateTimeOffset CreatedAtUtc,
+        bool AllowSevenCsValidationFailure = false
     );
 }

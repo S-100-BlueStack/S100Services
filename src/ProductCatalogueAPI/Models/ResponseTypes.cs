@@ -63,12 +63,17 @@ namespace ProductCatalogueAPI.Models
         {
             public Guid Id { get; set; }
             public required string Name { get; set; }
+            public required string ProductSpecification { get; set; }
             public int? Edition { get; set; }
             public int? Update { get; set; }
             public required ProductStatus Status { get; set; }
             public required DateTime From { get; set; }
             public required DateTime To { get; set; }
             public string? Owner { get; set; }
+            public string? ErrorCode { get; set; }
+            public string? ErrorMessage { get; set; }
+            /// <summary>Indicates whether the track currently has a manual freeze hold.</summary>
+            public bool IsManuallyFrozen { get; set; }
         }
 
         public class DashboardResponse

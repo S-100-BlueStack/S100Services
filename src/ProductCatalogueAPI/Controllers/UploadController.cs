@@ -91,7 +91,9 @@ namespace ProductCatalogueAPI.Controllers
                 );
             }
 
-            if (product.State != ProductState.ReadyForDistribution) {
+            var allowsSevenCsValidationOverride = product.State == ProductState.Error &&
+                string.Equals(product.ErrorCode, SendToIcEncContract.SevenCsValidationFailedCode, StringComparison.Ordinal);
+            if (product.State != ProductState.ReadyForDistribution && !allowsSevenCsValidationOverride) {
                 _logger.LogWarning(
                     "IC-ENC send simulation rejected because Product state is invalid. DatasetName: {DatasetName}. ExpectedState: {ExpectedState}. ActualState: {ActualState}",
                     datasetName,
@@ -105,6 +107,14 @@ namespace ProductCatalogueAPI.Controllers
                 );
             }
 
+            if (allowsSevenCsValidationOverride) {
+                _logger.LogWarning(
+                    "IC-ENC send simulation manually allowed despite SevenCs validation findings. DatasetName: {DatasetName}. User: {User}",
+                    datasetName,
+                    User?.Identity?.Name
+                );
+            }
+
             cancellationToken.ThrowIfCancellationRequested();
 
             var request = new SendToIcEncJobRequest(
@@ -113,7 +123,8 @@ namespace ProductCatalogueAPI.Controllers
                 product.EditionNo,
                 product.UpdateNo,
                 HttpContext.TraceIdentifier,
-                _timeProvider.GetUtcNow()
+                _timeProvider.GetUtcNow(),
+                allowsSevenCsValidationOverride
             );
 
             try {

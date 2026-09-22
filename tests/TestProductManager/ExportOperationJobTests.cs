@@ -25,6 +25,23 @@ public sealed class ExportOperationJobTests
     }
 
     [Fact]
+    public async Task NewDatasetUsesNewEditionProcessingWhenEditionIsZero() {
+        var context = new FakeExecutionContext();
+        var operations = new RecordingOperations();
+        var job = new ExportOperationJob(
+            new FakeProductManager(new FakeElectronicProductManager(new ElectronicProductVersion("101DK001", 0, 0))),
+            new FakeLockService(),
+            operations,
+            NullLogger<ExportOperationJob>.Instance
+        );
+
+        await job.ExecuteAsync(Request(ExportOperationType.NewDataset, 0, 0), context, CancellationToken.None);
+
+        Assert.Equal(ExportRevisionType.NewEdition, operations.LastRevisionType);
+        Assert.Equal(ExportOperationContract.ExportCompletedCode, context.Get<string>(ExportJobParameterNames.ResultCode));
+    }
+
+    [Fact]
     public async Task CancelExportUsesRenamedOperationContract() {
         var operations = new RecordingOperations();
         var job = CreateJob(operations);
@@ -68,7 +85,7 @@ public sealed class ExportOperationJobTests
     }
 
     private static ExportOperationJob CreateJob(RecordingOperations operations) => new(new FakeProductManager(new FakeElectronicProductManager(new ElectronicProductVersion("101DK001", 4, 2))), new FakeLockService(), operations, NullLogger<ExportOperationJob>.Instance);
-    private static ExportOperationJobRequest Request(ExportOperationType operationType) => new("101DK001", operationType, "S101", 4, 2, "correlation", DateTimeOffset.Parse("2026-08-10T20:00:00Z"));
+    private static ExportOperationJobRequest Request(ExportOperationType operationType, int edition = 4, int update = 2) => new("101DK001", operationType, "S101", edition, update, "correlation", DateTimeOffset.Parse("2026-08-10T20:00:00Z"));
 
     private sealed class RecordingOperations : IExportOperationService
     {

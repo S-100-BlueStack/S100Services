@@ -93,12 +93,18 @@ namespace ProductCatalogueAPI.Jobs
         private static void ValidateRequest(ExportOperationJobRequest request) {
             ValidateSharedRequest(request.DatasetName, request.CorrelationId);
 
-            if (request.OperationType is ExportOperationType.ExportEdition or ExportOperationType.ExportUpdate &&
+            if ((request.OperationType is ExportOperationType.NewDataset or ExportOperationType.ExportEdition or ExportOperationType.ExportUpdate) &&
                 request.ProductSpecification is not ("S57" or "S101")) {
                 throw new InvalidOperationException(
                     "Export jobs require a currently implemented canonical product target."
                 );
             }
+
+            if (request.OperationType == ExportOperationType.NewDataset && request.ExpectedEdition != 0)
+                throw new InvalidOperationException("NewDataset jobs require edition zero.");
+
+            if ((request.OperationType is ExportOperationType.ExportEdition or ExportOperationType.ExportUpdate) && request.ExpectedEdition == 0)
+                throw new InvalidOperationException("Edition zero must use the NewDataset operation.");
 
             if (request.OperationType == ExportOperationType.CancelExport &&
                 request.ProductSpecification is not ("S57" or "S101")) {
