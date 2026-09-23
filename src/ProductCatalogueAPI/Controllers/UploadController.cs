@@ -93,11 +93,11 @@ namespace ProductCatalogueAPI.Controllers
 
             var allowsSevenCsValidationOverride = product.State == ProductState.Error &&
                 string.Equals(product.ErrorCode, SendToIcEncContract.SevenCsValidationFailedCode, StringComparison.Ordinal);
-            if (product.State != ProductState.ReadyForDistribution && !allowsSevenCsValidationOverride) {
+            if (product.State != ProductState.Exported && !allowsSevenCsValidationOverride) {
                 _logger.LogWarning(
                     "IC-ENC send simulation rejected because Product state is invalid. DatasetName: {DatasetName}. ExpectedState: {ExpectedState}. ActualState: {ActualState}",
                     datasetName,
-                    ProductState.ReadyForDistribution,
+                    ProductState.Exported,
                     product.State
                 );
                 return JobProblem(

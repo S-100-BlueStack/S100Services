@@ -84,7 +84,7 @@ test("simulation capability keeps the standard send action label", () => {
 
 test("disabled capability disables send with backend-owned reason", () => {
   const availability = createActions({
-    attributes: { datasetName: "DK_TEST_PRODUCT", status: "ReadyForDistribution" },
+    attributes: { datasetName: "DK_TEST_PRODUCT", status: "Exported" },
     sendToIcEncCapability: {
       mode: "Disabled",
       available: false,
@@ -106,21 +106,35 @@ test("missing or unknown capability fails closed", () => {
 
 test("send simulation is disabled when product is frozen", () => {
   const availability = createActions({
-    attributes: { datasetName: "DK_TEST_PRODUCT", status: "ReadyForDistribution" },
+    attributes: { datasetName: "DK_TEST_PRODUCT", status: "Exported" },
     frozen: true,
   });
   assert.equal(availability.sendImmediately.disabled, true);
   assert.equal(availability.sendImmediately.disabledReason, "Unfreeze the product before sending.");
 });
 
-test("send simulation is disabled when known state is not ReadyForDistribution", () => {
+test("send simulation is available only from Exported state", () => {
+  for (const status of ["Exported", 2]) {
+    const availability = createActions({
+      attributes: { datasetName: "DK_TEST_PRODUCT", status },
+    });
+    assert.equal(availability.sendImmediately.disabled, false);
+  }
+
+  const previousState = createActions({
+    attributes: { datasetName: "DK_TEST_PRODUCT", status: "ReadyForDistribution" },
+  });
+  assert.equal(previousState.sendImmediately.disabled, true);
+});
+
+test("send simulation is disabled when known state is not Exported", () => {
   const availability = createActions({
     attributes: { datasetName: "DK_TEST_PRODUCT", status: "Idle" },
   });
   assert.equal(availability.sendImmediately.disabled, true);
   assert.equal(
     availability.sendImmediately.disabledReason,
-    "IC-ENC send simulation is only available when product status is ReadyForDistribution."
+    "IC-ENC send simulation is only available when product status is Exported."
   );
 });
 

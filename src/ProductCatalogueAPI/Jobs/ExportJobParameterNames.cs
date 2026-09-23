@@ -83,7 +83,7 @@ namespace ProductCatalogueAPI.Jobs
         public const string ConfigurationChangedCode = "SEND_TO_ICENC_CONFIGURATION_CHANGED";
         public const string ConfigurationChangedMessage = "The Send to IC-ENC configuration changed before the simulation started.";
         public const string InvalidStateCode = "SEND_TO_ICENC_PRODUCT_STATE_INVALID";
-        public const string InvalidStateStartMessage = "The product must be ReadyForDistribution before an IC-ENC send simulation can start.";
+        public const string InvalidStateStartMessage = "The product must be Exported before an IC-ENC send simulation can start.";
         public const string InvalidStateJobMessage = "The product state changed before the IC-ENC send simulation started.";
         public const string SevenCsValidationFailedCode = "SEVENCS_VALIDATION_FAILED";
         public const string ManualValidationOverrideAcceptedMessage = "IC-ENC send simulation was manually allowed despite SevenCs validation findings. No data will be delivered.";

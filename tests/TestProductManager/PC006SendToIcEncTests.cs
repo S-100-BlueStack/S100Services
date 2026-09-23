@@ -148,10 +148,12 @@ namespace TestProductCatalogueAPI
             Assert.Equal(0, repository.AppendCalls);
         }
 
-        [Fact]
+        [Theory]
+        [InlineData(ProductState.Idle)]
+        [InlineData(ProductState.ReadyForDistribution)]
         [Trait("Package", "PC-006")]
-        public async Task InvalidProductStateReturnsConflictWithoutEnqueueOrMutation() {
-            var repository = new RecordingProductRepository(Product(ProductState.Idle));
+        public async Task InvalidProductStateReturnsConflictWithoutEnqueueOrMutation(ProductState state) {
+            var repository = new RecordingProductRepository(Product(state));
             var jobs = new RecordingSendJobService();
             var controller = Controller(repository, new ThrowingLockService(), jobs, SendToIcEncMode.Simulation);
 
@@ -304,7 +306,7 @@ namespace TestProductCatalogueAPI
 
         [Theory]
         [InlineData(ProductState.Idle, 5, 0, SendToIcEncContract.InvalidStateCode)]
-        [InlineData(ProductState.ReadyForDistribution, 6, 0, ExportJobContract.ProductVersionChangedCode)]
+        [InlineData(ProductState.Exported, 6, 0, ExportJobContract.ProductVersionChangedCode)]
         [Trait("Package", "PC-006")]
         public async Task ProductChangeFailsWithoutFabricatedState(
             ProductState state,
@@ -606,7 +608,7 @@ namespace TestProductCatalogueAPI
         );
 
         private static ProductRecord Product(
-            ProductState state = ProductState.ReadyForDistribution,
+            ProductState state = ProductState.Exported,
             int edition = 5,
             int update = 0,
             string? errorCode = null

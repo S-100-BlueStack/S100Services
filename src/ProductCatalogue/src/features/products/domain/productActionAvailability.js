@@ -184,9 +184,9 @@ function createSendAvailability({
   if (frozen) {
     return unavailable("Unfreeze the product before sending.");
   }
-  if (!productState.known || !isReadyForDistributionState(productState)) {
+  if (!productState.known || !isExportedState(productState)) {
     return unavailable(
-      "IC-ENC send simulation is only available when product status is ReadyForDistribution."
+      "IC-ENC send simulation is only available when product status is Exported."
     );
   }
 
@@ -325,8 +325,8 @@ function isExportableState(productState) {
   );
 }
 
-function isReadyForDistributionState(productState) {
-  return productState.id === 11 || productState.name === "readyfordistribution";
+function isExportedState(productState) {
+  return productState.id === 2 || productState.name === "exported";
 }
 
 function isCancelableCandidateState(productState) {

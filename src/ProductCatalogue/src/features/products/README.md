@@ -48,7 +48,7 @@ polls retain finite request timeouts and bounded backoff while keeping an unknow
 the UI.
 
 Known workflow states constrain export; backend mapping/version/candidate checks remain authoritative.
-Send is a capability-gated simulation from ReadyForDistribution, never real delivery.
+Send is a capability-gated simulation from Exported, never real delivery.
 S57 Freeze/Unfreeze is unavailable because the current upload routes write S-101 explicitly.
 Paper Charts/S102 cannot dispatch electronic mutations or read electronic History/artifacts.
 

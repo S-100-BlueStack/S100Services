@@ -54,6 +54,7 @@ test("compatibility AOI keeps supported mutation actions", () => {
   assert.equal(availability.freeze.visible, true);
   assert.equal(availability.freeze.disabled, false);
   assert.equal(availability.sendImmediately.visible, true);
+  assert.equal(availability.sendImmediately.disabled, false);
   assert.equal(availability.rollback.visible, true);
 });
 

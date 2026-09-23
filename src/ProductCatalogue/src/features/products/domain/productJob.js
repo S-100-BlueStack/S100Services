@@ -174,7 +174,10 @@ export function createProductJobLabel(operationType, specification) {
   if (isExportEditionOperation(operationType)) {
     return `Exporting ${label ? `${label} ` : ""}Edition`;
   }
-  if (normalizeText(operationType).toLowerCase() === PRODUCT_JOB_OPERATION.EXPORT_UPDATE.toLowerCase()) {
+  if (
+    normalizeText(operationType).toLowerCase() ===
+    PRODUCT_JOB_OPERATION.EXPORT_UPDATE.toLowerCase()
+  ) {
     return `Exporting ${label ? `${label} ` : ""}Update`;
   }
 
