@@ -44,6 +44,60 @@ test("accepted export job response is normalized for persistent tracking", () =>
   });
 });
 
+test("NewDataset backend wire operation preserves the requested Edition identity", () => {
+  const record = createProductJobRecord({
+    response: {
+      jobId: "job-edition",
+      datasetName: "101DK005NORSA",
+      operationType: "NewDataset",
+      exportTarget: "S101",
+      status: "Queued",
+      createdAt: "2026-09-23T07:44:43.32067+00:00",
+      statusUrl: "/jobs/job-edition",
+    },
+    datasetName: "101DK005NORSA",
+    operationType: PRODUCT_JOB_OPERATION.EXPORT_EDITION,
+  });
+
+  assert.equal(record.operationType, PRODUCT_JOB_OPERATION.EXPORT_EDITION);
+  assert.equal(record.label, "Exporting S-101 Edition");
+});
+
+test("NewDataset backend wire operation preserves the requested Update identity", () => {
+  const record = createProductJobRecord({
+    response: {
+      jobId: "job-update",
+      datasetName: "101DK005NORSA",
+      operationType: "NewDataset",
+      exportTarget: "S101",
+      status: "Queued",
+      createdAt: "2026-09-23T07:44:43.32067+00:00",
+      statusUrl: "/jobs/job-update",
+    },
+    datasetName: "101DK005NORSA",
+    operationType: PRODUCT_JOB_OPERATION.EXPORT_UPDATE,
+  });
+
+  assert.equal(record.operationType, PRODUCT_JOB_OPERATION.EXPORT_UPDATE);
+  assert.equal(record.label, "Exporting S-101 Update");
+});
+
+test("NewDataset without request context stays generic instead of becoming Edition", () => {
+  const record = createProductJobRecord({
+    response: {
+      jobId: "job-remote",
+      datasetName: "101DK005NORSA",
+      operationType: "NewDataset",
+      exportTarget: "S101",
+      status: "Running",
+    },
+    operationType: "NewDataset",
+  });
+
+  assert.equal(record.operationType, "NewDataset");
+  assert.equal(record.label, "Exporting S-101 export");
+});
+
 test("accepted simulation job preserves truthful mode and delivery status", () => {
   const record = createProductJobRecord({
     response: {
@@ -65,6 +119,23 @@ test("accepted simulation job preserves truthful mode and delivery status", () =
       response: {
         ...record,
         operationType: PRODUCT_JOB_OPERATION.EXPORT_EDITION,
+      },
+      operationType: PRODUCT_JOB_OPERATION.SEND_TO_ICENC,
+    }),
+    null
+  );
+});
+
+test("NewDataset is not compatible with a Send operation", () => {
+  assert.equal(
+    createProductJobRecord({
+      response: {
+        jobId: "job-invalid-send",
+        datasetName: "101DK005NORSA",
+        operationType: "NewDataset",
+        status: "Queued",
+        mode: "Simulation",
+        deliveryStatus: "NotDelivered",
       },
       operationType: PRODUCT_JOB_OPERATION.SEND_TO_ICENC,
     }),
@@ -109,6 +180,25 @@ test("succeeded export job remains a successful product action result", () => {
   assert.equal(result.success, true);
   assert.equal(result.data, response);
   assert.equal(result.warning.code, "ROLLBACK_CLEANUP_FAILED");
+});
+
+test("terminal NewDataset status is compatible with known Edition and Update jobs", () => {
+  for (const expectedOperationType of [
+    PRODUCT_JOB_OPERATION.EXPORT_EDITION,
+    PRODUCT_JOB_OPERATION.EXPORT_UPDATE,
+  ]) {
+    const result = createProductJobActionResult(
+      {
+        jobId: "job-export",
+        operationType: "NewDataset",
+        status: "Succeeded",
+        message: "Export completed.",
+      },
+      { expectedOperationType }
+    );
+
+    assert.equal(result.success, true);
+  }
 });
 
 test("truthful terminal simulation result is successful but not delivered", () => {

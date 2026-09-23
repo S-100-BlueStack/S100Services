@@ -29,9 +29,15 @@ GET /jobs/active?datasetName={datasetName}
 ```
 
 The backend resolves specification from the exact Product; no exportTarget query is sent.
-Operations are ExportEdition, ExportUpdate and CancelExport. Export success means a generated,
-validated candidate, not publication to S-128. User-facing labels remain S-101/S-57 and Cancel Export.
-The S100 alias remains valid for Product export metadata only.
+Frontend operation identities are ExportEdition, ExportUpdate and CancelExport. The current backend
+wire contract returns `NewDataset` for both Edition and Update jobs. A `NewDataset` response is therefore
+accepted only when frontend request context already identifies the job as ExportEdition or ExportUpdate;
+the canonical request identity is retained for persistence and terminal-status validation. Other operation
+mismatches continue to fail closed. A remotely discovered `NewDataset` job without request context stays
+generic because the wire value alone cannot distinguish Edition from Update.
+
+Export success means a generated, validated candidate, not publication to S-128. User-facing labels
+remain S-101/S-57 and Cancel Export. The S100 alias remains valid for Product export metadata only.
 
 Active jobs persist in browser storage and resume after reload. Cross-tab reconciliation combines
 storage, BroadcastChannel and focus/visibility updates; backend active-job discovery provides shared

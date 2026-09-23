@@ -13,6 +13,11 @@ export const PRODUCT_JOB_OPERATION = Object.freeze({
   SEND_TO_ICENC: "SendToIcEnc",
 });
 
+const BACKEND_NEW_DATASET_OPERATION = "NewDataset";
+const NEW_DATASET_COMPATIBLE_OPERATIONS = new Set([
+  PRODUCT_JOB_OPERATION.EXPORT_EDITION.toLowerCase(),
+  PRODUCT_JOB_OPERATION.EXPORT_UPDATE.toLowerCase(),
+]);
 const SEND_SIMULATION_MODE = "Simulation";
 const SEND_SIMULATION_OUTCOME = "SimulationCompleted";
 const SEND_NOT_DELIVERED_STATUS = "NotDelivered";
@@ -33,7 +38,10 @@ export function createProductJobRecord({
   const normalizedDatasetName = normalizeText(response?.datasetName) || normalizeText(datasetName);
   const responseOperationType = normalizeText(response?.operationType);
   const expectedOperationType = normalizeText(operationType);
-  const normalizedOperationType = responseOperationType || expectedOperationType;
+  const normalizedOperationType = resolveProductJobOperation(
+    responseOperationType,
+    expectedOperationType
+  );
 
   if (
     response?.datasetName &&
@@ -42,13 +50,6 @@ export function createProductJobRecord({
   )
     return null;
   if (!jobId || !normalizedDatasetName || !normalizedOperationType) {
-    return null;
-  }
-  if (
-    responseOperationType &&
-    expectedOperationType &&
-    responseOperationType.toLowerCase() !== expectedOperationType.toLowerCase()
-  ) {
     return null;
   }
 
@@ -106,7 +107,7 @@ export function createProductJobActionResult(statusResponse, { expectedOperation
 
   if (
     normalizedExpectedOperationType &&
-    actualOperationType.toLowerCase() !== normalizedExpectedOperationType.toLowerCase()
+    !productJobOperationsMatch(actualOperationType, normalizedExpectedOperationType)
   ) {
     const error = {
       code: "JOB_STATUS_INVALID",
@@ -170,8 +171,14 @@ export function createProductJobLabel(operationType, specification) {
 
   if (isRollbackOperation(operationType)) return "Canceling export";
   const label = specificationLabel(specification);
-  const kind = operationType === PRODUCT_JOB_OPERATION.EXPORT_UPDATE ? "Update" : "Edition";
-  return `Exporting ${label ? `${label} ` : ""}${kind}`;
+  if (isExportEditionOperation(operationType)) {
+    return `Exporting ${label ? `${label} ` : ""}Edition`;
+  }
+  if (normalizeText(operationType).toLowerCase() === PRODUCT_JOB_OPERATION.EXPORT_UPDATE.toLowerCase()) {
+    return `Exporting ${label ? `${label} ` : ""}Update`;
+  }
+
+  return label ? `Exporting ${label} export` : "Exporting";
 }
 
 export function createProductJobCompletionTitle(record, statusResponse) {
@@ -195,6 +202,37 @@ export function createProductJobCompletionTitle(record, statusResponse) {
 
 export function getProductJobFailureMessage(statusResponse) {
   return normalizeJobError(statusResponse).message;
+}
+
+function resolveProductJobOperation(responseOperationType, expectedOperationType) {
+  const actual = normalizeText(responseOperationType);
+  const expected = normalizeText(expectedOperationType);
+
+  if (!actual) {
+    return expected;
+  }
+  if (!expected) {
+    return actual;
+  }
+
+  return productJobOperationsMatch(actual, expected) ? expected : "";
+}
+
+function productJobOperationsMatch(actualOperationType, expectedOperationType) {
+  const actual = normalizeText(actualOperationType).toLowerCase();
+  const expected = normalizeText(expectedOperationType).toLowerCase();
+
+  if (!actual || !expected) {
+    return false;
+  }
+  if (actual === expected) {
+    return true;
+  }
+
+  return (
+    actual === BACKEND_NEW_DATASET_OPERATION.toLowerCase() &&
+    NEW_DATASET_COMPATIBLE_OPERATIONS.has(expected)
+  );
 }
 
 function isExportEditionOperation(operationType) {
