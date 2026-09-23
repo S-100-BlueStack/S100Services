@@ -1,43 +1,22 @@
-export const statusColorConfig = {
-  1: {
-    fill: "rgba(51,160,44,0.35)",
-    outline: "rgba(51,160,44,0.9)",
-    header: "rgba(51,160,44,0.25)",
-  },
-  2: {
-    fill: "rgba(56,168,255,0.35)",
-    outline: "rgba(56,168,255,0.9)",
-    header: "rgba(56,168,255,0.25)",
-  },
-  3: {
-    fill: "rgba(178,102,255,0.35)",
-    outline: "rgba(178,102,255,0.9)",
-    header: "rgba(178,102,255,0.25)",
-  },
-  4: {
-    fill: "rgba(255,10,10,0.35)",
-    outline: "rgba(255,10,10,0.9)",
-    header: "rgba(255,10,10,0.25)",
-  },
-  5: {
-    fill: "rgba(255,165,0,0.35)",
-    outline: "rgba(255,165,0,0.9)",
-    header: "rgba(255,165,0,0.25)",
-  },
-};
+const PRODUCT_STATUS_RGB = Object.freeze({
+  1: "115,125,120", // Idle
+  2: "55,150,85", // Exported
+  5: "115,120,190", // Frozen
+  6: "55,120,195", // In Transit
+  7: "205,55,55", // Rejected
+  8: "205,140,30", // Changes Detected
+  9: "55,135,210", // Exporting
+  10: "125,95,190", // Validating
+  11: "40,155,130", // Ready For Distribution
+  12: "45,145,80", // Accepted For Distribution
+  13: "95,125,105", // Published
+  14: "130,130,130", // Cancelled
+  15: "220,45,45", // Error
+});
 
-for (const [id, rgb] of Object.entries({
-  6: "120,120,180",
-  7: "210,60,60",
-  8: "190,155,35",
-  9: "55,130,210",
-  10: "135,95,190",
-  11: "40,155,130",
-  12: "45,140,80",
-  13: "35,125,65",
-  14: "130,130,130",
-  15: "220,45,45",
-})) {
+export const statusColorConfig = {};
+
+for (const [id, rgb] of Object.entries(PRODUCT_STATUS_RGB)) {
   statusColorConfig[id] = {
     fill: `rgba(${rgb},0.35)`,
     outline: `rgba(${rgb},0.9)`,
