@@ -41,7 +41,9 @@ Collection reconciliation, source state and persistence. Disable/reset invalidat
 
 Compatible source layers and Graphics reconcile in place by stable feature identity, preserving
 popup/menu DOM. Structural replacements reconcile only the currently open selection; closed or
-replaced sessions never reopen later. Scale visibility bindings follow the current layer set.
+replaced sessions never reopen later. Scale visibility bindings follow the current layer set. Runtime
+source changes rebind scale visibility without republishing compatibility-derived filter/search state;
+compatibility publication remains owned by compatibility load/refresh boundaries.
 
 Failed active refresh retains the previous representation, filters and search index. Failed initial
 activation leaves no partial representation. Candidate layers are discarded on failure or supersession.

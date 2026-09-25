@@ -185,9 +185,7 @@ function createSendAvailability({
     return unavailable("Unfreeze the product before sending.");
   }
   if (!productState.known || !isExportedState(productState)) {
-    return unavailable(
-      "IC-ENC send simulation is only available when product status is Exported."
-    );
+    return unavailable("IC-ENC send simulation is only available when product status is Exported.");
   }
 
   return createSendToIcEncCapabilityAvailability(capability);

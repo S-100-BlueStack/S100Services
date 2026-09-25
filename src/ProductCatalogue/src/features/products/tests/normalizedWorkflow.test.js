@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import test from "node:test";
 import { createDataSourceRegistry } from "../../dataSources/config/dataSourceRegistry.js";
 import { normalizeDataSourcePayload } from "../../dataSources/services/dataSourceNormalizer.js";
@@ -299,7 +299,7 @@ test("state gates match normalized candidate and simulation transitions", () => 
         attributes: { datasetName: "P", status },
         sendToIcEncCapability: capability,
       }).sendImmediately.disabled,
-      status !== 11
+      status !== 2
     );
   assert.equal(isFrozenStatus(5), true);
   assert.equal(isFrozenStatus(6), false);

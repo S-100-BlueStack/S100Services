@@ -68,12 +68,15 @@ export function initMap() {
   const applyMapVisibility = (layers = getAllLayers()) => {
     applyDisplayScaleVisibility(view, layers, { isGraphicAllowed });
   };
-  const bindMapVisibility = (layers = getAllLayers()) => {
-    compatibilityDerivedState.replace(layers);
+  const bindScaleVisibility = (layers = getAllLayers()) => {
     bindDisplayScaleVisibility(view, {
       layers,
       isGraphicAllowed,
     });
+  };
+  const bindMapVisibility = (layers = getAllLayers()) => {
+    compatibilityDerivedState.replace(layers);
+    bindScaleVisibility(layers);
   };
   const dataSourceRuntime = createDataSourceRuntime({
     map,
@@ -84,11 +87,11 @@ export function initMap() {
     filterService,
     productSearchIndex,
     onLayersChanged: () => {
-      // The controller emits its generation-guarded lifecycle event immediately
-      // after this callback. Publishing visibility in a microtask keeps derived
-      // filter/search state inside that same committed operation boundary.
+      // Runtime source filter/search state is published by the source lifecycle.
+      // Only rebind scale visibility here: republishing compatibility derived state
+      // can remove/recreate unrelated provider intent when another source changes.
       queueMicrotask(() => {
-        bindMapVisibility();
+        bindScaleVisibility();
         filterPanel?.refresh?.();
       });
     },
