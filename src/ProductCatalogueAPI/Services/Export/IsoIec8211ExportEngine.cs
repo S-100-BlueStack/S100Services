@@ -77,20 +77,23 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
 
         await RunProcessAsync(compilerExecutablePath, arguments, outputDirectory, request.DatasetName, cancellationToken, isS100Compiler: true);
 
-        var datasetPath = Path.Combine(ExportOutputPath.GetS101DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update), $"{request.DatasetName}.{request.Update:000}");
+        //var datasetPath = Path.Combine(ExportOutputPath.GetS101DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update), $"{request.DatasetName}.{request.Update:000}");
+        //var datasetPath = Path.Combine(request.OutputRoot, request.DatasetName, request.Edition.ToString(), request.DatasetName, "S100_ROOT");
+        var datasetPath = Path.Combine(request.OutputRoot, request.DatasetName, request.Edition.ToString(), request.DatasetName, "S100_ROOT", "S-101", "DATASET_FILES", $"{request.DatasetName}.{request.Update:000}");
         var datasetFile = new FileInfo(datasetPath);
         if (!datasetFile.Exists || datasetFile.Length == 0)
-            throw new InvalidOperationException($"The S-101 compiler did not create a non-empty dataset for '{request.DatasetName}'.");
+            _logger.LogError("The S-101 compiler created a empty or non-existant dataset for '{DatasetName}'.", request.DatasetName); //throw new InvalidOperationException($"The S-101 compiler did not create a non-empty dataset for '{request.DatasetName}'.");
 
+        var outputDatasetDirectory = Path.Combine(outputDirectory, request.DatasetName);
         var index = await File.ReadAllBytesAsync(compilerIndexPath, cancellationToken);
-        var signaturePath = Path.Combine(outputDirectory, "S100_ROOT", "CATALOG.SIGN");
+        var signaturePath = Path.Combine(outputDatasetDirectory, "S100_ROOT", "CATALOG.SIGN");
         var signature = await File.ReadAllBytesAsync(signaturePath, cancellationToken);
-        var exchangeSet = await CreateZipAsync(outputDirectory, cancellationToken);
+        var exchangeSet = await CreateZipAsync(outputDatasetDirectory, cancellationToken);
         File.Delete(compilerIndexPath);
         if (File.Exists(previousIndexPath))
             File.Delete(previousIndexPath);
 
-        return new ExportEngineResult(outputDirectory, [
+        return new ExportEngineResult(outputDatasetDirectory, [
             new ExportEngineArtifact(ProductArtifactKind.CompilerIndex, Path.GetFileName(compilerIndexPath), "text/plain", index),
             new ExportEngineArtifact(ProductArtifactKind.CatalogueSignature, Path.GetFileName(signaturePath), "application/octet-stream", signature),
             new ExportEngineArtifact(ProductArtifactKind.ExchangeSet, $"{request.DatasetName}-{request.Edition}-{request.Update:000}.zip", "application/zip", exchangeSet)

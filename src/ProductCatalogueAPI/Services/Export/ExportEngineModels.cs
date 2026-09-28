@@ -29,20 +29,18 @@ public sealed record ExportEngineResult(string OutputDirectory, IReadOnlyList<Ex
 public static class ExportOutputPath
 {
     /// <summary>
-    /// Gets the working directory for one candidate export.
+    /// Gets the root directory for a product candidate export.
     /// </summary>
     /// <param name="outputRoot">The configured root export directory.</param>
     /// <param name="datasetName">The authoritative dataset name.</param>
-    /// <param name="productSpecification">The independently exported product specification.</param>
+    /// <param name="productSpecification">The product specification being exported.</param>
     /// <param name="edition">The candidate edition number.</param>
     /// <param name="update">The candidate update number.</param>
-    /// <returns>The candidate working directory.</returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="outputRoot"/> or <paramref name="datasetName"/> is empty.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="edition"/> or <paramref name="update"/> is negative.</exception>
+    /// <returns>The candidate export directory.</returns>
     public static string GetCandidateDirectory(string outputRoot, string datasetName, ProductSpecification productSpecification, int edition, int update) {
         Validate(outputRoot, datasetName, edition, update);
 
-        // S-101 retains the established exchange-set layout consumed by operational tooling and SevenCs.
+        // The S-101 compiler creates a dataset-name directory beneath the edition directory.
         if (productSpecification == ProductSpecification.S101)
             return Path.Combine(outputRoot, datasetName, edition.ToString(CultureInfo.InvariantCulture));
 
@@ -50,15 +48,16 @@ public static class ExportOutputPath
     }
 
     /// <summary>
-    /// Gets the S-101 dataset-files directory inside an edition exchange set.
+    /// Gets the S-101 dataset-files directory produced by the compiler inside an edition exchange set.
     /// </summary>
     /// <param name="outputRoot">The configured root export directory.</param>
     /// <param name="datasetName">The authoritative dataset name.</param>
     /// <param name="edition">The candidate edition number.</param>
     /// <param name="update">The candidate update number used for input validation.</param>
     /// <returns>The directory containing the S-101 <c>.000</c> and update files.</returns>
-    public static string GetS101DatasetFilesDirectory(string outputRoot, string datasetName, int edition, int update) => Path.Combine(GetCandidateDirectory(outputRoot, datasetName, ProductSpecification.S101, edition, update), "S100_ROOT", "S-101", "DATASET_FILES");
-
+    public static string GetS101DatasetFilesDirectory(string outputRoot, string datasetName, int edition, int update) {
+        return Path.Combine(GetCandidateDirectory(outputRoot, datasetName, ProductSpecification.S101, edition, update), datasetName, "S100_ROOT", "S-101", "DATASET_FILES");
+    }
     private static void Validate(string outputRoot, string datasetName, int edition, int update) {
         if (string.IsNullOrWhiteSpace(outputRoot))
             throw new ArgumentException("An export output root is required.", nameof(outputRoot));
