@@ -1,0 +1,671 @@
+import {
+  getActiveJobFilterSummary,
+  hasActiveJobFilters,
+} from "../../features/jobs/domain/jobFilters.js";
+import { JOB_PRIORITY_OPTIONS } from "../../features/jobs/domain/jobPriority.js";
+import { JOB_STATUS_OPTIONS } from "../../features/jobs/domain/jobStatus.js";
+import {
+  AOI_MAP_FILTER_MODE_OPTIONS,
+  getAoiMapFilterSummary,
+  hasActiveAoiMapFilters,
+} from "../../features/map/domain/aoiMapFilters.js";
+import {
+  JOB_CLUSTER_PRESET_OPTIONS,
+  JOB_CLUSTER_STYLE_OPTIONS,
+  getJobClusterSettingSummary,
+} from "../../features/map/domain/jobClusterSettings.js";
+import { THEME_MODE } from "../../features/theme/domain/themeMode.js";
+
+export async function createNavbarController({
+  jobFilterStore,
+  aoiMapFilterStore,
+  jobClusterSettingsStore,
+  themeStore,
+  onTestNotice,
+} = {}) {
+  await ensureNavbarComponentsDefined();
+
+  const element = await loadNavbarTemplate();
+  const jobsButton = getRequiredElement(element, "#jobs-toggle");
+  const filtersButton = getRequiredElement(element, "#filters-button");
+  const filtersPopover = getRequiredElement(element, "#filters-popover");
+  const themeToggle = getRequiredElement(element, "#theme-toggle");
+  const testNoticeButton = getRequiredElement(element, "#test-notice-button");
+
+  await configureFiltersPopover({ filtersButton, filtersPopover });
+
+  const filterControlRefs = createJobFilterPopoverContent({
+    filtersPopover,
+    jobFilterStore,
+    aoiMapFilterStore,
+    jobClusterSettingsStore,
+  });
+
+  const unsubscribeJobFilters =
+    jobFilterStore?.subscribe?.((snapshot) => {
+      syncJobFilterControls({
+        filtersButton,
+        filterControlRefs,
+        filters: snapshot.filters,
+      });
+    }) ?? (() => {});
+
+  const unsubscribeAoiMapFilters =
+    aoiMapFilterStore?.subscribe?.((snapshot) => {
+      syncAoiMapFilterControls({
+        filtersButton,
+        filterControlRefs,
+        filters: snapshot.filters,
+      });
+    }) ?? (() => {});
+
+  const unsubscribeJobClusterSettings =
+    jobClusterSettingsStore?.subscribe?.((snapshot) => {
+      syncJobClusterSettingControls({
+        filterControlRefs,
+        settings: snapshot.settings,
+      });
+    }) ?? (() => {});
+
+  const unsubscribeTheme =
+    themeStore?.subscribe?.((snapshot) => {
+      syncThemeToggle({
+        themeToggle,
+        themeMode: snapshot.themeMode,
+      });
+    }) ?? (() => {});
+
+  const handleFiltersButtonClick = () => {
+    setFilterPopoverOpen(filtersPopover, filtersButton, !filtersPopover.open);
+  };
+
+  const handleFiltersCloseClick = () => {
+    setFilterPopoverOpen(filtersPopover, filtersButton, false);
+  };
+
+  const handleThemeToggleClick = () => {
+    themeStore?.toggleThemeMode?.();
+  };
+
+  const handleTestNoticeClick = () => {
+    onTestNotice?.();
+  };
+
+  const handleDocumentClick = (event) => {
+    if (!filtersPopover.open) {
+      return;
+    }
+
+    if (isEventInsideElements(event, [filtersButton, filtersPopover])) {
+      return;
+    }
+
+    setFilterPopoverOpen(filtersPopover, filtersButton, false);
+  };
+
+  filtersButton.addEventListener("click", handleFiltersButtonClick);
+  filterControlRefs.closeButton.addEventListener("click", handleFiltersCloseClick);
+  themeToggle.addEventListener("click", handleThemeToggleClick);
+  testNoticeButton.addEventListener("click", handleTestNoticeClick);
+  document.addEventListener("click", handleDocumentClick);
+
+  setFilterPopoverOpen(filtersPopover, filtersButton, false);
+
+  return {
+    element,
+    jobsButton,
+    filtersButton,
+    filtersPopover,
+    themeToggle,
+    destroy() {
+      filtersButton.removeEventListener("click", handleFiltersButtonClick);
+      filterControlRefs.closeButton.removeEventListener("click", handleFiltersCloseClick);
+      themeToggle.removeEventListener("click", handleThemeToggleClick);
+      testNoticeButton.removeEventListener("click", handleTestNoticeClick);
+      document.removeEventListener("click", handleDocumentClick);
+      unsubscribeJobFilters();
+      unsubscribeAoiMapFilters();
+      unsubscribeJobClusterSettings();
+      unsubscribeTheme();
+    },
+  };
+}
+
+async function ensureNavbarComponentsDefined() {
+  await Promise.all([
+    customElements.whenDefined("calcite-action"),
+    customElements.whenDefined("calcite-button"),
+    customElements.whenDefined("calcite-icon"),
+    customElements.whenDefined("calcite-popover"),
+  ]);
+}
+
+async function loadNavbarTemplate() {
+  const response = await fetch("/components/navbar.html", {
+    cache: "no-cache",
+  });
+
+  if (!response.ok) {
+    throw new Error(`DataCatalogue could not load the navbar template.\nStatus: ${response.status}`);
+  }
+
+  const template = document.createElement("template");
+  template.innerHTML = await response.text();
+
+  const headerElement = template.content.firstElementChild;
+
+  if (!headerElement) {
+    throw new Error("DataCatalogue navbar template did not contain a root element.");
+  }
+
+  return headerElement;
+}
+
+async function configureFiltersPopover({ filtersButton, filtersPopover }) {
+  await filtersPopover.componentOnReady?.();
+
+  // Use the actual element reference to avoid brittle document-wide id lookups.
+  filtersPopover.referenceElement = filtersButton;
+  filtersPopover.triggerDisabled = true;
+  filtersPopover.overlayPositioning = "fixed";
+  filtersPopover.placement = "bottom-end";
+}
+
+function createJobFilterPopoverContent({
+  filtersPopover,
+  jobFilterStore,
+  aoiMapFilterStore,
+  jobClusterSettingsStore,
+}) {
+  const contentElement = document.createElement("div");
+  contentElement.className = "data-catalogue-filters";
+
+  const headerElement = document.createElement("div");
+  headerElement.className = "data-catalogue-filters__header";
+
+  const titleElement = document.createElement("h2");
+  titleElement.className = "data-catalogue-filters__title";
+  titleElement.textContent = "Filters";
+
+  const headerActionsElement = document.createElement("div");
+  headerActionsElement.className = "data-catalogue-filters__header-actions";
+
+  const clearButton = document.createElement("calcite-button");
+  clearButton.className = "data-catalogue-filters__clear-button";
+  clearButton.appearance = "outline";
+  clearButton.kind = "neutral";
+  clearButton.scale = "s";
+  clearButton.textContent = "Clear filters";
+  clearButton.addEventListener("pointerdown", markPointerActivation, { passive: true });
+  clearButton.addEventListener("click", () => {
+    jobFilterStore.clearFilters();
+    aoiMapFilterStore?.clearFilters?.();
+    blurAfterPointerActivation(clearButton);
+  });
+
+  const closeButton = document.createElement("calcite-action");
+  closeButton.id = "filters-close-button";
+  closeButton.icon = "x";
+  closeButton.scale = "s";
+  closeButton.text = "Close filters";
+  closeButton.title = "Close filters";
+
+  headerActionsElement.append(clearButton, closeButton);
+  headerElement.append(titleElement, headerActionsElement);
+
+  const summaryElement = document.createElement("p");
+  summaryElement.className = "data-catalogue-filters__summary";
+  summaryElement.textContent = "No filters active";
+
+  const scrollElement = document.createElement("div");
+  scrollElement.className = "data-catalogue-filters__scroll";
+
+  const aoiOverviewSection = createFilterSection({
+    title: "AOI overview",
+    description:
+      "Controls which AOIs are visible on the map. Current Job filters are applied first.",
+  });
+  aoiOverviewSection.body.classList.add("data-catalogue-filters__button-grid");
+
+  const aoiMapFilterButtons = AOI_MAP_FILTER_MODE_OPTIONS.map((modeOption) =>
+    createPresetButton({
+      option: modeOption,
+      onSelect() {
+        aoiMapFilterStore?.setFilters?.({
+          mode: modeOption.value,
+        });
+      },
+    })
+  );
+
+  aoiOverviewSection.body.append(...aoiMapFilterButtons.map((button) => button.buttonElement));
+
+  const aoiOverviewActionsElement = document.createElement("div");
+  aoiOverviewActionsElement.className = "data-catalogue-filters__section-actions";
+
+  const clearAoiOverviewButton = document.createElement("calcite-button");
+  clearAoiOverviewButton.appearance = "outline";
+  clearAoiOverviewButton.kind = "neutral";
+  clearAoiOverviewButton.scale = "s";
+  clearAoiOverviewButton.textContent = "Clear AOI overview";
+  clearAoiOverviewButton.addEventListener("pointerdown", markPointerActivation, { passive: true });
+  clearAoiOverviewButton.addEventListener("click", () => {
+    aoiMapFilterStore?.clearFilters?.();
+    blurAfterPointerActivation(clearAoiOverviewButton);
+  });
+
+  aoiOverviewActionsElement.append(clearAoiOverviewButton);
+  aoiOverviewSection.element.append(aoiOverviewActionsElement);
+
+  const quickFilterSection = createFilterSection({
+    title: "Quick filters",
+    description:
+      "Toggle common Job filters. Multiple quick filters can be active at the same time.",
+  });
+  quickFilterSection.body.classList.add("data-catalogue-filters__button-grid--three");
+
+  const activeOnlyButton = createToggleButton({
+    label: "Active Jobs",
+    onChange(checked) {
+      jobFilterStore.setFilters({
+        activeOnly: checked,
+      });
+    },
+  });
+  const highPriorityOnlyButton = createToggleButton({
+    label: "High Priority",
+    onChange(checked) {
+      jobFilterStore.setFilters({
+        highPriorityOnly: checked,
+      });
+    },
+  });
+  const withRelatedAoisOnlyButton = createToggleButton({
+    label: "Jobs with AOIs",
+    onChange(checked) {
+      jobFilterStore.setFilters({
+        withRelatedAoisOnly: checked,
+      });
+    },
+  });
+
+  quickFilterSection.body.append(
+    activeOnlyButton.buttonElement,
+    highPriorityOnlyButton.buttonElement,
+    withRelatedAoisOnlyButton.buttonElement
+  );
+
+  const statusSection = createFilterSection({
+    title: "Job status",
+    description:
+      "Show Jobs matching one or more selected statuses. Done Jobs are hidden by default unless Done is selected.",
+  });
+  statusSection.body.classList.add("data-catalogue-filters__button-grid--three");
+
+  const statusButtons = JOB_STATUS_OPTIONS.map((statusOption) =>
+    createMultiValueFilterButton({
+      label: statusOption.label,
+      value: statusOption.value,
+      getCurrentValues() {
+        return jobFilterStore.getSnapshot().filters.statusValues;
+      },
+      setCurrentValues(nextValues) {
+        jobFilterStore.setFilters({
+          statusValues: nextValues,
+        });
+      },
+    })
+  );
+
+  statusSection.body.append(...statusButtons.map((button) => button.buttonElement));
+
+  const prioritySection = createFilterSection({
+    title: "Job priority",
+    description: "Show Jobs matching one or more selected priorities.",
+  });
+  prioritySection.body.classList.add("data-catalogue-filters__button-grid--three");
+
+  const priorityButtons = JOB_PRIORITY_OPTIONS.map((priorityOption) =>
+    createMultiValueFilterButton({
+      label: priorityOption.label,
+      value: priorityOption.value,
+      getCurrentValues() {
+        return jobFilterStore.getSnapshot().filters.priorityValues;
+      },
+      setCurrentValues(nextValues) {
+        jobFilterStore.setFilters({
+          priorityValues: nextValues,
+        });
+      },
+    })
+  );
+
+  prioritySection.body.append(...priorityButtons.map((button) => button.buttonElement));
+
+  const clusteringSection = createFilterSection({
+    title: "Job point clustering radius",
+    description: "Controls how close Job points must be before they cluster on the map.",
+  });
+  clusteringSection.body.classList.add("data-catalogue-filters__button-grid--four");
+
+  const clusteringSummaryElement = document.createElement("p");
+  clusteringSummaryElement.className = "data-catalogue-filters__section-hint";
+  clusteringSummaryElement.textContent = "Radius: Medium";
+  clusteringSection.element.insertBefore(clusteringSummaryElement, clusteringSection.body);
+
+  const clusterPresetButtons = JOB_CLUSTER_PRESET_OPTIONS.map((presetOption) =>
+    createPresetButton({
+      option: presetOption,
+      onSelect() {
+        jobClusterSettingsStore.setSettings({
+          preset: presetOption.value,
+        });
+      },
+    })
+  );
+
+  clusteringSection.body.append(...clusterPresetButtons.map((button) => button.buttonElement));
+
+  const clusterStyleSection = createFilterSection({
+    title: "Job point cluster style",
+    description: "Controls how Job point clusters are visualized on the map.",
+  });
+  clusterStyleSection.body.classList.add("data-catalogue-filters__button-grid--three");
+
+  const clusterStyleButtons = JOB_CLUSTER_STYLE_OPTIONS.map((styleOption) =>
+    createPresetButton({
+      option: styleOption,
+      onSelect() {
+        jobClusterSettingsStore.setSettings({
+          style: styleOption.value,
+        });
+      },
+    })
+  );
+
+  clusterStyleSection.body.append(...clusterStyleButtons.map((button) => button.buttonElement));
+
+  scrollElement.append(
+    aoiOverviewSection.element,
+    quickFilterSection.element,
+    statusSection.element,
+    prioritySection.element,
+    clusteringSection.element,
+    clusterStyleSection.element
+  );
+
+  contentElement.append(headerElement, summaryElement, scrollElement);
+
+  filtersPopover.replaceChildren(contentElement);
+
+  return {
+    closeButton,
+    summaryElement,
+    clearButton,
+    activeOnlyButton: activeOnlyButton.buttonElement,
+    highPriorityOnlyButton: highPriorityOnlyButton.buttonElement,
+    withRelatedAoisOnlyButton: withRelatedAoisOnlyButton.buttonElement,
+    statusButtons,
+    priorityButtons,
+    aoiMapFilterButtons,
+    clearAoiOverviewButton,
+    clusteringSummaryElement,
+    clusterPresetButtons,
+    clusterStyleButtons,
+    hasActiveJobFilters: false,
+    hasActiveAoiMapFilters: false,
+  };
+}
+
+function createFilterSection({ title, description = "" }) {
+  const element = document.createElement("section");
+  element.className = "data-catalogue-filters__section";
+
+  const titleElement = document.createElement("h3");
+  titleElement.className = "data-catalogue-filters__section-title";
+  titleElement.textContent = title;
+
+  const normalizedDescription = normalizeOptionalString(description);
+
+  if (normalizedDescription) {
+    titleElement.title = normalizedDescription;
+    titleElement.setAttribute("aria-label", `${title}. ${normalizedDescription}`);
+    titleElement.classList.add("data-catalogue-filters__section-title--hinted");
+  }
+
+  const body = document.createElement("div");
+  body.className = "data-catalogue-filters__button-grid";
+
+  element.append(titleElement, body);
+
+  return {
+    element,
+    body,
+  };
+}
+
+function createMultiValueFilterButton({ label, value, getCurrentValues, setCurrentValues }) {
+  return createToggleButton({
+    label,
+    value,
+    onChange(checked) {
+      const currentValues = new Set(getCurrentValues());
+
+      if (checked) {
+        currentValues.add(value);
+      } else {
+        currentValues.delete(value);
+      }
+
+      setCurrentValues([...currentValues]);
+    },
+  });
+}
+
+function createPresetButton({ option, onSelect }) {
+  const buttonElement = document.createElement("calcite-button");
+
+  buttonElement.className = "data-catalogue-filters__preset-button";
+  buttonElement.appearance = "outline";
+  buttonElement.kind = "neutral";
+  buttonElement.scale = "s";
+  buttonElement.title = option.description;
+  buttonElement.textContent = option.label;
+  buttonElement.addEventListener("pointerdown", markPointerActivation, { passive: true });
+  buttonElement.addEventListener("click", () => {
+    onSelect();
+    blurAfterPointerActivation(buttonElement);
+  });
+
+  return {
+    buttonElement,
+    value: option.value,
+    description: option.description,
+  };
+}
+
+function createToggleButton({ label, value = "", onChange }) {
+  const buttonElement = document.createElement("calcite-button");
+
+  buttonElement.className = "data-catalogue-filters__toggle-button";
+  buttonElement.appearance = "outline";
+  buttonElement.kind = "neutral";
+  buttonElement.scale = "s";
+  buttonElement.textContent = label;
+  buttonElement.setAttribute("aria-pressed", "false");
+
+  if (value) {
+    buttonElement.value = value;
+  }
+
+  buttonElement.addEventListener("pointerdown", markPointerActivation, { passive: true });
+  buttonElement.addEventListener("click", () => {
+    onChange(buttonElement.getAttribute("aria-pressed") !== "true");
+    blurAfterPointerActivation(buttonElement);
+  });
+
+  return {
+    buttonElement,
+    value,
+  };
+}
+
+function syncJobFilterControls({ filtersButton, filterControlRefs, filters }) {
+  const hasActiveFilters = hasActiveJobFilters(filters);
+
+  syncToggleButton(filterControlRefs.activeOnlyButton, filters.activeOnly);
+  syncToggleButton(filterControlRefs.highPriorityOnlyButton, filters.highPriorityOnly);
+  syncToggleButton(filterControlRefs.withRelatedAoisOnlyButton, filters.withRelatedAoisOnly);
+
+  syncValueButtons(filterControlRefs.statusButtons, filters.statusValues);
+  syncValueButtons(filterControlRefs.priorityButtons, filters.priorityValues);
+
+  filterControlRefs.hasActiveJobFilters = hasActiveFilters;
+  filterControlRefs.latestJobFilterSummary = getActiveJobFilterSummary(filters);
+  syncCombinedSummaryFromRefs(filterControlRefs);
+  syncFilterClearAndIndicator({ filtersButton, filterControlRefs });
+}
+
+function syncAoiMapFilterControls({ filtersButton, filterControlRefs, filters }) {
+  const hasActiveFilters = hasActiveAoiMapFilters(filters);
+  const aoiMapFilterSummary = getAoiMapFilterSummary(filters);
+
+  filterControlRefs.hasActiveAoiMapFilters = hasActiveFilters;
+  filterControlRefs.latestAoiMapFilterSummary = aoiMapFilterSummary;
+  filterControlRefs.clearAoiOverviewButton.disabled = !hasActiveFilters;
+
+  syncPresetButtons({
+    buttons: filterControlRefs.aoiMapFilterButtons,
+    activeValue: filters.mode,
+  });
+  syncCombinedSummaryFromRefs(filterControlRefs);
+  syncFilterClearAndIndicator({ filtersButton, filterControlRefs });
+}
+
+function syncJobClusterSettingControls({ filterControlRefs, settings }) {
+  filterControlRefs.clusteringSummaryElement.textContent = getJobClusterSettingSummary(settings);
+
+  syncPresetButtons({
+    buttons: filterControlRefs.clusterPresetButtons,
+    activeValue: settings.preset,
+  });
+  syncPresetButtons({
+    buttons: filterControlRefs.clusterStyleButtons,
+    activeValue: settings.style,
+  });
+}
+
+function syncThemeToggle({ themeToggle, themeMode }) {
+  const isDark = themeMode === THEME_MODE.DARK;
+  const nextLabel = isDark ? "Switch to light mode" : "Switch to dark mode";
+
+  themeToggle.icon = isDark ? "brightness" : "moon";
+  themeToggle.text = nextLabel;
+  themeToggle.label = nextLabel;
+  themeToggle.title = nextLabel;
+  themeToggle.setAttribute("aria-label", nextLabel);
+}
+
+function syncPresetButtons({ buttons, activeValue }) {
+  for (const presetButton of buttons) {
+    const isActive = presetButton.value === activeValue;
+
+    presetButton.buttonElement.appearance = isActive ? "solid" : "outline";
+    presetButton.buttonElement.kind = isActive ? "brand" : "neutral";
+    presetButton.buttonElement.setAttribute("aria-pressed", String(isActive));
+  }
+}
+
+function syncToggleButton(buttonElement, isActive) {
+  buttonElement.appearance = isActive ? "solid" : "outline";
+  buttonElement.kind = isActive ? "brand" : "neutral";
+  buttonElement.setAttribute("aria-pressed", String(isActive));
+}
+
+function syncValueButtons(buttonRefs, activeValues) {
+  const activeValueSet = new Set(activeValues);
+
+  for (const buttonRef of buttonRefs) {
+    syncToggleButton(buttonRef.buttonElement, activeValueSet.has(buttonRef.value));
+  }
+}
+
+function syncCombinedSummaryFromRefs(filterControlRefs) {
+  const summary = getCombinedFilterSummary({
+    jobFilters: filterControlRefs.latestJobFilterSummary ?? "No filters active",
+    aoiMapFilters: filterControlRefs.latestAoiMapFilterSummary ?? "All AOIs",
+  });
+
+  filterControlRefs.summaryElement.textContent = summary;
+}
+
+function syncFilterClearAndIndicator({ filtersButton, filterControlRefs }) {
+  const hasAnyActiveFilters =
+    filterControlRefs.hasActiveJobFilters || filterControlRefs.hasActiveAoiMapFilters;
+
+  filterControlRefs.clearButton.disabled = !hasAnyActiveFilters;
+  filtersButton.indicator = hasAnyActiveFilters;
+}
+
+function getCombinedFilterSummary({ jobFilters, aoiMapFilters }) {
+  const normalizedJobFilters = normalizeOptionalString(jobFilters);
+  const normalizedAoiMapFilters = normalizeOptionalString(aoiMapFilters);
+  const parts = [];
+
+  if (normalizedJobFilters && normalizedJobFilters !== "No filters active") {
+    parts.push(`Jobs: ${normalizedJobFilters}`);
+  }
+
+  if (normalizedAoiMapFilters && normalizedAoiMapFilters !== "All AOIs") {
+    parts.push(`AOI overview: ${normalizedAoiMapFilters}`);
+  }
+
+  return parts.length > 0 ? parts.join(", ") : "No filters active";
+}
+
+function markPointerActivation(event) {
+  event.currentTarget.dataset.pointerActivation = "true";
+}
+
+function blurAfterPointerActivation(element) {
+  if (element.dataset.pointerActivation !== "true") {
+    return;
+  }
+
+  delete element.dataset.pointerActivation;
+  element.blur?.();
+}
+
+function getRequiredElement(rootElement, selector) {
+  const element = rootElement.querySelector(selector);
+
+  if (!element) {
+    throw new Error(`Expected navbar element was not found: ${selector}`);
+  }
+
+  return element;
+}
+
+function setFilterPopoverOpen(popoverElement, triggerButton, isOpen) {
+  popoverElement.open = isOpen;
+  popoverElement.toggleAttribute("open", isOpen);
+  triggerButton.active = isOpen;
+  triggerButton.toggleAttribute("active", isOpen);
+  triggerButton.setAttribute("aria-expanded", String(isOpen));
+}
+
+function isEventInsideElements(event, elements) {
+  const composedPath = event.composedPath?.() ?? [];
+
+  return elements.some(
+    (element) => element.contains(event.target) || composedPath.includes(element)
+  );
+}
+
+function normalizeOptionalString(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  return String(value).trim();
+}

@@ -1,0 +1,2888 @@
+# DataCatalogue Project Tracker
+
+This document is the source of truth for DataCatalogue project goals, requirements, architecture decisions, folder structure, implementation order, open questions and progress.
+
+Keep this document updated when requirements, technical decisions, backend assumptions or implementation status change.
+
+The DataCatalogue scope below supersedes the earlier Jobs/AOI-only delivery order. Historical phase entries and `JM-*` task IDs are retained for traceability; they are not renamed or newly revalidated by this candidate. Accepted assignment-page requirements are recorded in [FEATURE_WORKSPACE_SCOPE.md](FEATURE_WORKSPACE_SCOPE.md).
+
+## 1. Project summary
+
+DataCatalogue supports two related but distinct workflows: the existing Jobs/AOI main map and the planned assessment of incoming geographic Features against Workspaces.
+
+The next delivery is a separate Feature-to-Workspace assignment page. Features, Workspaces, work-area AOIs, ENC cells and Jobs remain separate concepts. Assigned indicates an active Workspace link, not completion of downstream chart updates.
+
+```txt
+S100Services/
+  src/
+    ProductManager/
+    DataCatalogue/
+```
+
+Follow Product Manager patterns where useful, without coupling domains or changing API projects. The frontend rename must be accepted before new page implementation.
+
+## 2. Current project status
+
+Status: DataCatalogue rename candidate In progress; implementation is prepared, full local tooling and browser acceptance remain pending.
+
+Authoritative input: `e8bb33256802935592f7bcc700deb2bc21d223ba`. The uploaded export records a different local HEAD and a different local remote-tracking reference. Those informational references do not replace the explicit input commit. Do not apply the candidate blindly over another branch or dirty tree.
+
+The current app still runs the existing Jobs/AOI workflow. The Feature-to-Workspace page, live DK1-DK5 test integration and new mock persistence are Not started. See section 20 for the current delivery order and [RENAME_NOTES.md](RENAME_NOTES.md) for validation and migration limits.
+
+Current known baseline:
+
+- The candidate moves the frontend from `src/JobManager` to `src/DataCatalogue` and updates its branding and internal app namespace.
+- Vite dev server works.
+- `npm run rdy` is the preferred local readiness command because it formats, lints, tests, builds and then starts the dev server.
+- Calcite stylesheet import uses `@esri/calcite-components/main.css`.
+- ArcGIS Maps SDK theme CSS is switched at runtime between light and dark mode.
+- Package versions are aligned with the current Product Manager major-version baseline.
+- Feature-based folder structure is in place.
+- Jobs are loaded through a mock backend hidden behind services.
+- ArcGIS Map/MapView lifecycle is isolated under `features/map/core`.
+- AOIs are displayed through an ArcGIS FeatureLayer from runtime configuration.
+- Current AOI field mapping uses the test Feature Service and is not final backend contract.
+- Jobs are displayed on the map through read-only client-side point and polygon FeatureLayers.
+- Jobs panel starts closed and can be opened from the navbar, AOI popup flow or Job popup flow.
+- Shared Job filters affect both the Jobs panel and map Job layers.
+- Done Jobs are hidden by default and can be shown with the explicit `Done` status filter.
+- AOI popup content shows related Job summary counts.
+- AOI `Show related Jobs` opens the Jobs panel, highlights the selected AOI and scopes map Job layers to related Jobs.
+- Selecting a Job highlights the Job geometry and related AOIs.
+- Job point clustering is implemented with count, priority pie and priority group modes.
+- Job cluster picker is implemented for point clusters.
+- Hover feedback supports Jobs and AOIs and clears reliably when the pointer leaves the map.
+- Jobs panel supports a dedicated Job details mode in addition to list mode.
+- Job details mode has sticky panel navigation, sticky selected Job context, status mutation controls and read-only Job metadata.
+- AOI overview filters are available from the Filters popover and can filter AOIs by visible Jobs, active Jobs and high-priority Jobs.
+- AOI overview controls use compact button groups, a stable active-filter summary, section header hover hints and a dedicated `Clear AOI overview` action.
+- Global `Clear filters` is available from the Filters popover header and clears both Job filters and AOI overview filtering.
+- AOI overview map filtering surfaces a map warning when the active overview produces no matching AOIs or when relation ids are incompatible with the current AOI service identifier field.
+- Job status mutations now sync map Job layers, AOI renderer summaries and active map scope/highlight state without requiring manual refresh.
+- Job service now uses an explicit adapter boundary. The mock backend remains the default adapter, and a future HTTP adapter seam exists without introducing endpoint or auth assumptions.
+- AOI service readiness has been reviewed after the Job service adapter work. AOI FeatureLayer ownership remains the right current approach, and canonical queried AOI state remains deferred until final AOI service inputs are known.
+- Phase 20 adds regression tests for Job service adapter boundaries, Job store mutation metadata, AOI readiness validation and AOI overview fallback/no-match behavior without changing runtime behavior.
+- Startup stage coordination is now isolated behind a startup controller with regression tests for stage order, retry reuse and invalid Jobs load results.
+- Map refresh and selection restore coordination is now isolated behind a map sync coordinator with regression tests for manual refresh, mutation sync, selected AOI restore, selected Job restore and stale refresh guards.
+- Cluster picker popup state detection is more robust when Job filters, AOI-scoped Job map filters, cluster settings or refreshed Job data change while a cluster popup is open.
+- Job popup lifecycle is now coordinated with selected-Job panel context so normal Job popups can stay open while details are used, but close when the selected-Job context is left.
+- Jobs overlay layout now fills the map workspace height without leaving a bottom gap in list or details mode.
+- Filters popover layout, low-height scrolling and Escape close behavior have been polished for laptop/desktop use without changing filter state ownership or map/list filtering behavior.
+- User-driven map/list transitions cancel pending async map refresh restore work so stale AOI/Job scope or highlight state cannot be reapplied after the user changes context.
+- The current UI-polish baseline is considered stable. Do not start additional UI polish unless manual testing finds a concrete reproducible issue.
+- Final Jobs/AOI backend integration remains gated by confirmed inputs. This does not block the separately accepted mock assignment page or its verified direct-browser test map integration.
+- Backend/AOI readiness gate has been converted into a concrete input checklist for future Job HTTP adapter, AOI Feature Service and relation-ownership work.
+
+Current known limitations:
+
+- AOI renderer enrichment is still asynchronous after filter changes, but mutation-driven AOI renderer flashing has been fixed.
+- AOI overview filtering can only apply destructive AOI layer filtering when relation AOI ids are compatible with the current provisional AOI `GlobalID` field.
+- AOI clustering or AOI cluster-like overview is still deferred until real AOI geometry density and shape are confirmed.
+- Job polygon clustering is deferred because centroid-based clustering could hide real polygon footprint.
+- Final AOI Feature Service fields, auth requirements, geometry characteristics and backend relation ownership remain unconfirmed.
+- Backend/AOI input checklist is documented, but the required endpoint, auth, field, geometry and relation-ownership answers remain unavailable.
+
+## 3. Product principles
+
+### 3.1 Primary goal
+
+Support manual assessment of incoming Features and retain visibility of geographic work that needs to be done. The next delivery is defined in `FEATURE_WORKSPACE_SCOPE.md`.
+
+Existing Jobs/AOI goal: make it difficult to miss Areas of Interest that require work.
+
+The user should be able to:
+
+- open the app and understand where Jobs exist geographically
+- quickly filter to AOIs with active Jobs
+- inspect an AOI and see related Jobs
+- inspect a Job and see related AOIs
+- update simple Job status
+- use either the map or a Job list depending on workflow
+
+### 3.2 What DataCatalogue is not
+
+DataCatalogue is not intended to become a heavy case-management system.
+
+Avoid adding complex workflow unless it becomes an explicit requirement.
+
+Jobs should remain simple:
+
+- created date
+- optional deadline
+- priority
+- status
+- related AOIs
+- simple status buttons
+
+### 3.3 User-facing language
+
+All authored UI text must be English. Source data retains its original language; Danish notice content is not translated just to display it.
+
+Use the user-facing term `Jobs`.
+
+Do not use these as app labels:
+
+- Tasks
+- Opgaver
+- Corrections, unless a later requirement explicitly introduces it as a different domain concept
+
+Danish can be used in internal planning conversations, but not in app UI.
+
+## 4. Core domain concepts
+
+## 4.1 Area of Interest
+
+An Area of Interest, abbreviated AOI, represents a geographic area defined through an ArcGIS/Esri Feature Service.
+
+AOIs are expected to be polygons unless the actual Feature Service proves otherwise.
+
+AOI responsibilities:
+
+- load from ArcGIS/Esri Feature Service
+- display on the map
+- support hover/selection feedback
+- support popup
+- show related Jobs
+- support filtering
+- participate in clustering or cluster-like overview
+- support navigation from AOI to related Jobs
+
+Important constraint:
+
+AOI geometry and AOI clustering must be treated carefully. If AOIs are large or irregular polygons, clustering the polygons directly may misrepresent the work distribution. The implementation should support using an AOI display layer and a separate derived cluster layer if needed.
+
+## 4.2 Job
+
+A Job is a simple work item that can affect one or more AOIs.
+
+Minimum Job fields:
+
+```txt
+id
+title
+summary or description
+createdAt
+deadline
+priority
+status
+relatedAoiIds
+```
+
+Initial priority values:
+
+```txt
+Low
+Medium
+High
+```
+
+Initial status values:
+
+```txt
+To do
+In Progress
+Done
+```
+
+Suggested internal enum values:
+
+```txt
+todo
+inProgress
+done
+```
+
+Use stable internal values and map them to user-facing labels in UI/domain helpers.
+
+## 4.3 AOI/Job relationship
+
+A Job may affect one or more AOIs.
+
+An AOI may have zero or more Jobs.
+
+The final backend responsibility is not decided yet. The relation may be:
+
+- returned directly by backend
+- calculated by backend using geometry
+- temporarily calculated by frontend
+- temporarily mocked
+
+Architecture rule:
+
+UI must not know whether AOI/Job relations came from mock data, frontend spatial calculation or backend relation data.
+
+Use a relation service/domain layer.
+
+## 5. Functional requirements
+
+## 5.1 Map
+
+The map must support:
+
+- ArcGIS Maps SDK for JavaScript
+- AOI Feature Service loading
+- AOI display
+- AOI hover feedback
+- AOI selection feedback
+- AOI popup
+- clustered or cluster-like overview
+- filtering
+- quick filters
+- filtering AOIs by selected Job
+- clear loading states
+- clear empty states
+- clear error states
+
+## 5.2 Clustering and geographic overview
+
+The app must help users quickly identify areas with many Jobs.
+
+Initial clustering/overview requirements:
+
+- show AOIs with related Jobs
+- visually distinguish AOIs with active Jobs
+- visually distinguish high-priority Jobs where possible
+- support zooming from overview to individual AOIs
+- avoid misleading polygon clustering
+
+Preferred initial direction:
+
+- display actual AOI polygons for detailed spatial context
+- consider a derived AOI centroid/representative-point layer for clustering
+- keep cluster configuration isolated in `features/map/layers`
+- keep cluster business meaning isolated in domain helpers
+- disable clustering or change representation when zoomed in enough to inspect AOIs directly
+
+Open issue:
+
+The correct cluster strategy depends on actual AOI geometry size, shape and density.
+
+## 5.3 Filters
+
+The app must support shared filters used by both map and list where possible.
+
+Initial filters:
+
+- AOIs with Jobs
+- AOIs with active Jobs
+- AOIs with high-priority Jobs
+- Jobs by status
+- Jobs by priority
+- Jobs due soon
+- Jobs without deadline
+- AOIs affected by selected Job
+
+Filtering principles:
+
+- filters should be represented as state, not scattered DOM logic
+- filter predicates should live in domain/service utilities
+- map and list should consume the same filter state
+- quick filters should be easy to extend
+
+## 5.4 AOI popup
+
+AOI popup must show:
+
+- AOI name or display identifier
+- AOI metadata needed for user recognition
+- related Job count
+- active Job count
+- high-priority Job count, if available
+- action to open related Jobs
+- action to filter or focus related Jobs, if useful
+
+The AOI popup should follow the Product Manager pattern of custom popup UI/actions where appropriate.
+
+Avoid locking the app into Esri default popup actions if custom actions give better control and consistency.
+
+## 5.5 Job list
+
+The app must include a Job list view/panel.
+
+The Job list must show:
+
+- title
+- status
+- priority
+- created date
+- deadline, if set
+- related AOI count
+- clear loading/error/empty states
+
+The Job list should support:
+
+- selecting a Job
+- changing Job status
+- filtering by status
+- filtering by priority
+- focusing/filtering the map to AOIs affected by the selected Job
+- opening related AOI information where practical
+
+## 5.6 Job details
+
+Job details should show:
+
+- title
+- summary or description
+- created date
+- deadline
+- status
+- priority
+- related AOIs
+- mutation state if status update is running
+- clear error feedback if update fails
+
+Do not add heavy editing forms unless required later.
+
+## 5.7 Job status mutations
+
+Users must be able to change status using simple buttons:
+
+- To do
+- In Progress
+- Done
+
+Mutation behavior:
+
+- show per-Job loading state
+- prevent duplicate mutation clicks for the same Job
+- show success notice
+- show failure notice
+- preserve user context after mutation
+- allow mock backend failures to surface in UI
+
+## 5.8 Cyclic mock work
+
+The mock backend must simulate cyclic work.
+
+When a Job is marked `Done`, the mock backend should sometimes create a new Job.
+
+This behavior must be:
+
+- isolated in mock backend/service code
+- visible through a user-facing notice
+- deterministic enough for development if seeded mode is later added
+- easy to disable or tune
+
+## 5.9 Notices
+
+Notices must be used for important user-visible outcomes:
+
+- Job status updated
+- Job status update failed
+- new mock Job created
+- AOI loading failed
+- Job loading failed
+- refresh failed
+- filters produce no results, if useful
+- backend conflict, when later supported
+
+Notices should use a centralized service, not ad hoc DOM messages scattered across features.
+
+## 5.10 Theme
+
+DataCatalogue must support dark and light mode.
+
+Theme behavior should follow Product Manager patterns where useful.
+
+Initial requirements:
+
+- support light mode
+- support dark mode
+- persist or respect existing app preference if Product Manager has a reusable pattern
+- ensure map, Calcite components and custom CSS remain readable in both modes
+
+## 5.11 Refresh
+
+Refresh behavior should be planned early, even if not fully implemented first.
+
+Expected future behavior:
+
+- manual refresh
+- possible auto-refresh
+- preserve filters where practical
+- preserve selected AOI/Job where practical
+- do not use full-screen loader for silent refresh
+- show notice on refresh failure
+
+## 6. Non-functional requirements
+
+## 6.1 Maintainability
+
+Code should be easy to replace, test manually and refactor.
+
+Rules:
+
+- keep UI components thin
+- keep backend/mock normalization out of UI
+- centralize app state where needed
+- avoid circular imports between features
+- avoid hidden global mutable state unless documented
+- keep file responsibilities narrow
+- document important flows in README files when they become non-trivial
+
+## 6.2 Security
+
+The project is open source.
+
+Never commit:
+
+- tokens
+- credentials
+- private service URLs
+- private portal configuration
+- user-specific settings
+- generated secrets
+- real sensitive operational data
+
+Use `.env.example` with placeholders.
+
+Environment variables must use the `VITE_` prefix only when they are safe to expose to browser code.
+
+## 6.3 Backend flexibility
+
+There is no backend yet.
+
+Frontend must not lock itself to a final backend contract too early.
+
+Rules:
+
+- use services/adapters
+- normalize incoming data to frontend models
+- isolate mock data
+- make mocked responses resemble likely backend result shapes without pretending the contract is final
+- document backend assumptions in this file or `BACKEND_CONTRACTS.md`
+
+## 6.4 Performance
+
+Performance concerns to keep in mind:
+
+- AOI Feature Service may contain many geometries
+- clustering and filtering can become expensive
+- Job/AOI relation mapping can become expensive
+- map refresh should avoid unnecessary full reloads
+- large data updates should avoid blocking UI
+
+Early implementation can be simple, but architecture should not prevent later optimization.
+
+## 6.5 Accessibility and UX
+
+Use Calcite and Bootstrap patterns consistently.
+
+UX requirements:
+
+- clear button labels
+- visible focus states
+- no status conveyed by color alone
+- readable empty/error/loading states
+- status and priority labels should be text-based
+- map interactions should have list/panel alternatives where practical
+
+## 7. Folder structure
+
+Initial structure:
+
+```txt
+DataCatalogue/
+  docs/
+    PROJECT_TRACKER.md
+    BACKEND_CONTRACTS.md
+    ARCHITECTURE.md
+
+  public/
+
+  src/
+    app/
+
+    features/
+      aoi/
+        api/
+        config/
+        domain/
+        services/
+        state/
+        ui/
+
+      jobs/
+        api/
+        domain/
+        mock/
+        services/
+        state/
+        ui/
+
+      relations/
+        domain/
+        services/
+
+      map/
+        config/
+        core/
+        filters/
+        layers/
+        popups/
+
+      notices/
+        services/
+        ui/
+
+      theme/
+
+    shared/
+      api/
+      config/
+      dom/
+      errors/
+      events/
+      utils/
+
+    styles/
+```
+
+## 7.1 Folder responsibilities
+
+### `src/app`
+
+Application composition and lifecycle wiring.
+
+Allowed responsibilities:
+
+- app bootstrap
+- root layout composition
+- feature initialization
+- high-level state wiring
+
+Avoid:
+
+- backend calls
+- feature-specific business logic
+- direct mock data access
+
+### `src/features/aoi`
+
+AOI-specific logic.
+
+Allowed responsibilities:
+
+- AOI frontend model
+- AOI Feature Service loading
+- AOI normalization
+- AOI state
+- AOI UI components
+- AOI filtering helpers
+- AOI display metadata
+
+### `src/features/jobs`
+
+Job-specific logic.
+
+Allowed responsibilities:
+
+- Job frontend model
+- Job service API
+- mock Job backend
+- status mutation service
+- cyclic mock Job behavior
+- Job state
+- Job list UI
+- Job detail UI
+- Job filtering helpers
+
+Rule:
+
+UI may use `jobs/services`, but must not import from `jobs/mock` directly.
+
+### `src/features/relations`
+
+AOI/Job relation-specific logic.
+
+Allowed responsibilities:
+
+- relation frontend model
+- relation source values
+- relation lookup helpers
+- deriving relations from mock Jobs
+- deriving AOI Job summaries
+- finding Jobs for an AOI
+- finding AOIs for a Job
+
+Rules:
+
+- relation code may use `jobs/services`, but must not import from `jobs/mock` directly
+- relation code must not own canonical Job or AOI state
+- UI must not know whether relations came from mock Jobs, frontend geometry or backend data
+
+### `src/features/map`
+
+Map-specific logic.
+
+Allowed responsibilities:
+
+- ArcGIS Map and MapView creation
+- layer creation
+- layer lifecycle
+- clustering config
+- map filters
+- popup integration
+- map selection/highlight behavior
+
+Avoid:
+
+- storing canonical Job state
+- backend response normalization
+- mock data creation
+
+### `src/features/notices`
+
+Notice system.
+
+Allowed responsibilities:
+
+- notice rendering
+- notice queue/state
+- notice service API
+- mapping API/mutation outcomes to user-facing messages
+
+### `src/features/theme`
+
+Theme integration.
+
+Allowed responsibilities:
+
+- dark/light mode
+- persisted theme preference
+- Calcite theme integration
+- theme toggle UI, if needed
+
+### `src/shared`
+
+Shared utilities with no domain ownership.
+
+Allowed:
+
+- generic API result wrapper
+- error normalization
+- DOM helpers
+- config helpers
+- event utilities
+- small pure utilities
+
+Avoid:
+
+- dumping domain logic here
+- creating vague catch-all files
+- moving feature logic into shared prematurely
+
+## 8. Architecture decisions
+
+## 8.1 Use feature-based structure from project start
+
+Status: Done
+
+DataCatalogue will use a feature-based frontend structure from the beginning instead of growing folders organically. The top-level app structure follows Product Manager where useful, but DataCatalogue separates AOI, Jobs, Map, Notices and Theme responsibilities early to avoid later structural refactoring.
+
+## 8.2 Keep mock backend behind services
+
+Status: Done
+
+Initial Jobs data will be provided by a mock backend, but UI code must not import mock data directly. Job UI should depend on service/domain functions so the mock backend can later be replaced by a real backend adapter.
+
+## 8.3 Keep package versions aligned with Product Manager
+
+Status: Done
+
+DataCatalogue should initially stay aligned with Product Manager package major versions unless there is a specific reason to diverge. The initial Vite dependency was changed from an open-ended `>=7.3.1` range to `^7.3.1` to avoid unintentionally installing Vite 8 during project bootstrap.
+
+## 8.4 Use Calcite 5 stylesheet entrypoint
+
+Status: Done
+
+Calcite 5 stylesheet imports should use `@esri/calcite-components/main.css` instead of deep `dist/...` CSS imports, because package exports can block deep imports in modern Vite versions.
+
+## 8.5 Treat AOI/Job relation mapping as a service concern
+
+Status: Proposed
+
+The UI should not know whether AOI/Job relations are mocked, calculated in frontend or returned by backend. Relation lookup should be provided through a service/domain layer.
+
+Rationale:
+
+This keeps the app flexible while the backend contract is not decided.
+
+## 8.6 Avoid direct polygon clustering assumptions
+
+Status: Proposed
+
+AOI clustering must not assume that clustering AOI polygons directly is always correct. If AOIs are large or irregular, a derived representative point layer should be considered for clustering while preserving polygon display for detailed inspection.
+
+Rationale:
+
+Direct polygon clustering can misrepresent spatial distribution if AOIs vary greatly in size or shape.
+
+## 8.7 Use stable frontend models
+
+Status: Proposed
+
+Incoming AOI and Job data should be normalized into stable frontend model shapes before reaching UI components.
+
+Rationale:
+
+Backend contracts are not final, and UI should not be refactored whenever response casing, field names or metadata structure change.
+
+## 8.8 Use user-facing status labels separately from internal status values
+
+Status: Proposed
+
+Internal Job statuses should use stable code values such as `todo`, `inProgress` and `done`, while UI labels should display `To do`, `In Progress` and `Done`.
+
+Rationale:
+
+This avoids coupling UI labels to logic and makes future localization or label changes safer.
+
+## 8.9 Use Product Manager-style map-first shell
+
+Status: Done
+
+DataCatalogue should use a Product Manager-style map-first shell instead of a generic dashboard layout. The map should be the primary workspace, with navigation/header and panels layered over the map where practical.
+
+Rationale:
+
+Product Manager uses a full-height map workspace with app UI around and over the map. DataCatalogue should preserve that UX direction so Jobs, filters and AOI details can become panels or overlays without later layout refactoring.
+
+## 8.10 Match Product Manager navbar and overlay behavior
+
+Status: Done
+
+DataCatalogue should use Product Manager's navbar baseline more closely: GST logo, `#456178` navbar color, 50px header height, text navigation in the navbar and action/filter controls in the header area.
+
+Jobs should open as a left-side overlay panel above the map and must be closable. This preserves the right side of the map workspace for future Job-related tools and detail actions.
+
+Quick filters should be accessible from the navbar. A dedicated Filters panel can be used when filters need more explanatory text or advanced controls.
+
+## 8.11 Use a navbar HTML template like Product Manager
+
+Status: Done
+
+DataCatalogue should use a static navbar template in `public/components/navbar.html` and enrich it from JavaScript, matching the Product Manager pattern more closely than constructing the entire navbar in JS.
+
+The navbar should use Product Manager's header baseline: `#456178`, 50px height, GST logo, centered text navigation and Calcite action icons on the right.
+
+Filters should be opened from a right-side navbar Calcite dropdown, not as a permanent map panel. Quick filters should live inside that dropdown until shared filter state is implemented.
+
+Rationale:
+
+This keeps the shell closer to Product Manager, makes the navbar easier to compare and maintain, and avoids hardcoding too much Product Manager-style markup inside `createApp.js`.
+
+## 8.12 Prefer Calcite components and log active opt-outs
+
+Status: Done
+
+DataCatalogue should use Calcite and Calcite Components where they fit the UI need. When the project actively chooses not to use Calcite for a UI element where a relevant Calcite component was considered, the decision must be logged in `docs/CALCITE_USAGE_LOG.md` with the reason and any feedback that may be useful to Esri.
+
+Normal semantic HTML used for layout and document structure is not considered a Calcite opt-out.
+
+Rationale:
+
+This keeps UI decisions explicit, makes Product Manager alignment easier to review and preserves feedback that may be useful when Calcite components do not fit a specific app-shell need.
+
+## 8.13 Use native navbar panel toggle when Calcite button styling does not fit
+
+Status: Done
+
+The Jobs navbar control uses a native `button` with `calcite-icon` instead of `calcite-button`.
+
+Rationale:
+
+`calcite-button` worked functionally but produced styling and focus behavior that did not fit the Product Manager-style navbar. The decision is logged in `docs/CALCITE_USAGE_LOG.md` as an active Calcite opt-out.
+
+## 8.14 Add lint, format and HTTPS dev server foundation
+
+Status: Done
+
+DataCatalogue uses ESLint flat config, Prettier and an HTTPS Vite dev server through `vite-plugin-mkcert`.
+
+Rationale:
+
+Linting and formatting should be available early so implementation quality does not drift. HTTPS should be available from the start because ArcGIS/browser integrations and future auth-related flows may require secure local development behavior.
+
+## 8.15 Align package versions with current Product Manager state
+
+Status: Done
+
+DataCatalogue should align package versions with the current Product Manager implementation, not only with the originally documented package versions. Vite is kept on version 8 because Product Manager has also been updated to Vite 8.
+
+Rationale:
+
+Product Manager is the practical baseline for DataCatalogue. Package alignment should follow the actively maintained project state to avoid unnecessary divergence.
+
+## 8.16 Use square corners for panels and app surfaces
+
+Status: Done
+
+DataCatalogue should generally use square corners for panels, popovers, notices, map overlays and app surfaces. Rounded corners are acceptable for navbar actions and compact header controls where they match the Product Manager style.
+
+Rationale:
+
+This keeps DataCatalogue closer to the visual style used in Product Manager and avoids drifting into a generic rounded dashboard look.
+
+## 8.17 Include Job geometry in mock data without coupling UI to spatial logic
+
+Status: Done
+
+Mock Jobs include geometry within Denmark and the surrounding Danish waters. Mock geometry may be either point or polygon geometry.
+
+The UI must not use Job geometry directly for AOI/Job relation logic. Initial relation flow should use mocked `relatedAoiIds` through the relation/service layer. Later, relation logic can be replaced by frontend spatial calculation or backend-provided AOI/Job relations.
+
+Rationale:
+
+This supports realistic map-oriented development while avoiding early coupling to an unconfirmed backend or spatial relation strategy.
+
+## 8.18 Add lightweight color guide before expanding UI states
+
+Status: Done
+
+DataCatalogue should define a lightweight color guide early instead of letting priority, status, filter and notice colors emerge randomly during implementation.
+
+The first color guide should be implemented as CSS variables and used for Job priority and status UI. It should stay small and practical, and can be refined later when dark mode and map symbology are implemented.
+
+Rationale:
+
+Priority and status are central to the Job workflow. Defining their colors early improves consistency and avoids a later UI color refactor.
+
+## 8.19 Hide Done Jobs from the default Jobs list
+
+Status: Done
+
+Done Jobs should remain in state/mock data but be hidden from the default Jobs list. The default list should focus on actionable work.
+
+A later filter can allow users to include Done Jobs when needed.
+
+Rationale:
+
+The main workflow is to identify remaining work. Showing Done Jobs by default adds noise and reduces the usefulness of the Jobs panel.
+
+## 8.20 Use collapsible Job cards in the Jobs panel
+
+Status: Done
+
+Job cards should be collapsed by default and show only title, status, priority and status action buttons. Users can expand a Job to inspect summary, created date, deadline and related AOI count.
+
+Geometry type should not be shown in the Job card because geometry is primarily map information.
+
+Rationale:
+
+The Jobs panel should remain scannable. Users need to identify and act on Jobs quickly, while detailed metadata should still be available on demand.
+
+## 8.21 Use status buttons as the primary Job status indicator
+
+Status: Done
+
+Job cards should not show a separate status badge when status action buttons are already visible. The active status button should visually indicate the current Job status.
+
+Rationale:
+
+Showing both a status badge and status buttons duplicates information and makes the card harder to scan.
+
+## 8.22 Keep collapsed Job cards information-dense
+
+Status: Done
+
+Collapsed Job cards should show the key operational information: title, priority, created date, deadline, affected AOI count and status actions. Expanded content should be reserved for summary text and later supporting links/actions.
+
+Rationale:
+
+The Jobs panel is primarily a work queue. Users should be able to scan and act on Jobs without expanding each card.
+
+## 8.23 Defer deadline editing until workflow is confirmed
+
+Status: Done
+
+Deadline should be displayed in the Job card, but editing deadline should not be implemented until it is confirmed as part of the frontend workflow.
+
+Rationale:
+
+Deadline editing introduces mutation handling, validation and backend contract assumptions. It should not be implemented before the workflow is confirmed.
+
+## 8.24 Split global CSS by UI area
+
+Status: Done
+
+DataCatalogue CSS should be split by UI area once the app has more than generic bootstrap styling. `main.css` should only import CSS sections, while navbar, map, overlays, notices, Jobs UI, filter popover and design tokens live in separate files.
+
+Rationale:
+
+This follows the Product Manager direction and prevents `main.css` from becoming a large mixed-responsibility stylesheet.
+
+## 8.25 Keep newly completed Jobs visible until refresh or panel close
+
+Status: Done
+
+When a user marks a Job as Done, the Job should remain visible in the current Jobs panel session so the result of the action is visible. Done Jobs are hidden again after refresh or when the Jobs panel is closed and reopened.
+
+Rationale:
+
+Removing a Job immediately after clicking Done makes the UI feel abrupt and can make users unsure whether the update succeeded.
+
+## 8.26 Queue mock-created Jobs until refresh or panel reopen
+
+Status: Done
+
+Mock-created Jobs should be stored in the mock backend immediately, but should not be inserted into the currently visible Jobs list immediately after a status update.
+
+New mock-created Jobs should become visible after refresh or after the Jobs panel is closed and reopened.
+
+Rationale:
+
+The real backend is expected to create later Jobs through a slower process. Showing newly created Jobs immediately after clicking Done makes the mock UI feel less realistic and visually abrupt.
+
+## 8.27 Avoid transient updating UI for Job status mutations
+
+Status: Done
+
+Job status updates should not show a temporary inline "updating" message or force a visible card re-render before the mutation result is returned.
+
+A local pending guard prevents duplicate status clicks while the mock/backend mutation is running, but the card UI should only change when the mutation result updates the Job state.
+
+Rationale:
+
+The inline updating state made the Jobs panel flash and made small status updates feel visually heavier than necessary.
+
+## 8.28 Add dedicated relation feature boundary
+
+Status: Done
+
+AOI/Job relation logic lives under `features/relations` instead of being owned by either `features/aoi` or `features/jobs`.
+
+Rationale:
+
+AOI/Job relations are shared by AOI popups, Job details, filters and map rendering. A dedicated relation feature keeps cross-domain logic out of UI components and avoids making either AOI or Jobs responsible for the other domain's canonical state.
+
+## 8.29 Add AOI renderer foundation before final relation matching
+
+Status: Done
+
+AOI renderer logic lives under `features/map/layers` and uses relation summaries as best-effort input.
+
+Current behavior:
+
+- AOIs get a neutral default renderer when no relation summaries match.
+- AOIs can be styled as having active Jobs or high-priority active Jobs when relation summary ids match the AOI Feature Service id field.
+- Renderer enrichment does not block map startup.
+
+Rationale:
+
+The current test Feature Service uses `GlobalID` as the provisional AOI id, while mock Jobs may still use mock AOI ids. The renderer must therefore be ready for real relation matching without making the current map depend on matching test data.
+
+## 8.30 Add selected AOI to related Jobs flow
+
+Status: Done
+
+AOI popup actions can now open the Jobs panel scoped to Jobs related to the selected AOI.
+
+Current behavior:
+
+- AOI popup includes a `Show related Jobs` action.
+- The action resolves the selected AOI id from the Feature Service attributes.
+- Selected AOI state is stored in `features/aoi/state`.
+- The Jobs panel can show a scoped view for the selected AOI.
+- The scoped Jobs list uses relation service helpers instead of importing mock data directly.
+
+Rationale:
+
+The main workflow requires users to start from an AOI and inspect related Jobs. This flow connects the map and Jobs panel while keeping relation-source details isolated behind service/domain code.
+
+## 8.31 Keep AOI popup action wiring production-safe
+
+Status: Done
+
+Temporary AOI popup debug logging was removed after the `PopupViewModel` action flow was verified.
+
+The Jobs overlay close flow now moves focus back to the navbar Jobs control before hiding the panel.
+
+Rationale:
+
+The popup action debug logs were useful while diagnosing the lazy ArcGIS popup lifecycle, but they should not remain in normal development output. Moving focus before hiding the panel avoids browser accessibility warnings caused by hiding a panel while a descendant still has focus.
+
+## 8.32 Add read-only Job geometry layer foundation
+
+Status: Done
+
+Job geometry is displayed on the map through client-side ArcGIS `FeatureLayer`s populated from Job service data.
+
+Current behavior:
+
+- Point Jobs are displayed in a dedicated Job point layer.
+- Polygon Jobs are displayed in a dedicated Job polygon layer.
+- Job geometry layers are read-only.
+- Job geometry is styled by active priority and Done status.
+- Job geometry popups show basic Job metadata.
+- Job data is loaded through `jobs/services`, not directly from `jobs/mock`.
+
+Rationale:
+
+Jobs may use different geometry types, and ArcGIS client-side FeatureLayers are geometry-type specific. Splitting point and polygon Jobs keeps renderer, popup and later selection/highlight behavior isolated while preserving the service boundary around mock data.
+
+Implementation note:
+
+Client-side Job FeatureLayer data is replaced with `FeatureLayer.applyEdits()` instead of mutating `layer.source` after load. ArcGIS does not propagate `source` mutations after a client-side FeatureLayer has loaded.
+
+## 8.33 Add Job selection as shared map/list state
+
+Status: Done
+
+Job selection is represented as frontend state shared by the map and Jobs panel.
+
+Current behavior:
+
+- selecting a Job geometry popup action opens the Jobs panel
+- the matching Job card is expanded and focused
+- selected Job geometry is highlighted on the map
+- AOI scoped mode is cleared when opening a specific Job from the map
+- selected Job state is cleared when returning to the normal Jobs list or closing the Jobs panel
+- related AOI highlighting is deferred until the basic Job selection flow is stable
+
+Rationale:
+
+Job geometry is now visible on the map, and users can move directly from map geometry to operational Job details. Keeping selected Job state outside the map layer keeps map UI, Jobs UI and later backend integration decoupled.
+
+Implementation note:
+
+AOI popup actions use `PopupViewModel trigger-action` because the selected AOI flow is stable there.
+
+Job details uses a `PopupTemplate` action for action bar placement. A hidden Esri `CustomContent` item captures the feature-scoped Job selection from the rendered popup graphic, because `PopupViewModel` selected feature state can be ambiguous for point Jobs when multiple popup features are present.
+
+## 8.34 Add selected Job related AOI highlight
+
+Status: Done
+
+Selecting a Job highlights the AOIs listed in the selected Job's `relatedAoiIds`.
+
+Current behavior:
+
+- selected Job geometry remains highlighted
+- related AOIs are highlighted on the map through the AOI FeatureLayerView
+- clearing selected Job also clears related AOI highlight
+- AOI popup and related Jobs flow continue to work while highlight is active
+- clustering remains deferred
+
+Rationale:
+
+The user can now move from Job geometry to Job details and see which AOIs are affected by the selected Job. This closes the basic Job-to-AOI navigation loop before broader shared filters and clustering are introduced.
+
+Status: Done
+
+Implementation note:
+
+Related AOI highlight queries AOI graphics through the `FeatureLayerView` and highlights the returned graphics. The first implementation queried the AOI `FeatureLayer` and passed object ids to `FeatureLayerView.highlight()`, which was not reliable for the current AOI service/view state.
+
+## 8.35 Add shared Jobs filter state before clustering
+
+Status: Done
+
+Shared Jobs filter state has been introduced before clustering and broader AOI filtering.
+
+Current behavior:
+
+- navbar filter controls update central frontend Job filter state
+- Jobs panel uses the shared filter state
+- Jobs can be filtered by active-only, high priority and Jobs with AOIs
+- Jobs can be filtered by explicit status values
+- Jobs can be filtered by explicit priority values
+- active filter state is shown in the Jobs panel
+- the navbar filter action shows an indicator when filters are active
+- map Job layers hide Done Jobs by default, matching the Jobs panel
+- map Job layers reveal Done Jobs when the user explicitly selects the `Done` status filter
+- Job filter state is owned by `features/jobs` because the filter rules are Job-domain rules. Map-specific application of the same filter state should live under `features/map/filters`.
+
+Implementation note:
+
+Done Jobs remain hidden by default unless the user explicitly selects the `Done` status filter. Selecting `Done` disables the Jobs panel's hidden-Done rule for the filtered result set, so the status filter behaves as an explicit request to view Done Jobs.
+
+Rationale:
+
+The app now supports AOI-to-Job and Job-to-AOI navigation. Shared filtering is the next foundation needed before clustering, because clusters and map counts should reflect the same filtered Job set shown in the Jobs panel.
+
+Implementation note:
+
+Job filter rules and filter state are owned by `features/jobs` because the filters describe Job-domain properties. ArcGIS-specific application of those filters lives under `features/map/filters`.
+
+Done Jobs remain hidden by default in the Jobs panel unless the user explicitly selects the `Done` status filter. Selecting `Done` disables the Jobs panel's hidden-Done rule for the filtered result set, so the status filter behaves as an explicit request to view Done Jobs.
+
+Current map behavior:
+
+- shared Job filters are applied to Job point and polygon layers through `definitionExpression`
+- map Job layers use the same filter state as the Jobs panel
+- map Job layers hide Done Jobs by default, matching the Jobs panel
+- map Job layers reveal Done Jobs when the user explicitly selects the `Done` status filter
+- AOI renderer summaries are rebuilt from the same visible Job set used by map filtering
+- selected Job highlight and related AOI highlight remain independent of layer filter state
+
+Implementation note:
+
+The map filter expression includes `status <> 'done'` by default so Job point and polygon layers match the Jobs panel's hidden-Done behavior. The default Done exclusion is removed only when the explicit `Done` status filter is active.
+
+AOI renderer summaries use `filterJobsForVisibleJobSet(...)` before relations and summaries are built, so AOI severity follows active Job filters and the hidden-Done default. Existing unfiltered relation-service calls remain supported when no `jobFilters` argument is provided.
+
+Deferred:
+
+- clustering
+
+## 8.36 Add Job point clustering foundation
+
+Status: Done
+
+Job point clustering has been enabled through the ArcGIS `FeatureLayer.featureReduction` cluster configuration.
+
+Current behavior:
+
+- Job point layer uses `featureReduction: { type: "cluster" }`
+- cluster labels show the number of Jobs in each cluster
+- cluster popup shows the cluster Job count
+- Job point clusters respect the existing Job layer `definitionExpression` filters
+- individual Job point popups still use the existing `Show Job details` popup action
+- Job polygon layer is not clustered yet
+- mock data includes enough active point Jobs to visibly exercise clustering
+- mock polygon Jobs use compact footprints so they do not dominate the map
+
+Rationale:
+
+Initial clustering is limited to Job points because it provides a low-risk geographic overview without changing polygon rendering. Polygon and AOI clustering can be misleading if centroid-based clusters hide the actual polygon footprint, so those strategies remain deferred until the actual AOI geometry density and scale are better understood.
+
+Known limitation:
+
+AOI renderer color updates can take roughly a second after filters are cleared because relation summaries and the AOI renderer are rebuilt asynchronously. This is acceptable for now and should be optimized later only if it becomes disruptive.
+
+Deferred:
+
+- AOI clustering or cluster-like overview
+- polygon Job clustering strategy
+- cluster styling based on priority/severity
+- AOI renderer refresh performance optimization
+
+Implementation note:
+
+Initial point clustering did not visibly cluster because the mock dataset had too few active point Jobs and oversized polygon Jobs dominated the map. The mock dataset now includes clustered point Jobs around several Danish waters and smaller polygon Jobs that better approximate realistic Job footprints.
+
+Point clustering remains limited to the Job point layer. Polygon Jobs are still rendered individually.
+
+## 8.37 Add Job point clustering UI settings
+
+Status: Done
+
+Job point clustering can now be controlled from the navbar popover.
+
+Current behavior:
+
+- clustering is map state, not Job filter state
+- available presets are `Off`, `Low`, `Medium` and `High`
+- `Medium` remains the default clustering preset
+- `Off` disables point clustering by setting the point layer feature reduction to `null`
+- `Low`, `Medium` and `High` map to different ArcGIS cluster radius values
+- Job polygon layer remains unclustered
+- Job filters continue to affect clustered Job points through layer filtering
+
+Rationale:
+
+Clustering distance is a map presentation concern, not a Job-domain rule. Presets are used instead of a free slider to keep the behavior predictable and easier to test.
+
+Known limitation:
+
+Clustering settings are frontend runtime state only and are not persisted across reloads.
+
+## 8.38 Add priority-aware Job point clustering modes
+
+Status: Done
+
+Job point clustering now supports multiple demo styles.
+
+Current behavior:
+
+- `Count` keeps the existing count-based cluster style.
+- `Priority pie` uses ArcGIS smart mapping pie-chart cluster rendering to show the priority distribution inside each cluster.
+- `Priority groups` uses separate Low, Medium and High point layers so clusters only contain Jobs with the same priority.
+- Priority group layers reuse the same point Job features but add priority-specific layer filters.
+- Job filters still apply to all point clustering modes.
+- Job polygon layer remains unclustered.
+- Mock point Job density has been increased to make clustering modes easier to test.
+
+Rationale:
+
+Priority pie clustering is useful for overview and demo value because mixed-priority clusters show their composition directly. Priority-separated clustering cannot be expressed as one normal spatial cluster layer, so it is implemented with separate priority point layers.
+
+Deferred:
+
+- polygon Job clustering
+- AOI clustering or AOI overview aggregation
+- persisting clustering settings across reloads
+
+## 8.39 Extract app-shell UI wiring from createApp
+
+Status: Done
+
+App-shell UI construction has been extracted from `src/app/createApp.js` into focused modules under `src/app/ui`.
+
+Current structure:
+
+```txt
+src/app/createApp.js
+  -> app composition
+  -> store creation
+  -> high-level map/list/selection wiring
+  -> lifecycle cleanup
+
+src/app/ui/createNavbarController.js
+  -> navbar template loading
+  -> Filters popover creation
+  -> Job filter controls
+  -> Job point clustering controls
+  -> popover open/close behavior
+
+src/app/ui/createJobsOverlay.js
+  -> Jobs overlay shell
+  -> hosts Jobs list UI
+
+src/app/ui/createMapWorkspace.js
+  -> map workspace shell
+  -> map status region
+```
+
+Decision:
+
+- Keep Job filter rules and filter state under `features/jobs`.
+- Keep Job point clustering settings under `features/map`.
+- Keep ArcGIS layer filtering and clustering application under `features/map`.
+- Keep app-shell UI modules under `src/app/ui` when they coordinate multiple features but do not own feature-domain logic.
+- Keep `createApp.js` focused on app composition, store creation, high-level feature wiring and lifecycle cleanup.
+
+Rationale:
+
+`createApp.js` had grown to mix app composition with detailed navbar/filter/clustering DOM construction. Extracting this keeps the next feature work simpler without changing domain ownership or behavior.
+
+Known limitation:
+
+AOI renderer color updates can lag after filter reset because relation summaries and renderer enrichment are rebuilt asynchronously. Keep this documented as a later optimization unless it becomes disruptive.
+
+## 8.40 Add AOI popup Job summary content
+
+Status: Done
+
+AOI popup content now includes a related Jobs summary.
+
+Current behavior:
+
+- AOI popup shows related Job count.
+- AOI popup shows active Job count.
+- AOI popup shows high-priority active Job count.
+- Counts use relation service snapshots and current Job filters where available.
+- Done Jobs remain hidden by default unless the `Done` filter is active.
+- If an AOI has no matching relation summary, the popup shows a neutral empty summary.
+- The existing `Show related Jobs` action still opens the Jobs panel scoped to the selected AOI.
+- Open AOI popup summary counts live-refresh after Job filter changes, successful Jobs refresh and Job status changes.
+- Popup summary refresh uses the current shared Jobs store snapshot when available, instead of loading a separate Jobs snapshot from the relation service.
+
+Rationale:
+
+Users can now inspect an AOI and see the operational Job signal before opening the Jobs panel. The implementation keeps relation source details behind the relation service and does not import mock Job data into popup UI.
+
+Implementation note:
+
+AOI popup summary content keeps track of active custom content containers and re-renders them best-effort when Job-derived state changes. Closed popup content is cleaned up on later refresh attempts.
+
+## 8.41 Add selected AOI highlight from popup action
+
+Status: Done
+
+Selecting `Show related Jobs` from an AOI popup now highlights the selected AOI on the map.
+
+Current behavior:
+
+- AOI popup action still opens the Jobs panel scoped to the selected AOI.
+- Selected AOI state remains owned by `features/aoi/state`.
+- Visual AOI highlight remains owned by the map controller/layer highlight code.
+- Closing the Jobs panel clears selected AOI highlight.
+- Reopening the normal Jobs list clears selected AOI highlight.
+- Selecting a Job clears selected AOI highlight before applying selected Job and related AOI highlights.
+
+Rationale:
+
+The AOI-to-Jobs workflow now gives immediate geographic feedback, so users can see which AOI the scoped Jobs panel refers to without relying only on popup/list context.
+
+## 8.42 Add map hover feedback for Jobs and AOIs
+
+Status: Done
+
+Map hover feedback now supports both Job geometry and AOI polygons.
+
+Current behavior:
+
+- Pointer movement performs frame-throttled map hit testing against registered Job/AOI layers.
+- Job geometry has hover priority over AOIs below it.
+- Hovered Jobs get a transient ArcGIS layer-view highlight.
+- Hovered AOIs get a transient ArcGIS layer-view highlight.
+- Hover layer views are warmed and cached to avoid resolving layer views during normal pointer movement.
+- Hover hit testing coalesces pointer movement instead of cancelling every in-flight hit test.
+- Hover highlight clears when the pointer leaves the map.
+- Hover highlight clears when the user drags the map.
+- Hover highlight clears when a map click begins, so selected highlight can take over.
+- Hover cleanup runs through the map controller destroy flow.
+- Cursor styling remains the default map cursor for now.
+- Selected AOI, selected Job and related AOI highlights use separate controllers and are not overwritten by hover cleanup.
+
+Rationale:
+
+The first AOI-only hover implementation worked, but AOI-only hit testing could highlight an AOI underneath a Job geometry. The hover controller now respects map hit-test order and treats Jobs as the top-priority interactive target while keeping hover separate from selection state.
+
+The hover controller follows the Product Manager hover pattern more closely by caching layer views, limiting hit testing to relevant layers and frame-throttling pointer movement. This avoids the delayed feel caused by invalidating each in-flight hit test while the pointer is still moving.
+
+## 8.43 Add AOI-scoped Job map filtering
+
+Status: Done
+
+Selecting `Show related Jobs` from an AOI popup now scopes both the Jobs panel and map Job layers to Jobs related to the selected AOI.
+
+Current behavior:
+
+- The selected AOI still highlights on the map.
+- The Jobs panel still shows Jobs related to the selected AOI.
+- Map Job point and polygon layers are filtered to the same related Job ids.
+- Existing Job filters are combined with the selected AOI Job scope.
+- Done Jobs remain hidden by default unless the `Done` filter is active.
+- Job point clustering follows the AOI scope because clustering uses the filtered point layer.
+- Clearing the AOI scope in the Jobs panel clears the map Job scope.
+- Opening the normal Jobs list clears the map Job scope.
+- Closing the Jobs panel clears the map Job scope.
+- Selecting a specific Job clears the AOI Job scope before applying selected Job highlight and related AOI highlight.
+
+Rationale:
+
+The AOI-to-Jobs workflow should make related Jobs visible on both the list and the map. Filtering the Job layers is clearer than adding another highlight color because clusters and visible counts then represent only the scoped Job set.
+
+## 8.44 Add Job cluster picker
+
+Status: Done
+
+Job point cluster popups now include a compact picker for the Jobs represented by the cluster.
+
+Current behavior:
+
+- Clicking a Job point cluster opens a compact Job picker.
+- The picker queries the clustered layer view for member Jobs using the cluster aggregate id.
+- Picker items show Job title, status, priority, deadline and affected AOI count.
+- Selecting a Job from the picker opens the normal Job feature popup.
+- The normal Job feature popup remains responsible for `Show Job details`.
+- Count, priority pie and priority group clustering modes can use the picker.
+- Existing Job filters and AOI-scoped Job map filtering continue to determine which Jobs are included in clusters.
+- Default popup actions such as `Zoom to` and `Browse features` are disabled for the map popup.
+
+Rationale:
+
+The picker should behave like the Product Manager overlap picker: show the underlying features first, then open the selected feature popup. This keeps cluster interaction compact and avoids sending users directly into the Jobs panel before they have chosen a specific Job from the map.
+
+## 8.45 Polish hover cleanup and initial Jobs panel state
+
+Status: Done
+
+Small UX polish after Job cluster picker implementation.
+
+Current behavior:
+
+- Map hover highlight clears when the pointer leaves the map container.
+- Map hover highlight clears when the browser window loses focus.
+- Map hover highlight clears when the document is hidden.
+- Stale asynchronous hit-test results cannot re-apply hover highlight after the pointer has left the map.
+- The Jobs panel starts closed when the app loads.
+- The Jobs panel still opens when the user clicks the Jobs navbar button.
+- The Jobs panel still opens from AOI `Show related Jobs`.
+- The Jobs panel still opens from Job `Show Job details`.
+
+Rationale:
+
+Hover highlight should behave as transient pointer feedback and must not remain visible after the pointer leaves the map. Starting with the Jobs panel closed gives the map-first workspace more room on load while preserving all explicit Jobs workflows.
+
+## 8.46 Add manual refresh coordination
+
+Status: Done
+
+Manual refresh now coordinates the Jobs panel and map-derived Job data.
+
+Current behavior:
+
+- Clicking `Refresh` in the Jobs panel reloads Jobs through the Jobs service/store.
+- Reopening the Jobs panel from the navbar also refreshes Jobs through the same path.
+- A successful Jobs refresh triggers map Job layer refresh using the refreshed Jobs already returned to the Jobs panel.
+- Map Job point, priority point and polygon layers are repopulated from the refreshed Jobs.
+- Existing Job filters remain active after refresh.
+- Existing Job point clustering settings remain active after refresh.
+- AOI renderer summaries are rebuilt after refresh.
+- If an AOI scope is active, related Job ids are resolved again and map Job layer scope is reapplied.
+- If a Job is selected, selected Job and related AOI highlights are reapplied best-effort.
+- If Jobs refresh fails, map refresh is not attempted.
+- If map refresh fails after Jobs refresh, a user-facing notice is shown.
+
+Rationale:
+
+Manual refresh should not only update the Jobs panel. It should keep the map/list workflow coherent by refreshing map Job layers, derived AOI severity and active scope/highlight state without resetting filters or forcing a full app reload.
+
+## 8.47 Add theme foundation and dark mode
+
+Status: Done
+
+DataCatalogue now has a basic light/dark theme foundation.
+
+Current behavior:
+
+- Theme state lives under `features/theme`.
+- The app applies `calcite-mode-light` or `calcite-mode-dark` to the root `html` element.
+- The selected theme is persisted in browser storage.
+- If no persisted theme exists, the app follows the system color-scheme preference.
+- The navbar includes a theme toggle action.
+- Calcite components follow the active Calcite mode.
+- Custom UI surfaces use semantic DataCatalogue CSS tokens.
+- Jobs panel, Filters popover, notices, map status, popup custom content and cluster picker use theme-aware tokens.
+- ArcGIS Maps SDK theme CSS is switched at runtime between light and dark mode instead of statically importing only the light ArcGIS theme.
+
+Rationale:
+
+Theme behavior is cross-cutting UI state and should be centralized before more panels and backend-driven states are added. Using Calcite mode classes keeps DataCatalogue aligned with the Product Manager theme token pattern while allowing DataCatalogue-specific colors and surfaces.
+
+## 8.48 Harden AOI Feature Service readiness checks
+
+Status: Done
+
+AOI Feature Service integration now performs a lightweight readiness check when the map starts.
+
+Current behavior:
+
+- AOI FeatureLayer still owns map display of AOIs.
+- AOI service exposes a readiness validation helper for the configured FeatureLayer.
+- Missing AOI Feature Service configuration shows a map warning.
+- AOI layer load failure keeps the map usable and shows a user-facing notice.
+- AOI field metadata is validated after the FeatureLayer loads.
+- Required provisional AOI fields are `GlobalID` and `PRODUCTNAME`.
+- Recommended test-service metadata fields are checked and reported as warnings.
+- AOI feature count is checked best-effort.
+- Empty AOI sources show a map warning.
+- AOI popup field rows are filtered to fields that actually exist in the loaded service.
+- AOI `outFields` uses `*` while the AOI service contract remains provisional.
+
+Rationale:
+
+The current AOI service is still provisional, but the map should fail gracefully when configuration, service loading or field assumptions do not match expectations. Validation belongs in the AOI feature boundary, while ArcGIS layer lifecycle and map status remain owned by the map controller.
+
+## 8.49 Fix hover coalescing and click highlight transition
+
+Status: Done
+
+Map hover feedback now avoids the delayed feel introduced by stale hit-test cancellation.
+
+Current behavior:
+
+- Hover hit testing runs at most one ArcGIS hit test at a time.
+- Pointer moves are coalesced while a hit test is in flight.
+- Completed hit-test results can update hover state even if the pointer moved during the async hit test.
+- A queued pointer move triggers the next hit test after the current one finishes.
+- Clicking a hovered AOI or Job no longer clears hover immediately.
+- Hover highlight is cleared after selected highlight has taken over, reducing visible blink between hover and selected state.
+- Drag, wheel, pointer exit, window blur, document hidden and controller destroy still clear hover immediately.
+
+Rationale:
+
+Discarding every hit-test result when `pointerEvent` changed made hover appear only after the pointer stopped moving. Clearing hover on click before selected highlight was ready caused a visual blink. The hover controller should coalesce pointer work without making pointer feedback feel delayed.
+
+## 8.50 Add startup loader and required data gate
+
+Status: Done
+
+DataCatalogue now blocks initial app access until required startup data is available.
+
+Current behavior:
+
+- Startup is coordinated from app composition instead of being split between map startup and Jobs UI startup.
+- The app shell is rendered behind a full-screen startup loader, but remains inert until startup succeeds.
+- Jobs are loaded once through a shared Jobs store during startup.
+- The Jobs panel consumes the shared startup-loaded Jobs store instead of triggering its own initial load.
+- AOI Feature Service readiness is required during startup.
+- Missing AOI Feature Service configuration blocks startup.
+- AOI layer load failure blocks startup.
+- AOI readiness warning states that mean the AOI source is not usable block startup.
+- Job map layer population is required during startup and uses the Jobs snapshot already loaded by the startup flow.
+- Startup failures retry automatically with exponential backoff and countdown text in the loader.
+- After retries are exhausted, the loader remains visible and offers `Retry now`.
+- User-facing app controls are unavailable until startup succeeds.
+- Post-startup manual Jobs refresh remains non-blocking and can still show an inline refresh failure while stale Jobs are available.
+- Startup loader styling now follows the Product Manager glass-overlay pattern so the app/map can be seen loading behind the required startup gate.
+- Startup order now matches the Product Manager pattern more closely: the map workspace starts behind the transparent loader before required Jobs are loaded and rendered.
+- Map status UI is suppressed during startup so the loader remains the only startup status surface.
+
+Cleanup:
+
+- Removed the old map status retry action path from startup-related map errors.
+- Kept Jobs inline retry only for post-startup refresh failures where stale Jobs are still available.
+- Defensive empty Jobs error state no longer exposes an alternate initial retry path because initial Jobs loading is owned by the startup gate.
+- Startup retry now runs per startup stage. Once the map/AOI workspace is ready, later Jobs load retries no longer recreate the map. Once Jobs are loaded, later Job map rendering retries reuse the loaded Jobs snapshot.
+- Removed stale startup/map-status action styling and unused loader destroy cleanup code after the startup retry surface moved fully into the loader.
+
+Rationale:
+
+DataCatalogue cannot be used meaningfully without both AOIs and Jobs. Initial load failures should therefore be handled before the user enters the app, instead of exposing a partial map/list workspace. Non-blocking inline refresh errors still make sense after a successful startup because the app already has a valid previous data snapshot.
+
+## 9. Backend assumptions
+
+Status: Integration contracts unverified; backend development is owned separately.
+
+The repository input identifies a DataCatalogue API project, but the frontend export is not a backend contract review. Do not describe the backend as nonexistent or claim its endpoints are ready.
+
+Expected roles from accepted scoping:
+
+- Package API supplies Features after splitting incoming packages.
+- Workspace API supplies Workspaces and work areas.
+- Assignment/comment ownership and retained-history semantics remain undecided.
+- Production ArcGIS service-account access and AD identity/authorization belong behind the backend.
+- Direct browser access to the live map service is required for the initial assignment-page test, with no embedded or persisted credentials/tokens.
+
+Existing Jobs use the unchanged mock adapter. The final Job HTTP adapter, authoritative spatial relations and multi-user conflict behavior still need verified inputs. See `BACKEND_CONTRACTS.md` for the input gates. No API implementation or endpoint change is included in the rename.
+
+## 10. Mock backend requirements
+
+The mock backend must support:
+
+- loading Jobs
+- loading AOI/Job relations
+- latency simulation
+- status mutation
+- mutation failure simulation
+- cyclic Job creation
+- partial failure scenarios, if useful
+- predictable development behavior where possible
+
+Mock backend rules:
+
+- must live under `features/jobs/mock`
+- must not be imported by UI components
+- must be accessed through service functions
+- must have clear comments explaining what behavior is mock-only and why
+- must be easy to remove when real backend is introduced
+
+Mock Jobs must include at least:
+
+- title
+- created date
+- priority
+- status
+- geometry within Denmark or surrounding Danish waters
+- related AOI ids for initial UI testing
+
+Suggested initial mock configuration:
+
+```txt
+latencyMinMs: 250
+latencyMaxMs: 1000
+loadFailureRate: 0.05
+mutationFailureRate: 0.15
+cyclicJobCreationRate: 0.85
+```
+
+These values are tuned for frontend UX testing and are not final backend behavior.
+
+## 11. Data model draft
+
+## 11.1 Job frontend model
+
+Draft shape:
+
+```js
+{
+  id: "job-001",
+  title: "Review affected AOIs",
+  summary: "Short user-facing description of the work.",
+  createdAt: "2026-06-15T10:00:00.000Z",
+  deadline: "2026-06-30T00:00:00.000Z",
+  priority: "medium",
+  status: "todo",
+  relatedAoiIds: ["aoi-001", "aoi-002"]
+}
+```
+
+## 11.2 AOI frontend model
+
+Draft shape:
+
+```js
+{
+  id: "aoi-001",
+  name: "Area of Interest 001",
+  geometry: null,
+  attributes: {},
+  jobSummary: {
+    total: 2,
+    active: 1,
+    highPriority: 1
+  }
+}
+```
+
+## 11.3 Relation model
+
+Draft shape:
+
+```js
+{
+  jobId: "job-001",
+  aoiIds: ["aoi-001", "aoi-002"],
+  source: "mock"
+}
+```
+
+Possible `source` values:
+
+```txt
+mock
+frontendGeometry
+backend
+```
+
+The `source` field is useful for diagnostics and development, but should normally not be displayed to users.
+
+## 12. Original Jobs/AOI implementation roadmap
+
+The following phases preserve the earlier delivery history. Section 20 defines the current DataCatalogue delivery order. Previous validation statements are historical, not new candidate test results.
+
+## Phase 0 - Project foundation
+
+Goal:
+
+Create the project shell and establish the source-of-truth documentation.
+
+Tasks:
+
+| ID      | Task                                                        | Status | Notes                                                                                        |
+| ------- | ----------------------------------------------------------- | -----: | -------------------------------------------------------------------------------------------- |
+| JM-0001 | Create DataCatalogue Vite project under `src/DataCatalogue` |   Done | Initial shell created and pushed.                                                            |
+| JM-0002 | Align package versions with Product Manager baseline        |   Done | Vite range corrected to avoid Vite 8 drift.                                                  |
+| JM-0003 | Create initial feature-based folder structure               |   Done | AOI, Jobs, Map, Notices, Theme and Shared folders created.                                   |
+| JM-0004 | Create project tracker/source-of-truth document             |   Done | This document is now the active source of truth and is updated during implementation phases. |
+| JM-0005 | Create backend contract notes document                      |   Done | Initial skeleton created in `docs/BACKEND_CONTRACTS.md`.                                     |
+| JM-0006 | Create architecture notes document                          |   Done | Initial skeleton created in `docs/ARCHITECTURE.md`.                                          |
+
+Exit criteria:
+
+- app shell builds
+- tracker exists
+- folder structure is documented
+- initial decisions are recorded
+
+## Phase 1 - App shell and shared foundations
+
+Goal:
+
+Create a maintainable app shell with shared helpers before adding domain-heavy map logic.
+
+Status: Done
+
+Tasks:
+
+| ID      | Task                                             | Status | Notes                                                                                                                                                                                    |
+| ------- | ------------------------------------------------ | -----: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0101 | Create root app layout shell                     |   Done | Root layout uses Product Manager-style navbar template, GST logo, map-first workspace, native Jobs panel toggle with Calcite icon, closable left Jobs panel and Calcite Filters popover. |
+| JM-0102 | Add shared config helper                         |   Done | Runtime config reads safe `VITE_` values from `import.meta.env`.                                                                                                                         |
+| JM-0103 | Add shared API result helper                     |   Done | Added success/error result helpers for future services.                                                                                                                                  |
+| JM-0104 | Add shared error normalization                   |   Done | Added normalized frontend error shape for mock and future backend errors.                                                                                                                |
+| JM-0105 | Add notice service shell                         |   Done | Added notice service and UI container for user-visible messages. Notice UI is currently custom and should be reviewed against Calcite alert/notice options before hardening.             |
+| JM-0106 | Add basic dark/light theme foundation            |   Done | Theme state, persisted preference, Calcite mode classes and navbar theme toggle are implemented.                                                                                         |
+| JM-0107 | Extract app-shell UI modules from `createApp.js` |   Done | Navbar/filter/clustering UI, Jobs overlay shell and map workspace DOM helpers now live under `src/app/ui`.                                                                               |
+
+Exit criteria:
+
+- app has stable layout
+- notices can be shown
+- config is centralized
+- errors can be normalized
+- theme foundation is ready
+
+## Phase 2 - Mock Jobs domain and service
+
+Goal:
+
+Implement Jobs without UI depending directly on mock data.
+
+Tasks:
+
+| ID      | Task                                            | Status | Notes                                                                                                                                                                          |
+| ------- | ----------------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| JM-0201 | Define Job status and priority domain constants |   Done | Added stable internal status and priority values with user-facing labels.                                                                                                      |
+| JM-0202 | Define Job model normalization helpers          |   Done | Added normalization for Job fields and point/polygon geometry.                                                                                                                 |
+| JM-0203 | Implement mock Job data                         |   Done | Mock Jobs include titles, dates, priority, status, point/polygon geometry and related AOI ids.                                                                                 |
+| JM-0204 | Implement mock Job backend adapter              |   Done | Mock backend supports latency, failures, status mutation, cyclic Job creation and both follow-up/separate generated Jobs. Generated Jobs appear after refresh or panel reopen. |
+| JM-0205 | Implement Job service facade                    |   Done | UI consumes Job service/store instead of importing mock backend directly.                                                                                                      |
+| JM-0206 | Implement status update service flow            |   Done | Status updates return API result objects and support created follow-up Jobs.                                                                                                   |
+
+Exit criteria:
+
+- Jobs can be loaded through service
+- Job status can be changed through service
+- failures can be simulated
+- completing a Job can sometimes create a new Job
+- UI has no direct mock imports
+
+Phase 12 polish notes:
+
+- In Job details mode, Back to Jobs belongs in the sticky Jobs panel header as an icon action next to Close.
+- Details mode should avoid nested box-in-box styling. Use one main details surface with section headers and thin separators.
+- `Refresh` in details mode intentionally refreshes all Jobs for now because no single-Job backend endpoint exists yet.
+- Mouse/programmatic focus should not show a large blue outline around Job cards or details surfaces. Keyboard focus should still use `:focus-visible`.
+- Jobs panel header remains sticky and flush to the top of the scroll area.
+- In details mode, the Selected Job summary header remains sticky under the panel header so key Job context stays visible while scrolling.
+- Status buttons suppress mouse/click outlines while preserving keyboard `:focus-visible` behavior.
+- Jobs panel header is sticky and flush to the top of the panel scroll area.
+- Jobs panel header actions stay right-aligned in both list mode and details mode.
+- Selected Job header remains sticky below the panel header in details mode.
+- Status button click focus is suppressed for pointer interactions while keyboard focus remains visible.
+- Selected Job sticky header spacing has been tightened so the details view keeps context visible without taking excessive vertical space.
+- Jobs overlay overrides the generic panel flex layout because the shared panel gap creates unwanted spacing below the sticky Jobs header.
+
+## Phase 3 - Job list UI
+
+Goal:
+
+Provide list-based work access before complex map interaction.
+
+Tasks:
+
+| ID      | Task                                         | Status | Notes                                                                                                                                                                                                                                                                                            |
+| ------- | -------------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| JM-0301 | Create Job list component                    |   Done | Jobs panel now renders active mock Jobs with compact collapsible cards using separate title/badge and date/action rows, fixed-width date chips, fixed-width priority/AOI badges and Calcite brand status actions. Done Jobs remain visible until refresh or panel close after being marked Done. |
+| JM-0302 | Create Job detail/selection component        |   Done | Dedicated Job details mode is implemented in the Jobs panel. Compact card expansion remains available for list scanning.                                                                                                                                                                         |
+| JM-0303 | Add Job status buttons                       |   Done | Added To do, In Progress and Done buttons per Job.                                                                                                                                                                                                                                               |
+| JM-0304 | Add per-Job mutation loading state           |   Done | Replaced visible per-Job loading text with a local pending guard to avoid card flashing while still preventing duplicate status updates.                                                                                                                                                         |
+| JM-0305 | Show success/failure notices for Job updates |   Done | Status updates show success and error notices.                                                                                                                                                                                                                                                   |
+| JM-0306 | Show cyclic Job creation notice              |   Done | Mock-created follow-up Jobs show an info notice.                                                                                                                                                                                                                                                 |
+| JM-0307 | Add selected AOI Jobs scope                  |   Done | AOI popup action opens the Jobs panel and scopes map Job layers to Jobs related to the selected AOI.                                                                                                                                                                                             |
+
+Exit criteria:
+
+- user can view Jobs
+- user can update Job status
+- mutation failures are visible
+- cyclic mock behavior is visible
+- list has loading/error/empty states
+
+## Phase 4 - AOI Feature Service foundation
+
+Goal:
+
+Load AOIs through a service layer and prepare them for map display and relation mapping.
+
+Tasks:
+
+| ID      | Task                                | Status | Notes                                                                                                                                          |
+| ------- | ----------------------------------- | -----: | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0401 | Add AOI Feature Service config      |   Done | Added AOI Feature Service config helper using safe runtime config from `VITE_AOI_FEATURE_SERVICE_URL`. No private URL or credential is stored. |
+| JM-0402 | Implement AOI service facade        |   Done | AOI service exposes FeatureLayer readiness validation. Real queried AOI state remains deferred while FeatureLayer owns map display.            |
+| JM-0403 | Implement AOI normalization helpers |   Done | AOI normalization helpers and centralized field validation metadata are implemented for the current test Feature Service.                      |
+| JM-0404 | Add AOI loading state               |   Done | Map status handles missing AOI config, AOI layer load failure, field validation warnings and empty source count.                               |
+| JM-0405 | Document required AOI fields        |   Done | Required and recommended provisional AOI fields are centralized and documented. Final service fields remain open.                              |
+
+Exit criteria:
+
+- AOI config is centralized
+- AOIs can be loaded
+- AOI data is normalized
+- errors are user-visible
+- no secrets or private URLs are committed
+
+## Phase 5 - AOI/Job relation service
+
+Goal:
+
+Make AOI/Job relations available without coupling UI to relation source.
+
+Tasks:
+
+| ID      | Task                                  | Status | Notes                                                                                                                      |
+| ------- | ------------------------------------- | -----: | -------------------------------------------------------------------------------------------------------------------------- |
+| JM-0501 | Define relation model                 |   Done | Added relation model helpers with `jobId`, `aoiIds` and `source`.                                                          |
+| JM-0502 | Implement mock relation lookup        |   Done | Relations are derived from normalized Jobs using `relatedAoiIds`.                                                          |
+| JM-0503 | Implement AOI summary derivation      |   Done | Added total, active, high-priority and active high-priority Job summary derivation per AOI.                                |
+| JM-0504 | Implement Job related AOI lookup      |   Done | Relation helpers support Job-to-AOI lookup. Selected Job map highlight currently uses related AOI ids carried on Job data. |
+| JM-0505 | Implement AOI related Jobs lookup     |   Done | Jobs panel and AOI-scoped map filtering can resolve Jobs related to a selected AOI.                                        |
+| JM-0506 | Document backend relation assumptions |   Done | Relation implementation uses source markers so mock, frontend geometry and backend relations can be swapped later.         |
+
+Exit criteria:
+
+- AOIs can show related Job counts.
+- Jobs can show related AOIs.
+- Relation source is abstracted.
+- UI does not care whether relations are mocked, frontend-derived or backend-provided.
+
+## Phase 6 - Map foundation
+
+Goal:
+
+Create the ArcGIS map and layer architecture.
+
+Tasks:
+
+| ID      | Task                                    | Status | Notes                                                                                                                                |
+| ------- | --------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------------------------------ |
+| JM-0601 | Implement ArcGIS Map/MapView creation   |   Done | Added isolated ArcGIS Map/MapView creation under `features/map/core`.                                                                |
+| JM-0602 | Add map container to app shell          |   Done | Replaced the map placeholder with a real MapView container while preserving the overlay Jobs panel layout.                           |
+| JM-0603 | Add AOI layer creation                  |   Done | Added AOI `FeatureLayer` creation from configured service URL and connected popup/outFields/actions to centralized AOI field config. |
+| JM-0604 | Add AOI renderer foundation             |   Done | Added neutral AOI renderer and best-effort Job summary renderer support using relation summaries matched by AOI id.                  |
+| JM-0605 | Add map loading/error state integration |   Done | Added loading, warning and error status surface for the map. Renderer and Job layer enrichment failures do not block map loading.    |
+| JM-0606 | Add basic view cleanup                  |   Done | Added MapView cleanup through the app lifecycle destroy flow.                                                                        |
+| JM-0607 | Add read-only Job geometry layers       |   Done | Added client-side point and polygon FeatureLayers populated from Job service geometry.                                               |
+
+Exit criteria:
+
+- map loads
+- AOIs are visible when a service URL is configured
+- map lifecycle is isolated
+- AOI layer creation is not mixed into app bootstrap
+- Job geometry layers are isolated under map/layers
+
+## Phase 7 - Map selection, hover and popup
+
+Goal:
+
+Make AOIs inspectable from the map.
+
+Tasks:
+
+| ID      | Task                                  | Status | Notes                                                                                                                                     |
+| ------- | ------------------------------------- | -----: | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0701 | Add AOI hover feedback                |   Done | Map hover now highlights Jobs or AOIs using hit-test order, with Job geometry taking priority over AOIs underneath.                       |
+| JM-0702 | Add AOI selection feedback            |   Done | `Show related Jobs` now stores selected AOI state, opens the scoped Jobs panel and highlights the selected AOI on the map.                |
+| JM-0703 | Add AOI popup shell                   |   Done | Added ArcGIS popup template using current test Feature Service metadata, related Job summary content and a Show related Jobs action.      |
+| JM-0704 | Show related Job summary in popup     |   Done | AOI popup now shows related, active and high-priority active Job counts using relation summaries and current Job filters where available. |
+| JM-0705 | Add popup action to open related Jobs |   Done | AOI popup action opens the Jobs panel scoped to Jobs related to the selected AOI.                                                         |
+| JM-0706 | Document popup flow                   |   Done | AOI popup relation summary content and `Show related Jobs` action flow are documented in `ARCHITECTURE.md`.                               |
+
+Exit criteria:
+
+- user can click AOI
+- popup shows useful AOI and Job summary
+- popup can open related Jobs
+- popup flow is documented
+
+## Phase 8 - Filtering and quick filters
+
+Goal:
+
+Create shared filtering used by map and list.
+
+Tasks:
+
+| ID      | Task                             |      Status | Notes                                                                                                                              |
+| ------- | -------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------------------- |
+| JM-0801 | Define filter state model        |        Done | Job filter state lives in `features/jobs/state/jobFilterStore.js`.                                                                 |
+| JM-0802 | Implement Job filter predicates  |        Done | Job filter predicates and summaries live in `features/jobs/domain/jobFilters.js`.                                                  |
+| JM-0803 | Implement AOI filter predicates  |        Done | AOI overview filter modes and map filter state are implemented under `features/map`; relation membership remains service-derived.  |
+| JM-0804 | Add quick filter UI              |        Done | Navbar Filters popover exposes Job quick filters and explicit status/priority filters.                                             |
+| JM-0805 | Apply filters to Job list        |        Done | Jobs panel consumes shared Job filter state.                                                                                       |
+| JM-0806 | Apply filters to AOI map layer   |        Done | AOI overview filters can apply AOI FeatureLayer `definitionExpression` when relation AOI ids are compatible with the AOI id field. |
+| JM-0807 | Add filter-by-selected-Job flow  | In progress | Selecting a Job highlights related AOIs. Persistent AOI layer filtering for selected Job remains deferred.                         |
+| JM-0808 | Apply filters to Job map layers  |        Done | Map Job point, polygon and priority point layers use shared Job filter definition expressions.                                     |
+| JM-0809 | Add AOI-scoped Job map filtering |        Done | AOI `Show related Jobs` scopes map Job layers to Jobs related to the selected AOI while preserving active filters.                 |
+
+Exit criteria:
+
+- quick filters work
+- Job map and list filtering are consistent
+- selected AOI can scope related Jobs in both list and map
+- empty states are clear
+- AOI-specific filtering is documented as a later step where still deferred
+
+## Phase 9 - Clustering and geographic overview
+
+Goal:
+
+Implement geographic overview without misleading AOI geometry.
+
+Tasks:
+
+| ID      | Task                                       |      Status | Notes                                                                                                     |
+| ------- | ------------------------------------------ | ----------: | --------------------------------------------------------------------------------------------------------- |
+| JM-0901 | Inspect real AOI geometry characteristics  |     Blocked | Requires actual Feature Service or representative sample data.                                            |
+| JM-0902 | Decide AOI cluster strategy                |     Blocked | Direct polygon clustering vs derived representative points depends on real AOI geometry.                  |
+| JM-0903 | Implement Job point cluster layer/config   |        Done | Job point clustering is implemented through ArcGIS FeatureLayer `featureReduction`.                       |
+| JM-0904 | Add Job cluster labels                     |        Done | Job point cluster labels show cluster count.                                                              |
+| JM-0905 | Add Job cluster popup/picker               |        Done | Job point clusters open a compact picker that lists cluster member Jobs and opens the selected Job popup. |
+| JM-0906 | Disable/change clustering at detailed zoom | Not started | Deferred until clustering behavior has been tested with real AOI and Job density.                         |
+| JM-0907 | Document clustering decision               |        Done | Job point clustering is documented. AOI clustering decision remains blocked by real geometry.             |
+| JM-0908 | Add Job cluster UI settings                |        Done | Navbar clustering controls support Off, Low, Medium and High presets.                                     |
+| JM-0909 | Add priority-aware Job clustering modes    |        Done | Count, priority pie and priority group modes are implemented.                                             |
+
+Exit criteria:
+
+- users can identify dense Job areas
+- Job clustering does not hide polygon Job footprints
+- AOI clustering remains explicitly deferred until geometry is understood
+- cluster implementation is isolated
+
+## Phase 10 - Refresh, resilience and UX hardening
+
+Goal:
+
+Make the app resilient to realistic loading, mutation and refresh scenarios.
+
+Tasks:
+
+| ID      | Task                                         |      Status | Notes                                                                                                                                                                |
+| ------- | -------------------------------------------- | ----------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-1001 | Add manual refresh flow                      |        Done | Jobs panel refresh also refreshes map Job layers, AOI renderer summaries, filters, clustering and active scope/highlight state best-effort.                          |
+| JM-1002 | Add silent refresh plan                      |    Deferred | Manual refresh and startup retry cover current needs. Revisit when backend behavior and auto-refresh requirements are clearer.                                       |
+| JM-1003 | Preserve selected AOI/Job across refresh     |        Done | Manual refresh reapplies active AOI scope or selected Job highlight best-effort. Stale/deleted selection policy is deferred to backend work.                         |
+| JM-1004 | Add mutation conflict handling placeholder   | Not started | Backend future.                                                                                                                                                      |
+| JM-1005 | Add startup loader and automatic retry gate  |        Done | Initial startup blocks app access until Jobs, AOI readiness and Job map layer data are available. Retry runs per startup stage in loader.                            |
+| JM-1006 | Review loading states across app             |        Done | Startup loading is gated. Post-startup manual refresh and AOI popup summary refresh are non-blocking. Backend-driven states are deferred.                            |
+| JM-1007 | Polish hover cleanup and initial panel state |        Done | Hover clears on map exit/stale hit-test, and Jobs panel starts closed on app load.                                                                                   |
+| JM-1008 | Add AOI popup live-refresh for Job summaries |        Done | Open AOI popup summary counts refresh after Job filter changes, successful Jobs refresh and Job status changes.                                                      |
+| JM-1009 | Sync map presentation after Job mutation     |        Done | Successful Job status mutations now refresh map Job layers, AOI renderer summaries, AOI popup summaries and active scope/highlight state from the shared Jobs store. |
+
+Exit criteria:
+
+- refresh does not destroy user context unnecessarily
+- failures are visible
+- loading states are consistent
+- mock failure scenarios are handled
+
+Current known limitations:
+
+- Generated mock Jobs are still queued in the mock backend and intentionally become visible only after refresh or panel reopen.
+- Silent/auto refresh remains deferred until backend behavior and freshness requirements are clearer.
+- Backend conflict handling remains deferred until a real backend contract exists.
+
+## Phase 11 - Documentation and backend preparation
+
+Goal:
+
+Prepare for backend integration and reduce future rework.
+
+Tasks:
+
+| ID      | Task                                                    | Status | Notes                                                                                                                                            |
+| ------- | ------------------------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| JM-1101 | Create `docs/BACKEND_CONTRACTS.md`                      |   Done | Draft backend assumptions, frontend models, AOI fields and open questions are documented.                                                        |
+| JM-1102 | Create `docs/ARCHITECTURE.md`                           |   Done | Folder ownership, state rules, service rules and map flows are documented.                                                                       |
+| JM-1103 | Document mock backend behavior                          |   Done | Mock loading, latency, failures, status mutation, cyclic Job creation and generated Job visibility rules are documented.                         |
+| JM-1104 | Document AOI Feature Service requirements               |   Done | Current test service fields and provisional readiness rules are documented. Final service fields, auth and geometry characteristics remain open. |
+| JM-1105 | Document clustering decision                            |   Done | Job point clustering is documented. AOI clustering remains blocked by real geometry.                                                             |
+| JM-1106 | Review for secrets before backend config work           |   Done | `.env.example` uses placeholders, and runtime config only exposes safe `VITE_` browser values.                                                   |
+| JM-1107 | Review AOI service and backend readiness after Phase 10 |   Done | Current service seams are ready for later adapter work. AOI FeatureLayer ownership remains the right current approach.                           |
+
+Exit criteria:
+
+- backend assumptions are documented
+- mock behavior is documented
+- architecture decisions are recorded
+- future backend integration path is clear
+
+Phase 11 readiness review:
+
+- Keep AOI FeatureLayer ownership for map display until real AOI geometry, field stability, auth and service size are confirmed.
+- Do not introduce normalized canonical AOI state yet. The current AOI service skeleton and FeatureLayer readiness validation are sufficient for the current UI.
+- Keep `GlobalID` and `PRODUCTNAME` as provisional test-service assumptions only.
+- Keep mock Jobs behind `features/jobs/services/jobService.js` until a real backend adapter exists.
+- Keep relation source flexibility through `mock`, `frontendGeometry` and `backend`.
+- Do not add backend API environment variables until a real backend endpoint is known.
+
+Mock backend behavior review:
+
+- Mock Jobs are accessed through `features/jobs/services/jobService.js`.
+- UI code must not import from `features/jobs/mock`.
+- Mock Jobs are normalized before they reach store/UI consumers.
+- Mock loading simulates latency and load failures.
+- Mock status mutation simulates latency and mutation failures.
+- Completing a Job can create a generated Job.
+- Generated Jobs are stored in the mock backend immediately and returned as `createdJobs`.
+- The current Jobs store updates the mutated Job in the visible state but does not immediately insert generated Jobs.
+- Generated Jobs become visible after refresh or panel reopen, matching the intended slower backend-like workflow.
+- Mock relations are derived from normalized Job `relatedAoiIds` through the relation service/domain layer.
+- Mock relation behavior can later be replaced by backend-provided relations without changing UI ownership.
+
+## Phase 12 - Job details workflow polish
+
+Goal:
+
+Improve the Job details workflow without introducing heavy editing or final backend assumptions.
+
+Tasks:
+
+| ID      | Task                                          | Status | Notes                                                                                                                          |
+| ------- | --------------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------------------------ |
+| JM-1201 | Define Job details panel scope                |   Done | Details view remains read-only except for existing status buttons. Deadline editing remains deferred.                          |
+| JM-1202 | Implement dedicated Job details view          |   Done | Jobs panel supports list mode and a dedicated selected Job details mode.                                                       |
+| JM-1203 | Wire map/list Job selection to details mode   |   Done | Map popup flow opens details mode with Job/related AOI highlights. Job list cards can open details mode without map selection. |
+| JM-1204 | Preserve status mutation and notices          |   Done | Details view reuses existing status mutation flow, notices and mock-created Job queue notice behavior.                         |
+| JM-1205 | Defer AOI details until real AOI fields exist |   Done | AOI details panel is deferred until final AOI Feature Service fields/auth/geometry are confirmed.                              |
+
+Exit criteria:
+
+- Jobs panel supports list mode and details mode
+- selected Job details are readable and focused
+- status changes work from details mode
+- map-selected Jobs still highlight Job geometry and related AOIs
+- backing out of details mode clears map selection only when the details view was opened from the map
+- no new backend contract is introduced
+
+Phase 12 implementation notes:
+
+- Job details mode uses the existing normalized frontend Job model.
+- Job details mode is read-only except for existing Job status mutation buttons.
+- Deadline editing remains deferred until workflow and backend ownership are confirmed.
+- The Jobs panel header remains sticky and flush to the top of the panel scroll area.
+- In details mode, `Back to Jobs` is shown as a header icon action beside `Close`.
+- In details mode, selected Job context remains sticky under the panel header.
+- Details content uses one main surface with section dividers instead of nested card boxes.
+- Status mutation controls are placed near the top of details mode, directly under selected Job context.
+- Pointer/click focus outlines are suppressed on non-interactive details surfaces and status buttons, while keyboard focus remains visible through `:focus-visible`.
+- Details refresh intentionally uses the shared all-Jobs refresh flow for now because no single-Job backend endpoint exists yet.
+- AOI details remain deferred until real AOI fields, auth and geometry are confirmed.
+
+## Phase 13 - Selected Job map focus / filtering
+
+Goal:
+
+Improve the Job details map workflow by making it possible to focus the map on the selected Job and its related AOIs without introducing AOI details or a final backend/AOI relation contract.
+
+Tasks:
+
+| ID      | Task                                       | Status | Notes                                                                                          |
+| ------- | ------------------------------------------ | -----: | ---------------------------------------------------------------------------------------------- |
+| JM-1301 | Define selected Job map focus scope        |   Done | Initial focus scope filters Job layers to the selected Job and highlights related AOIs.        |
+| JM-1302 | Add Job details map focus controls         |   Done | Job details includes explicit `Focus map` and `Clear map focus` controls.                      |
+| JM-1303 | Reuse existing Job layer filtering         |   Done | Selected Job focus reuses the existing Job layer definition-expression scope path.             |
+| JM-1304 | Preserve focus state across manual refresh |   Done | Manual refresh reapplies selected Job map focus when it is active.                             |
+| JM-1305 | Clear focus when backing out of details    |   Done | `Back to Jobs` clears selected Job map focus after `Focus map` has been used from Job details. |
+| JM-1306 | Keep AOI details deferred                  |   Done | Related AOIs are highlighted only; AOI details and permanent AOI filtering remain deferred.    |
+
+Exit criteria:
+
+- Job details can request selected Job map focus
+- related AOIs remain highlighted for selected Job context
+- Job layers can be scoped to the selected Job
+- clearing map focus restores normal Job layer filtering
+- backing out of details mode clears selected Job map focus when focus was active
+- existing shared Job filters still combine with selected Job map scope
+- manual refresh preserves active selected Job map focus
+- existing AOI `Show related Jobs` and Job `Show Job details` flows continue to work
+- no new backend or AOI details contract is introduced
+
+Phase 13 implementation notes:
+
+- `Focus map` is intentionally explicit for now instead of automatic when Job details opens. This makes the behavior easier to demo and avoids surprising map context changes from list-opened details.
+- `Clear map focus` restores normal Job layer filtering while keeping Job details open.
+- `Back to Jobs` clears selected Job map focus after `Focus map` has been used, because the user is leaving the focused details context.
+- Selected Job map focus is coordinated by app composition. Job details UI only raises events and does not import map controller logic.
+- Selected Job map focus uses the same map filtering path as AOI-scoped Job filtering, so filters and clustering continue to operate on the scoped visible Job set.
+- Related AOIs are highlighted, not hidden/filtered, until real AOI Feature Service identifiers, geometry behavior and UX expectations are confirmed.
+
+## Phase 14 - AOI overview/filtering foundation
+
+Goal:
+
+Add a controlled AOI map overview/filtering foundation without introducing AOI details, AOI clustering or a final backend/AOI relation contract.
+
+Tasks:
+
+| ID      | Task                                     | Status | Notes                                                                                                                     |
+| ------- | ---------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------------------- |
+| JM-1401 | Define AOI map filter modes              |   Done | Added AOI map filter modes for all AOIs, visible Jobs, active Jobs and high-priority Jobs.                                |
+| JM-1402 | Add AOI map filter state                 |   Done | AOI map filter state is map presentation state under `features/map/state`.                                                |
+| JM-1403 | Add AOI FeatureLayer filter translation  |   Done | AOI map filter state is translated into AOI FeatureLayer `definitionExpression` when relation AOI ids are compatible.     |
+| JM-1404 | Wire AOI map filters into navbar and map |   Done | Filters popover controls AOI map overview filtering through app composition and map controller.                           |
+| JM-1405 | Keep AOI details deferred                |   Done | Phase 14 does not add AOI details panel or canonical queried AOI state.                                                   |
+| JM-1406 | Keep backend/AOI contract provisional    |   Done | AOI filtering uses provisional `GlobalID` matching and relation summaries behind services.                                |
+| JM-1407 | Validate AOI filter UX with current data |   Done | Current AOI overview filters work with the current service/mock data and showed no observed regression in manual testing. |
+
+Exit criteria:
+
+- AOI map filter modes are represented as explicit frontend state
+- AOI filtering can be applied to the AOI FeatureLayer without UI knowing relation source
+- current Job filters can be reused when deriving AOI filter membership
+- default AOI display remains unchanged
+- AOI details remain deferred
+- no final backend/AOI contract is introduced
+
+Implementation notes:
+
+- AOI overview filters are exposed from the Filters popover.
+- Current modes are `All AOIs`, `AOIs with visible Jobs`, `AOIs with active Jobs` and `AOIs with high-priority Jobs`.
+- AOI map filter state is map presentation state, not Job-domain state.
+- AOI membership is derived from relation service snapshots, not from direct mock imports.
+- Current Job filters are applied before AOI filter membership is calculated, so AOI overview follows the same visible Job set as the map/list workflow.
+- AOI filtering applies an AOI FeatureLayer `definitionExpression` only when relation AOI ids look compatible with the provisional `GlobalID` AOI id field.
+- Mock or incompatible relation ids fall back to showing all AOIs instead of hiding the AOI layer.
+- AOI overview filtering does not validate active filters through ArcGIS `queryFeatures`, because the current AOI Feature Service can fail tile/query operations for generated relation expressions.
+- AOI overview filtering worked in manual validation after the non-destructive matching change, with no observed regression in existing AOI, Job details, Job filter or map focus flows.
+- AOI details, canonical queried AOI state, AOI clustering and final backend/AOI relation ownership remain deferred.
+
+## Phase 15 - Mutation-to-map sync
+
+Goal:
+
+Keep map-derived Job presentation in sync after successful Job status mutations without introducing a new backend contract or moving map responsibility into Jobs UI.
+
+Tasks:
+
+| ID      | Task                                          | Status | Notes                                                                                                  |
+| ------- | --------------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------ |
+| JM-1501 | Track Job store mutation changes              |   Done | Job store snapshots expose a `lastChange` marker for successful and failed status mutation results.    |
+| JM-1502 | Sync map after successful Job status mutation |   Done | App composition refreshes map Job layers from the shared Jobs store after successful status mutations. |
+| JM-1503 | Preserve active map context after mutation    |   Done | Active AOI scope, selected Job focus and selected/related AOI highlights are reapplied best-effort.    |
+| JM-1504 | Keep generated mock Jobs queued               |   Done | Generated mock Jobs remain backend-queued and become visible after refresh or panel reopen.            |
+| JM-1505 | Keep Job UI free of map controller dependency |   Done | Status buttons still call the Jobs store only; map sync is coordinated by app composition.             |
+
+Exit criteria:
+
+- successful status mutations update visible Job map layers
+- AOI renderer summaries update after mutation
+- AOI popup summaries continue to update from shared Jobs state
+- active AOI scope is reapplied after mutation
+- active selected Job map focus is reapplied after mutation
+- generated mock Jobs remain queued until refresh or panel reopen
+- Job UI does not import map controller code
+- no new backend contract is introduced
+
+Implementation notes:
+
+- `jobStore` exposes `lastChange` metadata so app composition can distinguish status mutations from startup/manual refresh loads.
+- App composition only syncs map presentation for `jobStatusUpdated` changes.
+- Startup `loadJobs()` and manual refresh still use their existing map refresh paths and do not trigger duplicate mutation sync.
+- Map sync after mutation uses the current shared Jobs store snapshot, so the map receives the same Job data as the Jobs panel.
+- If map sync fails after a successful mutation, a non-blocking `Map sync failed` notice is shown.
+- Generated mock Jobs remain intentionally excluded from the visible Jobs store until refresh or panel reopen.
+- AOI renderer refresh after Job status mutation keeps the existing AOI renderer visible while new relation summaries are calculated. This avoids a brief neutral-color flash on AOIs with related Jobs.
+- AOI renderer refresh now uses the shared Jobs store snapshot when available, matching the Jobs panel and mutation-to-map sync behavior.
+- Manual validation confirmed that setting a Job to `Done` removes it from the map without manual refresh.
+- Manual validation confirmed that existing Job filters and AOI overview filters still work after mutation-to-map sync.
+- Manual validation confirmed that generated mock Jobs remain queued and only become visible after refresh or panel reopen.
+- Manual validation confirmed that AOI renderer flash after Job status mutation was removed by keeping the existing renderer visible until replacement summaries are ready.
+
+## Phase 16 - Docs/status cleanup
+
+Goal:
+
+Clean tracker, architecture and backend-contract status drift after the completed map/list foundation phases before selecting the next feature phase.
+
+Tasks:
+
+| ID      | Task                                     | Status | Notes                                                                                         |
+| ------- | ---------------------------------------- | -----: | --------------------------------------------------------------------------------------------- |
+| JM-1601 | Align tracker phase statuses             |   Done | Early foundation phases and documented map/list flows now reflect implemented status.         |
+| JM-1602 | Clean current known limitations          |   Done | Limitations now focus on remaining AOI/backend/polygon-clustering/silent-refresh constraints. |
+| JM-1603 | Clean backend-contract duplication       |   Done | Duplicate generated Job backend implication text was consolidated.                            |
+| JM-1604 | Fix stale wording and encoding artifacts |   Done | Open questions and backend notes use plain ASCII quotes/apostrophes to avoid mojibake.        |
+| JM-1605 | Keep next feature choice explicit        |   Done | Next phase remains open and should be selected from a clean baseline.                         |
+
+Exit criteria:
+
+- tracker statuses match the current implemented state
+- known limitations describe remaining constraints instead of completed work
+- backend-contract notes do not duplicate generated Job behavior
+- architecture notes remain aligned with implemented app composition and map ownership
+- no code behavior changes are introduced
+
+## Phase 17 - AOI overview polish
+
+Goal:
+
+Make the existing AOI overview filtering easier to understand and safer to operate without introducing AOI details, AOI clustering or a final AOI/backend relation contract.
+
+Tasks:
+
+| ID      | Task                                              | Status | Notes                                                                                                                                        |
+| ------- | ------------------------------------------------- | -----: | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| JM-1701 | Clarify AOI overview controls                     |   Done | Filters popover now exposes AOI overview as compact button controls with a dedicated clear action.                                           |
+| JM-1702 | Separate Job and AOI filter summaries             |   Done | Combined filter summary prefixes Job filters and AOI overview state so active filters are easier to read.                                    |
+| JM-1703 | Add AOI overview no-match map feedback            |   Done | Map status warns when active AOI overview filters produce no matching AOIs.                                                                  |
+| JM-1704 | Add AOI relation-id fallback map feedback         |   Done | Map status warns when relation AOI ids cannot safely filter the current AOI FeatureLayer and all AOIs are shown.                             |
+| JM-1705 | Keep deferred AOI work explicit                   |   Done | Phase 17 does not add AOI details, canonical queried AOI state, AOI clustering or final backend relation assumptions.                        |
+| JM-1706 | Keep filter actions accessible in small viewports |   Done | Filters popover uses a fixed header, stable summary and scrollable filter body so actions remain reachable.                                  |
+| JM-1707 | Compact filter popover controls                   |   Done | Filter popover controls now use compact button groups for AOI overview, quick filters, Job status, Job priority and Job point cluster style. |
+| JM-1708 | Stabilize filter summary and add section hints    |   Done | Filter summary remains visible with `No filters active`, and compact section headers expose hover hints without adding visible text.         |
+| JM-1709 | Polish filter popover actions and focus behavior  |   Done | `Clear filters` moved to the header and pointer-activated filter buttons no longer keep persistent focus highlight.                          |
+
+Exit criteria:
+
+- AOI overview controls are understandable without opening docs
+- active AOI overview state is visibly separate from Job filters
+- `Clear AOI overview` resets only AOI overview filtering
+- global `Clear filters` still clears both Job filters and AOI overview filtering
+- no-match AOI overview states are communicated on the map
+- incompatible relation-id fallback is communicated on the map
+- AOI details remain deferred
+- AOI clustering remains deferred
+- no final backend/AOI relation contract is introduced
+
+Implementation notes:
+
+- `createNavbarController` still owns Filters popover composition and does not own AOI filter rules.
+- AOI overview mode state remains owned by `features/map/state/aoiMapFilterStore.js`.
+- AOI overview filtering still uses `features/map/filters/applyAoiLayerFilters.js`.
+- Map controller restores the normal AOI readiness status after AOI overview filters are cleared or successfully applied.
+- The map warning for incompatible AOI relation ids is informational and preserves the non-destructive fallback to all AOIs.
+- The map warning for no matching AOIs is shown only when the active filter safely produced an empty AOI set.
+- Filters popover layout keeps the header and current filter summary outside the scrollable filter body.
+- `Clear filters` lives in the filter popover header next to the close action and remains reachable without using the scroll body.
+- `Clear AOI overview` remains inside the AOI overview section and only resets AOI overview filtering.
+- Filter popover sections use compact toggle button groups instead of checkbox rows where the choices are short and known.
+- Quick filters, Job status and Job priority remain multi-select filters even though they are rendered as button groups.
+- AOI overview duplicate status/hint text was removed because the active state is already shown in the popover summary.
+- Filter summary space is always rendered so the popover layout does not jump when filters are toggled.
+- Section descriptions are available through hover hints on section headers instead of visible helper text blocks.
+- Pointer-activated filter buttons blur after click to avoid persistent focus highlight.
+- Keyboard focus remains available through `:focus-visible`.
+- The Phase 17 changes are UI/map-status polish only and do not change Job filter, AOI overview filter or clustering state ownership.
+
+## Phase 18 - Backend adapter preparation
+
+Goal:
+
+Prepare the Job service layer for a future backend adapter without introducing a final backend contract, endpoint configuration or authentication assumptions.
+
+Tasks:
+
+| ID      | Task                                  | Status | Notes                                                                                                      |
+| ------- | ------------------------------------- | -----: | ---------------------------------------------------------------------------------------------------------- |
+| JM-1801 | Define Job service adapter source ids |   Done | Job service adapter sources are centralized as `mock` and `http`.                                          |
+| JM-1802 | Move mock backend behind adapter      |   Done | `jobService.js` now depends on a Job service adapter instead of importing mock backend functions directly. |
+| JM-1803 | Preserve existing Job service API     |   Done | Existing `loadJobs()` and `updateJobStatus(jobId, status)` exports remain available for current callers.   |
+| JM-1804 | Add future HTTP adapter seam          |   Done | An unavailable HTTP adapter placeholder exists but is not wired to runtime config or endpoints.            |
+| JM-1805 | Avoid premature backend contract      |   Done | No backend URL, auth config, endpoint path or response contract beyond the existing draft is introduced.   |
+
+Exit criteria:
+
+- current app behavior remains mock-backed by default
+- UI and Jobs store continue using the same Job service methods
+- mock backend is explicitly one adapter implementation
+- future backend adapter work has a clear file seam
+- no private endpoints, credentials or auth assumptions are introduced
+- no final backend response contract is implied
+
+Implementation notes:
+
+- `features/jobs/services/jobService.js` owns API result wrapping and the service-facing methods consumed by stores/UI.
+- `features/jobs/services/mockJobServiceAdapter.js` owns the current mock adapter implementation.
+- `features/jobs/services/unavailableHttpJobServiceAdapter.js` is a deliberate placeholder for future backend work and should not be wired into runtime until a real backend exists.
+- `features/jobs/services/jobServiceAdapter.js` chooses adapter implementations by source id.
+- The default adapter remains `mock`.
+- The HTTP adapter placeholder returns normalized service errors through the existing `toApiResult` path if used accidentally.
+- Phase 18 does not introduce `VITE_JOB_API_BASE_URL`, endpoint paths, auth behavior or backend response normalization rules.
+
+## Phase 19 - AOI service readiness review
+
+Goal:
+
+Review the current AOI service, configuration and map readiness boundary after backend adapter preparation without introducing AOI details, AOI clustering, canonical queried AOI state or final AOI/backend contract assumptions.
+
+Tasks:
+
+| ID      | Task                                         | Status | Notes                                                                                                                     |
+| ------- | -------------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------------------- |
+| JM-1901 | Review AOI FeatureLayer ownership            |   Done | AOI FeatureLayer should continue to own map AOI display until real service fields, auth, geometry and size are confirmed. |
+| JM-1902 | Review AOI service responsibility            |   Done | AOI service should continue to own readiness validation and normalization helpers, not canonical AOI state yet.           |
+| JM-1903 | Review provisional AOI field assumptions     |   Done | `GlobalID` and `PRODUCTNAME` remain provisional test-service assumptions only.                                            |
+| JM-1904 | Avoid premature AOI backend/config expansion |   Done | No new AOI env vars, auth config, endpoint assumptions or backend relation assumptions are introduced.                    |
+| JM-1905 | Keep deferred AOI work explicit              |   Done | AOI details, AOI clustering and selected-Job AOI filtering remain blocked by real AOI/backend inputs.                     |
+
+Exit criteria:
+
+- AOI FeatureLayer ownership is still explicitly accepted
+- AOI service readiness/validation boundary is still explicitly accepted
+- canonical queried AOI state remains deferred
+- current test-service field mapping remains provisional
+- no new AOI backend contract is introduced
+- blocked AOI/backend inputs remain visible in tracker
+
+Implementation notes:
+
+- Phase 19 is a readiness review only.
+- No code behavior changes are needed from the current uploaded context.
+- `features/aoi/services/aoiService.js` remains a readiness/validation service while `features/map/layers/createAoiLayer.js` owns the ArcGIS FeatureLayer construction.
+- `loadAois()` remains a stable service facade skeleton and should not become a full AOI query path before a concrete UI/backend need appears.
+- `validateAoiFeatureLayer()` remains the current startup readiness boundary for configured AOI FeatureLayers.
+- AOI popup, hover, highlight, renderer enrichment and AOI overview filtering continue to use the FeatureLayer path.
+- AOI relation ids still depend on provisional `GlobalID` compatibility for destructive AOI layer filtering.
+- The next AOI implementation step is blocked until final AOI Feature Service fields, auth requirements, geometry characteristics, spatial reference, service size and backend relation ownership are confirmed.
+
+## Phase 20 - Test and resilience hardening
+
+Goal:
+
+Harden regression coverage around service boundaries, store mutation metadata and AOI/map filter resilience without adding new UI, backend contracts, AOI details or clustering behavior.
+
+Tasks:
+
+| ID      | Task                                      | Status | Notes                                                                                                          |
+| ------- | ----------------------------------------- | -----: | -------------------------------------------------------------------------------------------------------------- |
+| JM-2001 | Test Job service adapter boundary         |   Done | `createJobService()` is covered with injected adapters and unavailable HTTP adapter behavior.                  |
+| JM-2002 | Test Job service adapter source selection |   Done | Mock default, HTTP seam and unsupported source behavior are covered.                                           |
+| JM-2003 | Test Job store mutation metadata          |   Done | Load, successful status update and failed status update paths are covered, including queued `createdJobs`.     |
+| JM-2004 | Test AOI readiness validation edge cases  |   Done | Missing layer, load failure, ready layer, missing required fields and feature count warning paths are covered. |
+| JM-2005 | Test AOI overview filter resilience       |   Done | AOI layer fallback, compatible no-match and incompatible relation-id behavior are covered.                     |
+
+Exit criteria:
+
+- service adapter seams are covered by tests
+- unavailable HTTP adapter behavior is covered without adding backend config
+- Job store mutation metadata is covered
+- generated/created Jobs remain queued in visible state tests
+- AOI readiness validation edge cases are covered
+- AOI overview fallback and no-match behavior are covered
+- runtime app behavior is unchanged
+
+Implementation notes:
+
+- Phase 20 adds tests only.
+- No production source files are changed.
+- Tests use injected services/adapters where possible to avoid coupling to mock internals.
+- The HTTP adapter remains unavailable and unconfigured.
+- AOI readiness tests use lightweight FeatureLayer stubs instead of ArcGIS runtime objects.
+- AOI overview filter tests exercise definition-expression behavior through simple layer/relation stubs.
+
+## Phase 21 - Startup/map coordination test hardening
+
+Goal:
+
+Harden startup coordination coverage without adding new UI, backend contracts, AOI details, AOI clustering or ArcGIS-heavy integration tests.
+
+Tasks:
+
+| ID      | Task                               | Status | Notes                                                                                                        |
+| ------- | ---------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------ |
+| JM-2101 | Extract startup stage coordination |   Done | Startup stage orchestration now lives in `app/startup/createStartupController.js`.                           |
+| JM-2102 | Preserve app composition ownership |   Done | `createApp.js` still owns app shell composition, feature wiring and startup shell blocking/unblocking.       |
+| JM-2103 | Test startup stage order           |   Done | Tests cover map workspace, Jobs load and Job map rendering order.                                            |
+| JM-2104 | Test startup retry stage reuse     |   Done | Tests cover retry after Jobs load failure and Job map rendering failure without restarting completed stages. |
+| JM-2105 | Test invalid Jobs startup result   |   Done | Invalid Jobs load data fails startup before Job map rendering.                                               |
+| JM-2106 | Avoid ArcGIS-heavy startup tests   |   Done | Startup tests use injected map/job/loader stubs instead of ArcGIS runtime objects.                           |
+
+Exit criteria:
+
+- startup coordination is testable outside `createApp.js`
+- retry after Jobs load failure reuses the ready map workspace
+- retry after Job map rendering failure reuses loaded map and Jobs
+- invalid Jobs load results fail before Job map rendering
+- startup shell blocking remains owned by app composition
+- no UI, backend, AOI or ArcGIS runtime behavior is intentionally changed
+
+Implementation notes:
+
+- `createStartupController` owns startup stage orchestration and stage-local loader updates.
+- `createApp.js` owns shell blocking/unblocking through callbacks passed to the startup controller.
+- The startup controller keeps startup state across retry attempts so completed stages are not repeated unnecessarily.
+- Tests use injected `mapController`, `jobStore`, `startupLoader`, `runWithRetry` and `waitForNextPaint` dependencies.
+- The refactor keeps the existing required startup sequence: map/AOI readiness, Jobs load, Job map rendering.
+- Phase 21 does not add endpoint assumptions, auth behavior, AOI details, AOI clustering or new map presentation behavior.
+
+## Phase 22 - Map refresh and selection coordination hardening
+
+Goal:
+
+Harden map refresh and selection restore coordination coverage without adding new UI, backend contracts, AOI details, AOI clustering or ArcGIS-heavy integration tests.
+
+Tasks:
+
+| ID      | Task                                    | Status | Notes                                                                                                             |
+| ------- | --------------------------------------- | -----: | ----------------------------------------------------------------------------------------------------------------- |
+| JM-2201 | Extract map sync coordination           |   Done | Manual refresh and mutation-to-map sync coordination now lives in `app/coordination/createMapSyncCoordinator.js`. |
+| JM-2202 | Preserve app composition ownership      |   Done | `createApp.js` still owns app composition, feature event wiring and panel/map state transitions.                  |
+| JM-2203 | Test selected AOI restore after refresh |   Done | Tests cover selected AOI map scope and highlight restore after Jobs refresh.                                      |
+| JM-2204 | Test selected Job restore after refresh |   Done | Tests cover selected Job map focus and related AOI highlight restore from refreshed Jobs snapshots.               |
+| JM-2205 | Test mutation-to-map sync gating        |   Done | Tests cover startup-time mutation sequence handling and post-startup mutation sync behavior.                      |
+| JM-2206 | Test stale refresh guard                |   Done | Tests cover that stale map refresh results cannot restore old selection state.                                    |
+| JM-2207 | Test map refresh failure handling       |   Done | Tests cover user-facing notice behavior and skipped selection restore after map refresh failure.                  |
+| JM-2208 | Avoid ArcGIS-heavy coordination tests   |   Done | Tests use injected map/store/notice stubs instead of ArcGIS runtime objects.                                      |
+
+Exit criteria:
+
+- map refresh coordination is testable outside `createApp.js`
+- manual Jobs refresh still refreshes map Job layers
+- selected AOI scope/highlight is restored after refresh
+- selected Job focus/highlight is restored after refresh
+- mutation-to-map sync remains gated by startup completion and change sequence
+- stale refresh results cannot overwrite newer map selection state
+- refresh failure shows a user-facing notice and does not restore stale selection state
+- no UI, backend, AOI or ArcGIS runtime behavior is intentionally changed
+
+Implementation notes:
+
+- `createMapSyncCoordinator` owns map refresh and restore orchestration.
+- `createApp.js` still owns user events, selected AOI/Job transitions, Jobs panel visibility and feature wiring.
+- The coordinator uses injected `mapController`, selected AOI/Job stores and notice function so tests can avoid ArcGIS runtime objects.
+- The coordinator keeps the existing restore precedence: selected AOI scope first, then selected Job context.
+- The coordinator keeps the existing behavior where a startup-time mutation sequence is recorded even when map sync is skipped before startup completion.
+- Phase 22 does not add endpoint assumptions, auth behavior, AOI details, AOI clustering or new map presentation behavior.
+
+## Phase 23 - Hardened baseline review and next feature selection
+
+Goal:
+
+Review the hardened baseline after service, startup and map refresh coordination test hardening, clean documentation drift and identify the next safe feature direction without adding backend, AOI contract or ArcGIS-heavy assumptions.
+
+Tasks:
+
+| ID      | Task                                    | Status | Notes                                                                                                          |
+| ------- | --------------------------------------- | -----: | -------------------------------------------------------------------------------------------------------------- |
+| JM-2301 | Review tracker status after Phase 20-22 |   Done | Current status and next-task rows are aligned with the committed test-hardening phases.                        |
+| JM-2302 | Review architecture status drift        |   Done | Duplicate map refresh coordination text is removed and Job service adapter status is aligned as `Done`.        |
+| JM-2303 | Confirm backend/AOI blockers            |   Done | Job HTTP adapter contract and final AOI inputs remain blocked by real backend/AOI decisions.                   |
+| JM-2304 | Select next safe work direction         |   Done | Next recommended work is small UI/UX polish that does not depend on backend or final AOI Feature Service data. |
+| JM-2305 | Keep Phase 23 docs-only                 |   Done | No runtime behavior, backend contract or feature implementation is introduced.                                 |
+
+Exit criteria:
+
+- tracker status reflects the hardened baseline
+- Phase 20, Phase 21 and Phase 22 remain documented as completed
+- architecture duplication introduced during Phase 22 docs update is removed
+- backend and final AOI blockers remain explicit
+- next feature direction is selected without requiring unavailable backend/AOI inputs
+- no runtime code behavior changes are introduced
+
+Implementation notes:
+
+- Phase 23 is a docs/status cleanup and next-feature selection pass.
+- The current internal technical risk is lower after targeted tests for service boundaries, startup coordination and map refresh/selection restore coordination.
+- Backend adapter implementation remains blocked until real endpoint shape, authentication behavior and guaranteed Job fields are known.
+- AOI details, canonical queried AOI state, selected-Job permanent AOI filtering and AOI clustering remain blocked until final AOI Feature Service inputs are known.
+- The next recommended implementation direction is UI/UX polish around existing map/list behavior, because it can be validated without locking backend or AOI contracts.
+
+## Phase 24 - Cluster picker popup state polish
+
+Goal:
+
+Polish the existing Job cluster picker edge case where stale cluster popup content could remain visible after Job filter, AOI-scope, cluster setting or Job data changes.
+
+Tasks:
+
+| ID      | Task                                  | Status | Notes                                                                                                  |
+| ------- | ------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------ |
+| JM-2401 | Extract aggregate popup detection     |   Done | Aggregate popup detection now lives in `features/map/core/mapPopupState.js`.                           |
+| JM-2402 | Harden cluster popup close behavior   |   Done | Cluster popups are closed through robust popup selected-feature and feature-collection detection.      |
+| JM-2403 | Preserve normal Job popup behavior    |   Done | Normal Job popups are not closed by the aggregate popup helper.                                        |
+| JM-2404 | Add targeted popup-state tests        |   Done | Tests cover aggregate detection through `isAggregate`, `cluster_count`, popup template and view model. |
+| JM-2405 | Fix cluster picker subtitle separator |   Done | The subtitle separator no longer contains mojibake.                                                    |
+
+Exit criteria:
+
+- open cluster picker popups are closed when visible Job layer membership changes
+- normal Job popups are not closed by aggregate popup cleanup
+- cluster popup detection is covered without ArcGIS-heavy tests
+- no backend, AOI contract, AOI details or new feature scope is introduced
+
+Implementation notes:
+
+- `mapController.js` still owns when popup cleanup happens.
+- `mapPopupState.js` only owns pure popup aggregate detection and close fallback behavior.
+- Detection checks popup selected feature, popup view model selected feature and popup feature collections.
+- The implementation avoids relying only on `selectedFeature.isAggregate`, because ArcGIS popup state can expose aggregate graphics through different popup/view model properties.
+
+## Phase 25 - Job popup and Jobs panel interaction polish
+
+Goal:
+
+Polish the interaction between normal Job popups and the Jobs panel without changing backend contracts, AOI contracts, clustering behavior or the core map/list workflow.
+
+Tasks:
+
+| ID      | Task                                      | Status | Notes                                                                                                        |
+| ------- | ----------------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------ |
+| JM-2501 | Add Job popup state detection             |   Done | Job popup detection now lives in `features/map/core/mapPopupState.js` beside aggregate popup detection.      |
+| JM-2502 | Preserve popup while Job details is used  |   Done | Normal Job popup can remain open while the selected Job details panel is active.                             |
+| JM-2503 | Close popup when selected context is left |   Done | Job popup closes when Back to Jobs, Clear map focus or Jobs panel close leaves the selected-Job context.     |
+| JM-2504 | Keep cluster popup cleanup unchanged      |   Done | Existing aggregate/cluster popup cleanup remains intact.                                                     |
+| JM-2505 | Add targeted popup-state tests            |   Done | Tests cover Job popup detection, specific Job id matching and close behavior without ArcGIS runtime objects. |
+| JM-2506 | Remove Jobs panel bottom gap              |   Done | Jobs overlay CSS now fills the workspace height without reserving bottom space.                              |
+
+Exit criteria:
+
+- normal Job popup can stay open while Job details panel is used
+- leaving selected-Job context closes stale Job popup state
+- aggregate/cluster popup cleanup still works
+- Jobs panel fills the available map workspace height in list and details mode
+- tests cover popup-state helper behavior without ArcGIS-heavy tests
+- no backend, AOI contract, clustering mode or new feature scope is introduced
+
+Implementation notes:
+
+- `mapController.js` exposes a focused `closeJobPopup` method for app-level selected-Job lifecycle wiring.
+- `createApp.js` decides when selected-Job panel context is left.
+- `mapPopupState.js` keeps popup detection pure and testable.
+- Job popup detection checks popup selected feature, popup view model selected feature and popup feature collections.
+- The Jobs overlay uses top/bottom insets and border-box sizing so panel padding does not create a bottom gap.
+- Manual validation confirmed that the Jobs panel can be used while a normal Job popup is open, selected-context cleanup works, cluster modes still work and the panel bottom gap is removed.
+
+## Phase 26 - Filters popover small viewport polish
+
+Goal:
+
+Polish the existing Filters popover layout, scroll behavior and close/focus behavior for laptop/desktop browser use without changing filter state ownership, AOI overview rules, Job clustering behavior or backend/AOI contracts.
+
+Tasks:
+
+| ID      | Task                                        | Status | Notes                                                                                                       |
+| ------- | ------------------------------------------- | -----: | ----------------------------------------------------------------------------------------------------------- |
+| JM-2601 | Harden Filters popover viewport sizing      |   Done | Popover sizing uses dynamic viewport height with a fallback and tighter viewport margins.                   |
+| JM-2602 | Improve small-width filter control wrapping |   Done | Button grids collapse earlier, with a one-column fallback on very narrow viewports.                         |
+| JM-2603 | Improve low-height scroll behavior          |   Done | Low-height viewport behavior was manually validated and behaves as expected.                                |
+| JM-2604 | Add keyboard close behavior                 |   Done | Escape closes the Filters popover.                                                                          |
+| JM-2605 | Preserve laptop/desktop scope               |   Done | Very narrow/mobile layout is not a primary target because the app is expected to be used on laptop/desktop. |
+
+Exit criteria:
+
+- Filters popover remains usable on laptop/desktop viewports
+- filter header and active-filter summary remain visible while the body scrolls on low-height viewports
+- Escape closes the popover
+- Job filters, AOI overview filters and Job point clustering settings still behave as before
+- very narrow/mobile behavior is documented as accepted non-primary scope
+- no backend, AOI contract or new filter-domain behavior is introduced
+
+Implementation notes:
+
+- The Filters popover continues to use `calcite-popover`.
+- `createNavbarController.js` owns popover close/focus behavior and forwards state changes to feature stores.
+- `filterPopover.css` owns viewport sizing, scroll containment and filter control wrapping.
+- The header and active-filter summary remain outside the scroll body.
+- Manual validation confirmed that filters work, low-height behavior works and Escape closes the popover.
+- Manual validation confirmed that very narrow browser widths are constrained by the practical popover minimum width; this is acceptable for the current laptop/desktop target.
+
+## Phase 27 - Map/list state transition polish
+
+Goal:
+
+Polish existing state transitions between AOI popup scope, Jobs panel, filters, Job details and map focus without changing backend contracts, AOI contracts, filter ownership or relation ownership.
+
+Tasks:
+
+| ID      | Task                                             | Status | Notes                                                                                                        |
+| ------- | ------------------------------------------------ | -----: | ------------------------------------------------------------------------------------------------------------ |
+| JM-2701 | Cancel stale map refresh restores on transitions |   Done | User-driven map/list transitions now invalidate pending async refresh restore work.                          |
+| JM-2702 | Preserve current AOI/Job transition behavior     |   Done | Existing AOI scoped Jobs, Job details, Focus map, Clear map focus, Back and panel close flows are preserved. |
+| JM-2703 | Add targeted stale-restore regression tests      |   Done | Tests cover cancellation before selected AOI restore and before selected AOI highlight restore.              |
+| JM-2704 | Validate map/list transition behavior            |   Done | Manual validation found no issues in the tested AOI scope, filter, Job details and map focus flows.          |
+
+Exit criteria:
+
+- AOI popup to scoped Jobs still opens the Jobs panel and scopes map Jobs
+- clearing AOI scope cannot be undone by a stale refresh restore
+- Job details and map focus transitions still work
+- Back, Clear map focus and panel close still clear selected map context
+- pending refresh/mutation sync cannot reapply stale AOI/Job scope or highlights after user context changes
+- no backend, AOI contract, filter-domain or relation-source behavior is introduced
+
+Implementation notes:
+
+- App composition calls `mapSyncCoordinator.cancelPendingRefreshes()` before user-driven context transitions that replace AOI scope, selected Job context, map focus or panel state.
+- The map sync coordinator remains responsible for async refresh/restore orchestration.
+- The app composition remains responsible for deciding when the user has changed context.
+- Pending refresh work is invalidated before it can reapply selected AOI scope, selected Job scope or related highlights.
+- Targeted tests cover cancellation before selected AOI scope restore and before selected AOI highlight restore.
+- Manual validation found no issues in the tested map/list state transition flows.
+- Phase 27 does not change filter rules, relation lookup, backend assumptions or AOI service assumptions.
+
+## Phase 28 - Baseline review and backend/AOI readiness gate
+
+Goal:
+
+Review the stable Phase 27 baseline, close the current open-ended UI-polish track, and make the next work gate explicit: either confirmed backend/AOI inputs or a concrete reproducible manual issue.
+
+Tasks:
+
+| ID      | Task                                   | Status | Notes                                                                                                       |
+| ------- | -------------------------------------- | -----: | ----------------------------------------------------------------------------------------------------------- |
+| JM-2801 | Review current frontend baseline       |   Done | Current map/list, popup, panel, filter, startup and refresh polish is documented through Phase 27.          |
+| JM-2802 | Confirm backend/AOI readiness blockers |   Done | Real Job endpoint/auth/fields and final AOI service fields/auth/geometry/relation ownership remain open.    |
+| JM-2803 | Decide next work gate                  |   Done | Further UI polish should wait for a concrete reproducible manual finding; backend/AOI work waits on inputs. |
+| JM-2804 | Keep Phase 28 docs-only                |   Done | No runtime behavior, Calcite usage, backend contract or feature implementation is introduced.               |
+
+Exit criteria:
+
+- current frontend baseline is documented as stable after Phase 27
+- no new UI-polish target is selected without a reproducible issue
+- backend/AOI-dependent work remains explicitly blocked by missing external inputs
+- tracker next-task status reflects the readiness gate
+- no runtime behavior, backend contract, AOI contract or Calcite usage is changed
+
+Implementation notes:
+
+- Phase 28 is a docs/status review only.
+- Current laptop/desktop UI polish is considered sufficient unless manual testing finds a concrete issue.
+- Backend implementation remains blocked until real Job endpoint shape, authentication behavior, guaranteed Job fields and mutation semantics are known.
+- Final AOI work remains blocked until real AOI Feature Service fields, auth requirements, geometry characteristics, spatial reference, service size and relation identifier ownership are confirmed.
+- Additional frontend work should be selected from one of two inputs: confirmed backend/AOI information or a reproducible problem from manual testing.
+
+## Phase 29 - Backend/AOI input checklist
+
+Goal:
+
+Convert the Phase 28 readiness gate into a concrete checklist that can be used when backend and final AOI inputs become available, without introducing runtime behavior, endpoint assumptions, auth assumptions or final AOI contract assumptions.
+
+Tasks:
+
+| ID      | Task                                       | Status | Notes                                                                                                              |
+| ------- | ------------------------------------------ | -----: | ------------------------------------------------------------------------------------------------------------------ |
+| JM-2901 | Define Job backend input checklist         |   Done | Required Job API, auth, model, geometry, mutation and error-shape inputs are documented.                           |
+| JM-2902 | Define AOI Feature Service input checklist |   Done | Required AOI service URL, auth, field, geometry, query, scale and relation-id compatibility inputs are documented. |
+| JM-2903 | Define unblock criteria                    |   Done | Minimum inputs for Job HTTP adapter work, AOI details work and AOI clustering decisions are listed explicitly.     |
+| JM-2904 | Keep Phase 29 docs-only                    |   Done | No runtime behavior, endpoint path, auth behavior, Calcite usage or final backend/AOI contract is introduced.      |
+
+Exit criteria:
+
+- backend/AOI input needs are concrete enough to send to backend/AOI stakeholders
+- future Job HTTP adapter work has clear minimum input requirements
+- future AOI details, AOI clustering and relation-id work have clear minimum input requirements
+- open backend/AOI blockers remain visible
+- no runtime behavior or final backend/AOI contract is introduced
+
+Implementation notes:
+
+- Phase 29 is a docs/status preparation pass only.
+- The checklist is intentionally written as required inputs, not as final answers.
+- The future Job HTTP adapter remains blocked until real endpoint shape, authentication behavior, guaranteed Job fields, geometry format, mutation semantics and error shapes are confirmed.
+- AOI details, canonical queried AOI state and AOI clustering remain blocked until final AOI Feature Service fields, auth behavior, geometry type, spatial reference, service size and relation-id ownership are confirmed.
+- If manual testing finds a concrete reproducible frontend issue before backend/AOI inputs arrive, that issue can still become the next focused implementation phase.
+
+## 13. Original Jobs/AOI implementation order (historical)
+
+Recommended order:
+
+1. Finish tracker and docs skeleton.
+2. Build app shell and shared foundations.
+3. Implement notices early.
+4. Implement mock Jobs service.
+5. Implement Job list and status mutations.
+6. Add ArcGIS MapView foundation.
+7. Continue AOI service and normalization.
+8. Implement AOI/Job relation service.
+9. Connect AOI Feature Service loading to AOI state.
+10. Implement AOI popup and related Jobs flow.
+11. Implement filters and quick filters.
+12. Implement clustering/overview after AOI geometry is understood.
+13. Harden refresh, errors and UX.
+14. Prepare backend contracts.
+
+Reasoning:
+
+The Job service and list came before map complexity because they validate domain behavior, mutation flow, notices and mock backend behavior without being blocked by ArcGIS geometry details.
+
+The initial MapView foundation is now in place before full AOI loading so future AOI layer, popup, selection and filtering work can be added inside `features/map` and `features/aoi` without putting ArcGIS lifecycle details in `src/app`.
+
+Clustering should not be implemented too early because the correct approach depends on real AOI geometry.
+
+## 14. Open questions
+
+| ID     | Question                                                          |      Status | Notes                                                                                                                                 |
+| ------ | ----------------------------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------------------------- |
+| OQ-001 | What is the actual AOI geometry type?                             |        Open | Test service exposes geometry, but final geometry type and density must still be verified against the real service.                   |
+| OQ-002 | Are AOIs small/uniform enough for direct polygon clustering?      |        Open | Important for AOI clustering strategy. Job point clustering is already implemented separately.                                        |
+| OQ-003 | Which AOI fields are stable and user-friendly?                    | In progress | Test service uses `GlobalID` as provisional id and `PRODUCTNAME` as provisional display name. Final service fields are not confirmed. |
+| OQ-004 | Will AOI Feature Service require authentication?                  |        Open | Must avoid committing secrets. Current test integration does not settle final auth requirements.                                      |
+| OQ-005 | Will backend return AOI/Job relations directly?                   |        Open | Frontend should remain flexible.                                                                                                      |
+| OQ-006 | Will backend calculate spatial intersections?                     |        Open | Preferred for authoritative relation logic.                                                                                           |
+| OQ-007 | What counts as "due soon"?                                        |        Open | Suggested default: deadline within 7 days.                                                                                            |
+| OQ-008 | Should `Done` Jobs remain visible by default?                     |    Resolved | Done Jobs are hidden by default. The explicit `Done` status filter reveals them.                                                      |
+| OQ-009 | Should cyclic mock Job creation be deterministic in dev?          |        Open | A seed option may make testing easier.                                                                                                |
+| OQ-010 | Should the app use Product Manager's server/SSPI setup initially? |        Open | Only if needed for auth or deployment.                                                                                                |
+| OQ-011 | Should users be able to edit Job deadlines in the frontend?       |        Open | Display deadline now, but defer editing until workflow/backend ownership is confirmed.                                                |
+
+## 15. Risks and mitigations
+
+## 15.1 Risk: folder structure becomes unclear
+
+Mitigation:
+
+- keep feature ownership explicit
+- update this document when folders are added
+- avoid generic dumping grounds
+- add feature README files for non-trivial flows
+
+## 15.2 Risk: mock backend leaks into UI
+
+Mitigation:
+
+- enforce service facade
+- forbid UI imports from `features/jobs/mock`
+- keep mock-only behavior documented
+
+## 15.3 Risk: clustering misrepresents AOIs
+
+Mitigation:
+
+- inspect real geometry first
+- consider representative-point clustering
+- preserve polygon layer for detail
+- disable clusters at detailed zoom levels
+- document cluster decision
+
+## 15.4 Risk: future backend contract forces UI refactor
+
+Mitigation:
+
+- normalize data before UI
+- keep relation mapping in services/domain
+- use stable frontend models
+- document backend assumptions
+
+## 15.5 Risk: app becomes too complex
+
+Mitigation:
+
+- keep Jobs simple
+- avoid heavy workflow
+- prioritize map/list/filter/status basics
+- require explicit decision before adding large new features
+
+## 16. Validation checklist
+
+Use relevant steps depending on the change.
+
+Common commands:
+
+```powershell
+npm install
+npm run format:check
+npm run lint
+npm run test
+npm run build
+```
+
+Preferred full local readiness command:
+
+```powershell
+npm run rdy
+```
+
+`npm run rdy` formats, lints, tests, builds and starts the dev server.
+
+Use `npm run check` when the dev server should not be started.
+
+Manual validation flows:
+
+- app loads without console errors
+- Jobs panel starts closed on app load
+- Jobs panel opens from navbar
+- Job list shows loading, data, empty and error states
+- Job status can be changed
+- failed Job update shows notice
+- completing a Job can trigger mock cyclic Job creation
+- AOIs load from configured source
+- AOI popup shows related Job summary
+- opening related Jobs from AOI scopes both Jobs panel and map Job layers
+- selecting a Job opens the Jobs panel and highlights related AOIs
+- quick filters affect Job list and Job map layers consistently
+- Job point clustering works in Count, Priority pie and Priority groups modes
+- Job cluster picker opens normal Job popup for selected Job
+- hover highlight clears when the pointer leaves the map
+- dark/light mode remains readable when theme work is introduced
+- no secrets are present in committed files
+
+## 17. Definition of done for implementation tasks
+
+A task is only `Done` when:
+
+- code is implemented
+- relevant UI state is handled
+- relevant error state is handled
+- user-facing text is English
+- no secrets are introduced
+- build passes
+- manual validation steps are described or completed
+- tracker is updated if the task changes requirements, architecture or status
+
+## 18. Future documentation split
+
+This document is the primary source of truth for now.
+
+Split into separate documents only when useful:
+
+```txt
+docs/PROJECT_TRACKER.md
+  Goals, requirements, decisions, roadmap, task status.
+
+docs/BACKEND_CONTRACTS.md
+  Backend assumptions, endpoint drafts, data contracts, unresolved backend questions.
+
+docs/ARCHITECTURE.md
+  Folder structure, data flow, map/layer architecture, important implementation patterns.
+```
+
+Do not duplicate content across documents. Link or summarize instead.
+
+## 19. Previous Jobs/AOI next-step history
+
+Retain these IDs and their historical status for traceability. Use section 20 when choosing new work:
+
+| ID          | Task                                                     |      Status | Notes                                                                                                                              |
+| ----------- | -------------------------------------------------------- | ----------: | ---------------------------------------------------------------------------------------------------------------------------------- |
+| JM-NEXT-001 | Add `docs/BACKEND_CONTRACTS.md` skeleton                 |        Done | Initial backend assumptions and open questions documented.                                                                         |
+| JM-NEXT-002 | Add `docs/ARCHITECTURE.md` skeleton                      |        Done | Initial architecture boundaries and data flow documented.                                                                          |
+| JM-NEXT-003 | Implement app shell layout                               |        Done | Product Manager-style navbar, map-first workspace, Jobs panel and notices are implemented.                                         |
+| JM-NEXT-004 | Implement notice service foundation                      |        Done | Notice service and UI container are implemented.                                                                                   |
+| JM-NEXT-005 | Implement mock Jobs service                              |        Done | Mock Jobs service supports loading, failures, status mutation and cyclic mock Job creation.                                        |
+| JM-NEXT-006 | Connect AOI Feature Service loading                      | In progress | AOI FeatureLayer is wired from runtime config. Dedicated AOI service querying remains deferred.                                    |
+| JM-NEXT-007 | Add AOI/Job relation service                             |        Done | Mock `relatedAoiIds` are exposed through relation helpers and snapshots.                                                           |
+| JM-NEXT-008 | Add AOI renderer and popup foundation                    |        Done | AOI renderer and popup related Job summary are implemented.                                                                        |
+| JM-NEXT-009 | Extract navbar/filter/clustering UI from `createApp.js`  |        Done | App-shell navbar UI now lives in `src/app/ui/createNavbarController.js`.                                                           |
+| JM-NEXT-010 | Extract Jobs overlay and map workspace DOM helpers       |        Done | Jobs overlay and map workspace DOM helpers now live under `src/app/ui`.                                                            |
+| JM-NEXT-011 | Clean up tracker/docs status drift                       |        Done | Phase 8/9 and latest map/list interaction statuses have been aligned with implementation.                                          |
+| JM-NEXT-012 | Add manual refresh flow                                  |        Done | Jobs panel refresh now refreshes map Job layers, derived AOI renderer state and active scope/highlight state best-effort.          |
+| JM-NEXT-013 | Add theme foundation / dark mode                         |        Done | Theme foundation, persisted preference and navbar toggle are implemented.                                                          |
+| JM-NEXT-014 | Review final AOI Feature Service field/auth requirements |     Blocked | Requires confirmation of real AOI Feature Service fields, auth requirements, geometry type, spatial reference and data volume.     |
+| JM-NEXT-015 | Phase 10 wrap-up and backend preparation review          |        Done | Refresh, retry, loading and popup consistency are wrapped. Remaining mutation-to-map sync is deferred unless needed.               |
+| JM-NEXT-016 | Start backend/AOI-service preparation                    |        Done | Phase 11 readiness review completed. Next implementation should focus on docs alignment and confirmed external AOI/backend inputs. |
+| JM-NEXT-017 | Clean Phase 11 docs drift                                |        Done | Mock backend behavior is documented and stale docs placement/status drift has been cleaned.                                        |
+| JM-NEXT-018 | Await final AOI/backend inputs                           |     Blocked | Requires real AOI Feature Service fields, auth requirements, geometry characteristics and backend contract direction.              |
+| JM-NEXT-019 | Start Phase 12 Job details workflow polish               |        Done | Dedicated Job details mode is implemented and polished.                                                                            |
+| JM-NEXT-020 | Start Phase 13 selected Job map focus                    |        Done | Job details now provides explicit map focus controls that scope Job layers to the selected Job and highlight related AOIs.         |
+| JM-NEXT-021 | Review selected Job AOI filtering after real AOI inputs  |     Blocked | Requires confirmed AOI Feature Service identifiers, geometry characteristics and UX decision on hiding vs highlighting AOIs.       |
+| JM-NEXT-022 | Wire Phase 14 AOI map filters into UI and map            |        Done | Filters popover now exposes AOI overview modes and applies them to the AOI FeatureLayer.                                           |
+| JM-NEXT-023 | Validate Phase 14 AOI filter UX                          |        Done | AOI overview filters work with current service/mock data and no regression was observed in existing map/list flows.                |
+| JM-NEXT-024 | Implement mutation-to-map sync                           |        Done | Successful Job status mutations now refresh map Job layers, AOI renderer summaries and active map context.                         |
+| JM-NEXT-025 | Clean final docs/status drift after Phase 15             |        Done | Tracker, architecture and backend-contract status drift has been cleaned after mutation-to-map sync.                               |
+| JM-NEXT-026 | Polish AOI overview filters from clean baseline          |        Done | AOI overview controls and map feedback have been clarified without adding AOI details or AOI clustering.                           |
+| JM-NEXT-027 | Choose next feature phase after AOI overview polish      |        Done | Backend adapter preparation was selected as the next recommended feature direction.                                                |
+| JM-NEXT-028 | Start backend adapter preparation                        |        Done | Job service now has an explicit adapter boundary with mock as the default adapter and an unavailable HTTP seam for future work.    |
+| JM-NEXT-029 | Define future Job HTTP adapter contract                  |     Blocked | Blocked until real backend endpoint shape, auth behavior and guaranteed Job fields are known.                                      |
+| JM-NEXT-031 | Continue test hardening for startup/map coordination     |        Done | Startup coordination was extracted and covered with targeted stage-order and retry-reuse tests.                                    |
+| JM-NEXT-032 | Review map refresh and selection coordination tests      |        Done | Map refresh and selected AOI/Job restore coordination was extracted and covered with targeted tests.                               |
+| JM-NEXT-033 | Choose next feature phase from hardened baseline         |        Done | Backend/AOI-dependent work remains blocked; next safe direction is UI/UX polish against existing map/list behavior.                |
+| JM-NEXT-034 | Start small UI polish from hardened baseline             |        Done | Cluster picker popup state cleanup was hardened without adding backend, AOI details or new contract assumptions.                   |
+| JM-NEXT-035 | Continue small UI polish from hardened baseline          |        Done | Job popup and Jobs panel selected-context cleanup was polished without adding backend, AOI details or new contract assumptions.    |
+| JM-NEXT-036 | Choose next polish target from manual testing            |        Done | Phase 25 validation found a Jobs panel bottom gap, which was fixed as a small CSS-only follow-up.                                  |
+| JM-NEXT-037 | Choose next polish target from current UI baseline       |        Done | Filters popover small viewport and close/focus behavior was selected as the next polish target.                                    |
+| JM-NEXT-038 | Choose next polish target after Phase 26 validation      |        Done | Map/list state transition polish was selected after Phase 26 validation.                                                           |
+| JM-NEXT-039 | Choose next polish target after Phase 27 validation      |        Done | Phase 28 baseline review selected pause/readiness gate instead of another open-ended UI-polish task.                               |
+| JM-NEXT-040 | Prepare backend/AOI input checklist                      |        Done | Phase 29 converted the readiness gate into a concrete checklist for Job backend, AOI service and relation-ownership inputs.        |
+| JM-NEXT-041 | Await backend/AOI inputs or concrete manual issue        |     Blocked | Continue only when real backend/AOI inputs are available or manual testing finds a concrete reproducible frontend issue.           |
+
+
+## 20. DataCatalogue delivery plan
+
+This section takes precedence over the original Jobs/AOI-only implementation order. Runtime requirements for the new page are accepted but not implemented by the rename.
+
+| ID              | Task                                                               | Status      | Acceptance or dependency                                                                                                                |
+| --------------- | ------------------------------------------------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| DC-REN-001      | Rename the frontend directory, branding and internal namespace     | In progress | Candidate prepared; complete local format/lint/build and browser validation before acceptance. No API changes.                          |
+| DC-SCOPE-001    | Record accepted Feature/Workspace scope                            | Done        | `FEATURE_WORKSPACE_SCOPE.md` records the agreed scope, boundaries and temporary decisions.                                              |
+| DC-DOC-001      | Align docs and ChatGPT project instructions                        | In progress | Repository candidate updated; user application of the replacement ChatGPT instructions is pending.                                      |
+| DC-UI-001       | Implement the four-panel assignment page and navbar entry          | Not started | Begin only after DC-REN-001 acceptance; preserve the existing Jobs/AOI workflow.                                                        |
+| DC-MOCK-001     | Implement paged Feature/Workspace mocks and assignment history     | Not started | NM/KP, optional append-only saved comments, retained history, explicit Save, local persistence, reset, latency and controlled failures. |
+| DC-MAP-001      | Integrate live DK1-DK5 context directly in the browser for testing | Not started | Verify configured layers 4-8, metadata, CORS and runtime auth; support multiple layers per Workspace. No synthetic fallback.            |
+| DC-API-001      | Replace mock sources with Package/Workspace API adapters           | Deferred    | Confirm routes, response shapes, pagination and ownership of assignments/comments first.                                                |
+| DC-AUTH-001     | Use backend-mediated ArcGIS access and AD authorization            | Deferred    | Requires the colleague's backend contract; no application login page or embedded service credentials.                                   |
+| DC-CONFLICT-001 | Handle concurrent assignment edits                                 | Deferred    | Requires API concurrency/error semantics; first prototype assumes one user at a time.                                                   |
+| DC-ENC-001      | Track completion independently for each affected ENC               | Deferred    | Keep chart completion separate from Workspace assignment status.                                                                        |
+| DC-WORK-001     | Connect work areas and locking to the future main-map workflow     | Deferred    | Work areas span Workspaces; do not reuse a Workspace or ENC as the work-area identity.                                                  |
+| DC-PIXEL-001    | Add pixel-data assessment                                          | Deferred    | Initial prototype contains only geographic NM/KP Features.                                                                              |
+| DC-AUTO-001     | Add automated ingestion or Workspace assignment                    | Deferred    | First assessment workflow is manual.                                                                                                    |
+
+Next order: accept rename and docs; implement the page with isolated mocks and live test-map access; validate the user workflow; integrate verified APIs later. The API owner remains responsible for backend implementation.
+
+### Rename acceptance and compatibility
+
+The app display name is DataCatalogue, the npm package name is `data-catalogue`, DOM/class/event/layer prefixes use `data-catalogue`, and CSS variables use `--dc-*`. Domain names such as Jobs and AOIs are unchanged.
+
+The only retained legacy runtime key is the read-only fallback for the pre-rename theme preference. A valid new key wins, an old valid value is migrated best-effort, and writes target only the new key. The old value remains intact for rollback. Historical `JM-*` task IDs and ignored pre-rename local artifacts are deliberate documentation/safety exceptions, not active branding.
+
+Candidate validation and the exact apply boundary are recorded in `RENAME_NOTES.md`. Mark DC-REN-001 Done only after the remaining local and browser checks succeed. Mark DC-DOC-001 Done after the updated repository docs and ChatGPT project instructions are accepted/applied. Do not mark the new page, live test map or API integration Done during the rename.
