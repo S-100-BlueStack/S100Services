@@ -8,6 +8,8 @@ using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Models;
 using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Services.Locking;
+using ProductCatalogueAPI.Services.Export;
+using S100FC.ProductCatalogue;
 
 namespace ProductCatalogueAPI.Controllers
 {
@@ -22,7 +24,8 @@ namespace ProductCatalogueAPI.Controllers
         IDatasetLockService datasetLockService,
         ISendToIcEncJobService sendToIcEncJobService,
         IOptionsMonitor<SendToIcEncOptions> sendToIcEncOptions,
-        TimeProvider timeProvider
+        TimeProvider timeProvider,
+        IProductManager productManager
     ) : ControllerBase
     {
         private readonly ILogger<UploadController> _logger = logger;
@@ -32,6 +35,7 @@ namespace ProductCatalogueAPI.Controllers
         private readonly ISendToIcEncJobService _sendToIcEncJobService = sendToIcEncJobService;
         private readonly IOptionsMonitor<SendToIcEncOptions> _sendToIcEncOptions = sendToIcEncOptions;
         private readonly TimeProvider _timeProvider = timeProvider;
+        private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
 
         /// <summary>
         /// Enqueues a truthful IC-ENC send simulation when the capability is enabled.
@@ -162,18 +166,26 @@ namespace ProductCatalogueAPI.Controllers
             string datasetName,
             CancellationToken cancellationToken
         ) {
+            var product = ExportProductResolver.Resolve(_electronicProductManager, datasetName);
+            if (product is null)
+                return NotFound();
+
             await using var datasetLock = await _datasetLockService.TryAcquireAsync(
-                ProductTrackLockKey.For(datasetName, ProductSpecification.S101),
+                ProductTrackLockKey.For(product.DatasetName, product.ProductSpecification),
                 cancellationToken
             );
 
             if (datasetLock == null)
                 return Conflict($"Dataset {datasetName} is already being processed.");
 
-            var track = await _workflowRepository.GetTrackAsync(datasetName, ProductSpecification.S101, cancellationToken);
-
-            if (track == null)
+            var version = await _electronicProductManager.ReadElectronicProductVersionAsync(product.DatasetName, product.ProductSpecification.ToString(), cancellationToken);
+            if (version is null)
                 return NotFound();
+            if (version.Edition is null || version.Update is null)
+                return Conflict($"Product {product.DatasetName} has no public edition or update number.");
+
+            // The catalogue is authoritative; initialize SQL state before placing the hold.
+            var track = await _workflowRepository.GetOrCreateTrackAsync(product.DatasetName, product.ProductSpecification, ExportEngineKind.IsoIec8211, version.Edition.Value, version.Update.Value, cancellationToken);
 
             if (track.IsManuallyFrozen || track.State == ProductState.Frozen)
                 return BadRequest($"Product {datasetName} is already frozen.");
@@ -204,15 +216,19 @@ namespace ProductCatalogueAPI.Controllers
             string datasetName,
             CancellationToken cancellationToken
         ) {
+            var product = ExportProductResolver.Resolve(_electronicProductManager, datasetName);
+            if (product is null)
+                return NotFound();
+
             await using var datasetLock = await _datasetLockService.TryAcquireAsync(
-                ProductTrackLockKey.For(datasetName, ProductSpecification.S101),
+                ProductTrackLockKey.For(product.DatasetName, product.ProductSpecification),
                 cancellationToken
             );
 
             if (datasetLock == null)
                 return Conflict($"Dataset {datasetName} is already being processed.");
 
-            var track = await _workflowRepository.GetTrackAsync(datasetName, ProductSpecification.S101, cancellationToken);
+            var track = await _workflowRepository.GetTrackAsync(product.DatasetName, product.ProductSpecification, cancellationToken);
 
             if (track == null)
                 return NotFound();

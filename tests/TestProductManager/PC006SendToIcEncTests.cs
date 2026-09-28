@@ -14,6 +14,8 @@ using ProductCatalogueAPI.Models;
 using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Services.Locking;
 using System.Reflection;
+using System.Collections;
+using S100FC.ProductCatalogue;
 using System.Text.Json;
 
 namespace TestProductCatalogueAPI
@@ -479,6 +481,47 @@ namespace TestProductCatalogueAPI
 
         [Fact]
         [Trait("Package", "PC-006")]
+        public async Task FreezeCreatesMissingTrackFromCatalogueAndPreservesPublicVersion() {
+            var workflowRepository = new InMemoryProductRepository();
+            var controller = Controller(new RecordingProductRepository(null), new AcquiredLockService(), new RecordingSendJobService(), SendToIcEncMode.Disabled, workflowRepository);
+
+            var result = await controller.FreezeProduct(DatasetName, CancellationToken.None);
+
+            Assert.IsType<OkResult>(result);
+            var track = await workflowRepository.GetTrackAsync(DatasetName, ProductSpecification.S101);
+            Assert.NotNull(track);
+            Assert.Equal(5, track.PublishedEdition);
+            Assert.Equal(0, track.PublishedUpdate);
+            Assert.True(track.IsManuallyFrozen);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task FreezeRejectsUnknownProductWithoutCreatingSqlTrack() {
+            var workflowRepository = new InMemoryProductRepository();
+            var controller = Controller(new RecordingProductRepository(null), new AcquiredLockService(), new RecordingSendJobService(), SendToIcEncMode.Disabled, workflowRepository);
+
+            var result = await controller.FreezeProduct("UNKNOWN", CancellationToken.None);
+
+            Assert.IsType<NotFoundResult>(result);
+            Assert.Null(await workflowRepository.GetTrackAsync("UNKNOWN", ProductSpecification.S101));
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task FreezeUsesS57TrackIdentifiedByCatalogue() {
+            var workflowRepository = new InMemoryProductRepository();
+            var controller = Controller(new RecordingProductRepository(null), new AcquiredLockService(), new RecordingSendJobService(), SendToIcEncMode.Disabled, workflowRepository);
+
+            var result = await controller.FreezeProduct("DK3BIDQE", CancellationToken.None);
+
+            Assert.IsType<OkResult>(result);
+            Assert.True((await workflowRepository.GetTrackAsync("DK3BIDQE", ProductSpecification.S57))!.IsManuallyFrozen);
+            Assert.Null(await workflowRepository.GetTrackAsync("DK3BIDQE", ProductSpecification.S101));
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
         public async Task UnfreezeFlowUsesCanonicalTrackLockAndRevealsUnderlyingState() {
             var repository = new RecordingProductRepository(Product(ProductState.Idle));
             var workflowRepository = new InMemoryProductRepository();
@@ -577,7 +620,8 @@ namespace TestProductCatalogueAPI
                 locks,
                 jobs,
                 new StaticOptionsMonitor<SendToIcEncOptions>(new SendToIcEncOptions { Mode = mode }),
-                TimeProvider.System
+                TimeProvider.System,
+                new FreezeProductManager(new FreezeElectronicProductManager())
             ) {
                 ControllerContext = new ControllerContext {
                     HttpContext = new DefaultHttpContext {
@@ -747,6 +791,44 @@ namespace TestProductCatalogueAPI
             public T CurrentValue => value;
             public T Get(string? name) => value;
             public IDisposable? OnChange(Action<T, string?> listener) => null;
+        }
+
+        private sealed class FreezeProductManager(IElectronicProductManager electronicProductManager) : IProductManager
+        {
+            public INauticalProductManager NauticalProductManager => null!;
+            public IElectronicProductManager ElectronicProductManager { get; } = electronicProductManager;
+        }
+
+        private sealed class FreezeElectronicProductManager : IElectronicProductManager
+        {
+            public string OutputFolder => string.Empty;
+            public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(string datasetName, CancellationToken cancellationToken = default) => Task.FromResult<ElectronicProductVersion?>(new(datasetName, 5, 0));
+            public IEnumerator<string> GetEnumerator() => Array.Empty<string>().AsEnumerable().GetEnumerator();
+            IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+            public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name) => null;
+            public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name, string productSpecification) => null;
+            public S100FC.S128.FeatureTypes.ElectronicProduct? ResolveExportProduct(string name) => name.Equals("UNKNOWN", StringComparison.OrdinalIgnoreCase) ? null : name.Equals("DK3BIDQE", StringComparison.OrdinalIgnoreCase)
+                ? new S100FC.S128.FeatureTypes.ElectronicProduct { datasetName = "DK3BIDQE", productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-57" } }
+                : new S100FC.S128.FeatureTypes.ElectronicProduct { datasetName = "101DK001", productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-101" } };
+            public S100FC.S128.FeatureTypes.ElectronicProduct? ResolveElectronicProduct(string name, string productSpecification) => productSpecification == "S57"
+                ? new S100FC.S128.FeatureTypes.ElectronicProduct { datasetName = "DK3BIDQE", productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-57" } }
+                : null;
+            public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? ProductMapping, int? optimumDisplayScale = null) => throw new NotSupportedException();
+            public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, string boundary, int edition, int update, byte[] zipfile) => throw new NotSupportedException();
+            public Task<S100FC.YAML.Dataset> CreateNewDatasetAsync(string name) => throw new NotSupportedException();
+            public Task<S100FC.YAML.Dataset> CreateNewEditionAsync(string name) => throw new NotSupportedException();
+            public Task<S100FC.YAML.Dataset> CreateNewUpdateAsync(string name) => throw new NotSupportedException();
+            public Task<S100FC.YAML.Dataset> ReissueAsync(string name) => throw new NotSupportedException();
+            public Task<S100FC.YAML.Dataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            public Task<Dictionary<string, string>> GetDatasetAOIs() => throw new NotSupportedException();
+            public Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification) => throw new NotSupportedException();
+            public Task<bool> IsDirtyAsync(string name) => throw new NotSupportedException();
+            public Task<string> GetDatasetBoundary(string name) => throw new NotSupportedException();
+            public Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name) => throw new NotSupportedException();
+            public Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc) => throw new NotSupportedException();
+            public Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition) => throw new NotSupportedException();
+            public Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign) => throw new NotSupportedException();
+            public Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml) => throw new NotSupportedException();
         }
     }
 }
