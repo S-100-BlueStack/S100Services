@@ -119,9 +119,7 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
                         );
                     }
 
-                    if (validationResult.Summary.Errors > 0 ||
-                        validationResult.Summary.Critical > 0 ||
-                        validationResult.Summary.ShallowIsolatedDangersUpdatedBathy) {
+                    if (validationResult.Summary.Critical > 0) {
                         throw ExportValidationException.Findings(
                             targetDatasetName,
                             validationResult.Summary.Errors,
@@ -131,6 +129,9 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
                     }
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                    throw;
+                }
+                catch (ExportValidationException) {
                     throw;
                 }
                 catch (HttpRequestException ex)
@@ -149,28 +150,6 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
                     throw ExportValidationException.Unavailable(targetDatasetName, ex);
                 }
             }
-            //if (productSpecification == ProductSpecification.S101) {
-            //    SevenCsValidationResult validationResult;
-            //    try {
-            //        validationResult = await _sevenCsService.ValidateDatasetAsync(targetDatasetName, edition, update, _electronicProductManager.OutputFolder, cancellationToken);
-            //    }
-
-            //    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
-            //        throw;
-            //    }
-            //    catch(HttpRequestException ex) {
-            //        _logger.LogError(ex, "SevenCs validation service is unavailable. DatasetName: {DatasetName}. Skipping validation step for now", targetDatasetName);
-            //        //throw ExportValidationException.Unavailable(targetDatasetName, ex);
-            //    }
-            //    catch (Exception ex) {
-            //        throw ExportValidationException.Unavailable(targetDatasetName, ex);
-            //    }
-
-            //    foreach (var diagnostic in validationResult.Diagnostics)
-            //        await _workflowRepository.AddArtifactAsync(new ProductArtifactWrite(track.Id, revisionId, ProductArtifactKind.ValidationDiagnostic, diagnostic.FileName, diagnostic.MediaType, diagnostic.Content, _timeProvider.GetUtcNow().UtcDateTime), cancellationToken);
-            //    if (validationResult.Summary.Errors > 0 || validationResult.Summary.Critical > 0 || validationResult.Summary.ShallowIsolatedDangersUpdatedBathy)
-            //        throw ExportValidationException.Findings(targetDatasetName, validationResult.Summary.Errors, validationResult.Summary.Critical, validationResult.Summary.ShallowIsolatedDangersUpdatedBathy);
-            //}
 
             await _workflowRepository.SetStateAsync(track.Id, ProductState.ReadyForDistribution, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken: cancellationToken);
             _logger.LogInformation("Candidate export is ready for distribution. DatasetName: {DatasetName}. SourceDatasetName: {SourceDatasetName}. ProductSpecification: {ProductSpecification}. Edition: {Edition}. Update: {Update}. S128Published: {S128Published}", targetDatasetName, sourceDatasetName, productSpecification, edition, update, false);

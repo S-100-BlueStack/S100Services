@@ -33,17 +33,31 @@ public sealed class ExportOperationServiceTests
     }
 
     [Fact]
-    public async Task ValidationFailureDefaultsTrackToError() {
+    public async Task CriticalValidationFindingsPersistSummaryAndDiagnostics() {
         var repository = new RecordingWorkflowRepository();
         var diagnostic = new SevenCsDiagnosticArtifact("101DK001.vld", "text/plain", "validation details"u8.ToArray());
-        var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse { Errors = 1 }, [diagnostic]);
+        var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse { Errors = 3, Critical = 2 }, [diagnostic]);
 
-        await Assert.ThrowsAsync<ExportValidationException>(() => service.ExecuteExportAsync("101DK001", ExportRevisionType.Update, null));
+        var exception = await Assert.ThrowsAsync<ExportValidationException>(() => service.ExecuteExportAsync("101DK001", ExportRevisionType.Update, null));
 
         Assert.Equal(ProductState.Error, repository.Track.State);
         Assert.Equal("SEVENCS_VALIDATION_FAILED", repository.LastErrorCode);
-        Assert.Contains("SevenCs validation failed", repository.LastErrorMessage);
+        Assert.Contains("3 errors and 2 critical findings", exception.PublicMessage);
+        Assert.Equal(exception.PublicMessage, repository.LastErrorMessage);
         Assert.DoesNotContain(repository.Artifacts, artifact => artifact.Kind == ProductArtifactKind.ValidationReport);
+        Assert.Contains(repository.Artifacts, artifact => artifact.Kind == ProductArtifactKind.ValidationDiagnostic && artifact.FileName == "101DK001.vld");
+    }
+
+    [Fact]
+    public async Task NonCriticalFindingsAllowExportToBeReadyForDistribution() {
+        var repository = new RecordingWorkflowRepository();
+        var diagnostic = new SevenCsDiagnosticArtifact("101DK001.vld", "text/plain", "validation details"u8.ToArray());
+        var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse { Errors = 3, ShallowIsolatedDangersUpdatedBathy = true }, [diagnostic]);
+
+        await service.ExecuteExportAsync("101DK001", ExportRevisionType.Update, null);
+
+        Assert.Equal(ProductState.ReadyForDistribution, repository.Track.State);
+        Assert.Null(repository.LastErrorMessage);
         Assert.Contains(repository.Artifacts, artifact => artifact.Kind == ProductArtifactKind.ValidationDiagnostic && artifact.FileName == "101DK001.vld");
     }
 
