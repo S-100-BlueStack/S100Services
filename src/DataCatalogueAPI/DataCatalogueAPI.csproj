@@ -20,6 +20,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Controllers\ProductsController.cs" />
+    <Compile Remove="InMemoryProductRepository.cs" />
+    <Compile Remove="IProductRepository.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- API versioning for controller-based APIs. -->
     <PackageReference Include="Asp.Versioning.Mvc" Version="10.0.0" />
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="10.0.0" />

@@ -33,7 +33,10 @@ public static class ApplicationServicesConfiguration
 
         services.AddHealthChecks();
 
-        services.AddSingleton<IProductRepository, InMemoryProductRepository>();
+        //services.AddSingleton<IDataRepository, InMemoryProductRepository>();
+        //services.AddSingleton<IWorkspaceRepository, InMemoryProductRepository>();
+
+        //services.AddSingleton<IProductRepository, InMemoryProductRepository>();
 
         return services;
     }
