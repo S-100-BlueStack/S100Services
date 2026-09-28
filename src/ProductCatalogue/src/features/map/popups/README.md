@@ -1,6 +1,7 @@
 # Popup actions
 
-Current backend baseline: `345b79eef2a9225473d57db80243e731739cbc3a`.
+Package foundation baseline: `355c0596cea30df059ee729835f3fc3565ff1ea0`.
+See the [package foundation](../../../../docs/enc-package-frontend-foundation.md) for current scope.
 See the [normalized contract review](../../../../docs/normalized-workflow-frontend-adaptation.md).
 
 Popup actions are implemented as a custom DOM action bar instead of Esri `view.popup.actions`.
@@ -54,6 +55,7 @@ The popup and action layers consume a resolved Product context equivalent to:
   productType,
   layerId,
   capabilities,
+  workUnit, // Main-map package metadata; absent for simple/workspace contexts.
   exportConfiguration,
   graphic,
 }
@@ -64,11 +66,18 @@ data-source map adapter. Attribute-only or stale source metadata fails closed. U
 a source from layer title, popup DOM, or dataset-name patterns.
 
 The isolated legacy `compatibility-aoi` layer adapter is not a production source or fallback.
-Production S57/S101 now use independent registry-owned AOI contracts.
+Main map uses one ENC-package representation through the existing S101 AOI contract.
+The S57 AOI contract remains available for deferred workspace compatibility.
 
 ## Current action status
 
-Electronic registry Products expose capability-gated actions:
+The Main-map ENC-package popup retains Product Collection but exposes no Analyze or History
+navigation; its empty Tools group is omitted. Work-unit navigation capabilities restrict the resolved
+Main-map context without changing direct product-based workspace resolution. Package-aware
+Analyze/Review/History navigation is deferred. Mutation capabilities and manual Export configuration
+remain disabled until a package-safe backend contract exists.
+
+Simple electronic/compatibility Products expose capability-gated actions:
 
 - `Freeze` / `Unfreeze`;
 - `Send to IC-ENC`;
@@ -201,13 +210,33 @@ remains authoritative across users and computers.
 from backend jobs. The normalized backend remains authoritative for job identity, specification resolution, locking,
 version checks and execution guards.
 
-## Source-local Product metadata
+## Work-unit Product metadata
 
-Electronic popup metadata renders one column for the selected Product source. Matching export-track
-metadata may enrich that column with candidate edition/update, state, error and validation files, but
-related tracks for another Product Specification are not rendered as additional columns. For example,
-an S-57 Product never exposes an S-101 comparison column merely because the backend uses an S-101
-relationship during export mapping.
+Main-map package contexts expose a declarative `workUnit` with a primary member key and ordered
+members (`key`, `label`, `exportStandard`). `popupProductMetadata.js` projects one column per member;
+`createPopup.js` remains an arbitrary-column table renderer. For ENC-package the order is S-101,
+then S-57. Related normalized `exportMetadata` supplies current candidate values when present.
+Only the primary member may fall back to selected Graphic/main attributes. Missing S-57 metadata
+stays empty; no version, status, error, membership identity or package workflow state is inferred.
+Simple/workspace contexts retain their existing single-column projection.
+
+Package column presentation decorates only the Status value cell with the existing status palette.
+The existing status text remains visible, unknown statuses stay uncolored, and theme text colors
+remain inherited. There are no permanent Current/Candidate comparison columns.
+
+`popupErrorDetails.js` owns one application DOM overlay per popup session. An Error button exposes
+full plain text on hover/focus; click or native keyboard activation pins and focuses the overlay.
+The overlay is outside the table layout, viewport-clamped and scrollable; text remains selectable.
+Escape or Close restores trigger focus, while outside pointer dismissal does not steal focus.
+Metadata-only signatures preserve controls/selected text during unrelated action/job updates.
+Changed metadata closes stale details and restores a matching focused member control; disconnect
+cleanup removes the overlay and its global listeners. No private Calcite/ArcGIS DOM is accessed.
+
+Package capabilities hide Freeze/Unfreeze, Send, Cancel Export and manual Edition/Update Export.
+No package action calls the single-product backend. Read refresh and Collection retain the
+existing source-aware behavior. Package-originated Analyze/Review/History navigation is disabled
+until the later package-aware workspace/history phase. Pause/Resume, Discard, Send/Accept, scheduling, multi-level status
+filters, mixed-status hatching and the package backend read/action contracts are deferred.
 
 ## Export state
 

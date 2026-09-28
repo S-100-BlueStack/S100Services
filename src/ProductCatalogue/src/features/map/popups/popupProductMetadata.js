@@ -1,6 +1,24 @@
 import { findProductExportMetadataItem } from "../../products/domain/productExportTrack.js";
 
-export function createPopupProductMetadataColumns(attributes) {
+export function createPopupProductMetadataColumns(attributes, productContext) {
+  const workUnit = productContext?.workUnit;
+  if (workUnit?.kind === "package") {
+    return workUnit.members.map((member) => {
+      const main = createMainProductMetadataItem(
+        member.key === workUnit.primaryMemberKey ? attributes : null
+      );
+      const related = findProductExportMetadataItem(attributes?.exportMetadata, [
+        member.exportStandard,
+      ]);
+      return {
+        key: member.key,
+        label: member.label,
+        presentation: { statusCell: true, compactError: true },
+        item: related ? mergeSelectedExport(main, related) : main,
+      };
+    });
+  }
+
   const selectedExport = findSelectedExport(attributes);
   const main = createMainProductMetadataItem(attributes);
   const item = selectedExport ? mergeSelectedExport(main, selectedExport) : main;

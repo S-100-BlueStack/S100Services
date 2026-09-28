@@ -161,6 +161,10 @@ function normalizeCollectionProduct(product) {
     productKey,
     datasetName,
     productType,
+    navigationCapabilities: Object.freeze({
+      analyze: product.capabilities?.analyze === true,
+      review: product.capabilities?.review === true,
+    }),
   };
 }
 
@@ -180,6 +184,7 @@ function createLegacyCompatibilityProduct(datasetName) {
     productKey: normalizedDatasetName,
     datasetName: normalizedDatasetName,
     productType: "compatibility-product",
+    navigationCapabilities: Object.freeze({ analyze: true, review: true }),
   };
 }
 

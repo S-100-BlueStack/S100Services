@@ -11,7 +11,7 @@ import {
   isWorkspaceAvailableDataSource,
 } from "./dataSourceRegistry.js";
 
-test("registry defines independent target sources without a permanent combined source", () => {
+test("registry preserves technical source IDs for package and workspace compatibility", () => {
   const registry = createDataSourceRegistry({ isDevelopment: true });
   assert.deepEqual(
     registry.definitions.map((source) => source.id),
@@ -26,7 +26,7 @@ test("S-57 and S-101 have authoritative specification-filtered AOIs for workspac
   for (const sourceId of [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101]) {
     const source = registry.byId.get(sourceId);
     assert.equal(source.availability.state, DATA_SOURCE_AVAILABILITY.AVAILABLE);
-    assert.equal(source.userSelectable, true);
+    assert.equal(source.userSelectable, sourceId === DATA_SOURCE_IDS.S101);
     assert.equal(
       source.loader.path,
       `electronicproducts/aoi?productSpecification=${sourceId.toUpperCase()}`
@@ -40,10 +40,9 @@ test("explicit synthetic fixture mode exposes Paper Charts and S-102 for tests",
   const registry = createDataSourceRegistry({ isDevelopment: true });
   assert.deepEqual(
     getRuntimeSelectableDataSources(registry).map((source) => source.id),
-    [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101, DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]
+    [DATA_SOURCE_IDS.S101, DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]
   );
   assert.deepEqual(getDefaultEnabledSourceIds(registry), [
-    DATA_SOURCE_IDS.S57,
     DATA_SOURCE_IDS.S101,
     DATA_SOURCE_IDS.PAPER_CHARTS,
     DATA_SOURCE_IDS.S102,
@@ -68,13 +67,13 @@ test("explicit synthetic fixture mode exposes Paper Charts and S-102 for tests",
   });
 });
 
-test("runtime-default registry exposes only authoritative S-57 and S-101 sources", () => {
+test("runtime-default registry exposes one representative ENC-package source", () => {
   const registry = createDataSourceRegistry();
   assert.deepEqual(
     getRuntimeSelectableDataSources(registry).map((source) => source.id),
-    ["s57", "s101"]
+    ["s101"]
   );
-  assert.deepEqual(getDefaultEnabledSourceIds(registry), ["s57", "s101"]);
+  assert.deepEqual(getDefaultEnabledSourceIds(registry), ["s101"]);
   assert.equal(
     isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.PAPER_CHARTS)),
     false
@@ -90,7 +89,7 @@ test("synthetic fixture sources require explicit registry construction", () => {
 
   assert.deepEqual(
     getRuntimeSelectableDataSources(registry).map((source) => source.id),
-    [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101, DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]
+    [DATA_SOURCE_IDS.S101, DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]
   );
   assert.equal(
     isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.PAPER_CHARTS)),

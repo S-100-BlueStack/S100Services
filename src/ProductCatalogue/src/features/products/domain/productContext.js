@@ -478,7 +478,13 @@ function createRegisteredSourceProductContext({
     datasetName,
     productType: registryProductType,
     layerId,
-    capabilities: sourceDefinition.capabilities,
+    workUnit: sourceDefinition.workUnit ?? null,
+    // Main-map work units may restrict navigation without changing direct product
+    // workspace contexts, which are still resolved through the source contract.
+    capabilities: {
+      ...sourceDefinition.capabilities,
+      ...sourceDefinition.workUnit?.navigationCapabilities,
+    },
     exportConfiguration: sourceDefinition.exportConfiguration ?? null,
     contentConfiguration: sourceDefinition.contentConfiguration ?? null,
     graphic,
@@ -493,6 +499,7 @@ function createResolvedProductContext({
   datasetName,
   productType,
   layerId,
+  workUnit = null,
   capabilities,
   exportConfiguration,
   contentConfiguration,
@@ -515,6 +522,7 @@ function createResolvedProductContext({
     datasetName,
     productType,
     layerId,
+    workUnit: workUnit ? deepFreeze({ ...workUnit }) : null,
     capabilities: Object.freeze({ ...capabilities }),
     exportConfiguration,
     contentConfiguration: contentConfiguration ? deepFreeze({ ...contentConfiguration }) : null,

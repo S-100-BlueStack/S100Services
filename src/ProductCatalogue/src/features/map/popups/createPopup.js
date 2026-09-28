@@ -1,5 +1,7 @@
+import { createPopupErrorDetails } from "./popupErrorDetails.js";
+import { applyPopupProductStatusCell } from "./popupProductStatusCell.js";
 import { fetchProductPropertiesByDatasetName } from "../../data/api/productApi.js";
-import { getStatusName } from "../../data/stores/statusStore.js";
+import { getStatusName, getStatusIdByName } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { resolveProductContext } from "../../products/domain/productContext.js";
 import { attributesSupportLayerCapability } from "../config/layerDefinitions.js";
@@ -47,6 +49,7 @@ export function createPopup() {
       let currentAttributes = {
         ...(graphic.attributes ?? {}),
       };
+      const errorDetails = createPopupErrorDetails();
       let latestRefreshId = 0;
       let disposed = false;
       const productContext = resolveProductContext({
@@ -68,6 +71,7 @@ export function createPopup() {
           graphic,
           productContext,
           refreshAndRender,
+          errorDetails,
         });
       }
 
@@ -132,6 +136,7 @@ export function createPopup() {
         container,
         combineCleanups(
           () => {
+            errorDetails.destroy();
             disposed = true;
             latestRefreshId += 1;
           },
@@ -178,7 +183,11 @@ export function createPopup() {
   };
 }
 
-function renderPopupContent(container, attributes, { graphic, productContext, refreshAndRender }) {
+function renderPopupContent(
+  container,
+  attributes,
+  { graphic, productContext, refreshAndRender, errorDetails }
+) {
   const section = getOrCreatePopupSection(container);
   const actionBar = getDirectChildByClass(container, "popup-action-bar");
 
@@ -205,14 +214,24 @@ function renderPopupContent(container, attributes, { graphic, productContext, re
     }
   }
 
+  // Job/action updates must not replace focused error controls or selected error text
+  // when the metadata itself has not changed.
+  const columns = createPopupProductMetadataColumns(attributes, productContext);
+  const signature = JSON.stringify({
+    columns,
+    statuses: columns.map((column) => formatProductStatus(column.item.status)),
+  });
+  if (shouldRenderProductContent(attributes) && section.metadataSignature === signature) return;
+  const focusedErrorKey = errorDetails.beforeRender();
   section.replaceChildren();
-
+  section.metadataSignature = null;
   if (shouldRenderProductContent(attributes)) {
-    renderProductRows(section, attributes);
-    return;
+    renderProductRows(section, columns, errorDetails);
+    section.metadataSignature = signature;
+  } else {
+    renderGenericRows(section, attributes);
   }
-
-  renderGenericRows(section, attributes);
+  errorDetails.afterRender(focusedErrorKey, section);
 }
 
 function getOrCreatePopupSection(container) {
@@ -224,6 +243,7 @@ function getOrCreatePopupSection(container) {
 
   const section = document.createElement("div");
   section.className = "popup-section";
+  section.tabIndex = -1;
   container.appendChild(section);
 
   return section;
@@ -235,8 +255,8 @@ function getDirectChildByClass(container, className) {
   });
 }
 
-function renderProductRows(section, attributes) {
-  const table = createProductMetadataTable(attributes);
+function renderProductRows(section, columns, errorDetails) {
+  const table = createProductMetadataTable(columns, errorDetails);
 
   if (table) {
     section.appendChild(table);
@@ -422,13 +442,12 @@ function readDatasetName(attributes) {
   return readAttribute(attributes, ["datasetName", "DatasetName", "datasetname"]);
 }
 
-function createProductMetadataTable(attributes) {
-  const columns = createPopupProductMetadataColumns(attributes);
+function createProductMetadataTable(columns, errorDetails) {
   if (columns.length === 0) {
     return null;
   }
 
-  const rows = createProductMetadataRows(columns);
+  const rows = createProductMetadataRows(columns, errorDetails);
   if (rows.length === 0) {
     return null;
   }
@@ -445,7 +464,7 @@ function createProductMetadataTable(attributes) {
   return container;
 }
 
-function createProductMetadataRows(columns) {
+function createProductMetadataRows(columns, errorDetails) {
   const rows = [
     {
       label: "Edition",
@@ -457,10 +476,21 @@ function createProductMetadataRows(columns) {
     },
     {
       label: "Status",
+      decorateCell: (cell, column) => {
+        if (column.presentation?.statusCell) {
+          applyPopupProductStatusCell(cell, column.item?.status, {
+            resolveStatusId: getStatusIdByName,
+          });
+        }
+      },
       getValue: (item) => formatProductStatus(item?.status),
     },
     {
       label: "Error message",
+      getContent: (item, column) =>
+        column.presentation?.compactError
+          ? errorDetails.createTrigger(item?.errorMessage, column)
+          : null,
       getValue: (item) => formatProductTableValue(item?.errorMessage),
       shouldShow: () => columns.some((column) => hasDisplayableValue(column.item?.errorMessage)),
     },
@@ -501,7 +531,7 @@ function createProductTableBody(columns, rows) {
   return body;
 }
 
-function createProductTableRow({ label, getValue, getContent }, columns) {
+function createProductTableRow({ label, getValue, getContent, decorateCell }, columns) {
   const row = document.createElement("tr");
   const labelCell = document.createElement("th");
   labelCell.scope = "row";
@@ -511,12 +541,13 @@ function createProductTableRow({ label, getValue, getContent }, columns) {
 
   for (const column of columns) {
     const cell = document.createElement("td");
-    const content = getContent?.(column.item);
+    const content = getContent?.(column.item, column);
     if (content instanceof Node) {
       cell.appendChild(content);
     } else {
       cell.textContent = getValue?.(column.item) ?? "";
     }
+    decorateCell?.(cell, column);
     row.appendChild(cell);
   }
 

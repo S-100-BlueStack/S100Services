@@ -101,15 +101,25 @@ export function createDataSourceRegistry({
       specification: "S57",
       freezeSupported: false,
       enabledInSchema1: false,
+      mainMapSelectable: false,
     }),
     createElectronicSource({
       id: DATA_SOURCE_IDS.S101,
-      label: "S-101",
+      label: "ENC-package",
       productType: "s101-product",
       configuredIds,
       specification: "S101",
       freezeSupported: true,
       enabledInSchema1: true,
+      workUnit: {
+        kind: "package",
+        primaryMemberKey: "s101",
+        navigationCapabilities: { analyze: false, review: false, history: false },
+        members: [
+          { key: "s101", label: "S-101", exportStandard: "S100" },
+          { key: "s57", label: "S-57", exportStandard: "S57" },
+        ],
+      },
     }),
     createMockSource({
       id: DATA_SOURCE_IDS.PAPER_CHARTS,
@@ -180,6 +190,8 @@ function createElectronicSource({
   specification,
   freezeSupported,
   enabledInSchema1,
+  mainMapSelectable = true,
+  workUnit = null,
 }) {
   const enabledByConfiguration = isConfigured(id, configuredIds);
   return {
@@ -188,15 +200,16 @@ function createElectronicSource({
     productType,
     enabledByConfiguration,
     availability: { state: DATA_SOURCE_AVAILABILITY.AVAILABLE, reason: null },
-    userSelectable: true,
-    defaultEnabled: true,
+    userSelectable: mainMapSelectable,
+    defaultEnabled: mainMapSelectable,
+    workUnit,
     loader: {
       type: "http-json",
       path: `electronicproducts/aoi?productSpecification=${specification}`,
       errorMessage: `${label} AOI request failed`,
     },
     normalizer: { type: "electronic-aoi", specification },
-    persistence: { enabledInSchema1, persistSelection: true },
+    persistence: { enabledInSchema1, persistSelection: mainMapSelectable },
     identityStrategy: {
       type: "stable-product-key",
       fields: ["datasetName"],
@@ -224,15 +237,18 @@ function createElectronicSource({
     ],
     capabilities: {
       ...WORKSPACE_VISUALIZATION_CAPABILITIES,
-      freeze: freezeSupported,
-      unfreeze: freezeSupported,
-      sendToIcEnc: true,
-      cancelExport: true,
-      exportEdition: true,
-      exportUpdate: true,
+      freeze: !workUnit && freezeSupported,
+      unfreeze: !workUnit && freezeSupported,
+      sendToIcEnc: !workUnit,
+      cancelExport: !workUnit,
+      exportEdition: !workUnit,
+      exportUpdate: !workUnit,
+      popupExport: !workUnit,
       backendProductRefresh: true,
     },
-    exportConfiguration: createElectronicExportConfiguration(specification, label),
+    exportConfiguration: workUnit
+      ? { visible: false, leaves: [] }
+      : createElectronicExportConfiguration(specification, label),
     contentConfiguration: {
       history: {
         visible: true,

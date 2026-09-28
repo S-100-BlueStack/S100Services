@@ -51,7 +51,7 @@ test("S-101 presentation stays separate from the normalized product-resolved exp
     popup,
     /import \{ createPopupProductMetadataColumns \} from "\.\/popupProductMetadata\.js";/
   );
-  assert.match(popup, /createPopupProductMetadataColumns\(attributes\)/);
+  assert.match(popup, /createPopupProductMetadataColumns\(attributes, productContext\)/);
   assert.match(
     popupMetadata,
     /label: attributes\?\.sourceLabel \?\? selectedExport\?\.label \?\? "Product"/

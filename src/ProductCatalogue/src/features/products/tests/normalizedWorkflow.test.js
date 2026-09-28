@@ -79,19 +79,19 @@ for (const id of ["s57", "s101"]) {
     assert.equal(result.layers[0].data.features[0].attributes.status, 8);
     assert.equal(result.products[0].edition, undefined);
   });
-  test(`${id} exposes Edition and Update with a matching generic dispatch contract`, () => {
+  test(`${id} gates manual exports through its source capabilities`, () => {
     const productContext = context(id);
     const actions = createPopupExportActions(productContext);
     assert.deepEqual(
       actions.map((action) => action.operationKind),
-      ["Edition", "Update"]
+      id === "s101" ? [] : ["Edition", "Update"]
     );
     for (const action of actions) {
       assert.equal(isSupportedExportAction(action), true);
       assert.equal(action.backendTarget, id.toUpperCase());
       assert.equal(isSupportedExportAction({ ...action, backendTarget: "S102" }), false);
     }
-    assert.equal(productContext.capabilities.freeze, id === "s101");
+    assert.equal(productContext.capabilities.freeze, false);
   });
 }
 
@@ -357,7 +357,7 @@ test("source migration drops retired configured-out mock selection intent", asyn
     },
   };
   writeDataSourceSelection({ registry, storage, enabledSourceIds: ["s57", "s101"] });
-  assert.deepEqual(JSON.parse(value).enabledSourceIds, ["s57", "s101"]);
+  assert.deepEqual(JSON.parse(value).enabledSourceIds, ["s101"]);
   assert.equal(JSON.parse(value).schemaVersion, 2);
 });
 

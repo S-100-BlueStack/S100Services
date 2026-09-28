@@ -1,3 +1,4 @@
+import { getCollectionNavigationAvailability } from "../domain/productCollectionNavigation.js";
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
 import { launchWorkspaceUrl } from "../../../app/routing/workspaceNavigation.js";
 import { noticeError } from "../../notices/services/noticeService.js";
@@ -44,7 +45,7 @@ function renderProductCollectionTray(tray, snapshot) {
   tray.hidden = false;
   tray.appendChild(createHeader(snapshot));
   tray.appendChild(createProductList(snapshot.items));
-  tray.appendChild(createActions(snapshot.datasetNames));
+  tray.appendChild(createActions(snapshot.items));
 }
 
 function createHeader(snapshot) {
@@ -113,44 +114,58 @@ function createProductItem(item) {
   return row;
 }
 
-function createActions(datasetNames) {
+function createActions(items) {
   const footer = document.createElement("div");
   footer.className = "pc-product-collection-tray__footer";
 
-  footer.append(
-    createActionButton({
-      label: "Review",
-      title: "Open Product Review in a new tab with the current collection",
-      onClick: () => {
-        openCollectionUrl(
-          buildReviewUrl(datasetNames),
-          "review",
-          "Product Review page was blocked"
-        );
-      },
-    }),
-    createActionButton({
-      label: "Analyze",
-      title: "Open Analyze in a new tab with the current collection",
-      onClick: () => {
-        openCollectionUrl(buildAnalyzeUrl(datasetNames), "analyze", "Analyze page was blocked");
-      },
-    })
-  );
+  for (const [destination, label, title] of [
+    ["review", "Review", "Open Product Review in a new tab with the current collection"],
+    ["analyze", "Analyze", "Open Analyze in a new tab with the current collection"],
+  ]) {
+    const availability = getCollectionNavigationAvailability(items, destination);
+    footer.appendChild(
+      createActionButton({
+        label,
+        title: availability.reason ?? title,
+        disabled: !availability.allowed,
+        onClick: () => openProductCollection(destination),
+      })
+    );
+  }
 
   return footer;
 }
 
-function createActionButton({ label, title, onClick }) {
+function createActionButton({ label, title, disabled, onClick }) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "pc-product-collection-tray__action";
   button.textContent = label;
   button.title = title;
+  button.disabled = disabled;
   button.setAttribute("aria-label", title);
   button.addEventListener("click", onClick);
 
   return button;
+}
+
+export function openProductCollection(
+  destination,
+  { getSnapshot = getProductCollectionSnapshot, ...navigationOptions } = {}
+) {
+  // Re-read at dispatch time: a previously rendered enabled action must not
+  // launch a stale subset after an unsupported work unit enters the collection.
+  const snapshot = getSnapshot();
+  if (!getCollectionNavigationAvailability(snapshot.items, destination).allowed) return false;
+  const datasetNames = snapshot.items.map((item) => item.datasetName);
+  const url =
+    destination === "review" ? buildReviewUrl(datasetNames) : buildAnalyzeUrl(datasetNames);
+  return openCollectionUrl(
+    url,
+    destination,
+    destination === "review" ? "Product Review page was blocked" : "Analyze page was blocked",
+    navigationOptions
+  );
 }
 
 export function openCollectionUrl(

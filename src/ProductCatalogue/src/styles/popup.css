@@ -201,3 +201,60 @@
 .popup-product-table__attribute {
   width: 92px;
 }
+
+.popup-product-table td.popup-product-table__status {
+  color: var(--pc-popup-text);
+  background: var(--pc-product-status-background);
+}
+
+.popup-product-error {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.popup-product-error:focus-visible,
+.popup-error-details__close:focus-visible {
+  outline: 2px solid var(--calcite-color-focus, #0079c1);
+  outline-offset: 2px;
+}
+
+.popup-error-details {
+  position: fixed;
+  z-index: 10000;
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 16px));
+  max-height: min(280px, calc(100vh - 16px));
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--calcite-color-border-2);
+  border-radius: 0;
+  color: var(--calcite-color-text-1);
+  background: var(--calcite-color-foreground-1);
+  box-shadow: 0 3px 12px rgb(0 0 0 / 25%);
+  font-size: 12px;
+}
+
+.popup-error-details__text {
+  clear: both;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.popup-error-details__close {
+  float: right;
+  margin-bottom: 6px;
+  border: 1px solid var(--calcite-color-border-2);
+  border-radius: 0;
+  color: inherit;
+  background: var(--calcite-color-foreground-2);
+  font: inherit;
+  cursor: pointer;
+}

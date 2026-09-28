@@ -6,15 +6,20 @@ records the normalized backend evidence and remaining limitations.
 
 ## Sources
 
-| Source       | Production transport                                   | Capability boundary                                                                                        |
-| ------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| S-57         | `GET electronicproducts/aoi?productSpecification=S57`  | Read, search, Collection, History, diagnostics, Edition/Update/Cancel Export; Freeze/Unfreeze unavailable. |
-| S-101        | `GET electronicproducts/aoi?productSpecification=S101` | Read, search, Collection, History, diagnostics, Edition/Update/Cancel Export and current Freeze/Unfreeze.  |
-| Paper Charts | No runtime transport                                   | Synthetic registry fixture retained only for explicit tests; not Main-map/workspace selectable.            |
-| S-102        | No runtime transport                                   | Synthetic registry fixture retained only for explicit tests; not Main-map/workspace selectable.            |
+| Source               | Production transport                                   | Capability boundary                                                                                                                                     |
+| -------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ENC-package (`s101`) | `GET electronicproducts/aoi?productSpecification=S101` | One Main-map work unit; read, search and Collection. Package-originated Analyze/Review/History navigation, manual mutations and Export are unavailable. |
+| S-57 (`s57`)         | `GET electronicproducts/aoi?productSpecification=S57`  | Workspace compatibility only; not selectable or selection-persistable on Main map.                                                                      |
+| Paper Charts         | No runtime transport                                   | Synthetic registry fixture retained only for explicit tests.                                                                                            |
+| S-102                | No runtime transport                                   | Synthetic registry fixture retained only for explicit tests.                                                                                            |
 
-Send availability is separately gated by the backend Disabled/Simulation capability and normalized
-workflow state. No real IC-ENC delivery or report contract is enabled.
+The [package foundation](../../../docs/enc-package-frontend-foundation.md) retains the technical
+`s101` provider, S-101 dataset key, geometry and DisplayScale. Its declarative `workUnit` describes
+the primary member and ordered metadata columns. No second Graphic or Collection store is created.
+The package source has no live mutation capabilities or manual export leaves. Its `workUnit`
+navigation capabilities restrict Main-map Product contexts until destinations become package-aware;
+source-level capabilities for direct product-based workspace resolution are retained. Other simple sources
+retain their existing contracts. Analyze, Review and Dashboard remain product-based surfaces.
 
 Electronic AOI responses contain Esri geometry and DatasetName/Status/DisplayScale/UsageBand/error
 attributes. The scoped server request establishes specification; names and geometry never do.
@@ -62,7 +67,7 @@ that is still loading is not dropped; failed explicit activation is rolled back 
 
 ## Filters and Product search
 
-Each active provider has independent fields, facets, selections and counts. S57/S101 declare Status,
+Each active provider has independent fields, facets, selections and counts. The package declares Status,
 Display scale and Usage band using backend lookups. Retired synthetic fixtures do not participate in
 runtime filtering. Unsupported/missing optional facets do not invent data.
 
@@ -80,18 +85,20 @@ Escape/outside-click/focus lifecycle. No private shadow DOM or animation-depende
 Source state keeps `productCatalogue.dataSources.v1`, now schema 2:
 
 ```json
-{ "schemaVersion": 2, "initialized": true, "enabledSourceIds": ["s57", "s101"] }
+{ "schemaVersion": 2, "initialized": true, "enabledSourceIds": ["s101"] }
 ```
 
 New visits use configured available defaults. Version 1 migration retains previously fixed S101
-but leaves newly available S57 for explicit activation. Retired synthetic fixture IDs can remain in
+and removes the retired Main-map S57 selection. Retired synthetic fixture IDs can remain in
 older persisted payloads but cannot become active because runtime registry construction no longer
 enables those sources. A schema-2 all-off selection remains valid in-session; the next startup enables
 one available selection-persistable registry fallback. Session-only synthetic fixtures are never FI-031
 restored-state fallbacks. Known configured-out sources retain intent and cannot be activated while
 unavailable; unknown IDs are sanitized. If no eligible source is available, startup truthfully remains
 all-off. Reset still uses deployment defaults. Nothing copies a combined source identity into two
-standards.
+standards. An old S57-only selection is sanitized and the existing empty-selection startup recovery
+enables `s101` when eligible. Failed loading preserves requested package intent for retry; deployments
+with no eligible source remain empty. No schema or filter-provider identity change is required.
 
 Filter state remains separate at `pc.attributeFilters.v3`, schema 2. The old fixed S101 provider's
 filter state migrates to s101, never s57, with explicit new state taking precedence. Pending state
@@ -110,7 +117,7 @@ This test-only path is not used by Main-map or workspace bootstrap.
 
 ## Content and exports
 
-Flat Edition/Update leaves are registry configured; backend product resolution owns specification,
+Simple-source Edition/Update leaves are registry configured; the package declares no leaves. Backend product resolution owns specification,
 mapping, version and candidate checks. User-facing S-101 remains distinct from the backend S100
 metadata alias. Cancel Export keeps its presentation while using public CancelExport operation identity.
 

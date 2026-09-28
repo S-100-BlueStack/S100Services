@@ -139,9 +139,14 @@
   cursor: pointer;
 }
 
-.pc-product-collection-tray__action:hover {
+.pc-product-collection-tray__action:not(:disabled):hover {
   color: var(--pc-text);
   background: var(--pc-button-secondary-bg-hover);
+}
+
+.pc-product-collection-tray__action:disabled {
+  color: var(--pc-text-muted);
+  cursor: not-allowed;
 }
 
 .popup-product-collection-btn {
