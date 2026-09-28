@@ -21,8 +21,11 @@
 
   <ItemGroup>
     <Compile Remove="Controllers\ProductsController.cs" />
+    <Compile Remove="Domain\Product.cs" />
     <Compile Remove="InMemoryProductRepository.cs" />
     <Compile Remove="IProductRepository.cs" />
+    <Compile Remove="Models\CreateProductRequest.cs" />
+    <Compile Remove="Models\ProductResponse.cs" />
   </ItemGroup>
 
   <ItemGroup>
