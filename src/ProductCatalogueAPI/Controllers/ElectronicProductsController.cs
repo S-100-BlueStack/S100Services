@@ -320,7 +320,7 @@ namespace ProductCatalogueAPI.Controllers
             {
                 controllerStopwatch.Stop();
 
-                _logger.LogInformation(
+                _logger.LogTrace(
                     "AOI controller profiling completed. RequestId: {RequestId}. CorrelationId: {CorrelationId}. Success: {Success}. ControllerDurationMs: {ControllerDurationMs}. GeometryRetrievalMs: {GeometryRetrievalMs}. ProductStateRetrievalMs: {ProductStateRetrievalMs}. MappingMs: {MappingMs}. RepositoryCallCount: {RepositoryCallCount}. ProductCount: {ProductCount}. GeometryCount: {GeometryCount}. ResponseItemCount: {ResponseItemCount}. SkippedProductCount: {SkippedProductCount}. CacheState: {CacheState}",
                     requestId,
                     correlationId,

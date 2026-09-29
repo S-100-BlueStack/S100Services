@@ -5,12 +5,23 @@ namespace ProductCatalogueAPI.Models;
 /// <summary>Summarizes the state shared by the two exports of one ENC AOI.</summary>
 public enum EncPackageStatus
 {
-    /// <summary>No candidate exists.</summary> Idle,
-    /// <summary>At least one candidate is being built or validated.</summary> Building,
-    /// <summary>Both non-discarded candidates are ready.</summary> Ready,
-    /// <summary>At least one candidate is awaiting IC-ENC.</summary> InTransit,
-    /// <summary>A candidate failed or was rejected and must be acknowledged.</summary> Error,
-    /// <summary>One of the products has an operator hold.</summary> Held
+    /// <summary>No candidate exists.</summary> 
+    Idle,
+
+    /// <summary>At least one candidate is being built or validated.</summary> 
+    Building,
+
+    /// <summary>Both non-discarded candidates are ready.</summary> 
+    Ready,
+
+    /// <summary>At least one candidate is awaiting IC-ENC.</summary> 
+    InTransit,
+
+    /// <summary>A candidate failed or was rejected and must be acknowledged.</summary> 
+    Error,
+
+    /// <summary>One of the products has an operator hold.</summary> 
+    Held
 }
 
 /// <summary>Exposes public and candidate versions separately for one mapped product.</summary>
