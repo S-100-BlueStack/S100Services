@@ -34,7 +34,7 @@ public sealed class ExportController(ILogger<ExportController> logger, IProductM
     [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
     public Task<IActionResult> NewUpdate(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.ExportUpdate, cancellationToken);
 
-    /// <summary>Queues a candidate discard; discarding both candidates restores the ENC package scan bound.</summary>
+    /// <summary>Queues a candidate discard; discarding both products removes the package until new edits are detected.</summary>
     [HttpPost("{name}/discard", Name = "Discard")]
     [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
     public Task<IActionResult> Discard(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.Discard, cancellationToken);

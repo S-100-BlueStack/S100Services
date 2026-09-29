@@ -16,7 +16,7 @@ public sealed class EncPackage
     public string SourceDatasetName { get; set; } = string.Empty;
     /// <summary>Gets or sets the mapped S-57 product name.</summary>
     public string S57DatasetName { get; set; } = string.Empty;
-    /// <summary>Gets or sets the scan lower bound that must be restored if both candidates are discarded.</summary>
+    /// <summary>Gets or sets the scan lower bound retained only when DPC replaces a ready package.</summary>
     public DateTime ScanFromUtc { get; set; }
     /// <summary>Gets or sets the timestamp of the source scan that created this snapshot.</summary>
     public DateTime DetectedAtUtc { get; set; }

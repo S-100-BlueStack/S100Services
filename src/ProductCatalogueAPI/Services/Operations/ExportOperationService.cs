@@ -153,7 +153,7 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
     }
 
     /// <inheritdoc/>
-    public async Task<ExportOperationResult> ExecuteDiscardAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) {
+    public async Task<ExportOperationResult> ExecuteDiscardAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null, bool preservePackageScanBound = false) {
         cancellationToken.ThrowIfCancellationRequested();
         var product = ResolveRequiredExportProduct(datasetName);
         var targetDatasetName = product.DatasetName;
@@ -170,7 +170,9 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
             if (active is null || active.ErrorMessage is null && track.State is not (ProductState.Error or ProductState.Rejected))
                 throw new ExportOperationRejectedException("There is no unverified candidate export to discard.");
             beforeMutation?.Invoke();
-            await packages!.DiscardAsync(targetDatasetName, productSpecification, cancellationToken);
+            if (track.State is ProductState.Error or ProductState.Rejected)
+                await _workflowRepository.DiscardCandidateAsync(track.Id, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+            await packages!.DiscardAsync(targetDatasetName, productSpecification, cancellationToken, preservePackageScanBound);
             return new ExportOperationResult(ExportOperationContract.DiscardCompletedCode, "The failed ENC candidate was discarded.");
         }
         if (track.State is ProductState.InTransit or ProductState.AcceptedForDistribution or ProductState.Published)
@@ -181,7 +183,7 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
         await engine.DeleteOutputAsync(new ExportOutputIdentity(targetDatasetName, productSpecification, track.CandidateEdition.Value, track.CandidateUpdate.Value, _electronicProductManager.OutputFolder), cancellationToken);
         await _workflowRepository.DiscardCandidateAsync(track.Id, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
         if (active is not null)
-            await packages!.DiscardAsync(targetDatasetName, productSpecification, cancellationToken);
+            await packages!.DiscardAsync(targetDatasetName, productSpecification, cancellationToken, preservePackageScanBound);
         _logger.LogInformation("Unverified candidate export discarded. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.", targetDatasetName, productSpecification);
         return new ExportOperationResult(ExportOperationContract.DiscardCompletedCode, ExportOperationContract.DiscardCompletedMessage);
     }

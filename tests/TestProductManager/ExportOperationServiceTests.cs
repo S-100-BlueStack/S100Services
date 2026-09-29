@@ -143,6 +143,46 @@ public sealed class ExportOperationServiceTests
     }
 
     [Fact]
+    public async Task DiscardAcknowledgesFailureBeforeCandidateCreationAndDoesNotReplayUnchangedPackage() {
+        var repository = new RecordingWorkflowRepository { InitialState = ProductState.Error };
+        var packages = new RecordingPackageRepository();
+        var engine = new RecordingExportEngine();
+        var service = CreateService(new RecordingElectronicProductManager(), repository, engine, new SummaryResponse(), packages: packages);
+
+        await service.ExecuteDiscardAsync("101DK001", "developer");
+
+        Assert.Equal(ProductState.Idle, repository.Track.State);
+        Assert.Null(repository.Track.CandidateEdition);
+        Assert.Equal(0, engine.DeleteCalls);
+        Assert.Equal(1, packages.DiscardCalls);
+        Assert.False(packages.PreserveScanBound);
+    }
+
+    [Fact]
+    public async Task FailedTrackWithoutCandidateCanBeResetByRepository() {
+        var repository = new InMemoryProductRepository();
+        var track = await repository.GetOrCreateTrackAsync("101DK001", ProductSpecification.S101, ExportEngineKind.IsoIec8211, 4, 2);
+        await repository.SetStateAsync(track.Id, ProductState.Error, "system", DateTime.UtcNow, "ENC_CANDIDATE_FAILED", "Build failed before candidate creation");
+
+        await repository.DiscardCandidateAsync(track.Id, "developer", DateTime.UtcNow);
+
+        var restored = await repository.GetTrackAsync("101DK001", ProductSpecification.S101);
+        Assert.Equal(ProductState.Idle, restored!.State);
+        Assert.Null(restored.CandidateEdition);
+    }
+
+    [Fact]
+    public async Task InternalRefreshPreservesScanBoundWhenDiscardingItsReadyCandidate() {
+        var repository = new RecordingWorkflowRepository { CandidateEdition = 5, CandidateUpdate = 0, InitialState = ProductState.ReadyForDistribution };
+        var packages = new RecordingPackageRepository();
+        var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse(), packages: packages);
+
+        await service.ExecuteDiscardAsync("101DK001", "system", preservePackageScanBound: true);
+
+        Assert.True(packages.PreserveScanBound);
+    }
+
+    [Fact]
     public async Task S57ExportUsesProductMappingInsteadOfDerivingTheDatasetName() {
         var products = new RecordingElectronicProductManager();
         var repository = new RecordingWorkflowRepository();
@@ -183,12 +223,12 @@ public sealed class ExportOperationServiceTests
         Assert.Equal(0, engine.ExportCalls);
     }
 
-    private static TestExportOperationService CreateService(RecordingElectronicProductManager products, RecordingWorkflowRepository repository, RecordingExportEngine engine, SummaryResponse validation, IReadOnlyList<SevenCsDiagnosticArtifact>? diagnostics = null, Exception? validationFailure = null) => new(
+    private static TestExportOperationService CreateService(RecordingElectronicProductManager products, RecordingWorkflowRepository repository, RecordingExportEngine engine, SummaryResponse validation, IReadOnlyList<SevenCsDiagnosticArtifact>? diagnostics = null, Exception? validationFailure = null, IEncPackageRepository? packages = null) => new(
         new FakeProductManager(products), new ExportEngineRegistry([engine]), repository, new FakeSevenCsService(validation, diagnostics ?? [], validationFailure),
-        new FixedTimeProvider(DateTimeOffset.Parse("2026-08-10T20:00:00Z")), "dataset-yaml");
+        new FixedTimeProvider(DateTimeOffset.Parse("2026-08-10T20:00:00Z")), "dataset-yaml", packages);
 
-    private sealed class TestExportOperationService(IProductManager productManager, IExportEngineRegistry engines, IProductWorkflowRepository repository, ISevenCsService sevenCs, TimeProvider timeProvider, string yaml)
-        : ExportOperationService(productManager, engines, repository, sevenCs, timeProvider, NullLogger<ExportOperationService>.Instance)
+    private sealed class TestExportOperationService(IProductManager productManager, IExportEngineRegistry engines, IProductWorkflowRepository repository, ISevenCsService sevenCs, TimeProvider timeProvider, string yaml, IEncPackageRepository? packages)
+        : ExportOperationService(productManager, engines, repository, sevenCs, timeProvider, NullLogger<ExportOperationService>.Instance, packages)
     {
         protected override string SerializeDataset(YamlDataset dataset) => yaml;
     }
@@ -252,6 +292,23 @@ public sealed class ExportOperationServiceTests
         public bool Supports(ProductSpecification productSpecification) => productSpecification is ProductSpecification.S57 or ProductSpecification.S101;
         public Task<ExportEngineResult> ExportAsync(ExportEngineRequest request, CancellationToken cancellationToken = default) { ExportCalls++; LastRequest = request; return Task.FromResult(new ExportEngineResult("output", [])); }
         public Task DeleteOutputAsync(ExportOutputIdentity output, CancellationToken cancellationToken = default) { DeleteCalls++; return Task.CompletedTask; }
+    }
+
+    private sealed class RecordingPackageRepository : IEncPackageRepository
+    {
+        public int DiscardCalls { get; private set; }
+        public bool PreserveScanBound { get; private set; }
+        public Task<IReadOnlyDictionary<string, EncPackage>> GetActiveAsync(IEnumerable<string> sourceDatasetNames, CancellationToken cancellationToken = default, bool includeSourceYaml = true) =>
+            Task.FromResult<IReadOnlyDictionary<string, EncPackage>>(new Dictionary<string, EncPackage> {
+                ["101DK001"] = new() { Id = Guid.NewGuid(), SourceDatasetName = "101DK001", S57DatasetName = "DK3BIDQE", ErrorMessage = "Failed export" }
+            });
+        public Task<DateTime?> GetReplayFromUtcAsync(CancellationToken cancellationToken = default) => Task.FromResult<DateTime?>(null);
+        public Task<IReadOnlyDictionary<string, DateTime>> GetReplayBoundsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyDictionary<string, DateTime>>(new Dictionary<string, DateTime>());
+        public Task MarkReplayAsync(string sourceDatasetName, DateTime scanFromUtc, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task SetErrorAsync(Guid packageId, string message, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default, bool preserveScanBound = false) { DiscardCalls++; PreserveScanBound = preserveScanBound; return Task.CompletedTask; }
+        public Task ReleaseAcceptedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class RecordingWorkflowRepository : IProductWorkflowRepository

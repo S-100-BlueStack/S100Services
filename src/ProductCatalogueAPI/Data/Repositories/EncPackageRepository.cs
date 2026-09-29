@@ -77,7 +77,7 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
     }
 
     /// <inheritdoc/>
-    public async Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default) {
+    public async Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default, bool preserveScanBound = false) {
         if (specification is not (ProductSpecification.S57 or ProductSpecification.S101))
             throw new ArgumentOutOfRangeException(nameof(specification));
 
@@ -93,7 +93,8 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
 
         await connection.ExecuteAsync(new CommandDefinition($"UPDATE dbo.EncPackage SET {flag} = 1, error_message = NULL WHERE package_id = @Id", new { package.Id }, transaction, cancellationToken: cancellationToken));
         if ((specification == ProductSpecification.S57 || package.S57Discarded) && (specification == ProductSpecification.S101 || package.S101Discarded)) {
-            await UpsertReplayAsync(connection, transaction, package.SourceDatasetName, package.ScanFromUtc, cancellationToken);
+            if (preserveScanBound)
+                await UpsertReplayAsync(connection, transaction, package.SourceDatasetName, package.ScanFromUtc, cancellationToken);
             await connection.ExecuteAsync(new CommandDefinition("DELETE FROM dbo.EncPackage WHERE package_id = @Id", new { package.Id }, transaction, cancellationToken: cancellationToken));
         }
         transaction.Commit();

@@ -7,7 +7,7 @@ public interface IEncPackageRepository
 {
     /// <summary>Gets active packages for a set of S-101 AOIs in one SQL read.</summary>
     Task<IReadOnlyDictionary<string, EncPackage>> GetActiveAsync(IEnumerable<string> sourceDatasetNames, CancellationToken cancellationToken = default, bool includeSourceYaml = true);
-    /// <summary>Gets the oldest scan lower bound that was rolled back by a discard or a completed package.</summary>
+    /// <summary>Gets the oldest pending scan bound for edits observed while a package was locked or after acceptance.</summary>
     Task<DateTime?> GetReplayFromUtcAsync(CancellationToken cancellationToken = default);
     /// <summary>Gets the per-AOI replay bounds to avoid rebuilding unrelated packages from old edits.</summary>
     Task<IReadOnlyDictionary<string, DateTime>> GetReplayBoundsAsync(CancellationToken cancellationToken = default);
@@ -17,8 +17,8 @@ public interface IEncPackageRepository
     Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default);
     /// <summary>Records a package failure without losing its source YAML or rollback boundary.</summary>
     Task SetErrorAsync(Guid packageId, string message, CancellationToken cancellationToken = default);
-    /// <summary>Marks a candidate discarded and restores the scan bound when both are discarded.</summary>
-    Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default);
+    /// <summary>Marks a candidate discarded; only an automatic package refresh replays its scan bound.</summary>
+    Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default, bool preserveScanBound = false);
     /// <summary>Releases packages whose non-discarded tracks have all reached an accepted terminal state.</summary>
     Task ReleaseAcceptedAsync(CancellationToken cancellationToken = default);
 }

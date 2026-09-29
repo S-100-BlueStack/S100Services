@@ -328,15 +328,16 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
         using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
 
         var candidate = await connection.QuerySingleOrDefaultAsync<CandidateCancellationState>(new CommandDefinition("""
-            SELECT candidate_previous_state AS PreviousState,
+            SELECT state AS State, candidate_previous_state AS PreviousState,
                    candidate_edition AS CandidateEdition,
                    candidate_update AS CandidateUpdate
             FROM dbo.ProductExportTrack WITH (UPDLOCK, HOLDLOCK)
             WHERE product_export_track_id = @TrackId;
             """, new { TrackId = trackId }, transaction, cancellationToken: cancellationToken));
 
-        if (candidate is null || !candidate.CandidateEdition.HasValue || !candidate.CandidateUpdate.HasValue)
-            throw new InvalidOperationException("The product track has no candidate export to cancel.");
+        if (candidate is null || candidate.CandidateEdition.HasValue != candidate.CandidateUpdate.HasValue ||
+            !candidate.CandidateEdition.HasValue && candidate.State is not (ProductState.Error or ProductState.Rejected))
+            throw new InvalidOperationException("The product track has no failed or unverified candidate to discard.");
 
         var previousState = candidate.PreviousState ?? ProductState.Idle;
         var restoredAtUtc = occurredAtUtc.AddTicks(1);
@@ -345,7 +346,7 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
             INSERT INTO dbo.ProductStateHistory
                 (product_state_history_id, product_export_track_id, state, edition_number, update_number, owner, occurred_at_utc)
             SELECT @CancelledHistoryId, product_export_track_id, @CancelledState,
-                   candidate_edition, candidate_update,
+                   COALESCE(candidate_edition, published_edition), COALESCE(candidate_update, published_update),
                    @Owner, @OccurredAtUtc
             FROM dbo.ProductExportTrack
             WHERE product_export_track_id = @TrackId;
@@ -626,6 +627,7 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
 
     private sealed class CandidateCancellationState
     {
+        public ProductState State { get; set; }
         public ProductState? PreviousState { get; set; }
         public int? CandidateEdition { get; set; }
         public int? CandidateUpdate { get; set; }
@@ -743,7 +745,20 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     }
 
     /// <inheritdoc/>
-    public Task DiscardCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.State = track.CandidatePreviousState ?? ProductState.Idle; track.CandidateEdition = null; track.CandidateUpdate = null; track.CandidatePreviousState = null; track.UpdatedAtUtc = occurredAtUtc; } return Task.CompletedTask; }
+    public Task DiscardCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        lock (_gate) {
+            var track = FindTrack(trackId);
+            if (track.CandidateEdition.HasValue != track.CandidateUpdate.HasValue ||
+                !track.CandidateEdition.HasValue && track.State is not (ProductState.Error or ProductState.Rejected))
+                throw new InvalidOperationException("The product track has no failed or unverified candidate to discard.");
+            track.State = track.CandidatePreviousState ?? ProductState.Idle;
+            track.CandidateEdition = null;
+            track.CandidateUpdate = null;
+            track.CandidatePreviousState = null;
+            track.UpdatedAtUtc = occurredAtUtc;
+        }
+        return Task.CompletedTask;
+    }
 
     /// <inheritdoc/>
     public Task<Guid> AddRevisionAsync(ProductRevisionWrite revision, CancellationToken cancellationToken = default) {

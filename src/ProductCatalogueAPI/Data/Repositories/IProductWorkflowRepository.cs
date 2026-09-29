@@ -36,7 +36,7 @@ public interface IProductWorkflowRepository
     /// <summary>Removes an independent manual hold and leaves the underlying workflow state unchanged.</summary>
     Task<bool> ClearManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default);
 
-    /// <summary>Clears an unverified candidate and records a cancelled workflow state.</summary>
+    /// <summary>Clears an unverified candidate, or acknowledges a failed build that never received a candidate version.</summary>
     Task DiscardCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default);
 
     /// <summary>Creates an immutable candidate revision containing its complete YAML source.</summary>

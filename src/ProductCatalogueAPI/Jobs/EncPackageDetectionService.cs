@@ -76,6 +76,10 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             var packageScanFromUtc = replay.GetValueOrDefault(sourceName, sinceUtc);
             if (active.TryGetValue(sourceName, out var existing)) {
                 if (sinceUtc < existing.DetectedAtUtc || !await CanRefreshAsync(existing, cancellationToken)) {
+                    // Retain only edits observed after this snapshot. Discarding an unchanged
+                    // failed package must not rebuild the same source snapshot.
+                    if (sinceUtc >= existing.DetectedAtUtc)
+                        await packages.MarkReplayAsync(sourceName, packageScanFromUtc, cancellationToken);
                     await RecoverIncompletePackageAsync(existing, cancellationToken);
                     continue;
                 }
@@ -84,8 +88,8 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 if (!completeChanges.TryGetValue(sourceName, out packageChanges) || packageChanges.Count == 0)
                     continue;
                 try {
-                    await exports.ExecuteDiscardAsync(existing.S57DatasetName, "system", cancellationToken);
-                    await exports.ExecuteDiscardAsync(existing.SourceDatasetName, "system", cancellationToken);
+                    await exports.ExecuteDiscardAsync(existing.S57DatasetName, "system", cancellationToken, preservePackageScanBound: true);
+                    await exports.ExecuteDiscardAsync(existing.SourceDatasetName, "system", cancellationToken, preservePackageScanBound: true);
                 }
                 catch {
                     await packages.SetErrorAsync(existing.Id, "The package could not be refreshed. Review and discard its remaining candidate.", CancellationToken.None);
