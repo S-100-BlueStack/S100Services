@@ -199,8 +199,7 @@ namespace ProductCatalogueAPI
                 //   Authorization = new[] { new MyAuthorizationFilter() }             // TODO: Auth
             });
 
-            // Change detection and change-summary processing jobs are registered for explicit invocation only.
-            // Scheduling is intentionally deferred until operational cadence and rulesets are approved.
+            // The enabled DPC schedule builds ENC packages; legacy summary processing stays unscheduled.
 
             app.UseExceptionHandler();
             // Configure the HTTP request pipeline.

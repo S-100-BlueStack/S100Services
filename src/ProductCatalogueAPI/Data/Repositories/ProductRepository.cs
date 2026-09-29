@@ -33,8 +33,11 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
         await connection.ExecuteAsync("""
             UPDATE dbo.ProductExportTrack
             SET state = @State,
-                candidate_edition = CASE WHEN @State IN (1, 5, 7, 13, 14, 15) THEN candidate_edition ELSE @Edition END,
-                candidate_update = CASE WHEN @State IN (1, 5, 7, 13, 14, 15) THEN candidate_update ELSE @Update END,
+                published_edition = CASE WHEN @State = 13 THEN @Edition ELSE published_edition END,
+                published_update = CASE WHEN @State = 13 THEN @Update ELSE published_update END,
+                candidate_edition = CASE WHEN @State = 13 THEN NULL WHEN @State IN (1, 5, 7, 14, 15) THEN candidate_edition ELSE @Edition END,
+                candidate_update = CASE WHEN @State = 13 THEN NULL WHEN @State IN (1, 5, 7, 14, 15) THEN candidate_update ELSE @Update END,
+                candidate_previous_state = CASE WHEN @State = 13 THEN NULL ELSE candidate_previous_state END,
                 updated_at_utc = @OccurredAtUtc
             WHERE product_export_track_id = @TrackId;
 
@@ -183,6 +186,20 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
         using var connection = _connectionFactory.Create();
         var tracks = await connection.QueryAsync<ProductExportTrackRecord>(new CommandDefinition($"{TrackSelectBaseSql}\nWHERE p.dataset_name = @DatasetName;", new { DatasetName = datasetName }, cancellationToken: cancellationToken));
         return tracks.ToArray();
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<ProductExportTrackRecord>> GetTracksByNamesAsync(IEnumerable<string> datasetNames, CancellationToken cancellationToken = default) {
+        var names = datasetNames.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var tracks = new List<ProductExportTrackRecord>();
+        if (names.Length == 0)
+            return tracks;
+        using var connection = _connectionFactory.Create();
+        foreach (var batch in names.Chunk(1000)) {
+            var rows = await connection.QueryAsync<ProductExportTrackRecord>(new CommandDefinition($"{TrackSelectBaseSql}\nWHERE p.dataset_name IN @Names;", new { Names = batch }, cancellationToken: cancellationToken));
+            tracks.AddRange(rows);
+        }
+        return tracks;
     }
 
     /// <inheritdoc/>
@@ -790,6 +807,9 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
 
     /// <inheritdoc/>
     public Task<IReadOnlyList<ProductExportTrackRecord>> GetTracksAsync(string datasetName, CancellationToken cancellationToken = default) { lock (_gate) return Task.FromResult<IReadOnlyList<ProductExportTrackRecord>>([.. _tracks.Values.Where(track => string.Equals(track.DatasetName, datasetName, StringComparison.OrdinalIgnoreCase))]); }
+
+    /// <inheritdoc/>
+    public Task<IReadOnlyList<ProductExportTrackRecord>> GetTracksByNamesAsync(IEnumerable<string> datasetNames, CancellationToken cancellationToken = default) { var names = datasetNames.ToHashSet(StringComparer.OrdinalIgnoreCase); lock (_gate) return Task.FromResult<IReadOnlyList<ProductExportTrackRecord>>([.. _tracks.Values.Where(track => names.Contains(track.DatasetName))]); }
 
     /// <inheritdoc/>
     public Task<ProductExportTrackRecord> GetOrCreateTrackAsync(string datasetName, ProductSpecification productSpecification, ExportEngineKind engine, int publishedEdition, int publishedUpdate, CancellationToken cancellationToken = default) {

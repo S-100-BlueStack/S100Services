@@ -40,6 +40,21 @@ namespace TestProductCatalogueAPI
         }
 
         [Fact]
+        public void PackageLayersExposeEncAsTheCurrentAoiLayer() {
+            var result = Assert.IsType<OkObjectResult>(Controller(SendToIcEncMode.Disabled).GetPackageLayers());
+            var json = JsonSerializer.Serialize(result.Value);
+            Assert.Contains("\"Name\":\"ENC\"", json);
+        }
+
+        [Fact]
+        public void LegacyFrozenStateIsPresentedAsHold() {
+            var result = Assert.IsType<OkObjectResult>(Controller(SendToIcEncMode.Disabled).GetProductStates());
+            var json = JsonSerializer.Serialize(result.Value);
+            using var document = JsonDocument.Parse(json);
+            Assert.Contains(document.RootElement.EnumerateArray(), item => item.GetProperty("Id").GetInt32() == 5 && item.GetProperty("Name").GetString() == "Hold");
+        }
+
+        [Fact]
         [Trait("Package", "PC-006")]
         public void DisabledCapabilityIsBackendOwnedAndIncludesSafeReason() {
             var result = Assert.IsType<OkObjectResult>(Controller(SendToIcEncMode.Disabled).GetCapabilities());

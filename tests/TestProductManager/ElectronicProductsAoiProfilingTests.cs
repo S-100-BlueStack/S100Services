@@ -82,6 +82,9 @@ namespace TestProductCatalogueAPI
             Assert.Equal(ProductStatus.Frozen, firstResponse.Attributes?.Status);
             Assert.Equal(22_000, firstResponse.Attributes?.DisplayScale);
             Assert.Equal(4, firstResponse.Attributes?.UsageBand);
+            Assert.Equal(PackageLayer.ENC, firstResponse.Attributes?.Package?.Layer);
+            Assert.Equal($"57{firstDatasetName}", firstResponse.Attributes?.Package?.S57.DatasetName);
+            Assert.Equal(firstDatasetName, firstResponse.Attributes?.Package?.S101.DatasetName);
 
             var secondResponse = Assert.Single(
                 responses.Where(response => response.Attributes?.DatasetName == secondDatasetName)
@@ -143,7 +146,7 @@ namespace TestProductCatalogueAPI
         }
 
         [Fact]
-        public async Task GlobalAoiActionReturnsOnlyTheRequestedProductSpecification() {
+        public async Task GlobalAoiActionRejectsObsoleteProductSpecificationFilter() {
             const string datasetName = "DK3AA01";
             var electronicProductManager = new FakeElectronicProductManager(
                 new Dictionary<string, string> { [datasetName] = "{\"rings\":[]}" },
@@ -164,10 +167,8 @@ namespace TestProductCatalogueAPI
 
             var result = await controller.GetAllElectronicProductsAOI("S57");
 
-            var response = Assert.Single(Assert.IsType<List<AOIResponse>>(Assert.IsType<OkObjectResult>(result).Value));
-            Assert.Equal(datasetName, response.Attributes?.DatasetName);
-            Assert.Equal("IC-ENC rejected the dataset.", response.Attributes?.ErrorMessage);
-            Assert.Equal(ProductSpecification.S57, repository.RequestedProductSpecification);
+            Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal(0, electronicProductManager.BulkAoiCallCount);
         }
 
         [Fact]
@@ -398,6 +399,16 @@ namespace TestProductCatalogueAPI
             public ElectronicProduct? ResolveElectronicProduct(string name, string productSpecification) =>
                 ElectronicProduct(name, productSpecification);
 
+            public IReadOnlyList<ElectronicProduct> GetMappedElectronicProducts(string name, string productSpecification) {
+                if (!products.TryGetValue(name, out var source))
+                    return [];
+                if (productSpecification == "S57" && source.productSpecification?.name == "S-101")
+                    return [CreateElectronicProduct($"57{name}", Convert.ToInt32(source.optimumDisplayScale), Convert.ToInt32(source.specificUsage), "S-57")];
+                if (productSpecification == "S101" && source.productSpecification?.name == "S-57")
+                    return [CreateElectronicProduct($"101{name}", Convert.ToInt32(source.optimumDisplayScale), Convert.ToInt32(source.specificUsage), "S-101")];
+                return [];
+            }
+
             public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(
                 string datasetName,
                 CancellationToken cancellationToken = default
@@ -457,7 +468,7 @@ namespace TestProductCatalogueAPI
             public Task<bool> IsDirtyAsync(string name) => throw new NotSupportedException();
             public Task<string> GetDatasetBoundary(string name) {
                 TargetedBoundaryCallCount++;
-                if (!aois.TryGetValue(name, out var boundary))
+                if (!aois.TryGetValue(name, out var boundary) && (!name.StartsWith("101", StringComparison.Ordinal) || !aois.TryGetValue(name[3..], out boundary)))
                     throw new InvalidOperationException("No dataset rows found");
                 return Task.FromResult(boundary);
             }

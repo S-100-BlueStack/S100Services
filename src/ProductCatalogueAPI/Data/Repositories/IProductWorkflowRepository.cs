@@ -13,6 +13,14 @@ public interface IProductWorkflowRepository
     /// <summary>Gets all independently versioned tracks for one dataset.</summary>
     Task<IReadOnlyList<ProductExportTrackRecord>> GetTracksAsync(string datasetName, CancellationToken cancellationToken = default);
 
+    /// <summary>Gets both export tracks for all AOIs in a bounded number of SQL reads.</summary>
+    async Task<IReadOnlyList<ProductExportTrackRecord>> GetTracksByNamesAsync(IEnumerable<string> datasetNames, CancellationToken cancellationToken = default) {
+        var result = new List<ProductExportTrackRecord>();
+        foreach (var name in datasetNames.Distinct(StringComparer.OrdinalIgnoreCase))
+            result.AddRange(await GetTracksAsync(name, cancellationToken));
+        return result;
+    }
+
     /// <summary>Creates a missing track from the currently published S-128 version, or returns the existing SQL-authoritative track.</summary>
     Task<ProductExportTrackRecord> GetOrCreateTrackAsync(string datasetName, ProductSpecification productSpecification, ExportEngineKind engine, int publishedEdition, int publishedUpdate, CancellationToken cancellationToken = default);
 

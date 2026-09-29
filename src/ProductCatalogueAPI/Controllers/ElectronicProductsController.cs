@@ -29,7 +29,7 @@ namespace ProductCatalogueAPI.Controllers
     //[Authorize("productmanager:access")]
     [ApiController]
     [Route("[controller]")]
-    public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository, IProductWorkflowRepository workflowRepository, IProductHistoryEventService historyEventService = null!, IProductWorkspaceFreshnessRepository workspaceFreshnessRepository = null!) : ControllerBase
+    public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository, IProductWorkflowRepository workflowRepository, IProductHistoryEventService historyEventService = null!, IProductWorkspaceFreshnessRepository workspaceFreshnessRepository = null!, IEncPackageRepository? packageRepository = null) : ControllerBase
     {
         private const string AoiCacheKeyPrefix = "electronic-products-aoi";
         private static readonly TimeSpan AoiCacheLifetime = TimeSpan.FromHours(24);
@@ -40,6 +40,7 @@ namespace ProductCatalogueAPI.Controllers
         private readonly IMemoryCache _cache = cache;
         private readonly IProductRepository _repository = repository;
         private readonly IProductWorkflowRepository _workflowRepository = workflowRepository;
+        private readonly IEncPackageRepository? _packageRepository = packageRepository;
         private readonly IProductWorkspaceFreshnessRepository? _workspaceFreshnessRepository = workspaceFreshnessRepository;
 
         /// <summary>
@@ -147,7 +148,7 @@ namespace ProductCatalogueAPI.Controllers
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpGet("aoi")]
-        public async Task<IActionResult> GetAllElectronicProductsAOI([FromQuery, SwaggerAllowedValues(nameof(ProductSpecification.S57), nameof(ProductSpecification.S101))] string productSpecification = "S101")
+        public async Task<IActionResult> GetAllElectronicProductsAOI([FromQuery, SwaggerAllowedValues(nameof(PackageLayer.ENC))] string layer = "ENC")
         {
             var controllerStopwatch = Stopwatch.StartNew();
             var geometryRetrievalStopwatch = new Stopwatch();
@@ -165,10 +166,10 @@ namespace ProductCatalogueAPI.Controllers
 
             try
             {
-                if (!TryParseAoiProductSpecification(productSpecification, out var selectedProductSpecification))
-                    return BadRequest(new ApiResponse { Success = false, Message = "productSpecification must be S57 or S101." });
+                if (!Enum.TryParse<PackageLayer>(layer, ignoreCase: false, out var selectedLayer) || selectedLayer != PackageLayer.ENC)
+                    return BadRequest(new ApiResponse { Success = false, Message = "layer must be ENC." });
 
-                var cacheKey = $"{AoiCacheKeyPrefix}:{selectedProductSpecification}";
+                var cacheKey = $"{AoiCacheKeyPrefix}:{selectedLayer}";
                 cacheState = _cache.TryGetValue(cacheKey, out Lazy<Task<Dictionary<string, string>>>? cachedAois)
                     ? "Hit"
                     : "Miss";
@@ -176,7 +177,7 @@ namespace ProductCatalogueAPI.Controllers
                 cachedAois ??= _cache.GetOrCreate(cacheKey, entry => {
                     entry.AbsoluteExpirationRelativeToNow = AoiCacheLifetime;
                     return new Lazy<Task<Dictionary<string, string>>>(
-                        () => _electronicProductManager.GetDatasetAOIs(selectedProductSpecification.ToString()),
+                        () => _electronicProductManager.GetDatasetAOIs(ProductSpecification.S101.ToString()),
                         LazyThreadSafetyMode.ExecutionAndPublication);
                 }) ?? throw new InvalidOperationException("Could not create the AOI cache entry.");
 
@@ -202,11 +203,11 @@ namespace ProductCatalogueAPI.Controllers
                 geometryCount = aois.Count;
 
                 mappingStopwatch.Start();
-                var mappedProducts = new List<(string DatasetName, string Geometry, ElectronicProduct Product)>(aois.Count);
+                var mappedProducts = new List<(string DatasetName, string Geometry, ElectronicProduct Product, ElectronicProduct S57)>(aois.Count);
 
                 foreach (var aoi in aois)
                 {
-                    var electronicProduct = _electronicProductManager.ElectronicProduct(aoi.Key, selectedProductSpecification.ToString());
+                    var electronicProduct = _electronicProductManager.ElectronicProduct(aoi.Key, ProductSpecification.S101.ToString());
 
                     if (electronicProduct == null)
                     {
@@ -220,10 +221,16 @@ namespace ProductCatalogueAPI.Controllers
                         continue;
                     }
 
-                    if (!MatchesProductSpecification(electronicProduct, selectedProductSpecification))
+                    if (!MatchesProductSpecification(electronicProduct, ProductSpecification.S101))
                         continue;
 
-                    mappedProducts.Add((aoi.Key, aoi.Value, electronicProduct));
+                    var relatedS57 = _electronicProductManager.GetMappedElectronicProducts(aoi.Key, ProductSpecification.S57.ToString());
+                    if (relatedS57.Count != 1 || string.IsNullOrWhiteSpace(relatedS57[0].datasetName) || !MatchesProductSpecification(relatedS57[0], ProductSpecification.S57)) {
+                        skippedProductCount++;
+                        _logger.LogWarning("ENC AOI has no unique mapped S-57 product. SourceDatasetName: {SourceDatasetName}.", aoi.Key);
+                        continue;
+                    }
+                    mappedProducts.Add((aoi.Key, aoi.Value, electronicProduct, relatedS57[0]));
                 }
 
                 mappingStopwatch.Stop();
@@ -238,7 +245,7 @@ namespace ProductCatalogueAPI.Controllers
                     productStateRetrievalStopwatch.Start();
                     try
                     {
-                        currentProducts = await _repository.GetCurrentByNamesAsync(mappedProducts.Select(product => product.DatasetName), selectedProductSpecification);
+                        currentProducts = await _repository.GetCurrentByNamesAsync(mappedProducts.Select(product => product.DatasetName), ProductSpecification.S101);
                     }
                     finally
                     {
@@ -253,12 +260,29 @@ namespace ProductCatalogueAPI.Controllers
                     mappingStopwatch.Stop();
                 }
 
+                var allNames = mappedProducts.SelectMany(product => new[] { product.DatasetName, product.S57.datasetName! });
+                var tracks = await _workflowRepository.GetTracksByNamesAsync(allNames);
+                var tracksByName = tracks.GroupBy(track => track.DatasetName, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
+                var packages = _packageRepository is null
+                    ? new Dictionary<string, EncPackage>(StringComparer.OrdinalIgnoreCase)
+                    : await _packageRepository.GetActiveAsync(mappedProducts.Select(product => product.DatasetName), includeSourceYaml: false);
                 var responses = new List<AOIResponse>(mappedProducts.Count);
 
                 mappingStopwatch.Start();
                 foreach (var mappedProduct in mappedProducts)
                 {
                     currentProductsByName.TryGetValue(mappedProduct.DatasetName, out var current);
+                    tracksByName.TryGetValue(mappedProduct.DatasetName, out var s101Tracks);
+                    tracksByName.TryGetValue(mappedProduct.S57.datasetName!, out var s57Tracks);
+                    var s101Track = s101Tracks?.FirstOrDefault(track => track.ProductSpecification == ProductSpecification.S101);
+                    var s57Track = s57Tracks?.FirstOrDefault(track => track.ProductSpecification == ProductSpecification.S57);
+                    packages.TryGetValue(mappedProduct.DatasetName, out var activePackage);
+                    var status = EncPackageStatusResolver.Resolve(activePackage, s57Track, s101Track);
+                    var package = new EncPackageResponse(selectedLayer, mappedProduct.DatasetName, mappedProduct.Product.specificUsage,
+                        mappedProduct.Product.optimumDisplayScale, activePackage?.DetectedAtUtc, status, activePackage?.ErrorMessage,
+                        CreatePackageProduct(mappedProduct.S57, ProductSpecification.S57, s57Track, activePackage?.S57Discarded == true),
+                        CreatePackageProduct(mappedProduct.Product, ProductSpecification.S101, s101Track, activePackage?.S101Discarded == true));
 
                     responses.Add(new AOIResponse
                     {
@@ -267,11 +291,21 @@ namespace ProductCatalogueAPI.Controllers
                         Attributes = new Attributes
                         {
                             DatasetName = mappedProduct.Product.datasetName,
-                            Status = Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString()),
+                            Package = package,
+                            Status = status switch {
+                                EncPackageStatus.Error => ProductStatus.Error,
+                                EncPackageStatus.InTransit => ProductStatus.InTransit,
+                                EncPackageStatus.Ready => ProductStatus.ReadyForDistribution,
+                                EncPackageStatus.Building => ProductStatus.Exporting,
+                                EncPackageStatus.Held => ProductStatus.Frozen,
+                                _ => Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString())
+                            },
                             // Products without a SQL workflow track remain idle until internal work begins.
                             DisplayScale = mappedProduct.Product.optimumDisplayScale,
                             UsageBand = mappedProduct.Product.specificUsage,
-                            ErrorMessage = current?.ErrorMessage
+                            ErrorMessage = status == EncPackageStatus.Error
+                                ? activePackage?.ErrorMessage ?? (activePackage?.S57Discarded == true ? null : s57Track?.ErrorMessage) ?? (activePackage?.S101Discarded == true ? null : s101Track?.ErrorMessage)
+                                : current?.ErrorMessage
                         }
                     });
                 }
@@ -491,7 +525,19 @@ namespace ProductCatalogueAPI.Controllers
                 return Conflict(response);
             }
 
-            var boundary = await _electronicProductManager.GetDatasetBoundary(identity.DatasetName);
+            var sourceName = identity.DatasetName;
+            if (identity.ProductSpecification == ProductSpecification.S57) {
+                var sources = _electronicProductManager.GetMappedElectronicProducts(identity.DatasetName, ProductSpecification.S101.ToString());
+                if (sources.Count != 1 || string.IsNullOrWhiteSpace(sources[0].datasetName)) {
+                    response.Success = false;
+                    response.Message = "The S-57 product does not have a unique mapped S-101 AOI.";
+                    response.DurationMs = sw.ElapsedMilliseconds;
+                    return Conflict(response);
+                }
+                sourceName = sources[0].datasetName!.Trim();
+            }
+
+            var boundary = await _electronicProductManager.GetDatasetBoundary(sourceName);
 
             if (boundary.IsNullOrEmpty())
             {
@@ -827,6 +873,19 @@ namespace ProductCatalogueAPI.Controllers
             var normalized = value.Trim().Replace("-", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
             return Enum.TryParse(normalized, out productSpecification) && productSpecification is ProductSpecification.S57 or ProductSpecification.S101;
         }
+
+        /// <summary>Separates the published catalogue version from the SQL candidate version in a package response.</summary>
+        private static EncPackageProductResponse CreatePackageProduct(ElectronicProduct product, ProductSpecification specification, ProductExportTrackRecord? track, bool discarded) => new(
+            product.datasetName?.Trim() ?? string.Empty,
+            specification,
+            track?.PublishedEdition ?? product.editionNumber ?? 0,
+            track?.PublishedUpdate ?? product.updateNumber ?? 0,
+            discarded ? null : track?.CandidateEdition,
+            discarded ? null : track?.CandidateUpdate,
+            track?.State ?? ProductState.Idle,
+            track?.IsManuallyFrozen == true,
+            discarded,
+            discarded ? null : track?.ErrorMessage);
 
         private async Task<IReadOnlyList<ProductExportTrackRecord>> GetRelatedExportTracksAsync(ElectronicProduct electronicProduct, CancellationToken cancellationToken = default)
         {

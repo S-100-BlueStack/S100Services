@@ -8,7 +8,7 @@ using System.Text.Json;
 namespace ProductCatalogueAPI.Jobs;
 
 /// <summary>
-/// Accumulates detected source edits into daily YAML summaries. It never creates exports or changes S-128.
+/// Runs the ENC package scan and candidate builds in the worker without publishing unaccepted data to S-128.
 /// </summary>
 /// <param name="productRepository">Persists the successful scan watermark.</param>
 /// <param name="workflowRepository">Persists independent product tracks and change summaries.</param>
@@ -17,7 +17,8 @@ namespace ProductCatalogueAPI.Jobs;
 /// <param name="timeProvider">Supplies the scan timestamp and work-date boundary.</param>
 /// <param name="logger">Receives scan diagnostics.</param>
 /// <param name="detectionState">The immutable startup decision that guards scheduled and persisted invocations.</param>
-public sealed class DetectProductChangesJob(IProductRepository productRepository, IProductWorkflowRepository workflowRepository, IProductManager productManager, IDatasetLockService datasetLockService, TimeProvider timeProvider, ILogger<DetectProductChangesJob> logger, DetectProductChangesState detectionState) : IBackgroundJob
+/// <param name="encPackages">The package workflow registered by the production worker.</param>
+public sealed class DetectProductChangesJob(IProductRepository productRepository, IProductWorkflowRepository workflowRepository, IProductManager productManager, IDatasetLockService datasetLockService, TimeProvider timeProvider, ILogger<DetectProductChangesJob> logger, DetectProductChangesState detectionState, IEncPackageDetectionService? encPackages = null) : IBackgroundJob
 {
     private readonly IProductRepository _productRepository = productRepository;
     private readonly IProductWorkflowRepository _workflowRepository = workflowRepository;
@@ -33,6 +34,10 @@ public sealed class DetectProductChangesJob(IProductRepository productRepository
         // Removing the recurring schedule does not remove already persisted invocations.
         _detectionState.EnsureEnabled();
         cancellationToken.ThrowIfCancellationRequested();
+        if (encPackages is not null) {
+            await encPackages.RunAsync(cancellationToken);
+            return;
+        }
         var jobName = nameof(DetectProductChangesJob);
         var scanStartedUtc = _timeProvider.GetUtcNow().UtcDateTime;
         var sinceUtc = await _productRepository.GetLastSuccessfulRunUtcAsync(jobName);
@@ -118,7 +123,7 @@ public sealed class DetectProductChangesJob(IProductRepository productRepository
         await _workflowRepository.SaveChangeSummaryAsync(new ProductChangeSummary(summaryId, track.Id, track.DatasetName, track.ProductSpecification, workDate, yaml, changes, firstDetectedAtUtc, detectedAtUtc), cancellationToken);
     }
 
-    private static IReadOnlyCollection<string> GetObservedAttributePaths(ArchiveRow row) {
+    internal static IReadOnlyCollection<string> GetObservedAttributePaths(ArchiveRow row) {
         var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         AddJsonPaths(paths, "attributes", row.AttributeBindings);
         AddJsonPaths(paths, "featureBindings", row.FeatureBindings);
@@ -162,7 +167,7 @@ public sealed class DetectProductChangesJob(IProductRepository productRepository
 
     private static DateOnly GetCopenhagenDate(DateTime utc) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), GetCopenhagenTimeZone()));
 
-    private static DateTime GetCopenhagenDayStartUtc(DateTime utc) {
+    internal static DateTime GetCopenhagenDayStartUtc(DateTime utc) {
         var timeZone = GetCopenhagenTimeZone();
         var localDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), timeZone));
         return TimeZoneInfo.ConvertTimeToUtc(localDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), timeZone);

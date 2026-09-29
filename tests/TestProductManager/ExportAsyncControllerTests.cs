@@ -51,7 +51,7 @@ public sealed class ExportAsyncControllerTests
         Assert.IsType<AcceptedResult>(result);
         Assert.Equal("DK3BIDQE", jobs.Request!.DatasetName);
         Assert.Equal("S57", jobs.Request.ProductSpecification);
-        Assert.Equal(ExportOperationType.CancelExport, jobs.Request.OperationType);
+        Assert.Equal(ExportOperationType.Discard, jobs.Request.OperationType);
     }
 
     [Fact]

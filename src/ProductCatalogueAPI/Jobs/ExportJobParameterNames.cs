@@ -55,8 +55,8 @@ namespace ProductCatalogueAPI.Jobs
         public const string OperationCancelledMessage = "The operation was cancelled before completion.";
         public const string ExportFailedCode = "EXPORT_FAILED";
         public const string ExportFailedMessage = "The export could not be completed.";
-        public const string CancelExportFailedCode = "CANCEL_EXPORT_FAILED";
-        public const string CancelExportFailedMessage = "The candidate export could not be cancelled.";
+        public const string CancelExportFailedCode = "DISCARD_FAILED";
+        public const string CancelExportFailedMessage = "The candidate export could not be discarded.";
         public const string JobFailedCode = "JOB_FAILED";
         public const string JobFailedMessage = "The operation could not be completed.";
         public const string JobEnqueueFailedCode = "JOB_ENQUEUE_FAILED";

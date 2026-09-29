@@ -33,6 +33,21 @@ public sealed class ExportOperationServiceTests
     }
 
     [Fact]
+    public async Task PackageExportUsesPersistedSharedYamlWithoutTakingAnotherSnapshot() {
+        var products = new RecordingElectronicProductManager();
+        var repository = new RecordingWorkflowRepository();
+        var engine = new RecordingExportEngine();
+        var service = CreateService(products, repository, engine, new SummaryResponse());
+
+        await service.ExecutePackageExportAsync("DK3BIDQE", ExportRevisionType.NewEdition, "shared-enc-yaml", "summary-yaml");
+
+        Assert.Equal(0, products.SnapshotCalls);
+        Assert.Equal("shared-enc-yaml", engine.LastRequest?.DatasetYaml);
+        Assert.Equal("101DK001", engine.LastRequest?.SourceDatasetName);
+        Assert.Equal("summary-yaml", Assert.Single(repository.Revisions).ChangeSummaryYaml);
+    }
+
+    [Fact]
     public async Task CriticalValidationFindingsPersistSummaryAndDiagnostics() {
         var repository = new RecordingWorkflowRepository();
         var diagnostic = new SevenCsDiagnosticArtifact("101DK001.vld", "text/plain", "validation details"u8.ToArray());

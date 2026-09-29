@@ -106,10 +106,10 @@ namespace ProductCatalogueAPI.Jobs
             if ((request.OperationType is ExportOperationType.ExportEdition or ExportOperationType.ExportUpdate) && request.ExpectedEdition == 0)
                 throw new InvalidOperationException("Edition zero must use the NewDataset operation.");
 
-            if (request.OperationType == ExportOperationType.CancelExport &&
+            if ((request.OperationType is ExportOperationType.CancelExport or ExportOperationType.Discard) &&
                 request.ProductSpecification is not ("S57" or "S101")) {
                 throw new InvalidOperationException(
-                    "CancelExport jobs must include the independent export target."
+                    "Discard jobs must include the independent export target."
                 );
             }
         }

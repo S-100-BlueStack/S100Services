@@ -24,7 +24,8 @@ namespace ProductCatalogueAPI.Jobs
         ) {
             try {
                 if (state.Enabled)
-                    addOrUpdate(RecurringJobId, job => job.RunAsync(CancellationToken.None), Cron.Daily(23));
+                    // The client filter coalesces minute ticks while a previous scan is queued or running.
+                    addOrUpdate(RecurringJobId, job => job.RunAsync(CancellationToken.None), Cron.Minutely());
                 else
                     removeIfExists(RecurringJobId);
             }

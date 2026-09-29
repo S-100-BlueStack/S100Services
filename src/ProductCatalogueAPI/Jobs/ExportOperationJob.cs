@@ -198,7 +198,7 @@ namespace ProductCatalogueAPI.Jobs
                     ExportOperationType.ExportUpdate => await _exportOperationService.ExecuteExportAsync(
                         request.DatasetName, ExportRevisionType.Update,
                         user: null, cancellationToken: cancellationToken, beforeMutation: markExecutionStarted),
-                    ExportOperationType.CancelExport => await _exportOperationService.ExecuteCancelExportAsync(
+                    ExportOperationType.CancelExport or ExportOperationType.Discard => await _exportOperationService.ExecuteCancelExportAsync(
                         request.DatasetName, user: null,
                         cancellationToken: cancellationToken, beforeMutation: markExecutionStarted),
                     _ => throw new ArgumentOutOfRangeException(
@@ -304,7 +304,7 @@ namespace ProductCatalogueAPI.Jobs
                         ExportJobContract.ExportFailedCode,
                         ExportJobContract.ExportFailedMessage
                     ),
-                    ExportOperationType.CancelExport => (
+                    ExportOperationType.CancelExport or ExportOperationType.Discard => (
                         ExportJobContract.CancelExportFailedCode,
                         ExportJobContract.CancelExportFailedMessage
                     ),

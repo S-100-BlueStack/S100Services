@@ -13,7 +13,7 @@ namespace TestProductCatalogueAPI
         [Theory]
         [InlineData(nameof(ExportController.NewEdition), "{name}/newedition")]
         [InlineData(nameof(ExportController.NewUpdate), "{name}/newupdate")]
-        [InlineData(nameof(ExportController.CancelExport), "{name}/cancel-export")]
+        [InlineData(nameof(ExportController.CancelExport), "{name}/discard")]
         public void QueuedExportRoutesUseTheirProductSpecificNames(string methodName, string expectedRoute) {
             var method = typeof(ExportController).GetMethod(methodName)
                 ?? throw new InvalidOperationException($"Method {methodName} was not found.");

@@ -10,6 +10,9 @@ public interface IExportOperationService
     /// <summary>Builds and validates a new edition or update candidate for one independent product track.</summary>
     Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null);
 
+    /// <summary>Builds one package candidate from the exact YAML snapshot already persisted for both encoders.</summary>
+    Task<ExportOperationResult> ExecutePackageExportAsync(string datasetName, ExportRevisionType revisionType, string datasetYaml, string changeSummaryYaml, CancellationToken cancellationToken = default) => throw new NotSupportedException("The export service does not support ENC packages.");
+
     /// <summary>Cancels an unverified candidate without changing the public S-128 catalogue.</summary>
     Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null);
 }

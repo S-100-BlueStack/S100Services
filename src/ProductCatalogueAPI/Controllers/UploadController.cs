@@ -97,7 +97,7 @@ namespace ProductCatalogueAPI.Controllers
 
             var allowsSevenCsValidationOverride = product.State == ProductState.Error &&
                 string.Equals(product.ErrorCode, SendToIcEncContract.SevenCsValidationFailedCode, StringComparison.Ordinal);
-            if (product.State != ProductState.Exported && !allowsSevenCsValidationOverride) {
+            if (product.State is not (ProductState.Exported or ProductState.ReadyForDistribution) && !allowsSevenCsValidationOverride) {
                 _logger.LogWarning(
                     "IC-ENC send simulation rejected because Product state is invalid. DatasetName: {DatasetName}. ExpectedState: {ExpectedState}. ActualState: {ActualState}",
                     datasetName,
@@ -157,11 +157,11 @@ namespace ProductCatalogueAPI.Controllers
         }
 
         /// <summary>
-        /// Manually freezes a product so it will be excluded in the automatic upload to IC-ENC.
+        /// Places an independent manual hold on this product and its ENC package.
         /// </summary>
         [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError, "application/json")]
-        [HttpPut("{datasetName}/freeze", Name = "freeze")]
+        [HttpPut("{datasetName}/hold", Name = "hold")]
         public async Task<IActionResult> FreezeProduct(
             string datasetName,
             CancellationToken cancellationToken
@@ -188,10 +188,10 @@ namespace ProductCatalogueAPI.Controllers
             var track = await _workflowRepository.GetOrCreateTrackAsync(product.DatasetName, product.ProductSpecification, ExportEngineKind.IsoIec8211, version.Edition.Value, version.Update.Value, cancellationToken);
 
             if (track.IsManuallyFrozen || track.State == ProductState.Frozen)
-                return BadRequest($"Product {datasetName} is already frozen.");
+                return BadRequest($"Product {datasetName} is already on hold.");
 
             if (track.State == ProductState.InTransit)
-                return BadRequest($"Product {datasetName} is currently in transit and cannot be frozen.");
+                return BadRequest($"Product {datasetName} is currently in transit and cannot be placed on hold.");
 
             var changed = await _workflowRepository.SetManualFreezeAsync(
                 track.Id,
@@ -201,17 +201,17 @@ namespace ProductCatalogueAPI.Controllers
             );
 
             if (!changed)
-                return BadRequest($"Product {datasetName} is already frozen.");
+                return BadRequest($"Product {datasetName} is already on hold.");
 
             return Ok();
         }
 
         /// <summary>
-        /// Unfreezes a product so it will be included again in the automatic upload to IC-ENC.
+        /// Releases an independent manual hold so future package detection can proceed.
         /// </summary>
         [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError, "application/json")]
-        [HttpPut("{datasetName}/unfreeze", Name = "unfreeze")]
+        [HttpPut("{datasetName}/release-hold", Name = "release-hold")]
         public async Task<IActionResult> UnfreezeProduct(
             string datasetName,
             CancellationToken cancellationToken
@@ -234,7 +234,7 @@ namespace ProductCatalogueAPI.Controllers
                 return NotFound();
 
             if (!track.IsManuallyFrozen)
-                return BadRequest($"Product {datasetName} is not frozen and cannot be unfrozen.");
+                return BadRequest($"Product {datasetName} is not on hold.");
 
             var changed = await _workflowRepository.ClearManualFreezeAsync(
                 track.Id,
@@ -244,7 +244,7 @@ namespace ProductCatalogueAPI.Controllers
             );
 
             if (!changed)
-                return BadRequest($"Product {datasetName} is not frozen and cannot be unfrozen.");
+                return BadRequest($"Product {datasetName} is not on hold.");
 
             return Ok();
         }

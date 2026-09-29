@@ -34,6 +34,7 @@ public static class BackendRegistrations
         services.AddScoped<ProductRepository>();
         services.AddScoped<IProductRepository>(provider => provider.GetRequiredService<ProductRepository>());
         services.AddScoped<IProductWorkflowRepository>(provider => provider.GetRequiredService<ProductRepository>());
+        services.AddScoped<IEncPackageRepository, EncPackageRepository>();
         services.AddScoped<IProductWorkspaceFreshnessRepository, ProductWorkspaceFreshnessRepository>();
         services.AddScoped<IProductHistoryEventRepository, ProductHistoryEventRepository>();
         services.AddScoped<IProductHistoryEventService, ProductHistoryEventService>();
@@ -80,6 +81,7 @@ public static class BackendRegistrations
         services.AddSingleton<IExportDecisionRuleSetRegistry, ExportDecisionRuleSetRegistry>();
         services.AddSingleton<ISevenCsService, SevenCsService>();
         services.AddScoped<IExportOperationService, ExportOperationService>();
+        services.AddScoped<IEncPackageDetectionService, EncPackageDetectionService>();
         services.AddTransient<ExportOperationJob>();
         services.AddTransient<DetectProductChangesJob>();
         services.AddTransient<ProcessChangeSummariesJob>();
@@ -114,6 +116,7 @@ public static class BackendRegistrations
                 .UseSimpleAssemblyNameTypeSerializer()
                 .UseRecommendedSerializerSettings()
                 .UseFilter(new ExportJobMetadataClientFilter())
+                .UseFilter(new CoalescingDpcFilter())
                 .UseSqlServerStorage(
                     nameOrConnectionString: connectionString,
                     options: new SqlServerStorageOptions {

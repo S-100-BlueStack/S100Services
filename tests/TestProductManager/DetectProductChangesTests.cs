@@ -72,7 +72,7 @@ namespace TestProductCatalogueAPI
 
             var registration = Assert.Single(schedule.Registrations);
             Assert.Equal("detect-product-changes-job", registration.Id);
-            Assert.Equal("0 23 * * *", registration.Cron);
+            Assert.Equal("* * * * *", registration.Cron);
             var invocation = Job.FromExpression(registration.Invocation);
             Assert.Equal(typeof(DetectProductChangesJob), invocation.Type);
             Assert.Equal("RunAsync", invocation.Method.Name);
@@ -197,7 +197,7 @@ namespace TestProductCatalogueAPI
                 Assert.Equal(typeof(DetectProductChangesJob), invocation.Type);
                 Assert.Equal(typeof(DetectProductChangesJob).GetMethod("RunAsync", new[] { typeof(CancellationToken) }), invocation.Method);
                 Assert.Equal(CancellationToken.None, Assert.IsType<CancellationToken>(Assert.Single(invocation.Args)));
-                Assert.Equal("0 23 * * *", call.Arguments[2]);
+                Assert.Equal("* * * * *", call.Arguments[2]);
                 var options = Assert.IsType<RecurringJobOptions>(call.Arguments[3]);
                 Assert.Equal(TimeZoneInfo.Utc, options.TimeZone);
             }

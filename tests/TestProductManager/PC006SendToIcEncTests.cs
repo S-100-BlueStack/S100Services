@@ -47,10 +47,12 @@ namespace TestProductCatalogueAPI
             Assert.Equal(0, locks.AcquireCalls);
         }
 
-        [Fact]
+        [Theory]
+        [InlineData(ProductState.Exported)]
+        [InlineData(ProductState.ReadyForDistribution)]
         [Trait("Package", "PC-006")]
-        public async Task SimulationEndpointAcceptsTruthfulBackgroundJobWithoutProductMutation() {
-            var repository = new RecordingProductRepository(Product());
+        public async Task SimulationEndpointAcceptsTruthfulBackgroundJobWithoutProductMutation(ProductState state) {
+            var repository = new RecordingProductRepository(Product(state));
             var jobs = new RecordingSendJobService();
             var locks = new ThrowingLockService();
             var controller = Controller(repository, locks, jobs, SendToIcEncMode.Simulation);
@@ -152,7 +154,6 @@ namespace TestProductCatalogueAPI
 
         [Theory]
         [InlineData(ProductState.Idle)]
-        [InlineData(ProductState.ReadyForDistribution)]
         [Trait("Package", "PC-006")]
         public async Task InvalidProductStateReturnsConflictWithoutEnqueueOrMutation(ProductState state) {
             var repository = new RecordingProductRepository(Product(state));

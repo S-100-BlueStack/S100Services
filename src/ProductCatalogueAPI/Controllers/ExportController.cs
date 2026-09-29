@@ -25,12 +25,12 @@ public sealed class ExportController(ILogger<ExportController> logger, IProductM
     private readonly IExportJobService _exportJobService = exportJobService;
     private readonly TimeProvider _timeProvider = timeProvider;
 
-    /// <summary>Queues a new-edition candidate build.</summary>
+    /// <summary>Queues a manual new-edition build for Swagger testing and operator repair.</summary>
     [HttpPost("{name}/newedition", Name = "NewEdition")]
     [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
     public Task<IActionResult> NewEdition(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.ExportEdition, cancellationToken);
 
-    /// <summary>Queues an update candidate build.</summary>
+    /// <summary>Queues a manual update build for Swagger testing and operator repair.</summary>
     [HttpPost("{name}/newupdate", Name = "NewUpdate")]
     [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
     public Task<IActionResult> NewUpdate(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.ExportUpdate, cancellationToken);
@@ -40,10 +40,10 @@ public sealed class ExportController(ILogger<ExportController> logger, IProductM
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status501NotImplemented, "application/json")]
     public IActionResult CreateAllDatasets() => StatusCode(StatusCodes.Status501NotImplemented, new ApiResponse { Success = false, Message = "Bulk candidate creation is not implemented for independent export tracks." });
 
-    /// <summary>Queues cancellation of one unverified product-track export.</summary>
-    [HttpPost("{name}/cancel-export", Name = "CancelExport")]
+    /// <summary>Discards one candidate; discarding both rolls the ENC package and scan timestamp back.</summary>
+    [HttpPost("{name}/discard", Name = "Discard")]
     [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
-    public Task<IActionResult> CancelExport(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.CancelExport, cancellationToken);
+    public Task<IActionResult> CancelExport(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.Discard, cancellationToken);
 
     /// <summary>Preserves the legacy analysis route while validation history is served by the electronic-products API.</summary>
     [HttpPost("{name}/analysis", Name = "GetAnalysis")]
