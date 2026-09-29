@@ -5,7 +5,6 @@ using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Hosting;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Services.Export;
-using ProductCatalogueAPI.Services.ExportRules;
 using ProductCatalogueAPI.Services.History;
 using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Services.Locking;
@@ -76,15 +75,11 @@ public static class BackendRegistrations
         services.AddSingleton<IExportEngine, Hdf5ExportEngine>();
         services.AddSingleton<IExportEngine, GmlExportEngine>();
         services.AddSingleton<IExportEngineRegistry, ExportEngineRegistry>();
-        services.AddSingleton<IExportDecisionRuleSet, PendingS101ExportDecisionRuleSet>();
-        services.AddSingleton<IExportDecisionRuleSet, PendingS57ExportDecisionRuleSet>();
-        services.AddSingleton<IExportDecisionRuleSetRegistry, ExportDecisionRuleSetRegistry>();
         services.AddSingleton<ISevenCsService, SevenCsService>();
         services.AddScoped<IExportOperationService, ExportOperationService>();
         services.AddScoped<IEncPackageDetectionService, EncPackageDetectionService>();
         services.AddTransient<ExportOperationJob>();
         services.AddTransient<DetectProductChangesJob>();
-        services.AddTransient<ProcessChangeSummariesJob>();
 
         return services;
     }

@@ -42,11 +42,11 @@ public sealed class ExportAsyncControllerTests
     }
 
     [Fact]
-    public async Task CancelExportQueuesS57FromTheCatalogueProduct() {
+    public async Task DiscardQueuesS57FromTheCatalogueProduct() {
         var jobs = new RecordingJobService();
         var controller = CreateController(jobs);
 
-        var result = await controller.CancelExport("DK3BIDQE", CancellationToken.None);
+        var result = await controller.Discard("DK3BIDQE", CancellationToken.None);
 
         Assert.IsType<AcceptedResult>(result);
         Assert.Equal("DK3BIDQE", jobs.Request!.DatasetName);

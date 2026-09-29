@@ -155,7 +155,7 @@ namespace TestProductCatalogueAPI
 
             if (initiallyEnabled) {
                 await Assert.ThrowsAsync<DependencyAccessException>(() => job.RunAsync(CancellationToken.None));
-                Assert.Equal(new[] { "IProductRepository.GetLastSuccessfulRunUtcAsync" }, calls);
+                Assert.Equal(new[] { "IEncPackageDetectionService.RunAsync" }, calls);
                 Assert.Single(schedule.Registrations);
                 Assert.Empty(schedule.Removals);
             }
@@ -267,16 +267,9 @@ namespace TestProductCatalogueAPI
             state, logger ?? new RecordingLogger(), schedule.AddOrUpdate, schedule.RemoveIfExists
         );
 
-        /// <summary>Fails on dependency access so disabled jobs cannot silently perform any work.</summary>
-        private static DetectProductChangesJob CreateJob(DetectProductChangesState state, List<string> calls) => new(
-            DependencySpy<IProductRepository>.Create(calls),
-            DependencySpy<IProductWorkflowRepository>.Create(calls),
-            DependencySpy<IProductManager>.Create(calls),
-            DependencySpy<IDatasetLockService>.Create(calls),
-            TimeProvider.System,
-            DependencySpy<ILogger<DetectProductChangesJob>>.Create(calls),
-            state
-        );
+        /// <summary>Fails on package scanning so disabled jobs cannot access the workflow.</summary>
+        private static DetectProductChangesJob CreateJob(DetectProductChangesState state, List<string> calls) =>
+            new(state, DependencySpy<IEncPackageDetectionService>.Create(calls));
 
         public sealed class DependencyAccessException : Exception { }
 

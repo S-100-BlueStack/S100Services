@@ -30,7 +30,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         await packages.ReleaseAcceptedAsync(cancellationToken);
         var scanStartedUtc = clock.GetUtcNow().UtcDateTime;
         var sinceUtc = await productRepository.GetLastSuccessfulRunUtcAsync(nameof(DetectProductChangesJob))
-            ?? DetectProductChangesJob.GetCopenhagenDayStartUtc(scanStartedUtc);
+            ?? EncChangeSummary.GetCopenhagenDayStartUtc(scanStartedUtc);
         var pending = await _products.GetPendingEditsAsync(sinceUtc);
         var replay = await packages.GetReplayBoundsAsync(cancellationToken);
         if (replay.Count > 0) {
@@ -43,7 +43,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             var eligibleReplay = replay.Where(entry => !activeReplay.ContainsKey(entry.Key) &&
                 !replayTracks.Any(track => (string.Equals(track.DatasetName, entry.Key, StringComparison.OrdinalIgnoreCase) ||
                     mappedS57[entry.Key].Contains(track.DatasetName, StringComparer.OrdinalIgnoreCase)) &&
-                    (track.IsManuallyFrozen || track.State is ProductState.InTransit or ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or ProductState.Error)))
+                    (track.IsManuallyFrozen || track.State is ProductState.Frozen or ProductState.InTransit or ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or ProductState.Error)))
                 .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
             if (eligibleReplay.Count > 0) {
                 // A blocked AOI retains its cursor without repeatedly forcing a historic archive scan.
@@ -84,8 +84,8 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 if (!completeChanges.TryGetValue(sourceName, out packageChanges) || packageChanges.Count == 0)
                     continue;
                 try {
-                    await exports.ExecuteCancelExportAsync(existing.S57DatasetName, "system", cancellationToken);
-                    await exports.ExecuteCancelExportAsync(existing.SourceDatasetName, "system", cancellationToken);
+                    await exports.ExecuteDiscardAsync(existing.S57DatasetName, "system", cancellationToken);
+                    await exports.ExecuteDiscardAsync(existing.SourceDatasetName, "system", cancellationToken);
                 }
                 catch {
                     await packages.SetErrorAsync(existing.Id, "The package could not be refreshed. Review and discard its remaining candidate.", CancellationToken.None);
@@ -102,15 +102,15 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             var s101 = await workflowRepository.GetOrCreateTrackAsync(sourceName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, s101Version.Edition ?? 0, s101Version.Update ?? 0, cancellationToken);
             var s57 = await workflowRepository.GetOrCreateTrackAsync(s57Name, ProductSpecification.S57, ExportEngineKind.IsoIec8211, s57Version.Edition ?? 0, s57Version.Update ?? 0, cancellationToken);
             if (s101.IsManuallyFrozen || s57.IsManuallyFrozen ||
-                s101.State is ProductState.InTransit or ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or ProductState.Error ||
-                s57.State is ProductState.InTransit or ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or ProductState.Error) {
+                s101.State is ProductState.Frozen or ProductState.InTransit or ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or ProductState.Error ||
+                s57.State is ProductState.Frozen or ProductState.InTransit or ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or ProductState.Error) {
                 await packages.MarkReplayAsync(sourceName, replay.GetValueOrDefault(sourceName, sinceUtc), cancellationToken);
                 continue;
             }
 
-            var summaryChanges = packageChanges.SelectMany(pair => DetectProductChangesJob.GetObservedAttributePaths(pair.Value)
+            var summaryChanges = packageChanges.SelectMany(pair => EncChangeSummary.GetObservedAttributePaths(pair.Value)
                 .Select(path => new ProductChange(pair.Key, pair.Value.Code ?? string.Empty, path, pair.Value.EditDate ?? scanStartedUtc, pair.Value.Deleted)));
-            var summary = ChangeSummaryYamlSerializer.Serialize(sourceName, ProductSpecification.S101, DateOnly.FromDateTime(scanStartedUtc), packageScanFromUtc, scanStartedUtc, summaryChanges);
+            var summary = EncChangeSummary.Serialize(sourceName, ProductSpecification.S101, EncChangeSummary.GetCopenhagenDate(scanStartedUtc), packageScanFromUtc, scanStartedUtc, summaryChanges);
             var edition = checked(s101.PublishedEdition + 1);
             var dataset = await _products.CreateExportSnapshotAsync(sourceName, ExportTypes.NewEdition, edition, 0, cancellationToken);
             var yaml = dataset.Serialize();
@@ -123,7 +123,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
 
             // A failed candidate remains in the package for explicit operator acknowledgement.
             // Both encoders receive the exact same persisted YAML string.
-            foreach (var name in new[] { sourceName, s57Name }) {
+            foreach (var (name, specification) in new[] { (sourceName, ProductSpecification.S101), (s57Name, ProductSpecification.S57) }) {
                 try {
                     await exports.ExecutePackageExportAsync(name, ExportRevisionType.NewEdition, yaml, summary, cancellationToken);
                 }
@@ -131,8 +131,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                     throw;
                 }
                 catch (Exception exception) {
-                    logger.LogError(exception, "ENC candidate failed. SourceDatasetName: {SourceDatasetName}. ExportDatasetName: {ExportDatasetName}. PackageId: {PackageId}.", sourceName, name, package.Id);
-                    await packages.SetErrorAsync(package.Id, $"The {name} candidate failed. Review its export status and diagnostics, then discard the failed candidate.", cancellationToken);
+                    await RecordCandidateFailureAsync(package, name, specification, exception);
                 }
             }
         }
@@ -171,9 +170,28 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 throw;
             }
             catch (Exception exception) {
-                logger.LogError(exception, "ENC candidate recovery failed. PackageId: {PackageId}. ExportDatasetName: {ExportDatasetName}.", package.Id, name);
-                await packages.SetErrorAsync(package.Id, "A candidate build failed during recovery. Discard the affected candidate.", cancellationToken);
+                await RecordCandidateFailureAsync(package, name, specification, exception);
             }
         }
+    }
+
+    private async Task RecordCandidateFailureAsync(EncPackage package, string datasetName, ProductSpecification specification, Exception exception) {
+        logger.LogError(exception, "ENC candidate failed. PackageId: {PackageId}. ExportDatasetName: {ExportDatasetName}.", package.Id, datasetName);
+        var message = exception is ExportValidationException validation
+            ? validation.PublicMessage
+            : $"The {specification} candidate '{datasetName}' failed. Review its diagnostics and discard the failed candidate.";
+        var errorCode = exception is ExportValidationException failure ? failure.Code : "ENC_CANDIDATE_FAILED";
+        try {
+            // A failure before BeginExportAsync still needs a failed track for the operator to acknowledge.
+            var track = await workflowRepository.GetTrackAsync(datasetName, specification, CancellationToken.None);
+            if (track is not null && track.State is not (ProductState.Error or ProductState.Rejected))
+                await workflowRepository.SetStateAsync(track.Id, ProductState.Error, "system", clock.GetUtcNow().UtcDateTime, errorCode, message, CancellationToken.None);
+        }
+        catch (Exception persistenceException) {
+            logger.LogError(persistenceException, "Could not record the failed ENC export track. PackageId: {PackageId}. ExportDatasetName: {ExportDatasetName}.", package.Id, datasetName);
+        }
+
+        // Keep package failure durable even if a cancellation arrives after the encoder fails.
+        await packages.SetErrorAsync(package.Id, message, CancellationToken.None);
     }
 }

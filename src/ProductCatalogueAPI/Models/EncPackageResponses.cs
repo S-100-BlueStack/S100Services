@@ -35,18 +35,36 @@ public static class EncPackageStatusResolver
 {
     /// <summary>Returns Error for any failed candidate and keeps InTransit locked until both are terminal.</summary>
     public static EncPackageStatus Resolve(EncPackage? package, ProductExportTrackRecord? s57, ProductExportTrackRecord? s101) {
-        if (package?.ErrorMessage is not null || IsError(s57, package?.S57Discarded == true) || IsError(s101, package?.S101Discarded == true))
+        if (!string.IsNullOrWhiteSpace(package?.ErrorMessage) || IsError(s57, package?.S57Discarded == true) || IsError(s101, package?.S101Discarded == true))
             return EncPackageStatus.Error;
         if (package is null)
-            return s57?.IsManuallyFrozen == true || s101?.IsManuallyFrozen == true ? EncPackageStatus.Held : EncPackageStatus.Idle;
+            return IsHeld(s57) || IsHeld(s101) ? EncPackageStatus.Held : EncPackageStatus.Idle;
         if (s57?.State is ProductState.InTransit or ProductState.AcceptedForDistribution or ProductState.Published ||
             s101?.State is ProductState.InTransit or ProductState.AcceptedForDistribution or ProductState.Published)
             return EncPackageStatus.InTransit;
+        if (IsHeld(s57) || IsHeld(s101))
+            return EncPackageStatus.Held;
         if ((package.S57Discarded || s57?.State == ProductState.ReadyForDistribution) &&
             (package.S101Discarded || s101?.State == ProductState.ReadyForDistribution))
             return EncPackageStatus.Ready;
         return EncPackageStatus.Building;
     }
 
-    private static bool IsError(ProductExportTrackRecord? track, bool discarded) => !discarded && track?.State is ProductState.Error or ProductState.Rejected;
+    /// <summary>Shows the failed product's diagnostic even when the package row has no error text.</summary>
+    public static string? GetErrorMessage(EncPackage? package, ProductExportTrackRecord? s57, ProductExportTrackRecord? s101) {
+        if (IsError(s101, package?.S101Discarded == true) && !string.IsNullOrWhiteSpace(s101?.ErrorMessage))
+            return s101.ErrorMessage;
+        if (IsError(s57, package?.S57Discarded == true) && !string.IsNullOrWhiteSpace(s57?.ErrorMessage))
+            return s57.ErrorMessage;
+        if (!string.IsNullOrWhiteSpace(package?.ErrorMessage))
+            return package.ErrorMessage;
+        if (IsError(s101, package?.S101Discarded == true))
+            return "The S-101 candidate failed or was rejected. Review its validation artifacts and discard the failed candidate.";
+        if (IsError(s57, package?.S57Discarded == true))
+            return "The S-57 candidate failed or was rejected. Review its validation artifacts and discard the failed candidate.";
+        return null;
+    }
+
+    private static bool IsError(ProductExportTrackRecord? track, bool discarded) => !discarded && track is { State: ProductState.Error or ProductState.Rejected };
+    private static bool IsHeld(ProductExportTrackRecord? track) => track?.IsManuallyFrozen == true || track?.State == ProductState.Frozen;
 }

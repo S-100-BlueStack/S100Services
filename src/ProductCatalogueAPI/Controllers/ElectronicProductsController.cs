@@ -20,7 +20,6 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using static ProductCatalogueAPI.Models.RequestTypes;
 using static ProductCatalogueAPI.Models.ResponseTypes;
 
 namespace ProductCatalogueAPI.Controllers
@@ -142,10 +141,11 @@ namespace ProductCatalogueAPI.Controllers
         }
 
         /// <summary>
-        /// Get all product AOIs in the database as ESRI json feature collection.
+        /// Gets S-101 AOIs as ENC packages with their mapped S-57 and S-101 products.
         /// </summary>
-        /// <returns>An ESRI json feature collection for all product AOIs.</returns>
-        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
+        /// <returns>An ESRI JSON feature collection containing each AOI's package status and candidate versions.</returns>
+        [ProducesResponseType(typeof(List<AOIResponse>), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpGet("aoi")]
         public async Task<IActionResult> GetAllElectronicProductsAOI([FromQuery, SwaggerAllowedValues(nameof(PackageLayer.ENC))] string layer = "ENC")
@@ -279,8 +279,11 @@ namespace ProductCatalogueAPI.Controllers
                     var s57Track = s57Tracks?.FirstOrDefault(track => track.ProductSpecification == ProductSpecification.S57);
                     packages.TryGetValue(mappedProduct.DatasetName, out var activePackage);
                     var status = EncPackageStatusResolver.Resolve(activePackage, s57Track, s101Track);
+                    var packageError = status == EncPackageStatus.Error
+                        ? EncPackageStatusResolver.GetErrorMessage(activePackage, s57Track, s101Track)
+                        : null;
                     var package = new EncPackageResponse(selectedLayer, mappedProduct.DatasetName, mappedProduct.Product.specificUsage,
-                        mappedProduct.Product.optimumDisplayScale, activePackage?.DetectedAtUtc, status, activePackage?.ErrorMessage,
+                        mappedProduct.Product.optimumDisplayScale, activePackage?.DetectedAtUtc, status, packageError,
                         CreatePackageProduct(mappedProduct.S57, ProductSpecification.S57, s57Track, activePackage?.S57Discarded == true),
                         CreatePackageProduct(mappedProduct.Product, ProductSpecification.S101, s101Track, activePackage?.S101Discarded == true));
 
@@ -303,9 +306,7 @@ namespace ProductCatalogueAPI.Controllers
                             // Products without a SQL workflow track remain idle until internal work begins.
                             DisplayScale = mappedProduct.Product.optimumDisplayScale,
                             UsageBand = mappedProduct.Product.specificUsage,
-                            ErrorMessage = status == EncPackageStatus.Error
-                                ? activePackage?.ErrorMessage ?? (activePackage?.S57Discarded == true ? null : s57Track?.ErrorMessage) ?? (activePackage?.S101Discarded == true ? null : s101Track?.ErrorMessage)
-                                : current?.ErrorMessage
+                            ErrorMessage = status == EncPackageStatus.Error ? packageError : current?.ErrorMessage
                         }
                     });
                 }
@@ -370,7 +371,7 @@ namespace ProductCatalogueAPI.Controllers
             var exports = new List<ProductExport>();
             foreach (var track in tracks)
             {
-                // A track is retained after CancelExport so its state history remains auditable.
+                // A track remains after a discard so its state history remains auditable.
                 // It is not a current export unless it still has a candidate or a published version.
                 var hasActiveCandidate = track.CandidateEdition.HasValue && track.CandidateUpdate.HasValue;
                 var latestRevisionId = hasActiveCandidate
@@ -574,72 +575,6 @@ namespace ProductCatalogueAPI.Controllers
             response.DurationMs = sw.ElapsedMilliseconds;
 
             return this.Ok(response);
-        }
-
-        /// <summary>
-        /// Creates a new Electronic Product in the S-128 database.
-        /// </summary>
-        /// <remarks>
-        /// The request payload containing the dataset boundary (AOI) and usage band.
-        /// The aoi should be provided in ArcGIS JSON geometry format.
-        /// </remarks>
-        [ProducesResponseType(StatusCodes.Status501NotImplemented)]
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
-        //[ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
-        [HttpPost()]
-        //[Authorize("productmanager:manage")]
-        public async Task<IActionResult> CreateElectronicProduct([FromBody] CreateProductRequest product)
-        {
-            return StatusCode(StatusCodes.Status501NotImplemented);
-
-#pragma warning disable CS0162 // Unreachable code is kept because this endpoint is intentionally parked.
-            var sw = Stopwatch.StartNew();
-            var response = new ApiResponse();
-
-            if (_electronicProductManager.ElectronicProduct(product.Name) != null)
-            {
-                response.Success = false;
-                response.Message = $"An electronic product with name '{product.Name}' already exists.";
-                response.DurationMs = sw.ElapsedMilliseconds;
-                return StatusCode(StatusCodes.Status404NotFound, response);
-            }
-
-            //var boundary = GetBoundaryFromGeoJSON(aoi);
-            //var boundary = NetTopologySuite.Geometries.Polygon.FromJson(product.Aoi.ToString());
-            var boundary = product.Aoi.ToString();
-            _electronicProductManager.ElectronicProduct(product.Name); // check if product already exists, if not, will return null
-
-            var productSpecification = new S100FC.S128.ComplexAttributes.productSpecification()
-            {
-                name = "S-101",
-                version = "2.0.0",
-                editionDate = DateOnly.FromDateTime(DateTime.Today)
-            };
-
-            var specificUsage = product.UsageBand switch
-            {
-                SpecificUsage.NavigationalPurposeOverview => 1, // S100FC.S128.specificUsage.NavigationalPurposeOverview,
-                SpecificUsage.NavigationalPurposeGeneral => 2, //S100FC.S128.specificUsage.NavigationalPurposeGeneral,
-                SpecificUsage.NavigationalPurposeCoastal => 3, //S100FC.S128.specificUsage.NavigationalPurposeCoastal,
-                SpecificUsage.NavigationalPurposeApproach => 4, //S100FC.S128.specificUsage.NavigationalPurposeApproach,
-                SpecificUsage.NavigationalPurposeHarbour => 5, //S100FC.S128.specificUsage.NavigationalPurposeHarbour,
-                SpecificUsage.NavigationalPurposeBerthing => 6, //S100FC.S128.specificUsage.NavigationalPurposeBerthing,
-                _ => throw new ArgumentNullException(),
-            };
-
-            // Todo: change argument to AOI and do arcgis core geometry conversion in ProductManagerCore
-            await _electronicProductManager.CreateElectronicProductAsync(
-                product.Name,
-                productSpecification,
-                specificUsage,
-                boundary,
-                "",
-                product.OptimumDisplayScale);
-
-            response.DurationMs = sw.ElapsedMilliseconds;
-            return Ok(response);
-#pragma warning restore CS0162
         }
 
         /// <summary>

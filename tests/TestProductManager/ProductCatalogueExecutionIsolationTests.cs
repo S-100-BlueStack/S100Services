@@ -88,7 +88,9 @@ public sealed class ProductCatalogueExecutionIsolationTests
         AssertConstructorConsumesProductManager(typeof(ExportController));
         AssertConstructorConsumesProductManager(typeof(ExportOperationJob));
         AssertConstructorConsumesProductManager(typeof(ExportOperationService));
-        AssertConstructorConsumesProductManager(typeof(DetectProductChangesJob));
+        AssertConstructorConsumesProductManager(typeof(EncPackageDetectionService));
+        Assert.Contains(typeof(DetectProductChangesJob).GetConstructors().Single().GetParameters(),
+            parameter => parameter.ParameterType == typeof(IEncPackageDetectionService) && !parameter.IsOptional);
     }
 
     [Theory]

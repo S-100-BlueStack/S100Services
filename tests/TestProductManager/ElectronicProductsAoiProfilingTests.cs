@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using ProductCatalogueAPI.Controllers;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
+using ProductCatalogueAPI.Models;
 using S100FC;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
@@ -21,6 +22,31 @@ namespace TestProductCatalogueAPI
 {
     public class ElectronicProductsAoiProfilingTests
     {
+        [Fact]
+        public async Task GlobalAoiShowsS101FailureOnThePackageWhenS57Succeeded() {
+            const string datasetName = "101DK0000001E";
+            var products = new FakeElectronicProductManager(
+                new Dictionary<string, string> { [datasetName] = "{\"rings\":[]}" },
+                new Dictionary<string, ElectronicProduct> { [datasetName] = CreateElectronicProduct(datasetName, 90_000, 3) });
+            var tracks = new InMemoryProductRepository();
+            var s101 = await tracks.GetOrCreateTrackAsync(datasetName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 1, 0);
+            var s57 = await tracks.GetOrCreateTrackAsync($"57{datasetName}", ProductSpecification.S57, ExportEngineKind.IsoIec8211, 1, 0);
+            await tracks.SetStateAsync(s101.Id, ProductState.Error, "system", DateTime.UtcNow, "SEVENCS_VALIDATION_FAILED", "SevenCs found 2 critical findings.");
+            await tracks.SetStateAsync(s57.Id, ProductState.ReadyForDistribution, "system", DateTime.UtcNow);
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
+                new FakeProductManager(products), new RecordingProductRepository(new Dictionary<string, ProductRecord?>()), tracks) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+
+            var result = await controller.GetAllElectronicProductsAOI();
+
+            var response = Assert.Single(Assert.IsType<List<AOIResponse>>(Assert.IsType<OkObjectResult>(result).Value));
+            Assert.Equal(EncPackageStatus.Error, response.Attributes?.Package?.Status);
+            Assert.Equal("SevenCs found 2 critical findings.", response.Attributes?.Package?.ErrorMessage);
+            Assert.Equal(response.Attributes?.Package?.ErrorMessage, response.Attributes?.ErrorMessage);
+        }
+
         [Fact]
         public async Task GlobalAoiActionPreservesResponseContractAndLogsProfilingMetrics() {
             const string firstDatasetName = "101DK0000001E";

@@ -3,7 +3,7 @@ using ProductCatalogueAPI.Data.Models;
 namespace ProductCatalogueAPI.Data.Repositories;
 
 /// <summary>
-/// Persists independent product tracks, candidate revisions, artifacts, and daily change summaries in SQL Server.
+/// Persists independent product tracks, candidate revisions and artifacts in SQL Server.
 /// </summary>
 public interface IProductWorkflowRepository
 {
@@ -37,7 +37,7 @@ public interface IProductWorkflowRepository
     Task<bool> ClearManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default);
 
     /// <summary>Clears an unverified candidate and records a cancelled workflow state.</summary>
-    Task CancelCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default);
+    Task DiscardCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default);
 
     /// <summary>Creates an immutable candidate revision containing its complete YAML source.</summary>
     Task<Guid> AddRevisionAsync(ProductRevisionWrite revision, CancellationToken cancellationToken = default);
@@ -57,15 +57,4 @@ public interface IProductWorkflowRepository
     /// <summary>Gets one validation diagnostic after verifying that it belongs to the requested dataset.</summary>
     Task<ProductArtifactContent?> GetValidationArtifactAsync(string datasetName, Guid artifactId, CancellationToken cancellationToken = default);
 
-    /// <summary>Gets the daily summary for a track and work date, including a closed row that can be reopened by new detection results.</summary>
-    Task<ProductChangeSummary?> GetOpenChangeSummaryAsync(Guid trackId, DateOnly workDate, CancellationToken cancellationToken = default);
-
-    /// <summary>Upserts the complete, lock-protected daily summary and its normalized changes.</summary>
-    Task SaveChangeSummaryAsync(ProductChangeSummary summary, CancellationToken cancellationToken = default);
-
-    /// <summary>Gets all open summaries that can be evaluated by the export decision rulesets.</summary>
-    Task<IReadOnlyList<ProductChangeSummary>> GetOpenChangeSummariesAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>Closes a summary after its candidate export has been durably created.</summary>
-    Task CloseChangeSummaryAsync(Guid summaryId, DateTime closedAtUtc, CancellationToken cancellationToken = default);
 }

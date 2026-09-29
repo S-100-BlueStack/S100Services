@@ -11,8 +11,8 @@ public interface IExportOperationService
     Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null);
 
     /// <summary>Builds one package candidate from the exact YAML snapshot already persisted for both encoders.</summary>
-    Task<ExportOperationResult> ExecutePackageExportAsync(string datasetName, ExportRevisionType revisionType, string datasetYaml, string changeSummaryYaml, CancellationToken cancellationToken = default) => throw new NotSupportedException("The export service does not support ENC packages.");
+    Task<ExportOperationResult> ExecutePackageExportAsync(string datasetName, ExportRevisionType revisionType, string datasetYaml, string changeSummaryYaml, CancellationToken cancellationToken = default);
 
-    /// <summary>Cancels an unverified candidate without changing the public S-128 catalogue.</summary>
-    Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null);
+    /// <summary>Discards an unverified candidate without changing the public S-128 catalogue.</summary>
+    Task<ExportOperationResult> ExecuteDiscardAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null);
 }

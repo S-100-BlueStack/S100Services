@@ -7,6 +7,7 @@ using ProductCatalogueAPI.Services.Operations;
 using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.ProductCatalogue;
 using System.Collections;
+using System.Net.Sockets;
 using static ProductCatalogueAPI.Services.SevenCs.SevenCsService;
 using YamlDataset = S100FC.YAML.Dataset;
 
@@ -77,6 +78,19 @@ public sealed class ExportOperationServiceTests
     }
 
     [Fact]
+    public async Task SevenCsTimeoutFailsTheS101CandidateInsteadOfMarkingItReady() {
+        var repository = new RecordingWorkflowRepository();
+        var timeout = new HttpRequestException("SevenCs timed out", new SocketException((int)SocketError.TimedOut));
+        var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse(), validationFailure: timeout);
+
+        var error = await Assert.ThrowsAsync<ExportValidationException>(() => service.ExecutePackageExportAsync("101DK001", ExportRevisionType.NewEdition, "shared-yaml", "summary-yaml"));
+
+        Assert.Equal("SEVENCS_VALIDATION_UNAVAILABLE", error.Code);
+        Assert.Equal(ProductState.Error, repository.Track.State);
+        Assert.Equal(error.PublicMessage, repository.LastErrorMessage);
+    }
+
+    [Fact]
     public async Task FrozenCanOnlyBeClearedByTheUserFlowAndBlocksExportBeforeMutation() {
         var repository = new RecordingWorkflowRepository { InitialState = ProductState.Frozen };
         var products = new RecordingElectronicProductManager();
@@ -91,15 +105,15 @@ public sealed class ExportOperationServiceTests
     }
 
     [Fact]
-    public async Task CancelExportRestoresThePreviousStateAndClearsOnlyTheSqlCandidateAndFilesystemOutput() {
+    public async Task DiscardRestoresThePreviousStateAndClearsOnlyTheSqlCandidateAndFilesystemOutput() {
         var repository = new RecordingWorkflowRepository { CandidateEdition = 5, CandidateUpdate = 0, InitialState = ProductState.ReadyForDistribution };
         var products = new RecordingElectronicProductManager();
         var engine = new RecordingExportEngine();
         var service = CreateService(products, repository, engine, new SummaryResponse());
 
-        var result = await service.ExecuteCancelExportAsync("101DK001", "developer");
+        var result = await service.ExecuteDiscardAsync("101DK001", "developer");
 
-        Assert.Equal(ExportOperationContract.CancelExportCompletedCode, result.Code);
+        Assert.Equal(ExportOperationContract.DiscardCompletedCode, result.Code);
         Assert.Equal(ProductState.ReadyForDistribution, repository.Track.State);
         Assert.Null(repository.Track.CandidateEdition);
         Assert.Null(repository.Track.CandidatePreviousState);
@@ -109,7 +123,7 @@ public sealed class ExportOperationServiceTests
     }
 
     [Fact]
-    public async Task CancelExportRestoresPreviousStateAndPreservesManualFreezeHold() {
+    public async Task DiscardRestoresPreviousStateAndPreservesManualHold() {
         var repository = new RecordingWorkflowRepository { CandidateEdition = 5, CandidateUpdate = 0, InitialState = ProductState.ChangesDetected };
         var track = await repository.GetTrackAsync("101DK001", ProductSpecification.S101);
         track!.IsManuallyFrozen = true;
@@ -117,7 +131,7 @@ public sealed class ExportOperationServiceTests
         var engine = new RecordingExportEngine();
         var service = CreateService(products, repository, engine, new SummaryResponse());
 
-        await service.ExecuteCancelExportAsync("101DK001", "developer");
+        await service.ExecuteDiscardAsync("101DK001", "developer");
 
         Assert.Equal(ProductState.ChangesDetected, repository.Track.State);
         Assert.True(repository.Track.IsManuallyFrozen);
@@ -169,8 +183,8 @@ public sealed class ExportOperationServiceTests
         Assert.Equal(0, engine.ExportCalls);
     }
 
-    private static TestExportOperationService CreateService(RecordingElectronicProductManager products, RecordingWorkflowRepository repository, RecordingExportEngine engine, SummaryResponse validation, IReadOnlyList<SevenCsDiagnosticArtifact>? diagnostics = null) => new(
-        new FakeProductManager(products), new ExportEngineRegistry([engine]), repository, new FakeSevenCsService(validation, diagnostics ?? []),
+    private static TestExportOperationService CreateService(RecordingElectronicProductManager products, RecordingWorkflowRepository repository, RecordingExportEngine engine, SummaryResponse validation, IReadOnlyList<SevenCsDiagnosticArtifact>? diagnostics = null, Exception? validationFailure = null) => new(
+        new FakeProductManager(products), new ExportEngineRegistry([engine]), repository, new FakeSevenCsService(validation, diagnostics ?? [], validationFailure),
         new FixedTimeProvider(DateTimeOffset.Parse("2026-08-10T20:00:00Z")), "dataset-yaml");
 
     private sealed class TestExportOperationService(IProductManager productManager, IExportEngineRegistry engines, IProductWorkflowRepository repository, ISevenCsService sevenCs, TimeProvider timeProvider, string yaml)
@@ -257,13 +271,9 @@ public sealed class ExportOperationServiceTests
         public Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default) { Track.State = state; LastErrorCode = errorCode; LastErrorMessage = errorMessage; return Task.CompletedTask; }
         public Task<bool> SetManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { var changed = !Track.IsManuallyFrozen; Track.IsManuallyFrozen = true; return Task.FromResult(changed); }
         public Task<bool> ClearManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { var changed = Track.IsManuallyFrozen; Track.IsManuallyFrozen = false; return Task.FromResult(changed); }
-        public Task CancelCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { Track.State = Track.CandidatePreviousState ?? ProductState.Idle; Track.CandidateEdition = null; Track.CandidateUpdate = null; Track.CandidatePreviousState = null; return Task.CompletedTask; }
+        public Task DiscardCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { Track.State = Track.CandidatePreviousState ?? ProductState.Idle; Track.CandidateEdition = null; Track.CandidateUpdate = null; Track.CandidatePreviousState = null; return Task.CompletedTask; }
         public Task<Guid> AddRevisionAsync(ProductRevisionWrite revision, CancellationToken cancellationToken = default) { Revisions.Add(revision); return Task.FromResult(Guid.NewGuid()); }
         public Task AddArtifactAsync(ProductArtifactWrite artifact, CancellationToken cancellationToken = default) { Artifacts.Add(artifact); return Task.CompletedTask; }
-        public Task<ProductChangeSummary?> GetOpenChangeSummaryAsync(Guid trackId, DateOnly workDate, CancellationToken cancellationToken = default) => Task.FromResult<ProductChangeSummary?>(null);
-        public Task SaveChangeSummaryAsync(ProductChangeSummary summary, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task<IReadOnlyList<ProductChangeSummary>> GetOpenChangeSummariesAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ProductChangeSummary>>([]);
-        public Task CloseChangeSummaryAsync(Guid summaryId, DateTime closedAtUtc, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<IReadOnlyList<ProductExportTrackRecord>> GetTracksAsync(string datasetName, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ProductExportTrackRecord>>([]);
         public Task<Guid?> GetLatestRevisionIdAsync(Guid trackId, CancellationToken cancellationToken = default) => Task.FromResult<Guid?>(null);
         public Task<IReadOnlyList<ProductArtifactReference>> GetValidationArtifactsAsync(Guid productRevisionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ProductArtifactReference>>([]);
@@ -273,9 +283,11 @@ public sealed class ExportOperationServiceTests
         private ProductExportTrackRecord EnsureTrack(string datasetName, ProductSpecification specification) => Track ??= new ProductExportTrackRecord { Id = Guid.NewGuid(), DatasetName = datasetName, ProductSpecification = specification, Engine = ExportEngineKind.IsoIec8211, State = InitialState, PublishedEdition = 4, PublishedUpdate = 2, CandidateEdition = CandidateEdition, CandidateUpdate = CandidateUpdate };
     }
 
-    private sealed class FakeSevenCsService(SummaryResponse response, IReadOnlyList<SevenCsDiagnosticArtifact> diagnostics) : ISevenCsService
+    private sealed class FakeSevenCsService(SummaryResponse response, IReadOnlyList<SevenCsDiagnosticArtifact> diagnostics, Exception? failure) : ISevenCsService
     {
-        public Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) => Task.FromResult(new SevenCsValidationResult(response, diagnostics));
+        public Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) => failure is null
+            ? Task.FromResult(new SevenCsValidationResult(response, diagnostics))
+            : Task.FromException<SevenCsValidationResult>(failure);
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider

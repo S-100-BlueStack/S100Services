@@ -25,6 +25,13 @@ namespace TestProductCatalogueAPI
         private const string DatasetName = "101DK001";
 
         [Fact]
+        public void SendQueuesWithPostAndHoldUsesResourceMethods() {
+            Assert.Single(typeof(UploadController).GetMethod(nameof(UploadController.UploadSingularProduct))!.GetCustomAttributes<HttpPostAttribute>());
+            Assert.Single(typeof(UploadController).GetMethod(nameof(UploadController.HoldProduct))!.GetCustomAttributes<HttpPutAttribute>());
+            Assert.Single(typeof(UploadController).GetMethod(nameof(UploadController.ReleaseHoldProduct))!.GetCustomAttributes<HttpDeleteAttribute>());
+        }
+
+        [Fact]
         [Trait("Package", "PC-006")]
         public async Task DisabledEndpointReturnsSafeServiceUnavailableWithoutEnqueueOrMutation() {
             var repository = new RecordingProductRepository(Product());
@@ -458,7 +465,7 @@ namespace TestProductCatalogueAPI
 
         [Fact]
         [Trait("Package", "PC-006")]
-        public async Task FreezeFlowUsesCanonicalTrackLockAndPersistsIndependentHold() {
+        public async Task HoldUsesCanonicalTrackLockAndPersistsIndependentState() {
             var repository = new RecordingProductRepository(Product(ProductState.Idle));
             var workflowRepository = new InMemoryProductRepository();
             var track = await workflowRepository.GetOrCreateTrackAsync(DatasetName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 5, 0);
@@ -471,7 +478,7 @@ namespace TestProductCatalogueAPI
                 workflowRepository
             );
 
-            var result = await controller.FreezeProduct(DatasetName, CancellationToken.None);
+            var result = await controller.HoldProduct(DatasetName, CancellationToken.None);
 
             Assert.IsType<OkResult>(result);
             Assert.Equal(1, locks.AcquireCalls);
@@ -481,12 +488,26 @@ namespace TestProductCatalogueAPI
         }
 
         [Fact]
+        public async Task HoldAndReleaseAreIdempotentForTheSameProduct() {
+            var tracks = new InMemoryProductRepository();
+            var controller = Controller(new RecordingProductRepository(null), new AcquiredLockService(), new RecordingSendJobService(), SendToIcEncMode.Disabled, tracks);
+
+            Assert.IsType<OkResult>(await controller.HoldProduct(DatasetName, CancellationToken.None));
+            Assert.IsType<OkResult>(await controller.HoldProduct(DatasetName, CancellationToken.None));
+            Assert.True((await tracks.GetTrackAsync(DatasetName, ProductSpecification.S101))!.IsManuallyFrozen);
+
+            Assert.IsType<OkResult>(await controller.ReleaseHoldProduct(DatasetName, CancellationToken.None));
+            Assert.IsType<OkResult>(await controller.ReleaseHoldProduct(DatasetName, CancellationToken.None));
+            Assert.False((await tracks.GetTrackAsync(DatasetName, ProductSpecification.S101))!.IsManuallyFrozen);
+        }
+
+        [Fact]
         [Trait("Package", "PC-006")]
-        public async Task FreezeCreatesMissingTrackFromCatalogueAndPreservesPublicVersion() {
+        public async Task HoldCreatesMissingTrackFromCatalogueAndPreservesPublicVersion() {
             var workflowRepository = new InMemoryProductRepository();
             var controller = Controller(new RecordingProductRepository(null), new AcquiredLockService(), new RecordingSendJobService(), SendToIcEncMode.Disabled, workflowRepository);
 
-            var result = await controller.FreezeProduct(DatasetName, CancellationToken.None);
+            var result = await controller.HoldProduct(DatasetName, CancellationToken.None);
 
             Assert.IsType<OkResult>(result);
             var track = await workflowRepository.GetTrackAsync(DatasetName, ProductSpecification.S101);
@@ -498,11 +519,11 @@ namespace TestProductCatalogueAPI
 
         [Fact]
         [Trait("Package", "PC-006")]
-        public async Task FreezeRejectsUnknownProductWithoutCreatingSqlTrack() {
+        public async Task HoldRejectsUnknownProductWithoutCreatingSqlTrack() {
             var workflowRepository = new InMemoryProductRepository();
             var controller = Controller(new RecordingProductRepository(null), new AcquiredLockService(), new RecordingSendJobService(), SendToIcEncMode.Disabled, workflowRepository);
 
-            var result = await controller.FreezeProduct("UNKNOWN", CancellationToken.None);
+            var result = await controller.HoldProduct("UNKNOWN", CancellationToken.None);
 
             Assert.IsType<NotFoundResult>(result);
             Assert.Null(await workflowRepository.GetTrackAsync("UNKNOWN", ProductSpecification.S101));
@@ -510,11 +531,11 @@ namespace TestProductCatalogueAPI
 
         [Fact]
         [Trait("Package", "PC-006")]
-        public async Task FreezeUsesS57TrackIdentifiedByCatalogue() {
+        public async Task HoldUsesS57TrackIdentifiedByCatalogue() {
             var workflowRepository = new InMemoryProductRepository();
             var controller = Controller(new RecordingProductRepository(null), new AcquiredLockService(), new RecordingSendJobService(), SendToIcEncMode.Disabled, workflowRepository);
 
-            var result = await controller.FreezeProduct("DK3BIDQE", CancellationToken.None);
+            var result = await controller.HoldProduct("DK3BIDQE", CancellationToken.None);
 
             Assert.IsType<OkResult>(result);
             Assert.True((await workflowRepository.GetTrackAsync("DK3BIDQE", ProductSpecification.S57))!.IsManuallyFrozen);
@@ -523,7 +544,7 @@ namespace TestProductCatalogueAPI
 
         [Fact]
         [Trait("Package", "PC-006")]
-        public async Task UnfreezeFlowUsesCanonicalTrackLockAndRevealsUnderlyingState() {
+        public async Task ReleaseHoldUsesCanonicalTrackLockAndRevealsUnderlyingState() {
             var repository = new RecordingProductRepository(Product(ProductState.Idle));
             var workflowRepository = new InMemoryProductRepository();
             var track = await workflowRepository.GetOrCreateTrackAsync(DatasetName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 5, 0);
@@ -537,7 +558,7 @@ namespace TestProductCatalogueAPI
                 workflowRepository
             );
 
-            var result = await controller.UnfreezeProduct(DatasetName, CancellationToken.None);
+            var result = await controller.ReleaseHoldProduct(DatasetName, CancellationToken.None);
 
             Assert.IsType<OkResult>(result);
             Assert.Equal(1, locks.AcquireCalls);

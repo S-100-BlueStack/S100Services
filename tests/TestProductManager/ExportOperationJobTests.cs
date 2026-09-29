@@ -42,13 +42,13 @@ public sealed class ExportOperationJobTests
     }
 
     [Fact]
-    public async Task CancelExportUsesRenamedOperationContract() {
+    public async Task LegacyCancelExportOperationStillDiscards() {
         var operations = new RecordingOperations();
         var job = CreateJob(operations);
 
         await job.ExecuteAsync(Request(ExportOperationType.CancelExport), new FakeExecutionContext(), CancellationToken.None);
 
-        Assert.Equal(1, operations.CancelCalls);
+        Assert.Equal(1, operations.DiscardCalls);
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class ExportOperationJobTests
     private sealed class RecordingOperations : IExportOperationService
     {
         public int ExportCalls { get; private set; }
-        public int CancelCalls { get; private set; }
+        public int DiscardCalls { get; private set; }
         public ExportRevisionType? LastRevisionType { get; private set; }
         public CancellationTokenSource? CancelDuringExport { get; init; }
         public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) {
@@ -101,7 +101,8 @@ public sealed class ExportOperationJobTests
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage));
         }
-        public Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) { beforeMutation?.Invoke(); CancelCalls++; return Task.FromResult(new ExportOperationResult(ExportOperationContract.CancelExportCompletedCode, ExportOperationContract.CancelExportCompletedMessage)); }
+        public Task<ExportOperationResult> ExecutePackageExportAsync(string datasetName, ExportRevisionType revisionType, string datasetYaml, string changeSummaryYaml, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ExportOperationResult> ExecuteDiscardAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) { beforeMutation?.Invoke(); DiscardCalls++; return Task.FromResult(new ExportOperationResult(ExportOperationContract.DiscardCompletedCode, ExportOperationContract.DiscardCompletedMessage)); }
     }
 
     private sealed class FakeExecutionContext : IExportJobExecutionContext

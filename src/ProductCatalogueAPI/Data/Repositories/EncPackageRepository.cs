@@ -71,7 +71,9 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
     /// <inheritdoc/>
     public async Task SetErrorAsync(Guid packageId, string message, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
-        await connection.ExecuteAsync(new CommandDefinition("UPDATE dbo.EncPackage SET error_message = @Message WHERE package_id = @PackageId;", new { PackageId = packageId, Message = message[..Math.Min(message.Length, 1024)] }, cancellationToken: cancellationToken));
+        var affected = await connection.ExecuteAsync(new CommandDefinition("UPDATE dbo.EncPackage SET error_message = @Message WHERE package_id = @PackageId;", new { PackageId = packageId, Message = message[..Math.Min(message.Length, 1024)] }, cancellationToken: cancellationToken));
+        if (affected != 1)
+            throw new InvalidOperationException($"ENC package '{packageId}' was not available to record its export failure.");
     }
 
     /// <inheritdoc/>
