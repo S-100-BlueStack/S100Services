@@ -1,3 +1,4 @@
+import { readWorkUnitStatusFilterValues } from "../domain/workUnitStatusProjection.js";
 import { ATTRIBUTE_FILTER_CONFIG } from "../../map/filters/attributeFilterConfig.js";
 import { createElectronicExportConfiguration } from "../../products/domain/electronicProductContract.js";
 export const DATA_SOURCE_AVAILABILITY = Object.freeze({
@@ -272,7 +273,13 @@ function createElectronicSource({
     workspace: { supported: true, providerType: "registry-source" },
     filtering: {
       supported: true,
-      definitions: ["status", "displayScale", "usageBand"],
+      definitions: workUnit
+        ? [
+            { fieldName: "status", readValues: readWorkUnitStatusFilterValues },
+            "displayScale",
+            "usageBand",
+          ]
+        : ["status", "displayScale", "usageBand"],
       defaultExcludedValues: ATTRIBUTE_FILTER_CONFIG.global.defaultExcludedValues,
       useLookupOptions: true,
     },

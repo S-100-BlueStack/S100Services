@@ -543,6 +543,74 @@ describe("attributeFilterService", () => {
   });
 });
 
+describe("multi-value field contract", () => {
+  const statusDefinition = {
+    fieldName: "status",
+    readValues: (graphic, readScalar) => graphic.attributes.statusValues ?? [readScalar()],
+  };
+
+  it("counts distinct work units per facet and matches any status with other dimensions ANDed", () => {
+    const service = createService();
+    const layer = createLayer("packages", [
+      { statusValues: ["Ready", "Error"], usageBand: "Coastal", displayScale: 1000 },
+      { statusValues: ["Ready", "Ready"], usageBand: "Overview", displayScale: 2000 },
+      { status: "Scalar", usageBand: "Coastal", displayScale: 3000 },
+    ]);
+    service.replaceProvider({
+      providerId: "packages",
+      generation: 1,
+      layers: [layer],
+      filterDefinitions: [statusDefinition, "usageBand", "displayScale"],
+    });
+    const facets = service.getValuesForField("packages", "status");
+    assert.equal(facets.find((entry) => entry.value === "Ready").count, 2);
+    assert.equal(facets.find((entry) => entry.value === "Error").count, 1);
+    assert.equal(facets.find((entry) => entry.value === "Ready").label, "Ready");
+    service.setFilter("packages", "status", ["Ready"], facets.length);
+    assert.equal(service.getLayerMetadata("packages").visibleCount, 2);
+    service.setFilter("packages", "usageBand", ["Coastal"], 2);
+    assert.equal(service.getLayerMetadata("packages").visibleCount, 1);
+    service.setRangeFilter("packages", "displayScale", 1500, 3000, 1000, 3000);
+    assert.equal(service.getLayerMetadata("packages").visibleCount, 0);
+    service.setFilter("packages", "status", ["Error"], facets.length);
+    assert.equal(service.getLayerMetadata("packages").visibleCount, 0);
+    service.clearFilter("packages", "displayScale");
+    assert.equal(service.getLayerMetadata("packages").visibleCount, 1);
+  });
+
+  it("round-trips a value selected from a member without persisting membership", () => {
+    const layer = createLayer("packages", [{ statusValues: ["W", "M"] }]);
+    const first = createService();
+    first.replaceProvider({
+      providerId: "packages",
+      generation: 1,
+      layers: [layer],
+      filterDefinitions: [statusDefinition],
+    });
+    first.setFilter("packages", "status", ["M"], 2);
+    const snapshot = first.getFilterSnapshot();
+    assert.deepEqual(snapshot, {
+      version: 2,
+      sources: [
+        {
+          providerId: "packages",
+          fields: [{ fieldName: "status", mode: "values", values: ["M"] }],
+        },
+      ],
+    });
+    const second = createService();
+    assert.equal(second.applyFilterSnapshot(snapshot), true);
+    second.replaceProvider({
+      providerId: "packages",
+      generation: 1,
+      layers: [layer],
+      filterDefinitions: [statusDefinition],
+    });
+    assert.equal(second.getLayerMetadata("packages").visibleCount, 1);
+    assert.deepEqual([...second.getSelectedValues("packages", "status")], ["M"]);
+  });
+});
+
 function createService() {
   return createAttributeFilterService({
     getStatuses: () => STATUSES,

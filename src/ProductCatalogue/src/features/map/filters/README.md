@@ -35,6 +35,25 @@ The shared field registry currently defines:
 - `displayScale` as a numeric range filter;
 - `usageBand` as a value filter.
 
+A value-mode field definition may provide `readValues(graphic, readScalar)` instead of
+reading one scalar attribute. It returns logical values for one Graphic; facets and matching use
+the same reader and deduplicate values per Graphic. One selected value matches if any returned
+value matches. Other dimensions still combine with AND, while numeric range fields always read
+one scalar. The package source configures this reader only for Status; simple sources and
+Display scale/Usage band keep their existing scalar behavior.
+
+The package status reader consumes the application-owned normalized
+`graphic.attributes.workUnitStatus` shape `{ workflowStatus, members: [{ key, status }] }`.
+The future AOI integration must map its canonical backend read state into that shape. Neither the
+filter service nor this foundation assumes a backend DTO. Package workflow status and all available
+member Product statuses form one Status option list. A repeated value counts once per Graphic,
+and a matching member retains the one representative Graphic/work unit. Until normalized package
+state is supplied, the reader falls back to that Graphic's scalar `status`; it does not infer
+missing member or workflow state. Backend DTO mapping and mixed-status map rendering are deferred.
+
+Selections remain provider/value based in schema version 2. No member key or package identity is
+stored in filter preferences beyond the existing provider identity.
+
 A source declares only the dimensions supported by its current data contract. Facets are built from
 normalized attributes. Missing optional attributes omit the unsupported field for that provider
 without affecting other fields or sources.

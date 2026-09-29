@@ -72,6 +72,25 @@ Changed metadata closes obsolete details and restores the focused member's contr
 section if its error disappeared. The generic table renderer consumes column presentation metadata;
 it contains no S-101/S-57 source branching or private Calcite/ArcGIS DOM access.
 
+## F1 package Status filter foundation
+
+The package registry configures an optional `readValues` strategy on its Status field. The generic
+filter service reads one or more logical values per Graphic, deduplicates values within that Graphic,
+and matches any selected Status value. Package workflow status and individual member Product statuses
+therefore share one Status dimension with OR semantics. A Graphic contributes at most one count to
+each facet and one count to the provider's visible total. Display scale and other active dimensions
+still combine using AND. Search, hover, selection and Collection retain the one representative
+Graphic and stable identity.
+
+The application-owned normalized input is `graphic.attributes.workUnitStatus` with
+`{ workflowStatus, members: [{ key, status }] }`. The pure projector returns ordered unique values;
+missing member statuses contribute nothing. A later backend-read integration must map authoritative
+package/member state to this shape. No backend DTO names or new status enum values are assumed.
+Current AOI Graphics have only the representative scalar `status`, so the live filter falls back to
+that scalar without inventing S-57 or package workflow state or fetching Product details. Persisted
+filter snapshots stay version 2 with provider-scoped selected logical values, independent of which
+member supplied a match. Backend DTO mapping and mixed-status rendering remain deferred.
+
 ## Capability boundary and deferred work
 
 The package registry source disables Freeze, Unfreeze, Send, Cancel Export, popup Export, Edition and

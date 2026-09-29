@@ -372,6 +372,7 @@ export function createAttributeFilterService({
       return true;
     }
 
+    const provider = providers.get(providerId);
     for (const [fieldName, filter] of providerFilters.entries()) {
       const rawValue = readAttributeValue(graphic, fieldName);
       if (filter.mode === FILTER_MODE.RANGE) {
@@ -382,7 +383,8 @@ export function createAttributeFilterService({
         continue;
       }
 
-      if (!filter.values.has(normalizeFilterValue(rawValue))) {
+      const definition = provider?.definitions.find((entry) => entry.fieldName === fieldName);
+      if (!readFilterValues(graphic, definition).some((value) => filter.values.has(value))) {
         return false;
       }
     }
@@ -655,8 +657,7 @@ function buildFacets({ layers, definitions, useLookupOptions, getStatuses, getUs
     const graphics = layers.flatMap(getLayerGraphics);
 
     for (const graphic of graphics) {
-      const rawValue = readAttributeValue(graphic, definition.fieldName);
-      if (!isEmptyAttributeValue(rawValue)) {
+      if (readFilterValues(graphic, definition).some((value) => value !== EMPTY_FILTER_VALUE)) {
         hasConfiguredAttribute = true;
       }
     }
@@ -666,20 +667,36 @@ function buildFacets({ layers, definitions, useLookupOptions, getStatuses, getUs
     }
 
     for (const graphic of graphics) {
-      const value = normalizeFilterValue(readAttributeValue(graphic, definition.fieldName));
-      const entry = values.get(value) ?? {
-        value,
-        label: createFallbackValueLabel(value),
-        count: 0,
-      };
-      entry.count += 1;
-      values.set(value, entry);
+      for (const value of readFilterValues(graphic, definition)) {
+        const entry = values.get(value) ?? {
+          value,
+          label: createFallbackValueLabel(value),
+          count: 0,
+        };
+        entry.count += 1;
+        values.set(value, entry);
+      }
     }
 
     facets.set(definition.fieldName, [...values.values()].sort(compareValues));
   }
 
   return facets;
+}
+
+function readFilterValues(graphic, definition) {
+  if (!definition) {
+    return [];
+  }
+  const readScalar = (fieldName = definition.fieldName) => readAttributeValue(graphic, fieldName);
+  const rawValues =
+    definition.mode === FILTER_MODE.VALUES && typeof definition.readValues === "function"
+      ? definition.readValues(graphic, readScalar)
+      : [readScalar()];
+  // A field contributes once per Graphic, even when several members share its value.
+  return [
+    ...new Set((Array.isArray(rawValues) ? rawValues : [rawValues]).map(normalizeFilterValue)),
+  ];
 }
 
 function createLookupOptionEntries({ definition, useLookupOptions, getStatuses, getUsages }) {
