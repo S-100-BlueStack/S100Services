@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  readStoredThemeMode,
-  resolveThemeStorage,
-  writeStoredThemeMode,
-} from "./themeStorage.js";
+import { readStoredThemeMode, resolveThemeStorage, writeStoredThemeMode } from "./themeStorage.js";
 
 const CURRENT_KEY = "data-catalogue:theme-mode";
 const LEGACY_KEY = "job-manager:theme-mode";

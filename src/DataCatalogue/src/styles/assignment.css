@@ -1,0 +1,346 @@
+/* Jobs/AOI owns its startup gate; the navbar and independent assignment workflow stay outside it. */
+.dc-jobs-workflow-host {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.dc-jobs-workflow-host > .data-catalogue-workspace {
+  width: 100%;
+  height: 100%;
+}
+.dc-workflow-startup {
+  position: absolute;
+  inset: 0;
+}
+.dc-jobs-workflow-host[hidden],
+.dc-assignment-page[hidden],
+.data-catalogue-workspace[hidden] {
+  display: none !important;
+}
+
+.dc-assignment-page {
+  display: grid;
+  grid-template-columns: minmax(20rem, 1fr) minmax(24rem, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 5px;
+  padding: 5px;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--dc-surface-alt);
+  color: var(--dc-text);
+  font-size: 0.82rem;
+}
+.dc-assignment-column {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  min-height: 0;
+}
+.dc-assignment-column--left {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+.dc-assignment-column--right {
+  grid-template-rows: minmax(0, 43fr) minmax(0, 57fr);
+}
+.dc-prototype-toolbar {
+  grid-column: 1 / -1;
+}
+
+.dc-assignment-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--dc-border);
+  background: var(--dc-surface);
+}
+.dc-assignment-panel > footer,
+.dc-assignment-panel > form,
+.dc-assignment-panel > .dc-assignment-toolbar,
+.dc-assignment-panel > .dc-assignment-panel-toolbar {
+  padding: 4px 7px;
+  flex-shrink: 0;
+}
+.dc-assignment-panel-toolbar {
+  border-bottom: 1px solid var(--dc-border);
+}
+.dc-assignment-page p {
+  margin: 2px 7px;
+}
+.dc-assignment-page p:empty {
+  display: none;
+}
+.dc-assignment-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.dc-assignment-toolbar label {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.dc-assignment-toolbar-spacer {
+  flex: 1 1 auto;
+}
+.dc-assignment-grow {
+  flex: 1;
+  min-width: 10rem;
+}
+.dc-assignment-grow input {
+  width: 100%;
+  min-width: 4rem;
+}
+
+.dc-assignment-page button,
+.dc-assignment-page input,
+.dc-assignment-page select,
+.dc-assignment-page textarea,
+.dc-assignment-dialog button {
+  font: inherit;
+  border: 1px solid var(--dc-border);
+  border-radius: 2px;
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  padding: 3px 6px;
+}
+.dc-assignment-page button,
+.dc-assignment-dialog button {
+  cursor: pointer;
+}
+.dc-assignment-page button:hover:not(:disabled),
+.dc-assignment-dialog button:hover:not(:disabled) {
+  background: var(--dc-surface-alt);
+}
+.dc-assignment-page button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.dc-assignment-page :focus-visible,
+.dc-assignment-dialog :focus-visible {
+  outline: 2px solid var(--calcite-color-brand, #007ac2);
+  outline-offset: 2px;
+}
+
+.dc-assignment-scroll {
+  min-height: 0;
+  overflow: auto;
+  flex: 1;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 0 7px;
+}
+.dc-feature-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  margin: 2px 0;
+  min-height: 27px;
+}
+.dc-feature-row[aria-pressed="true"] {
+  box-shadow: inset 3px 0 var(--calcite-color-brand, #007ac2);
+  background: var(--dc-surface-alt);
+  font-weight: 650;
+}
+.dc-assignment-status {
+  font-size: 0.73rem;
+  padding: 1px 5px;
+}
+.dc-assignment-status.is-assigned {
+  background: var(--dc-color-aoi-low-bg);
+  color: var(--dc-color-aoi-low-text);
+}
+.dc-assignment-status.is-unassigned {
+  background: var(--dc-color-aoi-high-bg);
+  color: var(--dc-color-aoi-high-text);
+}
+.dc-assignment-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.dc-assignment-page dl {
+  margin: 4px 0;
+}
+.dc-assignment-page dt {
+  font-weight: 650;
+}
+.dc-assignment-page dd {
+  margin: 1px 0 7px;
+}
+.dc-assignment-muted {
+  color: var(--dc-text-muted);
+  font-size: 0.73rem;
+}
+
+.dc-work-stream-row {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--dc-border);
+}
+.dc-work-stream-row__primary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.dc-work-stream-row__selection {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 5rem;
+  flex: 1 1 auto;
+}
+.dc-work-stream-row__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+.dc-work-stream-history {
+  margin: 4px 0 1px 22px;
+  padding-left: 7px;
+  border-left: 2px solid var(--dc-border);
+}
+.dc-work-stream-history__item {
+  padding: 2px 0 3px;
+}
+.dc-work-stream-history__item + .dc-work-stream-history__item {
+  border-top: 1px solid var(--dc-border);
+}
+.dc-work-stream-history__item p {
+  margin: 1px 0 0;
+}
+.dc-work-stream-drafts:empty {
+  display: none;
+}
+.dc-comment-draft {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin: 4px 0 0 22px;
+}
+.dc-comment-draft textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+}
+.dc-assignment-validation {
+  color: var(--calcite-color-status-danger, #d83020);
+  font-size: 0.73rem;
+}
+
+.dc-work-stream-reload {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--dc-border);
+}
+.dc-assignment-map-stage {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.dc-assignment-map {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.dc-assignment-map-retry {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: var(--dc-surface);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 24%);
+}
+.dc-assignment-map-retry calcite-icon {
+  pointer-events: none;
+}
+.dc-assignment-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  padding: 3px 7px 4px;
+  font-size: 0.72rem;
+}
+.dc-assignment-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.dc-assignment-legend__feature {
+  position: relative;
+  width: 12px;
+  height: 12px;
+}
+.dc-assignment-legend__feature::before,
+.dc-assignment-legend__feature::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 0;
+  width: 2px;
+  height: 12px;
+  background: var(--calcite-color-brand, #007ac2);
+}
+.dc-assignment-legend__feature::after {
+  transform: rotate(90deg);
+}
+.dc-assignment-legend__line {
+  width: 18px;
+  height: 0;
+  border-top: 2px solid var(--dc-text-muted);
+}
+.dc-assignment-legend__line.is-assigned {
+  border-top-style: solid;
+  border-top-width: 3px;
+}
+.dc-assignment-legend__line.is-context {
+  border-top-style: dashed;
+}
+
+.dc-assignment-dialog {
+  max-width: 30rem;
+  padding: 16px;
+  border: 1px solid var(--dc-border);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+}
+.dc-assignment-dialog h2 {
+  font-size: 0.93rem;
+  margin: 0;
+  font-weight: 650;
+}
+.dc-assignment-dialog::backdrop {
+  background: rgb(0 0 0 / 40%);
+}
+.dc-prototype-toolbar {
+  font-size: 0.73rem;
+}
+.dc-prototype-toolbar > span:first-child {
+  margin-right: auto;
+}
+
+@media (max-height: 720px) {
+  .dc-assignment-panel > footer,
+  .dc-assignment-panel > form,
+  .dc-assignment-panel > .dc-assignment-toolbar,
+  .dc-assignment-panel > .dc-assignment-panel-toolbar {
+    padding-block: 3px;
+  }
+  .dc-assignment-page {
+    font-size: 0.76rem;
+  }
+}

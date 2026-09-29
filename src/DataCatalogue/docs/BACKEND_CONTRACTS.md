@@ -14,17 +14,17 @@ The exported repository inventory includes `src/DataCatalogueAPI`, but API imple
 
 Expected ownership from scoping:
 
-| Data or responsibility                    | Expected owner | Verification state                                                     |
-| ----------------------------------------- | -------------- | ---------------------------------------------------------------------- |
-| Incoming packages and individual Features | Package API    | Role agreed; routes and responses unverified.                          |
-| Workspaces and work areas                 | Workspace API  | Role agreed; routes and responses unverified.                          |
-| Assignments and comments                  | Undecided      | Ownership, retention and mutation semantics need confirmation.         |
-| Production ArcGIS service-account access  | Backend        | Required future boundary; not implemented here.                        |
-| Microsoft AD identity and permissions     | Backend        | No application login page; identity/authorization contract unverified. |
+| Data or responsibility                    | Expected owner | Verification state                                                      |
+| ----------------------------------------- | -------------- | ----------------------------------------------------------------------- |
+| Incoming packages and individual Features | Package API    | Role agreed; routes and responses unverified.                           |
+| Work streams and work areas               | Workspace API  | Frontend term changed; external contract name/routes remain unverified. |
+| Assignments and comments                  | Undecided      | Ownership, retention and mutation semantics need confirmation.          |
+| Production ArcGIS service-account access  | Backend        | Required future boundary; not implemented here.                         |
+| Microsoft AD identity and permissions     | Backend        | No application login page; identity/authorization contract unverified.  |
 
 Existing Jobs remain on the mock adapter and existing AOIs remain on the configured FeatureLayer. Their final identifiers and relation contracts remain provisional.
 
-The first new assignment-page prototype instead requires mock Feature/Workspace application data plus live map context accessed directly in the browser. This test exception must be isolated and replaced by server-mediated access for production. No new map-source settings or authentication are implemented by the rename itself.
+The first new assignment-page prototype instead requires mock Feature/Work stream application data plus live map context accessed directly in the browser. This test exception must be isolated and replaced by server-mediated access for production. No new map-source settings or authentication are implemented by the rename itself.
 
 ## 2. Frontend integration principles
 
@@ -736,7 +736,6 @@ User-facing error messages must be English.
 | BE-011 | How large and dense is the AOI Feature Service?         |        Open | Required before deciding whether to query all AOIs eagerly or page/filter.                                               |
 | BE-012 | Should `PRODUCTID` participate in AOI/Job relations?    |        Open | It may be domain-relevant, but current test field is nullable, so it should not replace `GlobalID` without confirmation. |
 
-
 ## 11. Backend/AOI input checklist
 
 This checklist is the handoff surface for backend/AOI-dependent work. It lists required inputs, not final answers.
@@ -864,15 +863,14 @@ When backend work begins, update this document with:
 - relation calculation ownership
 - known limitations
 
+## 13. Feature/Work stream integration inputs
 
-## 13. Feature/Workspace integration inputs
-
-The accepted UI requirements are in `FEATURE_WORKSPACE_SCOPE.md`. Mock behavior is a frontend testing model, not a final API contract.
+The accepted UI requirements are in `FEATURE_WORK_STREAM_SCOPE.md`. Mock behavior is a frontend testing model, not a final API contract. `Work stream` is the frontend domain term; `Workspace API` remains the current external contract name until its owner explicitly changes it.
 
 Before replacing the mocks, obtain:
 
 - Feature identity, display name, Type, optional information fields, geometry/spatial reference, paging/filtering and errors from Package API.
-- Workspace and work-area identities, optional geography and catalogue paging from Workspace API.
+- Work stream and work-area identities, optional geography and catalogue paging from the external Workspace API.
 - The owner of assignments/comments; current-state reads; create/remove/recreate semantics; immutable comment records, author/time, retained history and error shapes.
 - Save atomicity or partial-failure semantics. The explicit frontend Save must not falsely acknowledge an entire draft when only some operations succeeded.
 - Authentication and authorization, and later version/conflict behavior for concurrent edits.
@@ -881,8 +879,20 @@ For the live direct-browser test map, verify the configured MapServer layer meta
 
 Do not make the user's private service URL a committed fixture or embed credentials in source, browser-exposed environment variables or local mock persistence. The frontend test cannot keep a browser runtime token secret from the person controlling that browser; production service-account access remains a backend responsibility.
 
-A Workspace may bind to multiple layers or no geography. Future grouping of DK1-3 and DK4-5 must not require treating a Workspace ID as an individual map layer or ENC ID.
+A Work stream may bind to multiple layers or no geography. Future grouping of DK1-3 and DK4-5 must not require treating a Work stream ID as an individual map layer or ENC ID.
 
-The temporary mock retains comments when an assignment is removed and shows them again on recreation. This does not prescribe whether the API uses immutable connection records, soft deletion or an audit stream; confirm the actual backend model before implementing an adapter.
+The temporary mock retains comments when an assignment is removed and shows them again on recreation. Deterministic history on `NM260004` and `NM260005` exists only to exercise browser validation; it does not prescribe immutable connection records, soft deletion, an audit stream or any backend fixture. Confirm the actual backend model before implementing an adapter.
 
 Per-ENC completion and work-area locking require separate later contracts. Neither is represented by the first page's Assigned/Not assigned state.
+
+### DC-001 adapter status
+
+Features, Work stream definitions, assignments, comments and all mutations are currently mocked. `createAssignmentWorkflow` is the composition seam for replacing these services; its UI receives normalized frontend values and never imports storage or constructs backend payloads. Package API and Workspace API integration are deferred; no endpoint or authentication contract is introduced.
+
+Only Work stream geography is read directly from ArcGIS in the browser. `VITE_WORK_STREAM_MAP_SERVICE_URL` accepts an HTTPS MapServer base URL without user information, query parameters or fragments. Layer IDs come from Work stream bindings. `createDirectWorkStreamSource` is the temporary source seam to replace with backend-mediated geography. It does not rewrite the URL to FeatureServer, store credentials or introduce a login flow.
+
+The frontend Work stream catalogue exposes neither free-text name search nor pagination. Its normalized service returns the complete applicable Work stream list or an active-ID subset for the panel's internal scroll region. This frontend contract does not prescribe Workspace API query capabilities or payload shape; an eventual adapter must reconcile the verified external contract with this UI requirement.
+
+Production ArcGIS access and Microsoft AD identity/authorization belong behind the backend. Assignment relation/comment API ownership remains unresolved. The local storage envelope, prototype storage key and prototype comment identifiers are provisional test details, not API contracts. The mock assumes one browser user editing at a time; cross-tab and concurrent-user conflict handling remains deferred.
+
+The service metadata could not be retrieved in this implementation environment. Actual fields, spatial reference, browser-origin CORS, session authentication, token expiry and rendering therefore remain manual integration gates. See `DC_001_VALIDATION.md`. ENC completion and Work-area locking remain separate later workflows.

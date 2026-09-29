@@ -1,3 +1,5 @@
+import { createAssignmentWorkflow } from "../features/assignmentPage/createAssignmentWorkflow.js";
+import { createWorkflowNavigation } from "./ui/createWorkflowNavigation.js";
 import { createSelectedAoiStore } from "../features/aoi/state/selectedAoiStore.js";
 import { createJobFilterStore } from "../features/jobs/state/jobFilterStore.js";
 import { createJobStore } from "../features/jobs/state/jobStore.js";
@@ -13,6 +15,7 @@ import { createStartupController } from "./startup/createStartupController.js";
 import { createMapSyncCoordinator } from "./coordination/createMapSyncCoordinator.js";
 import { createStartupLoader } from "../shared/ui/startupLoader.js";
 import { createJobsOverlay } from "./ui/createJobsOverlay.js";
+import { createJobsPanelActions } from "./ui/createJobsPanelActions.js";
 import { createMapWorkspace } from "./ui/createMapWorkspace.js";
 import { createNavbarController } from "./ui/createNavbarController.js";
 
@@ -148,13 +151,37 @@ export async function createApp(rootElement) {
 
   workspace.element.appendChild(jobsPanel.element);
 
-  const shellElement = document.createElement("div");
-  shellElement.className = "data-catalogue-app data-catalogue-app--startup-blocked";
-  shellElement.inert = true;
-  shellElement.setAttribute("aria-hidden", "true");
-  shellElement.append(navbar.element, workspace.element, noticeRegion);
+  const jobsWorkflowHost = document.createElement("div");
+  jobsWorkflowHost.className = "dc-jobs-workflow-host";
+  startupLoader.element.classList.add("dc-workflow-startup");
+  jobsWorkflowHost.append(workspace.element, startupLoader.element);
 
-  rootElement.replaceChildren(shellElement, startupLoader.element);
+  const shellElement = document.createElement("div");
+  shellElement.className = "data-catalogue-app";
+  blockShellForStartup(workspace.element);
+  navbar.jobsButton.disabled = true;
+  navbar.filtersButton.disabled = true;
+  shellElement.append(navbar.element, jobsWorkflowHost, noticeRegion);
+
+  rootElement.replaceChildren(shellElement);
+  const jobsPanelActions = createJobsPanelActions({
+    isOpen: () => !jobsPanel.element.hidden,
+    resetContext: resetJobsPanelContext,
+    prepareOpen() {
+      jobsPanel.clearAoiFilter();
+      jobsPanel.refreshJobs();
+    },
+    prepareClose: () => jobsPanel.hideCompletedJobs(),
+    setOpen: (isOpen) => setPanelOpen(jobsPanel.element, navbar.jobsButton, isOpen),
+  });
+  const workflowNavigation = createWorkflowNavigation({
+    shellElement,
+    jobsWorkflowHost,
+    navbar,
+    createPage: () => createAssignmentWorkflow(runtimeConfig),
+    onOpenJobs: jobsPanelActions.open,
+    isJobsStartupComplete: () => isStartupComplete,
+  });
 
   const startupController = createStartupController({
     startupLoader,
@@ -294,33 +321,20 @@ export async function createApp(rootElement) {
 
   setPanelOpen(jobsPanel.element, navbar.jobsButton, false);
 
-  navbar.jobsButton.addEventListener(
-    "click",
-    () => {
-      const shouldOpen = jobsPanel.element.hidden;
+  function resetJobsPanelContext() {
+    cancelPendingMapRestores();
+    isSelectedJobMapScopeActive = false;
+    selectedAoiStore.clearSelection();
+    selectedJobStore.clearSelection();
+    jobsPanel.clearSelectedJob();
+    mapController.clearJobHighlight();
+    mapController.clearAoiHighlight();
+    mapController.clearAoiJobScope();
+  }
 
-      cancelPendingMapRestores();
-      isSelectedJobMapScopeActive = false;
-      selectedAoiStore.clearSelection();
-      selectedJobStore.clearSelection();
-      jobsPanel.clearSelectedJob();
-      mapController.clearJobHighlight();
-      mapController.clearAoiHighlight();
-      mapController.clearAoiJobScope();
-
-      if (shouldOpen) {
-        jobsPanel.clearAoiFilter();
-        jobsPanel.refreshJobs();
-      } else {
-        jobsPanel.hideCompletedJobs();
-      }
-
-      setPanelOpen(jobsPanel.element, navbar.jobsButton, shouldOpen);
-    },
-    {
-      signal: appEventAbortController.signal,
-    }
-  );
+  navbar.jobsButton.addEventListener("click", () => jobsPanelActions.toggle(), {
+    signal: appEventAbortController.signal,
+  });
 
   jobsPanel.closeButton.addEventListener(
     "click",
@@ -345,11 +359,15 @@ export async function createApp(rootElement) {
   void startupController.runStartup({
     onStartupBlocked() {
       isStartupComplete = false;
-      blockShellForStartup(shellElement);
+      blockShellForStartup(workspace.element);
+      workflowNavigation.syncJobsButtonState();
+      navbar.filtersButton.disabled = true;
     },
     onStartupComplete() {
       isStartupComplete = true;
-      releaseShellAfterStartup(shellElement);
+      releaseShellAfterStartup(workspace.element);
+      workflowNavigation.syncJobsButtonState();
+      navbar.filtersButton.disabled = false;
     },
   });
 
@@ -392,6 +410,7 @@ export async function createApp(rootElement) {
 
   return {
     destroy() {
+      workflowNavigation.destroy();
       startupController.destroy();
       mapSyncCoordinator?.destroy?.();
       appEventAbortController.abort();

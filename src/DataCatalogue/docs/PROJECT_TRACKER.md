@@ -4,13 +4,13 @@ This document is the source of truth for DataCatalogue project goals, requiremen
 
 Keep this document updated when requirements, technical decisions, backend assumptions or implementation status change.
 
-The DataCatalogue scope below supersedes the earlier Jobs/AOI-only delivery order. Historical phase entries and `JM-*` task IDs are retained for traceability; they are not renamed or newly revalidated by this candidate. Accepted assignment-page requirements are recorded in [FEATURE_WORKSPACE_SCOPE.md](FEATURE_WORKSPACE_SCOPE.md).
+The DataCatalogue scope below supersedes the earlier Jobs/AOI-only delivery order. Historical phase entries and `JM-*` task IDs are retained for traceability; they are not renamed or newly revalidated by this candidate. Accepted assignment-page requirements are recorded in [FEATURE_WORK_STREAM_SCOPE.md](FEATURE_WORK_STREAM_SCOPE.md).
 
 ## 1. Project summary
 
-DataCatalogue supports two related but distinct workflows: the existing Jobs/AOI main map and the planned assessment of incoming geographic Features against Workspaces.
+DataCatalogue supports two related but distinct workflows: the existing Jobs/AOI main map and the prototype assessment of incoming geographic Features against Work streams.
 
-The next delivery is a separate Feature-to-Workspace assignment page. Features, Workspaces, work-area AOIs, ENC cells and Jobs remain separate concepts. Assigned indicates an active Workspace link, not completion of downstream chart updates.
+DC-001 provides a separate Feature-to-Work stream assignment page candidate. Features, Work streams, work-area AOIs, ENC cells and Jobs remain separate concepts. Assigned indicates an active Work stream link, not completion of downstream chart updates.
 
 ```txt
 S100Services/
@@ -19,21 +19,21 @@ S100Services/
     DataCatalogue/
 ```
 
-Follow Product Manager patterns where useful, without coupling domains or changing API projects. The frontend rename must be accepted before new page implementation.
+Follow Product Manager patterns where useful, without coupling domains or changing API projects. The DC-001 frontend candidate uses the accepted Work stream terminology without renaming external API contracts.
 
 ## 2. Current project status
 
-Status: DataCatalogue rename candidate In progress; implementation is prepared, full local tooling and browser acceptance remain pending.
+Status: DC-001 final visual/interaction polish candidate prepared; full dependency-backed checks, browser acceptance and live Work stream service verification remain pending.
 
-Authoritative input: `e8bb33256802935592f7bcc700deb2bc21d223ba`. The uploaded export records a different local HEAD and a different local remote-tracking reference. Those informational references do not replace the explicit input commit. Do not apply the candidate blindly over another branch or dirty tree.
+Authoritative DC-001 input: `184fdca6f5f8d87dc7a3a878c867b6714ec873f8`. The archive and context SHA-256 values were verified against the supplied manifest. The accepted DataCatalogue rename is preserved. Informational local changes were not exported and are not reconstructed.
 
-The current app still runs the existing Jobs/AOI workflow. The Feature-to-Workspace page, live DK1-DK5 test integration and new mock persistence are Not started. See section 20 for the current delivery order and [RENAME_NOTES.md](RENAME_NOTES.md) for validation and migration limits.
+The corrected candidate keeps the independent four-region assignment workflow and explicit Jobs-open navigation, scopes the Jobs/AOI startup gate to its workflow host, standardizes the frontend domain on Work stream, gives the assignment map a larger right-column share, uses a compact map Retry icon, seeds deterministic saved-comment history, keeps paged NM/KP Features behind their service boundary, and renders the complete applicable Work stream list in its scroll region. New comments require an active draft assignment. Jobs/AOI remains the default. See section 20 and [DC_001_VALIDATION.md](DC_001_VALIDATION.md) for validation and remaining integration work.
 
 Current known baseline:
 
-- The candidate moves the frontend from `src/JobManager` to `src/DataCatalogue` and updates its branding and internal app namespace.
+- The accepted baseline places the frontend in `src/DataCatalogue` with DataCatalogue branding and internal namespace.
 - Vite dev server works.
-- `npm run rdy` is the preferred local readiness command because it formats, lints, tests, builds and then starts the dev server.
+- Use `npm run check` for readiness; use `npm run rdy` only when a development server is also wanted.
 - Calcite stylesheet import uses `@esri/calcite-components/main.css`.
 - ArcGIS Maps SDK theme CSS is switched at runtime between light and dark mode.
 - Package versions are aligned with the current Product Manager major-version baseline.
@@ -86,7 +86,7 @@ Current known limitations:
 
 ### 3.1 Primary goal
 
-Support manual assessment of incoming Features and retain visibility of geographic work that needs to be done. The next delivery is defined in `FEATURE_WORKSPACE_SCOPE.md`.
+Support manual assessment of incoming Features and retain visibility of geographic work that needs to be done. The next delivery is defined in `FEATURE_WORK_STREAM_SCOPE.md`.
 
 Existing Jobs/AOI goal: make it difficult to miss Areas of Interest that require work.
 
@@ -1535,7 +1535,7 @@ The repository input identifies a DataCatalogue API project, but the frontend ex
 Expected roles from accepted scoping:
 
 - Package API supplies Features after splitting incoming packages.
-- Workspace API supplies Workspaces and work areas.
+- The external Workspace API is expected to supply data adapted by the frontend into Work streams, plus work areas. The API contract name is unchanged.
 - Assignment/comment ownership and retained-history semantics remain undecided.
 - Production ArcGIS service-account access and AD identity/authorization belong behind the backend.
 - Direct browser access to the live map service is required for the initial assignment-page test, with no embedded or persisted credentials/tokens.
@@ -2856,28 +2856,27 @@ Retain these IDs and their historical status for traceability. Use section 20 wh
 | JM-NEXT-040 | Prepare backend/AOI input checklist                      |        Done | Phase 29 converted the readiness gate into a concrete checklist for Job backend, AOI service and relation-ownership inputs.        |
 | JM-NEXT-041 | Await backend/AOI inputs or concrete manual issue        |     Blocked | Continue only when real backend/AOI inputs are available or manual testing finds a concrete reproducible frontend issue.           |
 
-
 ## 20. DataCatalogue delivery plan
 
-This section takes precedence over the original Jobs/AOI-only implementation order. Runtime requirements for the new page are accepted but not implemented by the rename.
+This section takes precedence over the original Jobs/AOI-only implementation order. DC-001 implements the existing DC-UI-001, DC-MOCK-001 and DC-MAP-001 delivery entries together; these are not duplicated under another task row.
 
-| ID              | Task                                                               | Status      | Acceptance or dependency                                                                                                                |
-| --------------- | ------------------------------------------------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| DC-REN-001      | Rename the frontend directory, branding and internal namespace     | In progress | Candidate prepared; complete local format/lint/build and browser validation before acceptance. No API changes.                          |
-| DC-SCOPE-001    | Record accepted Feature/Workspace scope                            | Done        | `FEATURE_WORKSPACE_SCOPE.md` records the agreed scope, boundaries and temporary decisions.                                              |
-| DC-DOC-001      | Align docs and ChatGPT project instructions                        | In progress | Repository candidate updated; user application of the replacement ChatGPT instructions is pending.                                      |
-| DC-UI-001       | Implement the four-panel assignment page and navbar entry          | Not started | Begin only after DC-REN-001 acceptance; preserve the existing Jobs/AOI workflow.                                                        |
-| DC-MOCK-001     | Implement paged Feature/Workspace mocks and assignment history     | Not started | NM/KP, optional append-only saved comments, retained history, explicit Save, local persistence, reset, latency and controlled failures. |
-| DC-MAP-001      | Integrate live DK1-DK5 context directly in the browser for testing | Not started | Verify configured layers 4-8, metadata, CORS and runtime auth; support multiple layers per Workspace. No synthetic fallback.            |
-| DC-API-001      | Replace mock sources with Package/Workspace API adapters           | Deferred    | Confirm routes, response shapes, pagination and ownership of assignments/comments first.                                                |
-| DC-AUTH-001     | Use backend-mediated ArcGIS access and AD authorization            | Deferred    | Requires the colleague's backend contract; no application login page or embedded service credentials.                                   |
-| DC-CONFLICT-001 | Handle concurrent assignment edits                                 | Deferred    | Requires API concurrency/error semantics; first prototype assumes one user at a time.                                                   |
-| DC-ENC-001      | Track completion independently for each affected ENC               | Deferred    | Keep chart completion separate from Workspace assignment status.                                                                        |
-| DC-WORK-001     | Connect work areas and locking to the future main-map workflow     | Deferred    | Work areas span Workspaces; do not reuse a Workspace or ENC as the work-area identity.                                                  |
-| DC-PIXEL-001    | Add pixel-data assessment                                          | Deferred    | Initial prototype contains only geographic NM/KP Features.                                                                              |
-| DC-AUTO-001     | Add automated ingestion or Workspace assignment                    | Deferred    | First assessment workflow is manual.                                                                                                    |
+| ID              | Task                                                               | Status      | Acceptance or dependency                                                                                                                                                                                                                                                                                                                |
+| --------------- | ------------------------------------------------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DC-REN-001      | Rename the frontend directory, branding and internal namespace     | Done        | Accepted input at DC-001 baseline `184fdca6f5f8d87dc7a3a878c867b6714ec873f8`; no backend rename.                                                                                                                                                                                                                                        |
+| DC-SCOPE-001    | Record accepted Feature/Work stream scope                          | Done        | `FEATURE_WORK_STREAM_SCOPE.md` records the agreed scope, boundaries and temporary decisions.                                                                                                                                                                                                                                            |
+| DC-DOC-001      | Align docs and ChatGPT project instructions                        | In progress | Repository candidate updated; user application of the replacement ChatGPT instructions is pending.                                                                                                                                                                                                                                      |
+| DC-UI-001       | Implement the four-panel assignment page and navbar entry          | In progress | DC-001 v5 keeps the four accessible regions, lets left/right columns own independent vertical splits so the map receives about 57% of the right column, and replaces the map toolbar with a compact Retry icon action. Browser acceptance and full dependency-backed checks remain pending.                                             |
+| DC-MOCK-001     | Implement Feature/Work stream mocks and assignment history         | In progress | DC-001 v5 keeps Feature pagination, removes Work stream pagination/search, returns the complete applicable Work stream list for internal scrolling, preserves Show active/Show all behavior, and retains immutable history fixtures on `NM260004` and `NM260005`. Verify persistence, dirty navigation and native focus in the browser. |
+| DC-MAP-001      | Integrate live DK1-DK5 context directly in the browser for testing | In progress | Configurable adapter implemented; live metadata, layer rendering, browser CORS and session auth remain unverified in this environment. No synthetic fallback.                                                                                                                                                                           |
+| DC-API-001      | Replace mock sources with Package/Workspace API adapters           | Deferred    | Frontend Work stream terminology does not rename the external Workspace API contract. Confirm routes, response shapes, catalogue semantics and ownership of assignments/comments first.                                                                                                                                                 |
+| DC-AUTH-001     | Use backend-mediated ArcGIS access and AD authorization            | Deferred    | Requires the colleague's backend contract; no application login page or embedded service credentials.                                                                                                                                                                                                                                   |
+| DC-CONFLICT-001 | Handle concurrent assignment edits                                 | Deferred    | Requires API concurrency/error semantics; first prototype assumes one user at a time.                                                                                                                                                                                                                                                   |
+| DC-ENC-001      | Track completion independently for each affected ENC               | Deferred    | Keep chart completion separate from Work stream assignment status.                                                                                                                                                                                                                                                                      |
+| DC-WORK-001     | Connect work areas and locking to the future main-map workflow     | Deferred    | Work areas span Work streams; do not reuse a Work stream or ENC as the work-area identity.                                                                                                                                                                                                                                              |
+| DC-PIXEL-001    | Add pixel-data assessment                                          | Deferred    | Initial prototype contains only geographic NM/KP Features.                                                                                                                                                                                                                                                                              |
+| DC-AUTO-001     | Add automated ingestion or Work stream assignment                  | Deferred    | First assessment workflow is manual.                                                                                                                                                                                                                                                                                                    |
 
-Next order: accept rename and docs; implement the page with isolated mocks and live test-map access; validate the user workflow; integrate verified APIs later. The API owner remains responsible for backend implementation.
+Next order: validate the DC-001 candidate locally, verify live test-map access and accept the user workflow; integrate verified APIs later. The API owner remains responsible for backend implementation.
 
 ### Rename acceptance and compatibility
 
@@ -2885,4 +2884,4 @@ The app display name is DataCatalogue, the npm package name is `data-catalogue`,
 
 The only retained legacy runtime key is the read-only fallback for the pre-rename theme preference. A valid new key wins, an old valid value is migrated best-effort, and writes target only the new key. The old value remains intact for rollback. Historical `JM-*` task IDs and ignored pre-rename local artifacts are deliberate documentation/safety exceptions, not active branding.
 
-Candidate validation and the exact apply boundary are recorded in `RENAME_NOTES.md`. Mark DC-REN-001 Done only after the remaining local and browser checks succeed. Mark DC-DOC-001 Done after the updated repository docs and ChatGPT project instructions are accepted/applied. Do not mark the new page, live test map or API integration Done during the rename.
+Historical rename validation and migration boundaries remain in `RENAME_NOTES.md`. DC-001 uses the accepted renamed baseline. DC-DOC-001 retains its previous status because acceptance of the separate instruction update is not established here. Assignment-page, live-map and API acceptance remain separate.

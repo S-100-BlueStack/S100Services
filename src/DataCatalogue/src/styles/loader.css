@@ -94,7 +94,8 @@
   transition: width 160ms ease;
 }
 
-.data-catalogue-startup-loader__progress.is-indeterminate .data-catalogue-startup-loader__progress-fill {
+.data-catalogue-startup-loader__progress.is-indeterminate
+  .data-catalogue-startup-loader__progress-fill {
   width: 45%;
   animation: data-catalogue-loader-indeterminate 1.2s ease-in-out infinite;
 }
