@@ -9,10 +9,8 @@ namespace DataCatalague.Api.Repositories
         private readonly int nextId;
 
         public InMemoryPipelineRepository() {
-            var seed = new[]
-            {
-                new Pipeline
-                {
+            var seed = new[] {
+                new Pipeline {
                     Uuid = Guid.NewGuid(),
                     Name = "ENC",
                 },
