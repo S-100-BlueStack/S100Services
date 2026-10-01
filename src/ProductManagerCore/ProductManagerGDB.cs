@@ -3,6 +3,8 @@ using ArcGIS.Core.Data.UtilityNetwork.Trace;
 using ArcGIS.Core.Geometry;
 using ArcGIS.Core.Internal.Geometry;
 using Microsoft.Extensions.Logging;
+using S100FC;
+using S100FC.Topology;
 using S100BlueStack.Settings;
 using S100FC.S128.SimpleAttributes;
 using S100FC.S128.ComplexAttributes;
@@ -21,7 +23,6 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using IO = System.IO;
-using S100FC.Topology;
 
 namespace S100FC.ProductCatalogue
 {
@@ -154,7 +155,7 @@ namespace S100FC.ProductCatalogue
 
                             AddElectronicProduct(electronicProduct);
                             catalogueEntries.Add(new ElectronicProductCatalogueEntry(
-                                c.IsNull("UID") ? string.Empty : Convert.ToString(c["UID"]) ?? string.Empty,
+                                c.UID(),
                                 electronicProduct,
                                 c.IsNull("featurebindings") ? null : Convert.ToString(c["featurebindings"])));
                         }
@@ -416,7 +417,7 @@ namespace S100FC.ProductCatalogue
                         using var archiveCursor = archiveTable.Search(filter, true);
                         while (archiveCursor.MoveNext()) {
                             var cur = archiveCursor.Current;
-                            var id = cur["UID"]?.ToString();
+                            var id = cur.UID();
                             Log.Information("Change detected for {id} in {table}. Stopping further detection", id, baseTableName);
                             return true;
                         }
@@ -496,7 +497,7 @@ namespace S100FC.ProductCatalogue
                     while (cursor.MoveNext()) {
                         var row = cursor.Current;
 
-                        var id = row["UID"]?.ToString();
+                        var id = row.UID();
 
                         if (string.IsNullOrWhiteSpace(id))
                             continue;
@@ -615,7 +616,7 @@ namespace S100FC.ProductCatalogue
                 while (cursor.MoveNext()) {
                     var row = cursor.Current;
 
-                    var id = row["UID"]?.ToString();
+                    var id = row.UID();
 
                     if (string.IsNullOrWhiteSpace(id)) {
 
@@ -676,16 +677,16 @@ namespace S100FC.ProductCatalogue
                 throw new ArchiveChangeClassificationException(connectionName, unclassifiedArchiveRows);
         }
 
-        /// <summary>Reads the UIDs that still exist in the current feature class version.</summary>
+        /// <summary>Reads current feature GUIDs so archived deletes can be identified without a UID column.</summary>
         private static HashSet<string> ReadCurrentFeatureIds(FeatureClass featureClass) {
             var currentFeatureIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             using var cursor = featureClass.Search(new QueryFilter {
-                SubFields = "UID"
+                SubFields = "OBJECTID,GLOBALID"
             }, true);
 
             while (cursor.MoveNext()) {
-                var id = cursor.Current["UID"]?.ToString();
+                var id = cursor.Current.UID();
                 if (!string.IsNullOrWhiteSpace(id))
                     currentFeatureIds.Add(id);
             }
@@ -988,8 +989,8 @@ namespace S100FC.ProductCatalogue
                         cancellationToken.ThrowIfCancellationRequested();
                         var current = informationCursor.Current;
 
-                        // var name = $"{current.UID()}";
-                        var name = current["UID"].ToString()!;  //$"{current.UID()}";
+                        var uid = current.UID();
+                        var name = Guid.Parse(uid).ToStableUInt64().ToString();
                         var code = current["code"].ToString()!;
                         var flatten = current.FindField("attributebindings") != -1 &&
                             current["attributebindings"] != null &&
@@ -1013,7 +1014,7 @@ namespace S100FC.ProductCatalogue
                         var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
 
                         foreach (var filename in filenames) {
-                            supportFiles.Add(name, filename);
+                            supportFiles.Add(uid, filename);
                         }
                     }
                 }
@@ -1033,7 +1034,8 @@ namespace S100FC.ProductCatalogue
                         cancellationToken.ThrowIfCancellationRequested();
                         var current = featureCursor.Current;
 
-                        var name = current["UID"].ToString()!;  //$"{current.UID()}";
+                        var uid = current.UID();
+                        var name = Guid.Parse(uid).ToStableUInt64().ToString();
                         var code = current["code"].ToString()!;
                         var flatten = current.FindField("attributebindings") != -1 &&
                            current["attributebindings"] != null &&
@@ -1044,7 +1046,7 @@ namespace S100FC.ProductCatalogue
 
                         var instance = S100FC.AttributeFlattenExtensions.Unflatten<S100FC.FeatureType>(flatten, type);
 
-                        var foid = $"110:{name.Substring(1)}:1";       // Geodatastyrelsen: 110
+                        var foid = $"110:{name}:1";       // Geodatastyrelsen: 110
 
                         var feature = new YAML.Feature {
                             Prim = Primitive.NoGeometry,
@@ -1058,7 +1060,7 @@ namespace S100FC.ProductCatalogue
                         var filenames = S100FC.YAML.Extensions.GetFileNames(flatten);
 
                         foreach (var filename in filenames) {
-                            supportFiles.Add(name, filename);
+                            supportFiles.Add(uid, filename);
                         }
                     }
                 }
@@ -1092,11 +1094,6 @@ namespace S100FC.ProductCatalogue
                     using var fc = connection.OpenDataset<FeatureClass>(def.GetName());
                     // using var featureCursor = fc.Search(filter, true);
 
-                    //using var featureCursor = fc.Search(new QueryFilter {
-                    //    WhereClause = $"OBJECTID IN ({string.Join(',', selection[tableName.ToLowerInvariant()])})",
-                    //    SubFields = "OBJECTID,UID,GLOBALID,CODE,attributeBindings,informationBindings,featureBindings,SHAPE",
-                    //}, true);
-
                     var key = tableName.ToLowerInvariant();
 
                     if (!selection.TryGetValue(key, out var objectIds) || objectIds.Count == 0) {
@@ -1107,14 +1104,14 @@ namespace S100FC.ProductCatalogue
 
                     using var featureCursor = fc.Search(new QueryFilter {
                         WhereClause = $"OBJECTID IN ({string.Join(',', objectIds)})",
-                        SubFields = "OBJECTID,UID,GLOBALID,CODE,attributeBindings,informationBindings,featureBindings,SHAPE",
+                        SubFields = "OBJECTID,GLOBALID,CODE,attributeBindings,informationBindings,featureBindings,SHAPE",
                     }, true);
 
 
                     while (featureCursor.MoveNext()) {
                         cancellationToken.ThrowIfCancellationRequested();
                         var current = (ArcGIS.Core.Data.Feature)featureCursor.Current;
-                        var name = current["UID"].ToString()!;  //$"{current.UID()}";
+                        var name = current.UID();
 
 
 
@@ -1122,7 +1119,7 @@ namespace S100FC.ProductCatalogue
                         if (hashSet.Contains(oid)) continue;
                         hashSet.Add(oid);
 
-                        var _uid = Convert.ToString(current["UID"])!;
+                        var _uid = name;
 
                         // if (topology.matrix.Collapse.Contains(_uid)) continue;
                         if (collapse.Contains(_uid)) continue;
@@ -1200,12 +1197,12 @@ namespace S100FC.ProductCatalogue
                                                 var asso = new YAML.Association {
                                                     Name = binding.informationType!, // binding.GetType().GenericTypeArguments[0].Name,
                                                     Role = binding.role,
-                                                    To = binding.informationId
+                                                    To = Guid.Parse(binding.informationId!).ToStableUInt64().ToString()
                                                 };
 
                                                 var wasAdded = informationsTypesAdded.Add(binding.informationId!);
                                                 if (wasAdded) {
-                                                    dataset!.AddInformation(informationTypes.Single(e => e.ID!.Equals(binding.informationId!)));
+                                                    dataset!.AddInformation(informationTypes.Single(e => e.ID == asso.To));
 
 
                                                     using var attachmentTable = connection.OpenDataset<Table>(this.QualifyTableName("attachment"));
@@ -1297,12 +1294,12 @@ namespace S100FC.ProductCatalogue
                                                 var asso = new YAML.Association {
                                                     Name = binding.featureType!, // binding.GetType().GenericTypeArguments[0].Name,
                                                     Role = binding.role,
-                                                    To = $"110:{binding!.featureId!.Substring(1)}:1"
+                                                    To = TopologyFeatureMapping.CreateFoid(binding.featureId!)
                                                 };
 
                                                 feature?.AddFeatureAssociation(asso);
 
-                                                var noGeometry = featureTypes.SingleOrDefault(e => e.Foid.Equals($"110:{binding.featureId.Substring(1)}:1"));
+                                                var noGeometry = featureTypes.SingleOrDefault(e => e.Foid == asso.To);
                                                 if (noGeometry != null && !featureTypesAdded.Contains(binding.featureId)) {
                                                     featureTypesAdded.Add(binding.featureId);
                                                     dataset?.AddFeature(noGeometry);
