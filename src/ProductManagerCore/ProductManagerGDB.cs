@@ -21,6 +21,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using IO = System.IO;
+using S100FC.Topology;
 
 namespace S100FC.ProductCatalogue
 {
@@ -1099,7 +1100,9 @@ namespace S100FC.ProductCatalogue
                     var key = tableName.ToLowerInvariant();
 
                     if (!selection.TryGetValue(key, out var objectIds) || objectIds.Count == 0) {
-                        throw new Exception($"No object IDs found for table {tableName} in selection.");
+                        Log.Warning("No object IDs found for table {tableName} in selection.", tableName);
+                        continue;
+                        //throw new Exception($"No object IDs found for table {tableName} in selection.");
                     }
 
                     using var featureCursor = fc.Search(new QueryFilter {
