@@ -3,11 +3,7 @@ import lightArcgisThemeUrl from "@arcgis/core/assets/esri/themes/light/main.css?
 
 import { THEME_MODE, getNextThemeMode, normalizeThemeMode } from "../domain/themeMode.js";
 
-import {
-  readStoredThemeMode,
-  resolveThemeStorage,
-  writeStoredThemeMode,
-} from "./themeStorage.js";
+import { readStoredThemeMode, resolveThemeStorage, writeStoredThemeMode } from "./themeStorage.js";
 const ARCGIS_THEME_LINK_ID = "arcgis-theme-css";
 
 export function createThemeStore({

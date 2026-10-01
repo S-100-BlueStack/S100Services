@@ -76,7 +76,10 @@ test("renamed CSS tokens all have a stylesheet or measured-layout definition", (
 
   const references = new Set([...styles.matchAll(/var\((--dc-[\w-]+)/g)].map((m) => m[1]));
   assert.ok(references.size > 0);
-  assert.deepEqual([...references].filter((name) => !declarations.has(name)), []);
+  assert.deepEqual(
+    [...references].filter((name) => !declarations.has(name)),
+    []
+  );
 });
 
 test("runtime keeps no old app branding except the documented theme migration key", () => {

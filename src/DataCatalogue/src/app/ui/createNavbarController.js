@@ -146,7 +146,9 @@ async function loadNavbarTemplate() {
   });
 
   if (!response.ok) {
-    throw new Error(`DataCatalogue could not load the navbar template.\nStatus: ${response.status}`);
+    throw new Error(
+      `DataCatalogue could not load the navbar template.\nStatus: ${response.status}`
+    );
   }
 
   const template = document.createElement("template");

@@ -2,9 +2,9 @@
 
 This document describes the frontend architecture for DataCatalogue.
 
-The app should follow Product Manager patterns where useful. Preserve the current Jobs/AOI feature boundaries and keep the planned Feature/Workspace assessment workflow distinct from them.
+The app should follow Product Manager patterns where useful. Preserve the current Jobs/AOI feature boundaries and keep the Feature/Work stream assessment workflow distinct from them.
 
-Sections describing current flows refer to the existing Jobs/AOI implementation. Historical phase notes retain their original scope. The accepted next delivery is specified in `FEATURE_WORKSPACE_SCOPE.md` and the current implementation order in `PROJECT_TRACKER.md` section 20. It is not implemented by the rename.
+Sections describing current flows refer to the existing Jobs/AOI implementation. Historical phase notes retain their original scope. The accepted DC-001 assignment-page scope is specified in `FEATURE_WORK_STREAM_SCOPE.md`, and the current implementation status is tracked in `PROJECT_TRACKER.md` section 20. The frontend candidate implements that workflow behind mock/service boundaries; backend integration remains deferred.
 
 ## 1. Architectural goals
 
@@ -1643,8 +1643,7 @@ Avoid duplicating large sections between docs. Keep:
 - backend contract notes in `BACKEND_CONTRACTS.md`
 - architecture and folder ownership in `ARCHITECTURE.md`
 
-
-## 18. DataCatalogue rename and planned assessment boundary
+## 18. DataCatalogue rename and assessment boundary
 
 ### Implemented by the rename candidate
 
@@ -1656,18 +1655,43 @@ Avoid duplicating large sections between docs. Keep:
 - Theme migration is same-origin only; it does not copy storage across hosts or ports.
 - Package scripts, dependency versions, environment variable names and Vite configuration are unchanged.
 
-### Planned, not implemented
+### Assessment source boundaries
 
-The assignment page should have its own composition and service boundaries. Its UI consumes normalized Feature information, Workspace metadata, assignment state and comment history, not raw API responses or mock storage.
+The assignment page has its own composition and service boundaries. Its UI consumes normalized Feature information, Work stream metadata, assignment state and comment history, not raw API responses or mock storage.
 
-Keep source seams separate: Feature reads, Workspace/work-area reads, assignment/comment persistence and live map context. Expected API ownership is documented in `BACKEND_CONTRACTS.md`; do not guess unresolved routes or schemas.
+Keep source seams separate: Feature reads, Work stream/work-area reads, assignment/comment persistence and live map context. Expected API ownership is documented in `BACKEND_CONTRACTS.md`; do not guess unresolved routes or schemas. The external Workspace API name remains an integration-contract name until that owner changes it; frontend Work stream terminology does not rename backend contracts.
 
-Represent Workspace map context through configurable bindings that can reference multiple layers. Workspace identity must not be a layer ID. Optional geography and future regrouping must not change the assignment UI model.
+Represent Work stream map context through configurable bindings that can reference multiple layers. Work stream identity must not be a layer ID. Optional geography and future regrouping must not change the assignment UI model.
 
 The direct-browser map adapter is a temporary test integration with live service data, not mock geography. Runtime authentication must be isolated from assignment persistence. Later backend-mediated access should replace the source boundary without moving auth into UI components.
 
-Use bounded list rendering and a paged/filterable service interface for Features and Workspace discovery. Keep drafts separate from committed assignments and preserve selection across search/page changes.
+Use paged bounded rendering for Features. Feature discovery retains type/status/name filtering. The Work stream UI intentionally has neither name search nor pagination; its service returns the complete applicable catalogue or active-ID subset, and the existing panel scroll region bounds rendering. Keep drafts separate from committed assignments and preserve Feature selection across list changes.
 
-Do not implement assignment navigation by forcing initialization of the existing main-map Jobs/AOI startup controller. Design the new page's lifecycle when implementing it; the rename preserves the current main-map startup gate unchanged.
+The application shell owns navbar navigation, while Jobs/AOI owns its startup gate. `createApp.js` places the blocked map workspace and interactive startup loader inside one Jobs workflow host as sibling surfaces. Only the map workspace becomes inert/aria-hidden while startup is blocked, so Retry remains usable and the navbar can open Feature assignment. Workflow navigation hides or reveals the whole Jobs host without changing startup truth; returning before startup succeeds therefore exposes the same blocked state again. No navbar-height offset, loader pointer-event bypass or startup-disable path is used.
 
 Backend projects and the Product Manager sibling are outside this implementation boundary. Root metadata changes must be restricted to references needed for this frontend.
+
+### DC-001 implementation ownership
+
+| Boundary                                              | Ownership                                                                                                                                                                    |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/ui/createWorkflowNavigation.js`                  | Lazy in-shell navigation; consults the page before leaving, hides/reveals the Jobs workflow host and retains the main-map/startup state. No router or domain persistence.    |
+| `features/assignmentPage/createAssignmentWorkflow.js` | Composition root selecting prototype services and the assignment map implementation.                                                                                         |
+| `features/features`                                   | Deterministic NM/KP mock summaries/details; combined name/type/status filters and paged Feature reads.                                                                       |
+| `features/workStreams`                                | Complete applicable Work stream catalogue lists and zero-to-many geography bindings. No assignment overlap rule, user-facing name search or pagination.                      |
+| `features/assignments/domain`                         | Active-relation status, draft comparison and append-only comment application.                                                                                                |
+| `features/assignments/mock`                           | Versioned local persistence, deterministic saved-history fixtures, structural validation, immutable returned snapshots and prototype-only reset.                             |
+| `features/assignments/services`                       | Replaceable Feature/Work stream/assignment service composition; deterministic delay and one-shot failure injection.                                                          |
+| `features/assignments/state`                          | One authoritative selected-Feature generation; draft/save lifecycle, deduplicated Save, refusal to switch while dirty or saving, stale completion suppression.               |
+| `features/assignmentPage/ui`                          | Four accessible panel regions without visible headings, compact Work stream rows, stable draft controls, Save/Discard/Cancel navigation dialog and render-target validation. |
+| `features/assignmentPage/state`                       | Independent latest-request owners plus pure Work stream Show active/Show all mode rules.                                                                                     |
+| `features/map/core/createBaseMapView.js`              | Shared SDK Map/MapView foundation with existing runtime configuration and defaults. Jobs retains its layer and popup composition.                                            |
+| `features/map/assignment`                             | Direct-browser Work stream source seam, metadata/sample checks, layer/rendering ownership, selected Feature graphics and selection-only map focus.                           |
+
+The Feature list has 25 rows per page. Work streams are not paged: `Show active` requests only current active IDs and `Show all` requests the complete applicable catalogue, which renders inside the panel's internal scroll region. If a selected Feature has zero active assignments, active-only mode normalizes to all; an assigned Feature does not override an existing all-mode preference. Saved history and drafts remain within their Work stream row, and expanded history renders at most 20 comments at once.
+
+The session freezes edits and context switches during Save. Repeated Save calls share the same Promise. A failed mutation leaves the original draft intact; a completed mutation replaces the saved snapshot and draft together. New comments require an active relation in the current draft. Unassigning does not delete existing comment drafts, but domain validation blocks Save until the relation is reactivated or those drafts are removed. UI components patch comment textareas rather than replacing them on keystrokes. Browser unload uses `beforeunload`; in-app transitions use a native modal dialog with Save, Discard and Cancel.
+
+App-shell workflow navigation preserves the intent of navbar controls after dirty-state resolution. Returning through `Jobs` invokes an explicit open action once after the assignment page has allowed the transition, so a panel that was already open before entering assignment is not toggled closed. The normal main-workflow Jobs control still uses the separate toggle action. Both actions share the same app-shell context reset and open/close branches; title navigation only restores the main workflow. Assignment domain/session code does not own these actions.
+
+Map selection has its own generation within the map boundary. Assignment/comment changes update renderers without `goTo`. Shared layers are styled assigned when any bound Work stream is assigned; all successfully loaded unassigned layers remain visible. Selected Feature, assigned Work stream and context use distinct shapes/line styles as well as color, mirrored by application-owned legend swatches. The source checks metadata and a bounded geometry query through public SDK APIs, with a 20-second abort deadline. Failure does not manufacture Work stream geography. A small application-owned top-right Retry action with a public Calcite refresh icon explicitly recreates that map instance without adding a dedicated toolbar row.

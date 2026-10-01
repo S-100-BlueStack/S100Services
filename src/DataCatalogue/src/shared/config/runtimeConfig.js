@@ -1,5 +1,6 @@
 export function getRuntimeConfig() {
   return {
+    workStreamMapServiceUrl: readStringEnv("VITE_WORK_STREAM_MAP_SERVICE_URL"),
     arcgisPortalUrl: readStringEnv("VITE_ARCGIS_PORTAL_URL"),
     aoiFeatureServiceUrl: readStringEnv("VITE_AOI_FEATURE_SERVICE_URL"),
   };
