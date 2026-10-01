@@ -1,11 +1,11 @@
 import Graphic from "@arcgis/core/Graphic.js";
 import { resolveFeatureKey } from "../core/featureIdentity.js";
-import { getCorrectionSymbol } from "../symbology/correctionSymbols.js";
 import { resolveDisplayScaleValue } from "../scale/displayScale.js";
+import { createGraphicProperties } from "./graphicSymbolization.js";
 
 export function geoJsonToGraphics(
   geojson,
-  { layerId, layerKind, displayScale: layerDisplayScale } = {}
+  { layerId, layerKind, displayScale: layerDisplayScale, symbolization } = {}
 ) {
   return geojson.features
     .map((feature) => {
@@ -21,18 +21,22 @@ export function geoJsonToGraphics(
         return null;
       }
 
-      return new Graphic({
-        geometry,
-        attributes: {
-          ...attributes,
-          layerId,
-          layerKind,
-          featureKey,
-          displayScale,
-          status,
-        },
-        symbol: getCorrectionSymbol(status),
-      });
+      const graphicAttributes = {
+        ...attributes,
+        layerId,
+        layerKind,
+        featureKey,
+        displayScale,
+        status,
+      };
+
+      return new Graphic(
+        createGraphicProperties({
+          geometry,
+          attributes: graphicAttributes,
+          symbolization,
+        })
+      );
     })
     .filter(Boolean);
 }

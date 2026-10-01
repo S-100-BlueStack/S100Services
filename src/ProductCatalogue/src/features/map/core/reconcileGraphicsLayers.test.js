@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION,
+  resolveCorrectionSymbol,
+} from "../symbology/correctionSymbolResolver.js";
 import { reconcileGraphicsLayers } from "./reconcileGraphicsLayers.js";
 
 test("reconciliation preserves matching graphic identity and updates its state", () => {
@@ -92,7 +96,97 @@ test("invalid candidate feature identity does not partially mutate current layer
   assert.equal(currentGraphic.attributes.status, "Idle");
 });
 
-function createLayer(id, graphics) {
+test("package reconciliation preserves Graphic identity across scalar and mixed transitions", () => {
+  const currentGraphic = createPackageGraphic("feature-1", {
+    status: 8,
+  });
+  const currentLayer = createLayer("products", [currentGraphic], {
+    symbolization: WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION,
+  });
+
+  const transitions = [
+    {
+      attributes: {
+        status: 8,
+        workUnitStatus: { members: [{ status: 8 }, { status: 11 }] },
+      },
+      expectedType: "cim",
+    },
+    {
+      attributes: {
+        status: 8,
+        workUnitStatus: { members: [{ status: 10 }, { status: 12 }] },
+      },
+      expectedType: "cim",
+    },
+    {
+      attributes: {
+        status: 8,
+        workUnitStatus: { members: [{ status: 11 }, { status: "11" }] },
+      },
+      expectedType: "simple-fill",
+    },
+  ];
+
+  let previousSymbol = currentGraphic.symbol;
+  for (const transition of transitions) {
+    const candidateGraphic = createPackageGraphic("feature-1", transition.attributes);
+    const candidateLayer = createLayer("products", [candidateGraphic], {
+      symbolization: WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION,
+    });
+
+    const result = reconcileGraphicsLayers({
+      currentLayers: [currentLayer],
+      candidateLayers: [candidateLayer],
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(currentLayer.graphics.toArray()[0], currentGraphic);
+    assert.equal(currentGraphic.symbol.type, transition.expectedType);
+    assert.notEqual(currentGraphic.symbol, previousSymbol);
+    previousSymbol = currentGraphic.symbol;
+  }
+});
+
+test("reordered equivalent mixed state avoids symbol churn while preserving Graphic identity", () => {
+  const currentGraphic = createPackageGraphic("feature-1", {
+    status: 8,
+    workUnitStatus: {
+      members: [
+        { key: "alpha", status: 8 },
+        { key: "beta", status: 11 },
+      ],
+    },
+  });
+  const originalSymbol = currentGraphic.symbol;
+  const currentLayer = createLayer("products", [currentGraphic], {
+    symbolization: WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION,
+  });
+  const candidateGraphic = createPackageGraphic("feature-1", {
+    status: 8,
+    workUnitStatus: {
+      members: [
+        { key: "beta", status: "11" },
+        { key: "alpha", status: "8" },
+      ],
+    },
+  });
+  const candidateLayer = createLayer("products", [candidateGraphic], {
+    symbolization: WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION,
+  });
+
+  const result = reconcileGraphicsLayers({
+    currentLayers: [currentLayer],
+    candidateLayers: [candidateLayer],
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(currentLayer.graphics.toArray()[0], currentGraphic);
+  assert.equal(currentGraphic.symbol, originalSymbol);
+  assert.deepEqual(currentGraphic.symbol, candidateGraphic.symbol);
+});
+
+function createLayer(id, graphics, { symbolization = null } = {}) {
   const collection = [...graphics];
 
   return {
@@ -102,6 +196,7 @@ function createLayer(id, graphics) {
     appLayerCapabilities: {
       supportsProductActions: true,
     },
+    appSymbolization: symbolization,
     layerType: "graphics",
     title: "Products",
     graphics: {
@@ -122,6 +217,23 @@ function createLayer(id, graphics) {
     addMany(items) {
       collection.push(...items);
     },
+  };
+}
+
+function createPackageGraphic(featureKey, attributes) {
+  const geometry = { type: "polygon", rings: [] };
+  return {
+    attributes: {
+      featureKey,
+      ...attributes,
+    },
+    geometry,
+    symbol: resolveCorrectionSymbol({
+      attributes,
+      geometry,
+      symbolization: WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION,
+    }),
+    visible: true,
   };
 }
 

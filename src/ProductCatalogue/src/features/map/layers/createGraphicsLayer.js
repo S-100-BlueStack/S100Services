@@ -17,6 +17,7 @@ export async function createGraphicsLayer(map, layerConfig, { onProgress } = {})
     graphicsChunkSize = DEFAULT_GRAPHICS_CHUNK_SIZE,
     layerKind,
     capabilities,
+    symbolization,
   } = layerConfig;
 
   const appLayerKind = layerKind ?? resolveLayerKind(id);
@@ -34,6 +35,7 @@ export async function createGraphicsLayer(map, layerConfig, { onProgress } = {})
     layerId: id,
     layerKind: appLayerKind,
     displayScale,
+    symbolization,
     chunkSize: graphicsChunkSize,
     onProgress: (progress) => {
       reportProgress(onProgress, scaleProgress(progress, 0, 0.72), "Creating graphics", title);
@@ -57,6 +59,7 @@ export async function createGraphicsLayer(map, layerConfig, { onProgress } = {})
     appLayerId: id,
     appLayerKind,
     appLayerCapabilities,
+    appSymbolization: symbolization,
     index: layerIndex,
   });
 
@@ -76,7 +79,7 @@ export async function createGraphicsLayer(map, layerConfig, { onProgress } = {})
 
 async function createGraphicsFromData(
   data,
-  { dataFormat, layerId, layerKind, displayScale, chunkSize, onProgress }
+  { dataFormat, layerId, layerKind, displayScale, symbolization, chunkSize, onProgress }
 ) {
   const source = createFeatureChunkSource(data, dataFormat);
   const graphics = [];
@@ -97,6 +100,7 @@ async function createGraphicsFromData(
         layerId,
         layerKind,
         displayScale,
+        symbolization,
       })
     );
 
@@ -110,13 +114,17 @@ async function createGraphicsFromData(
   return graphics;
 }
 
-function createGraphicsFromChunkData(data, { dataFormat, layerId, layerKind, displayScale }) {
+function createGraphicsFromChunkData(
+  data,
+  { dataFormat, layerId, layerKind, displayScale, symbolization }
+) {
   switch (normalizeDataFormat(dataFormat)) {
     case "esri-json":
       return esriJsonToGraphics(data, {
         layerId,
         layerKind,
         displayScale,
+        symbolization,
       });
 
     case "geojson":
@@ -124,6 +132,7 @@ function createGraphicsFromChunkData(data, { dataFormat, layerId, layerKind, dis
         layerId,
         layerKind,
         displayScale,
+        symbolization,
       });
 
     default:
@@ -193,12 +202,13 @@ async function addGraphicsInChunks(layer, graphics, { chunkSize, onProgress }) {
 
 function applyAppLayerMetadata(
   layer,
-  { customId, appLayerId, appLayerKind, appLayerCapabilities, index }
+  { customId, appLayerId, appLayerKind, appLayerCapabilities, appSymbolization, index }
 ) {
   layer.customId = customId;
   layer.appLayerId = appLayerId;
   layer.appLayerKind = appLayerKind;
   layer.appLayerCapabilities = appLayerCapabilities;
+  layer.appSymbolization = appSymbolization ?? null;
   layer.layerType = "graphics";
   layer._index = index;
 }

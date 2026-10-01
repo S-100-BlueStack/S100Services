@@ -3,12 +3,12 @@ import Polygon from "@arcgis/core/geometry/Polygon.js";
 import Polyline from "@arcgis/core/geometry/Polyline.js";
 import Point from "@arcgis/core/geometry/Point.js";
 import { resolveFeatureKey } from "../core/featureIdentity.js";
-import { getCorrectionSymbol } from "../symbology/correctionSymbols.js";
 import { resolveDisplayScaleValue } from "../scale/displayScale.js";
+import { createGraphicProperties } from "./graphicSymbolization.js";
 
 export function esriJsonToGraphics(
   data,
-  { layerId, layerKind, displayScale: layerDisplayScale } = {}
+  { layerId, layerKind, displayScale: layerDisplayScale, symbolization } = {}
 ) {
   const features = getFeatures(data);
 
@@ -44,24 +44,28 @@ export function esriJsonToGraphics(
         });
       }
 
-      return new Graphic({
-        geometry,
-        attributes: {
-          ...attributes,
+      const graphicAttributes = {
+        ...attributes,
 
-          // Other map systems rely on these stable keys for indexing, hover
-          // state, popup actions, filtering and future refresh reconciliation.
-          layerId,
-          layerKind,
-          featureKey,
+        // Other map systems rely on these stable keys for indexing, hover
+        // state, popup actions, filtering and future refresh reconciliation.
+        layerId,
+        layerKind,
+        featureKey,
 
-          // Keep displayScale normalized so map visibility logic does not need
-          // to understand every possible API field shape.
-          displayScale,
-          status,
-        },
-        symbol: getCorrectionSymbol(status),
-      });
+        // Keep displayScale normalized so map visibility logic does not need
+        // to understand every possible API field shape.
+        displayScale,
+        status,
+      };
+
+      return new Graphic(
+        createGraphicProperties({
+          geometry,
+          attributes: graphicAttributes,
+          symbolization,
+        })
+      );
     })
     .filter(Boolean);
 }

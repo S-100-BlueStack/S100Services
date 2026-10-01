@@ -177,7 +177,8 @@ function areLayersCompatible(currentLayer, candidateLayer) {
     currentLayer?.appLayerId === candidateLayer?.appLayerId &&
     currentLayer?.appLayerKind === candidateLayer?.appLayerKind &&
     currentLayer?.title === candidateLayer?.title &&
-    areEquivalent(currentLayer?.appLayerCapabilities, candidateLayer?.appLayerCapabilities)
+    areEquivalent(currentLayer?.appLayerCapabilities, candidateLayer?.appLayerCapabilities) &&
+    areEquivalent(currentLayer?.appSymbolization, candidateLayer?.appSymbolization)
   );
 }
 

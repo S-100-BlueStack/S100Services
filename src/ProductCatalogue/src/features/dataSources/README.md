@@ -21,6 +21,13 @@ navigation capabilities restrict Main-map Product contexts until destinations be
 source-level capabilities for direct product-based workspace resolution are retained. Other simple sources
 retain their existing contracts. Analyze, Review and Dashboard remain product-based surfaces.
 
+The package layer also owns the declarative member-aware symbolization strategy described in the
+[F2 mixed-status rendering foundation](../../../docs/package-mixed-status-rendering.md). Rendering
+projects only normalized `workUnitStatus.members[].status`; package `workflowStatus` remains available
+to F1 filtering but cannot affect the AOI symbol. Missing member state falls back to the representative
+scalar status, and all non-opted-in sources retain scalar symbols. Current transport does not populate
+complete member state, so this boundary adds no live mixed AOIs or Product-detail requests.
+
 Electronic AOI responses contain Esri geometry and DatasetName/Status/DisplayScale/UsageBand/error
 attributes. The scoped server request establishes specification; names and geometry never do.
 Bulk AOIs omit version metadata. A generic `electronic-aoi` normalizer validates identity and geometry
