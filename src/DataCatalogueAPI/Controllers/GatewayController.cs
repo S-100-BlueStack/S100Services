@@ -7,11 +7,11 @@ namespace DataCatalague.Api.Controllers
 {
     [ApiController]
     [ApiVersion(ApiVersions.V1Text)]
-    [Route("api/v{version:apiVersion}/data")]
+    [Route("api/v{version:apiVersion}/gateway")]
     [Produces("application/json")]
-    public sealed class DataController(/*IDataRepository repository, */ILogger<DataController> logger) : ControllerBase
+    public sealed class GatewayController(/*IDataRepository repository, */ILogger<GatewayController> logger) : ControllerBase
     {
         //private readonly IDataRepository repository = repository;
-        private readonly ILogger<DataController> logger = logger;
+        private readonly ILogger<GatewayController> logger = logger;
     }
 }

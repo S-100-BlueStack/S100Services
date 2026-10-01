@@ -13,7 +13,7 @@ namespace DataCatalague.Api.Controllers
     {
         [ApiController]
         [ApiVersion(ApiVersions.V1Text)]
-        [Route("api/v{version:apiVersion}/workspace")]
+        [Route("api/v{version:apiVersion}/pipeline")]
         [Produces("application/json")]
         public sealed class PipelineController(IPipelineRepository repository, ILogger<PipelineController> logger) : ControllerBase
         {
