@@ -1,6 +1,6 @@
 ﻿namespace DataCatalague.Api.Models.V1
 {
-    public sealed class WorkspaceResponse
+    public sealed class PipelineResponse
     {
         public required int Id { get; init; }
 

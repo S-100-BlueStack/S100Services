@@ -1,6 +1,6 @@
 ﻿namespace DataCatalague.Api.Domain
 {
-    public sealed class Workspace
+    public sealed class Pipeline
     {
         public required int Id { get; set; }
 

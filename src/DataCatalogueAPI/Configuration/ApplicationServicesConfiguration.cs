@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using DataCatalague.Api.Repositories;
 using DataCatalague.Api.Services;
 
 namespace DataCatalague.Api.Configuration;
@@ -34,7 +35,7 @@ public static class ApplicationServicesConfiguration
         services.AddHealthChecks();
 
         //services.AddSingleton<IDataRepository, InMemoryProductRepository>();
-        //services.AddSingleton<IWorkspaceRepository, InMemoryProductRepository>();
+        services.AddSingleton<IPipelineRepository, InMemoryPipelineRepository>();
 
         //services.AddSingleton<IProductRepository, InMemoryProductRepository>();
 
