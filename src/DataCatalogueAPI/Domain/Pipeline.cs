@@ -2,7 +2,7 @@
 {
     public sealed class Pipeline
     {
-        public required int Id { get; set; }
+        public required Guid Uuid { get; set; }
 
         public required string Name { get; set; }
     }
