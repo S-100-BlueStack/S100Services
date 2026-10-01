@@ -1,5 +1,6 @@
 import { readWorkUnitStatusFilterValues } from "../domain/workUnitStatusProjection.js";
 import { ATTRIBUTE_FILTER_CONFIG } from "../../map/filters/attributeFilterConfig.js";
+import { WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION } from "../../map/symbology/correctionSymbolResolver.js";
 import { createElectronicExportConfiguration } from "../../products/domain/electronicProductContract.js";
 export const DATA_SOURCE_AVAILABILITY = Object.freeze({
   AVAILABLE: "available",
@@ -234,6 +235,7 @@ function createElectronicSource({
           supportsOverlapPicker: true,
           supportsProductSearch: true,
         },
+        ...(workUnit ? { symbolization: WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION } : {}),
       },
     ],
     capabilities: {

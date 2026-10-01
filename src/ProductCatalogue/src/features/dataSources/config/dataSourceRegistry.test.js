@@ -81,6 +81,27 @@ test("runtime-default registry exposes one representative ENC-package source", (
   assert.equal(isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.S102)), false);
 });
 
+test("only the package work-unit layer opts into member-aware symbolization", () => {
+  const registry = createDataSourceRegistry({ isDevelopment: true });
+  const packageLayer = registry.byId.get(DATA_SOURCE_IDS.S101).layerDefinitions[0];
+
+  assert.deepEqual(packageLayer.symbolization, {
+    type: "work-unit-member-status",
+  });
+
+  for (const sourceId of [
+    DATA_SOURCE_IDS.S57,
+    DATA_SOURCE_IDS.PAPER_CHARTS,
+    DATA_SOURCE_IDS.S102,
+  ]) {
+    assert.equal(
+      Object.hasOwn(registry.byId.get(sourceId).layerDefinitions[0], "symbolization"),
+      false,
+      sourceId
+    );
+  }
+});
+
 test("synthetic fixture sources require explicit registry construction", () => {
   const registry = createDataSourceRegistry({
     isDevelopment: false,

@@ -1,5 +1,10 @@
 import { getStatusIdByName, isFrozenStatus } from "../../data/stores/statusStore.js";
-import { getCorrectionSymbol } from "../symbology/correctionSymbols.js";
+import {
+  areCorrectionSymbolsEquivalent,
+  canResolveCorrectionSymbol,
+  resolveCorrectionSymbol,
+  resolveGraphicSymbolization,
+} from "../symbology/correctionSymbolResolver.js";
 
 const FROZEN_STATUS_NAME = "Frozen";
 const TEMPORARY_FROZEN_STATUS_NAME = "In Transit";
@@ -117,13 +122,27 @@ function getStatusFromResult(result) {
 }
 
 function updateGraphicSymbol(graphic) {
-  const status = graphic?.attributes?.status;
+  const symbolization = resolveGraphicSymbolization(graphic);
 
-  if (status === undefined || status === null) {
+  if (
+    !canResolveCorrectionSymbol({
+      attributes: graphic?.attributes,
+      geometry: graphic?.geometry,
+      symbolization,
+    })
+  ) {
     return;
   }
 
-  graphic.symbol = getCorrectionSymbol(status, {
-    variant: "detail",
+  const nextSymbol = resolveCorrectionSymbol({
+    attributes: graphic.attributes,
+    geometry: graphic.geometry,
+    symbolization,
   });
+
+  if (areCorrectionSymbolsEquivalent(graphic.symbol, nextSymbol)) {
+    return;
+  }
+
+  graphic.symbol = nextSymbol;
 }

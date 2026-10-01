@@ -89,7 +89,24 @@ package/member state to this shape. No backend DTO names or new status enum valu
 Current AOI Graphics have only the representative scalar `status`, so the live filter falls back to
 that scalar without inventing S-57 or package workflow state or fetching Product details. Persisted
 filter snapshots stay version 2 with provider-scoped selected logical values, independent of which
-member supplied a match. Backend DTO mapping and mixed-status rendering remain deferred.
+member supplied a match. Backend DTO mapping remains deferred.
+
+## F2 mixed-status AOI rendering foundation
+
+The [F2 rendering foundation](package-mixed-status-rendering.md) adds a separate member-only rendering
+projection. It deliberately does not reuse F1's workflow-plus-member filter values: package workflow
+status cannot change the map symbol. The package layer declaratively opts into member-aware polygon
+symbolization, while simple sources keep scalar symbols. Initial transformation and later attribute
+refreshes use one centralized resolver, and source reconciliation retains the representative Graphic.
+
+Two or more distinct supplied member statuses produce one public multi-layer CIM polygon symbol using
+the existing status palette: one deterministic member status supplies a translucent base fill and the
+other distinct statuses supply colored hatch stripes. This keeps all supplied Product status colors
+visible without assigning a visual direction to S-101 or S-57. Absent member state falls back to the
+existing scalar status, so current live AOIs remain visually unchanged. No backend shape, fabricated
+runtime state, child Graphic, additional layer or network request is introduced. The symbol choice
+remains a candidate until representative browser/performance testing in light and dark themes is
+accepted.
 
 ## Capability boundary and deferred work
 
@@ -104,11 +121,11 @@ this task does not introduce package layouts or package mutation routes there.
 No backend source, API contract, migration, status enum, transport or job is changed. No dependencies
 or lockfiles are changed. No fabricated package state or demo-state infrastructure is introduced.
 
-Deferred: authoritative complete package/child read state; package lifecycle actions
-Pause/Resume/Discard/Send/Accept; scheduling; multi-level status filters; mixed-status hatching;
-Analyze/Review/Dashboard package UX. Current map styling/filtering still uses the representative
-product's scalar status. A blank S-57 column is an expected truthful limitation until related metadata
-or the future read contract supplies data.
+Deferred: authoritative complete package/child read state and its backend-to-frontend mapping; package
+lifecycle actions Pause/Resume/Discard/Send/Accept; scheduling; multi-level status filters; final
+mixed-status symbol acceptance; Analyze/Review/Dashboard package UX. Current live map styling remains
+scalar because no authoritative member status state is supplied. A blank S-57 column is an expected
+truthful limitation until related metadata or the future read contract supplies data.
 
 ## Verification
 
