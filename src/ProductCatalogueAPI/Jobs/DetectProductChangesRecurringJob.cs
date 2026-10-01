@@ -37,7 +37,7 @@ namespace ProductCatalogueAPI.Jobs
                 );
             }
 
-            logger.LogInformation(
+            logger.LogTrace(
                 "DetectProductChanges recurring-job reconciliation completed. Enabled: {Enabled}.",
                 state.Enabled
             );

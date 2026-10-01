@@ -22,6 +22,11 @@ namespace ProductCatalogueAPI
             var processProfile = ProductCatalogueProcessProfile.For(processRole);
 
             if (processRole == ProductCatalogueProcessRole.Worker) {
+                // The local launcher starts the worker in a separate console, so its BAT title is not inherited.
+                if (Environment.UserInteractive) {
+                    try { Console.Title = "Product Catalogue Worker"; }
+                    catch (IOException) { /* A service process may have no console to rename. */ }
+                }
                 await RunWorkerAsync(args, processProfile);
                 return;
             }

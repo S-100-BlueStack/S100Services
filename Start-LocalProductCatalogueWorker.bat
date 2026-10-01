@@ -1,5 +1,6 @@
 @echo off
 setlocal
+title Product Catalogue Worker Launcher
 
 rem This BAT file is intended to be placed in the repository root.
 set "SCRIPT=%~dp0src\ProductCatalogueAPI\scripts\Manage-LocalProductCatalogueWorker.ps1"

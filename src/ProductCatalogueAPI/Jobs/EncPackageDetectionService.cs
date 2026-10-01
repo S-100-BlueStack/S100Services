@@ -4,6 +4,7 @@ using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Operations;
 using S100FC.ProductCatalogue;
 using S100FC.YAML;
+using System.Diagnostics;
 
 namespace ProductCatalogueAPI.Jobs;
 
@@ -31,7 +32,12 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         var scanStartedUtc = clock.GetUtcNow().UtcDateTime;
         var sinceUtc = await productRepository.GetLastSuccessfulRunUtcAsync(nameof(DetectProductChangesJob))
             ?? EncChangeSummary.GetCopenhagenDayStartUtc(scanStartedUtc);
+        logger.LogInformation("ENC archive scan started. SinceUtc: {SinceUtc}. StartedUtc: {StartedUtc}.", sinceUtc, scanStartedUtc);
+
+        var archiveScanTime = Stopwatch.StartNew();
         var pending = await _products.GetPendingEditsAsync(sinceUtc);
+        logger.LogInformation("ENC archive scan finished. DurationMs: {DurationMs}. ChangedAoiCount: {ChangedAoiCount}. UniqueChangedFeatureCount: {UniqueChangedFeatureCount}.",
+            archiveScanTime.ElapsedMilliseconds, pending.Count, pending.Values.SelectMany(changes => changes.Keys).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         var replay = await packages.GetReplayBoundsAsync(cancellationToken);
         if (replay.Count > 0) {
             var activeReplay = await packages.GetActiveAsync(replay.Keys, cancellationToken);
@@ -53,6 +59,15 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                         pending[sourceName] = changes;
                 }
             }
+        }
+
+        if (pending.Count == 0)
+            logger.LogInformation("ENC scan found no changed features.");
+        else {
+            logger.LogInformation("ENC scan found changes. UniqueChangedFeatureCount: {UniqueChangedFeatureCount}. AffectedAoiCount: {AffectedAoiCount}.",
+                pending.Values.SelectMany(changes => changes.Keys).Distinct(StringComparer.OrdinalIgnoreCase).Count(), pending.Count);
+            foreach (var (sourceName, changes) in pending)
+                logger.LogInformation("ENC changes for {SourceDatasetName}: {ChangedFeatureCount} feature(s).", sourceName, changes.Count);
         }
 
         var active = await packages.GetActiveAsync(pending.Keys, cancellationToken);

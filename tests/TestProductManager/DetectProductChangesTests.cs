@@ -3,6 +3,7 @@ using Hangfire.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Services.Locking;
@@ -269,7 +270,7 @@ namespace TestProductCatalogueAPI
 
         /// <summary>Fails on package scanning so disabled jobs cannot access the workflow.</summary>
         private static DetectProductChangesJob CreateJob(DetectProductChangesState state, List<string> calls) =>
-            new(state, DependencySpy<IEncPackageDetectionService>.Create(calls));
+            new(state, DependencySpy<IEncPackageDetectionService>.Create(calls), NullLogger<DetectProductChangesJob>.Instance);
 
         public sealed class DependencyAccessException : Exception { }
 
