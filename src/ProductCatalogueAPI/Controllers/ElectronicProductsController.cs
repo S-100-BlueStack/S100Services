@@ -389,7 +389,7 @@ namespace ProductCatalogueAPI.Controllers
                     .ToArray();
 
                 exports.Add(new ProductExport(
-                    track.ProductSpecification == ProductSpecification.S101 ? "S100" : "S57",
+                    track.ProductSpecification.ToString(),
                     track.DatasetName,
                     track.CandidateEdition ?? track.PublishedEdition,
                     track.CandidateUpdate ?? track.PublishedUpdate,

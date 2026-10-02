@@ -203,6 +203,8 @@ namespace ProductCatalogueAPI.Models
             string? Revision,
             bool Available);
 
+        /// <summary>Describes a candidate export for a specific electronic product.</summary>
+        /// <param name="Type">Product specification identifier, either S57 or S101.</param>
         public sealed record ProductExport(
             string Type,
             string Name,

@@ -44,12 +44,35 @@ namespace TestProductCatalogueAPI
             await workflows.BeginExportAsync(s57.Id, 5, 0, "operator", DateTime.UtcNow);
             var withCandidate = await controller.GetElectronicProduct(sourceName);
             var active = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(withCandidate).Value);
-            Assert.Equal(5, Assert.Single(active.Data!.Exports).Edition);
+            var s57Export = Assert.Single(active.Data!.Exports);
+            Assert.Equal("S57", s57Export.Type);
+            Assert.Equal(5, s57Export.Edition);
 
             await workflows.DiscardCandidateAsync(s57.Id, "operator", DateTime.UtcNow);
             var afterDiscard = await controller.GetElectronicProduct(sourceName);
             var discarded = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(afterDiscard).Value);
             Assert.Empty(discarded.Data!.Exports);
+        }
+
+        [Fact]
+        public async Task ProductDetailIdentifiesS101CandidateByItsSpecificProductType() {
+            const string sourceName = "101DK001GSOUT";
+            var products = new FakeElectronicProductManager(
+                new Dictionary<string, string>(),
+                new Dictionary<string, ElectronicProduct> { [sourceName] = CreateElectronicProduct(sourceName, 90_000, 1) });
+            var workflows = new InMemoryProductRepository();
+            var s101 = await workflows.GetOrCreateTrackAsync(sourceName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 4, 0);
+            await workflows.BeginExportAsync(s101.Id, 5, 0, "operator", DateTime.UtcNow);
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
+                new FakeProductManager(products), workflows, workflows) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+
+            var result = await controller.GetElectronicProduct(sourceName);
+            var response = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(result).Value);
+
+            Assert.Equal("S101", Assert.Single(response.Data!.Exports).Type);
         }
 
         [Fact]
