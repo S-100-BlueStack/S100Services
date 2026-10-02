@@ -643,25 +643,33 @@ namespace S100FC.ProductCatalogue
                     archiveRows++;
                     uniqueChangedFeatureIds.Add(id);
 
+                    var fromDate = row["GDB_FROM_DATE"] as DateTime?;
+                    var toDate = row["GDB_TO_DATE"] as DateTime?;
+                    // A removed or superseded archive row changed when it closed, not when it began.
+                    var changedAt = toDate is { Year: < 9999 } && (!fromDate.HasValue || toDate > fromDate) ? toDate : fromDate;
                     var archiveRow = new ArchiveRow {
                         Code = row["Code"]?.ToString(),
                         AttributeBindings = row["attributebindings"]?.ToString(),
                         InformationBindings = row["informationbindings"]?.ToString(),
                         FeatureBindings = row["featurebindings"]?.ToString(),
                         Deleted = IsDeletedFeature(id, currentFeatureIds),
-                        EditDate = row["GDB_FROM_DATE"] as DateTime?
+                        EditDate = changedAt
                     };
 
                     foreach (var product in productList) {
-                        if (!GeometryEngine.Instance.Intersects(changedShape, product.Aoi))
-                            continue;
+                        string productName = product.Name;
+                        affectedProducts.Add(productName);
 
-                        affectedProducts.Add(product.Name);
+                        if (!result.TryGetValue(productName, out var productChanges)) {
+                            productChanges = new Dictionary<string, ArchiveRow>();
+                            result[productName] = productChanges;
+                        }
 
-                        if (!result.ContainsKey(product.Name))
-                            result[product.Name] = new Dictionary<string, ArchiveRow>();
-
-                        result[product.Name][id] = archiveRow;
+                        // Archive cursors have no guaranteed row order; retain the newest change per feature.
+                        if (!productChanges.TryGetValue(id, out var previous) ||
+                            !previous.EditDate.HasValue ||
+                            archiveRow.EditDate > previous.EditDate)
+                            productChanges[id] = archiveRow;
                     }
                 }
 
