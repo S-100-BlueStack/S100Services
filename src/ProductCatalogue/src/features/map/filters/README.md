@@ -49,7 +49,8 @@ filter service nor this foundation assumes a backend DTO. Package workflow statu
 member Product statuses form one Status option list. A repeated value counts once per Graphic,
 and a matching member retains the one representative Graphic/work unit. Until normalized package
 state is supplied, the reader falls back to that Graphic's scalar `status`; it does not infer
-missing member or workflow state. Backend DTO mapping and mixed-status map rendering are deferred.
+missing member or workflow state. Backend DTO mapping remains deferred; the accepted F2 rendering
+foundation is unchanged by contextual facet counting.
 
 Selections remain provider/value based in schema version 2. No member key or package identity is
 stored in filter preferences beyond the existing provider identity.
@@ -61,10 +62,40 @@ without affecting other fields or sources.
 Electronic providers use authoritative lookup lists for status and usage labels. Runtime
 mock sources derive values from their loaded graphics and do not invent absent attributes.
 
+## Context-aware facet counts (F3)
+
+Committed provider facets retain the full option domain, labels, and lookup order. Each call to
+`getValuesForField(providerId, fieldName)` derives fresh counts from that provider's current committed
+Graphics and filters. The target field ignores its own active filter; all other active dimensions
+are ANDed using the same predicate as map matching. Alternatives within a value field remain ORed.
+No contextual cache or network request is involved.
+
+Status counts therefore apply Usage band and Display scale, Usage band counts apply Status and
+Display scale, and Display scale counts apply Status and Usage band. Package Status uses the same
+F1 workflow/member projection as matching: one representative Graphic contributes at most once per
+logical facet value, even when workflow and multiple members repeat it. Scalar-only package fallback
+and current backend/member integration limitations remain unchanged.
+
+Zero-count options remain visible and selectable, including lookup options and unknown values with
+fallback labels. Contextual counts never remove fields or shrink the provider's option domain.
+Display scale keeps its full numeric domain so a narrowed range can be expanded again. Its preview
+sums contextual scalar scale counts inside the preview range and therefore also respects the other
+active dimensions. Map-scale hiding/preferences remain a separate lifecycle.
+
+Provider `visibleCount` still applies ALL active filters; `totalCount` still counts provider Graphics.
+Counts are derived metadata and are never persisted. The storage key, version 2 snapshot, selected
+values/range formats, migration, pending intent, Auto-save, Clear all, and Reset contracts are unchanged.
+
+A range commit retains `commitFilterChange({ rerender: false })`: visibility and persistence use the
+existing path once, while `attributeFilterCounts.js` patches only application-owned provider count
+text, checkbox count text/zero-count classes, and range preview/summary text. The existing Calcite
+slider and its public values remain intact; no focus calls or private shadow DOM access are used.
+Checkbox changes retain their existing full render. A closed panel shows fresh counts on its next render.
+
 ## Isolation and lifecycle
 
-Selected values, range state, facets, visible counts, and active-filter counts are stored per
-provider. A filter change in one provider cannot hide graphics or alter counts in another provider.
+Selected values, range state, and base facets are stored per provider; contextual facets,
+visible counts, and active-filter counts are derived per provider. A filter change in one provider cannot hide graphics or alter counts in another provider.
 
 Provider replacement rebuilds facets only for that provider and reconciles valid selected values.
 Authoritative provider removal clears active filters, pending snapshot filters, explicit persisted

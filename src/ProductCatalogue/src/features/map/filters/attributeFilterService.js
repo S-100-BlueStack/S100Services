@@ -361,19 +361,50 @@ export function createAttributeFilterService({
 
   function getValuesForField(providerId, fieldName) {
     const provider = providers.get(optionalText(providerId));
-    const values = provider?.facets.get(canonicalField(fieldName));
-    return values ? values.map((entry) => ({ ...entry })) : [];
+    const canonicalFieldName = canonicalField(fieldName);
+    const values = provider?.facets.get(canonicalFieldName);
+    if (!values) {
+      return [];
+    }
+
+    const counts = new Map(values.map((entry) => [entry.value, 0]));
+    const definition = provider.definitions.find((entry) => entry.fieldName === canonicalFieldName);
+    const providerFilters = filtersByProvider.get(provider.id);
+    for (const layer of provider.layers) {
+      for (const graphic of getLayerGraphics(layer)) {
+        if (!matchesProviderFilters(graphic, provider, providerFilters, canonicalFieldName)) {
+          continue;
+        }
+        for (const value of readFilterValues(graphic, definition)) {
+          if (counts.has(value)) {
+            counts.set(value, counts.get(value) + 1);
+          }
+        }
+      }
+    }
+
+    // Keep the committed option domain and lookup order, including contextual zeroes.
+    return values.map((entry) => ({ ...entry, count: counts.get(entry.value) }));
   }
 
   function matchesGraphic(graphic, layer) {
     const providerId = resolveProviderId(graphic, layer);
-    const providerFilters = providerId ? filtersByProvider.get(providerId) : null;
+    return matchesProviderFilters(
+      graphic,
+      providers.get(providerId),
+      filtersByProvider.get(providerId)
+    );
+  }
+
+  function matchesProviderFilters(graphic, provider, providerFilters, excludeFieldName = null) {
     if (!providerFilters) {
       return true;
     }
 
-    const provider = providers.get(providerId);
     for (const [fieldName, filter] of providerFilters.entries()) {
+      if (fieldName === excludeFieldName) {
+        continue;
+      }
       const rawValue = readAttributeValue(graphic, fieldName);
       if (filter.mode === FILTER_MODE.RANGE) {
         const numberValue = toFiniteNumber(rawValue);

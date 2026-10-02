@@ -16,6 +16,14 @@ import {
   writeAttributeFilterSnapshot,
 } from "./attributeFilterPersistence.js";
 
+import {
+  clampIndex,
+  getNumericEntries,
+  getRangeState,
+  refreshRenderedFilterCounts,
+  updateRangePreview,
+} from "./attributeFilterCounts.js";
+
 const POPOVER_ID = "filters";
 
 export function initAttributeFilterPanel({
@@ -181,6 +189,9 @@ export function initAttributeFilterPanel({
       render();
     } else {
       refreshBadge();
+      if (isOpen()) {
+        refreshRenderedFilterCounts(panel, filterService);
+      }
     }
   }
 
@@ -258,7 +269,6 @@ export function initAttributeFilterPanel({
       values[maxIndex].numericValue
     );
     commitFilterChange({ rerender: false });
-    updateRangePreview(panel, filterService, slider.dataset.providerId, slider.dataset.fieldName);
   }
 
   function handlePanelClick(event) {
@@ -420,7 +430,7 @@ function renderProvider(filterService, providerId, openFieldKeys) {
   return `
     <section class="pc-filter-layer" data-filter-provider="${escapeHtml(providerId)}">
       <h3>${escapeHtml(metadata?.label ?? providerId)}</h3>
-      <p class="pc-filter-empty">${escapeHtml(countText)}</p>
+      <p class="pc-filter-empty" data-provider-count>${escapeHtml(countText)}</p>
       ${
         fields.length
           ? fields
@@ -563,70 +573,6 @@ function renderRangeField(filterService, providerId, fieldName, values, openFiel
   `;
 }
 
-function updateRangePreview(panel, filterService, providerId, fieldName) {
-  const entries = getNumericEntries(filterService.getValuesForField(providerId, fieldName));
-  const slider = panel.querySelector(
-    `calcite-slider[data-provider-id="${CSS.escape(
-      providerId
-    )}"][data-field-name="${CSS.escape(fieldName)}"]`
-  );
-
-  if (entries.length < 2 || !slider) {
-    return;
-  }
-
-  const state = getRangeState(
-    entries,
-    clampIndex(slider.minValue, entries.length - 1),
-    clampIndex(slider.maxValue, entries.length - 1),
-    fieldName
-  );
-  const container = slider.closest("[data-range-values]");
-  const field = slider.closest(".pc-filter-field");
-
-  if (container) {
-    container.querySelector('[data-range-output="min"]')?.replaceChildren(state.minLabel);
-    container.querySelector('[data-range-output="max"]')?.replaceChildren(state.maxLabel);
-    container
-      .querySelector("[data-range-hint]")
-      ?.replaceChildren(`${state.featureCount} product(s) in range`);
-  }
-
-  field
-    ?.querySelector("[data-range-summary]")
-    ?.replaceChildren(`${state.selectedValueCount}/${entries.length}`);
-}
-
-function getRangeState(entries, minIndex, maxIndex, fieldName) {
-  const normalizedMin = Math.min(minIndex, maxIndex);
-  const normalizedMax = Math.max(minIndex, maxIndex);
-  const selected = entries.slice(normalizedMin, normalizedMax + 1);
-
-  return {
-    minIndex: normalizedMin,
-    maxIndex: normalizedMax,
-    selectedValueCount: selected.length,
-    featureCount: selected.reduce((sum, entry) => sum + entry.count, 0),
-    minLabel: formatAttributeDisplayValue(
-      fieldName,
-      entries[normalizedMin].value,
-      entries[normalizedMin].label
-    ),
-    maxLabel: formatAttributeDisplayValue(
-      fieldName,
-      entries[normalizedMax].value,
-      entries[normalizedMax].label
-    ),
-  };
-}
-
-function getNumericEntries(values) {
-  return values
-    .map((entry) => ({ ...entry, numericValue: Number(entry.value) }))
-    .filter((entry) => Number.isFinite(entry.numericValue))
-    .sort((left, right) => left.numericValue - right.numericValue);
-}
-
 function findMinIndex(entries, value) {
   const index = entries.findIndex((entry) => entry.numericValue >= value);
   return index < 0 ? 0 : index;
@@ -640,11 +586,6 @@ function findMaxIndex(entries, value) {
   }
 
   return entries.length - 1;
-}
-
-function clampIndex(value, max) {
-  const number = Number(value);
-  return Math.min(Math.max(Number.isFinite(number) ? number : 0, 0), max);
 }
 
 function getCheckedValues(panel, providerId, fieldName) {
