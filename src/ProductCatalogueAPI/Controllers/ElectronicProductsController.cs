@@ -371,8 +371,8 @@ namespace ProductCatalogueAPI.Controllers
             var exports = new List<ProductExport>();
             foreach (var track in tracks)
             {
-                // A track remains after a discard so its state history remains auditable.
-                // It is not a current export unless it still has a candidate or a published version.
+                // Published versions remain on the track after discard; only current candidates
+                // and failures awaiting acknowledgement belong in the exports list.
                 var hasActiveCandidate = track.CandidateEdition.HasValue && track.CandidateUpdate.HasValue;
                 var latestRevisionId = hasActiveCandidate
                     ? await _workflowRepository.GetLatestRevisionIdAsync(track.Id)
@@ -832,8 +832,7 @@ namespace ProductCatalogueAPI.Controllers
                 .DistinctBy(track => track.Id)
                 .Where(track => track.ProductSpecification is ProductSpecification.S57 or ProductSpecification.S101)
                 .Where(track => (track.CandidateEdition.HasValue && track.CandidateUpdate.HasValue)
-                    || track.PublishedEdition > 0
-                    || track.PublishedUpdate > 0)
+                    || track.State is ProductState.Error or ProductState.Rejected)
                 .OrderBy(track => track.ProductSpecification)];
         }
 

@@ -23,6 +23,36 @@ namespace TestProductCatalogueAPI
     public class ElectronicProductsAoiProfilingTests
     {
         [Fact]
+        public async Task ProductDetailDoesNotShowDiscardedPublishedTrackAsAnExport() {
+            const string sourceName = "101DK001GSOUT";
+            var s57Name = $"57{sourceName}";
+            var products = new FakeElectronicProductManager(
+                new Dictionary<string, string>(),
+                new Dictionary<string, ElectronicProduct> { [sourceName] = CreateElectronicProduct(sourceName, 90_000, 1) });
+            var workflows = new InMemoryProductRepository();
+            var s57 = await workflows.GetOrCreateTrackAsync(s57Name, ProductSpecification.S57, ExportEngineKind.IsoIec8211, 4, 0);
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
+                new FakeProductManager(products), workflows, workflows) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+
+            var withoutCandidate = await controller.GetElectronicProduct(sourceName);
+            var initial = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(withoutCandidate).Value);
+            Assert.Empty(initial.Data!.Exports);
+
+            await workflows.BeginExportAsync(s57.Id, 5, 0, "operator", DateTime.UtcNow);
+            var withCandidate = await controller.GetElectronicProduct(sourceName);
+            var active = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(withCandidate).Value);
+            Assert.Equal(5, Assert.Single(active.Data!.Exports).Edition);
+
+            await workflows.DiscardCandidateAsync(s57.Id, "operator", DateTime.UtcNow);
+            var afterDiscard = await controller.GetElectronicProduct(sourceName);
+            var discarded = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(afterDiscard).Value);
+            Assert.Empty(discarded.Data!.Exports);
+        }
+
+        [Fact]
         public async Task GlobalAoiShowsS101FailureOnThePackageWhenS57Succeeded() {
             const string datasetName = "101DK0000001E";
             var products = new FakeElectronicProductManager(
