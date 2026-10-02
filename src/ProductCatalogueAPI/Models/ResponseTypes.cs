@@ -52,6 +52,10 @@ namespace ProductCatalogueAPI.Models
 
         public class ProductResponse
         {
+            /// <summary>Gets the current S-57 product, even when no export candidate exists.</summary>
+            public CurrentElectronicProductResponse? S57 { get; set; }
+            /// <summary>Gets the current S-101 product, even when no export candidate exists.</summary>
+            public CurrentElectronicProductResponse? S101 { get; set; }
             public string? Name { get; set; }
             public int? Edition { get; set; }
             public int? Update { get; set; }
@@ -61,6 +65,9 @@ namespace ProductCatalogueAPI.Models
             public List<ProductExport>? Exports { get; set; }
             public string? ErrorMessage { get; set; }
         }
+
+        /// <summary>Describes the current product version read from the S-128 catalogue.</summary>
+        public sealed record CurrentElectronicProductResponse(string Name, int? Edition, int? Update, DateOnly? IssueDate);
 
         public class ProductHistoryResponse
         {

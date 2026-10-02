@@ -25,7 +25,8 @@ public enum EncPackageStatus
 }
 
 /// <summary>Exposes public and candidate versions separately for one mapped product.</summary>
-public sealed record EncPackageProductResponse(string DatasetName, ProductSpecification ProductSpecification, int CurrentEdition, int CurrentUpdate, int? CandidateEdition, int? CandidateUpdate, ProductState Status, bool Held, bool Discarded, string? ErrorMessage);
+/// <param name="IssueDate">The issue date of the current product in the S-128 catalogue.</param>
+public sealed record EncPackageProductResponse(string DatasetName, ProductSpecification ProductSpecification, int CurrentEdition, int CurrentUpdate, DateOnly? IssueDate, int? CandidateEdition, int? CandidateUpdate, ProductState Status, bool Held, bool Discarded, string? ErrorMessage);
 
 /// <summary>Exposes one S-101 AOI with its shared package and two independent export tracks.</summary>
 public sealed record EncPackageResponse(PackageLayer Layer, string SourceDatasetName, int? UsageBand, int? DisplayScale, DateTime? DetectedAtUtc, EncPackageStatus Status, string? ErrorMessage, EncPackageProductResponse S57, EncPackageProductResponse S101);

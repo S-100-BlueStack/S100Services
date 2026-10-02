@@ -23,6 +23,47 @@ namespace TestProductCatalogueAPI
     public class ElectronicProductsAoiProfilingTests
     {
         [Fact]
+        public async Task EncResponsesIncludeBothCurrentProductVersionsWithoutCandidates() {
+            const string s101Name = "101DK001GSOUT";
+            var s57Name = $"57{s101Name}";
+            var s101 = CreateElectronicProduct(s101Name, 90_000, 1);
+            s101.editionNumber = 3;
+            s101.updateNumber = 2;
+            s101.issueDate = new DateOnly(2026, 9, 20);
+            var s57 = CreateElectronicProduct(s57Name, 90_000, 1, "S-57");
+            s57.editionNumber = 4;
+            s57.updateNumber = 1;
+            s57.issueDate = new DateOnly(2026, 8, 15);
+            var products = new FakeElectronicProductManager(
+                new Dictionary<string, string> { [s101Name] = "{\"rings\":[]}" },
+                new Dictionary<string, ElectronicProduct> { [s101Name] = s101, [s57Name] = s57 });
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
+                new FakeProductManager(products), new RecordingProductRepository(new Dictionary<string, ProductRecord?>()), new InMemoryProductRepository()) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+
+            var detail = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(await controller.GetElectronicProduct(s101Name)).Value).Data!;
+            Assert.Empty(detail.Exports!);
+            Assert.Equal(s57Name, detail.S57?.Name);
+            Assert.Equal(4, detail.S57?.Edition);
+            Assert.Equal(1, detail.S57?.Update);
+            Assert.Equal(new DateOnly(2026, 8, 15), detail.S57?.IssueDate);
+            Assert.Equal(s101Name, detail.S101?.Name);
+            Assert.Equal(3, detail.S101?.Edition);
+            Assert.Equal(2, detail.S101?.Update);
+            Assert.Equal(new DateOnly(2026, 9, 20), detail.S101?.IssueDate);
+
+            var aoi = Assert.Single(Assert.IsType<List<AOIResponse>>(Assert.IsType<OkObjectResult>(await controller.GetAllElectronicProductsAOI()).Value));
+            Assert.Equal(4, aoi.Attributes?.Package?.S57.CurrentEdition);
+            Assert.Equal(1, aoi.Attributes?.Package?.S57.CurrentUpdate);
+            Assert.Equal(new DateOnly(2026, 8, 15), aoi.Attributes?.Package?.S57.IssueDate);
+            Assert.Equal(3, aoi.Attributes?.Package?.S101.CurrentEdition);
+            Assert.Equal(2, aoi.Attributes?.Package?.S101.CurrentUpdate);
+            Assert.Equal(new DateOnly(2026, 9, 20), aoi.Attributes?.Package?.S101.IssueDate);
+        }
+
+        [Fact]
         public async Task ProductDetailDoesNotShowDiscardedPublishedTrackAsAnExport() {
             const string sourceName = "101DK001GSOUT";
             var s57Name = $"57{sourceName}";
@@ -482,7 +523,7 @@ namespace TestProductCatalogueAPI
                 if (!products.TryGetValue(name, out var source))
                     return [];
                 if (productSpecification == "S57" && source.productSpecification?.name == "S-101")
-                    return [CreateElectronicProduct($"57{name}", Convert.ToInt32(source.optimumDisplayScale), Convert.ToInt32(source.specificUsage), "S-57")];
+                    return [products.GetValueOrDefault($"57{name}") ?? CreateElectronicProduct($"57{name}", Convert.ToInt32(source.optimumDisplayScale), Convert.ToInt32(source.specificUsage), "S-57")];
                 if (productSpecification == "S101" && source.productSpecification?.name == "S-57")
                     return [CreateElectronicProduct($"101{name}", Convert.ToInt32(source.optimumDisplayScale), Convert.ToInt32(source.specificUsage), "S-101")];
                 return [];

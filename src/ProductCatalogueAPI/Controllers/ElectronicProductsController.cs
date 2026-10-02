@@ -341,7 +341,7 @@ namespace ProductCatalogueAPI.Controllers
         }
 
         /// <summary>
-        /// Get a specific electronic product.
+        /// Gets the requested electronic product and the current versions of both mapped ENC products.
         /// </summary>
         /// <param name="name">The name of the dataset.</param>
         /// <returns>The product.</returns>
@@ -401,6 +401,8 @@ namespace ProductCatalogueAPI.Controllers
 
             var product = new ProductResponse
             {
+                S57 = GetCurrentProduct(electronicProduct, ProductSpecification.S57),
+                S101 = GetCurrentProduct(electronicProduct, ProductSpecification.S101),
                 IssueDate = electronicProduct.issueDate,
                 Name = electronicProduct.datasetName,
                 Edition = electronicProduct.editionNumber,
@@ -809,12 +811,30 @@ namespace ProductCatalogueAPI.Controllers
             return Enum.TryParse(normalized, out productSpecification) && productSpecification is ProductSpecification.S57 or ProductSpecification.S101;
         }
 
+        /// <summary>Finds the current product by specification without relying on a candidate track.</summary>
+        private CurrentElectronicProductResponse? GetCurrentProduct(ElectronicProduct source, ProductSpecification specification)
+        {
+            ElectronicProduct? product = source;
+            if (!MatchesProductSpecification(source, specification))
+            {
+                if (string.IsNullOrWhiteSpace(source.datasetName))
+                    return null;
+                var mapped = _electronicProductManager.GetMappedElectronicProducts(source.datasetName, specification.ToString());
+                product = mapped.Count == 1 && MatchesProductSpecification(mapped[0], specification) ? mapped[0] : null;
+            }
+
+            return string.IsNullOrWhiteSpace(product?.datasetName)
+                ? null
+                : new CurrentElectronicProductResponse(product.datasetName.Trim(), product.editionNumber, product.updateNumber, product.issueDate);
+        }
+
         /// <summary>Separates the published catalogue version from the SQL candidate version in a package response.</summary>
         private static EncPackageProductResponse CreatePackageProduct(ElectronicProduct product, ProductSpecification specification, ProductExportTrackRecord? track, bool discarded) => new(
             product.datasetName?.Trim() ?? string.Empty,
             specification,
-            track?.PublishedEdition ?? product.editionNumber ?? 0,
-            track?.PublishedUpdate ?? product.updateNumber ?? 0,
+            product.editionNumber ?? track?.PublishedEdition ?? 0,
+            product.updateNumber ?? track?.PublishedUpdate ?? 0,
+            product.issueDate,
             discarded ? null : track?.CandidateEdition,
             discarded ? null : track?.CandidateUpdate,
             track?.State ?? ProductState.Idle,
