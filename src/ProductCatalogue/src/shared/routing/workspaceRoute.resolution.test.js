@@ -11,6 +11,18 @@ function createService() {
   return createWorkspaceProductService({
     registry: createDataSourceRegistry({ isDevelopment: true }),
     loadCompatibilityCatalog: async () => ({ Data: ["A&B"] }),
+    loadTargetedProduct: async (name) =>
+      name === "A&B"
+        ? {
+            success: true,
+            data: {
+              Data: {
+                Geometry: { x: 10, y: 56 },
+                Attributes: { DatasetName: name, ProductSpecification: "S101" },
+              },
+            },
+          }
+        : { success: false, status: 409 },
     loadSource: async (source) =>
       source.id === "s57"
         ? []
@@ -18,7 +30,8 @@ function createService() {
     normalizeSource: (entries, source) => ({
       products: entries.map((entry) => ({
         ...entry,
-        productKey: entry.datasetName,
+        datasetName: entry.Attributes?.DatasetName ?? entry.datasetName,
+        productKey: entry.Attributes?.DatasetName ?? entry.datasetName,
         sourceId: source.id,
       })),
       layers: [],

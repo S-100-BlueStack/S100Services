@@ -61,7 +61,15 @@ function createIdentityWorkspaceService() {
   const registry = createDataSourceRegistry({ isDevelopment: true });
   return createWorkspaceProductService({
     registry,
-    loadTargetedProduct: null,
+    loadTargetedProduct: async (datasetName) => ({
+      success: true,
+      data: {
+        Data: {
+          Geometry: { x: 10, y: 56 },
+          Attributes: { DatasetName: datasetName, ProductSpecification: "S101" },
+        },
+      },
+    }),
     loadCompatibilityCatalog: async () => ({
       Data: [{ name: "1149E", datasetName: "101DK0041149E" }],
     }),
@@ -73,7 +81,14 @@ function createIdentityWorkspaceService() {
       return [{ datasetName: "102DK0041149E", productName: "1149E" }];
     },
     normalizeSource: (entries, source) => {
-      const features = entries.map((entry) => ({
+      const products =
+        source.workspace.resolution === "targeted-product-aoi"
+          ? entries.map((entry) => ({
+              datasetName: entry.Attributes.DatasetName,
+              productName: "1149E",
+            }))
+          : entries;
+      const features = products.map((entry) => ({
         type: "Feature",
         geometry: { type: "Point", coordinates: [10, 56] },
         properties: {
@@ -96,6 +111,7 @@ function createIdentityWorkspaceService() {
 
 test("Review resolves same visible Product name independently by datasetName", async () => {
   const workspaceProductService = createIdentityWorkspaceService();
+  await workspaceProductService.loadCatalog();
   const historyCalls = [];
   const results = await loadReviewHistories(["101DK0041149E", "102DK0041149E"], {
     workspaceProductService,
@@ -110,10 +126,13 @@ test("Review resolves same visible Product name independently by datasetName", a
     },
   });
 
-  assert.deepEqual(historyCalls, [
-    ["101DK0041149E", "s101"],
-    ["102DK0041149E", "s102"],
-  ]);
+  assert.deepEqual(
+    historyCalls.toSorted(([left], [right]) => left.localeCompare(right)),
+    [
+      ["101DK0041149E", "s101"],
+      ["102DK0041149E", "s102"],
+    ]
+  );
   assert.deepEqual(
     results.map((product) => [product.datasetName, product.sourceId, product.loadState]),
     [

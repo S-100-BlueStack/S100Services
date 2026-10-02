@@ -65,12 +65,12 @@ function context(id, datasetName = "PRODUCT") {
 }
 
 for (const id of ["s57", "s101"]) {
-  test(`${id} derives identity from the specification-scoped AOI contract`, () => {
+  test(`${id} normalizes source identity independently of Main-map transport`, () => {
     const source = registry.byId.get(id);
     const result = normalizeDataSourcePayload([aoi("NAME-WITHOUT-STANDARD")], source);
     assert.equal(
-      source.loader.path,
-      `electronicproducts/aoi?productSpecification=${id.toUpperCase()}`
+      source.loader?.path ?? null,
+      id === "s101" ? "electronicproducts/aoi?layer=ENC" : null
     );
     assert.equal(result.products[0].sourceId, id);
     assert.equal(result.products[0].productSpecification, id.toUpperCase());
@@ -141,17 +141,33 @@ test("workspace resolves both standards through targeted AOIs without loading bu
   assert.equal(bulkCalls, 0);
 });
 
-test("failed electronic source does not resolve through another source", async () => {
+test("failed targeted electronic Product never resolves through another source", async () => {
+  let bulkCalls = 0;
   const service = createWorkspaceProductService({
     registry,
-    loadTargetedProduct: null,
-    loadSource: async (source) => {
-      if (source.id === "s57") throw new Error("offline");
-      return [aoi("OTHER")];
+    loadTargetedProduct: async (datasetName) =>
+      datasetName === "MISSING"
+        ? { success: false, status: 503 }
+        : {
+            success: true,
+            data: {
+              Data: {
+                ...aoi(datasetName),
+                Attributes: {
+                  ...aoi(datasetName).Attributes,
+                  ProductSpecification: "S101",
+                },
+              },
+            },
+          },
+    loadSource: async () => {
+      bulkCalls += 1;
+      throw new Error("Bulk loader must not run");
     },
   });
   assert.equal((await service.resolveProduct("MISSING")).status, "failed");
   assert.equal((await service.resolveProduct("OTHER")).product.sourceId, "s101");
+  assert.equal(bulkCalls, 0);
 });
 
 test("normalized export routes have no target override or obsolete jobs suffix", () => {

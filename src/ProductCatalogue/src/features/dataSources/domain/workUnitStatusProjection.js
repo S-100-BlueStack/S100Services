@@ -1,4 +1,4 @@
-// The future AOI mapper owns this normalized application field; transport aliases stay there.
+// The electronic AOI normalizer owns this normalized application field; transport aliases stay there.
 // No member is inferred from the representative Product when its status is absent.
 export function projectWorkUnitStatusValues({ representativeStatus, workUnitStatus } = {}) {
   const candidates = [

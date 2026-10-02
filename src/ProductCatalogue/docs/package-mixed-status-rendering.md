@@ -2,10 +2,10 @@
 
 ## Scope and acceptance state
 
-F2 adds the frontend rendering boundary for mixed member Product statuses. It does not map a backend
-DTO, create package state, fetch Product details or add package actions. The current AOI response does
-not provide complete member status state, so live package AOIs remain scalar until an authoritative
-mapper supplies the existing normalized application shape:
+F2 provides the rendering boundary for mixed member Product statuses. F4 now maps the live backend
+`GET electronicproducts/aoi?layer=ENC` response into its normalized application input. Server-mapped
+S-101/S-57 member statuses render automatically; no Product-detail polling or helper invocation is
+needed. No package actions are added. The existing application shape is:
 
 ```js
 {
@@ -179,18 +179,19 @@ f2MixedStatusTest.allMixed();
 f2MixedStatusTest.restore();
 ```
 
-A real source refresh truthfully removes the synthetic state because the current backend payload does
-not provide it. Re-run the setup after refresh if another synthetic scenario is needed.
+This helper is diagnostic only. A real source refresh replaces synthetic state with authoritative
+backend member state, including scalar fallback when member state is incomplete. It is not the
+acceptance path for live mixed packages; use real data or an authoritative local API fixture.
 
 ## Manual acceptance checklist
 
-1. Before invoking the helper, current live ENC-package AOIs remain ordinary scalar fills.
+1. Before invoking the helper, verify equal live member statuses render scalar and differing live member statuses render mixed.
 2. `mixed(datasetName, [1, 15])` or `oneMixed()` changes one package polygon to the multi-color mixed
    symbol. Confirm that both status colors are visibly present as base-plus-stripe styling while the
    package remains one Graphic with the same geometry, selection identity and popup.
 3. Restore, run `oneEqual()` and confirm equal member statuses produce an ordinary scalar fill.
 4. Restore, run `workflowOnly()` and confirm workflow state alone does not affect the symbol.
-5. Confirm `restore()` returns mixed AOIs to their original scalar state without reloading.
+5. Confirm `restore()` returns AOIs to their original live scalar or mixed state without reloading.
 6. Exercise Product search, hover, normal click, modifier-click, overlap picker, popup and Product
    Collection. Each package must remain one work unit and one Graphic.
 7. With mixed state applied, toggle Status values that match the workflow/member values and confirm F1

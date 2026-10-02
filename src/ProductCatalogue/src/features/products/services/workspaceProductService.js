@@ -75,7 +75,23 @@ export function createWorkspaceProductService({
       return createNotFoundResolution(datasetName);
     }
 
-    if (!force && !committedSnapshot && typeof loadTargetedProduct === "function") {
+    const snapshotResolution = committedSnapshot
+      ? resolveProductFromSnapshot(normalizedDatasetName, committedSnapshot)
+      : null;
+    if (
+      snapshotResolution?.reason === AMBIGUOUS_DATASET_NAME_REASON ||
+      (!force && snapshotResolution?.status === WORKSPACE_PRODUCT_RESOLUTION_STATUS.FAILED)
+    ) {
+      return snapshotResolution;
+    }
+    const snapshotSource = registry.byId.get(snapshotResolution?.product?.sourceId);
+    if (
+      typeof loadTargetedProduct === "function" &&
+      hasAvailableTargetedWorkspaceSource(registry) &&
+      (!snapshotResolution ||
+        !snapshotSource ||
+        snapshotSource.workspace?.resolution === "targeted-product-aoi")
+    ) {
       return resolveTargetedProduct({
         datasetName: normalizedDatasetName,
         registry,
@@ -246,6 +262,14 @@ function normalizeProductSpecification(value) {
   return null;
 }
 
+function hasAvailableTargetedWorkspaceSource(registry) {
+  return (registry?.definitions ?? []).some(
+    (source) =>
+      source.workspace?.resolution === "targeted-product-aoi" &&
+      isWorkspaceAvailableDataSource(source)
+  );
+}
+
 function createProviders({ registry, loadSource, normalizeSource, loadCompatibilityCatalog }) {
   const providers = [
     {
@@ -265,13 +289,17 @@ function createProviders({ registry, loadSource, normalizeSource, loadCompatibil
     },
   ];
 
-  // Specification-filtered providers replace the untyped catalogue transport.
-  if (registry?.definitions?.some((source) => source.normalizer?.type === "electronic-aoi")) {
+  // Targeted sources use the lightweight name list; their AOI loaders belong only
+  // to the Main map. Other registry sources retain their own catalog providers.
+  if (!hasAvailableTargetedWorkspaceSource(registry)) {
     providers.length = 0;
   }
 
   for (const source of registry?.definitions ?? []) {
-    if (!isWorkspaceAvailableDataSource(source)) {
+    if (
+      !isWorkspaceAvailableDataSource(source) ||
+      source.workspace?.resolution === "targeted-product-aoi"
+    ) {
       continue;
     }
 

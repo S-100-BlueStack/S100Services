@@ -187,7 +187,15 @@ function createIdentityWorkspaceService() {
   const registry = createDataSourceRegistry({ isDevelopment: true });
   return createWorkspaceProductService({
     registry,
-    loadTargetedProduct: null,
+    loadTargetedProduct: async (datasetName) => ({
+      success: true,
+      data: {
+        Data: {
+          Geometry: { x: 10, y: 56 },
+          Attributes: { DatasetName: datasetName, ProductSpecification: "S101" },
+        },
+      },
+    }),
     loadCompatibilityCatalog: async () => ({
       Data: [{ name: "1149E", datasetName: "101DK0041149E" }],
     }),
@@ -199,7 +207,14 @@ function createIdentityWorkspaceService() {
       return [{ datasetName: "102DK0041149E", productName: "1149E" }];
     },
     normalizeSource: (entries, source) => {
-      const features = entries.map((entry) => ({
+      const products =
+        source.workspace.resolution === "targeted-product-aoi"
+          ? entries.map((entry) => ({
+              datasetName: entry.Attributes.DatasetName,
+              productName: "1149E",
+            }))
+          : entries;
+      const features = products.map((entry) => ({
         type: "Feature",
         geometry: { type: "Point", coordinates: [10, 56] },
         properties: {
@@ -223,6 +238,7 @@ function createIdentityWorkspaceService() {
 
 test("Analyze resolves S-102 by authoritative datasetName and mixed routes keep source identity", async () => {
   const workspaceProductService = createIdentityWorkspaceService();
+  await workspaceProductService.loadCatalog();
   const calls = [];
   const get = async (endpoint) => {
     calls.push(endpoint);

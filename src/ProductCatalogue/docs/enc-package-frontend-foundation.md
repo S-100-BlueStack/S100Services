@@ -35,7 +35,8 @@ canonical composition. No source IDs, labels, prefixes or member names drive Col
 ## Architecture
 
 The registry retains technical provider `s101`, its product type, dataset/product key, layer identity,
-AOI request, geometry and DisplayScale. Its provisional label is `ENC-package`. One representative
+geometry and DisplayScale. F4 changes its AOI request to `electronicproducts/aoi?layer=ENC`.
+Its provisional label is `ENC-package`. One representative
 Graphic remains one search/overlap/hover/Collection item. No child Graphics or additional Collection
 store are introduced. Generation ownership, guarded commit, in-place Graphic reconciliation, filter
 provider IDs and source-aware resolution are unchanged.
@@ -45,7 +46,7 @@ The registry's immutable `workUnit` declares `kind`, `primaryMemberKey` and orde
 The metadata projection uses these fields rather than source-name branches. Simple and workspace
 contexts keep their existing single-product projection.
 
-S-57 remains available to workspace resolution through its specification-scoped registry loader,
+S-57 remains available through the declarative targeted workspace-resolution contract, without a bulk loader,
 but is neither selectable nor selection-persistable on Main map. Existing persistence sanitization
 removes its stored Main-map ID. Existing startup recovery selects the eligible `s101` fallback for
 old S-57-only/all-off selections. Configured-out persistable source intent, startup generation guards,
@@ -84,12 +85,13 @@ Graphic and stable identity.
 
 The application-owned normalized input is `graphic.attributes.workUnitStatus` with
 `{ workflowStatus, members: [{ key, status }] }`. The pure projector returns ordered unique values;
-missing member statuses contribute nothing. A later backend-read integration must map authoritative
-package/member state to this shape. No backend DTO names or new status enum values are assumed.
-Current AOI Graphics have only the representative scalar `status`, so the live filter falls back to
-that scalar without inventing S-57 or package workflow state or fetching Product details. Persisted
-filter snapshots stay version 2 with provider-scoped selected logical values, independent of which
-member supplied a match. Backend DTO mapping remains deferred.
+missing member statuses contribute nothing. F4 maps live `Package.S101` and `Package.S57` state
+into registry-ordered members with authoritative dataset names and explicitly normalized ProductState
+IDs. `workflowStatus` comes only from top-level `Attributes.Status`, which the backend projects into
+ProductStatus; raw EncPackageStatus IDs are never filter values. F1 and F3 consume this existing shape
+without semantic changes. Incomplete/unknown member state omits the projection and preserves scalar
+fallback. Contradictory identities reject the payload; no S-57 name/status is inferred. Persisted filter
+snapshots stay version 2 with provider-scoped logical values, independent of which member matched.
 
 ## F2 mixed-status AOI rendering foundation
 
@@ -103,8 +105,9 @@ Two or more distinct supplied member statuses produce one public multi-layer CIM
 the existing status palette: one deterministic member status supplies a translucent base fill and the
 other distinct statuses supply colored hatch stripes. This keeps all supplied Product status colors
 visible without assigning a visual direction to S-101 or S-57. Absent member state falls back to the
-existing scalar status, so current live AOIs remain visually unchanged. No backend shape, fabricated
-runtime state, child Graphic, additional layer or network request is introduced. The symbol choice
+existing scalar status. F4 supplies live member statuses, so differing members automatically render
+mixed while equal members render scalar. No fabricated state, child Graphic, additional layer or
+Product-detail request is introduced. The retained DevTools helper is diagnostic only. The symbol choice
 remains a candidate until representative browser/performance testing in light and dark themes is
 accepted.
 
@@ -121,11 +124,11 @@ this task does not introduce package layouts or package mutation routes there.
 No backend source, API contract, migration, status enum, transport or job is changed. No dependencies
 or lockfiles are changed. No fabricated package state or demo-state infrastructure is introduced.
 
-Deferred: authoritative complete package/child read state and its backend-to-frontend mapping; package
-lifecycle actions Pause/Resume/Discard/Send/Accept; scheduling; multi-level status filters; final
-mixed-status symbol acceptance; Analyze/Review/Dashboard package UX. Current live map styling remains
-scalar because no authoritative member status state is supplied. A blank S-57 column is an expected
-truthful limitation until related metadata or the future read contract supplies data.
+Deferred: full read-only package popup metadata; package lifecycle actions Pause/Resume/Discard/Send/Accept;
+scheduling; final mixed-status symbol acceptance; Analyze/Review/Dashboard package UX. Live member state
+now feeds F1/F2/F3 through `workUnitStatus`. Popup columns still use their accepted metadata boundary;
+F4 does not add a broad popup/action model. Targeted Product-based Analyze/Review is unchanged and
+package-originated Analyze/Review/History remains unavailable.
 
 ## Verification
 
@@ -153,7 +156,7 @@ npm run check
 ## Manual acceptance
 
 1. Start with existing schema-2 source selection containing only `s57`. Reload: one `ENC-package`
-   source should load through the S101 AOI endpoint. No S57 Main-map AOI/layer should load. Reload
+   source should load through `electronicproducts/aoi?layer=ENC`. No S57 Main-map AOI/layer should load. Reload
    again and confirm the persisted selection is `s101`. Also check existing `s101` filter preferences.
 2. Verify Product search, overlap selection, hover and popup all select the same representative
    Graphic. Toggle scale hiding and its DisplayScale behavior. Refresh with a selected Graphic and

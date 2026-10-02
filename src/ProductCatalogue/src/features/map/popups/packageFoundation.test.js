@@ -55,7 +55,7 @@ test("one Main-map package preserves its representative source identity and immu
   );
   assert.equal(Object.isFrozen(context.workUnit.members[0]), true);
   assert.equal(sources[0].layerDefinitions.length, 1);
-  assert.equal(sources[0].loader.path, "electronicproducts/aoi?productSpecification=S101");
+  assert.equal(sources[0].loader.path, "electronicproducts/aoi?layer=ENC");
 });
 
 test("package Collection identity survives refresh without adding child entries", () => {

@@ -6,12 +6,12 @@ records the normalized backend evidence and remaining limitations.
 
 ## Sources
 
-| Source               | Production transport                                   | Capability boundary                                                                                                                                     |
-| -------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ENC-package (`s101`) | `GET electronicproducts/aoi?productSpecification=S101` | One Main-map work unit; read, search and Collection. Package-originated Analyze/Review/History navigation, manual mutations and Export are unavailable. |
-| S-57 (`s57`)         | `GET electronicproducts/aoi?productSpecification=S57`  | Workspace compatibility only; not selectable or selection-persistable on Main map.                                                                      |
-| Paper Charts         | No runtime transport                                   | Synthetic registry fixture retained only for explicit tests.                                                                                            |
-| S-102                | No runtime transport                                   | Synthetic registry fixture retained only for explicit tests.                                                                                            |
+| Source               | Production transport                       | Capability boundary                                                                                                                                     |
+| -------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ENC-package (`s101`) | `GET electronicproducts/aoi?layer=ENC`     | One Main-map work unit; read, search and Collection. Package-originated Analyze/Review/History navigation, manual mutations and Export are unavailable. |
+| S-57 (`s57`)         | `GET electronicproducts/{datasetName}/aoi` | Workspace compatibility only; not selectable or selection-persistable on Main map.                                                                      |
+| Paper Charts         | No runtime transport                       | Synthetic registry fixture retained only for explicit tests.                                                                                            |
+| S-102                | No runtime transport                       | Synthetic registry fixture retained only for explicit tests.                                                                                            |
 
 The [package foundation](../../../docs/enc-package-frontend-foundation.md) retains the technical
 `s101` provider, S-101 dataset key, geometry and DisplayScale. Its declarative `workUnit` describes
@@ -25,13 +25,18 @@ The package layer also owns the declarative member-aware symbolization strategy 
 [F2 mixed-status rendering foundation](../../../docs/package-mixed-status-rendering.md). Rendering
 projects only normalized `workUnitStatus.members[].status`; package `workflowStatus` remains available
 to F1 filtering but cannot affect the AOI symbol. Missing member state falls back to the representative
-scalar status, and all non-opted-in sources retain scalar symbols. Current transport does not populate
-complete member state, so this boundary adds no live mixed AOIs or Product-detail requests.
+scalar status, and all non-opted-in sources retain scalar symbols. F4 maps backend member state into
+`workUnitStatus`; real mixed AOIs now render automatically without Product-detail requests.
 
 Electronic AOI responses contain Esri geometry and DatasetName/Status/DisplayScale/UsageBand/error
-attributes. The scoped server request establishes specification; names and geometry never do.
-Bulk AOIs omit version metadata. A generic `electronic-aoi` normalizer validates identity and geometry
-and preserves the existing GraphicsLayer/MapView path. There is no duplicate combined production layer.
+attributes. The server maps each representative S-101 AOI to its unique S-57 member. The normalizer
+projects only an application-owned `workUnitStatus`, using top-level `Attributes.Status` for workflow
+and numeric `ProductState` member statuses for the existing ProductStatus palette. Raw `Package.Status`
+is never a filter or symbol value; raw Package DTOs and version/action metadata are not attached.
+Member keys/order come from `workUnit.members`; DTO field mapping is declarative in the normalizer
+configuration. Missing/unknown member states retain scalar fallback. Contradictory package/member
+identity rejects the source payload before publication. The generic `electronic-aoi` normalizer
+preserves geometry, stable identity and the existing GraphicsLayer/MapView path. There is no duplicate combined production layer.
 The isolated compatibility layer adapter is not registered, persisted or used as a failed-source fallback.
 
 ## Registry and identity
@@ -41,9 +46,12 @@ search, export leaves and content permissions. Feature modules consume these cap
 than branching on source names. A Product identity is `{ sourceId, productKey }`; datasetName is the
 public globally unique route identity. Missing/duplicate stable keys reject a source before commit.
 
-Workspace resolution reuses registry loaders independently of Main-map enabled-source selection,
-while respecting deployment configuration. Duplicate normalized names across providers fail as
-ambiguous. Failures are isolated and cannot invoke another provider's backend route.
+Electronic workspace availability uses the declarative `workspace.resolution: "targeted-product-aoi"`
+contract rather than requiring a bulk loader. Analyze/Review keep the lightweight Product-name list
+and resolve each selected Product through `electronicproducts/{datasetName}/aoi`; its returned
+`ProductSpecification` is authoritative. S-57 has no Main-map loader. Catalog/force paths also avoid
+bulk AOI calls. Deployment configuration and ambiguous identity still fail closed. Generic fixture
+providers retain their own catalog loaders independently of Main-map selection.
 
 ## Lifecycle
 

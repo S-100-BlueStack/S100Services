@@ -1,3 +1,4 @@
+import { normalizeElectronicProductStatus } from "../domain/electronicProductStatus.js";
 import {
   assertUniqueProductIdentities,
   createSourceAwareProductIdentity,
@@ -233,7 +234,9 @@ function normalizeElectronicAois(payload, source) {
         datasetName,
         productKey: datasetName,
         productSpecification: source.normalizer.specification,
-        status: raw.Status ?? raw.status,
+        status:
+          normalizeElectronicProductStatus(raw.Status ?? raw.status) ?? raw.Status ?? raw.status,
+        workUnitStatus: normalizeElectronicPackage(raw, source, datasetName),
         displayScale: raw.DisplayScale ?? raw.displayScale,
         usageBand: raw.UsageBand ?? raw.usageBand,
         errorMessage: raw.ErrorMessage ?? raw.errorMessage,
@@ -255,5 +258,54 @@ function normalizeElectronicAois(payload, source) {
         })),
       },
     })),
+  };
+}
+
+function normalizeElectronicPackage(attributes, source, datasetName) {
+  if (source.workUnit?.kind !== "package" || !source.normalizer?.packageMembers) return undefined;
+  const pkg = readFirstDefined(attributes, ["package"]);
+  if (!pkg || typeof pkg !== "object" || Array.isArray(pkg)) return undefined;
+
+  const sourceDatasetName = normalizeText(readFirstDefined(pkg, ["sourceDatasetName"]));
+  const layer = readFirstDefined(pkg, ["layer"]);
+  if (
+    (sourceDatasetName && sourceDatasetName !== datasetName) ||
+    (layer !== undefined && layer !== 1 && layer !== "ENC")
+  ) {
+    throw new Error(`${source.label} returned contradictory package identity.`);
+  }
+
+  const members = (source.workUnit.members ?? []).map((declaration) => {
+    const transport = source.normalizer.packageMembers[declaration.key];
+    const member = transport ? readFirstDefined(pkg, [transport.field]) : null;
+    const memberDatasetName = normalizeText(readFirstDefined(member, ["datasetName"]));
+    const specification = readFirstDefined(member, ["productSpecification"]);
+    if (
+      (declaration.key === source.workUnit.primaryMemberKey &&
+        memberDatasetName &&
+        memberDatasetName !== datasetName) ||
+      (declaration.key !== source.workUnit.primaryMemberKey && memberDatasetName === datasetName) ||
+      (specification !== undefined && specification !== transport?.specification)
+    ) {
+      throw new Error(`${source.label} returned contradictory package member identity.`);
+    }
+    return {
+      key: declaration.key,
+      datasetName: memberDatasetName,
+      status: normalizeElectronicProductStatus(readFirstDefined(member, ["status"])),
+    };
+  });
+
+  // Incomplete member state must keep representative rendering; a single known
+  // member must not masquerade as the rendering state of the whole package.
+  if (
+    members.length === 0 ||
+    members.some((member) => !member.datasetName || member.status === undefined)
+  ) {
+    return undefined;
+  }
+  return {
+    workflowStatus: normalizeElectronicProductStatus(readFirstDefined(attributes, ["status"])),
+    members,
   };
 }

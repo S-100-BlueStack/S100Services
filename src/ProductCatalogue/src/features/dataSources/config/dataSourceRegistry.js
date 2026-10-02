@@ -180,7 +180,7 @@ export function isWorkspaceAvailableDataSource(source) {
     source?.enabledByConfiguration &&
     source?.workspace?.supported &&
     source?.availability?.state === DATA_SOURCE_AVAILABILITY.AVAILABLE &&
-    source?.loader
+    (source?.workspace?.resolution === "targeted-product-aoi" || source?.loader)
   );
 }
 
@@ -205,12 +205,25 @@ function createElectronicSource({
     userSelectable: mainMapSelectable,
     defaultEnabled: mainMapSelectable,
     workUnit,
-    loader: {
-      type: "http-json",
-      path: `electronicproducts/aoi?productSpecification=${specification}`,
-      errorMessage: `${label} AOI request failed`,
+    loader: workUnit
+      ? {
+          type: "http-json",
+          path: "electronicproducts/aoi?layer=ENC",
+          errorMessage: `${label} AOI request failed`,
+        }
+      : null,
+    normalizer: {
+      type: "electronic-aoi",
+      specification,
+      ...(workUnit
+        ? {
+            packageMembers: {
+              s101: { field: "S101", specification: 1 },
+              s57: { field: "S57", specification: 0 },
+            },
+          }
+        : {}),
     },
-    normalizer: { type: "electronic-aoi", specification },
     persistence: { enabledInSchema1, persistSelection: mainMapSelectable },
     identityStrategy: {
       type: "stable-product-key",
@@ -272,7 +285,11 @@ function createElectronicSource({
         availabilityReason: null,
       },
     },
-    workspace: { supported: true, providerType: "registry-source" },
+    workspace: {
+      supported: true,
+      providerType: "registry-source",
+      resolution: "targeted-product-aoi",
+    },
     filtering: {
       supported: true,
       definitions: workUnit
