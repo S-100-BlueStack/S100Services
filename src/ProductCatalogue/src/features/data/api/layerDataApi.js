@@ -4,10 +4,6 @@ export async function fetchGeoJson() {
   return await apiGet("mock/products", "GeoJSON request failed");
 }
 
-export async function fetchAOI(productSpecification = "S101") {
-  const specification = encodeURIComponent(productSpecification);
-  return await apiGet(
-    `electronicproducts/aoi?productSpecification=${specification}`,
-    "AOI request failed"
-  );
+export async function fetchAOI() {
+  return await apiGet("electronicproducts/aoi?layer=ENC", "AOI request failed");
 }

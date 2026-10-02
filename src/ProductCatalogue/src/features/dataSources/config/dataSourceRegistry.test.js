@@ -21,19 +21,19 @@ test("registry preserves technical source IDs for package and workspace compatib
   assert.equal(registry.byId.has("enc-products"), false);
 });
 
-test("S-57 and S-101 have authoritative specification-filtered AOIs for workspace resolution", () => {
-  const registry = createDataSourceRegistry({ isDevelopment: true });
-  for (const sourceId of [DATA_SOURCE_IDS.S57, DATA_SOURCE_IDS.S101]) {
+test("electronic workspace resolution is targeted and only ENC has a Main-map loader", () => {
+  const registry = createDataSourceRegistry();
+  assert.equal(registry.byId.get("s101").loader.path, "electronicproducts/aoi?layer=ENC");
+  assert.equal(registry.byId.get("s57").loader, null);
+  assert.equal(registry.byId.get("s57").persistence.persistSelection, false);
+  for (const sourceId of ["s57", "s101"]) {
     const source = registry.byId.get(sourceId);
-    assert.equal(source.availability.state, DATA_SOURCE_AVAILABILITY.AVAILABLE);
-    assert.equal(source.userSelectable, sourceId === DATA_SOURCE_IDS.S101);
-    assert.equal(
-      source.loader.path,
-      `electronicproducts/aoi?productSpecification=${sourceId.toUpperCase()}`
-    );
-    assert.equal(source.workspace.supported, true);
+    assert.equal(source.workspace.resolution, "targeted-product-aoi");
     assert.equal(isWorkspaceAvailableDataSource(source), true);
   }
+  assert.ok(
+    registry.definitions.every((source) => !source.loader?.path.includes("productSpecification="))
+  );
 });
 
 test("explicit synthetic fixture mode exposes Paper Charts and S-102 for tests", () => {

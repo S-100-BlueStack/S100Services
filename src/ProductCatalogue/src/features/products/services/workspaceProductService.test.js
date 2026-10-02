@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createDataSourceRegistry } from "../../dataSources/config/dataSourceRegistry.js";
+import { normalizeDataSourcePayload } from "../../dataSources/services/dataSourceNormalizer.js";
 import { filterProductCatalog, normalizeProductCatalog } from "../domain/productCatalog.js";
 import {
   WORKSPACE_PRODUCT_RESOLUTION_STATUS,
@@ -49,8 +50,18 @@ function createService({
         source.id
       ];
     },
-    normalizeSource: (entries, source) => normalizedSource(source, entries),
-    loadTargetedProduct: null,
+    normalizeSource: (entries, source) =>
+      source.workspace.resolution === "targeted-product-aoi"
+        ? normalizeDataSourcePayload(entries, source)
+        : normalizedSource(source, entries),
+    loadTargetedProduct: async (datasetName) => {
+      const exists = compatibility.some(
+        (entry) =>
+          (typeof entry === "string" ? entry : (entry.datasetName ?? entry.name)).toUpperCase() ===
+          datasetName.toUpperCase()
+      );
+      return exists ? targetedResponse(datasetName) : { success: false, status: 404 };
+    },
   });
 }
 
@@ -108,6 +119,7 @@ test("same visible Product name remains independently resolvable through authori
 
 test("resolver returns source-aware Products and fails closed for unavailable or unknown names", async () => {
   const service = createService();
+  await service.loadCatalog();
   const compatibility = await service.resolveProduct("AOI-1");
   const paper = await service.resolveProduct("PAPER-1");
   const s102 = await service.resolveProduct("S102-1");
@@ -144,7 +156,7 @@ test("duplicate normalized datasetName across providers fails closed instead of 
   assert.equal(resolved.reason, "ambiguous-dataset-name");
   assert.equal(resolved.product, null);
   assert.deepEqual(resolved.identityError.providers.map((provider) => provider.sourceId).sort(), [
-    "s101",
+    "compatibility-aoi",
     "s102",
   ]);
 });
@@ -170,7 +182,7 @@ test("stale provider load cannot replace a newer committed workspace snapshot", 
   const deferred = [];
   const service = createWorkspaceProductService({
     registry,
-    loadSource: () => new Promise((resolve) => deferred.push(resolve)),
+    loadCompatibilityCatalog: () => new Promise((resolve) => deferred.push(resolve)),
     normalizeSource: (entries, source) => normalizedSource(source, entries),
     loadTargetedProduct: null,
   });
@@ -348,4 +360,192 @@ test("targeted resolver treats backend 404 as not found without falling back to 
 
   assert.equal(resolved.status, WORKSPACE_PRODUCT_RESOLUTION_STATUS.NOT_FOUND);
   assert.equal(bulkCalls, 0);
+});
+
+function targetedResponse(datasetName, specification = "S101") {
+  return {
+    success: true,
+    status: 200,
+    data: {
+      Data: {
+        Geometry: { x: 10, y: 56 },
+        Attributes: {
+          DatasetName: datasetName,
+          ProductSpecification: specification,
+          Status: 8,
+        },
+      },
+    },
+  };
+}
+
+test("catalog choices and forced resolution never load electronic bulk AOIs", async () => {
+  const calls = [];
+  const service = createWorkspaceProductService({
+    loadCompatibilityCatalog: async () => {
+      calls.push("names");
+      return { Data: ["S57-ONE", "S101-ONE"] };
+    },
+    loadSource: async () => {
+      throw new Error("Electronic bulk AOI must not be loaded");
+    },
+    loadTargetedProduct: async (name) => {
+      calls.push(name);
+      return targetedResponse(name, name === "S57-ONE" ? "S57" : "S101");
+    },
+  });
+  assert.equal((await service.loadCatalog()).length, 2);
+  assert.equal((await service.resolveProduct("S57-ONE")).product.sourceId, "s57");
+  assert.equal(
+    (await service.resolveProduct("S101-ONE", { force: true })).product.sourceId,
+    "s101"
+  );
+  assert.deepEqual(calls, ["names", "S57-ONE", "S101-ONE"]);
+});
+
+test("targeted resolution rejects a conflicting returned dataset identity", async () => {
+  const service = createWorkspaceProductService({
+    loadTargetedProduct: async () => targetedResponse("OTHER"),
+  });
+  const result = await service.resolveProduct("EXPECTED");
+  assert.equal(result.status, "failed");
+  assert.match(result.providerErrors[0].message, /identity mismatch/);
+});
+
+test("catalog excludes electronic names when only a non-electronic workspace source is configured", async () => {
+  const registry = createDataSourceRegistry({
+    isDevelopment: true,
+    configuredSourceIds: ["s102"],
+  });
+  const calls = [];
+  const service = createWorkspaceProductService({
+    registry,
+    loadCompatibilityCatalog: async () => {
+      calls.push("electronic-names");
+      return { Data: ["ELECTRONIC-1"] };
+    },
+    loadSource: async (source) => {
+      calls.push(source.id);
+      return ["S102-1"];
+    },
+    normalizeSource: (entries, source) => normalizedSource(source, entries),
+  });
+
+  const catalog = await service.loadCatalog();
+  assert.deepEqual(calls, ["s102"]);
+  assert.deepEqual(
+    catalog.map(({ name, sourceId }) => [name, sourceId]),
+    [["S102-1", "s102"]]
+  );
+  assert.equal(catalog.incomplete, false);
+});
+
+test("direct and forced resolution skip targeted requests when electronic sources are configured out", async () => {
+  const registry = createDataSourceRegistry({
+    isDevelopment: true,
+    configuredSourceIds: ["s102"],
+  });
+  const sourceCalls = [];
+  const service = createWorkspaceProductService({
+    registry,
+    loadCompatibilityCatalog: async () => {
+      assert.fail("Configured-out electronic sources must not load the name catalog.");
+    },
+    loadTargetedProduct: async () => {
+      assert.fail("Configured-out electronic sources must not issue targeted Product requests.");
+    },
+    loadSource: async (source) => {
+      sourceCalls.push(source.id);
+      return ["S102-1"];
+    },
+    normalizeSource: (entries, source) => normalizedSource(source, entries),
+  });
+
+  const product = await service.resolveProduct("S102-1");
+  assert.equal(product.status, WORKSPACE_PRODUCT_RESOLUTION_STATUS.RESOLVED);
+  assert.equal(product.product.sourceId, "s102");
+  assert.equal((await service.resolveProduct("ELECTRONIC-1")).status, "not-found");
+  assert.equal((await service.resolveProduct("UNKNOWN", { force: true })).status, "not-found");
+  assert.deepEqual(sourceCalls, ["s102", "s102"]);
+});
+
+test("unavailable targeted definitions do not activate electronic catalog or targeted resolution", async () => {
+  const configured = createDataSourceRegistry({
+    isDevelopment: true,
+    configuredSourceIds: ["s101", "s102"],
+  });
+  const definitions = configured.definitions.map((source) =>
+    source.workspace.resolution === "targeted-product-aoi"
+      ? {
+          ...source,
+          availability: { state: "unavailable", reason: "Unavailable in this environment." },
+        }
+      : source
+  );
+  const registry = { definitions, byId: new Map(definitions.map((source) => [source.id, source])) };
+  const service = createWorkspaceProductService({
+    registry,
+    loadCompatibilityCatalog: async () => assert.fail("Unavailable catalog must not load."),
+    loadTargetedProduct: async () => assert.fail("Unavailable targeted provider must not load."),
+    loadSource: async () => ["S102-1"],
+    normalizeSource: (entries, source) => normalizedSource(source, entries),
+  });
+
+  assert.deepEqual(
+    (await service.loadCatalog()).map((product) => product.name),
+    ["S102-1"]
+  );
+  assert.equal((await service.resolveProduct("ELECTRONIC-1")).status, "not-found");
+});
+
+for (const [configuredSpecification, returnedSpecification] of [
+  ["s101", "S57"],
+  ["s57", "S101"],
+]) {
+  test(`targeted ${returnedSpecification} identity is not reinterpreted as configured ${configuredSpecification}`, async () => {
+    const registry = createDataSourceRegistry({ configuredSourceIds: [configuredSpecification] });
+    const calls = [];
+    const name = `${configuredSpecification.toUpperCase()}-MISLEADING-NAME`;
+    const service = createWorkspaceProductService({
+      registry,
+      loadCompatibilityCatalog: async () => {
+        calls.push("names");
+        return { Data: [name] };
+      },
+      loadSource: async () => assert.fail("Electronic bulk AOIs must not load."),
+      loadTargetedProduct: async (datasetName) => {
+        calls.push(datasetName);
+        return targetedResponse(datasetName, returnedSpecification);
+      },
+    });
+
+    assert.deepEqual(
+      (await service.loadCatalog()).map((product) => product.name),
+      [name]
+    );
+    const result = await service.resolveProduct(name);
+    assert.equal(result.status, WORKSPACE_PRODUCT_RESOLUTION_STATUS.NOT_FOUND);
+    assert.equal(result.product, null);
+    assert.deepEqual(calls, ["names", name]);
+  });
+}
+
+test("non-electronic provider failures remain failed when no targeted source is available", async () => {
+  const registry = createDataSourceRegistry({
+    isDevelopment: true,
+    configuredSourceIds: ["s102"],
+  });
+  const service = createWorkspaceProductService({
+    registry,
+    loadCompatibilityCatalog: async () => assert.fail("Disabled catalog must not load."),
+    loadTargetedProduct: async () => assert.fail("Disabled targeted provider must not load."),
+    loadSource: async () => {
+      throw new Error("Non-electronic provider failed.");
+    },
+  });
+
+  const result = await service.resolveProduct("UNKNOWN");
+  assert.equal(result.status, WORKSPACE_PRODUCT_RESOLUTION_STATUS.FAILED);
+  assert.equal(result.providerErrors[0].providerId, "s102");
+  assert.match(result.providerErrors[0].message, /Non-electronic provider failed/);
 });
