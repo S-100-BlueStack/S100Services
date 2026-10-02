@@ -46,10 +46,11 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                     .Select(product => product.datasetName).OfType<string>().ToArray(), StringComparer.OrdinalIgnoreCase);
             var mappedNames = replay.Keys.Concat(mappedS57.Values.SelectMany(names => names)).ToArray();
             var replayTracks = await workflowRepository.GetTracksByNamesAsync(mappedNames, cancellationToken);
-            var eligibleReplay = replay.Where(entry => !activeReplay.ContainsKey(entry.Key) &&
+            var eligibleReplay = replay.Where(entry =>
                 !replayTracks.Any(track => (string.Equals(track.DatasetName, entry.Key, StringComparison.OrdinalIgnoreCase) ||
                     mappedS57[entry.Key].Contains(track.DatasetName, StringComparer.OrdinalIgnoreCase)) &&
-                    (track.IsManuallyFrozen || track.State is ProductState.Frozen or ProductState.InTransit or ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or ProductState.Error)))
+                    (IsRefreshBlocked(track) || !activeReplay.ContainsKey(entry.Key) &&
+                        (track.State is ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected))))
                 .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
             if (eligibleReplay.Count > 0) {
                 // A blocked AOI retains its cursor without repeatedly forcing a historic archive scan.
@@ -71,6 +72,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         }
 
         var active = await packages.GetActiveAsync(pending.Keys, cancellationToken);
+        var completeScans = new Dictionary<DateTime, Dictionary<string, Dictionary<string, ArchiveRow>>>();
         foreach (var (sourceName, changes) in pending) {
             cancellationToken.ThrowIfCancellationRequested();
             if (changes.Count == 0)
@@ -89,28 +91,28 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
 
             var packageChanges = changes;
             var packageScanFromUtc = replay.GetValueOrDefault(sourceName, sinceUtc);
+            EncPackage? previous = null;
             if (active.TryGetValue(sourceName, out var existing)) {
-                if (sinceUtc < existing.DetectedAtUtc || !await CanRefreshAsync(existing, cancellationToken)) {
-                    // Retain only edits observed after this snapshot. Discarding an unchanged
-                    // failed package must not rebuild the same source snapshot.
-                    if (sinceUtc >= existing.DetectedAtUtc)
-                        await packages.MarkReplayAsync(sourceName, packageScanFromUtc, cancellationToken);
-                    await RecoverIncompletePackageAsync(existing, cancellationToken);
+                if (!HasNewEdits(changes, existing.DetectedAtUtc, sinceUtc)) {
+                    // A replayed archive row from the existing snapshot is not a reason to retry a failed export.
+                    if (await CanRefreshAsync(existing, cancellationToken))
+                        await RecoverIncompletePackageAsync(existing, cancellationToken);
+                    continue;
+                }
+                if (!await CanRefreshAsync(existing, cancellationToken)) {
+                    await packages.MarkReplayAsync(sourceName, packageScanFromUtc, cancellationToken);
+                    logger.LogInformation("ENC package refresh deferred while a product is held, building, or awaiting approval. SourceDatasetName: {SourceDatasetName}.", sourceName);
                     continue;
                 }
 
-                var completeChanges = await _products.GetPendingEditsAsync(existing.ScanFromUtc);
+                if (!completeScans.TryGetValue(existing.ScanFromUtc, out var completeChanges)) {
+                    completeChanges = await _products.GetPendingEditsAsync(existing.ScanFromUtc);
+                    completeScans.Add(existing.ScanFromUtc, completeChanges);
+                }
                 if (!completeChanges.TryGetValue(sourceName, out packageChanges) || packageChanges.Count == 0)
                     continue;
-                try {
-                    await exports.ExecuteDiscardAsync(existing.S57DatasetName, "system", cancellationToken, preservePackageScanBound: true);
-                    await exports.ExecuteDiscardAsync(existing.SourceDatasetName, "system", cancellationToken, preservePackageScanBound: true);
-                }
-                catch {
-                    await packages.SetErrorAsync(existing.Id, "The package could not be refreshed. Review and discard its remaining candidate.", CancellationToken.None);
-                    throw;
-                }
                 packageScanFromUtc = existing.ScanFromUtc;
+                previous = existing;
             }
 
             var s101Version = await _products.ReadElectronicProductVersionAsync(sourceName, ProductSpecification.S101.ToString(), cancellationToken)
@@ -120,9 +122,9 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
 
             var s101 = await workflowRepository.GetOrCreateTrackAsync(sourceName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, s101Version.Edition ?? 0, s101Version.Update ?? 0, cancellationToken);
             var s57 = await workflowRepository.GetOrCreateTrackAsync(s57Name, ProductSpecification.S57, ExportEngineKind.IsoIec8211, s57Version.Edition ?? 0, s57Version.Update ?? 0, cancellationToken);
-            if (s101.IsManuallyFrozen || s57.IsManuallyFrozen ||
-                s101.State is ProductState.Frozen or ProductState.InTransit or ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or ProductState.Error ||
-                s57.State is ProductState.Frozen or ProductState.InTransit or ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or ProductState.Error) {
+            if (IsRefreshBlocked(s101) || IsRefreshBlocked(s57) || previous is null &&
+                (s101.State is ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected ||
+                 s57.State is ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected)) {
                 await packages.MarkReplayAsync(sourceName, replay.GetValueOrDefault(sourceName, sinceUtc), cancellationToken);
                 continue;
             }
@@ -135,6 +137,18 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             var yaml = dataset.Serialize();
             if (string.IsNullOrWhiteSpace(yaml))
                 throw new InvalidOperationException($"ENC source snapshot for '{sourceName}' was empty.");
+
+            if (previous is not null) {
+                logger.LogInformation("Refreshing ENC package after new edits. SourceDatasetName: {SourceDatasetName}. PreviousDetectedAtUtc: {PreviousDetectedAtUtc}.", sourceName, previous.DetectedAtUtc);
+                try {
+                    await DiscardForRefreshAsync(previous, s57, ProductSpecification.S57, cancellationToken);
+                    await DiscardForRefreshAsync(previous, s101, ProductSpecification.S101, cancellationToken);
+                }
+                catch {
+                    await packages.SetErrorAsync(previous.Id, "The package could not be refreshed. Review and discard its remaining candidate.", CancellationToken.None);
+                    throw;
+                }
+            }
 
             var package = new EncPackage { Id = Guid.NewGuid(), SourceDatasetName = sourceName, S57DatasetName = s57Name, ScanFromUtc = packageScanFromUtc, DetectedAtUtc = scanStartedUtc, DatasetYaml = yaml, SummaryYaml = summary };
             if (!await packages.TryCreateAsync(package, cancellationToken))
@@ -160,12 +174,28 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
     }
 
     private async Task<bool> CanRefreshAsync(EncPackage package, CancellationToken cancellationToken) {
-        if (package.ErrorMessage is not null || package.S57Discarded || package.S101Discarded)
-            return false;
         var s57 = await workflowRepository.GetTrackAsync(package.S57DatasetName, ProductSpecification.S57, cancellationToken);
         var s101 = await workflowRepository.GetTrackAsync(package.SourceDatasetName, ProductSpecification.S101, cancellationToken);
-        return s57 is { State: ProductState.ReadyForDistribution, IsManuallyFrozen: false } &&
-               s101 is { State: ProductState.ReadyForDistribution, IsManuallyFrozen: false };
+        return !IsRefreshBlocked(s57) && !IsRefreshBlocked(s101);
+    }
+
+    /// <summary>Uses archive change times so replaying an old scan never rebuilds identical failed candidates.</summary>
+    internal static bool HasNewEdits(IReadOnlyDictionary<string, ArchiveRow> changes, DateTime detectedAtUtc, DateTime sinceUtc) =>
+        changes.Values.Any(change => change.EditDate > detectedAtUtc || change.EditDate is null && sinceUtc >= detectedAtUtc);
+
+    /// <summary>Protects an operator hold, a build in progress, or a candidate submitted for approval.</summary>
+    internal static bool IsRefreshBlocked(ProductExportTrackRecord? track) => track?.IsManuallyFrozen == true ||
+        track?.State is ProductState.Frozen or ProductState.InTransit or ProductState.AcceptedForDistribution or ProductState.Published or ProductState.Exporting or ProductState.Validating;
+
+    private async Task DiscardForRefreshAsync(EncPackage package, ProductExportTrackRecord track, ProductSpecification specification, CancellationToken cancellationToken) {
+        if (specification == ProductSpecification.S57 ? package.S57Discarded : package.S101Discarded)
+            return;
+
+        if (track.CandidateEdition.HasValue || track.State is ProductState.Error or ProductState.Rejected)
+            await exports.ExecuteDiscardAsync(track.DatasetName, "system", cancellationToken, preservePackageScanBound: true);
+        else
+            // An encoder can fail before it records a candidate; the package still owns that side.
+            await packages.DiscardAsync(track.DatasetName, specification, cancellationToken, preserveScanBound: true);
     }
 
     private async Task RecoverIncompletePackageAsync(EncPackage package, CancellationToken cancellationToken) {
