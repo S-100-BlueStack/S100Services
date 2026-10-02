@@ -33,8 +33,11 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
         await connection.ExecuteAsync("""
             UPDATE dbo.ProductExportTrack
             SET state = @State,
-                candidate_edition = CASE WHEN @State IN (1, 5, 7, 13, 14, 15) THEN candidate_edition ELSE @Edition END,
-                candidate_update = CASE WHEN @State IN (1, 5, 7, 13, 14, 15) THEN candidate_update ELSE @Update END,
+                published_edition = CASE WHEN @State = 13 THEN @Edition ELSE published_edition END,
+                published_update = CASE WHEN @State = 13 THEN @Update ELSE published_update END,
+                candidate_edition = CASE WHEN @State = 13 THEN NULL WHEN @State IN (1, 5, 7, 14, 15) THEN candidate_edition ELSE @Edition END,
+                candidate_update = CASE WHEN @State = 13 THEN NULL WHEN @State IN (1, 5, 7, 14, 15) THEN candidate_update ELSE @Update END,
+                candidate_previous_state = CASE WHEN @State = 13 THEN NULL ELSE candidate_previous_state END,
                 updated_at_utc = @OccurredAtUtc
             WHERE product_export_track_id = @TrackId;
 
@@ -186,6 +189,20 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
     }
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyList<ProductExportTrackRecord>> GetTracksByNamesAsync(IEnumerable<string> datasetNames, CancellationToken cancellationToken = default) {
+        var names = datasetNames.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var tracks = new List<ProductExportTrackRecord>();
+        if (names.Length == 0)
+            return tracks;
+        using var connection = _connectionFactory.Create();
+        foreach (var batch in names.Chunk(1000)) {
+            var rows = await connection.QueryAsync<ProductExportTrackRecord>(new CommandDefinition($"{TrackSelectBaseSql}\nWHERE p.dataset_name IN @Names;", new { Names = batch }, cancellationToken: cancellationToken));
+            tracks.AddRange(rows);
+        }
+        return tracks;
+    }
+
+    /// <inheritdoc/>
     public async Task<ProductExportTrackRecord> GetOrCreateTrackAsync(string datasetName, ProductSpecification productSpecification, ExportEngineKind engine, int publishedEdition, int publishedUpdate, CancellationToken cancellationToken = default) {
         if (string.IsNullOrWhiteSpace(datasetName))
             throw new ArgumentException("A dataset name is required.", nameof(datasetName));
@@ -305,21 +322,22 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
     }
 
     /// <inheritdoc/>
-    public async Task CancelCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+    public async Task DiscardCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
         connection.Open();
         using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
 
         var candidate = await connection.QuerySingleOrDefaultAsync<CandidateCancellationState>(new CommandDefinition("""
-            SELECT candidate_previous_state AS PreviousState,
+            SELECT state AS State, candidate_previous_state AS PreviousState,
                    candidate_edition AS CandidateEdition,
                    candidate_update AS CandidateUpdate
             FROM dbo.ProductExportTrack WITH (UPDLOCK, HOLDLOCK)
             WHERE product_export_track_id = @TrackId;
             """, new { TrackId = trackId }, transaction, cancellationToken: cancellationToken));
 
-        if (candidate is null || !candidate.CandidateEdition.HasValue || !candidate.CandidateUpdate.HasValue)
-            throw new InvalidOperationException("The product track has no candidate export to cancel.");
+        if (candidate is null || candidate.CandidateEdition.HasValue != candidate.CandidateUpdate.HasValue ||
+            !candidate.CandidateEdition.HasValue && candidate.State is not (ProductState.Error or ProductState.Rejected))
+            throw new InvalidOperationException("The product track has no failed or unverified candidate to discard.");
 
         var previousState = candidate.PreviousState ?? ProductState.Idle;
         var restoredAtUtc = occurredAtUtc.AddTicks(1);
@@ -328,7 +346,7 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
             INSERT INTO dbo.ProductStateHistory
                 (product_state_history_id, product_export_track_id, state, edition_number, update_number, owner, occurred_at_utc)
             SELECT @CancelledHistoryId, product_export_track_id, @CancelledState,
-                   candidate_edition, candidate_update,
+                   COALESCE(candidate_edition, published_edition), COALESCE(candidate_update, published_update),
                    @Owner, @OccurredAtUtc
             FROM dbo.ProductExportTrack
             WHERE product_export_track_id = @TrackId;
@@ -507,94 +525,6 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
             }, cancellationToken: cancellationToken));
     }
 
-    /// <inheritdoc/>
-    public async Task<ProductChangeSummary?> GetOpenChangeSummaryAsync(Guid trackId, DateOnly workDate, CancellationToken cancellationToken = default) {
-        using var connection = _connectionFactory.Create();
-        var header = await connection.QuerySingleOrDefaultAsync<ChangeSummaryHeader>(new CommandDefinition($"{ChangeSummaryHeaderSql}\nWHERE s.product_export_track_id = @TrackId AND s.work_date = @WorkDate", new { TrackId = trackId, WorkDate = workDate.ToDateTime(TimeOnly.MinValue) }, cancellationToken: cancellationToken));
-        return header is null ? null : await LoadSummaryAsync(connection, header, cancellationToken);
-    }
-
-    /// <inheritdoc/>
-    public async Task SaveChangeSummaryAsync(ProductChangeSummary summary, CancellationToken cancellationToken = default) {
-        using var connection = _connectionFactory.Create();
-        connection.Open();
-        using var transaction = connection.BeginTransaction();
-        var actualSummaryId = await connection.QuerySingleAsync<Guid>(new CommandDefinition("""
-            MERGE dbo.ProductChangeSummary WITH (HOLDLOCK) AS target
-            USING (SELECT @TrackId AS product_export_track_id, @WorkDate AS work_date) AS source
-              ON target.product_export_track_id = source.product_export_track_id AND target.work_date = source.work_date
-            WHEN MATCHED THEN
-              UPDATE SET summary_yaml = @Yaml,
-                         first_detected_at_utc = @FirstDetectedAtUtc,
-                         last_detected_at_utc = @LastDetectedAtUtc,
-                         is_closed = 0,
-                         closed_at_utc = NULL
-            WHEN NOT MATCHED THEN
-              INSERT (product_change_summary_id, product_export_track_id, work_date, summary_yaml, first_detected_at_utc, last_detected_at_utc, is_closed)
-              VALUES (@SummaryId, source.product_export_track_id, source.work_date, @Yaml, @FirstDetectedAtUtc, @LastDetectedAtUtc, 0)
-            OUTPUT inserted.product_change_summary_id;
-            """, new {
-                SummaryId = summary.Id,
-                summary.TrackId,
-                WorkDate = summary.WorkDate.ToDateTime(TimeOnly.MinValue),
-                summary.Yaml,
-                summary.FirstDetectedAtUtc,
-                summary.LastDetectedAtUtc
-            }, transaction, cancellationToken: cancellationToken));
-
-        await connection.ExecuteAsync(new CommandDefinition("DELETE FROM dbo.ProductChange WHERE product_change_summary_id = @SummaryId;", new { SummaryId = actualSummaryId }, transaction, cancellationToken: cancellationToken));
-
-        foreach (var change in summary.Changes) {
-            await connection.ExecuteAsync(new CommandDefinition("""
-                INSERT INTO dbo.ProductChange
-                    (product_change_id, product_change_summary_id, feature_id, feature_code, attribute_path, deleted, detected_at_utc)
-                VALUES
-                    (@ChangeId, @SummaryId, @FeatureId, @FeatureCode, @AttributePath, @Deleted, @DetectedAtUtc);
-                """, new {
-                    ChangeId = Guid.NewGuid(),
-                    SummaryId = actualSummaryId,
-                    change.FeatureId,
-                    change.FeatureCode,
-                    change.AttributePath,
-                    change.Deleted,
-                    change.DetectedAtUtc
-                }, transaction, cancellationToken: cancellationToken));
-        }
-
-        transaction.Commit();
-    }
-
-    /// <inheritdoc/>
-    public async Task<IReadOnlyList<ProductChangeSummary>> GetOpenChangeSummariesAsync(CancellationToken cancellationToken = default) {
-        using var connection = _connectionFactory.Create();
-        var headers = (await connection.QueryAsync<ChangeSummaryHeader>(new CommandDefinition($"{ChangeSummaryHeaderSql}\nWHERE s.is_closed = 0", cancellationToken: cancellationToken))).ToArray();
-        var summaries = new List<ProductChangeSummary>(headers.Length);
-        foreach (var header in headers)
-            summaries.Add(await LoadSummaryAsync(connection, header, cancellationToken));
-        return summaries;
-    }
-
-    /// <inheritdoc/>
-    public async Task CloseChangeSummaryAsync(Guid summaryId, DateTime closedAtUtc, CancellationToken cancellationToken = default) {
-        using var connection = _connectionFactory.Create();
-        await connection.ExecuteAsync(new CommandDefinition("""
-            UPDATE dbo.ProductChangeSummary
-            SET is_closed = 1, closed_at_utc = @ClosedAtUtc
-            WHERE product_change_summary_id = @SummaryId AND is_closed = 0;
-            """, new { SummaryId = summaryId, ClosedAtUtc = closedAtUtc }, cancellationToken: cancellationToken));
-    }
-
-    private static async Task<ProductChangeSummary> LoadSummaryAsync(IDbConnection connection, ChangeSummaryHeader header, CancellationToken cancellationToken) {
-        var changes = (await connection.QueryAsync<ProductChange>(new CommandDefinition("""
-            SELECT feature_id AS FeatureId, feature_code AS FeatureCode, attribute_path AS AttributePath,
-                   detected_at_utc AS DetectedAtUtc, deleted AS Deleted
-            FROM dbo.ProductChange
-            WHERE product_change_summary_id = @SummaryId
-            ORDER BY feature_id, attribute_path;
-            """, new { SummaryId = header.Id }, cancellationToken: cancellationToken))).ToArray();
-        return new ProductChangeSummary(header.Id, header.TrackId, header.DatasetName, header.ProductSpecification, DateOnly.FromDateTime(header.WorkDate), header.Yaml, changes, header.FirstDetectedAtUtc, header.LastDetectedAtUtc);
-    }
-
     private static ProductSpecification ParseProductSpecification(string value) => value.Trim().ToUpperInvariant() switch {
         "S-57" or "S57" => ProductSpecification.S57,
         "S-102" or "S102" => ProductSpecification.S102,
@@ -695,33 +625,12 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
 
     private const string TrackSelectByIdSql = $"{TrackSelectBaseSql}\nWHERE t.product_export_track_id = @TrackId;";
 
-    private const string ChangeSummaryHeaderSql = """
-        SELECT s.product_change_summary_id AS Id, s.product_export_track_id AS TrackId,
-               p.dataset_name AS DatasetName, t.product_specification AS ProductSpecification,
-               s.work_date AS WorkDate, s.summary_yaml AS Yaml,
-               s.first_detected_at_utc AS FirstDetectedAtUtc, s.last_detected_at_utc AS LastDetectedAtUtc
-        FROM dbo.ProductChangeSummary s
-        INNER JOIN dbo.ProductExportTrack t ON t.product_export_track_id = s.product_export_track_id
-        INNER JOIN dbo.Product p ON p.product_id = t.product_id
-        """;
-
     private sealed class CandidateCancellationState
     {
+        public ProductState State { get; set; }
         public ProductState? PreviousState { get; set; }
         public int? CandidateEdition { get; set; }
         public int? CandidateUpdate { get; set; }
-    }
-
-    private sealed class ChangeSummaryHeader
-    {
-        public Guid Id { get; set; }
-        public Guid TrackId { get; set; }
-        public string DatasetName { get; set; } = string.Empty;
-        public ProductSpecification ProductSpecification { get; set; }
-        public DateTime WorkDate { get; set; }
-        public string Yaml { get; set; } = string.Empty;
-        public DateTime FirstDetectedAtUtc { get; set; }
-        public DateTime LastDetectedAtUtc { get; set; }
     }
 }
 
@@ -734,8 +643,6 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     private readonly List<ProductRecord> _products = [];
     private readonly Dictionary<string, DateTime> _lastSuccessfulRuns = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<(string Name, ProductSpecification Specification), ProductExportTrackRecord> _tracks = new();
-    private readonly Dictionary<Guid, ProductChangeSummary> _summaries = [];
-    private readonly HashSet<Guid> _closedSummaryIds = [];
     private readonly List<(Guid Id, ProductRevisionWrite Revision)> _revisions = [];
     private readonly List<(Guid Id, ProductArtifactWrite Artifact)> _artifacts = [];
 
@@ -792,6 +699,9 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     public Task<IReadOnlyList<ProductExportTrackRecord>> GetTracksAsync(string datasetName, CancellationToken cancellationToken = default) { lock (_gate) return Task.FromResult<IReadOnlyList<ProductExportTrackRecord>>([.. _tracks.Values.Where(track => string.Equals(track.DatasetName, datasetName, StringComparison.OrdinalIgnoreCase))]); }
 
     /// <inheritdoc/>
+    public Task<IReadOnlyList<ProductExportTrackRecord>> GetTracksByNamesAsync(IEnumerable<string> datasetNames, CancellationToken cancellationToken = default) { var names = datasetNames.ToHashSet(StringComparer.OrdinalIgnoreCase); lock (_gate) return Task.FromResult<IReadOnlyList<ProductExportTrackRecord>>([.. _tracks.Values.Where(track => names.Contains(track.DatasetName))]); }
+
+    /// <inheritdoc/>
     public Task<ProductExportTrackRecord> GetOrCreateTrackAsync(string datasetName, ProductSpecification productSpecification, ExportEngineKind engine, int publishedEdition, int publishedUpdate, CancellationToken cancellationToken = default) {
         lock (_gate) {
             if (!_tracks.TryGetValue((datasetName, productSpecification), out var track)) {
@@ -835,7 +745,20 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     }
 
     /// <inheritdoc/>
-    public Task CancelCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.State = track.CandidatePreviousState ?? ProductState.Idle; track.CandidateEdition = null; track.CandidateUpdate = null; track.CandidatePreviousState = null; track.UpdatedAtUtc = occurredAtUtc; } return Task.CompletedTask; }
+    public Task DiscardCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        lock (_gate) {
+            var track = FindTrack(trackId);
+            if (track.CandidateEdition.HasValue != track.CandidateUpdate.HasValue ||
+                !track.CandidateEdition.HasValue && track.State is not (ProductState.Error or ProductState.Rejected))
+                throw new InvalidOperationException("The product track has no failed or unverified candidate to discard.");
+            track.State = track.CandidatePreviousState ?? ProductState.Idle;
+            track.CandidateEdition = null;
+            track.CandidateUpdate = null;
+            track.CandidatePreviousState = null;
+            track.UpdatedAtUtc = occurredAtUtc;
+        }
+        return Task.CompletedTask;
+    }
 
     /// <inheritdoc/>
     public Task<Guid> AddRevisionAsync(ProductRevisionWrite revision, CancellationToken cancellationToken = default) {
@@ -893,30 +816,6 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
             return Task.FromResult<ProductArtifactContent?>(new ProductArtifactContent(item.Id, item.Artifact.FileName, item.Artifact.MediaType, item.Artifact.Content));
         }
     }
-
-    /// <inheritdoc/>
-    public Task<ProductChangeSummary?> GetOpenChangeSummaryAsync(Guid trackId, DateOnly workDate, CancellationToken cancellationToken = default) { lock (_gate) return Task.FromResult(_summaries.Values.SingleOrDefault(summary => summary.TrackId == trackId && summary.WorkDate == workDate)); }
-
-    /// <inheritdoc/>
-    public Task SaveChangeSummaryAsync(ProductChangeSummary summary, CancellationToken cancellationToken = default) {
-        lock (_gate) {
-            var existing = _summaries.Values.SingleOrDefault(item => item.TrackId == summary.TrackId && item.WorkDate == summary.WorkDate);
-            if (existing is not null && existing.Id != summary.Id) {
-                _summaries.Remove(existing.Id);
-                _closedSummaryIds.Remove(existing.Id);
-            }
-
-            _summaries[summary.Id] = summary;
-            _closedSummaryIds.Remove(summary.Id);
-        }
-        return Task.CompletedTask;
-    }
-
-    /// <inheritdoc/>
-    public Task<IReadOnlyList<ProductChangeSummary>> GetOpenChangeSummariesAsync(CancellationToken cancellationToken = default) { lock (_gate) return Task.FromResult<IReadOnlyList<ProductChangeSummary>>([.. _summaries.Values.Where(summary => !_closedSummaryIds.Contains(summary.Id))]); }
-
-    /// <inheritdoc/>
-    public Task CloseChangeSummaryAsync(Guid summaryId, DateTime closedAtUtc, CancellationToken cancellationToken = default) { lock (_gate) _closedSummaryIds.Add(summaryId); return Task.CompletedTask; }
 
     private ProductExportTrackRecord FindTrack(Guid trackId) => _tracks.Values.Single(track => track.Id == trackId);
     private static ProductRecord SelectPreferredCurrent(IGrouping<string, ProductRecord> group) => group.OrderBy(product => NormalizeProductSpecification(product.ProductSpecification) == "S101" ? 0 : 1).ThenByDescending(product => product.Date_From).First();

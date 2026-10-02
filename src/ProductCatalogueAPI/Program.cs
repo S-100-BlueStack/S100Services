@@ -22,6 +22,11 @@ namespace ProductCatalogueAPI
             var processProfile = ProductCatalogueProcessProfile.For(processRole);
 
             if (processRole == ProductCatalogueProcessRole.Worker) {
+                // The local launcher starts the worker in a separate console, so its BAT title is not inherited.
+                if (Environment.UserInteractive) {
+                    try { Console.Title = "Product Catalogue Worker"; }
+                    catch (IOException) { /* A service process may have no console to rename. */ }
+                }
                 await RunWorkerAsync(args, processProfile);
                 return;
             }
@@ -199,8 +204,7 @@ namespace ProductCatalogueAPI
                 //   Authorization = new[] { new MyAuthorizationFilter() }             // TODO: Auth
             });
 
-            // Change detection and change-summary processing jobs are registered for explicit invocation only.
-            // Scheduling is intentionally deferred until operational cadence and rulesets are approved.
+            // The enabled DPC schedule builds ENC packages; legacy summary processing stays unscheduled.
 
             app.UseExceptionHandler();
             // Configure the HTTP request pipeline.

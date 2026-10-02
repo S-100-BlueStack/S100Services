@@ -27,6 +27,9 @@ namespace ProductCatalogueAPI.Models
 
         public class Attributes
         {
+            /// <summary>Gets the ENC package represented by this S-101 AOI.</summary>
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public EncPackageResponse? Package { get; set; }
             [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
             public string? DatasetName { get; set; }
             [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

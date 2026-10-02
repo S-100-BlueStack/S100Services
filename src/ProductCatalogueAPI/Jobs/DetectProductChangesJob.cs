@@ -1,210 +1,33 @@
 using Hangfire;
-using ProductCatalogueAPI.Data.Models;
-using ProductCatalogueAPI.Data.Repositories;
-using ProductCatalogueAPI.Services.Locking;
-using S100FC.ProductCatalogue;
-using System.Text.Json;
+using System.Diagnostics;
 
 namespace ProductCatalogueAPI.Jobs;
 
-/// <summary>
-/// Accumulates detected source edits into daily YAML summaries. It never creates exports or changes S-128.
-/// </summary>
-/// <param name="productRepository">Persists the successful scan watermark.</param>
-/// <param name="workflowRepository">Persists independent product tracks and change summaries.</param>
-/// <param name="productManager">Provides catalogue products and pending geodatabase edits.</param>
-/// <param name="datasetLockService">Serializes summary updates for each canonical dataset/specification track.</param>
-/// <param name="timeProvider">Supplies the scan timestamp and work-date boundary.</param>
-/// <param name="logger">Receives scan diagnostics.</param>
-/// <param name="detectionState">The immutable startup decision that guards scheduled and persisted invocations.</param>
-public sealed class DetectProductChangesJob(IProductRepository productRepository, IProductWorkflowRepository workflowRepository, IProductManager productManager, IDatasetLockService datasetLockService, TimeProvider timeProvider, ILogger<DetectProductChangesJob> logger, DetectProductChangesState detectionState) : IBackgroundJob
+/// <summary>Runs the scheduled ENC package scan on the Hangfire worker.</summary>
+/// <param name="detectionState">Prevents persisted jobs from running after detection is disabled.</param>
+/// <param name="encPackages">Creates or refreshes packages and their paired export candidates.</param>
+/// <param name="logger">Reports job execution independently of the archive scan details.</param>
+public sealed class DetectProductChangesJob(DetectProductChangesState detectionState, IEncPackageDetectionService encPackages, ILogger<DetectProductChangesJob> logger) : IBackgroundJob
 {
-    private readonly IProductRepository _productRepository = productRepository;
-    private readonly IProductWorkflowRepository _workflowRepository = workflowRepository;
-    private readonly IProductManager _productManager = productManager;
-    private readonly IDatasetLockService _datasetLockService = datasetLockService;
-    private readonly TimeProvider _timeProvider = timeProvider;
-    private readonly ILogger<DetectProductChangesJob> _logger = logger;
-    private readonly DetectProductChangesState _detectionState = detectionState;
-
     /// <inheritdoc/>
     [AutomaticRetry(Attempts = 0, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
     public async Task RunAsync(CancellationToken cancellationToken) {
-        // Removing the recurring schedule does not remove already persisted invocations.
-        _detectionState.EnsureEnabled();
+        detectionState.EnsureEnabled();
         cancellationToken.ThrowIfCancellationRequested();
-        var jobName = nameof(DetectProductChangesJob);
-        var scanStartedUtc = _timeProvider.GetUtcNow().UtcDateTime;
-        var sinceUtc = await _productRepository.GetLastSuccessfulRunUtcAsync(jobName);
-        if (!sinceUtc.HasValue) {
-            sinceUtc = GetCopenhagenDayStartUtc(scanStartedUtc);
-            _logger.LogInformation("Initialized {JobName} scan window at the start of the Copenhagen work day. SinceUtc: {SinceUtc}.", jobName, sinceUtc);
-        }
 
-        var electronicProductManager = _productManager.ElectronicProductManager;
-        Dictionary<string, Dictionary<string, ArchiveRow>> pendingEdits;
+        var elapsed = Stopwatch.StartNew();
+        logger.LogInformation("DPC job started.");
         try {
-            pendingEdits = await electronicProductManager.GetPendingEditsAsync(sinceUtc.Value);
+            await encPackages.RunAsync(cancellationToken);
+            logger.LogInformation("DPC job finished. DurationMs: {DurationMs}.", elapsed.ElapsedMilliseconds);
         }
-        catch (ArchiveChangeClassificationException ex) {
-            _logger.LogError(ex, "Change detection could not classify every archive row. The successful-run watermark was preserved. ConnectionName: {ConnectionName}. UnclassifiedRowCount: {UnclassifiedRowCount}.", ex.ConnectionName, ex.RowCount);
-            throw new InvalidOperationException("Change detection could not classify every archive row. The successful-run watermark was preserved.", ex);
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+            logger.LogWarning("DPC job cancelled. DurationMs: {DurationMs}.", elapsed.ElapsedMilliseconds);
+            throw;
         }
-        var scanCompleted = true;
-        foreach (var (datasetName, dirtyFeatures) in pendingEdits) {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (dirtyFeatures.Count == 0)
-                continue;
-
-            var targets = new List<(string DatasetName, ProductSpecification ProductSpecification)> {
-                (datasetName, ProductSpecification.S101)
-            };
-            targets.AddRange(electronicProductManager.GetMappedElectronicProducts(datasetName, ProductSpecification.S57.ToString())
-                .Where(product => !string.IsNullOrWhiteSpace(product.datasetName))
-                .Select(product => (product.datasetName!.Trim(), ProductSpecification.S57)));
-
-            foreach (var target in targets
-                .GroupBy(target => ProductTrackLockKey.For(target.DatasetName, target.ProductSpecification), StringComparer.OrdinalIgnoreCase)
-                .Select(group => group.First())) {
-                await using var datasetLock = await _datasetLockService.TryAcquireAsync(ProductTrackLockKey.For(target.DatasetName, target.ProductSpecification), cancellationToken);
-                if (datasetLock is null) {
-                    _logger.LogWarning("Skipped change-summary update because the product track lock is held. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.", target.DatasetName, target.ProductSpecification);
-                    scanCompleted = false;
-                    continue;
-                }
-
-                var publicVersion = await electronicProductManager.ReadElectronicProductVersionAsync(target.DatasetName, target.ProductSpecification.ToString(), cancellationToken);
-                if (publicVersion is null) {
-                    _logger.LogError("Skipped change-summary update because the mapped S-128 product was not found. SourceDatasetName: {SourceDatasetName}. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.", datasetName, target.DatasetName, target.ProductSpecification);
-                    scanCompleted = false;
-                    continue;
-                }
-
-                var track = await _workflowRepository.GetOrCreateTrackAsync(publicVersion.DatasetName, target.ProductSpecification, ExportEngineKind.IsoIec8211, publicVersion.Edition ?? 0, publicVersion.Update ?? 0, cancellationToken);
-                await MergeDailySummaryAsync(track, dirtyFeatures, scanStartedUtc, cancellationToken);
-                if (!track.IsManuallyFrozen)
-                    await _workflowRepository.SetStateAsync(track.Id, ProductState.ChangesDetected, "system", scanStartedUtc, cancellationToken: cancellationToken);
-            }
-        }
-
-        if (!scanCompleted)
-            throw new InvalidOperationException("Change detection was incomplete. The successful-run watermark was preserved so skipped edits can be retried.");
-
-        await _productRepository.SetSuccessfulRunUtcAsync(jobName, scanStartedUtc);
-        _logger.LogInformation("Change detection completed. ProductCount: {ProductCount}. WatermarkUtc: {WatermarkUtc}.", pendingEdits.Count, scanStartedUtc);
-    }
-
-    private async Task MergeDailySummaryAsync(ProductExportTrackRecord track, IReadOnlyDictionary<string, ArchiveRow> dirtyFeatures, DateTime detectedAtUtc, CancellationToken cancellationToken) {
-        var workDate = GetCopenhagenDate(detectedAtUtc);
-        var existing = await _workflowRepository.GetOpenChangeSummaryAsync(track.Id, workDate, cancellationToken);
-        var merged = new Dictionary<string, ProductChange>(StringComparer.OrdinalIgnoreCase);
-        if (existing is not null) {
-            foreach (var change in existing.Changes)
-                merged[GetChangeKey(change)] = change;
-        }
-
-        foreach (var (featureId, archiveRow) in dirtyFeatures) {
-            var paths = GetObservedAttributePaths(archiveRow);
-            foreach (var path in paths) {
-                var change = new ProductChange(featureId, archiveRow.Code ?? string.Empty, path, archiveRow.EditDate ?? detectedAtUtc, archiveRow.Deleted);
-                merged[GetChangeKey(change)] = change;
-            }
-        }
-
-        var changes = merged.Values.OrderBy(change => change.FeatureId, StringComparer.OrdinalIgnoreCase).ThenBy(change => change.AttributePath, StringComparer.OrdinalIgnoreCase).ToArray();
-        var summaryId = existing?.Id ?? Guid.NewGuid();
-        var firstDetectedAtUtc = existing?.FirstDetectedAtUtc ?? detectedAtUtc;
-        var yaml = ChangeSummaryYamlSerializer.Serialize(track.DatasetName, track.ProductSpecification, workDate, firstDetectedAtUtc, detectedAtUtc, changes);
-        await _workflowRepository.SaveChangeSummaryAsync(new ProductChangeSummary(summaryId, track.Id, track.DatasetName, track.ProductSpecification, workDate, yaml, changes, firstDetectedAtUtc, detectedAtUtc), cancellationToken);
-    }
-
-    private static IReadOnlyCollection<string> GetObservedAttributePaths(ArchiveRow row) {
-        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        AddJsonPaths(paths, "attributes", row.AttributeBindings);
-        AddJsonPaths(paths, "featureBindings", row.FeatureBindings);
-        AddJsonPaths(paths, "informationBindings", row.InformationBindings);
-        if (row.Deleted)
-            paths.Add("$deleted");
-        if (paths.Count == 0)
-            paths.Add("$feature");
-        return paths;
-    }
-
-    private static void AddJsonPaths(ISet<string> paths, string prefix, string? json) {
-        if (string.IsNullOrWhiteSpace(json))
-            return;
-        try {
-            using var document = JsonDocument.Parse(json);
-            Visit(document.RootElement, prefix);
-        }
-        catch (JsonException) {
-            paths.Add(prefix);
-        }
-
-        void Visit(JsonElement element, string path) {
-            switch (element.ValueKind) {
-                case JsonValueKind.Object:
-                    foreach (var property in element.EnumerateObject())
-                        Visit(property.Value, $"{path}.{property.Name}");
-                    break;
-                case JsonValueKind.Array:
-                    if (element.GetArrayLength() == 0)
-                        paths.Add(path);
-                    else
-                        foreach (var item in element.EnumerateArray()) Visit(item, path);
-                    break;
-                default:
-                    paths.Add(path);
-                    break;
-            }
+        catch (Exception exception) {
+            logger.LogError(exception, "DPC job failed. DurationMs: {DurationMs}.", elapsed.ElapsedMilliseconds);
+            throw;
         }
     }
-
-    private static DateOnly GetCopenhagenDate(DateTime utc) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), GetCopenhagenTimeZone()));
-
-    private static DateTime GetCopenhagenDayStartUtc(DateTime utc) {
-        var timeZone = GetCopenhagenTimeZone();
-        var localDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), timeZone));
-        return TimeZoneInfo.ConvertTimeToUtc(localDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), timeZone);
-    }
-
-    private static TimeZoneInfo GetCopenhagenTimeZone() {
-        try {
-            return TimeZoneInfo.FindSystemTimeZoneById("Europe/Copenhagen");
-        }
-        catch (TimeZoneNotFoundException) {
-            return TimeZoneInfo.FindSystemTimeZoneById("Romance Standard Time");
-        }
-    }
-
-    private static string GetChangeKey(ProductChange change) => $"{change.FeatureId}\u001f{change.AttributePath}";
-}
-
-/// <summary>
-/// Writes a small deterministic YAML document without adding a general-purpose YAML dependency to the API.
-/// </summary>
-internal static class ChangeSummaryYamlSerializer
-{
-    /// <summary>Serializes the complete accumulated summary for durable storage and rule evaluation.</summary>
-    public static string Serialize(string datasetName, ProductSpecification productSpecification, DateOnly workDate, DateTime firstDetectedAtUtc, DateTime lastDetectedAtUtc, IEnumerable<ProductChange> changes) {
-        var lines = new List<string> {
-            $"datasetName: {Quote(datasetName)}",
-            $"productSpecification: {productSpecification}",
-            $"workDate: {workDate:yyyy-MM-dd}",
-            $"firstDetectedAtUtc: {firstDetectedAtUtc:O}",
-            $"lastDetectedAtUtc: {lastDetectedAtUtc:O}",
-            "changes:"
-        };
-
-        foreach (var change in changes) {
-            lines.Add($"  - featureId: {Quote(change.FeatureId)}");
-            lines.Add($"    featureCode: {Quote(change.FeatureCode)}");
-            lines.Add($"    attribute: {Quote(change.AttributePath)}");
-            lines.Add($"    deleted: {change.Deleted.ToString().ToLowerInvariant()}");
-            lines.Add($"    detectedAtUtc: {change.DetectedAtUtc:O}");
-        }
-        return string.Join(Environment.NewLine, lines) + Environment.NewLine;
-    }
-
-    private static string Quote(string value) => $"\"{value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
 }

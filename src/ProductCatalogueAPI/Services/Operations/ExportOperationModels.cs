@@ -14,8 +14,11 @@ public enum ExportOperationType
     /// <summary>Builds an update candidate.</summary>
     ExportUpdate,
 
-    /// <summary>Cancels and removes an unverified candidate.</summary>
-    CancelExport
+    /// <summary>Reads the former operation value from already queued jobs.</summary>
+    CancelExport,
+
+    /// <summary>Discards one ENC package candidate; the previous operation value remains readable for queued legacy jobs.</summary>
+    Discard
 }
 
 /// <summary>Represents a non-fatal operation warning.</summary>
@@ -67,8 +70,8 @@ public static class ExportOperationContract
 {
     public const string ExportCompletedCode = "EXPORT_READY_FOR_DISTRIBUTION";
     public const string ExportCompletedMessage = "The candidate export was generated and validated. It has not been published to S-128.";
-    public const string CancelExportCompletedCode = "CANCEL_EXPORT_COMPLETED";
-    public const string CancelExportCompletedMessage = "The unverified candidate export was cancelled.";
+    public const string DiscardCompletedCode = "DISCARD_COMPLETED";
+    public const string DiscardCompletedMessage = "The unverified candidate export was discarded.";
 
     /// <summary>Converts an operation type to its stable API/job value.</summary>
     public static string ToPublicValue(ExportOperationType operationType) => operationType.ToString();

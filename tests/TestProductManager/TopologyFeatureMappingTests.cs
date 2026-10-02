@@ -9,27 +9,31 @@ namespace TestProductCatalogueAPI
 {
     public class TopologyFeatureMappingTests
     {
+        private const string SourceUid = "00000000-0000-0000-0000-0000000001ab";
+
+        private static string Foid(int part) => $"110:{Guid.Parse(SourceUid).ToStableUInt64()}:{part}";
+
         [Fact]
         public void Resolve_NonSplitFeature_PreservesExistingFoidAndMappedGeometry() {
             var result = TopologyFeatureMapping.Resolve(
-                "F100",
+                SourceUid,
                 Primitive.Curve,
                 [],
-                new Dictionary<string, string> { ["F100"] = "C200" },
+                new Dictionary<string, string> { [SourceUid] = "C200" },
                 []);
 
             var mapping = Assert.Single(result);
 
-            Assert.Equal("F100", mapping.FeatureUid);
-            Assert.Equal("110:100:1", mapping.Foid);
+            Assert.Equal(SourceUid, mapping.FeatureUid);
+            Assert.Equal(Foid(1), mapping.Foid);
             Assert.Equal("C200", mapping.Geometry);
             Assert.Null(mapping.Masks);
         }
 
         [Fact]
-        public void Resolve_NonSplitPointWithoutTopologyMapping_PreservesSourceGeometry() {
+        public void Resolve_NonSplitPointWithoutTopologyMapping_UsesStablePointGeometry() {
             var result = TopologyFeatureMapping.Resolve(
-                "F100",
+                SourceUid,
                 Primitive.Point,
                 [],
                 new Dictionary<string, string>(),
@@ -37,24 +41,34 @@ namespace TestProductCatalogueAPI
 
             var mapping = Assert.Single(result);
 
-            Assert.Equal("F100", mapping.FeatureUid);
-            Assert.Equal("110:100:1", mapping.Foid);
-            Assert.Equal("F100", mapping.Geometry);
+            Assert.Equal(SourceUid, mapping.FeatureUid);
+            Assert.Equal(Foid(1), mapping.Foid);
+            Assert.Equal($"P{Guid.Parse(SourceUid).ToStableUInt64()}", mapping.Geometry);
+        }
+
+        [Fact]
+        public void CreateFoid_UsesStableGuidForGeneratedPart() {
+            Assert.Equal(Foid(0), TopologyFeatureMapping.CreateFoid($"{SourceUid}:0"));
+        }
+
+        [Fact]
+        public void CreateFoid_RejectsOldColumnBasedIdentifier() {
+            Assert.Throws<ArgumentException>(() => TopologyFeatureMapping.CreateFoid("F100"));
         }
 
         [Fact]
         public void Resolve_MultipleGeneratedCurveUids_UsesDeterministicGeneratedMappingsAndFoids() {
             var mapper = new Dictionary<string, string> {
-                ["F100:1"] = "F100",
-                ["F100:0"] = "F100",
+                [$"{SourceUid}:1"] = SourceUid,
+                [$"{SourceUid}:0"] = SourceUid,
             };
             var mappingFoid = new Dictionary<string, string> {
-                ["F100:0"] = "C200",
-                ["F100:1"] = "C201",
+                [$"{SourceUid}:0"] = "C200",
+                [$"{SourceUid}:1"] = "C201",
             };
 
             var result = TopologyFeatureMapping.Resolve(
-                "F100",
+                SourceUid,
                 Primitive.Curve,
                 mapper,
                 mappingFoid,
@@ -63,13 +77,13 @@ namespace TestProductCatalogueAPI
             Assert.Collection(
                 result,
                 mapping => {
-                    Assert.Equal("F100:0", mapping.FeatureUid);
-                    Assert.Equal("110:100:0", mapping.Foid);
+                    Assert.Equal($"{SourceUid}:0", mapping.FeatureUid);
+                    Assert.Equal(Foid(0), mapping.Foid);
                     Assert.Equal("C200", mapping.Geometry);
                 },
                 mapping => {
-                    Assert.Equal("F100:1", mapping.FeatureUid);
-                    Assert.Equal("110:100:1", mapping.Foid);
+                    Assert.Equal($"{SourceUid}:1", mapping.FeatureUid);
+                    Assert.Equal(Foid(1), mapping.Foid);
                     Assert.Equal("C201", mapping.Geometry);
                 });
         }
@@ -77,15 +91,15 @@ namespace TestProductCatalogueAPI
         [Fact]
         public void Resolve_MapperAndGeometryLookup_AreCaseInsensitive() {
             var result = TopologyFeatureMapping.Resolve(
-                "F100",
+                SourceUid,
                 Primitive.Curve,
-                new Dictionary<string, string> { ["F100:0"] = "f100" },
-                new Dictionary<string, string> { ["f100:0"] = "C200" },
+                new Dictionary<string, string> { [$"{SourceUid}:0"] = SourceUid.ToUpperInvariant() },
+                new Dictionary<string, string> { [$"{SourceUid.ToUpperInvariant()}:0"] = "C200" },
                 []);
 
             var mapping = Assert.Single(result);
 
-            Assert.Equal("F100:0", mapping.FeatureUid);
+            Assert.Equal($"{SourceUid}:0", mapping.FeatureUid);
             Assert.Equal("C200", mapping.Geometry);
         }
 
@@ -97,12 +111,12 @@ namespace TestProductCatalogueAPI
             var mappingFoid = new Dictionary<string, string>();
 
             if (mappedGeometry != null)
-                mappingFoid["F100:0"] = mappedGeometry;
+                mappingFoid[$"{SourceUid}:0"] = mappedGeometry;
 
             var result = TopologyFeatureMapping.Resolve(
-                "F100",
+                SourceUid,
                 Primitive.Curve,
-                new Dictionary<string, string> { ["F100:0"] = "F100" },
+                new Dictionary<string, string> { [$"{SourceUid}:0"] = SourceUid },
                 mappingFoid,
                 []);
 
@@ -112,30 +126,30 @@ namespace TestProductCatalogueAPI
         [Fact]
         public void Resolve_MultipleGeneratedCurveUids_OmitsOnlyGeneratedUidsWithoutMappingFoid() {
             var result = TopologyFeatureMapping.Resolve(
-                "F100",
+                SourceUid,
                 Primitive.Curve,
                 new Dictionary<string, string> {
-                    ["F100:1"] = "F100",
-                    ["F100:0"] = "F100",
+                    [$"{SourceUid}:1"] = SourceUid,
+                    [$"{SourceUid}:0"] = SourceUid,
                 },
-                new Dictionary<string, string> { ["F100:0"] = "C200" },
+                new Dictionary<string, string> { [$"{SourceUid}:0"] = "C200" },
                 []);
 
             var mapping = Assert.Single(result);
 
-            Assert.Equal("F100:0", mapping.FeatureUid);
-            Assert.Equal("110:100:0", mapping.Foid);
+            Assert.Equal($"{SourceUid}:0", mapping.FeatureUid);
+            Assert.Equal(Foid(0), mapping.Foid);
             Assert.Equal("C200", mapping.Geometry);
         }
 
         [Fact]
         public void Resolve_AllGeneratedCurveUidsWithoutMappingFoid_ReturnsEmpty() {
             var result = TopologyFeatureMapping.Resolve(
-                "F100",
+                SourceUid,
                 Primitive.Curve,
                 new Dictionary<string, string> {
-                    ["F100:0"] = "F100",
-                    ["F100:1"] = "F100",
+                    [$"{SourceUid}:0"] = SourceUid,
+                    [$"{SourceUid}:1"] = SourceUid,
                 },
                 new Dictionary<string, string>(),
                 []);
@@ -148,7 +162,7 @@ namespace TestProductCatalogueAPI
         [InlineData(Primitive.Surface)]
         public void Resolve_NonSplitTopologyFeatureWithoutMappingFoid_IsOmitted(Primitive primitive) {
             var result = TopologyFeatureMapping.Resolve(
-                "F100",
+                SourceUid,
                 primitive,
                 [],
                 new Dictionary<string, string>(),
@@ -160,9 +174,9 @@ namespace TestProductCatalogueAPI
         [Fact]
         public void Resolve_FutureGeneratedSurfaceWithoutMappingFoid_IsOmitted() {
             var result = TopologyFeatureMapping.Resolve(
-                "F100",
+                SourceUid,
                 Primitive.Surface,
-                new Dictionary<string, string> { ["F100:0"] = "F100" },
+                new Dictionary<string, string> { [$"{SourceUid}:0"] = SourceUid },
                 new Dictionary<string, string>(),
                 []);
 
@@ -173,23 +187,23 @@ namespace TestProductCatalogueAPI
         public void Resolve_NonSplitSurface_UsesSourceUidForGeometryAndMasks() {
             var surface = new SurfaceFeature {
                 Id = 900,
-                Ref = "F100",
+                Ref = SourceUid,
                 Exterior = new FeatureRef { Id = 200 },
                 Masks1 = [300],
                 Masks2 = [400],
             };
 
             var result = TopologyFeatureMapping.Resolve(
-                "F100",
+                SourceUid,
                 Primitive.Surface,
                 [],
-                new Dictionary<string, string> { ["F100"] = "S900" },
+                new Dictionary<string, string> { [SourceUid] = "S900" },
                 [surface]);
 
             var mapping = Assert.Single(result);
 
-            Assert.Equal("F100", mapping.FeatureUid);
-            Assert.Equal("110:100:1", mapping.Foid);
+            Assert.Equal(SourceUid, mapping.FeatureUid);
+            Assert.Equal(Foid(1), mapping.Foid);
             Assert.Equal("S900", mapping.Geometry);
             Assert.Equal("C300:1,C400:2", mapping.Masks);
         }
@@ -202,17 +216,17 @@ namespace TestProductCatalogueAPI
                 ? [
                     new SurfaceFeature {
                         Id = 900,
-                        Ref = "F100",
+                        Ref = SourceUid,
                         Exterior = new FeatureRef { Id = 200 },
                     }
                 ]
                 : [];
 
             var result = TopologyFeatureMapping.Resolve(
-                "F100",
+                SourceUid,
                 Primitive.Surface,
                 [],
-                new Dictionary<string, string> { ["F100"] = "S900" },
+                new Dictionary<string, string> { [SourceUid] = "S900" },
                 surfaces);
 
             Assert.Null(Assert.Single(result).Masks);
@@ -222,14 +236,14 @@ namespace TestProductCatalogueAPI
         public void SerializedCurveYaml_OmitsGeneratedUidWithoutTopologyGeometry() {
             var matrix = new TestMatrix {
                 Curves = [CreateCurve(200, 0.0)],
-                MappingFOID = new Dictionary<string, string> { ["F100:0"] = "C200" },
+                MappingFOID = new Dictionary<string, string> { [$"{SourceUid}:0"] = "C200" },
             };
             var mappings = TopologyFeatureMapping.Resolve(
-                "F100",
+                SourceUid,
                 Primitive.Curve,
                 new Dictionary<string, string> {
-                    ["F100:0"] = "F100",
-                    ["F100:1"] = "F100",
+                    [$"{SourceUid}:0"] = SourceUid,
+                    [$"{SourceUid}:1"] = SourceUid,
                 },
                 matrix.MappingFOID,
                 matrix.Surfaces);
@@ -238,14 +252,14 @@ namespace TestProductCatalogueAPI
             dataset.AddTopology(matrix);
 
             var feature = Assert.Single(dataset.Features!);
-            Assert.Equal("110:100:0", feature.Foid);
+            Assert.Equal(Foid(0), feature.Foid);
             Assert.Equal("C200", feature.Geometry);
             AssertFinalTopologyReferencesExist(dataset);
 
             var yaml = dataset.Serialize();
             Assert.Contains("Geometry: C200", yaml);
-            Assert.DoesNotContain("110:100:1", yaml);
-            Assert.DoesNotContain("F100:1", yaml);
+            Assert.DoesNotContain(Foid(1), yaml);
+            Assert.DoesNotContain($"{SourceUid}:1", yaml);
         }
 
         [Fact]
@@ -256,16 +270,16 @@ namespace TestProductCatalogueAPI
                     CreateCurve(201, 2.0),
                 ],
                 MappingFOID = new Dictionary<string, string> {
-                    ["F100:0"] = "C200",
-                    ["F100:1"] = "C201",
+                    [$"{SourceUid}:0"] = "C200",
+                    [$"{SourceUid}:1"] = "C201",
                 },
             };
             var mappings = TopologyFeatureMapping.Resolve(
-                "F100",
+                SourceUid,
                 Primitive.Curve,
                 new Dictionary<string, string> {
-                    ["F100:1"] = "F100",
-                    ["F100:0"] = "F100",
+                    [$"{SourceUid}:1"] = SourceUid,
+                    [$"{SourceUid}:0"] = SourceUid,
                 },
                 matrix.MappingFOID,
                 matrix.Surfaces);
@@ -286,7 +300,7 @@ namespace TestProductCatalogueAPI
         public void SerializedNonSplitSurfaceYaml_UsesSourceUidAndContainsNoDanglingTopologyReferences() {
             var surface = new SurfaceFeature {
                 Id = 900,
-                Ref = "F100",
+                Ref = SourceUid,
                 Exterior = new FeatureRef { Id = 200 },
                 Masks1 = [300],
                 Masks2 = [400],
@@ -298,10 +312,10 @@ namespace TestProductCatalogueAPI
                     CreateCurve(400, 4.0),
                 ],
                 Surfaces = [surface],
-                MappingFOID = new Dictionary<string, string> { ["F100"] = "S900" },
+                MappingFOID = new Dictionary<string, string> { [SourceUid] = "S900" },
             };
             var mappings = TopologyFeatureMapping.Resolve(
-                "F100",
+                SourceUid,
                 Primitive.Surface,
                 [],
                 matrix.MappingFOID,
@@ -313,7 +327,7 @@ namespace TestProductCatalogueAPI
             var feature = Assert.Single(dataset.Features!);
             var topologySurface = Assert.Single(dataset.Surfaces!);
 
-            Assert.Equal("110:100:1", feature.Foid);
+            Assert.Equal(Foid(1), feature.Foid);
             Assert.Equal("S100", topologySurface.Name);
             Assert.Equal(topologySurface.Name, feature.Geometry);
             Assert.Equal("C200", topologySurface.Exterior);

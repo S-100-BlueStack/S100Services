@@ -133,20 +133,6 @@ public sealed record ProductChange(
     bool Deleted = false);
 
 /// <summary>
-/// Represents an open daily change summary and its normalized change entries.
-/// </summary>
-public sealed record ProductChangeSummary(
-    Guid Id,
-    Guid TrackId,
-    string DatasetName,
-    ProductSpecification ProductSpecification,
-    DateOnly WorkDate,
-    string Yaml,
-    IReadOnlyList<ProductChange> Changes,
-    DateTime FirstDetectedAtUtc,
-    DateTime LastDetectedAtUtc);
-
-/// <summary>
 /// Carries an immutable candidate revision into the workflow repository.
 /// </summary>
 public sealed record ProductRevisionWrite(

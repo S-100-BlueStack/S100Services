@@ -6,7 +6,6 @@ using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.ProductCatalogue;
 using S100FC.YAML;
 using System.Diagnostics;
-using System.Net.Sockets;
 using System.Text;
 
 namespace ProductCatalogueAPI.Services.Operations;
@@ -14,7 +13,7 @@ namespace ProductCatalogueAPI.Services.Operations;
 /// <summary>
 /// Builds SQL-owned candidates from read-only geodatabase snapshots and deliberately stops before S-128 publication.
 /// </summary>
-public class ExportOperationService(IProductManager productManager, IExportEngineRegistry exportEngines, IProductWorkflowRepository workflowRepository, ISevenCsService sevenCsService, TimeProvider timeProvider, ILogger<ExportOperationService> logger) : IExportOperationService
+public class ExportOperationService(IProductManager productManager, IExportEngineRegistry exportEngines, IProductWorkflowRepository workflowRepository, ISevenCsService sevenCsService, TimeProvider timeProvider, ILogger<ExportOperationService> logger, IEncPackageRepository? packages = null) : IExportOperationService
 {
     private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
     private readonly IExportEngineRegistry _exportEngines = exportEngines;
@@ -24,7 +23,12 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
     private readonly ILogger<ExportOperationService> _logger = logger;
 
     /// <inheritdoc/>
-    public async Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) {
+    public Task<ExportOperationResult> ExecuteExportAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml = null, CancellationToken cancellationToken = default, Action? beforeMutation = null) => ExecuteExportCoreAsync(datasetName, revisionType, user, changeSummaryYaml, cancellationToken, beforeMutation, null);
+
+    /// <inheritdoc/>
+    public Task<ExportOperationResult> ExecutePackageExportAsync(string datasetName, ExportRevisionType revisionType, string datasetYaml, string changeSummaryYaml, CancellationToken cancellationToken = default) => ExecuteExportCoreAsync(datasetName, revisionType, "system", changeSummaryYaml, cancellationToken, null, datasetYaml);
+
+    private async Task<ExportOperationResult> ExecuteExportCoreAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml, CancellationToken cancellationToken, Action? beforeMutation, string? datasetYamlOverride) {
         cancellationToken.ThrowIfCancellationRequested();
         var product = ResolveRequiredExportProduct(datasetName);
         var targetDatasetName = product.DatasetName;
@@ -60,15 +64,15 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
                 exportType
             );
 
-            S100FC.YAML.Dataset dataset;
+            string datasetYaml;
             try {
-                dataset = await _electronicProductManager.CreateExportSnapshotAsync(
-                    sourceDatasetName,
-                    exportType,
-                    edition,
-                    update,
-                    cancellationToken
-                );
+                if (datasetYamlOverride is null) {
+                    var dataset = await _electronicProductManager.CreateExportSnapshotAsync(sourceDatasetName, exportType, edition, update, cancellationToken);
+                    datasetYaml = SerializeDataset(dataset);
+                }
+                else {
+                    datasetYaml = datasetYamlOverride;
+                }
             }
             finally {
                 _logger.LogInformation(
@@ -81,7 +85,6 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
                     Stopwatch.GetElapsedTime(snapshotStartedAt).TotalMilliseconds
                 );
             }
-            var datasetYaml = SerializeDataset(dataset);
             if (string.IsNullOrWhiteSpace(datasetYaml))
                 throw new ExportSourceUnavailableException(sourceDatasetName);
 
@@ -134,18 +137,6 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
                 catch (ExportValidationException) {
                     throw;
                 }
-                catch (HttpRequestException ex)
-                    when (ex.InnerException is SocketException {
-                        SocketErrorCode: SocketError.TimedOut
-                    }) {
-                    _logger.LogError(
-                        ex,
-                        "SevenCs validation timed out. Skipping validation for now. DatasetName: {DatasetName}. Edition: {Edition}. Update: {Update}.",
-                        targetDatasetName,
-                        edition,
-                        update
-                    );
-                }
                 catch (Exception ex) {
                     throw ExportValidationException.Unavailable(targetDatasetName, ex);
                 }
@@ -162,7 +153,7 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
     }
 
     /// <inheritdoc/>
-    public async Task<ExportOperationResult> ExecuteCancelExportAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null) {
+    public async Task<ExportOperationResult> ExecuteDiscardAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null, bool preservePackageScanBound = false) {
         cancellationToken.ThrowIfCancellationRequested();
         var product = ResolveRequiredExportProduct(datasetName);
         var targetDatasetName = product.DatasetName;
@@ -170,17 +161,31 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
         var track = await _workflowRepository.GetTrackAsync(targetDatasetName, productSpecification, cancellationToken)
             ?? throw new ExportOperationRejectedException($"No {productSpecification} export track exists for '{datasetName}'.");
 
-        if (!track.CandidateEdition.HasValue || !track.CandidateUpdate.HasValue)
-            throw new ExportOperationRejectedException("There is no unverified candidate export to cancel.");
+        EncPackage? active = null;
+        if (packages is not null) {
+            var sourceName = ResolveSourceDatasetName(targetDatasetName, productSpecification);
+            active = (await packages.GetActiveAsync([sourceName], cancellationToken, includeSourceYaml: false)).GetValueOrDefault(sourceName);
+        }
+        if (!track.CandidateEdition.HasValue || !track.CandidateUpdate.HasValue) {
+            if (active is null || active.ErrorMessage is null && track.State is not (ProductState.Error or ProductState.Rejected))
+                throw new ExportOperationRejectedException("There is no unverified candidate export to discard.");
+            beforeMutation?.Invoke();
+            if (track.State is ProductState.Error or ProductState.Rejected)
+                await _workflowRepository.DiscardCandidateAsync(track.Id, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+            await packages!.DiscardAsync(targetDatasetName, productSpecification, cancellationToken, preservePackageScanBound);
+            return new ExportOperationResult(ExportOperationContract.DiscardCompletedCode, "The failed ENC candidate was discarded.");
+        }
         if (track.State is ProductState.InTransit or ProductState.AcceptedForDistribution or ProductState.Published)
-            throw new ExportOperationRejectedException($"A candidate in state {track.State} cannot be cancelled.");
+            throw new ExportOperationRejectedException($"A candidate in state {track.State} cannot be discarded.");
 
         beforeMutation?.Invoke();
         var engine = _exportEngines.GetRequiredEngine(productSpecification);
         await engine.DeleteOutputAsync(new ExportOutputIdentity(targetDatasetName, productSpecification, track.CandidateEdition.Value, track.CandidateUpdate.Value, _electronicProductManager.OutputFolder), cancellationToken);
-        await _workflowRepository.CancelCandidateAsync(track.Id, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
-        _logger.LogInformation("Unverified candidate export cancelled. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.", targetDatasetName, productSpecification);
-        return new ExportOperationResult(ExportOperationContract.CancelExportCompletedCode, ExportOperationContract.CancelExportCompletedMessage);
+        await _workflowRepository.DiscardCandidateAsync(track.Id, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+        if (active is not null)
+            await packages!.DiscardAsync(targetDatasetName, productSpecification, cancellationToken, preservePackageScanBound);
+        _logger.LogInformation("Unverified candidate export discarded. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.", targetDatasetName, productSpecification);
+        return new ExportOperationResult(ExportOperationContract.DiscardCompletedCode, ExportOperationContract.DiscardCompletedMessage);
     }
 
     /// <summary>Serializes a read-only dataset snapshot. Overridden by focused tests.</summary>
@@ -210,7 +215,7 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
 
     private static void EnsureExportCanStart(ProductExportTrackRecord track) {
         if (track.IsManuallyFrozen)
-            throw new ExportOperationRejectedException($"An export could not be created now because the {track.ProductSpecification} product has a manual freeze hold.");
+            throw new ExportOperationRejectedException($"An export could not be created now because the {track.ProductSpecification} product has a manual hold.");
         if (track.State is ProductState.Frozen or ProductState.InTransit or ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or ProductState.AcceptedForDistribution)
             throw new ExportOperationRejectedException($"An export could not be created now. Current {track.ProductSpecification} state: {track.State}.");
     }

@@ -3,6 +3,7 @@ using Hangfire.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Services.Locking;
@@ -72,7 +73,7 @@ namespace TestProductCatalogueAPI
 
             var registration = Assert.Single(schedule.Registrations);
             Assert.Equal("detect-product-changes-job", registration.Id);
-            Assert.Equal("0 23 * * *", registration.Cron);
+            Assert.Equal("* * * * *", registration.Cron);
             var invocation = Job.FromExpression(registration.Invocation);
             Assert.Equal(typeof(DetectProductChangesJob), invocation.Type);
             Assert.Equal("RunAsync", invocation.Method.Name);
@@ -155,7 +156,7 @@ namespace TestProductCatalogueAPI
 
             if (initiallyEnabled) {
                 await Assert.ThrowsAsync<DependencyAccessException>(() => job.RunAsync(CancellationToken.None));
-                Assert.Equal(new[] { "IProductRepository.GetLastSuccessfulRunUtcAsync" }, calls);
+                Assert.Equal(new[] { "IEncPackageDetectionService.RunAsync" }, calls);
                 Assert.Single(schedule.Registrations);
                 Assert.Empty(schedule.Removals);
             }
@@ -197,7 +198,7 @@ namespace TestProductCatalogueAPI
                 Assert.Equal(typeof(DetectProductChangesJob), invocation.Type);
                 Assert.Equal(typeof(DetectProductChangesJob).GetMethod("RunAsync", new[] { typeof(CancellationToken) }), invocation.Method);
                 Assert.Equal(CancellationToken.None, Assert.IsType<CancellationToken>(Assert.Single(invocation.Args)));
-                Assert.Equal("0 23 * * *", call.Arguments[2]);
+                Assert.Equal("* * * * *", call.Arguments[2]);
                 var options = Assert.IsType<RecurringJobOptions>(call.Arguments[3]);
                 Assert.Equal(TimeZoneInfo.Utc, options.TimeZone);
             }
@@ -267,16 +268,9 @@ namespace TestProductCatalogueAPI
             state, logger ?? new RecordingLogger(), schedule.AddOrUpdate, schedule.RemoveIfExists
         );
 
-        /// <summary>Fails on dependency access so disabled jobs cannot silently perform any work.</summary>
-        private static DetectProductChangesJob CreateJob(DetectProductChangesState state, List<string> calls) => new(
-            DependencySpy<IProductRepository>.Create(calls),
-            DependencySpy<IProductWorkflowRepository>.Create(calls),
-            DependencySpy<IProductManager>.Create(calls),
-            DependencySpy<IDatasetLockService>.Create(calls),
-            TimeProvider.System,
-            DependencySpy<ILogger<DetectProductChangesJob>>.Create(calls),
-            state
-        );
+        /// <summary>Fails on package scanning so disabled jobs cannot access the workflow.</summary>
+        private static DetectProductChangesJob CreateJob(DetectProductChangesState state, List<string> calls) =>
+            new(state, DependencySpy<IEncPackageDetectionService>.Create(calls), NullLogger<DetectProductChangesJob>.Instance);
 
         public sealed class DependencyAccessException : Exception { }
 

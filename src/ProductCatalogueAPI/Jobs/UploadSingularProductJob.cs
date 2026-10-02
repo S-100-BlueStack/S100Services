@@ -80,7 +80,7 @@ namespace ProductCatalogueAPI.Jobs
                 var allowsSevenCsValidationOverride = request.AllowSevenCsValidationFailure &&
                     product.State == ProductState.Error &&
                     string.Equals(product.ErrorCode, SendToIcEncContract.SevenCsValidationFailedCode, StringComparison.Ordinal);
-                if (product.State != ProductState.Exported && !allowsSevenCsValidationOverride) {
+                if (product.State is not (ProductState.Exported or ProductState.ReadyForDistribution) && !allowsSevenCsValidationOverride) {
                     throw CreateSafeFailure(
                         context,
                         SendToIcEncContract.InvalidStateCode,

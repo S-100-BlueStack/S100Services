@@ -10,11 +10,11 @@ namespace TestProductCatalogueAPI;
 public sealed class SwaggerAllowedValuesOperationFilterTests
 {
     [Fact]
-    public void ElectronicProductAoiSpecificationUsesCanonicalDropdownValues() {
+    public void ElectronicProductAoiLayerUsesCanonicalDropdownValue() {
         var method = typeof(ElectronicProductsController).GetMethod(nameof(ElectronicProductsController.GetAllElectronicProductsAOI))
             ?? throw new InvalidOperationException("AOI action was not found.");
         var operation = new OpenApiOperation {
-            Parameters = [new OpenApiParameter { Name = "productSpecification", In = ParameterLocation.Query, Schema = new OpenApiSchema() }]
+            Parameters = [new OpenApiParameter { Name = "layer", In = ParameterLocation.Query, Schema = new OpenApiSchema() }]
         };
         var context = new OperationFilterContext(new ApiDescription(), null!, new SchemaRepository(), method);
 
@@ -22,7 +22,7 @@ public sealed class SwaggerAllowedValuesOperationFilterTests
 
         var parameter = Assert.Single(operation.Parameters);
         Assert.Equal("string", parameter.Schema.Type);
-        Assert.Equal(new[] { "S57", "S101" }, parameter.Schema.Enum.Cast<OpenApiString>().Select(value => value.Value));
-        Assert.Equal("S101", Assert.IsType<OpenApiString>(parameter.Schema.Default).Value);
+        Assert.Equal(new[] { "ENC" }, parameter.Schema.Enum.Cast<OpenApiString>().Select(value => value.Value));
+        Assert.Equal("ENC", Assert.IsType<OpenApiString>(parameter.Schema.Default).Value);
     }
 }

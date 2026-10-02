@@ -52,14 +52,12 @@ namespace S100FC.ProductCatalogue
         internal static string CreateFoid(string featureUid) {
             ArgumentException.ThrowIfNullOrWhiteSpace(featureUid);
 
-            if (featureUid.Length < 2 || !featureUid.StartsWith("F", StringComparison.OrdinalIgnoreCase))
+            var parts = featureUid.Split(':');
+            if (parts.Length > 2 || !Guid.TryParse(parts[0], out var guid) ||
+                (parts.Length == 2 && string.IsNullOrWhiteSpace(parts[1])))
                 throw new ArgumentException($"Feature UID '{featureUid}' is not a supported S-101 feature UID.", nameof(featureUid));
 
-            var localId = featureUid[1..];
-
-            return localId.Contains(':')
-                ? $"{AgencyCode}:{localId}"
-                : $"{AgencyCode}:{localId}:1";
+            return $"{AgencyCode}:{guid.ToStableUInt64()}:{(parts.Length == 2 ? parts[1] : "1")}";
         }
 
         private static bool TryResolveGeometry(
@@ -75,7 +73,8 @@ namespace S100FC.ProductCatalogue
                 return false;
             }
 
-            geometry = featureUid;
+            var uid = featureUid.Split(':', 2)[0];
+            geometry = $"P{Guid.Parse(uid).ToStableUInt64()}";
             return true;
         }
 

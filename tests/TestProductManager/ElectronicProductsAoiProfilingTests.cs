@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using ProductCatalogueAPI.Controllers;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
+using ProductCatalogueAPI.Models;
 using S100FC;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
@@ -21,6 +22,31 @@ namespace TestProductCatalogueAPI
 {
     public class ElectronicProductsAoiProfilingTests
     {
+        [Fact]
+        public async Task GlobalAoiShowsS101FailureOnThePackageWhenS57Succeeded() {
+            const string datasetName = "101DK0000001E";
+            var products = new FakeElectronicProductManager(
+                new Dictionary<string, string> { [datasetName] = "{\"rings\":[]}" },
+                new Dictionary<string, ElectronicProduct> { [datasetName] = CreateElectronicProduct(datasetName, 90_000, 3) });
+            var tracks = new InMemoryProductRepository();
+            var s101 = await tracks.GetOrCreateTrackAsync(datasetName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 1, 0);
+            var s57 = await tracks.GetOrCreateTrackAsync($"57{datasetName}", ProductSpecification.S57, ExportEngineKind.IsoIec8211, 1, 0);
+            await tracks.SetStateAsync(s101.Id, ProductState.Error, "system", DateTime.UtcNow, "SEVENCS_VALIDATION_FAILED", "SevenCs found 2 critical findings.");
+            await tracks.SetStateAsync(s57.Id, ProductState.ReadyForDistribution, "system", DateTime.UtcNow);
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
+                new FakeProductManager(products), new RecordingProductRepository(new Dictionary<string, ProductRecord?>()), tracks) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+
+            var result = await controller.GetAllElectronicProductsAOI();
+
+            var response = Assert.Single(Assert.IsType<List<AOIResponse>>(Assert.IsType<OkObjectResult>(result).Value));
+            Assert.Equal(EncPackageStatus.Error, response.Attributes?.Package?.Status);
+            Assert.Equal("SevenCs found 2 critical findings.", response.Attributes?.Package?.ErrorMessage);
+            Assert.Equal(response.Attributes?.Package?.ErrorMessage, response.Attributes?.ErrorMessage);
+        }
+
         [Fact]
         public async Task GlobalAoiActionPreservesResponseContractAndLogsProfilingMetrics() {
             const string firstDatasetName = "101DK0000001E";
@@ -82,6 +108,9 @@ namespace TestProductCatalogueAPI
             Assert.Equal(ProductStatus.Frozen, firstResponse.Attributes?.Status);
             Assert.Equal(22_000, firstResponse.Attributes?.DisplayScale);
             Assert.Equal(4, firstResponse.Attributes?.UsageBand);
+            Assert.Equal(PackageLayer.ENC, firstResponse.Attributes?.Package?.Layer);
+            Assert.Equal($"57{firstDatasetName}", firstResponse.Attributes?.Package?.S57.DatasetName);
+            Assert.Equal(firstDatasetName, firstResponse.Attributes?.Package?.S101.DatasetName);
 
             var secondResponse = Assert.Single(
                 responses.Where(response => response.Attributes?.DatasetName == secondDatasetName)
@@ -143,7 +172,7 @@ namespace TestProductCatalogueAPI
         }
 
         [Fact]
-        public async Task GlobalAoiActionReturnsOnlyTheRequestedProductSpecification() {
+        public async Task GlobalAoiActionRejectsObsoleteProductSpecificationFilter() {
             const string datasetName = "DK3AA01";
             var electronicProductManager = new FakeElectronicProductManager(
                 new Dictionary<string, string> { [datasetName] = "{\"rings\":[]}" },
@@ -164,10 +193,8 @@ namespace TestProductCatalogueAPI
 
             var result = await controller.GetAllElectronicProductsAOI("S57");
 
-            var response = Assert.Single(Assert.IsType<List<AOIResponse>>(Assert.IsType<OkObjectResult>(result).Value));
-            Assert.Equal(datasetName, response.Attributes?.DatasetName);
-            Assert.Equal("IC-ENC rejected the dataset.", response.Attributes?.ErrorMessage);
-            Assert.Equal(ProductSpecification.S57, repository.RequestedProductSpecification);
+            Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal(0, electronicProductManager.BulkAoiCallCount);
         }
 
         [Fact]
@@ -398,6 +425,16 @@ namespace TestProductCatalogueAPI
             public ElectronicProduct? ResolveElectronicProduct(string name, string productSpecification) =>
                 ElectronicProduct(name, productSpecification);
 
+            public IReadOnlyList<ElectronicProduct> GetMappedElectronicProducts(string name, string productSpecification) {
+                if (!products.TryGetValue(name, out var source))
+                    return [];
+                if (productSpecification == "S57" && source.productSpecification?.name == "S-101")
+                    return [CreateElectronicProduct($"57{name}", Convert.ToInt32(source.optimumDisplayScale), Convert.ToInt32(source.specificUsage), "S-57")];
+                if (productSpecification == "S101" && source.productSpecification?.name == "S-57")
+                    return [CreateElectronicProduct($"101{name}", Convert.ToInt32(source.optimumDisplayScale), Convert.ToInt32(source.specificUsage), "S-101")];
+                return [];
+            }
+
             public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(
                 string datasetName,
                 CancellationToken cancellationToken = default
@@ -457,7 +494,7 @@ namespace TestProductCatalogueAPI
             public Task<bool> IsDirtyAsync(string name) => throw new NotSupportedException();
             public Task<string> GetDatasetBoundary(string name) {
                 TargetedBoundaryCallCount++;
-                if (!aois.TryGetValue(name, out var boundary))
+                if (!aois.TryGetValue(name, out var boundary) && (!name.StartsWith("101", StringComparison.Ordinal) || !aois.TryGetValue(name[3..], out boundary)))
                     throw new InvalidOperationException("No dataset rows found");
                 return Task.FromResult(boundary);
             }

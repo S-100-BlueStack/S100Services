@@ -5,6 +5,7 @@ using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Models;
 using ProductCatalogueAPI.Options;
 using ProductCatalogueAPI.Services.Export;
+using ProductCatalogueAPI.Data.Models;
 using System.Text.RegularExpressions;
 
 namespace ProductCatalogueAPI.Controllers
@@ -42,7 +43,7 @@ namespace ProductCatalogueAPI.Controllers
             var values = Enum.GetValues<ResponseTypes.ProductStatus>()
               .Select(e => new {
                   Id = (int)e,
-                  Name = Regex.Replace(e.ToString(), "(?<!^)([A-Z])", " $1")
+                  Name = e == ResponseTypes.ProductStatus.Frozen ? "Hold" : Regex.Replace(e.ToString(), "(?<!^)([A-Z])", " $1")
               });
 
             return Ok(values);
@@ -77,6 +78,10 @@ namespace ProductCatalogueAPI.Controllers
 
             return Ok(values);
         }
+
+        /// <summary>Gets supported AOI package layers for the global map.</summary>
+        [HttpGet("packagelayers")]
+        public IActionResult GetPackageLayers() => Ok(Enum.GetValues<PackageLayer>().Select(layer => new { Id = (int)layer, Name = layer.ToString() }));
 
         /// <summary>Gets the product-specific export types whose encoders are currently implemented.</summary>
         [HttpGet("exporttypes")]

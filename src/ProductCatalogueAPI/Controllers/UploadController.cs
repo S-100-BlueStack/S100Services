@@ -38,13 +38,13 @@ namespace ProductCatalogueAPI.Controllers
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
 
         /// <summary>
-        /// Enqueues a truthful IC-ENC send simulation when the capability is enabled.
+        /// Queues an IC-ENC send simulation without delivering data when simulation mode is enabled.
         /// </summary>
         [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
         [ProducesResponseType(typeof(ExportJobErrorResponse), StatusCodes.Status404NotFound, "application/json")]
         [ProducesResponseType(typeof(ExportJobErrorResponse), StatusCodes.Status409Conflict, "application/json")]
         [ProducesResponseType(typeof(ExportJobErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
-        [HttpPut("{datasetName}", Name = "upload")]
+        [HttpPost("{datasetName}", Name = "upload")]
         public async Task<IActionResult> UploadSingularProduct(
             string datasetName,
             CancellationToken cancellationToken
@@ -97,7 +97,7 @@ namespace ProductCatalogueAPI.Controllers
 
             var allowsSevenCsValidationOverride = product.State == ProductState.Error &&
                 string.Equals(product.ErrorCode, SendToIcEncContract.SevenCsValidationFailedCode, StringComparison.Ordinal);
-            if (product.State != ProductState.Exported && !allowsSevenCsValidationOverride) {
+            if (product.State is not (ProductState.Exported or ProductState.ReadyForDistribution) && !allowsSevenCsValidationOverride) {
                 _logger.LogWarning(
                     "IC-ENC send simulation rejected because Product state is invalid. DatasetName: {DatasetName}. ExpectedState: {ExpectedState}. ActualState: {ActualState}",
                     datasetName,
@@ -156,13 +156,20 @@ namespace ProductCatalogueAPI.Controllers
             }
         }
 
+        /// <summary>Accepts the former PUT send route used by the existing web client.</summary>
+        [ApiExplorerSettings(IgnoreApi = true)]
+        [HttpPut("{datasetName}")]
+        public Task<IActionResult> UploadSingularProductLegacy(string datasetName, CancellationToken cancellationToken) => UploadSingularProduct(datasetName, cancellationToken);
+
         /// <summary>
-        /// Manually freezes a product so it will be excluded in the automatic upload to IC-ENC.
+        /// Places an independent manual hold on this product and its ENC package.
         /// </summary>
-        [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "application/json")]
-        [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError, "application/json")]
-        [HttpPut("{datasetName}/freeze", Name = "freeze")]
-        public async Task<IActionResult> FreezeProduct(
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        [HttpPut("{datasetName}/hold", Name = "hold")]
+        public async Task<IActionResult> HoldProduct(
             string datasetName,
             CancellationToken cancellationToken
         ) {
@@ -188,10 +195,10 @@ namespace ProductCatalogueAPI.Controllers
             var track = await _workflowRepository.GetOrCreateTrackAsync(product.DatasetName, product.ProductSpecification, ExportEngineKind.IsoIec8211, version.Edition.Value, version.Update.Value, cancellationToken);
 
             if (track.IsManuallyFrozen || track.State == ProductState.Frozen)
-                return BadRequest($"Product {datasetName} is already frozen.");
+                return Ok();
 
             if (track.State == ProductState.InTransit)
-                return BadRequest($"Product {datasetName} is currently in transit and cannot be frozen.");
+                return BadRequest($"Product {datasetName} is currently in transit and cannot be placed on hold.");
 
             var changed = await _workflowRepository.SetManualFreezeAsync(
                 track.Id,
@@ -201,18 +208,24 @@ namespace ProductCatalogueAPI.Controllers
             );
 
             if (!changed)
-                return BadRequest($"Product {datasetName} is already frozen.");
+                return Ok();
 
             return Ok();
         }
 
+        /// <summary>Accepts the former freeze route used by the existing web client.</summary>
+        [ApiExplorerSettings(IgnoreApi = true)]
+        [HttpPut("{datasetName}/freeze")]
+        public Task<IActionResult> HoldProductLegacy(string datasetName, CancellationToken cancellationToken) => HoldProduct(datasetName, cancellationToken);
+
         /// <summary>
-        /// Unfreezes a product so it will be included again in the automatic upload to IC-ENC.
+        /// Releases an independent manual hold so future package detection can proceed.
         /// </summary>
-        [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "application/json")]
-        [ProducesResponseType(typeof(string), StatusCodes.Status500InternalServerError, "application/json")]
-        [HttpPut("{datasetName}/unfreeze", Name = "unfreeze")]
-        public async Task<IActionResult> UnfreezeProduct(
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        [HttpDelete("{datasetName}/hold", Name = "release-hold")]
+        public async Task<IActionResult> ReleaseHoldProduct(
             string datasetName,
             CancellationToken cancellationToken
         ) {
@@ -231,10 +244,10 @@ namespace ProductCatalogueAPI.Controllers
             var track = await _workflowRepository.GetTrackAsync(product.DatasetName, product.ProductSpecification, cancellationToken);
 
             if (track == null)
-                return NotFound();
+                return Ok();
 
             if (!track.IsManuallyFrozen)
-                return BadRequest($"Product {datasetName} is not frozen and cannot be unfrozen.");
+                return Ok();
 
             var changed = await _workflowRepository.ClearManualFreezeAsync(
                 track.Id,
@@ -244,10 +257,16 @@ namespace ProductCatalogueAPI.Controllers
             );
 
             if (!changed)
-                return BadRequest($"Product {datasetName} is not frozen and cannot be unfrozen.");
+                return Ok();
 
             return Ok();
         }
+
+        /// <summary>Accepts the former PUT release route during client migration.</summary>
+        [ApiExplorerSettings(IgnoreApi = true)]
+        [HttpPut("{datasetName}/release-hold")]
+        [HttpPut("{datasetName}/unfreeze")]
+        public Task<IActionResult> ReleaseHoldLegacy(string datasetName, CancellationToken cancellationToken) => ReleaseHoldProduct(datasetName, cancellationToken);
 
         private static ObjectResult JobProblem(int statusCode, string code, string message) {
             var result = new ObjectResult(new ExportJobErrorResponse {

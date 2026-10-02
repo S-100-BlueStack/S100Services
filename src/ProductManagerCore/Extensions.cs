@@ -1,4 +1,5 @@
-﻿using System.IO.Compression;
+﻿using ArcGIS.Core.Data;
+using System.IO.Compression;
 using System.Text;
 
 
@@ -49,6 +50,30 @@ namespace S100FC.ProductCatalogue
             }
 
             return files;
+        }
+        public static (S100BlueStack.Settings.SupportFile supportFile, MemoryStream stream)? GetAttachment(this Geodatabase geodatabase, string filename) {
+            var sqlsystanx = geodatabase.GetSQLSyntax();
+
+            var definitions = geodatabase.GetDefinitions<TableDefinition>();
+
+            var _ = definitions.Single(e => sqlsystanx.ParseTableName(e.GetName()).Item3.Equals("attachment"));
+            using var attachment = geodatabase.OpenDataset<Table>(_.GetName());
+
+            filename = filename.Trim().ToUpper();
+            if (string.IsNullOrEmpty(filename)) return default;
+
+            using var cursor = attachment.Search(new QueryFilter {
+                WhereClause = $"UPPER(json) LIKE '%\"{filename}\"%'",
+            }, true);
+
+            if (!cursor.MoveNext()) return default;
+
+            var json = Convert.ToString(cursor.Current["json"]);
+            var blob = cursor.Current["data"] as MemoryStream;
+
+            var instance = AttributeFlattenExtensions.Unflatten<S100BlueStack.Settings.SupportFile>(json, typeof(S100BlueStack.Settings.SupportFile));
+
+            return (instance!, blob!);
         }
 
     }

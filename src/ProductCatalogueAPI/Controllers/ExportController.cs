@@ -8,7 +8,6 @@ using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Services.Operations;
 using S100FC.ProductCatalogue;
 using System.Diagnostics;
-using static ProductCatalogueAPI.Models.ResponseTypes;
 
 namespace ProductCatalogueAPI.Controllers;
 
@@ -25,30 +24,25 @@ public sealed class ExportController(ILogger<ExportController> logger, IProductM
     private readonly IExportJobService _exportJobService = exportJobService;
     private readonly TimeProvider _timeProvider = timeProvider;
 
-    /// <summary>Queues a new-edition candidate build.</summary>
+    /// <summary>Queues a manual new-edition build for Swagger testing and operator repair.</summary>
     [HttpPost("{name}/newedition", Name = "NewEdition")]
     [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
     public Task<IActionResult> NewEdition(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.ExportEdition, cancellationToken);
 
-    /// <summary>Queues an update candidate build.</summary>
+    /// <summary>Queues a manual update build for Swagger testing and operator repair.</summary>
     [HttpPost("{name}/newupdate", Name = "NewUpdate")]
     [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
     public Task<IActionResult> NewUpdate(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.ExportUpdate, cancellationToken);
 
-    /// <summary>Preserves the legacy bulk route while preventing uncontrolled parallel publication behavior.</summary>
-    [HttpPost("alldatasets", Name = "NewDatasets")]
-    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status501NotImplemented, "application/json")]
-    public IActionResult CreateAllDatasets() => StatusCode(StatusCodes.Status501NotImplemented, new ApiResponse { Success = false, Message = "Bulk candidate creation is not implemented for independent export tracks." });
-
-    /// <summary>Queues cancellation of one unverified product-track export.</summary>
-    [HttpPost("{name}/cancel-export", Name = "CancelExport")]
+    /// <summary>Queues a candidate discard; discarding both products removes the package until new edits are detected.</summary>
+    [HttpPost("{name}/discard", Name = "Discard")]
     [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
-    public Task<IActionResult> CancelExport(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.CancelExport, cancellationToken);
+    public Task<IActionResult> Discard(string name, CancellationToken cancellationToken) => QueueJobAsync(name, ExportOperationType.Discard, cancellationToken);
 
-    /// <summary>Preserves the legacy analysis route while validation history is served by the electronic-products API.</summary>
-    [HttpPost("{name}/analysis", Name = "GetAnalysis")]
-    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status501NotImplemented, "application/json")]
-    public IActionResult GetExportAnalysis(string name) => StatusCode(StatusCodes.Status501NotImplemented, new ApiResponse { Success = false, Message = "Use GET /electronicproducts/{name}/artifacts/history for validation artifact history." });
+    /// <summary>Accepts the former UI discard route while clients move to /discard.</summary>
+    [ApiExplorerSettings(IgnoreApi = true)]
+    [HttpPost("{name}/cancel-export")]
+    public Task<IActionResult> DiscardLegacy(string name, CancellationToken cancellationToken) => Discard(name, cancellationToken);
 
     private async Task<IActionResult> QueueJobAsync(string name, ExportOperationType operationType, CancellationToken cancellationToken) {
         var correlationId = Activity.Current?.TraceId.ToString();
