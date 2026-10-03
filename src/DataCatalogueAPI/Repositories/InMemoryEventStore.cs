@@ -1,4 +1,6 @@
 using Eventuous;
+using Eventuous.Subscriptions.Checkpoints;
+using Serilog.Core;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 
@@ -139,3 +141,25 @@ class InMemoryStream(StreamName name) {
 }
 
 public class WrongVersion(ExpectedStreamVersion expected, int actual) : Exception($"Wrong stream version. Expected {expected.Value}, actual {actual}");
+
+public class NoOpCheckpointStore(ulong? start = null) : ICheckpointStore
+{
+    Checkpoint _start = new("", start);
+
+    public ValueTask<Checkpoint> GetLastCheckpoint(string checkpointId, CancellationToken cancellationToken) {
+        var checkpoint = _start with { Id = checkpointId };
+        //Logger.Current.CheckpointLoaded(this, checkpoint);
+
+        return new(checkpoint);
+    }
+
+    public ValueTask<Checkpoint> StoreCheckpoint(Checkpoint checkpoint, bool force, CancellationToken cancellationToken) {
+        _start = checkpoint;
+        CheckpointStored?.Invoke(this, checkpoint);
+        //Logger.Current.CheckpointStored(this, checkpoint, force);
+
+        return new(checkpoint);
+    }
+
+    public event EventHandler<Checkpoint>? CheckpointStored;
+}

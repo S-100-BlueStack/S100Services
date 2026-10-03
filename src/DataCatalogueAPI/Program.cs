@@ -37,7 +37,12 @@ public static class Program
                 System.IO.File.Delete(System.IO.Path.GetFullPath(f));
             }
 
+            builder.Services.AddLuggagefiguration(builder.Configuration);
+
             builder.Services.AddEventStore<InMemoryEventStore>();
+
+            builder.Services.AddCommandService<CheckInCounterCommandService, CheckInCounterState>();
+            builder.Services.AddCommandService<LuggageCommandService, LuggageState>();
             builder.Services.AddCommandService<PipelineCommandService, PipelineState>();
 
             builder.Services.AddApplicationServices();
