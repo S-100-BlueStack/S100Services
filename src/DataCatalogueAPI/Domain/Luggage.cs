@@ -1,11 +1,11 @@
 ﻿using Eventuous;
-using static DataCatalague.Api.Domain.PipelineEvents;
+using static DataCatalague.Api.Domain.LuggageEvents;
 
 namespace DataCatalague.Api.Domain
 {
-    public record PipelineId(string Value) : Id(Value);
+    public record LuggageId(string Value) : Id(Value);
 
-    public record PipelineState : State<PipelineState>
+    public record LuggageState : State<LuggageState>
     {
         public Guid Uuid { get; set; }
 
@@ -15,11 +15,11 @@ namespace DataCatalague.Api.Domain
 
         public DateTimeOffset LastUpdatedUtc { get; set; }
 
-        public PipelineState() {
-            On<V1.PipelineCreated>(Created);
+        public LuggageState() {
+            On<V1.LuggageCreated>(Created);
         }
 
-        static PipelineState Created(PipelineState state, V1.PipelineCreated e)
+        static LuggageState Created(LuggageState state, V1.LuggageCreated e)
             => state with {
                 Uuid = e.Uuid,
                 DisplayName = e.DisplayName,
@@ -28,7 +28,7 @@ namespace DataCatalague.Api.Domain
             };
     }
 
-    public class Pipeline : Aggregate<PipelineState>
+    public class Luggage : Aggregate<LuggageState>
     {
         public async Task Create(
                     Guid Uuid,
@@ -36,34 +36,31 @@ namespace DataCatalague.Api.Domain
                     string Description
             ) {
             EnsureDoesntExist();
-            Apply(new V1.PipelineCreated(Uuid, DisplayName, Description, DateTime.UtcNow));
+            Apply(new V1.LuggageCreated(Uuid, DisplayName, Description, DateTime.UtcNow));
         }
     }
 
-    public static class PipelineCommands
+    public static class LuggageCommands
     {
         public record Create(Guid Uuid, string DisplayName, string? Description = default);
     }
 
-    public static class PipelineEvents
+    public static class LuggageEvents
     {
         public static class V1
         {
-            [EventType("V1.PipelineCreated")]
-            public record PipelineCreated(
+            [EventType("V1.LuggageCreated")]
+            public record LuggageCreated(
                     Guid Uuid,
                     string DisplayName,
                     string Description,
                     DateTimeOffset CreatedUTC
                 );
-
-            [EventType("V1.WorkspaceAdded")]
-            public record WorkspaceAdded(
-                );
         }
     }
 
-    public static class PipelineExtension {
-        public static PipelineId ToPipelineId(this Guid uuid) => new PipelineId(uuid.ToString("B"));
+    public static class LuggageExtension
+    {
+        public static LuggageId ToLuggageId(this Guid uuid) => new LuggageId(uuid.ToString("B"));
     }
 }
