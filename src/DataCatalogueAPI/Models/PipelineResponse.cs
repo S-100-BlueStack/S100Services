@@ -8,6 +8,6 @@
 
         public required string? Description { get; init; }
 
-        public required DateTimeOffset LastUpdatedUtc { get; init;  }
+        public required DateTimeOffset LastUpdatedUtc { get; init; }
     }
 }

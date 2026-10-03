@@ -16,7 +16,7 @@ namespace DataCatalague.Api.Domain
         public DateTimeOffset LastUpdatedUtc { get; set; }
 
         public PipelineState() {
-            On<V1.PipelineCreated>(Created);
+            this.On<V1.PipelineCreated>(Created);
         }
 
         static PipelineState Created(PipelineState state, V1.PipelineCreated e)
@@ -35,8 +35,8 @@ namespace DataCatalague.Api.Domain
                     string DisplayName,
                     string? Description
             ) {
-            EnsureDoesntExist();
-            Apply(new V1.PipelineCreated(Uuid, DisplayName, Description, DateTime.UtcNow));
+            this.EnsureDoesntExist();
+            this.Apply(new V1.PipelineCreated(Uuid, DisplayName, Description, DateTime.UtcNow));
         }
     }
 
@@ -63,7 +63,8 @@ namespace DataCatalague.Api.Domain
         }
     }
 
-    public static class PipelineExtension {
+    public static class PipelineExtension
+    {
         public static PipelineId ToPipelineId(this Guid uuid) => new PipelineId(uuid.ToString("B"));
     }
 }

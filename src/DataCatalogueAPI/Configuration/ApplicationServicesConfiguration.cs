@@ -1,5 +1,4 @@
 using DataCatalague.Api.Repositories;
-using DataCatalague.Api.Services;
 using Eventuous;
 using System.Text.Json.Serialization;
 
@@ -18,14 +17,12 @@ public static class ApplicationServicesConfiguration
     /// <exception cref="ArgumentNullException">
     /// Thrown when <paramref name="services"/> is <see langword="null"/>.
     /// </exception>
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
-    {
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services) {
         ArgumentNullException.ThrowIfNull(services);
 
         services
             .AddControllers()
-            .AddJsonOptions(options =>
-            {
+            .AddJsonOptions(options => {
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             });
 

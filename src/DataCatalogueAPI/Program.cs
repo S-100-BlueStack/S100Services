@@ -18,16 +18,14 @@ public static class Program
     /// </summary>
     /// <param name="args">The command line arguments passed to the process.</param>
     /// <returns>Zero when the host shut down normally, otherwise one.</returns>
-    public static async Task<int> Main(string[] args)
-    {
+    public static async Task<int> Main(string[] args) {
         // A bootstrap logger captures failures that happen before the host (and the
         // fully configured Serilog pipeline) is available.
         Log.Logger = new LoggerConfiguration()
             .WriteTo.Console()
             .CreateBootstrapLogger();
 
-        try
-        {
+        try {
             var builder = WebApplication.CreateBuilder(args);
 
             builder.AddSerilogLogging();
@@ -57,13 +55,11 @@ public static class Program
             await app.RunAsync().ConfigureAwait(false);
             return 0;
         }
-        catch (Exception exception) when (exception is not HostAbortedException)
-        {
+        catch (Exception exception) when (exception is not HostAbortedException) {
             Log.Fatal(exception, "The application terminated unexpectedly.");
             return 1;
         }
-        finally
-        {
+        finally {
             await Log.CloseAndFlushAsync().ConfigureAwait(false);
         }
     }

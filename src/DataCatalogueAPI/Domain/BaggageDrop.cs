@@ -10,16 +10,16 @@ namespace DataCatalague.Api.Domain
                     string DisplayName,
                     string? Description
             ) {
-            EnsureDoesntExist();
-            Apply(new V1.CheckInCounterCreated(Uuid, DisplayName, Description, DateTime.UtcNow));
+            this.EnsureDoesntExist();
+            this.Apply(new V1.CheckInCounterCreated(Uuid, DisplayName, Description, DateTime.UtcNow));
         }
     }
 
     public class Luggage : Aggregate<LuggageState>
     {
         public async Task Upload(Guid Uuid, string FileName, long FileLength) {
-            EnsureDoesntExist();
-            Apply(new V1.LuggageDroppedOff(Uuid, FileName, FileLength, DateTime.UtcNow));
+            this.EnsureDoesntExist();
+            this.Apply(new V1.LuggageDroppedOff(Uuid, FileName, FileLength, DateTime.UtcNow));
         }
     }
 
@@ -37,7 +37,7 @@ namespace DataCatalague.Api.Domain
         public DateTimeOffset LastUpdatedUtc { get; set; }
 
         public BaggageDropState() {
-            On<V1.CheckInCounterCreated>(Created);
+            this.On<V1.CheckInCounterCreated>(Created);
         }
 
         static BaggageDropState Created(BaggageDropState state, V1.CheckInCounterCreated e)
@@ -62,7 +62,7 @@ namespace DataCatalague.Api.Domain
         public DateTimeOffset LastUpdatedUtc { get; set; }
 
         public LuggageState() {
-            On<V1.LuggageDroppedOff>(DroppedOff);
+            this.On<V1.LuggageDroppedOff>(DroppedOff);
         }
 
         static LuggageState DroppedOff(LuggageState state, V1.LuggageDroppedOff e)
@@ -111,7 +111,7 @@ namespace DataCatalague.Api.Domain.Events
             [EventType("V1.LuggageDroppedOff")]
             public record LuggageDroppedOff(
                     Guid Uuid,
-                    string FileName, 
+                    string FileName,
                     long FileLength,
                     DateTimeOffset CreatedUTC
                 );

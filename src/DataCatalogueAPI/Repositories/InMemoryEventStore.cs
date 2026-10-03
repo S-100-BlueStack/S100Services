@@ -1,6 +1,5 @@
 using Eventuous;
 using Eventuous.Subscriptions.Checkpoints;
-using Serilog.Core;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 
@@ -9,40 +8,41 @@ namespace DataCatalague.Api.Repositories;
 /// <summary>
 /// In-memory event store implementation for testing purposes
 /// </summary>
-public class InMemoryEventStore : IEventStore {
+public class InMemoryEventStore : IEventStore
+{
     readonly ConcurrentDictionary<StreamName, InMemoryStream> _storage = new();
-    readonly List<StreamEvent>                                _global  = [];
+    readonly List<StreamEvent> _global = [];
 
     /// <inheritdoc />
     public Task<bool> StreamExists(StreamName streamName, CancellationToken cancellationToken)
-        => Task.FromResult(_storage.ContainsKey(streamName));
+        => Task.FromResult(this._storage.ContainsKey(streamName));
 
     /// <inheritdoc />
     public Task<AppendEventsResult> AppendEvents(
-            StreamName                          stream,
-            ExpectedStreamVersion               expectedVersion,
+            StreamName stream,
+            ExpectedStreamVersion expectedVersion,
             IReadOnlyCollection<NewStreamEvent> events,
-            CancellationToken                   cancellationToken
+            CancellationToken cancellationToken
         ) {
-        var existing = _storage.GetOrAdd(stream, s => new(s));
+        var existing = this._storage.GetOrAdd(stream, s => new(s));
         existing.AppendEvents(expectedVersion, events);
         var now = DateTime.UtcNow;
-        _global.AddRange(events.Select((x, i) => new StreamEvent(x.Id, x.Payload, x.Metadata, "application/json", _global.Count + i, now)));
+        this._global.AddRange(events.Select((x, i) => new StreamEvent(x.Id, x.Payload, x.Metadata, "application/json", this._global.Count + i, now)));
 
-        return Task.FromResult(new AppendEventsResult((ulong)(_global.Count - 1), existing.Version));
+        return Task.FromResult(new AppendEventsResult((ulong)(this._global.Count - 1), existing.Version));
     }
 
     /// <inheritdoc />
     public Task<AppendEventsResult[]> AppendEvents(IReadOnlyCollection<NewStreamAppend> appends, CancellationToken cancellationToken) {
         var results = new AppendEventsResult[appends.Count];
-        var i       = 0;
+        var i = 0;
 
         foreach (var append in appends) {
-            var now      = DateTime.UtcNow;
-            var existing = _storage.GetOrAdd(append.StreamName, s => new(s));
+            var now = DateTime.UtcNow;
+            var existing = this._storage.GetOrAdd(append.StreamName, s => new(s));
             existing.AppendEvents(append.ExpectedVersion, append.Events);
-            _global.AddRange(append.Events.Select((x, j) => new StreamEvent(x.Id, x.Payload, x.Metadata, "application/json", _global.Count + j, now)));
-            results[i++] = new((ulong)(_global.Count - 1), existing.Version);
+            this._global.AddRange(append.Events.Select((x, j) => new StreamEvent(x.Id, x.Payload, x.Metadata, "application/json", this._global.Count + j, now)));
+            results[i++] = new((ulong)(this._global.Count - 1), existing.Version);
         }
 
         return Task.FromResult(results);
@@ -52,7 +52,7 @@ public class InMemoryEventStore : IEventStore {
 #pragma warning disable CS1998 // Async method lacks 'await' operators
     // ReSharper disable once AsyncMethodWithoutAwait
     public async IAsyncEnumerable<StreamEvent> ReadEvents(StreamName stream, StreamReadPosition start, int count, [EnumeratorCancellation] CancellationToken cancellationToken) {
-        foreach (var evt in FindStream(stream, true).GetEvents(start, count)) {
+        foreach (var evt in this.FindStream(stream, true).GetEvents(start, count)) {
             yield return evt;
         }
     }
@@ -60,7 +60,7 @@ public class InMemoryEventStore : IEventStore {
     /// <inheritdoc />
     // ReSharper disable once AsyncMethodWithoutAwait
     public async IAsyncEnumerable<StreamEvent> ReadEventsBackwards(StreamName stream, StreamReadPosition start, int count, [EnumeratorCancellation] CancellationToken cancellationToken) {
-        foreach (var evt in FindStream(stream, true).GetEventsBackwards(start, count)) {
+        foreach (var evt in this.FindStream(stream, true).GetEventsBackwards(start, count)) {
             yield return evt;
         }
     }
@@ -68,28 +68,28 @@ public class InMemoryEventStore : IEventStore {
 
     /// <inheritdoc />
     public Task TruncateStream(
-            StreamName             stream,
+            StreamName stream,
             StreamTruncatePosition truncatePosition,
-            ExpectedStreamVersion  expectedVersion,
-            CancellationToken      cancellationToken
+            ExpectedStreamVersion expectedVersion,
+            CancellationToken cancellationToken
         ) {
-        FindStream(stream, expectedVersion.ExistingStream).Truncate(expectedVersion, truncatePosition);
+        this.FindStream(stream, expectedVersion.ExistingStream).Truncate(expectedVersion, truncatePosition);
 
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
     public Task DeleteStream(StreamName stream, ExpectedStreamVersion expectedVersion, CancellationToken cancellationToken) {
-        var existing = FindStream(stream, expectedVersion.ExistingStream);
+        var existing = this.FindStream(stream, expectedVersion.ExistingStream);
         existing.CheckVersion(expectedVersion);
-        _storage.Remove(stream, out _);
+        this._storage.Remove(stream, out _);
 
         return Task.CompletedTask;
     }
 
     // ReSharper disable once ReturnTypeCanBeEnumerable.Local
     InMemoryStream FindStream(StreamName stream, bool failIfNotFound)
-        => !_storage.TryGetValue(stream, out var existing)
+        => !this._storage.TryGetValue(stream, out var existing)
             ? failIfNotFound
                 ? throw new StreamNotFound(stream)
                 : new(stream)
@@ -98,28 +98,29 @@ public class InMemoryEventStore : IEventStore {
 
 record StoredEvent(StreamEvent Event, int Position);
 
-class InMemoryStream(StreamName name) {
-    public int    Version { get; private set; } = -1;
-    public string Name    { get; }              = name;
+class InMemoryStream(StreamName name)
+{
+    public int Version { get; private set; } = -1;
+    public string Name { get; } = name;
 
     readonly List<StoredEvent> _events = [];
 
     public void CheckVersion(ExpectedStreamVersion expectedVersion) {
-        if (expectedVersion != ExpectedStreamVersion.Any && expectedVersion.Value != Version) throw new WrongVersion(expectedVersion, Version);
+        if (expectedVersion != ExpectedStreamVersion.Any && expectedVersion.Value != this.Version) throw new WrongVersion(expectedVersion, this.Version);
     }
 
     public void AppendEvents(ExpectedStreamVersion expectedVersion, IReadOnlyCollection<NewStreamEvent> events) {
-        CheckVersion(expectedVersion);
+        this.CheckVersion(expectedVersion);
 
         foreach (var newEvent in events) {
-            var version     = ++Version;
+            var version = ++this.Version;
             var streamEvent = new StreamEvent(newEvent.Id, newEvent.Payload, newEvent.Metadata, "application/json", version, DateTime.UtcNow);
-            _events.Add(new(streamEvent, version));
+            this._events.Add(new(streamEvent, version));
         }
     }
 
     public IEnumerable<StreamEvent> GetEvents(StreamReadPosition from, int count) {
-        var selected = _events.SkipWhile(x => x.Position < from.Value);
+        var selected = this._events.SkipWhile(x => x.Position < from.Value);
 
         if (count > 0) selected = selected.Take(count);
 
@@ -130,13 +131,13 @@ class InMemoryStream(StreamName name) {
         var position = (int)from.Value;
 
         while (count-- > 0) {
-            yield return _events[position--].Event;
+            yield return this._events[position--].Event;
         }
     }
 
     public void Truncate(ExpectedStreamVersion version, StreamTruncatePosition position) {
-        CheckVersion(version);
-        _events.RemoveAll(x => x.Position <= position.Value);
+        this.CheckVersion(version);
+        this._events.RemoveAll(x => x.Position <= position.Value);
     }
 }
 
@@ -147,14 +148,14 @@ public class NoOpCheckpointStore(ulong? start = null) : ICheckpointStore
     Checkpoint _start = new("", start);
 
     public ValueTask<Checkpoint> GetLastCheckpoint(string checkpointId, CancellationToken cancellationToken) {
-        var checkpoint = _start with { Id = checkpointId };
+        var checkpoint = this._start with { Id = checkpointId };
         //Logger.Current.CheckpointLoaded(this, checkpoint);
 
         return new(checkpoint);
     }
 
     public ValueTask<Checkpoint> StoreCheckpoint(Checkpoint checkpoint, bool force, CancellationToken cancellationToken) {
-        _start = checkpoint;
+        this._start = checkpoint;
         CheckpointStored?.Invoke(this, checkpoint);
         //Logger.Current.CheckpointStored(this, checkpoint, force);
 

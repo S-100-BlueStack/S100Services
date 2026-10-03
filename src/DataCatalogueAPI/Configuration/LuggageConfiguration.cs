@@ -10,10 +10,11 @@ namespace DataCatalague.Api.Configuration
 
         public long MaxFileSize { get; init; }
 
-        public long MaxExtractedSize { get; init; }        
+        public long MaxExtractedSize { get; init; }
     }
 
-    public static class LuggageConfiguration {
+    public static class LuggageConfiguration
+    {
         public static IServiceCollection AddLuggagefiguration(
                 this IServiceCollection services,
                 IConfiguration configuration) {

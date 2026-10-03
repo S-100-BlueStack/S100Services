@@ -6,7 +6,7 @@ namespace DataCatalague.Api.Services
     public class PipelineCommandService : CommandService<Pipeline, PipelineState, PipelineId>
     {
         public PipelineCommandService(IEventStore store) : base(store) {
-            On<PipelineCommands.Create>()
+            this.On<PipelineCommands.Create>()
                 .InState(ExpectedState.New)
                 .GetId(cmd => cmd.Uuid.ToPipelineId())
                 .ActAsync(

@@ -7,7 +7,7 @@ namespace DataCatalague.Api.Services
     public class BaggageDropCommandService : CommandService<BaggageDrop, BaggageDropState, BaggageDropId>
     {
         public BaggageDropCommandService(IEventStore store) : base(store) {
-            On<BaggageDropCommands.CreateCheckInCounter>()
+            this.On<BaggageDropCommands.CreateCheckInCounter>()
                 .InState(ExpectedState.New)
                 .GetId(cmd => cmd.Uuid.ToBaggageDropId())
                 .ActAsync(
@@ -19,11 +19,11 @@ namespace DataCatalague.Api.Services
     public class LuggageCommandService : CommandService<Luggage, LuggageState, LuggageId>
     {
         public LuggageCommandService(IEventStore store) : base(store) {
-            On<BaggageDropCommands.DropOffLuggage>()
+            this.On<BaggageDropCommands.DropOffLuggage>()
                 .InState(ExpectedState.New)
                 .GetId(cmd => cmd.Uuid.ToLuggageId())
                 .ActAsync(
-                    (luggage, cmd, _) => luggage.Upload(cmd.Uuid, cmd.FileName,cmd.FileLength)
+                    (luggage, cmd, _) => luggage.Upload(cmd.Uuid, cmd.FileName, cmd.FileLength)
                 );
         }
     }

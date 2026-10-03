@@ -16,8 +16,7 @@ public static class SerilogConfiguration
     /// <exception cref="ArgumentNullException">
     /// Thrown when <paramref name="builder"/> is <see langword="null"/>.
     /// </exception>
-    public static WebApplicationBuilder AddSerilogLogging(this WebApplicationBuilder builder)
-    {
+    public static WebApplicationBuilder AddSerilogLogging(this WebApplicationBuilder builder) {
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Services.AddSerilog((services, loggerConfiguration) => loggerConfiguration

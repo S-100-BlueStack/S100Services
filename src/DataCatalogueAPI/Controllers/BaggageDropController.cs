@@ -3,9 +3,7 @@ using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Domain.Commands;
 using DataCatalague.Api.Models.V1;
-using DataCatalague.Api.Services;
 using Eventuous;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
@@ -16,10 +14,10 @@ namespace DataCatalague.Api.Controllers
     [Route("api/v{version:apiVersion}/baggagedrop")]
     [Produces("application/json")]
     public sealed class BaggageDropController(
-        IEventStore eventstore, 
-        ICommandService<BaggageDropState> checkInCounterService, 
+        IEventStore eventstore,
+        ICommandService<BaggageDropState> checkInCounterService,
         ICommandService<LuggageState> luggageService,
-        IOptions<LuggageOptions> options, 
+        IOptions<LuggageOptions> options,
         ILogger<BaggageDropController> logger) : ControllerBase
     {
         private const int DefaultPageSize = 20;
@@ -65,7 +63,7 @@ namespace DataCatalague.Api.Controllers
                 throw new ArgumentNullException(nameof(request.DisplayName));
             }
 
-            var cmd = await _serviceCheckInCounter.Handle(new BaggageDropCommands.CreateCheckInCounter(Guid.NewGuid(), displayName, description), cancellationToken);
+            var cmd = await this._serviceCheckInCounter.Handle(new BaggageDropCommands.CreateCheckInCounter(Guid.NewGuid(), displayName, description), cancellationToken);
 
             if (!cmd.Success)
                 return this.BadRequest();
@@ -96,7 +94,7 @@ namespace DataCatalague.Api.Controllers
             }
 
             if (!string.Equals(Path.GetExtension(request.File.FileName), ".zip", StringComparison.OrdinalIgnoreCase)) {
-                return Problem(
+                return this.Problem(
                     title: "Invalid luggage package",
                     detail: "The uploaded file must be a ZIP archive.",
                     statusCode: StatusCodes.Status400BadRequest);
@@ -104,7 +102,7 @@ namespace DataCatalague.Api.Controllers
 
             await using Stream stream = request.File.OpenReadStream();
 
-            var cmd = await _serviceLuggage.Handle(new BaggageDropCommands.DropOffLuggage(uuid, request.File.FileName, request.File.Length), cancellationToken);
+            var cmd = await this._serviceLuggage.Handle(new BaggageDropCommands.DropOffLuggage(uuid, request.File.FileName, request.File.Length), cancellationToken);
 
             if (!cmd.Success)
                 return this.BadRequest();

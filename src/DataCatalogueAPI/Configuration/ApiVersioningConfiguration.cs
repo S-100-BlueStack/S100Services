@@ -26,13 +26,11 @@ public static class ApiVersioningConfiguration
     /// <exception cref="ArgumentNullException">
     /// Thrown when <paramref name="services"/> is <see langword="null"/>.
     /// </exception>
-    public static IServiceCollection AddApiVersioningSupport(this IServiceCollection services)
-    {
+    public static IServiceCollection AddApiVersioningSupport(this IServiceCollection services) {
         ArgumentNullException.ThrowIfNull(services);
 
         services
-            .AddApiVersioning(options =>
-            {
+            .AddApiVersioning(options => {
                 options.DefaultApiVersion = ApiVersions.V2;
 
                 // Require clients to be explicit about the version they depend on.
@@ -51,8 +49,7 @@ public static class ApiVersioningConfiguration
                     new QueryStringApiVersionReader(VersionQueryParameterName));
             })
             .AddMvc()
-            .AddApiExplorer(options =>
-            {
+            .AddApiExplorer(options => {
                 // Produces group names such as "v1" and "v2", which line up with the
                 // default /openapi/{documentName}.json route of Microsoft.AspNetCore.OpenApi.
                 options.GroupNameFormat = "'v'VVV";

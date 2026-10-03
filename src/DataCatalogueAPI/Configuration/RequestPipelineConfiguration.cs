@@ -1,4 +1,3 @@
-using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
 using Scalar.AspNetCore;
 using Serilog;
@@ -23,16 +22,13 @@ public static class RequestPipelineConfiguration
     /// <exception cref="ArgumentNullException">
     /// Thrown when <paramref name="app"/> is <see langword="null"/>.
     /// </exception>
-    public static WebApplication ConfigureRequestPipeline(this WebApplication app)
-    {
+    public static WebApplication ConfigureRequestPipeline(this WebApplication app) {
         ArgumentNullException.ThrowIfNull(app);
 
-        if (app.Environment.IsDevelopment())
-        {
+        if (app.Environment.IsDevelopment()) {
             app.UseDeveloperExceptionPage();
         }
-        else
-        {
+        else {
             // Converts unhandled exceptions into ProblemDetails responses.
             app.UseExceptionHandler();
             app.UseHsts();
@@ -40,13 +36,11 @@ public static class RequestPipelineConfiguration
 
         app.UseStatusCodePages();
 
-        app.UseSerilogRequestLogging(options =>
-        {
+        app.UseSerilogRequestLogging(options => {
             options.MessageTemplate =
                 "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
 
-            options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
-            {
+            options.EnrichDiagnosticContext = (diagnosticContext, httpContext) => {
                 diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
                 diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
                 diagnosticContext.Set("ClientIp", httpContext.Connection.RemoteIpAddress?.ToString());
@@ -55,8 +49,7 @@ public static class RequestPipelineConfiguration
                 // the extension method httpContext.GetRequestedApiVersion().
                 var apiVersion = httpContext.RequestedApiVersion;
 
-                if (apiVersion is not null)
-                {
+                if (apiVersion is not null) {
                     diagnosticContext.Set("ApiVersion", apiVersion.ToString());
                 }
             };
@@ -71,16 +64,14 @@ public static class RequestPipelineConfiguration
         app.MapControllers();
         app.MapHealthChecks("/health");
 
-        if (app.Configuration.GetValue<bool>(EnableUiConfigurationKey))
-        {
+        if (app.Configuration.GetValue<bool>(EnableUiConfigurationKey)) {
             app.UseApiDocumentationUi();
         }
 
         return app;
     }
 
-    private static void UseApiDocumentationUi(this WebApplication app)
-    {
+    private static void UseApiDocumentationUi(this WebApplication app) {
         var versionProvider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
 
         // Newest version first, so the UI opens on the version most clients should use.
@@ -90,14 +81,12 @@ public static class RequestPipelineConfiguration
 
         // Swagger UI at /swagger. Only the UI package is referenced; document generation
         // is handled by Microsoft.AspNetCore.OpenApi.
-        app.UseSwaggerUI(options =>
-        {
+        app.UseSwaggerUI(options => {
             options.DocumentTitle = "OpenApiDataCatalogue API";
             options.RoutePrefix = "swagger";
             options.DisplayRequestDuration();
 
-            foreach (var description in descriptions)
-            {
+            foreach (var description in descriptions) {
                 options.SwaggerEndpoint(
                     $"/openapi/{description.GroupName}.json",
                     BuildDisplayName(description));
@@ -105,13 +94,11 @@ public static class RequestPipelineConfiguration
         });
 
         // Scalar at /scalar, with a per-version document picker.
-        app.MapScalarApiReference(options =>
-        {
+        app.MapScalarApiReference(options => {
             options.WithTitle("OpenApiDataCatalogue API");
             options.WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
 
-            for (var index = 0; index < descriptions.Count; index++)
-            {
+            for (var index = 0; index < descriptions.Count; index++) {
                 var description = descriptions[index];
 
                 options.AddDocument(
@@ -122,8 +109,7 @@ public static class RequestPipelineConfiguration
         });
     }
 
-    private static string BuildDisplayName(ApiVersionDescription description)
-    {
+    private static string BuildDisplayName(ApiVersionDescription description) {
         var name = description.GroupName.ToUpperInvariant();
 
         return description.IsDeprecated ? $"{name} (deprecated)" : name;

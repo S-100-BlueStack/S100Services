@@ -17,17 +17,14 @@ public static class OpenApiConfiguration
     /// <exception cref="ArgumentNullException">
     /// Thrown when <paramref name="services"/> is <see langword="null"/>.
     /// </exception>
-    public static IServiceCollection AddVersionedOpenApiDocuments(this IServiceCollection services)
-    {
+    public static IServiceCollection AddVersionedOpenApiDocuments(this IServiceCollection services) {
         ArgumentNullException.ThrowIfNull(services);
 
-        foreach (var documentName in ApiVersions.DocumentNames)
-        {
+        foreach (var documentName in ApiVersions.DocumentNames) {
             // Captured per iteration so each options delegate closes over its own name.
             var name = documentName;
 
-            services.AddOpenApi(name, options =>
-            {
+            services.AddOpenApi(name, options => {
                 options.ShouldInclude = description =>
                     string.Equals(description.GroupName, name, StringComparison.OrdinalIgnoreCase);
 

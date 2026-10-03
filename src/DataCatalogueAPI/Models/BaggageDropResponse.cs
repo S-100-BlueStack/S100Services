@@ -1,6 +1,7 @@
 ﻿namespace DataCatalague.Api.Models.V1
 {
-    public class CheckInCounterResponse {
+    public class CheckInCounterResponse
+    {
 
     }
 

@@ -47,7 +47,7 @@ namespace DataCatalague.Api.Controllers.V1
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
             public async Task<ActionResult<PipelineResponse>> GetPipeline(Guid uuid, CancellationToken cancellationToken) {
                 try {
-                    var pipeline = await this._eventStore.LoadState<PipelineState, PipelineId>(_streamNameMap, uuid.ToPipelineId(), cancellationToken: cancellationToken);
+                    var pipeline = await this._eventStore.LoadState<PipelineState, PipelineId>(this._streamNameMap, uuid.ToPipelineId(), cancellationToken: cancellationToken);
 
                     return this.Ok(Map(pipeline.State));
                 }
@@ -58,7 +58,7 @@ namespace DataCatalague.Api.Controllers.V1
                         title: "Pipeline not found.",
                         detail: $"No pipeline exists with identifier {uuid}.",
                         statusCode: StatusCodes.Status404NotFound);
-                }                            
+                }
             }
 
             [HttpPost]
@@ -75,11 +75,11 @@ namespace DataCatalague.Api.Controllers.V1
                     throw new ArgumentNullException(nameof(request.DisplayName));
                 }
 
-                var cmd = await _service.Handle(new PipelineCommands.Create(Guid.NewGuid(), displayName, description), cancellationToken);
+                var cmd = await this._service.Handle(new PipelineCommands.Create(Guid.NewGuid(), displayName, description), cancellationToken);
 
                 if (!cmd.Success)
                     return this.BadRequest();
-                
+
                 var result = cmd.Get()!;
 
                 this._logger.LogInformation("Created pipeline {uuid}.", result.State.Uuid);

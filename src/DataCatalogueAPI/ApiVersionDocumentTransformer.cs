@@ -26,8 +26,7 @@ public sealed class ApiVersionDocumentTransformer(IApiVersionDescriptionProvider
     public Task TransformAsync(
         OpenApiDocument document,
         OpenApiDocumentTransformerContext context,
-        CancellationToken cancellationToken)
-    {
+        CancellationToken cancellationToken) {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(context);
 
@@ -42,13 +41,11 @@ public sealed class ApiVersionDocumentTransformer(IApiVersionDescriptionProvider
         info.Title = "OpenApiDataCatalogue API";
         info.Version = description?.ApiVersion.ToString() ?? context.DocumentName;
         info.Description = BuildDescription(description);
-        info.Contact = new OpenApiContact
-        {
+        info.Contact = new OpenApiContact {
             Name = "Geodatastyrelsen",
             Email = "jesoe@gst.dk",
         };
-        info.License = new OpenApiLicense
-        {
+        info.License = new OpenApiLicense {
             Name = "MIT",
             Url = new Uri("https://opensource.org/licenses/MIT"),
         };
@@ -56,10 +53,8 @@ public sealed class ApiVersionDocumentTransformer(IApiVersionDescriptionProvider
         return Task.CompletedTask;
     }
 
-    private static string BuildDescription(ApiVersionDescription? description)
-    {
-        if (description is null)
-        {
+    private static string BuildDescription(ApiVersionDescription? description) {
+        if (description is null) {
             return Summary;
         }
 
