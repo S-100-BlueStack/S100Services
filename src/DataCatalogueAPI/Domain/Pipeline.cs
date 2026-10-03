@@ -11,7 +11,7 @@ namespace DataCatalague.Api.Domain
 
         public string DisplayName { get; set; } = string.Empty;
 
-        public string Description { get; set; } = string.Empty;
+        public string? Description { get; set; } = string.Empty;
 
         public DateTimeOffset LastUpdatedUtc { get; set; }
 
@@ -33,7 +33,7 @@ namespace DataCatalague.Api.Domain
         public async Task Create(
                     Guid Uuid,
                     string DisplayName,
-                    string Description
+                    string? Description
             ) {
             EnsureDoesntExist();
             Apply(new V1.PipelineCreated(Uuid, DisplayName, Description, DateTime.UtcNow));
@@ -53,7 +53,7 @@ namespace DataCatalague.Api.Domain
             public record PipelineCreated(
                     Guid Uuid,
                     string DisplayName,
-                    string Description,
+                    string? Description,
                     DateTimeOffset CreatedUTC
                 );
 
