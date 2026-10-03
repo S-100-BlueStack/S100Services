@@ -65,7 +65,7 @@ namespace DataCatalague.Api.Controllers.V1
             [Consumes("application/json")]
             [ProducesResponseType<PipelineResponse>(StatusCodes.Status201Created)]
             [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
-            public async Task<ActionResult<PipelineState>> Create([FromBody] CreatePipelineRequest request, CancellationToken cancellationToken) {
+            public async Task<ActionResult<PipelineResponse>> Create([FromBody] CreatePipelineRequest request, CancellationToken cancellationToken) {
                 ArgumentNullException.ThrowIfNull(request);
 
                 var displayName = request.DisplayName?.Trim();

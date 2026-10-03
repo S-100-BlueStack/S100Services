@@ -6,7 +6,7 @@
 
         public required string DisplayName { get; init; }
 
-        public required string Description { get; init; }
+        public required string? Description { get; init; }
 
         public required DateTimeOffset LastUpdatedUtc { get; init; }
     }

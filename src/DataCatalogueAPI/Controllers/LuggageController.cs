@@ -46,7 +46,7 @@ namespace DataCatalague.Api.Controllers
         [Consumes("application/json")]
         [ProducesResponseType<LuggageResponse>(StatusCodes.Status201Created)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
-        public async Task<ActionResult<LuggageState>> Create([FromBody] CreateLuggageRequest request, CancellationToken cancellationToken) {
+        public async Task<ActionResult<LuggageResponse>> Create([FromBody] CreateLuggageRequest request, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNull(request);
 
             var displayName = request.DisplayName?.Trim();
@@ -72,6 +72,39 @@ namespace DataCatalague.Api.Controllers
 
             return route;
         }
+
+
+
+
+
+
+        [HttpGet("{uuid:guid}/checkincounter")]
+        [Consumes("application/json")]
+        [ProducesResponseType<LuggageResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+
+        public async Task<ActionResult<LuggageResponse>> GetCheckInCounter(CancellationToken cancellationToken) {
+            return this.BadRequest();
+        }
+
+        [HttpPost("{uuid:guid}/checkincounter")]
+        [Consumes("application/json")]
+        [ProducesResponseType<LuggageResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+
+        public async Task<ActionResult<LuggageResponse>> CreateCheckInCounter(CancellationToken cancellationToken) {
+            return this.BadRequest();
+        }
+
+        [HttpGet("{uuid:guid}/checkincounter/{counterid:guid}")]
+        [Consumes("application/json")]
+        [ProducesResponseType<LuggageResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<LuggageResponse>> GetCheckInCounter(Guid uuid, Guid counterid, CancellationToken cancellationToken) {
+            return this.BadRequest();
+        }
+
+
 
         private static LuggageResponse Map(Domain.LuggageState luggage) => new() {
             Uuid = luggage.Uuid,
