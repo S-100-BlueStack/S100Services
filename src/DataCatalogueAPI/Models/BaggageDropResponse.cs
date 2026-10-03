@@ -1,5 +1,9 @@
 ﻿namespace DataCatalague.Api.Models.V1
 {
+    public class CheckInCounterResponse {
+
+    }
+
     public class LuggageResponse
     {
         public required Guid Uuid { get; init; }

@@ -4,12 +4,12 @@ using Eventuous;
 
 namespace DataCatalague.Api.Services
 {
-    public class CheckInCounterCommandService : CommandService<CheckInCounter, CheckInCounterState, CheckInCounterId>
+    public class BaggageDropCommandService : CommandService<BaggageDrop, BaggageDropState, BaggageDropId>
     {
-        public CheckInCounterCommandService(IEventStore store) : base(store) {
-            On<LuggageCommands.CreateCheckInCounter>()
+        public BaggageDropCommandService(IEventStore store) : base(store) {
+            On<BaggageDropCommands.CreateCheckInCounter>()
                 .InState(ExpectedState.New)
-                .GetId(cmd => cmd.Uuid.ToCheckInCounterId())
+                .GetId(cmd => cmd.Uuid.ToBaggageDropId())
                 .ActAsync(
                     (counter, cmd, _) => counter.Create(cmd.Uuid, cmd.DisplayName, cmd.Description)
                 );
@@ -19,7 +19,7 @@ namespace DataCatalague.Api.Services
     public class LuggageCommandService : CommandService<Luggage, LuggageState, LuggageId>
     {
         public LuggageCommandService(IEventStore store) : base(store) {
-            On<LuggageCommands.CheckInLuggage>()
+            On<BaggageDropCommands.DropOffLuggage>()
                 .InState(ExpectedState.New)
                 .GetId(cmd => cmd.Uuid.ToLuggageId())
                 .ActAsync(

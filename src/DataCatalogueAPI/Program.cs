@@ -41,7 +41,7 @@ public static class Program
 
             builder.Services.AddEventStore<InMemoryEventStore>();
 
-            builder.Services.AddCommandService<CheckInCounterCommandService, CheckInCounterState>();
+            builder.Services.AddCommandService<BaggageDropCommandService, BaggageDropState>();
             builder.Services.AddCommandService<LuggageCommandService, LuggageState>();
             builder.Services.AddCommandService<PipelineCommandService, PipelineState>();
 
