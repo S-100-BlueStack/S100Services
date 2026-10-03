@@ -41,12 +41,16 @@
 		<Compile Remove="IProductRepository.cs" />
 		<Compile Remove="Models\CreateProductRequest.cs" />
 		<Compile Remove="Models\ProductResponse.cs" />
+		<Compile Remove="Repositories\InMemoryPipelineRepository.cs" />
+		<Compile Remove="Repositories\IPipelineRepository.cs" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<!-- API versioning for controller-based APIs. -->
 		<PackageReference Include="Asp.Versioning.Mvc" Version="10.2.1" />
 		<PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="10.2.1" />
+		<PackageReference Include="Eventuous" Version="0.17.0" />
+		<PackageReference Include="Eventuous.Extensions.AspNetCore" Version="0.17.0" />
 
 		<!-- Built-in OpenAPI document generation. -->
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
@@ -67,11 +71,17 @@
     -->
 
 		<!-- Documentation UIs. -->
-		<PackageReference Include="Scalar.AspNetCore" Version="2.17.12" />
+		<PackageReference Include="Scalar.AspNetCore" Version="2.17.13" />
 		<PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.2.3" />
 
 		<!-- Logging. Console, Debug and File sinks come along transitively. -->
 		<PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Update="s100ed17.geodatabase">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
 	</ItemGroup>
 
 </Project>

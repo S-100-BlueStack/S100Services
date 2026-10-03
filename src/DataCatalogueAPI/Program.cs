@@ -1,5 +1,10 @@
 using DataCatalague.Api.Configuration;
+using DataCatalague.Api.Domain;
+using DataCatalague.Api.Repositories;
+using DataCatalague.Api.Services;
 using Serilog;
+
+using IO = System.IO;
 
 namespace DataCatalague.Api;
 
@@ -26,6 +31,15 @@ public static class Program
             var builder = WebApplication.CreateBuilder(args);
 
             builder.AddSerilogLogging();
+
+            foreach (var f in System.IO.Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory, $"*s100ed17*.geodatabase*")) {
+                if (IO.Path.GetFileName(f).Equals("s100ed17.geodatabase")) continue;
+                System.IO.File.Delete(System.IO.Path.GetFullPath(f));
+            }
+
+            builder.Services.AddEventStore<InMemoryEventStore>();
+            builder.Services.AddCommandService<PipelineCommandService, PipelineState>();
+
             builder.Services.AddApplicationServices();
             builder.Services.AddApiVersioningSupport();
             builder.Services.AddVersionedOpenApiDocuments();
