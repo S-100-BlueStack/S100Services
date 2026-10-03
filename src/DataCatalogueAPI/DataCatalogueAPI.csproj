@@ -52,6 +52,7 @@
 		<PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="10.2.1" />
 		<PackageReference Include="Eventuous" Version="0.17.0" />
 		<PackageReference Include="Eventuous.Extensions.AspNetCore" Version="0.17.0" />
+		<PackageReference Include="Eventuous.Subscriptions" Version="0.17.0" />
 
 		<!-- Built-in OpenAPI document generation. -->
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
