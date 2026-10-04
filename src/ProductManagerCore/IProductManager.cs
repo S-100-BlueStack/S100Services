@@ -18,6 +18,8 @@ namespace S100FC.ProductCatalogue
         public int ExactMatchCount { get; } = exactMatchCount;
     }
 
+    public sealed class ProductMappingIntegrityException(string message) : Exception(message);
+
     public interface INauticalProductManager
     {
     }
@@ -35,17 +37,42 @@ namespace S100FC.ProductCatalogue
         Task<YAML.Dataset> CreateNewUpdateAsync(string name);
 
         Task<YAML.Dataset> ReissueAsync(string name);
-        Task<bool> RollBackAsync(string name);
+
+        /// <summary>
+        /// Builds an export candidate at an explicit version without changing the S-128 ElectronicProduct or attachment tables.
+        /// </summary>
+        /// <param name="name">The S-128 dataset name used to select the product coverage.</param>
+        /// <param name="exportType">The candidate revision type.</param>
+        /// <param name="edition">The SQL-authoritative candidate edition.</param>
+        /// <param name="update">The SQL-authoritative candidate update.</param>
+        /// <param name="cancellationToken">Signals cancellation before dispatch and between substantial snapshot-processing phases. An ArcGIS call already in progress cannot be interrupted unless that API supports cancellation.</param>
+        /// <returns>A read-only YAML dataset snapshot containing the requested candidate version.</returns>
+        Task<YAML.Dataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default);
         Task<Dictionary<string, string>> GetDatasetAOIs();
+        Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification);
         Task<bool> IsDirtyAsync(string name);
         Task<string> GetDatasetBoundary(string name);
         Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name);
         Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc);
         ElectronicProduct? ElectronicProduct(string name);
+        ElectronicProduct? ElectronicProduct(string name, string productSpecification);
+        /// <summary>
+        /// Resolves the product represented by a dataset name using its S-128 catalogue identity.
+        /// </summary>
+        /// <param name="name">The dataset name supplied by the caller.</param>
+        /// <returns>The uniquely identified product, or <see langword="null"/> when it is not present.</returns>
+        ElectronicProduct? ResolveExportProduct(string name) => null;
+        ElectronicProduct? ResolveElectronicProduct(string name, string productSpecification) => ElectronicProduct(name, productSpecification);
+        IReadOnlyList<ElectronicProduct> GetMappedElectronicProducts(string name, string productSpecification) => [];
         Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(
             string datasetName,
             CancellationToken cancellationToken = default
         );
+        Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(
+            string datasetName,
+            string productSpecification,
+            CancellationToken cancellationToken = default
+        ) => ReadElectronicProductVersionAsync(datasetName, cancellationToken);
 
         Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition);
         Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign);

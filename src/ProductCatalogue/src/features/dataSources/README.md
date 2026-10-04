@@ -1,0 +1,141 @@
+# Configurable Product data sources
+
+The source registry owns source transport, normalization, identity, capabilities, filters/search,
+workspace availability and active-source lifecycle. The [current contract review](../../../docs/normalized-workflow-frontend-adaptation.md)
+records the normalized backend evidence and remaining limitations.
+
+## Sources
+
+| Source               | Production transport                       | Capability boundary                                                                                                                                     |
+| -------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ENC-package (`s101`) | `GET electronicproducts/aoi?layer=ENC`     | One Main-map work unit; read, search and Collection. Package-originated Analyze/Review/History navigation, manual mutations and Export are unavailable. |
+| S-57 (`s57`)         | `GET electronicproducts/{datasetName}/aoi` | Workspace compatibility only; not selectable or selection-persistable on Main map.                                                                      |
+| Paper Charts         | No runtime transport                       | Synthetic registry fixture retained only for explicit tests.                                                                                            |
+| S-102                | No runtime transport                       | Synthetic registry fixture retained only for explicit tests.                                                                                            |
+
+The [package foundation](../../../docs/enc-package-frontend-foundation.md) retains the technical
+`s101` provider, S-101 dataset key, geometry and DisplayScale. Its declarative `workUnit` describes
+the primary member and ordered metadata columns. No second Graphic or Collection store is created.
+The package source has no live mutation capabilities or manual export leaves. Its `workUnit`
+navigation capabilities restrict Main-map Product contexts until destinations become package-aware;
+source-level capabilities for direct product-based workspace resolution are retained. Other simple sources
+retain their existing contracts. Analyze, Review and Dashboard remain product-based surfaces.
+
+The package layer also owns the declarative member-aware symbolization strategy described in the
+[F2 mixed-status rendering foundation](../../../docs/package-mixed-status-rendering.md). Rendering
+projects only normalized `workUnitStatus.members[].status`; package `workflowStatus` remains available
+to F1 filtering but cannot affect the AOI symbol. Missing member state falls back to the representative
+scalar status, and all non-opted-in sources retain scalar symbols. F4 maps backend member state into
+`workUnitStatus`; real mixed AOIs now render automatically without Product-detail requests.
+
+Electronic AOI responses contain Esri geometry and DatasetName/Status/DisplayScale/UsageBand/error
+attributes. The server maps each representative S-101 AOI to its unique S-57 member. The normalizer
+projects only an application-owned `workUnitStatus`, using top-level `Attributes.Status` for workflow
+and numeric `ProductState` member statuses for the existing ProductStatus palette. Raw `Package.Status`
+is never a filter or symbol value; raw Package DTOs and version/action metadata are not attached.
+Member keys/order come from `workUnit.members`; DTO field mapping is declarative in the normalizer
+configuration. Missing/unknown member states retain scalar fallback. Contradictory package/member
+identity rejects the source payload before publication. The generic `electronic-aoi` normalizer
+preserves geometry, stable identity and the existing GraphicsLayer/MapView path. There is no duplicate combined production layer.
+The isolated compatibility layer adapter is not registered, persisted or used as a failed-source fallback.
+
+## Registry and identity
+
+Source definitions carry loaders, normalizers, layer definitions, identity strategies, filtering,
+search, export leaves and content permissions. Feature modules consume these capabilities rather
+than branching on source names. A Product identity is `{ sourceId, productKey }`; datasetName is the
+public globally unique route identity. Missing/duplicate stable keys reject a source before commit.
+
+Electronic workspace availability uses the declarative `workspace.resolution: "targeted-product-aoi"`
+contract rather than requiring a bulk loader. Analyze/Review keep the lightweight Product-name list
+and resolve each selected Product through `electronicproducts/{datasetName}/aoi`; its returned
+`ProductSpecification` is authoritative. S-57 has no Main-map loader. Catalog/force paths also avoid
+bulk AOI calls. Deployment configuration and ambiguous identity still fail closed. Generic fixture
+providers retain their own catalog loaders independently of Main-map selection.
+
+## Lifecycle
+
+Each source has a monotonic generation and AbortController. Loading and candidate layer preparation
+happen before a guarded synchronous commit. Only a committed generation publishes filters/search,
+Collection reconciliation, source state and persistence. Disable/reset invalidates pending work first.
+
+Compatible source layers and Graphics reconcile in place by stable feature identity, preserving
+popup/menu DOM. Structural replacements reconcile only the currently open selection; closed or
+replaced sessions never reopen later. Scale visibility bindings follow the current layer set. Runtime
+source changes rebind scale visibility without republishing compatibility-derived filter/search state;
+compatibility publication remains owned by compatibility load/refresh boundaries.
+
+Failed active refresh retains the previous representation, filters and search index. Failed initial
+activation leaves no partial representation. Candidate layers are discarded on failure or supersession.
+Source removal closes owned popup/hover state, clears that source's filter/search state and removes
+its Collection items without cancelling backend jobs. Reactivation fetches fresh data.
+
+Startup and refresh coordinate independent lookup/source outcomes before publishing completion. A valid
+restored selection that resolves to no enabled available source selects exactly one eligible
+selection-persistable source using the registry's default and definition ordering. Session-only sources
+remain valid first-visit defaults but are not restored-state fallbacks. Recovery runs only during
+controller initialization;
+disabling the final source remains valid for the rest of the current session. A newer source-selection
+mutation supersedes an older in-flight startup activation and owns subsequent persistence. Normal
+controller persistence records registry-ordered `requestedEnabled` selection intent, so another source
+that is still loading is not dropped; failed explicit activation is rolled back before that intent is saved.
+
+## Filters and Product search
+
+Each active provider has independent fields, facets, selections and counts. The package declares Status,
+Display scale and Usage band using backend lookups. Retired synthetic fixtures do not participate in
+runtime filtering. Unsupported/missing optional facets do not invent data.
+
+Electronic defaults retain the conservative Idle exclusion; saved explicit unfiltered state wins.
+The final AOI error-only preset remains deferred pending an authoritative classification/policy.
+Product search result identity is `[providerId, productKey]`; layer identity identifies the current
+representative Graphic, not a separate Product. Product search indexes committed active Graphics only. It does not fetch the workspace catalog or
+activate sources. Geographic Locator remains independent.
+
+Navbar Data sources and Filters use the existing coordinator, public Calcite controls and common
+Escape/outside-click/focus lifecycle. No private shadow DOM or animation-dependent state is used.
+
+## Persistence
+
+Source state keeps `productCatalogue.dataSources.v1`, now schema 2:
+
+```json
+{ "schemaVersion": 2, "initialized": true, "enabledSourceIds": ["s101"] }
+```
+
+New visits use configured available defaults. Version 1 migration retains previously fixed S101
+and removes the retired Main-map S57 selection. Retired synthetic fixture IDs can remain in
+older persisted payloads but cannot become active because runtime registry construction no longer
+enables those sources. A schema-2 all-off selection remains valid in-session; the next startup enables
+one available selection-persistable registry fallback. Session-only synthetic fixtures are never FI-031
+restored-state fallbacks. Known configured-out sources retain intent and cannot be activated while
+unavailable; unknown IDs are sanitized. If no eligible source is available, startup truthfully remains
+all-off. Reset still uses deployment defaults. Nothing copies a combined source identity into two
+standards. An old S57-only selection is sanitized and the existing empty-selection startup recovery
+enables `s101` when eligible. Failed loading preserves requested package intent for retry; deployments
+with no eligible source remain empty. No schema or filter-provider identity change is required.
+
+Filter state remains separate at `pc.attributeFilters.v3`, schema 2. The old fixed S101 provider's
+filter state migrates to s101, never s57, with explicit new state taking precedence. Pending state
+survives temporary activation failure. Authoritative source removal clears its filter intent.
+
+## FI-031 manual acceptance
+
+FI-031 was manually accepted in the browser on 2026-09-17 at `c1ed794374e56383a7362f3eadb2d16b07dfdb17`. The accepted behavior keeps zero enabled Product sources valid for the current session, then recovers an explicitly empty restored selection to exactly one eligible selection-persistable registry fallback on the next full startup. A later reload preserves that recovered selection instead of expanding back to all defaults. Existing non-empty restoration, ordinary source activation/deactivation, source refresh, Filters, Product search, popup/Product Collection, Preferences, Theme, Scale hiding, keyboard/focus behavior, and light/dark presentation remained unchanged in the acceptance pass.
+
+## Synthetic fixture boundary
+
+The application runtime no longer enables Paper Charts or S-102 mocks in Development or through a
+Vite build flag. `createDataSourceRegistry()` defaults to authoritative sources only. Tests may opt
+into the retained synthetic definitions by explicitly constructing the registry with fixture options.
+This test-only path is not used by Main-map or workspace bootstrap.
+
+## Content and exports
+
+Simple-source Edition/Update leaves are registry configured; the package declares no leaves. Backend product resolution owns specification,
+mapping, version and candidate checks. User-facing S-101 remains distinct from the backend S100
+metadata alias. Cancel Export keeps its presentation while using public CancelExport operation identity.
+
+History and validation use separate `visible`/`implemented` content permissions. Electronic History
+preserves BE-108A IDs/Events; diagnostics use public artifact history/download routes. Unsupported
+sources return unavailable content without electronic API requests. No Batch 2 producers are added.

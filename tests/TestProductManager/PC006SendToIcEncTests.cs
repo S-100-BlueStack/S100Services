@@ -1,0 +1,856 @@
+using Hangfire;
+using Hangfire.Common;
+using Hangfire.States;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using ProductCatalogueAPI.Options;
+using ProductCatalogueAPI.Controllers;
+using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Data.Repositories;
+using ProductCatalogueAPI.Jobs;
+using ProductCatalogueAPI.Models;
+using ProductCatalogueAPI.Services.Jobs;
+using ProductCatalogueAPI.Services.Locking;
+using System.Reflection;
+using System.Collections;
+using S100FC.ProductCatalogue;
+using System.Text.Json;
+
+namespace TestProductCatalogueAPI
+{
+    public sealed class PC006SendToIcEncTests
+    {
+        private const string DatasetName = "101DK001";
+
+        [Fact]
+        public void SendQueuesWithPostAndHoldUsesResourceMethods() {
+            Assert.Single(typeof(UploadController).GetMethod(nameof(UploadController.UploadSingularProduct))!.GetCustomAttributes<HttpPostAttribute>());
+            Assert.Single(typeof(UploadController).GetMethod(nameof(UploadController.HoldProduct))!.GetCustomAttributes<HttpPutAttribute>());
+            Assert.Single(typeof(UploadController).GetMethod(nameof(UploadController.ReleaseHoldProduct))!.GetCustomAttributes<HttpDeleteAttribute>());
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task DisabledEndpointReturnsSafeServiceUnavailableWithoutEnqueueOrMutation() {
+            var repository = new RecordingProductRepository(Product());
+            var jobs = new RecordingSendJobService();
+            var locks = new ThrowingLockService();
+            var controller = Controller(repository, locks, jobs, SendToIcEncMode.Disabled);
+
+            var result = await controller.UploadSingularProduct(DatasetName, CancellationToken.None);
+
+            var response = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(StatusCodes.Status503ServiceUnavailable, response.StatusCode);
+            Assert.Contains("application/json", response.ContentTypes);
+            var error = Assert.IsType<ExportJobErrorResponse>(response.Value);
+            Assert.Equal(SendToIcEncContract.DisabledCode, error.Code);
+            Assert.Equal(SendToIcEncContract.DisabledMessage, error.Message);
+            Assert.False(error.Message.Contains("exception", StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(0, jobs.EnqueueCalls);
+            Assert.Equal(0, repository.ReadCalls);
+            Assert.Equal(0, repository.AppendCalls);
+            Assert.Equal(0, locks.AcquireCalls);
+        }
+
+        [Theory]
+        [InlineData(ProductState.Exported)]
+        [InlineData(ProductState.ReadyForDistribution)]
+        [Trait("Package", "PC-006")]
+        public async Task SimulationEndpointAcceptsTruthfulBackgroundJobWithoutProductMutation(ProductState state) {
+            var repository = new RecordingProductRepository(Product(state));
+            var jobs = new RecordingSendJobService();
+            var locks = new ThrowingLockService();
+            var controller = Controller(repository, locks, jobs, SendToIcEncMode.Simulation);
+
+            var result = await controller.UploadSingularProduct(DatasetName, CancellationToken.None);
+
+            var accepted = Assert.IsType<AcceptedResult>(result);
+            Assert.Equal(StatusCodes.Status202Accepted, accepted.StatusCode);
+            var response = Assert.IsType<ExportJobStartResponse>(accepted.Value);
+            Assert.Equal("job-1", response.JobId);
+            Assert.Equal(SendToIcEncContract.OperationType, response.OperationType);
+            Assert.Equal(SendToIcEncContract.SimulationMode, response.Mode);
+            Assert.Equal(SendToIcEncContract.NotDeliveredStatus, response.DeliveryStatus);
+            Assert.Equal(SendToIcEncContract.AcceptedMessage, response.Message);
+            Assert.Equal(1, jobs.EnqueueCalls);
+            Assert.Equal(SendToIcEncMode.Simulation, jobs.LastRequest!.Mode);
+            Assert.Equal(5, jobs.LastRequest.ExpectedEdition);
+            Assert.Equal(0, jobs.LastRequest.ExpectedUpdate);
+            Assert.Equal(0, repository.AppendCalls);
+            Assert.Equal(0, locks.AcquireCalls);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task SimulationEndpointAllowsManualSendWhenSevenCsValidationFailed() {
+            var repository = new RecordingProductRepository(Product(
+                ProductState.Error,
+                errorCode: SendToIcEncContract.SevenCsValidationFailedCode
+            ));
+            var jobs = new RecordingSendJobService();
+            var controller = Controller(repository, new ThrowingLockService(), jobs, SendToIcEncMode.Simulation);
+
+            var result = await controller.UploadSingularProduct(DatasetName, CancellationToken.None);
+
+            var accepted = Assert.IsType<AcceptedResult>(result);
+            Assert.Equal(StatusCodes.Status202Accepted, accepted.StatusCode);
+            Assert.True(jobs.LastRequest!.AllowSevenCsValidationFailure);
+            Assert.Equal(1, jobs.EnqueueCalls);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task SimulationEndpointStillRejectsUnrelatedErrorStates() {
+            var repository = new RecordingProductRepository(Product(ProductState.Error, errorCode: "EXPORT_FAILED"));
+            var jobs = new RecordingSendJobService();
+            var controller = Controller(repository, new ThrowingLockService(), jobs, SendToIcEncMode.Simulation);
+
+            var result = await controller.UploadSingularProduct(DatasetName, CancellationToken.None);
+
+            var response = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(StatusCodes.Status409Conflict, response.StatusCode);
+            Assert.Equal(0, jobs.EnqueueCalls);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task MissingProductReturnsNotFoundWithoutEnqueueOrMutation() {
+            var repository = new RecordingProductRepository(null);
+            var jobs = new RecordingSendJobService();
+            var controller = Controller(repository, new ThrowingLockService(), jobs, SendToIcEncMode.Simulation);
+
+            var result = await controller.UploadSingularProduct(DatasetName, CancellationToken.None);
+
+            var response = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(StatusCodes.Status404NotFound, response.StatusCode);
+            Assert.Equal(ExportJobContract.ProductNotFoundCode, Assert.IsType<ExportJobErrorResponse>(response.Value).Code);
+            Assert.Equal(0, jobs.EnqueueCalls);
+            Assert.Equal(0, repository.AppendCalls);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task ProductLookupFailureReturnsSafeServiceUnavailableWithoutEnqueueOrMutation() {
+            var repository = new RecordingProductRepository(Product()) {
+                ExceptionToThrow = new InvalidOperationException(@"secret C:\internal\database")
+            };
+            var jobs = new RecordingSendJobService();
+            var controller = Controller(
+                repository,
+                new ThrowingLockService(),
+                jobs,
+                SendToIcEncMode.Simulation
+            );
+
+            var result = await controller.UploadSingularProduct(
+                DatasetName,
+                CancellationToken.None
+            );
+
+            var response = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(StatusCodes.Status503ServiceUnavailable, response.StatusCode);
+            var error = Assert.IsType<ExportJobErrorResponse>(response.Value);
+            Assert.Equal(SendToIcEncContract.SetupFailedCode, error.Code);
+            Assert.Equal(SendToIcEncContract.SetupFailedMessage, error.Message);
+            Assert.DoesNotContain("secret", error.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(0, jobs.EnqueueCalls);
+            Assert.Equal(0, repository.AppendCalls);
+        }
+
+        [Theory]
+        [InlineData(ProductState.Idle)]
+        [Trait("Package", "PC-006")]
+        public async Task InvalidProductStateReturnsConflictWithoutEnqueueOrMutation(ProductState state) {
+            var repository = new RecordingProductRepository(Product(state));
+            var jobs = new RecordingSendJobService();
+            var controller = Controller(repository, new ThrowingLockService(), jobs, SendToIcEncMode.Simulation);
+
+            var result = await controller.UploadSingularProduct(DatasetName, CancellationToken.None);
+
+            var response = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(StatusCodes.Status409Conflict, response.StatusCode);
+            Assert.Equal(SendToIcEncContract.InvalidStateCode, Assert.IsType<ExportJobErrorResponse>(response.Value).Code);
+            Assert.Equal(0, jobs.EnqueueCalls);
+            Assert.Equal(0, repository.AppendCalls);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task EnqueueFailureReturnsSafeServiceUnavailableWithoutMutation() {
+            var repository = new RecordingProductRepository(Product());
+            var jobs = new RecordingSendJobService { ExceptionToThrow = new JobEnqueueException(@"secret C:\internal") };
+            var controller = Controller(repository, new ThrowingLockService(), jobs, SendToIcEncMode.Simulation);
+
+            var result = await controller.UploadSingularProduct(DatasetName, CancellationToken.None);
+
+            var response = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(StatusCodes.Status503ServiceUnavailable, response.StatusCode);
+            var error = Assert.IsType<ExportJobErrorResponse>(response.Value);
+            Assert.Equal(ExportJobContract.JobEnqueueFailedCode, error.Code);
+            Assert.Equal(ExportJobContract.JobEnqueueFailedMessage, error.Message);
+            Assert.False(error.Message.Contains("secret", StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(0, repository.AppendCalls);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public void HangfireServiceEnqueuesSimulationJobWithTruthfulAcceptedContract() {
+            var client = new RecordingBackgroundJobClient();
+            var service = new HangfireSendToIcEncJobService(
+                client,
+                NullLogger<HangfireSendToIcEncJobService>.Instance
+            );
+
+            var response = service.Enqueue(Request());
+
+            Assert.Equal(1, client.CreateCalls);
+            Assert.Equal(typeof(UploadSingularProductJob), client.LastJob!.Type);
+            Assert.IsType<EnqueuedState>(client.LastState);
+            Assert.Equal(SendToIcEncContract.OperationType, response.OperationType);
+            Assert.Equal(SendToIcEncContract.NotDeliveredStatus, response.DeliveryStatus);
+            Assert.Contains("No data will be delivered", response.Message!);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task SimulationJobCompletesAsNotDeliveredWithoutRepositoryAppend() {
+            var repository = new RecordingProductRepository(Product());
+            var context = new RecordingExecutionContext();
+            var job = Job(repository, SendToIcEncMode.Simulation);
+
+            await job.ExecuteAsync(Request(), context, CancellationToken.None);
+
+            Assert.Equal(SendToIcEncContract.SimulationMode, context.Get<string>(ExportJobParameterNames.Mode));
+            Assert.Equal(SendToIcEncContract.SimulationCompletedOutcome, context.Get<string>(ExportJobParameterNames.OperationOutcome));
+            Assert.Equal(SendToIcEncContract.NotDeliveredStatus, context.Get<string>(ExportJobParameterNames.DeliveryStatus));
+            Assert.Equal(SendToIcEncContract.CompletedCode, context.Get<string>(ExportJobParameterNames.ResultCode));
+            Assert.Equal(SendToIcEncContract.CompletedMessage, context.Get<string>(ExportJobParameterNames.ResultMessage));
+            Assert.Null(context.Get<string>(ExportJobParameterNames.ErrorCode));
+            Assert.Equal(0, repository.AppendCalls);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task SimulationJobHonorsExplicitSevenCsValidationOverride() {
+            var repository = new RecordingProductRepository(Product(
+                ProductState.Error,
+                errorCode: SendToIcEncContract.SevenCsValidationFailedCode
+            ));
+            var context = new RecordingExecutionContext();
+            var job = Job(repository, SendToIcEncMode.Simulation);
+
+            await job.ExecuteAsync(Request(allowSevenCsValidationFailure: true), context, CancellationToken.None);
+
+            Assert.Equal(SendToIcEncContract.SimulationCompletedOutcome, context.Get<string>(ExportJobParameterNames.OperationOutcome));
+            Assert.Null(context.Get<string>(ExportJobParameterNames.ErrorCode));
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task SimulationJobRejectsSevenCsValidationFailureWithoutExplicitOverride() {
+            var repository = new RecordingProductRepository(Product(
+                ProductState.Error,
+                errorCode: SendToIcEncContract.SevenCsValidationFailedCode
+            ));
+            var context = new RecordingExecutionContext();
+            var job = Job(repository, SendToIcEncMode.Simulation);
+
+            var exception = await Assert.ThrowsAsync<SendToIcEncJobException>(() =>
+                job.ExecuteAsync(Request(), context, CancellationToken.None)
+            );
+
+            Assert.Equal(SendToIcEncContract.InvalidStateCode, exception.Code);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task MissingProductFailsSimulationWithoutCompletionOrMutation() {
+            var repository = new RecordingProductRepository(null);
+            var context = new RecordingExecutionContext();
+            var job = Job(repository, SendToIcEncMode.Simulation);
+
+            var exception = await Assert.ThrowsAsync<SendToIcEncJobException>(() =>
+                job.ExecuteAsync(Request(), context, CancellationToken.None)
+            );
+
+            Assert.Equal(ExportJobContract.ProductNotFoundCode, exception.Code);
+            Assert.Equal(ExportJobContract.ProductNotFoundCode, context.Get<string>(ExportJobParameterNames.ErrorCode));
+            Assert.Null(context.Get<string>(ExportJobParameterNames.OperationOutcome));
+            Assert.Null(context.Get<string>(ExportJobParameterNames.ResultCode));
+            Assert.Equal(0, repository.AppendCalls);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task ConfigurationChangeFailsSimulationWithoutCompletionOrMutation() {
+            var repository = new RecordingProductRepository(Product());
+            var context = new RecordingExecutionContext();
+            context.SetJobParameter(
+                ExportJobParameterNames.OperationOutcome,
+                SendToIcEncContract.SimulationCompletedOutcome
+            );
+            context.SetJobParameter(
+                ExportJobParameterNames.ResultCode,
+                SendToIcEncContract.CompletedCode
+            );
+            context.SetJobParameter(
+                ExportJobParameterNames.ResultMessage,
+                SendToIcEncContract.CompletedMessage
+            );
+            var job = Job(repository, SendToIcEncMode.Disabled);
+
+            var exception = await Assert.ThrowsAsync<SendToIcEncJobException>(() =>
+                job.ExecuteAsync(Request(), context, CancellationToken.None)
+            );
+
+            Assert.Equal(SendToIcEncContract.ConfigurationChangedCode, exception.Code);
+            Assert.Equal(SendToIcEncContract.ConfigurationChangedCode, context.Get<string>(ExportJobParameterNames.ErrorCode));
+            Assert.Null(context.Get<string>(ExportJobParameterNames.OperationOutcome));
+            Assert.Null(context.Get<string>(ExportJobParameterNames.ResultCode));
+            Assert.Null(context.Get<string>(ExportJobParameterNames.ResultMessage));
+            Assert.Equal(0, repository.ReadCalls);
+            Assert.Equal(0, repository.AppendCalls);
+        }
+
+        [Theory]
+        [InlineData(ProductState.Idle, 5, 0, SendToIcEncContract.InvalidStateCode)]
+        [InlineData(ProductState.Exported, 6, 0, ExportJobContract.ProductVersionChangedCode)]
+        [Trait("Package", "PC-006")]
+        public async Task ProductChangeFailsWithoutFabricatedState(
+            ProductState state,
+            int edition,
+            int update,
+            string expectedCode
+        ) {
+            var repository = new RecordingProductRepository(Product(state, edition, update));
+            var context = new RecordingExecutionContext();
+            var job = Job(repository, SendToIcEncMode.Simulation);
+
+            await Assert.ThrowsAsync<SendToIcEncJobException>(() =>
+                job.ExecuteAsync(Request(), context, CancellationToken.None)
+            );
+
+            Assert.Equal(expectedCode, context.Get<string>(ExportJobParameterNames.ErrorCode));
+            Assert.Null(context.Get<string>(ExportJobParameterNames.OperationOutcome));
+            Assert.Equal(0, repository.AppendCalls);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task UnexpectedJobFailurePersistsOnlySafeFailureMetadata() {
+            var repository = new RecordingProductRepository(Product()) {
+                ExceptionToThrow = new InvalidOperationException(@"secret C:\internal\database")
+            };
+            var context = new RecordingExecutionContext();
+            var job = Job(repository, SendToIcEncMode.Simulation);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                job.ExecuteAsync(Request(), context, CancellationToken.None)
+            );
+
+            Assert.Equal(SendToIcEncContract.FailedCode, context.Get<string>(ExportJobParameterNames.ErrorCode));
+            Assert.Equal(SendToIcEncContract.FailedMessage, context.Get<string>(ExportJobParameterNames.ErrorMessage));
+            Assert.DoesNotContain("secret", context.Get<string>(ExportJobParameterNames.ErrorMessage)!, StringComparison.OrdinalIgnoreCase);
+            Assert.Null(context.Get<string>(ExportJobParameterNames.OperationOutcome));
+            Assert.Equal(0, repository.AppendCalls);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public void SimulationMetadataAndStatusPollingRemainTruthful() {
+            var parameters = ExportJobMetadataClientFilter.CreateParameters(Request());
+            Assert.Equal(SendToIcEncContract.SimulationMode, parameters[ExportJobParameterNames.Mode]);
+            Assert.Equal(SendToIcEncContract.NotDeliveredStatus, parameters[ExportJobParameterNames.DeliveryStatus]);
+
+            var persisted = parameters.ToDictionary(
+                item => item.Key,
+                item => item.Value == null ? null : JsonSerializer.Serialize(item.Value),
+                StringComparer.Ordinal
+            );
+            var activeService = new HangfireJobStatusService(
+                new StaticStorageAccessor(new HangfireJobSnapshot(
+                    persisted,
+                    [new HangfireStateSnapshot("Enqueued", DateTime.UtcNow)]
+                )),
+                NullLogger<HangfireJobStatusService>.Instance
+            );
+            var activeResponse = Assert.Single(activeService.GetActiveJobs(DatasetName));
+            Assert.Equal(ExportJobContract.QueuedStatus, activeResponse.Status);
+            Assert.Equal(SendToIcEncContract.SimulationMode, activeResponse.Mode);
+            Assert.Equal(SendToIcEncContract.NotDeliveredStatus, activeResponse.DeliveryStatus);
+
+            persisted[ExportJobParameterNames.OperationOutcome] = JsonSerializer.Serialize(
+                SendToIcEncContract.SimulationCompletedOutcome
+            );
+            persisted[ExportJobParameterNames.ResultCode] = JsonSerializer.Serialize(
+                SendToIcEncContract.CompletedCode
+            );
+            persisted[ExportJobParameterNames.ResultMessage] = JsonSerializer.Serialize(
+                SendToIcEncContract.CompletedMessage
+            );
+            var snapshot = new HangfireJobSnapshot(
+                persisted,
+                [new HangfireStateSnapshot("Succeeded", DateTime.SpecifyKind(new DateTime(2026, 8, 3, 8, 0, 0), DateTimeKind.Utc))]
+            );
+            var service = new HangfireJobStatusService(
+                new StaticStorageAccessor(snapshot),
+                NullLogger<HangfireJobStatusService>.Instance
+            );
+
+            var response = service.GetJob("job-1");
+
+            Assert.NotNull(response);
+            Assert.Equal(SendToIcEncContract.OperationType, response!.OperationType);
+            Assert.Equal(SendToIcEncContract.SimulationMode, response.Mode);
+            Assert.Equal(SendToIcEncContract.SimulationCompletedOutcome, response.OperationOutcome);
+            Assert.Equal(SendToIcEncContract.NotDeliveredStatus, response.DeliveryStatus);
+            Assert.Equal(SendToIcEncContract.CompletedMessage, response.Message);
+            Assert.Null(response.Error);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public void FailedSimulationStatusPublishesOnlySafeBackendMetadata() {
+            var parameters = ExportJobMetadataClientFilter.CreateParameters(Request()).ToDictionary(
+                item => item.Key,
+                item => item.Value == null ? null : JsonSerializer.Serialize(item.Value),
+                StringComparer.Ordinal
+            );
+            parameters[ExportJobParameterNames.OperationOutcome] = JsonSerializer.Serialize(
+                SendToIcEncContract.SimulationCompletedOutcome
+            );
+            parameters[ExportJobParameterNames.ErrorCode] = JsonSerializer.Serialize(SendToIcEncContract.FailedCode);
+            parameters[ExportJobParameterNames.ErrorMessage] = JsonSerializer.Serialize(SendToIcEncContract.FailedMessage);
+            var service = new HangfireJobStatusService(
+                new StaticStorageAccessor(new HangfireJobSnapshot(
+                    parameters,
+                    [new HangfireStateSnapshot("Failed", DateTime.UtcNow)]
+                )),
+                NullLogger<HangfireJobStatusService>.Instance
+            );
+
+            var response = service.GetJob("job-1");
+
+            Assert.NotNull(response);
+            Assert.Equal(ExportJobContract.FailedStatus, response!.Status);
+            Assert.Equal(SendToIcEncContract.FailedCode, response.Error!.Code);
+            Assert.Equal(SendToIcEncContract.FailedMessage, response.Error.Message);
+            Assert.DoesNotContain("secret", response.Error.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Null(response.OperationOutcome);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public void InvalidTerminalSimulationMetadataIsNotPublishedAsSuccess() {
+            var parameters = ExportJobMetadataClientFilter.CreateParameters(Request()).ToDictionary(
+                item => item.Key,
+                item => item.Value == null ? null : JsonSerializer.Serialize(item.Value),
+                StringComparer.Ordinal
+            );
+            parameters[ExportJobParameterNames.OperationOutcome] = JsonSerializer.Serialize("Delivered");
+            parameters[ExportJobParameterNames.ResultCode] = JsonSerializer.Serialize("DELIVERED");
+            parameters[ExportJobParameterNames.ResultMessage] = JsonSerializer.Serialize("Sent successfully");
+            var service = new HangfireJobStatusService(
+                new StaticStorageAccessor(new HangfireJobSnapshot(
+                    parameters,
+                    [new HangfireStateSnapshot("Succeeded", DateTime.UtcNow)]
+                )),
+                NullLogger<HangfireJobStatusService>.Instance
+            );
+
+            Assert.Null(service.GetJob("job-1"));
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task HoldUsesCanonicalTrackLockAndPersistsIndependentState() {
+            var repository = new RecordingProductRepository(Product(ProductState.Idle));
+            var workflowRepository = new InMemoryProductRepository();
+            var track = await workflowRepository.GetOrCreateTrackAsync(DatasetName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 5, 0);
+            var locks = new AcquiredLockService();
+            var controller = Controller(
+                repository,
+                locks,
+                new RecordingSendJobService(),
+                SendToIcEncMode.Disabled,
+                workflowRepository
+            );
+
+            var result = await controller.HoldProduct(DatasetName, CancellationToken.None);
+
+            Assert.IsType<OkResult>(result);
+            Assert.Equal(1, locks.AcquireCalls);
+            Assert.Equal(0, repository.AppendCalls);
+            Assert.True(track.IsManuallyFrozen);
+            Assert.Equal(ProductState.Idle, track.State);
+        }
+
+        [Fact]
+        public async Task HoldAndReleaseAreIdempotentForTheSameProduct() {
+            var tracks = new InMemoryProductRepository();
+            var controller = Controller(new RecordingProductRepository(null), new AcquiredLockService(), new RecordingSendJobService(), SendToIcEncMode.Disabled, tracks);
+
+            Assert.IsType<OkResult>(await controller.HoldProduct(DatasetName, CancellationToken.None));
+            Assert.IsType<OkResult>(await controller.HoldProduct(DatasetName, CancellationToken.None));
+            Assert.True((await tracks.GetTrackAsync(DatasetName, ProductSpecification.S101))!.IsManuallyFrozen);
+
+            Assert.IsType<OkResult>(await controller.ReleaseHoldProduct(DatasetName, CancellationToken.None));
+            Assert.IsType<OkResult>(await controller.ReleaseHoldProduct(DatasetName, CancellationToken.None));
+            Assert.False((await tracks.GetTrackAsync(DatasetName, ProductSpecification.S101))!.IsManuallyFrozen);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task HoldCreatesMissingTrackFromCatalogueAndPreservesPublicVersion() {
+            var workflowRepository = new InMemoryProductRepository();
+            var controller = Controller(new RecordingProductRepository(null), new AcquiredLockService(), new RecordingSendJobService(), SendToIcEncMode.Disabled, workflowRepository);
+
+            var result = await controller.HoldProduct(DatasetName, CancellationToken.None);
+
+            Assert.IsType<OkResult>(result);
+            var track = await workflowRepository.GetTrackAsync(DatasetName, ProductSpecification.S101);
+            Assert.NotNull(track);
+            Assert.Equal(5, track.PublishedEdition);
+            Assert.Equal(0, track.PublishedUpdate);
+            Assert.True(track.IsManuallyFrozen);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task HoldRejectsUnknownProductWithoutCreatingSqlTrack() {
+            var workflowRepository = new InMemoryProductRepository();
+            var controller = Controller(new RecordingProductRepository(null), new AcquiredLockService(), new RecordingSendJobService(), SendToIcEncMode.Disabled, workflowRepository);
+
+            var result = await controller.HoldProduct("UNKNOWN", CancellationToken.None);
+
+            Assert.IsType<NotFoundResult>(result);
+            Assert.Null(await workflowRepository.GetTrackAsync("UNKNOWN", ProductSpecification.S101));
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task HoldUsesS57TrackIdentifiedByCatalogue() {
+            var workflowRepository = new InMemoryProductRepository();
+            var controller = Controller(new RecordingProductRepository(null), new AcquiredLockService(), new RecordingSendJobService(), SendToIcEncMode.Disabled, workflowRepository);
+
+            var result = await controller.HoldProduct("DK3BIDQE", CancellationToken.None);
+
+            Assert.IsType<OkResult>(result);
+            Assert.True((await workflowRepository.GetTrackAsync("DK3BIDQE", ProductSpecification.S57))!.IsManuallyFrozen);
+            Assert.Null(await workflowRepository.GetTrackAsync("DK3BIDQE", ProductSpecification.S101));
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public async Task ReleaseHoldUsesCanonicalTrackLockAndRevealsUnderlyingState() {
+            var repository = new RecordingProductRepository(Product(ProductState.Idle));
+            var workflowRepository = new InMemoryProductRepository();
+            var track = await workflowRepository.GetOrCreateTrackAsync(DatasetName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 5, 0);
+            await workflowRepository.SetManualFreezeAsync(track.Id, "operator", DateTime.UtcNow);
+            var locks = new AcquiredLockService();
+            var controller = Controller(
+                repository,
+                locks,
+                new RecordingSendJobService(),
+                SendToIcEncMode.Disabled,
+                workflowRepository
+            );
+
+            var result = await controller.ReleaseHoldProduct(DatasetName, CancellationToken.None);
+
+            Assert.IsType<OkResult>(result);
+            Assert.Equal(1, locks.AcquireCalls);
+            Assert.Equal(0, repository.AppendCalls);
+            Assert.False(track.IsManuallyFrozen);
+            Assert.Equal(ProductState.Idle, track.State);
+        }
+
+        [Theory]
+        [InlineData("ExportEdition", "S101")]
+        [InlineData("CancelExport", "S101")]
+        [Trait("Package", "PC-006")]
+        public void ExistingExportAndCancelExportStatusAndActiveLookupRemainAvailable(
+            string operationType,
+            string? exportTarget
+        ) {
+            var parameters = new Dictionary<string, string?>(StringComparer.Ordinal) {
+                [ExportJobParameterNames.DatasetName] = JsonSerializer.Serialize(DatasetName),
+                [ExportJobParameterNames.OperationType] = JsonSerializer.Serialize(operationType),
+                [ExportJobParameterNames.ExportTarget] = exportTarget == null
+                    ? null
+                    : JsonSerializer.Serialize(exportTarget),
+                [ExportJobParameterNames.ExpectedEdition] = JsonSerializer.Serialize(5),
+                [ExportJobParameterNames.ExpectedUpdate] = JsonSerializer.Serialize(0),
+                [ExportJobParameterNames.CorrelationId] = JsonSerializer.Serialize("correlation-export"),
+                [ExportJobParameterNames.CreatedAtUtc] = JsonSerializer.Serialize("2026-08-03T08:00:00.0000000+00:00")
+            };
+            var service = new HangfireJobStatusService(
+                new StaticStorageAccessor(new HangfireJobSnapshot(
+                    parameters,
+                    [new HangfireStateSnapshot("Enqueued", DateTime.UtcNow)]
+                )),
+                NullLogger<HangfireJobStatusService>.Instance
+            );
+
+            var response = Assert.Single(service.GetActiveJobs(DatasetName));
+
+            Assert.Equal(operationType, response.OperationType);
+            Assert.Equal(exportTarget, response.ExportTarget);
+            Assert.Equal(ExportJobContract.QueuedStatus, response.Status);
+            Assert.Null(response.Mode);
+            Assert.Null(response.OperationOutcome);
+            Assert.Null(response.DeliveryStatus);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public void ConfigurationValidatorRejectsLiveAndUnknownModes() {
+            var validator = new SendToIcEncOptionsValidator();
+
+            Assert.False(validator.Validate(null, new SendToIcEncOptions { Mode = SendToIcEncMode.Live }).Succeeded);
+            Assert.False(validator.Validate(null, new SendToIcEncOptions { Mode = (SendToIcEncMode)999 }).Succeeded);
+            Assert.True(validator.Validate(null, new SendToIcEncOptions { Mode = SendToIcEncMode.Disabled }).Succeeded);
+            Assert.True(validator.Validate(null, new SendToIcEncOptions { Mode = SendToIcEncMode.Simulation }).Succeeded);
+        }
+
+        [Fact]
+        [Trait("Package", "PC-006")]
+        public void SimulationJobDisablesAutomaticRetryAndRequestContainsNoCancellationToken() {
+            var method = typeof(UploadSingularProductJob).GetMethod(nameof(UploadSingularProductJob.RunAsync))!;
+            var retry = Assert.Single(method.GetCustomAttributes<AutomaticRetryAttribute>());
+
+            Assert.Equal(0, retry.Attempts);
+            Assert.DoesNotContain(
+                typeof(SendToIcEncJobRequest).GetProperties(),
+                property => property.PropertyType == typeof(CancellationToken)
+            );
+        }
+
+        private static UploadController Controller(
+            RecordingProductRepository repository,
+            IDatasetLockService locks,
+            ISendToIcEncJobService jobs,
+            SendToIcEncMode mode,
+            IProductWorkflowRepository? workflowRepository = null
+        ) {
+            var controller = new UploadController(
+                NullLogger<UploadController>.Instance,
+                repository,
+                workflowRepository ?? new InMemoryProductRepository(),
+                locks,
+                jobs,
+                new StaticOptionsMonitor<SendToIcEncOptions>(new SendToIcEncOptions { Mode = mode }),
+                TimeProvider.System,
+                new FreezeProductManager(new FreezeElectronicProductManager())
+            ) {
+                ControllerContext = new ControllerContext {
+                    HttpContext = new DefaultHttpContext {
+                        TraceIdentifier = "correlation-1"
+                    }
+                }
+            };
+            return controller;
+        }
+
+        private static UploadSingularProductJob Job(
+            RecordingProductRepository repository,
+            SendToIcEncMode mode
+        ) => new(
+            repository,
+            new StaticOptionsMonitor<SendToIcEncOptions>(new SendToIcEncOptions { Mode = mode }),
+            NullLogger<UploadSingularProductJob>.Instance
+        );
+
+        private static SendToIcEncJobRequest Request(bool allowSevenCsValidationFailure = false) => new(
+            DatasetName,
+            SendToIcEncMode.Simulation,
+            5,
+            0,
+            "correlation-1",
+            DateTimeOffset.Parse("2026-08-03T08:00:00Z"),
+            allowSevenCsValidationFailure
+        );
+
+        private static ProductRecord Product(
+            ProductState state = ProductState.Exported,
+            int edition = 5,
+            int update = 0,
+            string? errorCode = null
+        ) => new() {
+            Id = Guid.NewGuid(),
+            Name = DatasetName,
+            State = state,
+            ProductSpecification = "S-101",
+            EditionNo = edition,
+            UpdateNo = update,
+            ErrorCode = errorCode
+        };
+
+        private sealed class RecordingSendJobService : ISendToIcEncJobService
+        {
+            public int EnqueueCalls { get; private set; }
+            public SendToIcEncJobRequest? LastRequest { get; private set; }
+            public Exception? ExceptionToThrow { get; init; }
+
+            public ExportJobStartResponse Enqueue(SendToIcEncJobRequest request) {
+                EnqueueCalls++;
+                LastRequest = request;
+                if (ExceptionToThrow != null)
+                    throw ExceptionToThrow;
+
+                return new ExportJobStartResponse {
+                    JobId = "job-1",
+                    DatasetName = request.DatasetName,
+                    OperationType = SendToIcEncContract.OperationType,
+                    Status = ExportJobContract.QueuedStatus,
+                    CreatedAt = request.CreatedAtUtc,
+                    CorrelationId = request.CorrelationId,
+                    StatusUrl = "/jobs/job-1",
+                    Mode = SendToIcEncContract.SimulationMode,
+                    DeliveryStatus = SendToIcEncContract.NotDeliveredStatus,
+                    Message = SendToIcEncContract.AcceptedMessage
+                };
+            }
+        }
+
+        private sealed class RecordingProductRepository(ProductRecord? current) : IProductRepository
+        {
+            public int ReadCalls { get; private set; }
+            public int AppendCalls { get; private set; }
+            public Exception? ExceptionToThrow { get; init; }
+            public ProductState? LastAppendState { get; private set; }
+            public uint? LastAppendEdition { get; private set; }
+            public uint? LastAppendUpdate { get; private set; }
+
+            public Task<ProductRecord?> GetCurrentByNameAsync(string name) {
+                ReadCalls++;
+                if (ExceptionToThrow != null)
+                    throw ExceptionToThrow;
+
+                return Task.FromResult(current);
+            }
+
+            public Task AppendAsync(string name, ProductState state, string productSpecification, uint editionNo, uint? updateNo, string? owner = null, byte[]? attachment = null, string? attachmentFileName = null, string? errorCode = null, string? errorMessage = null) {
+                AppendCalls++;
+                LastAppendState = state;
+                LastAppendEdition = editionNo;
+                LastAppendUpdate = updateNo;
+                return Task.CompletedTask;
+            }
+
+            public Task<IEnumerable<ProductRecord>> GetCurrentAsync() => Task.FromResult<IEnumerable<ProductRecord>>([]);
+            public Task<IEnumerable<ProductRecord>> GetCurrentByNamesAsync(IEnumerable<string> names) => Task.FromResult<IEnumerable<ProductRecord>>([]);
+            public Task<IEnumerable<ProductRecord>> GetCurrentByNamesAsync(IEnumerable<string> names, ProductSpecification productSpecification) => Task.FromResult<IEnumerable<ProductRecord>>([]);
+            public Task<DateTime?> GetLastSuccessfulRunUtcAsync(string jobName) => Task.FromResult<DateTime?>(null);
+            public Task SetSuccessfulRunUtcAsync(string jobName, DateTime dateTime) => Task.CompletedTask;
+            public Task<string[]> GetIneligbleProductsAsync() => Task.FromResult(Array.Empty<string>());
+            public Task<string[]> GetEligibleProductsAsync() => Task.FromResult(Array.Empty<string>());
+            public Task<IEnumerable<ProductRecord>> GetHistoryByNameAsync(string name) => Task.FromResult<IEnumerable<ProductRecord>>([]);
+            public Task<IEnumerable<ProductRecord>> GetHistoryAsync(DateTime fromInclusive, DateTime toExclusive) => Task.FromResult<IEnumerable<ProductRecord>>([]);
+        }
+
+        private sealed class AcquiredLockService : IDatasetLockService
+        {
+            public int AcquireCalls { get; private set; }
+
+            public Task<IAsyncDisposable?> TryAcquireAsync(string datasetName, CancellationToken cancellationToken = default) {
+                AcquireCalls++;
+                return Task.FromResult<IAsyncDisposable?>(new NoopAsyncDisposable());
+            }
+        }
+
+        private sealed class NoopAsyncDisposable : IAsyncDisposable
+        {
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+
+        private sealed class ThrowingLockService : IDatasetLockService
+        {
+            public int AcquireCalls { get; private set; }
+
+            public Task<IAsyncDisposable?> TryAcquireAsync(string datasetName, CancellationToken cancellationToken = default) {
+                AcquireCalls++;
+                throw new InvalidOperationException("Simulation must not acquire the dataset lock.");
+            }
+        }
+
+        private sealed class RecordingExecutionContext : IExportJobExecutionContext
+        {
+            private readonly Dictionary<string, object?> _values = [];
+            public string JobId => "job-1";
+            public T? GetJobParameter<T>(string name) => Get<T>(name);
+            public void SetJobParameter(string name, object? value) => _values[name] = value;
+            public T? Get<T>(string name) => _values.TryGetValue(name, out var value) ? (T?)value : default;
+        }
+
+        private sealed class RecordingBackgroundJobClient : IBackgroundJobClient
+        {
+            public int CreateCalls { get; private set; }
+            public Job? LastJob { get; private set; }
+            public IState? LastState { get; private set; }
+
+            public string Create(Job job, IState state) {
+                CreateCalls++;
+                LastJob = job;
+                LastState = state;
+                return "job-1";
+            }
+
+            public bool ChangeState(string jobId, IState state, string expectedState) =>
+                throw new NotSupportedException();
+        }
+
+        private sealed class StaticStorageAccessor(HangfireJobSnapshot snapshot) : IHangfireJobStorageAccessor
+        {
+            public HangfireJobSnapshot? ReadJob(string jobId) => snapshot;
+            public IReadOnlyList<string> ReadActiveJobIds() => ["job-1"];
+        }
+
+        private sealed class StaticOptionsMonitor<T>(T value) : IOptionsMonitor<T>
+        {
+            public T CurrentValue => value;
+            public T Get(string? name) => value;
+            public IDisposable? OnChange(Action<T, string?> listener) => null;
+        }
+
+        private sealed class FreezeProductManager(IElectronicProductManager electronicProductManager) : IProductManager
+        {
+            public INauticalProductManager NauticalProductManager => null!;
+            public IElectronicProductManager ElectronicProductManager { get; } = electronicProductManager;
+        }
+
+        private sealed class FreezeElectronicProductManager : IElectronicProductManager
+        {
+            public string OutputFolder => string.Empty;
+            public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(string datasetName, CancellationToken cancellationToken = default) => Task.FromResult<ElectronicProductVersion?>(new(datasetName, 5, 0));
+            public IEnumerator<string> GetEnumerator() => Array.Empty<string>().AsEnumerable().GetEnumerator();
+            IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+            public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name) => null;
+            public S100FC.S128.FeatureTypes.ElectronicProduct? ElectronicProduct(string name, string productSpecification) => null;
+            public S100FC.S128.FeatureTypes.ElectronicProduct? ResolveExportProduct(string name) => name.Equals("UNKNOWN", StringComparison.OrdinalIgnoreCase) ? null : name.Equals("DK3BIDQE", StringComparison.OrdinalIgnoreCase)
+                ? new S100FC.S128.FeatureTypes.ElectronicProduct { datasetName = "DK3BIDQE", productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-57" } }
+                : new S100FC.S128.FeatureTypes.ElectronicProduct { datasetName = "101DK001", productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-101" } };
+            public S100FC.S128.FeatureTypes.ElectronicProduct? ResolveElectronicProduct(string name, string productSpecification) => productSpecification == "S57"
+                ? new S100FC.S128.FeatureTypes.ElectronicProduct { datasetName = "DK3BIDQE", productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = "S-57" } }
+                : null;
+            public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, int? specificUsage, string boundary, string? ProductMapping, int? optimumDisplayScale = null) => throw new NotSupportedException();
+            public Task CreateElectronicProductAsync(string name, S100FC.S128.ComplexAttributes.productSpecification productSpecification, string boundary, int edition, int update, byte[] zipfile) => throw new NotSupportedException();
+            public Task<S100FC.YAML.Dataset> CreateNewDatasetAsync(string name) => throw new NotSupportedException();
+            public Task<S100FC.YAML.Dataset> CreateNewEditionAsync(string name) => throw new NotSupportedException();
+            public Task<S100FC.YAML.Dataset> CreateNewUpdateAsync(string name) => throw new NotSupportedException();
+            public Task<S100FC.YAML.Dataset> ReissueAsync(string name) => throw new NotSupportedException();
+            public Task<S100FC.YAML.Dataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            public Task<Dictionary<string, string>> GetDatasetAOIs() => throw new NotSupportedException();
+            public Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification) => throw new NotSupportedException();
+            public Task<bool> IsDirtyAsync(string name) => throw new NotSupportedException();
+            public Task<string> GetDatasetBoundary(string name) => throw new NotSupportedException();
+            public Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name) => throw new NotSupportedException();
+            public Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc) => throw new NotSupportedException();
+            public Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition) => throw new NotSupportedException();
+            public Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign) => throw new NotSupportedException();
+            public Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml) => throw new NotSupportedException();
+        }
+    }
+}

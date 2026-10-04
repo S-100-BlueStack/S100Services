@@ -6,20 +6,141 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using ProductManagerAPI.Controllers;
-using ProductManagerAPI.Data.Models;
-using ProductManagerAPI.Data.Repositories;
+using ProductCatalogueAPI.Controllers;
+using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Data.Repositories;
+using ProductCatalogueAPI.Models;
+using S100FC;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using System.Collections;
 using System.Diagnostics;
 using System.Reflection;
-using static ProductManagerAPI.Models.ResponseTypes;
+using static ProductCatalogueAPI.Models.ResponseTypes;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class ElectronicProductsAoiProfilingTests
     {
+        [Fact]
+        public async Task EncResponsesIncludeBothCurrentProductVersionsWithoutCandidates() {
+            const string s101Name = "101DK001GSOUT";
+            var s57Name = $"57{s101Name}";
+            var s101 = CreateElectronicProduct(s101Name, 90_000, 1);
+            s101.editionNumber = 3;
+            s101.updateNumber = 2;
+            s101.issueDate = new DateOnly(2026, 9, 20);
+            var s57 = CreateElectronicProduct(s57Name, 90_000, 1, "S-57");
+            s57.editionNumber = 4;
+            s57.updateNumber = 1;
+            s57.issueDate = new DateOnly(2026, 8, 15);
+            var products = new FakeElectronicProductManager(
+                new Dictionary<string, string> { [s101Name] = "{\"rings\":[]}" },
+                new Dictionary<string, ElectronicProduct> { [s101Name] = s101, [s57Name] = s57 });
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
+                new FakeProductManager(products), new RecordingProductRepository(new Dictionary<string, ProductRecord?>()), new InMemoryProductRepository()) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+
+            var detail = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(await controller.GetElectronicProduct(s101Name)).Value).Data!;
+            Assert.Empty(detail.Exports!);
+            Assert.Equal(s57Name, detail.S57?.Name);
+            Assert.Equal(4, detail.S57?.Edition);
+            Assert.Equal(1, detail.S57?.Update);
+            Assert.Equal(new DateOnly(2026, 8, 15), detail.S57?.IssueDate);
+            Assert.Equal(s101Name, detail.S101?.Name);
+            Assert.Equal(3, detail.S101?.Edition);
+            Assert.Equal(2, detail.S101?.Update);
+            Assert.Equal(new DateOnly(2026, 9, 20), detail.S101?.IssueDate);
+
+            var aoi = Assert.Single(Assert.IsType<List<AOIResponse>>(Assert.IsType<OkObjectResult>(await controller.GetAllElectronicProductsAOI()).Value));
+            Assert.Equal(4, aoi.Attributes?.Package?.S57.CurrentEdition);
+            Assert.Equal(1, aoi.Attributes?.Package?.S57.CurrentUpdate);
+            Assert.Equal(new DateOnly(2026, 8, 15), aoi.Attributes?.Package?.S57.IssueDate);
+            Assert.Equal(3, aoi.Attributes?.Package?.S101.CurrentEdition);
+            Assert.Equal(2, aoi.Attributes?.Package?.S101.CurrentUpdate);
+            Assert.Equal(new DateOnly(2026, 9, 20), aoi.Attributes?.Package?.S101.IssueDate);
+        }
+
+        [Fact]
+        public async Task ProductDetailDoesNotShowDiscardedPublishedTrackAsAnExport() {
+            const string sourceName = "101DK001GSOUT";
+            var s57Name = $"57{sourceName}";
+            var products = new FakeElectronicProductManager(
+                new Dictionary<string, string>(),
+                new Dictionary<string, ElectronicProduct> { [sourceName] = CreateElectronicProduct(sourceName, 90_000, 1) });
+            var workflows = new InMemoryProductRepository();
+            var s57 = await workflows.GetOrCreateTrackAsync(s57Name, ProductSpecification.S57, ExportEngineKind.IsoIec8211, 4, 0);
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
+                new FakeProductManager(products), workflows, workflows) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+
+            var withoutCandidate = await controller.GetElectronicProduct(sourceName);
+            var initial = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(withoutCandidate).Value);
+            Assert.Empty(initial.Data!.Exports);
+
+            await workflows.BeginExportAsync(s57.Id, 5, 0, "operator", DateTime.UtcNow);
+            var withCandidate = await controller.GetElectronicProduct(sourceName);
+            var active = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(withCandidate).Value);
+            var s57Export = Assert.Single(active.Data!.Exports);
+            Assert.Equal("S57", s57Export.Type);
+            Assert.Equal(5, s57Export.Edition);
+
+            await workflows.DiscardCandidateAsync(s57.Id, "operator", DateTime.UtcNow);
+            var afterDiscard = await controller.GetElectronicProduct(sourceName);
+            var discarded = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(afterDiscard).Value);
+            Assert.Empty(discarded.Data!.Exports);
+        }
+
+        [Fact]
+        public async Task ProductDetailIdentifiesS101CandidateByItsSpecificProductType() {
+            const string sourceName = "101DK001GSOUT";
+            var products = new FakeElectronicProductManager(
+                new Dictionary<string, string>(),
+                new Dictionary<string, ElectronicProduct> { [sourceName] = CreateElectronicProduct(sourceName, 90_000, 1) });
+            var workflows = new InMemoryProductRepository();
+            var s101 = await workflows.GetOrCreateTrackAsync(sourceName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 4, 0);
+            await workflows.BeginExportAsync(s101.Id, 5, 0, "operator", DateTime.UtcNow);
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
+                new FakeProductManager(products), workflows, workflows) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+
+            var result = await controller.GetElectronicProduct(sourceName);
+            var response = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(result).Value);
+
+            Assert.Equal("S101", Assert.Single(response.Data!.Exports).Type);
+        }
+
+        [Fact]
+        public async Task GlobalAoiShowsS101FailureOnThePackageWhenS57Succeeded() {
+            const string datasetName = "101DK0000001E";
+            var products = new FakeElectronicProductManager(
+                new Dictionary<string, string> { [datasetName] = "{\"rings\":[]}" },
+                new Dictionary<string, ElectronicProduct> { [datasetName] = CreateElectronicProduct(datasetName, 90_000, 3) });
+            var tracks = new InMemoryProductRepository();
+            var s101 = await tracks.GetOrCreateTrackAsync(datasetName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 1, 0);
+            var s57 = await tracks.GetOrCreateTrackAsync($"57{datasetName}", ProductSpecification.S57, ExportEngineKind.IsoIec8211, 1, 0);
+            await tracks.SetStateAsync(s101.Id, ProductState.Error, "system", DateTime.UtcNow, "SEVENCS_VALIDATION_FAILED", "SevenCs found 2 critical findings.");
+            await tracks.SetStateAsync(s57.Id, ProductState.ReadyForDistribution, "system", DateTime.UtcNow);
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
+                new FakeProductManager(products), new RecordingProductRepository(new Dictionary<string, ProductRecord?>()), tracks) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+
+            var result = await controller.GetAllElectronicProductsAOI();
+
+            var response = Assert.Single(Assert.IsType<List<AOIResponse>>(Assert.IsType<OkObjectResult>(result).Value));
+            Assert.Equal(EncPackageStatus.Error, response.Attributes?.Package?.Status);
+            Assert.Equal("SevenCs found 2 critical findings.", response.Attributes?.Package?.ErrorMessage);
+            Assert.Equal(response.Attributes?.Package?.ErrorMessage, response.Attributes?.ErrorMessage);
+        }
+
         [Fact]
         public async Task GlobalAoiActionPreservesResponseContractAndLogsProfilingMetrics() {
             const string firstDatasetName = "101DK0000001E";
@@ -51,7 +172,8 @@ namespace TestProductManagerAPI
                 logger,
                 cache,
                 new FakeProductManager(electronicProductManager),
-                repository
+                repository,
+                new InMemoryProductRepository()
             );
             var httpContext = new DefaultHttpContext {
                 TraceIdentifier = requestId,
@@ -80,6 +202,9 @@ namespace TestProductManagerAPI
             Assert.Equal(ProductStatus.Frozen, firstResponse.Attributes?.Status);
             Assert.Equal(22_000, firstResponse.Attributes?.DisplayScale);
             Assert.Equal(4, firstResponse.Attributes?.UsageBand);
+            Assert.Equal(PackageLayer.ENC, firstResponse.Attributes?.Package?.Layer);
+            Assert.Equal($"57{firstDatasetName}", firstResponse.Attributes?.Package?.S57.DatasetName);
+            Assert.Equal(firstDatasetName, firstResponse.Attributes?.Package?.S101.DatasetName);
 
             var secondResponse = Assert.Single(
                 responses.Where(response => response.Attributes?.DatasetName == secondDatasetName)
@@ -103,11 +228,146 @@ namespace TestProductManagerAPI
             Assert.Equal(3, Assert.IsType<int>(completionEntry.Properties["GeometryCount"]));
             Assert.Equal(2, Assert.IsType<int>(completionEntry.Properties["ResponseItemCount"]));
             Assert.Equal(1, Assert.IsType<int>(completionEntry.Properties["SkippedProductCount"]));
-            Assert.Equal("None", Assert.IsType<string>(completionEntry.Properties["CacheState"]));
+            Assert.Equal("Miss", Assert.IsType<string>(completionEntry.Properties["CacheState"]));
             Assert.True(Assert.IsType<double>(completionEntry.Properties["ControllerDurationMs"]) >= 0d);
             Assert.True(Assert.IsType<double>(completionEntry.Properties["GeometryRetrievalMs"]) >= 0d);
             Assert.True(Assert.IsType<double>(completionEntry.Properties["ProductStateRetrievalMs"]) >= 0d);
             Assert.True(Assert.IsType<double>(completionEntry.Properties["MappingMs"]) >= 0d);
+        }
+
+        [Fact]
+        public async Task GlobalAoiActionCachesGeometryLookupPerProductSpecification() {
+            const string datasetName = "101DK0000001E";
+            var electronicProductManager = new FakeElectronicProductManager(
+                new Dictionary<string, string> { [datasetName] = "{\"rings\":[]}" },
+                new Dictionary<string, ElectronicProduct> { [datasetName] = CreateElectronicProduct(datasetName, 90_000, 3) }
+            );
+            var logger = new RecordingLogger<ElectronicProductsController>();
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(
+                logger,
+                cache,
+                new FakeProductManager(electronicProductManager),
+                new RecordingProductRepository(new Dictionary<string, ProductRecord?>()),
+                new InMemoryProductRepository()
+            ) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+
+            await controller.GetAllElectronicProductsAOI();
+            await controller.GetAllElectronicProductsAOI();
+
+            Assert.Equal(1, electronicProductManager.BulkAoiCallCount);
+            var cacheStates = logger.Entries
+                .Where(entry => entry.Properties.ContainsKey("CacheState"))
+                .Select(entry => Assert.IsType<string>(entry.Properties["CacheState"]))
+                .ToArray();
+            Assert.Equal(new[] { "Miss", "Hit" }, cacheStates);
+        }
+
+        [Fact]
+        public async Task GlobalAoiActionRejectsObsoleteProductSpecificationFilter() {
+            const string datasetName = "DK3AA01";
+            var electronicProductManager = new FakeElectronicProductManager(
+                new Dictionary<string, string> { [datasetName] = "{\"rings\":[]}" },
+                new Dictionary<string, ElectronicProduct> { [datasetName] = CreateElectronicProduct(datasetName, 90_000, 3, "S-57") }
+            );
+            var repository = new RecordingProductRepository(new Dictionary<string, ProductRecord?> {
+                [datasetName] = new ProductRecord { Name = datasetName, ProductSpecification = "S57", State = ProductState.Error, ErrorMessage = "IC-ENC rejected the dataset." }
+            });
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(
+                new RecordingLogger<ElectronicProductsController>(),
+                cache,
+                new FakeProductManager(electronicProductManager),
+                repository,
+                new InMemoryProductRepository()
+            );
+            controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+
+            var result = await controller.GetAllElectronicProductsAOI("S57");
+
+            Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal(0, electronicProductManager.BulkAoiCallCount);
+        }
+
+        [Fact]
+        public async Task TargetedAoiActionReturnsSourceAwareProductWithoutGlobalAoiScan() {
+            const string datasetName = "DK3AA01";
+            const string boundary = "{\"rings\":[[[10,55],[11,55],[11,56],[10,56],[10,55]]],\"spatialReference\":{\"wkid\":4326}}";
+            var electronicProductManager = new FakeElectronicProductManager(
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [datasetName] = boundary },
+                new Dictionary<string, ElectronicProduct>(StringComparer.OrdinalIgnoreCase) {
+                    [datasetName] = CreateElectronicProduct(datasetName, 90_000, 3, "S-57")
+                }
+            );
+            var repository = new RecordingProductRepository(new Dictionary<string, ProductRecord?>(StringComparer.OrdinalIgnoreCase) {
+                [datasetName] = new ProductRecord {
+                    Name = datasetName,
+                    ProductSpecification = "S57",
+                    State = ProductState.Error,
+                    ErrorMessage = "Validation failed."
+                }
+            });
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(
+                new RecordingLogger<ElectronicProductsController>(),
+                cache,
+                new FakeProductManager(electronicProductManager),
+                repository,
+                new InMemoryProductRepository()
+            );
+            controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+
+            var result = await controller.GetElectronicProductAoi(datasetName);
+
+            var response = Assert.IsType<ApiResponse<AOIResponse>>(Assert.IsType<OkObjectResult>(result).Value);
+            Assert.True(response.Success);
+            Assert.Equal(1, response.TotalHits);
+            Assert.Equal(boundary, response.Data?.Geometry);
+            Assert.Equal(datasetName, response.Data?.Attributes?.DatasetName);
+            Assert.Equal("S57", response.Data?.Attributes?.ProductSpecification);
+            Assert.Equal(ProductStatus.Error, response.Data?.Attributes?.Status);
+            Assert.Equal("Validation failed.", response.Data?.Attributes?.ErrorMessage);
+            Assert.Equal(0, electronicProductManager.BulkAoiCallCount);
+            Assert.Equal(1, electronicProductManager.TargetedBoundaryCallCount);
+            Assert.Equal(1, repository.BatchCallCount);
+            Assert.Equal(ProductSpecification.S57, repository.RequestedProductSpecification);
+            Assert.Equal(new[] { datasetName }, repository.RequestedNames);
+        }
+
+        [Fact]
+        public async Task TargetedAoiActionFailsClosedWhenDatasetIdentityIsAmbiguous() {
+            const string datasetName = "AMBIGUOUS";
+            var electronicProductManager = new FakeElectronicProductManager(
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                new Dictionary<string, ElectronicProduct>(StringComparer.OrdinalIgnoreCase),
+                new ProductMappingIntegrityException("Dataset identity is ambiguous.")
+            );
+            var repository = new RecordingProductRepository(new Dictionary<string, ProductRecord?>());
+            var logger = new RecordingLogger<ElectronicProductsController>();
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(
+                logger,
+                cache,
+                new FakeProductManager(electronicProductManager),
+                repository,
+                new InMemoryProductRepository()
+            );
+            controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+
+            var result = await controller.GetElectronicProductAoi(datasetName);
+
+            var response = Assert.IsType<ApiResponse<AOIResponse>>(Assert.IsType<ConflictObjectResult>(result).Value);
+            Assert.False(response.Success);
+            Assert.Equal("The electronic product identity is ambiguous or invalid.", response.Message);
+            Assert.Equal(0, electronicProductManager.BulkAoiCallCount);
+            Assert.Equal(0, electronicProductManager.TargetedBoundaryCallCount);
+            Assert.Equal(0, repository.BatchCallCount);
+            Assert.Contains(
+                logger.Entries,
+                entry => entry.Level == LogLevel.Error && entry.Message.Contains("identity resolution failed", StringComparison.OrdinalIgnoreCase)
+            );
         }
 
         [Theory]
@@ -148,6 +408,31 @@ namespace TestProductManagerAPI
             Assert.Equal("attributebindings, shape", filter.SubFields);
         }
 
+        [Theory]
+        [InlineData("S-101", "S101", true)]
+        [InlineData("S-57", "S57", true)]
+        [InlineData("S-57", "S101", false)]
+        [InlineData("S-128", "S101", false)]
+        public void DatasetAoiSpecificationIsReadFromTheRowsAttributeBindings(string actualProductSpecification, string requestedProductSpecification, bool expectedMatch) {
+            var attrBindings = CreateElectronicProduct("TEST", 90_000, 3, actualProductSpecification).Flatten();
+            var method = typeof(ProductManagerGDB).GetMethod("MatchesProductSpecification", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.NotNull(method);
+
+            var matches = Assert.IsType<bool>(method.Invoke(null, [attrBindings, requestedProductSpecification]));
+
+            Assert.Equal(expectedMatch, matches);
+        }
+
+        [Theory]
+        [InlineData("deleted-feature", true)]
+        [InlineData("current-feature", false)]
+        [InlineData("CURRENT-FEATURE", false)]
+        public void ArchivedFeatureIsDeletedOnlyWhenItsUidIsAbsentFromTheCurrentFeatureClass(string featureId, bool expectedDeleted) {
+            var currentFeatureIds = new HashSet<string>(["current-feature"], StringComparer.OrdinalIgnoreCase);
+
+            Assert.Equal(expectedDeleted, ProductManagerGDB.IsDeletedFeature(featureId, currentFeatureIds));
+        }
+
         [Fact]
         public async Task SingleThreadTaskSchedulerPreservesActivityCorrelation() {
             using var scheduler = new SingleThreadTaskScheduler();
@@ -164,15 +449,29 @@ namespace TestProductManagerAPI
             Assert.Equal(expectedCorrelationId, observedCorrelationId);
         }
 
+        [Fact]
+        public async Task SingleThreadTaskSchedulerUsesStaForArcGisOwnership() {
+            using var scheduler = new SingleThreadTaskScheduler();
+            var taskFactory = new TaskFactory(scheduler);
+
+            var apartmentState = await taskFactory.StartNew(
+                () => Thread.CurrentThread.GetApartmentState()
+            );
+
+            Assert.Equal(ApartmentState.STA, apartmentState);
+        }
+
         private static ElectronicProduct CreateElectronicProduct(
             string datasetName,
             int optimumDisplayScale,
-            int specificUsage
+            int specificUsage,
+            string productSpecification = "S-101"
         ) {
             return new ElectronicProduct {
                 datasetName = datasetName,
                 optimumDisplayScale = optimumDisplayScale,
                 specificUsage = specificUsage,
+                productSpecification = new S100FC.S128.ComplexAttributes.productSpecification { name = productSpecification },
             };
         }
 
@@ -190,14 +489,44 @@ namespace TestProductManagerAPI
 
         private sealed class FakeElectronicProductManager(
             Dictionary<string, string> aois,
-            Dictionary<string, ElectronicProduct> products
+            Dictionary<string, ElectronicProduct> products,
+            ProductMappingIntegrityException? resolveExportProductError = null
         ) : IElectronicProductManager
         {
             public IReadOnlyDictionary<string, string> Aois { get; } = aois;
+            public int BulkAoiCallCount { get; private set; }
+            public int TargetedBoundaryCallCount { get; private set; }
             public string OutputFolder => string.Empty;
 
             public ElectronicProduct? ElectronicProduct(string name) {
                 return products.GetValueOrDefault(name);
+            }
+
+            public ElectronicProduct? ElectronicProduct(string name, string productSpecification) {
+                var product = products.GetValueOrDefault(name);
+                var requested = productSpecification.Replace("-", string.Empty, StringComparison.OrdinalIgnoreCase);
+                var actual = product?.productSpecification?.name?.Replace("-", string.Empty, StringComparison.OrdinalIgnoreCase);
+                return string.Equals(requested, actual, StringComparison.OrdinalIgnoreCase) ? product : null;
+            }
+
+            public ElectronicProduct? ResolveExportProduct(string name) {
+                if (resolveExportProductError is not null)
+                    throw resolveExportProductError;
+
+                return products.GetValueOrDefault(name);
+            }
+
+            public ElectronicProduct? ResolveElectronicProduct(string name, string productSpecification) =>
+                ElectronicProduct(name, productSpecification);
+
+            public IReadOnlyList<ElectronicProduct> GetMappedElectronicProducts(string name, string productSpecification) {
+                if (!products.TryGetValue(name, out var source))
+                    return [];
+                if (productSpecification == "S57" && source.productSpecification?.name == "S-101")
+                    return [products.GetValueOrDefault($"57{name}") ?? CreateElectronicProduct($"57{name}", Convert.ToInt32(source.optimumDisplayScale), Convert.ToInt32(source.specificUsage), "S-57")];
+                if (productSpecification == "S101" && source.productSpecification?.name == "S-57")
+                    return [CreateElectronicProduct($"101{name}", Convert.ToInt32(source.optimumDisplayScale), Convert.ToInt32(source.specificUsage), "S-101")];
+                return [];
             }
 
             public Task<ElectronicProductVersion?> ReadElectronicProductVersionAsync(
@@ -216,6 +545,12 @@ namespace TestProductManagerAPI
             }
 
             public Task<Dictionary<string, string>> GetDatasetAOIs() {
+                BulkAoiCallCount++;
+                return Task.FromResult(new Dictionary<string, string>(aois, StringComparer.OrdinalIgnoreCase));
+            }
+
+            public Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification) {
+                BulkAoiCallCount++;
                 return Task.FromResult(new Dictionary<string, string>(aois, StringComparer.OrdinalIgnoreCase));
             }
 
@@ -249,9 +584,14 @@ namespace TestProductManagerAPI
             public Task<S100FC.YAML.Dataset> CreateNewEditionAsync(string name) => throw new NotSupportedException();
             public Task<S100FC.YAML.Dataset> CreateNewUpdateAsync(string name) => throw new NotSupportedException();
             public Task<S100FC.YAML.Dataset> ReissueAsync(string name) => throw new NotSupportedException();
-            public Task<bool> RollBackAsync(string name) => throw new NotSupportedException();
+            public Task<S100FC.YAML.Dataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default) => throw new NotSupportedException();
             public Task<bool> IsDirtyAsync(string name) => throw new NotSupportedException();
-            public Task<string> GetDatasetBoundary(string name) => throw new NotSupportedException();
+            public Task<string> GetDatasetBoundary(string name) {
+                TargetedBoundaryCallCount++;
+                if (!aois.TryGetValue(name, out var boundary) && (!name.StartsWith("101", StringComparison.Ordinal) || !aois.TryGetValue(name[3..], out boundary)))
+                    throw new InvalidOperationException("No dataset rows found");
+                return Task.FromResult(boundary);
+            }
             public Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name) => throw new NotSupportedException();
             public Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc) => throw new NotSupportedException();
             public Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition) => throw new NotSupportedException();
@@ -267,6 +607,7 @@ namespace TestProductManagerAPI
 
             public int BatchCallCount { get; private set; }
             public IReadOnlyList<string> RequestedNames => _requestedNames;
+            public ProductSpecification? RequestedProductSpecification { get; private set; }
 
             public Task<ProductRecord?> GetCurrentByNameAsync(string name) {
                 throw new InvalidOperationException("The global AOI action must use the batch repository method.");
@@ -286,6 +627,11 @@ namespace TestProductManagerAPI
                 return Task.FromResult<IEnumerable<ProductRecord>>(records);
             }
 
+            public Task<IEnumerable<ProductRecord>> GetCurrentByNamesAsync(IEnumerable<string> names, ProductSpecification productSpecification) {
+                RequestedProductSpecification = productSpecification;
+                return GetCurrentByNamesAsync(names);
+            }
+
             public Task AppendAsync(
                 string name,
                 ProductState state,
@@ -294,7 +640,9 @@ namespace TestProductManagerAPI
                 uint? updateNo,
                 string? owner = null,
                 byte[]? attachment = null,
-                string? attachmentFileName = null
+                string? attachmentFileName = null,
+                string? errorCode = null,
+                string? errorMessage = null
             ) => throw new NotSupportedException();
 
             public Task<IEnumerable<ProductRecord>> GetCurrentAsync() => throw new NotSupportedException();

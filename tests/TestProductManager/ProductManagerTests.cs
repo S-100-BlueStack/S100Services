@@ -1,9 +1,9 @@
 using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
 using Microsoft.Extensions.Logging.Abstractions;
-using ProductManagerAPI;
-using ProductManagerAPI.Services.Export;
-using ProductManagerAPI.Services.SevenCs;
+using ProductCatalogueAPI;
+using ProductCatalogueAPI.Services.Export;
+using ProductCatalogueAPI.Services.SevenCs;
 using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using S100FC.YAML;
@@ -15,7 +15,7 @@ using System.Text.Json;
 using Xunit.Abstractions;
 using IO = System.IO;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class TestProductManager
     {
@@ -27,27 +27,6 @@ namespace TestProductManagerAPI
 
             ArcGIS.Core.Hosting.Host.Initialize();
 
-        }
-
-
-        [Fact]
-        public async Task Test_ProductManagerREST() {
-            var productManager = await ProductCatalogue.ProductManagerREST.CreateInstanceAsync(() => {
-                var url = Environment.GetEnvironmentVariable("featureService_dev", EnvironmentVariableTarget.User)!;
-
-                var client = new HttpClient();
-                var opt = new S100Framework.REST.Configuration.FeatureServiceClientOptions {
-                    ServiceUri = new Uri(url),
-                };
-                return new S100Framework.REST.Clients.FeatureServiceClient(client, opt);
-
-            });
-
-
-
-            Assert.NotNull(productManager);
-
-            System.Diagnostics.Debugger.Break();
         }
 
 
@@ -68,10 +47,7 @@ namespace TestProductManagerAPI
             var datasetName = "";
             var outputPath = "";
 
-            var res = await sevenCs.ValidateDatasetAsync(new ElectronicProduct {
-                datasetName = datasetName,
-                editionNumber = 1,
-            }, outputPath);
+            var res = await sevenCs.ValidateDatasetAsync(datasetName, 1, 0, outputPath);
 
 
 

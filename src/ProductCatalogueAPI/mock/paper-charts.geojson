@@ -1,0 +1,239 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              8.0,
+              54.6
+            ],
+            [
+              9.2,
+              54.6
+            ],
+            [
+              9.2,
+              55.3
+            ],
+            [
+              8.0,
+              55.3
+            ],
+            [
+              8.0,
+              54.6
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "datasetName": "PAPER001",
+        "productName": "Synthetic Paper Chart 01",
+        "edition": 1,
+        "update": 0,
+        "status": 1,
+        "displayScale": 50000,
+        "usageBand": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              9.4,
+              55.0
+            ],
+            [
+              10.7,
+              55.0
+            ],
+            [
+              10.7,
+              55.7
+            ],
+            [
+              9.4,
+              55.7
+            ],
+            [
+              9.4,
+              55.0
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "datasetName": "PAPER002",
+        "productName": "Synthetic Paper Chart 02",
+        "edition": 1,
+        "update": 0,
+        "status": 2,
+        "displayScale": 75000,
+        "usageBand": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              10.9,
+              55.5
+            ],
+            [
+              12.1,
+              55.5
+            ],
+            [
+              12.1,
+              56.2
+            ],
+            [
+              10.9,
+              56.2
+            ],
+            [
+              10.9,
+              55.5
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "datasetName": "PAPER003",
+        "productName": "Synthetic Paper Chart 03",
+        "edition": 1,
+        "update": 0,
+        "status": 3,
+        "displayScale": 100000,
+        "usageBand": 5
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              12.2,
+              56.1
+            ],
+            [
+              13.4,
+              56.1
+            ],
+            [
+              13.4,
+              56.9
+            ],
+            [
+              12.2,
+              56.9
+            ],
+            [
+              12.2,
+              56.1
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "datasetName": "PAPER004",
+        "productName": "Synthetic Paper Chart 04",
+        "edition": 1,
+        "update": 0,
+        "status": 4,
+        "displayScale": 150000,
+        "usageBand": 5
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              14.6,
+              54.8
+            ],
+            [
+              15.2,
+              54.8
+            ],
+            [
+              15.2,
+              55.4
+            ],
+            [
+              14.6,
+              55.4
+            ],
+            [
+              14.6,
+              54.8
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "datasetName": "PAPER005",
+        "productName": "Synthetic Paper Chart 05",
+        "edition": 1,
+        "update": 0,
+        "status": 2,
+        "displayScale": 250000,
+        "usageBand": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -52.0,
+              64.0
+            ],
+            [
+              -49.5,
+              64.0
+            ],
+            [
+              -49.5,
+              66.0
+            ],
+            [
+              -52.0,
+              66.0
+            ],
+            [
+              -52.0,
+              64.0
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "datasetName": "PAPER006",
+        "productName": "Synthetic Paper Chart 06",
+        "edition": 1,
+        "update": 0,
+        "status": 3,
+        "displayScale": 350000,
+        "usageBand": 6
+      }
+    }
+  ]
+}

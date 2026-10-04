@@ -1,17 +1,17 @@
 ﻿using Microsoft.Extensions.Configuration;
-using ProductManagerAPI.Data.Database;
-using ProductManagerAPI.Data.Models;
-using ProductManagerAPI.Data.Repositories;
+using ProductCatalogueAPI.Data.Database;
+using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Data.Repositories;
 using Xunit.Abstractions;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class JobTests
     {
        // private readonly ProductRepository _repository;
         private readonly ITestOutputHelper _output;
         public JobTests(ITestOutputHelper output) {
-            //var connectionFile = Environment.GetEnvironmentVariable("productmanager_systemdb_dev");
+            //var connectionFile = Environment.GetEnvironmentVariable("productcatalogue_systemdb_dev");
             //var config = new ConfigurationBuilder()
             //    .AddInMemoryCollection(new Dictionary<string, string?>
             //    {

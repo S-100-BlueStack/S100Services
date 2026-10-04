@@ -1,0 +1,227 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              8.8,
+              55.7
+            ],
+            [
+              10.0,
+              55.7
+            ],
+            [
+              10.0,
+              56.5
+            ],
+            [
+              8.8,
+              56.5
+            ],
+            [
+              8.8,
+              55.7
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "datasetName": "102MOCK001",
+        "productName": "Synthetic S-102 01",
+        "edition": 1,
+        "update": 0,
+        "status": 1
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              10.3,
+              56.0
+            ],
+            [
+              11.6,
+              56.0
+            ],
+            [
+              11.6,
+              56.8
+            ],
+            [
+              10.3,
+              56.8
+            ],
+            [
+              10.3,
+              56.0
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "datasetName": "102MOCK002",
+        "productName": "Synthetic S-102 02",
+        "edition": 1,
+        "update": 0,
+        "status": 2
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -51.0,
+              63.0
+            ],
+            [
+              -48.0,
+              63.0
+            ],
+            [
+              -48.0,
+              65.0
+            ],
+            [
+              -51.0,
+              65.0
+            ],
+            [
+              -51.0,
+              63.0
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "datasetName": "102MOCK003",
+        "productName": "Synthetic S-102 03",
+        "edition": 1,
+        "update": 0,
+        "status": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -45.0,
+              67.0
+            ],
+            [
+              -42.0,
+              67.0
+            ],
+            [
+              -42.0,
+              69.0
+            ],
+            [
+              -45.0,
+              69.0
+            ],
+            [
+              -45.0,
+              67.0
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "datasetName": "102MOCK004",
+        "productName": "Synthetic S-102 04",
+        "edition": 1,
+        "update": 0,
+        "status": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -36.0,
+              70.0
+            ],
+            [
+              -33.0,
+              70.0
+            ],
+            [
+              -33.0,
+              72.0
+            ],
+            [
+              -36.0,
+              72.0
+            ],
+            [
+              -36.0,
+              70.0
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "datasetName": "102MOCK005",
+        "productName": "Synthetic S-102 05",
+        "edition": 1,
+        "update": 0,
+        "status": 2
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -25.0,
+              73.0
+            ],
+            [
+              -22.0,
+              73.0
+            ],
+            [
+              -22.0,
+              75.0
+            ],
+            [
+              -25.0,
+              75.0
+            ],
+            [
+              -25.0,
+              73.0
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "datasetName": "102MOCK006",
+        "productName": "Synthetic S-102 06",
+        "edition": 1,
+        "update": 0,
+        "status": 3
+      }
+    }
+  ]
+}

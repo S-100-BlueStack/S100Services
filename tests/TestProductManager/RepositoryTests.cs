@@ -1,10 +1,10 @@
 ﻿using Microsoft.Extensions.Configuration;
-using ProductManagerAPI.Data.Database;
-using ProductManagerAPI.Data.Models;
-using ProductManagerAPI.Data.Repositories;
+using ProductCatalogueAPI.Data.Database;
+using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Data.Repositories;
 using Xunit.Abstractions;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class ProductRepositoryTests
     {
@@ -17,7 +17,7 @@ namespace TestProductManagerAPI
         }
 
         [Fact]
-        public async Task Test_AppendJobTableRow() {
+        public async Task Test_AppendProductStateHistoryRow() {
             var name = "101DK0040349E";
             var state = ProductState.InTransit;
             

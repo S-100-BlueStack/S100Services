@@ -1,0 +1,86 @@
+<div id="header" slot="header">
+  <div class="header-left">
+    <img data-navbar-logo alt="Product Catalogue" width="42" height="42" />
+  </div>
+  <div class="header-center">
+    <a href="#" class="navbar-title-link" data-nav-home-link data-nav-route="main">
+      Product Catalogue
+    </a>
+    <a href="#" class="navbar-title-link" data-nav-dashboard-link data-nav-route="dashboard">
+      Dashboard
+    </a>
+    <a href="#" class="navbar-title-link" data-nav-analyze-link data-nav-route="analyze">
+      Analyze
+    </a>
+    <a href="#" class="navbar-title-link" data-nav-review-link data-nav-route="review"> Review </a>
+  </div>
+  <div class="header-right">
+    <!-- Filter panel -->
+    <div class="filter-wrapper">
+      <calcite-action
+        id="filter-button"
+        icon="filter"
+        text="Filters"
+        title="Filters"
+        aria-label="Filters"
+      ></calcite-action>
+      <span id="filter-count" hidden>0</span>
+    </div>
+
+    <!-- Runtime data sources -->
+    <calcite-action
+      id="data-sources-button"
+      hidden
+      icon="data"
+      text="Data sources"
+      label="Data sources"
+      title="Data sources"
+      aria-label="Data sources"
+      scale="m"
+    ></calcite-action>
+
+    <!-- Refresh button -->
+    <calcite-action
+      id="refresh-button"
+      icon="refresh"
+      text="Refresh data"
+      scale="m"
+    ></calcite-action>
+
+    <!-- Last successful data refresh -->
+    <span
+      id="last-updated"
+      title="No successful data refresh yet."
+      aria-label="No successful data refresh yet."
+    >
+      -
+    </span>
+
+    <!-- Auto refresh toggle -->
+    <!-- <div class="d-flex align-items-center">
+      <calcite-switch id="auto-refresh-switch" checked></calcite-switch>
+
+      <calcite-tooltip reference-element="auto-refresh-switch" style="z-index: 9999">
+        Automatically refreshes every 10 minutes
+      </calcite-tooltip>
+    </div> -->
+    <div class="notification-wrapper">
+      <calcite-action
+        id="notification-button"
+        icon="bell"
+        text="Notifications"
+        scale="m"
+      ></calcite-action>
+      <span id="notification-count"></span>
+    </div>
+    <calcite-action
+      id="preferences-button"
+      icon="gear"
+      text="Preferences"
+      label="Preferences"
+      title="Preferences"
+      aria-label="Preferences"
+      scale="m"
+    ></calcite-action>
+  </div>
+</div>

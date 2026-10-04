@@ -1,0 +1,116 @@
+﻿/* =========================================================
+   Anchored confirm popover
+   ========================================================= */
+
+.confirm-popover[hidden] {
+  display: none;
+}
+
+.confirm-popover {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  pointer-events: none;
+}
+
+.confirm-popover__card {
+  position: absolute;
+  min-width: 260px;
+  max-width: 320px;
+  padding: 12px;
+  pointer-events: auto;
+  background: var(--pc-surface);
+  color: var(--pc-text);
+  border: 1px solid var(--pc-border);
+  box-shadow: var(--pc-shadow);
+}
+
+.confirm-popover__card:focus {
+  outline: none;
+}
+
+.confirm-popover__card::before {
+  content: "";
+  position: absolute;
+  left: var(--confirm-popover-arrow-left, 50%);
+  width: 12px;
+  height: 12px;
+  background: var(--pc-surface);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.confirm-popover__card[data-placement="bottom"]::before {
+  top: -6px;
+  border-top: 1px solid var(--pc-border);
+  border-left: 1px solid var(--pc-border);
+}
+
+.confirm-popover__card[data-placement="top"]::before {
+  bottom: -6px;
+  border-right: 1px solid var(--pc-border);
+  border-bottom: 1px solid var(--pc-border);
+}
+
+.confirm-popover__title {
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pc-text);
+}
+
+.confirm-popover__divider {
+  height: 3px;
+  margin: 8px 0;
+  background: #bbb;
+}
+
+.confirm-popover__message {
+  margin-bottom: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--pc-text);
+}
+
+.confirm-popover__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.confirm-popover__button {
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.confirm-popover .confirm-popover__button:focus {
+  outline: none;
+}
+
+.confirm-popover .confirm-popover__button:focus-visible,
+.confirm-popover .confirm-popover__button.is-visible-focused {
+  outline: 2px solid var(--calcite-color-brand, #0079c1);
+  outline-offset: 2px;
+}
+
+.confirm-popover__button--secondary {
+  background: var(--pc-button-secondary-bg);
+  color: var(--pc-button-secondary-text);
+  border-color: var(--pc-button-secondary-border);
+}
+
+.confirm-popover__button--secondary:hover {
+  background: var(--pc-button-secondary-bg-hover);
+}
+
+.confirm-popover__button--primary {
+  background: #0079c1;
+  color: #ffffff;
+}
+
+.confirm-popover__button--primary:hover {
+  background: #00619b;
+}

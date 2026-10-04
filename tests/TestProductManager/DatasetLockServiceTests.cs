@@ -1,6 +1,7 @@
-using ProductManagerAPI.Services.Locking;
+using ProductCatalogueAPI.Services.Locking;
+using ProductCatalogueAPI.Data.Models;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class DatasetLockServiceTests : IDisposable
     {
@@ -115,6 +116,12 @@ namespace TestProductManagerAPI
 
             Assert.Equal(first, second);
             Assert.True(first.EndsWith(".lock", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void ProductTrackLockKeyNormalizesDatasetAndSpecification() {
+            Assert.Equal("101DK001-S101", ProductTrackLockKey.For(" 101dk001 ", ProductSpecification.S101));
+            Assert.NotEqual(ProductTrackLockKey.For("101DK001", ProductSpecification.S101), ProductTrackLockKey.For("101DK001", ProductSpecification.S57));
         }
 
         private string LockPath(string datasetName) => Path.Combine(

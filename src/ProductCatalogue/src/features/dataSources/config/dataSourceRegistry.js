@@ -1,0 +1,493 @@
+import { readWorkUnitStatusFilterValues } from "../domain/workUnitStatusProjection.js";
+import { ATTRIBUTE_FILTER_CONFIG } from "../../map/filters/attributeFilterConfig.js";
+import { WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION } from "../../map/symbology/correctionSymbolResolver.js";
+import { createElectronicExportConfiguration } from "../../products/domain/electronicProductContract.js";
+export const DATA_SOURCE_AVAILABILITY = Object.freeze({
+  AVAILABLE: "available",
+  UNAVAILABLE: "unavailable",
+});
+
+export const DATA_SOURCE_IDS = Object.freeze({
+  S57: "s57",
+  S101: "s101",
+  PAPER_CHARTS: "paper-charts",
+  S102: "s102",
+});
+
+export const DATA_SOURCE_LAYER_IDS = Object.freeze({
+  PAPER_CHARTS_PRODUCTS: "paper-charts-products",
+  S102_PRODUCTS: "s102-products",
+});
+
+const DISABLED_OPERATION_CAPABILITIES = Object.freeze({
+  freeze: false,
+  unfreeze: false,
+  sendToIcEnc: false,
+  cancelExport: false,
+  history: false,
+  icEncReports: false,
+  internalValidation: false,
+  exportEdition: false,
+  exportUpdate: false,
+  popupExport: false,
+  productCollection: false,
+  productSearch: false,
+  analyze: false,
+  review: false,
+  backendProductRefresh: false,
+});
+
+const WORKSPACE_VISUALIZATION_CAPABILITIES = Object.freeze({
+  ...DISABLED_OPERATION_CAPABILITIES,
+  history: true,
+  icEncReports: true,
+  internalValidation: true,
+  popupExport: true,
+  productCollection: true,
+  productSearch: true,
+  analyze: true,
+  review: true,
+});
+
+const ACTIVE_ONLY_REFRESH = Object.freeze({
+  mode: "active-only",
+  reloadOnReactivate: true,
+  retainLastSuccessfulRepresentationOnError: true,
+});
+
+const SOURCE_AWARE_IDENTITY = Object.freeze({
+  type: "stable-product-key",
+  fields: Object.freeze(["productKey", "datasetName", "productName", "OBJECTID", "id"]),
+  allowFeatureId: true,
+  sourceAware: true,
+});
+
+const GEOJSON_PRODUCT_NORMALIZER = Object.freeze({
+  type: "geojson-products",
+});
+
+// These strategies normalize synthetic mock identities before they enter
+// ProductContext/workspace state. They are not production naming contracts.
+const PAPER_CHARTS_MOCK_DATASET_NAME_STRATEGY = Object.freeze({
+  type: "synthetic-prefix",
+  prefix: "PAPER-MOCK",
+});
+
+const S102_MOCK_DATASET_NAME_STRATEGY = Object.freeze({
+  type: "replace-leading-product-code",
+  productCode: "102",
+  fallbackPrefix: "102-MOCK",
+});
+
+const DEFAULT_PRODUCT_SEARCH = Object.freeze({
+  supported: true,
+  fields: Object.freeze(["datasetName", "productName", "productKey"]),
+});
+
+// Synthetic Paper Charts and S-102 fixtures are retained only for explicit test
+// construction. Runtime callers use the zero-argument factory and therefore
+// expose only authoritative backend sources.
+export function createDataSourceRegistry({
+  isDevelopment = false,
+  mockDataSourcesEnabled = false,
+  configuredSourceIds,
+} = {}) {
+  const configuredIds = normalizeConfiguredSourceIds(configuredSourceIds);
+  const mockSourcesEnabled = isDevelopment || mockDataSourcesEnabled;
+  const definitions = [
+    createElectronicSource({
+      id: DATA_SOURCE_IDS.S57,
+      label: "S-57",
+      productType: "s57-product",
+      configuredIds,
+      specification: "S57",
+      freezeSupported: false,
+      enabledInSchema1: false,
+      mainMapSelectable: false,
+    }),
+    createElectronicSource({
+      id: DATA_SOURCE_IDS.S101,
+      label: "ENC-package",
+      productType: "s101-product",
+      configuredIds,
+      specification: "S101",
+      freezeSupported: true,
+      enabledInSchema1: true,
+      workUnit: {
+        kind: "package",
+        primaryMemberKey: "s101",
+        navigationCapabilities: { analyze: false, review: false, history: false },
+        members: [
+          { key: "s101", label: "S-101", exportStandard: "S100" },
+          { key: "s57", label: "S-57", exportStandard: "S57" },
+        ],
+      },
+    }),
+    createMockSource({
+      id: DATA_SOURCE_IDS.PAPER_CHARTS,
+      label: "Paper Charts",
+      productType: "paper-chart",
+      endpoint: "mock/paper-charts",
+      layerId: DATA_SOURCE_LAYER_IDS.PAPER_CHARTS_PRODUCTS,
+      layerKind: "paper-chart-products",
+      filterDefinitions: ["status", "displayScale", "usageBand"],
+      datasetNameStrategy: PAPER_CHARTS_MOCK_DATASET_NAME_STRATEGY,
+      mockSourcesEnabled,
+      configuredIds,
+    }),
+    createMockSource({
+      id: DATA_SOURCE_IDS.S102,
+      label: "S-102",
+      productType: "s102-product",
+      endpoint: "mock/s102",
+      layerId: DATA_SOURCE_LAYER_IDS.S102_PRODUCTS,
+      layerKind: "s102-products",
+      filterDefinitions: ["status"],
+      datasetNameStrategy: S102_MOCK_DATASET_NAME_STRATEGY,
+      mockSourcesEnabled,
+      configuredIds,
+    }),
+  ];
+
+  return freezeRegistry(definitions);
+}
+
+export function getDataSourceDefinition(registry, sourceId) {
+  return registry.byId.get(normalizeSourceId(sourceId)) ?? null;
+}
+
+export function getRuntimeSelectableDataSources(registry) {
+  return registry.definitions.filter(isRuntimeSelectableDataSource);
+}
+
+export function getDefaultEnabledSourceIds(registry) {
+  return getRuntimeSelectableDataSources(registry)
+    .filter((source) => source.defaultEnabled)
+    .map((source) => source.id);
+}
+
+export function isRuntimeSelectableDataSource(source) {
+  return Boolean(
+    source?.enabledByConfiguration &&
+    source?.userSelectable &&
+    source?.availability?.state === DATA_SOURCE_AVAILABILITY.AVAILABLE &&
+    source?.loader
+  );
+}
+
+export function isWorkspaceAvailableDataSource(source) {
+  return Boolean(
+    source?.enabledByConfiguration &&
+    source?.workspace?.supported &&
+    source?.availability?.state === DATA_SOURCE_AVAILABILITY.AVAILABLE &&
+    (source?.workspace?.resolution === "targeted-product-aoi" || source?.loader)
+  );
+}
+
+function createElectronicSource({
+  id,
+  label,
+  productType,
+  configuredIds,
+  specification,
+  freezeSupported,
+  enabledInSchema1,
+  mainMapSelectable = true,
+  workUnit = null,
+}) {
+  const enabledByConfiguration = isConfigured(id, configuredIds);
+  return {
+    id,
+    label,
+    productType,
+    enabledByConfiguration,
+    availability: { state: DATA_SOURCE_AVAILABILITY.AVAILABLE, reason: null },
+    userSelectable: mainMapSelectable,
+    defaultEnabled: mainMapSelectable,
+    workUnit,
+    loader: workUnit
+      ? {
+          type: "http-json",
+          path: "electronicproducts/aoi?layer=ENC",
+          errorMessage: `${label} AOI request failed`,
+        }
+      : null,
+    normalizer: {
+      type: "electronic-aoi",
+      specification,
+      ...(workUnit
+        ? {
+            packageMembers: {
+              s101: { field: "S101", specification: 1 },
+              s57: { field: "S57", specification: 0 },
+            },
+          }
+        : {}),
+    },
+    persistence: { enabledInSchema1, persistSelection: mainMapSelectable },
+    identityStrategy: {
+      type: "stable-product-key",
+      fields: ["datasetName"],
+      allowFeatureId: false,
+      sourceAware: true,
+    },
+    layerDefinitions: [
+      {
+        id: `${id}-products`,
+        title: label,
+        type: "graphics",
+        dataFormat: "esri-json",
+        layerKind: "electronic-products",
+        capabilities: {
+          supportsPopup: true,
+          supportsPopupActions: true,
+          supportsProductActions: true,
+          supportsDisplayScale: true,
+          supportsAttributeFilters: true,
+          supportsProductHistory: true,
+          supportsOverlapPicker: true,
+          supportsProductSearch: true,
+        },
+        ...(workUnit ? { symbolization: WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION } : {}),
+      },
+    ],
+    capabilities: {
+      ...WORKSPACE_VISUALIZATION_CAPABILITIES,
+      freeze: !workUnit && freezeSupported,
+      unfreeze: !workUnit && freezeSupported,
+      sendToIcEnc: !workUnit,
+      cancelExport: !workUnit,
+      exportEdition: !workUnit,
+      exportUpdate: !workUnit,
+      popupExport: !workUnit,
+      backendProductRefresh: true,
+    },
+    exportConfiguration: workUnit
+      ? { visible: false, leaves: [] }
+      : createElectronicExportConfiguration(specification, label),
+    contentConfiguration: {
+      history: {
+        visible: true,
+        implemented: true,
+        loaderId: "electronic-history",
+        availabilityReason: null,
+      },
+      icEncReports: {
+        visible: true,
+        implemented: false,
+        loaderId: null,
+        availabilityReason: "The backend does not provide IC-ENC reports.",
+      },
+      internalValidation: {
+        visible: true,
+        implemented: true,
+        loaderId: "electronic-artifacts",
+        availabilityReason: null,
+      },
+    },
+    workspace: {
+      supported: true,
+      providerType: "registry-source",
+      resolution: "targeted-product-aoi",
+    },
+    filtering: {
+      supported: true,
+      definitions: workUnit
+        ? [
+            { fieldName: "status", readValues: readWorkUnitStatusFilterValues },
+            "displayScale",
+            "usageBand",
+          ]
+        : ["status", "displayScale", "usageBand"],
+      defaultExcludedValues: ATTRIBUTE_FILTER_CONFIG.global.defaultExcludedValues,
+      useLookupOptions: true,
+    },
+    search: DEFAULT_PRODUCT_SEARCH,
+    refreshStrategy: ACTIVE_ONLY_REFRESH,
+  };
+}
+
+function createMockSource({
+  id,
+  label,
+  productType,
+  endpoint,
+  layerId,
+  layerKind,
+  filterDefinitions,
+  datasetNameStrategy,
+  mockSourcesEnabled,
+  configuredIds,
+}) {
+  const enabledByConfiguration = isConfigured(id, configuredIds) && mockSourcesEnabled;
+  const exportUnavailableReason = `${label} export is not available yet.`;
+
+  return {
+    id,
+    label,
+    enabledByConfiguration,
+    availability: enabledByConfiguration
+      ? {
+          state: DATA_SOURCE_AVAILABILITY.AVAILABLE,
+          reason: null,
+        }
+      : {
+          state: DATA_SOURCE_AVAILABILITY.UNAVAILABLE,
+          reason: "The mock source is unavailable in this environment.",
+        },
+    userSelectable: enabledByConfiguration,
+    defaultEnabled: true,
+    loader: enabledByConfiguration
+      ? {
+          type: "http-json",
+          path: endpoint,
+          errorMessage: `${label} mock request failed`,
+        }
+      : null,
+    normalizer: Object.freeze({
+      ...GEOJSON_PRODUCT_NORMALIZER,
+      datasetNameStrategy,
+    }),
+    persistence: { persistSelection: false },
+    identityStrategy: SOURCE_AWARE_IDENTITY,
+    layerDefinitions: [
+      {
+        id: layerId,
+        title: label,
+        type: "graphics",
+        dataFormat: "geojson",
+        layerKind,
+        capabilities: {
+          supportsPopup: true,
+          supportsPopupActions: true,
+          supportsProductActions: false,
+          supportsDisplayScale: false,
+          supportsAttributeFilters: true,
+          supportsProductHistory: false,
+          supportsOverlapPicker: true,
+          supportsProductSearch: true,
+        },
+      },
+    ],
+    capabilities: WORKSPACE_VISUALIZATION_CAPABILITIES,
+    exportConfiguration: createUnavailableExportConfiguration(exportUnavailableReason),
+    contentConfiguration: createUnavailableWorkspaceContentConfiguration(label),
+    workspace: {
+      supported: true,
+      providerType: "registry-source",
+    },
+    filtering: {
+      supported: true,
+      definitions: filterDefinitions,
+      defaultExcludedValues: [],
+      useLookupOptions: false,
+    },
+    search: DEFAULT_PRODUCT_SEARCH,
+    productType,
+    refreshStrategy: ACTIVE_ONLY_REFRESH,
+  };
+}
+
+function createUnavailableWorkspaceContentConfiguration(label) {
+  return {
+    history: {
+      visible: true,
+      implemented: false,
+      loaderId: null,
+      availabilityReason: `Product History is not available for ${label} yet.`,
+    },
+    icEncReports: {
+      visible: true,
+      implemented: false,
+      loaderId: null,
+      availabilityReason: `IC-ENC reports are not available for ${label} yet.`,
+    },
+    internalValidation: {
+      visible: true,
+      implemented: false,
+      loaderId: null,
+      availabilityReason: `Internal validation is not available for ${label} yet.`,
+    },
+  };
+}
+
+function createUnavailableExportConfiguration(availabilityReason) {
+  return {
+    visible: true,
+    helpText: availabilityReason,
+    leaves: [
+      {
+        id: "export-edition",
+        label: "Edition",
+        operationKind: "Edition",
+        capability: "exportEdition",
+        visible: true,
+        implemented: false,
+        backendTarget: null,
+        handlerId: null,
+        availabilityReason,
+      },
+      {
+        id: "export-update",
+        label: "Update",
+        operationKind: "Update",
+        capability: "exportUpdate",
+        visible: true,
+        implemented: false,
+        backendTarget: null,
+        handlerId: null,
+        availabilityReason,
+      },
+    ],
+  };
+}
+
+function freezeRegistry(definitions) {
+  const frozenDefinitions = definitions.map(deepFreeze);
+  const byId = new Map(frozenDefinitions.map((definition) => [definition.id, definition]));
+
+  return Object.freeze({
+    definitions: Object.freeze(frozenDefinitions),
+    byId,
+  });
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) {
+    return value;
+  }
+
+  for (const nestedValue of Object.values(value)) {
+    deepFreeze(nestedValue);
+  }
+
+  return Object.freeze(value);
+}
+
+function normalizeConfiguredSourceIds(configuredSourceIds) {
+  if (configuredSourceIds === undefined || configuredSourceIds === null) {
+    return null;
+  }
+
+  return new Set(
+    (Array.isArray(configuredSourceIds) ? configuredSourceIds : [configuredSourceIds])
+      .map(normalizeSourceId)
+      .filter(Boolean)
+  );
+}
+
+function isConfigured(sourceId, configuredIds) {
+  return configuredIds === null || configuredIds.has(sourceId);
+}
+
+export function isMockDataSourcesFlagEnabled(value) {
+  return (
+    String(value ?? "")
+      .trim()
+      .toLowerCase() === "true"
+  );
+}
+
+function normalizeSourceId(value) {
+  return String(value ?? "").trim();
+}
