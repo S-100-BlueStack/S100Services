@@ -65,7 +65,7 @@ namespace DataCatalague.Api.Controllers
 
         [HttpGet("packagetypes")]
         [Consumes("application/json")]
-        [ProducesResponseType<PagedResponse<PackageTypeResponse>>(StatusCodes.Status201Created)]
+        [ProducesResponseType<PagedResponse<PackageTypeResponse>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<PagedResponse<PackageTypeResponse>>> GetPackageTypes(CancellationToken cancellationToken) {
             return this.BadRequest();
@@ -102,8 +102,9 @@ namespace DataCatalague.Api.Controllers
 
         [HttpGet("packagetypes/{id}", Name = "GetPackageType.V1")]
         [Consumes("application/json")]
-        [ProducesResponseType<PackageTypeResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<PackageTypeResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<PackageTypeResponse>> GetPackageType(string id, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNullOrEmpty(id);
 
@@ -111,10 +112,11 @@ namespace DataCatalague.Api.Controllers
             return Map(stream.State);
         }
 
-        [HttpPut("packagetypes/{id}/specification", Name = "GetPackageType.V1")]
+        [HttpPut("packagetypes/{id}/specification")]
         [Consumes("application/json")]
-        [ProducesResponseType<PackageTypeResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<PackageTypeResponse>(StatusCodes.Status202Accepted)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<PackageTypeResponse>> UpdatePackageTypeSpecification(string id, [FromBody] UpdatePackageTypeSpecificationRequest request, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNullOrEmpty(id);
 
@@ -131,7 +133,7 @@ namespace DataCatalague.Api.Controllers
 
             this._logger.LogInformation("UpdatePackageTypeSpecification {version}.", result.State.Version);
 
-            return this.CreatedAtRoute(
+            return this.AcceptedAtRoute(
                 "GetPackage.V1",
                 new { id = result.State.Id, version = ApiVersions.V1Text },
                 Map(result.State));
@@ -160,12 +162,12 @@ namespace DataCatalague.Api.Controllers
                 var geometryRef = await this._dispatcher.ExecuteAsync(() => {
                     var polygon = this._dispatchRepository.FromGeoJson(request.GeoJSON);
 
-                    return this._dispatchRepository.AddPackageAOI(polygon, streamId, request.AbsoluteUri);                                         
+                    return this._dispatchRepository.AddPackageAOI(polygon, streamId, request.AbsoluteUri);
                 });
 
                 var filename = IO.Path.GetFileName(request.AbsoluteUri);
 
-                var cmd = await this._servicePackage.Handle(new DispatcherCommands.CreatePackage(streamId, stream.State.Id, filename, request.AbsoluteUri, geometryRef), cancellationToken);                
+                var cmd = await this._servicePackage.Handle(new DispatcherCommands.CreatePackage(streamId, stream.State.Id, filename, request.AbsoluteUri, geometryRef), cancellationToken);
 
                 if (!cmd.Success)
                     return this.BadRequest();
@@ -187,8 +189,9 @@ namespace DataCatalague.Api.Controllers
 
         [HttpGet("dispatch/packages/{id}", Name = "GetPackage.V1")]
         [Consumes("application/json")]
-        [ProducesResponseType<PackageResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<PackageResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<PackageResponse>> GetPackage(string id, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNullOrEmpty(id);
 
@@ -199,9 +202,8 @@ namespace DataCatalague.Api.Controllers
 
         [HttpPost("repository")]
         [Consumes("multipart/form-data")]
-        [ProducesResponseType<FileResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<FileResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<PackageResponse>> UploadFile([FromForm] UploadFileRequest request, CancellationToken cancellationToken) {
             if (request.File.Length == 0) {
                 return this.Problem(
