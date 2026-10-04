@@ -242,12 +242,14 @@ namespace DataCatalague.Api.Controllers
             Id = state.Id,
             DisplayName = state.DisplayName,
             Description = state.Description,
+            Version = state.Version?.ToString(),
+            Specification = state.Markdown,
             LastUpdatedUtc = state.LastUpdatedUtc,
         };
 
         private static PackageResponse Map(Domain.PackageState state) => new() {
             Id = state.Id,
-            PackageTypeId = state.PackageTypeId,
+            PackageTypeId = state.PackageTypeId,            
             FileName = state.FileName,
             AbsoluteUri = state.Uri?.AbsolutePath,
             LastUpdatedUtc = state.LastUpdatedUtc,
