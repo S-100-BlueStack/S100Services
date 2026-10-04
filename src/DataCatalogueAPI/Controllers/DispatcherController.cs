@@ -1,4 +1,5 @@
 ﻿using ArcGIS.Core.Data.UtilityNetwork.Trace;
+using ArcGIS.Core.Internal.CIM;
 using Asp.Versioning;
 using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
@@ -72,17 +73,6 @@ namespace DataCatalague.Api.Controllers
             return this.BadRequest();
         }
 
-        [HttpGet("packagetypes/{id}", Name = "GetPackageType.V1")]
-        [Consumes("application/json")]
-        [ProducesResponseType<PackageTypeResponse>(StatusCodes.Status201Created)]
-        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
-        public async Task<ActionResult<PackageTypeResponse>> GetPackageType(string id, CancellationToken cancellationToken) {
-            ArgumentNullException.ThrowIfNullOrEmpty(id);
-
-            var stream = await this._eventStore.LoadState<PackageTypeState>(new(id), true, cancellationToken);
-            return Map(stream.State);
-        }
-
         [HttpPost("packagetypes")]
         [Consumes("application/json")]
         [ProducesResponseType<PackageTypeResponse>(StatusCodes.Status201Created)]
@@ -104,13 +94,51 @@ namespace DataCatalague.Api.Controllers
 
             var result = cmd.Get()!;
 
-            this._logger.LogInformation("Created package type {id}.", result.State.Id);
+            this._logger.LogInformation("CreatePackageType {id}.", result.State.Id);
 
             return this.CreatedAtRoute(
                 "GetPackageType.V1",
                 new { id = result.State.Id, version = ApiVersions.V1Text },
                 Map(result.State));
         }
+
+        [HttpGet("packagetypes/{id}", Name = "GetPackageType.V1")]
+        [Consumes("application/json")]
+        [ProducesResponseType<PackageTypeResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<PackageTypeResponse>> GetPackageType(string id, CancellationToken cancellationToken) {
+            ArgumentNullException.ThrowIfNullOrEmpty(id);
+
+            var stream = await this._eventStore.LoadState<PackageTypeState>(new(id), true, cancellationToken);
+            return Map(stream.State);
+        }
+
+        [HttpPut("packagetypes/{id}/specification", Name = "GetPackageType.V1")]
+        [Consumes("application/json")]
+        [ProducesResponseType<PackageTypeResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<PackageTypeResponse>> UpdatePackageTypeSpecification(string id, [FromBody] UpdatePackageTypeSpecificationRequest request, CancellationToken cancellationToken) {
+            ArgumentNullException.ThrowIfNullOrEmpty(id);
+
+            ArgumentNullException.ThrowIfNullOrEmpty(request.Version);
+            ArgumentNullException.ThrowIfNullOrEmpty(request.Markdown);
+
+            var cmd = await this._servicePackageType.Handle(new DispatcherCommands.UpdateSpecificationPackageType(id, request.Version, request.Markdown), cancellationToken);
+
+            if (!cmd.Success)
+                return this.BadRequest();
+
+            var result = cmd.Get()!;
+
+
+            this._logger.LogInformation("UpdatePackageTypeSpecification {version}.", result.State.Version);
+
+            return this.CreatedAtRoute(
+                "GetPackage.V1",
+                new { id = result.State.Id, version = ApiVersions.V1Text },
+                Map(result.State));
+        }
+
 
         [HttpPost("dispatch/packages")]
         [Consumes("application/json")]

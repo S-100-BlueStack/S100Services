@@ -13,6 +13,14 @@ namespace DataCatalague.Api.Domain
             this.EnsureDoesntExist();
             this.Apply(new V1.PackageTypeCreated(PackageTypeId, DisplayName, Description, DateTime.UtcNow));
         }
+
+        public async Task UpdateSpecification(
+                    string Version,
+                    string Markdown
+            ) {
+            this.EnsureExists();
+            this.Apply(new V1.PackageTypeSpecificationUpdated(Version, Markdown, DateTime.UtcNow));
+        }
     }
 
     public class Package : Aggregate<PackageState>
@@ -37,11 +45,15 @@ namespace DataCatalague.Api.Domain
 
         public string DisplayName { get; set; } = string.Empty;
 
-        public string? Description { get; set; } = string.Empty;
+        public string? Description { get; set; } = string.Empty;        
 
-        public DateTimeOffset LastUpdatedUtc { get; set; }
+        public Version? Version { get; set; } = null;
+
+        public string? Markdown { get; set; } = null;
 
         public bool IsTerminated { get; set; }
+
+        public DateTimeOffset LastUpdatedUtc { get; set; }
 
         public PackageTypeState() {
             this.On<V1.PackageTypeCreated>(Created);
@@ -51,9 +63,16 @@ namespace DataCatalague.Api.Domain
             => state with {
                 Id = new(e.PackageTypeId),
                 DisplayName = e.DisplayName,
-                Description = e.Description,
-                LastUpdatedUtc = e.CreatedUTC,
+                Description = e.Description,                
                 IsTerminated = false,
+                LastUpdatedUtc = e.UTC,
+            };
+
+        static PackageTypeState UpdateSpecification(PackageTypeState state, V1.PackageTypeSpecificationUpdated e)
+            => state with {
+                Version = new Version(e.Version),
+                Markdown = e.Markdown,
+                LastUpdatedUtc = e.UTC,
             };
     }
 
@@ -84,7 +103,7 @@ namespace DataCatalague.Api.Domain
                 FileName = e.FileName,
                 Uri = new(e.AbsoluteUri),
                 GeometryRef = e.GeometryRef,
-                LastUpdatedUtc = e.CreatedUTC,                
+                LastUpdatedUtc = e.UTC,                
             };
     }
 
@@ -99,6 +118,8 @@ namespace DataCatalague.Api.Domain.Commands
     public static class DispatcherCommands
     {
         public record CreatePackageType(string PackageTypeId, string DisplayName, string? Description = default);
+
+        public record UpdateSpecificationPackageType(string PackageTypeId, string Version, string Markdown);
 
         public record CreatePackage(string PackageId, string PackageTypeId, string FileName, string AbsoluteUri, string GeometryRef);
     }
@@ -116,7 +137,14 @@ namespace DataCatalague.Api.Domain.Events
                     string PackageTypeId,
                     string DisplayName,
                     string? Description,
-                    DateTimeOffset CreatedUTC
+                    DateTimeOffset UTC
+                );
+
+            [EventType("V1.PackageTypeSpecificationUpdated")]
+            public record PackageTypeSpecificationUpdated(
+                    string Version,
+                    string Markdown,
+                    DateTimeOffset UTC
                 );
 
             [EventType("V1.PackageCreated")]
@@ -126,7 +154,7 @@ namespace DataCatalague.Api.Domain.Events
                     string FileName,
                     string AbsoluteUri,
                     string GeometryRef,
-                    DateTimeOffset CreatedUTC
+                    DateTimeOffset UTC
                 );
         }
     }

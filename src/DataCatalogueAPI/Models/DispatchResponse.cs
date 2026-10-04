@@ -9,6 +9,10 @@ namespace DataCatalague.Api.Models.V1
         public required string DisplayName { get; init; }
 
         public required string? Description { get; init; }
+        
+        public string? Version { get; init; }
+        
+        public string? Specification { get; init; }
 
         public required DateTimeOffset LastUpdatedUtc { get; init; }
     }

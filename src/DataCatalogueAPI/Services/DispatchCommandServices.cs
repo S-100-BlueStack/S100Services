@@ -11,7 +11,14 @@ namespace DataCatalague.Api.Services
                 .InState(ExpectedState.New)
                 .GetId(cmd => new(cmd.PackageTypeId))
                 .ActAsync(
-                    (counter, cmd, _) => counter.Create(cmd.PackageTypeId, cmd.DisplayName, cmd.Description)
+                    (packagetype, cmd, _) => packagetype.Create(cmd.PackageTypeId, cmd.DisplayName, cmd.Description)
+                );
+
+            this.On<DispatcherCommands.UpdateSpecificationPackageType>()
+                .InState(ExpectedState.New)
+                .GetId(cmd => new(cmd.PackageTypeId))
+                .ActAsync(
+                    (packagetype, cmd, _) => packagetype.UpdateSpecification(cmd.Version, cmd.Markdown)
                 );
         }
     }
