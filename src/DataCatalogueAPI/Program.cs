@@ -30,23 +30,39 @@ public static class Program
 
             builder.AddSerilogLogging();
 
+            ArcGIS.Core.Hosting.Host.Initialize();
+
             foreach (var f in System.IO.Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory, $"*s100ed17*.geodatabase*")) {
                 if (IO.Path.GetFileName(f).Equals("s100ed17.geodatabase")) continue;
                 System.IO.File.Delete(System.IO.Path.GetFullPath(f));
             }
 
-            builder.Services.AddLuggagefiguration(builder.Configuration);
+            builder.Services.AddStreamConfiguration(builder.Configuration);
 
             builder.Services.AddEventStore<InMemoryEventStore>();
 
-            builder.Services.AddCommandService<BaggageDropCommandService, BaggageDropState>();
-            builder.Services.AddCommandService<LuggageCommandService, LuggageState>();
+
+            builder.Services.AddSingleton<DispatchRepository>();
+
+            builder.Services.AddCommandService<StreamCommandService, PackageTypeState>();
+            builder.Services.AddCommandService<PackageCommandService, PackageState>();
             builder.Services.AddCommandService<PipelineCommandService, PipelineState>();
 
             builder.Services.AddApplicationServices();
             builder.Services.AddApiVersioningSupport();
             builder.Services.AddVersionedOpenApiDocuments();
             builder.Services.AddSecureTransport();
+
+
+            {
+                var uriLocal = new Uri(@"c:\temp\hello.txt");
+
+                var uriRelative = new Uri(@"\\server01\share\data\file.xml");
+
+                ;
+            }
+
+
 
             var app = builder.Build();
 

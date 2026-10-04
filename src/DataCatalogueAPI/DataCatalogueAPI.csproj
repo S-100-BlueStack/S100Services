@@ -63,6 +63,8 @@
       model properties read-only and breaks document generation.
     -->
 		<PackageReference Include="Microsoft.OpenApi" Version="2.12.2" />
+		<PackageReference Include="Nanoid" Version="3.1.0" />
+		<PackageReference Include="S100Framework.Catalogues" Version="4.1.1" />
 
 		<!-- Built-in OpenAPI document generation. -->
 
@@ -78,6 +80,15 @@
 
 		<!-- Logging. Console, Debug and File sinks come along transitively. -->
 		<PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Reference Include="ArcGIS.Core">
+	    <HintPath>C:\Program Files\ArcGIS\Pro\bin\ArcGIS.Core.dll</HintPath>
+	  </Reference>
+	  <Reference Include="ArcGIS.CoreHost">
+	    <HintPath>C:\Program Files\ArcGIS\Pro\bin\ArcGIS.CoreHost.dll</HintPath>
+	  </Reference>
 	</ItemGroup>
 
 	<ItemGroup>
