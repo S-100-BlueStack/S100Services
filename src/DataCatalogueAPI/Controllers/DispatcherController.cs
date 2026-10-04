@@ -1,6 +1,4 @@
-﻿using ArcGIS.Core.Data.UtilityNetwork.Trace;
-using ArcGIS.Core.Internal.CIM;
-using Asp.Versioning;
+﻿using Asp.Versioning;
 using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Domain.Commands;
