@@ -43,6 +43,7 @@ namespace DataCatalague.Api.Controllers
         ICommandService<PackageState> packageService,
         DispatchRepository dispatchRepository,
         IOptions<DispatcherOptions> options,
+        ArcGisDispatcher dispatcher,
         ILogger<DispatcherController> logger) : ControllerBase
     {
         private const int DefaultPageSize = 20;
@@ -58,6 +59,8 @@ namespace DataCatalague.Api.Controllers
         private readonly DispatchRepository _dispatchRepository = dispatchRepository;
 
         private readonly IOptions<DispatcherOptions> _options = options;
+
+        private readonly ArcGisDispatcher _dispatcher = dispatcher;
 
         private readonly ILogger<DispatcherController> _logger = logger;
 
@@ -128,18 +131,21 @@ namespace DataCatalague.Api.Controllers
 
                 var streamId = CreateStreamId();
 
-                var polygon = this._dispatchRepository.FromGeoJson(request.GeoJSON);
+                var geometryRef = await this._dispatcher.ExecuteAsync(() => {
+                    var polygon = this._dispatchRepository.FromGeoJson(request.GeoJSON);
 
-                var geometryRef = await this._dispatchRepository.AddPackageAOI(polygon, streamId, request.AbsoluteUri);
+                    return this._dispatchRepository.AddPackageAOI(polygon, streamId, request.AbsoluteUri);                                         
+                });
 
                 var filename = IO.Path.GetFileName(request.AbsoluteUri);
 
-                var cmd = await this._servicePackage.Handle(new DispatcherCommands.CreatePackage(streamId, stream.State.Id, filename, request.AbsoluteUri, geometryRef), cancellationToken);
+                var cmd = await this._servicePackage.Handle(new DispatcherCommands.CreatePackage(streamId, stream.State.Id, filename, request.AbsoluteUri, geometryRef), cancellationToken);                
 
                 if (!cmd.Success)
                     return this.BadRequest();
 
                 var result = cmd.Get()!;
+
 
                 this._logger.LogInformation("Created package {id}.", result.State.Id);
 
@@ -187,7 +193,9 @@ namespace DataCatalague.Api.Controllers
 
             await using IO.Stream stream = request.File.OpenReadStream();
 
-            var fileRef = await this._dispatchRepository.AddAttachment(stream, request.File.FileName, DateTime.UtcNow, cancellationToken);
+            var fileRef = await this._dispatcher.ExecuteAsync(() => {
+                return this._dispatchRepository.AddAttachment(stream, request.File.FileName, DateTime.UtcNow);
+            });
 
             //var cmd = await this._servicePackage.Handle(new StreamCommands.AddPackage(fileid, uuid, request.File.FileName, request.File.Length), cancellationToken);
 

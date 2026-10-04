@@ -30,7 +30,7 @@ public static class Program
 
             builder.AddSerilogLogging();
 
-            ArcGIS.Core.Hosting.Host.Initialize();
+            //ArcGIS.Core.Hosting.Host.Initialize();
 
             foreach (var f in System.IO.Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory, $"*s100ed17*.geodatabase*")) {
                 if (IO.Path.GetFileName(f).Equals("s100ed17.geodatabase")) continue;
@@ -39,10 +39,10 @@ public static class Program
 
             builder.Services.AddStreamConfiguration(builder.Configuration);
 
-            builder.Services.AddEventStore<InMemoryEventStore>();
-
-
             builder.Services.AddSingleton<DispatchRepository>();
+            builder.Services.AddSingleton<ArcGisDispatcher>();
+
+            builder.Services.AddEventStore<InMemoryEventStore>();
 
             builder.Services.AddCommandService<StreamCommandService, PackageTypeState>();
             builder.Services.AddCommandService<PackageCommandService, PackageState>();

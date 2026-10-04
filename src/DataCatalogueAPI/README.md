@@ -1,32 +1,79 @@
-# OpenApiDataCatalogue
+# DataCatalogueAPI
 
 A .NET 10 controller-based REST API with API versioning, OpenAPI document generation,
 Serilog logging, HTTPS, and two browsable documentation UIs (Swagger UI and Scalar).
 
-## Running
-
-```bash
-dotnet dev-certs https --trust     # once per machine
-dotnet run --project src/DataCatalague.Api
-```
 
 | Purpose            | URL                                            |
 | ------------------ | ---------------------------------------------- |
-| Scalar             | <https://localhost:7243/scalar>                |
-| Swagger UI         | <https://localhost:7243/swagger>               |
-| OpenAPI v1 document| <https://localhost:7243/openapi/v1.json>       |
-| OpenAPI v2 document| <https://localhost:7243/openapi/v2.json>       |
-| Health check       | <https://localhost:7243/health>                |
+| Scalar             | <https://localhost:51849/scalar>                |
+| Swagger UI         | <https://localhost:51849/swagger>               |
+| OpenAPI v1 document| <https://localhost:51849/openapi/v1.json>       |
+| OpenAPI v2 document| <https://localhost:51849/openapi/v2.json>       |
+| Health check       | <https://localhost:51849/health>                |
 
 Sample endpoints:
 
 ```
-GET    /api/v1/products
-GET    /api/v1/products/{id}
-GET    /api/v2/products?page=1&pageSize=20
-GET    /api/v2/products/{id}
-POST   /api/v2/products
+GET    /api/v1/dispatcher
+GET    /api/v2/dispatcher?page=1&pageSize=20
 ```
+
+
+## Initial configuration
+
+**NoticeToMariners**
+
+```
+POST /api/v1/dispatcher/packagetypes
+Request body
+{
+    "displayName": "Notice2Mariners",
+    "description": "A Notice to Mariners (EfS) is an official weekly or periodic publication issued by national hydrographic offices to provide safety-critical updates for nautical charts and publications."
+}
+Response body
+{
+  "id": "yYzKXybaQVkcPJ44a5",
+  "displayName": "Notice2Mariners",
+  "description": "A Notice to Mariners (EfS) is an official weekly or periodic publication issued by national hydrographic offices to provide safety-critical updates for nautical charts and publications.",
+  "lastUpdatedUtc": "2026-10-04T17:46:27.3119026+00:00"
+}
+
+
+POST api/v1/dispatcher/repository	
+Response body
+{
+  "absoluteUri": "database://fd142588-0d78-42f7-9326-67e28a0d042e"
+}
+
+
+POST /api/v1/dispatcher/dispatch/packages
+Request body
+{
+  "packageTypeId": "yYzKXybaQVkcPJ44a5",
+  "absoluteUri": "database://fd142588-0d78-42f7-9326-67e28a0d042e",
+  "geoJSON": "{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[102.0,0.5]}},{"type":"Feature","geometry":{"type":"LineString","coordinates":[[102.0,0.0],[103.0,1.0]]}}]}"
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## How the pieces fit together
 
@@ -95,8 +142,3 @@ becomes redundant.
 Note that with that package, `AddOpenApi(options => ...)` hands you a `VersionedOpenApiOptions`,
 so transformers are registered through `options.Document.AddDocumentTransformer(...)`.
 
-## Package versions
-
-Pinned rather than floated. One pin is load-bearing: `Microsoft.OpenApi` is held at 2.x because
-the .NET 10 OpenAPI generator is built against that object model, and a transitive bump to 3.x
-makes several model properties read-only and breaks document generation at build time.

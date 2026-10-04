@@ -4,8 +4,10 @@ using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Controllers;
 using Microsoft.Extensions.Options;
 using S100BlueStack.Settings;
+using System.Collections.Concurrent;
 using System.Net.Mail;
 using System.Text.Json;
+using static S100BlueStack.Settings.ProductCatalogue;
 using IO = System.IO;
 
 namespace DataCatalague.Api.Repositories
@@ -27,7 +29,7 @@ namespace DataCatalague.Api.Repositories
         private readonly IReadOnlyDictionary<string, FeatureClassDefinition> _featureClassDefinitions;
         private readonly IReadOnlyDictionary<string, TableDefinition> _standaloneTableDefinitions;
 
-        public DispatchRepository(IOptions<DispatcherOptions> options, ILogger<DispatchRepository> logger) {
+        public DispatchRepository(ArcGisDispatcher arcDispatcher, IOptions<DispatcherOptions> options, ILogger<DispatchRepository> logger) {
             _luggageOptions = options ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -50,15 +52,21 @@ namespace DataCatalague.Api.Repositories
             else
                 throw new System.ArgumentOutOfRangeException(nameof(options.Value.Geodatabase));
 
-            using var connector = createGeodatabase();
+            var definitions = arcDispatcher.ExecuteAsync(() => {
+                using var connector = createGeodatabase();
 
-            var syntax = connector.GetSQLSyntax();
+                var syntax = connector.GetSQLSyntax();
 
-            _featureClassDefinitions = connector.GetDefinitions<FeatureClassDefinition>().ToDictionary(e => syntax.ParseTableName(e.GetName()).Item3.ToLowerInvariant(), e => e);
-            _standaloneTableDefinitions = connector.GetDefinitions<TableDefinition>().ToDictionary(e => syntax.ParseTableName(e.GetName()).Item3.ToLowerInvariant(), e => e);
+                return (
+                    connector.GetDefinitions<FeatureClassDefinition>().ToDictionary(e => syntax.ParseTableName(e.GetName()).Item3.ToLowerInvariant(), e => e),
+                    connector.GetDefinitions<TableDefinition>().ToDictionary(e => syntax.ParseTableName(e.GetName()).Item3.ToLowerInvariant(), e => e));
+            }).ConfigureAwait(false).GetAwaiter().GetResult();
+
+            _featureClassDefinitions = definitions.Item1;
+            _standaloneTableDefinitions = definitions.Item2;
         }
 
-        public async Task<Guid> AddAttachment(Stream stream, string fileName, DateTimeOffset dateTimeOffsetUtc, CancellationToken cancellationToken) {
+        public Guid AddAttachment(Stream stream, string fileName, DateTimeOffset dateTimeOffsetUtc) {
             using (var connector = createGeodatabase()) {
                 using (Table attachment = connector.OpenDataset<Table>(this._standaloneTableDefinitions["attachment"].GetName())) {
                     using var rowBuffer = attachment.CreateRowBuffer();
@@ -87,7 +95,7 @@ namespace DataCatalague.Api.Repositories
                     };
 
                     var memoryStream = new MemoryStream();
-                    await stream.CopyToAsync(memoryStream, cancellationToken);
+                    stream.CopyTo(memoryStream);
                     memoryStream.Position = 0;
 
                     rowBuffer["ps"] = "S-100";
@@ -103,7 +111,7 @@ namespace DataCatalague.Api.Repositories
             }
         }
 
-        public async Task<string> AddPackageAOI(Geometry geometry, string packageId, string absoluteUri) {
+        public string AddPackageAOI(Geometry geometry, string packageId, string absoluteUri) {
             using (var connector = createGeodatabase()) {
                 using var fc = geometry.GeometryType switch {
                     GeometryType.Point => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["point"].GetName()),
