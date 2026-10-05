@@ -136,6 +136,31 @@ namespace DataCatalague.Api.Repositories
             }
         }
 
+        public string AddWorkspaceAOI(Geometry geometry, string pipelineId, string displayName) {
+            using (var connector = createGeodatabase()) {
+                using var fc = geometry.GeometryType switch {
+                    GeometryType.Point => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["point"].GetName()),
+                    GeometryType.Multipoint => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["pointset"].GetName()),
+                    GeometryType.Polyline => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["curve"].GetName()),
+                    GeometryType.Polygon => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["surface"].GetName()),
+                    _ => throw new NotImplementedException(),
+                };
+
+                using var buffer = fc.CreateRowBuffer();
+                buffer["ps"] = "";
+                buffer["code"] = "WorkspaceCoverage";
+                buffer["attributebindings"] = JsonSerializer.Serialize(new {
+                    pipelineId,
+                    displayName,
+                }, jsonSerializerOptions);
+                buffer["shape"] = geometry;
+
+                var row = fc.CreateRow(buffer);
+
+                return $"{fc.GetName().Split('.')[^1]}::{row.GetGlobalID():B}";
+            }
+        }
+
         public Polygon FromGeoJson(string geoJson) {
             var polygon = PolygonBuilderEx.FromJson(geoJson);
             return polygon;

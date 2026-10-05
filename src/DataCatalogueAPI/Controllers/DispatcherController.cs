@@ -108,8 +108,18 @@ namespace DataCatalague.Api.Controllers
         public async Task<ActionResult<PackageTypeResponse>> GetPackageType(string id, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNullOrEmpty(id);
 
-            var stream = await this._eventStore.LoadState<PackageTypeState>(new(id), true, cancellationToken);
-            return Map(stream.State);
+            try {
+                var stream = await this._eventStore.LoadState<PackageTypeState, PackageTypeId>(this._streamNameMap, new(id), cancellationToken: cancellationToken);
+                return Map(stream.State);
+            }
+            catch {
+                this._logger.LogInformation("PackageType {id} was not found.", id);
+
+                return this.Problem(
+                    title: "PackageType not found.",
+                    detail: $"No packagetype exists with identifier {id}.",
+                    statusCode: StatusCodes.Status404NotFound);
+            }
         }
 
         [HttpPut("packagetypes/{id}/specification")]
@@ -153,8 +163,8 @@ namespace DataCatalague.Api.Controllers
             ArgumentNullException.ThrowIfNullOrEmpty(request.GeoJSON);
 
             try {
-                var stream = await this._eventStore.LoadState<PackageTypeState>(new(request.PackageTypeId), true, cancellationToken);
-                if (stream.State.IsTerminated)
+                var packageType = await this._eventStore.LoadState<PackageTypeState>(new(request.PackageTypeId), true, cancellationToken);
+                if (packageType.State.IsTerminated)
                     return this.BadRequest();
 
                 var streamId = CreateStreamId();
@@ -167,13 +177,12 @@ namespace DataCatalague.Api.Controllers
 
                 var filename = IO.Path.GetFileName(request.AbsoluteUri);
 
-                var cmd = await this._servicePackage.Handle(new DispatcherCommands.CreatePackage(streamId, stream.State.Id, filename, request.AbsoluteUri, geometryRef), cancellationToken);
+                var cmd = await this._servicePackage.Handle(new DispatcherCommands.CreatePackage(streamId, packageType.State.Id, filename, request.AbsoluteUri, geometryRef), cancellationToken);
 
                 if (!cmd.Success)
                     return this.BadRequest();
 
                 var result = cmd.Get()!;
-
 
                 this._logger.LogInformation("Created package {id}.", result.State.Id);
 
@@ -195,8 +204,18 @@ namespace DataCatalague.Api.Controllers
         public async Task<ActionResult<PackageResponse>> GetPackage(string id, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNullOrEmpty(id);
 
-            var stream = await this._eventStore.LoadState<PackageState>(new(id), true, cancellationToken);
-            return Map(stream.State);
+            try {
+                var stream = await this._eventStore.LoadState<PackageState>(new(id), true, cancellationToken);
+                return Map(stream.State);
+            }
+            catch {
+                this._logger.LogInformation("Package {id} was not found.", id);
+
+                return this.Problem(
+                    title: "Package not found.",
+                    detail: $"No package exists with identifier {id}.",
+                    statusCode: StatusCodes.Status404NotFound);
+            }
         }
 
 
@@ -249,7 +268,7 @@ namespace DataCatalague.Api.Controllers
 
         private static PackageResponse Map(Domain.PackageState state) => new() {
             Id = state.Id,
-            PackageTypeId = state.PackageTypeId,            
+            PackageTypeId = state.PackageTypeId,
             FileName = state.FileName,
             AbsoluteUri = state.Uri?.AbsolutePath,
             LastUpdatedUtc = state.LastUpdatedUtc,

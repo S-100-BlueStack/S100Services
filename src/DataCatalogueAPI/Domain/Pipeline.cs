@@ -1,5 +1,6 @@
 ﻿using Eventuous;
 using static DataCatalague.Api.Domain.PipelineEvents;
+using static DataCatalague.Api.Domain.PipelineEvents.V1;
 
 namespace DataCatalague.Api.Domain
 {
@@ -7,7 +8,7 @@ namespace DataCatalague.Api.Domain
 
     public record PipelineState : State<PipelineState>
     {
-        public Guid Uuid { get; set; }
+        public PipelineId? Id { get; set; }
 
         public string DisplayName { get; set; } = string.Empty;
 
@@ -17,32 +18,40 @@ namespace DataCatalague.Api.Domain
 
         public PipelineState() {
             this.On<V1.PipelineCreated>(Created);
+            this.On<V1.WorkspaceAdded>(WorkspaceAdded);
         }
 
         static PipelineState Created(PipelineState state, V1.PipelineCreated e)
             => state with {
-                Uuid = e.Uuid,
+                Id = new(e.PipelineId),
                 DisplayName = e.DisplayName,
                 Description = e.Description,
                 LastUpdatedUtc = e.CreatedUTC,
+            };
+
+        static PipelineState WorkspaceAdded(PipelineState state, V1.WorkspaceAdded e)
+            => state with {
+                LastUpdatedUtc = e.UTC,
             };
     }
 
     public class Pipeline : Aggregate<PipelineState>
     {
         public async Task Create(
-                    Guid Uuid,
+                    string PipelineId,
                     string DisplayName,
                     string? Description
             ) {
             this.EnsureDoesntExist();
-            this.Apply(new V1.PipelineCreated(Uuid, DisplayName, Description, DateTime.UtcNow));
+            this.Apply(new V1.PipelineCreated(PipelineId, DisplayName, Description, DateTime.UtcNow));
         }
     }
 
     public static class PipelineCommands
     {
-        public record Create(Guid Uuid, string DisplayName, string? Description = default);
+        public record Create(string PipelineId, string DisplayName, string? Description = default);
+
+        public record CreateWorkspace(string PipelineId, string DisplayName, string GeometryRef);
     }
 
     public static class PipelineEvents
@@ -51,7 +60,7 @@ namespace DataCatalague.Api.Domain
         {
             [EventType("V1.PipelineCreated")]
             public record PipelineCreated(
-                    Guid Uuid,
+                    string PipelineId,
                     string DisplayName,
                     string? Description,
                     DateTimeOffset CreatedUTC
@@ -59,12 +68,14 @@ namespace DataCatalague.Api.Domain
 
             [EventType("V1.WorkspaceAdded")]
             public record WorkspaceAdded(
+                    string DisplayName,
+                    string GeometryRef,
+                    DateTimeOffset UTC
                 );
         }
     }
 
     public static class PipelineExtension
-    {
-        public static PipelineId ToPipelineId(this Guid uuid) => new PipelineId(uuid.ToString("B"));
+    {        
     }
 }

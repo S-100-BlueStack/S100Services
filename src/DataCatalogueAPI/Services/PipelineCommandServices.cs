@@ -8,9 +8,9 @@ namespace DataCatalague.Api.Services
         public PipelineCommandService(IEventStore store) : base(store) {
             this.On<PipelineCommands.Create>()
                 .InState(ExpectedState.New)
-                .GetId(cmd => cmd.Uuid.ToPipelineId())
+                .GetId(cmd => new(cmd.PipelineId))
                 .ActAsync(
-                    (pipeline, cmd, _) => pipeline.Create(cmd.Uuid, cmd.DisplayName, cmd.Description)
+                    (pipeline, cmd, _) => pipeline.Create(cmd.PipelineId, cmd.DisplayName, cmd.Description)
                 );
         }
     }
