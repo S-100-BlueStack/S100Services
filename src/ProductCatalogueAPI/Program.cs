@@ -27,8 +27,15 @@ namespace ProductCatalogueAPI
                     try { Console.Title = "Product Catalogue Worker"; }
                     catch (IOException) { /* A service process may have no console to rename. */ }
                 }
+
                 await RunWorkerAsync(args, processProfile);
                 return;
+            }
+            else if (processRole == ProductCatalogueProcessRole.Api) {
+                if (Environment.UserInteractive) {
+                    try { Console.Title = "Product Catalogue API"; }
+                    catch (IOException) { /* A service process may have no console to rename. */ }
+                }
             }
 
             var development = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")?.Equals("Development", StringComparison.OrdinalIgnoreCase) == true;
