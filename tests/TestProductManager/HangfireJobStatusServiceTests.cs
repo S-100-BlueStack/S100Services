@@ -2,6 +2,7 @@ using ProductCatalogueAPI.Models;
 using ProductCatalogueAPI.Controllers;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ProductCatalogueAPI.Jobs;
 using ProductCatalogueAPI.Services.Jobs;
@@ -203,6 +204,31 @@ namespace TestProductCatalogueAPI
             Assert.Null(Service(incomplete).GetJob("other-job"));
         }
 
+        [Fact]
+        public void ActiveDpcJobWithoutProductMetadataDoesNotProduceWarnings() {
+            var snapshots = new Dictionary<string, HangfireJobSnapshot>(StringComparer.Ordinal) {
+                ["dpc-job"] = new(new Dictionary<string, string?>(), [new HangfireStateSnapshot("Processing", Utc(10, 0))]),
+                ["export-job"] = Snapshot("Enqueued")
+            };
+            var logger = new CountingLogger();
+            var service = new HangfireJobStatusService(new MultiFakeAccessor(snapshots), logger);
+
+            Assert.Equal("export-job", Assert.Single(service.GetActiveJobs("101DK001")).JobId);
+            Assert.Equal(0, logger.WarningCount);
+        }
+
+        [Fact]
+        public void MalformedProductJobStillProducesAWarning() {
+            var logger = new CountingLogger();
+            var snapshot = new HangfireJobSnapshot(
+                new Dictionary<string, string?> { [ExportJobParameterNames.DatasetName] = Json("101DK001") },
+                [new HangfireStateSnapshot("Enqueued", Utc(10, 0))]);
+            var service = new HangfireJobStatusService(new FakeAccessor(snapshot), logger);
+
+            Assert.Null(service.GetJob("malformed-product-job"));
+            Assert.Equal(1, logger.WarningCount);
+        }
+
         private static HangfireJobStatusService Service(HangfireJobSnapshot? snapshot) =>
             Service(new FakeAccessor(snapshot));
 
@@ -269,6 +295,17 @@ namespace TestProductCatalogueAPI
                 snapshots.TryGetValue(jobId, out var snapshot) ? snapshot : null;
 
             public IReadOnlyList<string> ReadActiveJobIds() => snapshots.Keys.ToArray();
+        }
+
+        private sealed class CountingLogger : ILogger<HangfireJobStatusService>
+        {
+            public int WarningCount { get; private set; }
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(LogLevel logLevel) => true;
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                if (logLevel == LogLevel.Warning)
+                    WarningCount++;
+            }
         }
     }
 }

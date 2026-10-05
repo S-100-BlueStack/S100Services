@@ -184,10 +184,10 @@ namespace ProductCatalogueAPI.Services.Jobs
             string jobId,
             HangfireJobSnapshot snapshot
         ) {
-            var datasetName = ReadRequired<string>(
-                snapshot,
-                ExportJobParameterNames.DatasetName
-            );
+            // The active Hangfire list also contains DPC and other jobs without export metadata.
+            var datasetName = ReadOptional<string>(snapshot, ExportJobParameterNames.DatasetName);
+            if (datasetName is null)
+                return null;
             var operationType = ReadRequired<string>(
                 snapshot,
                 ExportJobParameterNames.OperationType
