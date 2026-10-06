@@ -538,14 +538,30 @@ namespace S100FC.ProductCatalogue
             await this.Dispatch(() => {
                 var products = this._electronicProducts
                     .Where(x => x.Key.ProductSpecification == "S101" && x.Value.optimumDisplayScale.HasValue)
-                    .Select(x => new {
-                        Name = x.Key.DatasetName,
-                        Product = x.Value,
-                        DisplayScale = x.Value.optimumDisplayScale!.Value,
-                        Aoi = this.GetProductAoiGeometry(x.Key.DatasetName, "S-101")
-                    })
-                    .Where(x => x.Aoi != null && !x.Aoi.IsEmpty)
-                    .ToList();
+                    .ToDictionary(x => x.Key.DatasetName, x => x.Value, StringComparer.OrdinalIgnoreCase);
+
+                // Read S-128 AOIs once: resolving each product separately scans the entire surface table hundreds of times.
+                var aois = new Dictionary<string, ArcGIS.Core.Geometry.Geometry>(StringComparer.OrdinalIgnoreCase);
+                using (var surface = this._geodatabase!.OpenDataset<FeatureClass>(this.QualifyTableName("surface"))) {
+                    using var cursor = surface.Search(CreateDatasetAoiQueryFilter(), true);
+                    while (cursor.MoveNext()) {
+                        var row = cursor.Current;
+                        if (row.IsNull("attributebindings") || row is not ArcGIS.Core.Data.Feature feature)
+                            continue;
+                        var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                        var name = NormalizeDatasetName(product.datasetName);
+                        if (NormalizeProductSpecification(product.productSpecification?.name) != "S101" || !products.ContainsKey(name))
+                            continue;
+                        var shape = feature.GetShape();
+                        if (shape is null || shape.IsEmpty || !aois.TryAdd(name, shape.Clone()))
+                            throw new ProductDataIntegrityException(name, aois.ContainsKey(name) ? 2 : 0);
+                    }
+                }
+
+                foreach (var name in products.Keys) {
+                    if (!aois.ContainsKey(name))
+                        throw new InvalidOperationException($"Could not find product coverage surface for S-101 product '{name}'.");
+                }
 
                 foreach (var c in this._connections.Where(e => e.ProductSpecification.Equals("S-101", StringComparison.OrdinalIgnoreCase))) {
                     var uri = c.ConnectionFile!;
@@ -554,7 +570,8 @@ namespace S100FC.ProductCatalogue
                     using var connection = this.OpenGeodatabase(uri);
 
                     var productsForConnection = products
-                        .Where(p => this.Connection(p.Product.productSpecification!.name!) == uri)
+                        .Where(p => this.Connection(p.Value.productSpecification!.name!) == uri)
+                        .Select(p => new ScanProductAoi(p.Key, aois[p.Key]))
                         .ToList();
 
                     if (productsForConnection.Count == 0)
@@ -567,7 +584,10 @@ namespace S100FC.ProductCatalogue
             return result;
         }
 
-        private void ScanConnectionForPendingEdits(Geodatabase connection, string connectionName, IEnumerable<dynamic> products, DateTime sinceUtc, Dictionary<string, Dictionary<string, ArchiveRow>> result) {
+        /// <summary>Associates one S-101 export product with its S-128 coverage geometry during archive scans.</summary>
+        internal sealed record ScanProductAoi(string Name, ArcGIS.Core.Geometry.Geometry Aoi);
+
+        private void ScanConnectionForPendingEdits(Geodatabase connection, string connectionName, IEnumerable<ScanProductAoi> products, DateTime sinceUtc, Dictionary<string, Dictionary<string, ArchiveRow>> result) {
             var productList = products.ToList();
 
             var sqlSyntax = connection.GetSQLSyntax();
@@ -658,8 +678,7 @@ namespace S100FC.ProductCatalogue
                         EditDate = changedAt
                     };
 
-                    foreach (var product in productList) {
-                        string productName = product.Name;
+                    foreach (var productName in FindAffectedProducts(changedShape, productList)) {
                         affectedProducts.Add(productName);
 
                         if (!result.TryGetValue(productName, out var productChanges)) {
@@ -686,6 +705,30 @@ namespace S100FC.ProductCatalogue
 
             if (unclassifiedArchiveRows > 0)
                 throw new ArchiveChangeClassificationException(connectionName, unclassifiedArchiveRows);
+        }
+
+        /// <summary>Only a real intersection with an AOI may attach an archived change to its product.</summary>
+        internal static IReadOnlyList<string> FindAffectedProducts(ArcGIS.Core.Geometry.Geometry feature, IReadOnlyList<ScanProductAoi> products) {
+            if (feature.SpatialReference is null)
+                throw new InvalidOperationException("An archived feature has no spatial reference; the scan watermark was preserved.");
+            var result = new List<string>();
+            var projections = new List<ArcGIS.Core.Geometry.Geometry>();
+            foreach (var product in products) {
+                if (product.Aoi.SpatialReference is null)
+                    throw new InvalidOperationException($"S-101 AOI '{product.Name}' has no spatial reference; the scan watermark was preserved.");
+                var comparable = feature;
+                if (!feature.SpatialReference.IsEqual(product.Aoi.SpatialReference)) {
+                    var projected = projections.FirstOrDefault(shape => shape.SpatialReference.IsEqual(product.Aoi.SpatialReference));
+                    if (projected is null) {
+                        projected = GeometryEngine.Instance.Project(feature, product.Aoi.SpatialReference);
+                        projections.Add(projected);
+                    }
+                    comparable = projected;
+                }
+                if (GeometryEngine.Instance.Intersects(comparable, product.Aoi))
+                    result.Add(product.Name);
+            }
+            return result;
         }
 
         /// <summary>Reads current feature GUIDs so archived deletes can be identified without a UID column.</summary>
