@@ -669,10 +669,12 @@ namespace S100FC.ProductCatalogue
                     archiveRows++;
                     uniqueChangedFeatureIds.Add(id);
 
-                    var fromDate = row["GDB_FROM_DATE"] as DateTime?;
-                    var toDate = row["GDB_TO_DATE"] as DateTime?;
+                    var fromDate = ReadArchiveUtc(row["GDB_FROM_DATE"]);
+                    var toDate = ReadArchiveUtc(row["GDB_TO_DATE"]);
                     // A removed or superseded archive row changed when it closed, not when it began.
                     var changedAt = toDate is { Year: < 9999 } && (!fromDate.HasValue || toDate > fromDate) ? toDate : fromDate;
+                    if (changedAt is null)
+                        throw new InvalidOperationException($"Archive feature '{id}' in '{baseTableName}' has no readable change date; DPC cannot advance its watermark safely.");
                     var archiveRow = new ArchiveRow {
                         Code = row["Code"]?.ToString(),
                         AttributeBindings = row["attributebindings"]?.ToString(),
@@ -710,6 +712,15 @@ namespace S100FC.ProductCatalogue
             if (unclassifiedArchiveRows > 0)
                 throw new ArchiveChangeClassificationException(connectionName, unclassifiedArchiveRows);
         }
+
+        /// <summary>Interprets geodatabase archive dates as UTC before comparing them with the DPC cursor.</summary>
+        internal static DateTime? ReadArchiveUtc(object? value) => value switch {
+            null or DBNull => null,
+            DateTimeOffset offset => offset.UtcDateTime,
+            DateTime { Kind: DateTimeKind.Local } date => date.ToUniversalTime(),
+            DateTime date => DateTime.SpecifyKind(date, DateTimeKind.Utc),
+            _ => throw new InvalidOperationException($"Unsupported geodatabase archive date value of type '{value.GetType().FullName}'.")
+        };
 
         /// <summary>Only a real intersection with an AOI may attach an archived change to its product.</summary>
         internal static IReadOnlyList<string> FindAffectedProducts(ArcGIS.Core.Geometry.Geometry feature, IReadOnlyList<ScanProductAoi> products, string? featureId = null, string? featureCode = null, string? tableName = null) {

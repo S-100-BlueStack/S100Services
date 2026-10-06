@@ -72,6 +72,16 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 logger.LogInformation("ENC changes for {SourceDatasetName}: {ChangedFeatureCount} feature(s).", sourceName, changes.Count);
         }
 
+        // Source archive timestamps must be comparable with the UTC package cursor. An invalid or
+        // future timestamp must stop the scan before it can discard any existing candidate.
+        var latestAllowedEditUtc = clock.GetUtcNow().UtcDateTime.AddMinutes(5);
+        foreach (var (sourceName, changes) in pending) {
+            foreach (var (featureId, change) in changes) {
+                if (change.EditDate is null || change.EditDate > latestAllowedEditUtc)
+                    throw new InvalidOperationException($"ENC archive change for '{sourceName}', feature '{featureId}', has an invalid UTC edit date ({change.EditDate:O}). DPC preserved the watermark and existing candidates.");
+            }
+        }
+
         var active = await packages.GetActiveAsync(pending.Keys, cancellationToken);
         var completeScans = new Dictionary<DateTime, Dictionary<string, Dictionary<string, ArchiveRow>>>();
         foreach (var (sourceName, changes) in pending) {
@@ -94,7 +104,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             var packageScanFromUtc = replay.GetValueOrDefault(sourceName, sinceUtc);
             EncPackage? previous = null;
             if (active.TryGetValue(sourceName, out var existing)) {
-                if (!HasNewEdits(changes, existing.DetectedAtUtc, sinceUtc)) {
+                if (!HasNewEdits(changes, existing.DetectedAtUtc)) {
                     // A replayed archive row from the existing snapshot is not a reason to retry a failed export.
                     if (await CanRefreshAsync(existing, cancellationToken))
                         await RecoverIncompletePackageAsync(existing, cancellationToken);
@@ -140,7 +150,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 throw new InvalidOperationException($"ENC source snapshot for '{sourceName}' was empty.");
 
             if (previous is not null) {
-                logger.LogInformation("Refreshing ENC package after new edits. SourceDatasetName: {SourceDatasetName}. PreviousDetectedAtUtc: {PreviousDetectedAtUtc}.", sourceName, previous.DetectedAtUtc);
+                logger.LogInformation("Refreshing ENC package after a later archive edit. SourceDatasetName: {SourceDatasetName}. PreviousDetectedAtUtc: {PreviousDetectedAtUtc}. LatestArchiveEditUtc: {LatestArchiveEditUtc}.", sourceName, previous.DetectedAtUtc, changes.Values.Max(change => change.EditDate));
                 try {
                     await DiscardForRefreshAsync(previous, s57, ProductSpecification.S57, cancellationToken);
                     await DiscardForRefreshAsync(previous, s101, ProductSpecification.S101, cancellationToken);
@@ -180,9 +190,12 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         return !IsRefreshBlocked(s57) && !IsRefreshBlocked(s101);
     }
 
-    /// <summary>Uses archive change times so replaying an old scan never rebuilds identical failed candidates.</summary>
-    internal static bool HasNewEdits(IReadOnlyDictionary<string, ArchiveRow> changes, DateTime detectedAtUtc, DateTime sinceUtc) =>
-        changes.Values.Any(change => change.EditDate > detectedAtUtc || change.EditDate is null && sinceUtc >= detectedAtUtc);
+    /// <summary>Requires a later archive edit before replacing a package; the global scan cursor is not evidence of a new edit.</summary>
+    internal static bool HasNewEdits(IReadOnlyDictionary<string, ArchiveRow> changes, DateTime detectedAtUtc) {
+        if (changes.Values.Any(change => change.EditDate is null))
+            throw new InvalidOperationException("An ENC archive edit has no timestamp; the package cannot be refreshed safely.");
+        return changes.Values.Any(change => change.EditDate > detectedAtUtc);
+    }
 
     /// <summary>Protects an operator hold, a build in progress, or a candidate submitted for approval.</summary>
     internal static bool IsRefreshBlocked(ProductExportTrackRecord? track) => track?.IsManuallyFrozen == true ||
