@@ -36,7 +36,8 @@ public static class EncPackageStatusResolver
 {
     /// <summary>Returns Error for any failed candidate and keeps InTransit locked until both are terminal.</summary>
     public static EncPackageStatus Resolve(EncPackage? package, ProductExportTrackRecord? s57, ProductExportTrackRecord? s101) {
-        if (!string.IsNullOrWhiteSpace(package?.ErrorMessage) || IsError(s57, package?.S57Discarded == true) || IsError(s101, package?.S101Discarded == true))
+        if (!string.IsNullOrWhiteSpace(package?.ErrorMessage) || IsError(s57, package?.S57Discarded == true) || IsError(s101, package?.S101Discarded == true) ||
+            IsUncertain(s57) || IsUncertain(s101))
             return EncPackageStatus.Error;
         if (package is null)
             return IsHeld(s57) || IsHeld(s101) ? EncPackageStatus.Held : EncPackageStatus.Idle;
@@ -53,6 +54,8 @@ public static class EncPackageStatusResolver
 
     /// <summary>Shows the failed product's diagnostic even when the package row has no error text.</summary>
     public static string? GetErrorMessage(EncPackage? package, ProductExportTrackRecord? s57, ProductExportTrackRecord? s101) {
+        if (IsUncertain(s101) || IsUncertain(s57))
+            return "IC-ENC delivery could not be confirmed. Verify the receiver's intake and reconcile the delivery before continuing.";
         if (IsError(s101, package?.S101Discarded == true) && !string.IsNullOrWhiteSpace(s101?.ErrorMessage))
             return s101.ErrorMessage;
         if (IsError(s57, package?.S57Discarded == true) && !string.IsNullOrWhiteSpace(s57?.ErrorMessage))
@@ -67,5 +70,6 @@ public static class EncPackageStatusResolver
     }
 
     private static bool IsError(ProductExportTrackRecord? track, bool discarded) => !discarded && track is { State: ProductState.Error or ProductState.Rejected };
+    private static bool IsUncertain(ProductExportTrackRecord? track) => track?.ErrorCode == "IC_ENC_DELIVERY_UNCERTAIN" && track.State == ProductState.InTransit;
     private static bool IsHeld(ProductExportTrackRecord? track) => track?.IsManuallyFrozen == true || track?.State == ProductState.Frozen;
 }

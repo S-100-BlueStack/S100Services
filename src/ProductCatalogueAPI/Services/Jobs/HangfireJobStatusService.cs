@@ -241,8 +241,8 @@ namespace ProductCatalogueAPI.Services.Jobs
             var operationOutcome = ReadOptional<string>(snapshot, ExportJobParameterNames.OperationOutcome);
             var deliveryStatus = ReadOptional<string>(snapshot, ExportJobParameterNames.DeliveryStatus);
             if (operationType == SendToIcEncContract.OperationType &&
-                (!string.Equals(mode, SendToIcEncContract.SimulationMode, StringComparison.Ordinal) ||
-                 !string.Equals(deliveryStatus, SendToIcEncContract.NotDeliveredStatus, StringComparison.Ordinal)))
+                (mode is not (SendToIcEncContract.SimulationMode or SendToIcEncContract.LiveMode) ||
+                 deliveryStatus is not (SendToIcEncContract.NotDeliveredStatus or SendToIcEncContract.DeliveredStatus or SendToIcEncContract.UncertainStatus)))
                 return null;
             if (operationType != SendToIcEncContract.OperationType &&
                 (mode != null || operationOutcome != null || deliveryStatus != null))
@@ -299,9 +299,14 @@ namespace ProductCatalogueAPI.Services.Jobs
 
             if (operationType == SendToIcEncContract.OperationType &&
                 publicStatus == ExportJobContract.SucceededStatus &&
-                (!string.Equals(operationOutcome, SendToIcEncContract.SimulationCompletedOutcome, StringComparison.Ordinal) ||
-                 !string.Equals(resultCode, SendToIcEncContract.CompletedCode, StringComparison.Ordinal) ||
-                 !string.Equals(resultMessage, SendToIcEncContract.CompletedMessage, StringComparison.Ordinal)))
+                !(mode == SendToIcEncContract.SimulationMode &&
+                  operationOutcome == SendToIcEncContract.SimulationCompletedOutcome &&
+                  resultCode == SendToIcEncContract.CompletedCode &&
+                  resultMessage == SendToIcEncContract.CompletedMessage) &&
+                !(mode == SendToIcEncContract.LiveMode &&
+                  operationOutcome == SendToIcEncContract.DeliveredOutcome &&
+                  resultCode == SendToIcEncContract.DeliveredCode &&
+                  resultMessage == SendToIcEncContract.DeliveredMessage))
                 return null;
 
             var message = error?.Message;
