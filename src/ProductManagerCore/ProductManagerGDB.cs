@@ -732,13 +732,12 @@ namespace S100FC.ProductCatalogue
                 while (cursor.MoveNext()) {
                     var row = cursor.Current;
 
-                    var id = row.UID();
-
-                    if (string.IsNullOrWhiteSpace(id)) {
-
-                        Log.Warning("Row in {tableName} for connection {connectionName} is missing UID. Skipping geometry check.", baseTableName, connectionName);
-                        unclassifiedArchiveRows++;
-                        continue;
+                    string id;
+                    try {
+                        id = ReadFeatureId(row);
+                    }
+                    catch (InvalidOperationException exception) {
+                        throw new InvalidOperationException($"S-101 archive row in '{baseTableName}' has no usable feature GUID; DPC preserved the watermark and candidates.", exception);
                     }
 
                     if (row is not ArcGIS.Core.Data.Feature feature) {
@@ -873,12 +872,24 @@ namespace S100FC.ProductCatalogue
             }, true);
 
             while (cursor.MoveNext()) {
-                var id = cursor.Current.UID();
-                if (!string.IsNullOrWhiteSpace(id))
-                    currentFeatureIds.Add(id);
+                currentFeatureIds.Add(ReadFeatureId(cursor.Current));
             }
 
             return currentFeatureIds;
+        }
+
+        private static string ReadFeatureId(Row row) {
+            var rawGlobalId = row.FindField("GLOBALID") >= 0 && !row.IsNull("GLOBALID") ? row["GLOBALID"] : null;
+            return ResolveFeatureId(row.UID(), rawGlobalId);
+        }
+
+        /// <summary>Rejects an empty archive GUID and falls back to the actual GlobalID field when the row extension cannot read it.</summary>
+        internal static string ResolveFeatureId(string? extensionId, object? rawGlobalId) {
+            if (Guid.TryParse(extensionId, out var id) && id != Guid.Empty)
+                return id.ToString("B");
+            if (Guid.TryParse(Convert.ToString(rawGlobalId), out id) && id != Guid.Empty)
+                return id.ToString("B");
+            throw new InvalidOperationException($"UID returned '{extensionId ?? "<null>"}' and GLOBALID returned '{rawGlobalId ?? "<null>"}'.");
         }
 
         /// <summary>Identifies a deleted feature by its absence from the current feature class version.</summary>
