@@ -34,6 +34,8 @@ public static class BackendRegistrations
         services.AddScoped<IProductRepository>(provider => provider.GetRequiredService<ProductRepository>());
         services.AddScoped<IProductWorkflowRepository>(provider => provider.GetRequiredService<ProductRepository>());
         services.AddScoped<IEncPackageRepository, EncPackageRepository>();
+        services.AddScoped<IEncPackageAcknowledgementRepository, EncPackageAcknowledgementRepository>();
+        services.AddScoped<IIcEncAcknowledgementService, IcEncAcknowledgementService>();
         services.AddScoped<IProductWorkspaceFreshnessRepository, ProductWorkspaceFreshnessRepository>();
         services.AddScoped<IProductHistoryEventRepository, ProductHistoryEventRepository>();
         services.AddScoped<IProductHistoryEventService, ProductHistoryEventService>();
@@ -78,6 +80,8 @@ public static class BackendRegistrations
         services.AddSingleton<ISevenCsService, SevenCsService>();
         services.AddScoped<IExportOperationService, ExportOperationService>();
         services.AddScoped<IEncPackageDetectionService, EncPackageDetectionService>();
+        services.AddScoped<IEncPackageFinalizationService, EncPackageFinalizationService>();
+        services.AddTransient<FinalizeEncPackageJob>();
         services.AddTransient<ExportOperationJob>();
         services.AddTransient<DetectProductChangesJob>();
 

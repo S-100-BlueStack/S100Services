@@ -16,7 +16,7 @@ public interface IEncPackageDetectionService
 }
 
 /// <summary>Coordinates a package scan across the system database, S-128 catalogue, and export engines.</summary>
-public sealed class EncPackageDetectionService(IProductRepository productRepository, IProductWorkflowRepository workflowRepository, IEncPackageRepository packages, IProductManager productManager, IExportOperationService exports, IDatasetLockService locks, TimeProvider clock, ILogger<EncPackageDetectionService> logger) : IEncPackageDetectionService
+public sealed class EncPackageDetectionService(IProductRepository productRepository, IProductWorkflowRepository workflowRepository, IEncPackageRepository packages, IProductManager productManager, IExportOperationService exports, IDatasetLockService locks, TimeProvider clock, ILogger<EncPackageDetectionService> logger, IEncPackageFinalizationService? finalization = null) : IEncPackageDetectionService
 {
     private readonly IElectronicProductManager _products = productManager.ElectronicProductManager;
 
@@ -28,7 +28,8 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             return;
         }
 
-        await packages.ReleaseAcceptedAsync(cancellationToken);
+        if (finalization is not null)
+            await finalization.FinalizePendingAsync(cancellationToken);
         var scanStartedUtc = clock.GetUtcNow().UtcDateTime;
         var sinceUtc = await productRepository.GetLastSuccessfulRunUtcAsync(nameof(DetectProductChangesJob))
             ?? EncChangeSummary.GetCopenhagenDayStartUtc(scanStartedUtc);

@@ -9,6 +9,9 @@ namespace S100FC.ProductCatalogue
         int? Update
     );
 
+    /// <summary>Contains the accepted versions and the immutable source snapshot to publish together in S-128.</summary>
+    public sealed record EncPackagePublication(Guid PackageId, string S57DatasetName, int S57Edition, int S57Update, string S101DatasetName, int S101Edition, int S101Update, DateTime DetectedAtUtc, string DatasetYaml, byte[] CompilerIndex, byte[] CatalogueSignature);
+
     public sealed class ProductDataIntegrityException(
         string datasetName,
         int exactMatchCount
@@ -77,6 +80,9 @@ namespace S100FC.ProductCatalogue
         Task<(string yaml, string index)> GetLatestDatasetYAML(string name, int edition);
         Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign);
         Task CreateS57AttachmentAsync(string name, ExportTypes exportType, string yaml);
+        /// <summary>Atomically publishes both accepted ENC versions and their shared YAML attachment; repeating the same package is safe.</summary>
+        Task PublishAcceptedEncPackageAsync(EncPackagePublication publication, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("This product manager does not support publishing accepted ENC packages.");
         //Task CreateElectronicProductAsync(string name, productSpecification productSpecification, string boundary, int? optimumDisplayScale, string ProductMapping);
 
         string OutputFolder { get; }

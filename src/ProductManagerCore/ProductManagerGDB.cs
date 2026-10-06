@@ -18,7 +18,9 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Reflection.Metadata;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -731,7 +733,11 @@ namespace S100FC.ProductCatalogue
                     var delta = data["yaml"];
                     index = data["index"];
 
-                    if (!string.IsNullOrEmpty(delta))
+                    // Accepted ENC packages store a full snapshot. Legacy attachments store deltas.
+                    using var metadata = JsonDocument.Parse(Convert.ToString(cursor.Current["json"])!);
+                    if (metadata.RootElement.TryGetProperty("PackageId", out _))
+                        rootYAML = delta;
+                    else if (!string.IsNullOrEmpty(delta))
                         rootYAML = S100FC.YAML.DatasetComparer.AppendUpdate(rootYAML, delta);
                 }
 
@@ -1687,6 +1693,130 @@ namespace S100FC.ProductCatalogue
                     Log.Information("Attachment created for dataset {datasetName} with edition {edition} and update {update}", electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
                 });
             });
+        }
+
+        /// <summary>Publishes the two bound products and the source attachment in one geodatabase edit transaction.</summary>
+        async Task IElectronicProductManager.PublishAcceptedEncPackageAsync(EncPackagePublication publication, CancellationToken cancellationToken) {
+            ArgumentNullException.ThrowIfNull(publication);
+            if (publication.PackageId == Guid.Empty || string.IsNullOrWhiteSpace(publication.DatasetYaml) || publication.CompilerIndex.Length == 0)
+                throw new ArgumentException("The accepted package must include its identity, YAML and S-101 compiler index.", nameof(publication));
+
+            await Dispatch(() => {
+                cancellationToken.ThrowIfCancellationRequested();
+                var mapped = _productMappings.GetMapped(publication.S101DatasetName, "S-57");
+                if (mapped.Count != 1 || !string.Equals(mapped[0].datasetName, publication.S57DatasetName, StringComparison.OrdinalIgnoreCase))
+                    throw new ProductMappingIntegrityException("The accepted S-57 and S-101 products no longer have an exact ProductMapping binding.");
+
+                using var surface = _geodatabase!.OpenDataset<FeatureClass>(QualifyTableName("surface"));
+                using var attachment = _geodatabase.OpenDataset<Table>(QualifyTableName("attachment"));
+                var existingAttachment = false;
+                var sourceSha256 = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(publication.DatasetYaml)));
+                using (var existing = attachment.Search(new QueryFilter {
+                    WhereClause = $"json LIKE '%{publication.PackageId:D}%'"
+                }, true)) {
+                    while (existing.MoveNext()) {
+                        using var document = JsonDocument.Parse(Convert.ToString(existing.Current["json"])!);
+                        if (document.RootElement.TryGetProperty("PackageId", out var id) && id.GetGuid() == publication.PackageId) {
+                            if (existingAttachment || !document.RootElement.TryGetProperty("SourceSha256", out var hash) ||
+                                !string.Equals(hash.GetString(), sourceSha256, StringComparison.Ordinal) ||
+                                !document.RootElement.TryGetProperty("DatasetName", out var name) ||
+                                !string.Equals(name.GetString(), publication.S101DatasetName, StringComparison.OrdinalIgnoreCase))
+                                throw new InvalidOperationException("Conflicting S-128 attachment metadata exists for this package.");
+                            existingAttachment = true;
+                        }
+                    }
+                }
+
+                var products = new Dictionary<string, ElectronicProduct>(StringComparer.OrdinalIgnoreCase);
+                using (var cursor = surface.Search(CreateElectronicProductVersionQueryFilter(), true)) {
+                    while (cursor.MoveNext()) {
+                        var row = cursor.Current;
+                        if (row.IsNull("attributebindings")) continue;
+                        var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                        var specification = NormalizeProductSpecification(product.productSpecification?.name);
+                        var wanted = specification == "S57" && string.Equals(product.datasetName, publication.S57DatasetName, StringComparison.OrdinalIgnoreCase) ||
+                                     specification == "S101" && string.Equals(product.datasetName, publication.S101DatasetName, StringComparison.OrdinalIgnoreCase);
+                        if (wanted && !products.TryAdd(specification, product))
+                            throw new ProductMappingIntegrityException("Multiple S-128 ElectronicProduct rows match an accepted package product.");
+                    }
+                }
+                if (!products.TryGetValue("S57", out var s57) || !products.TryGetValue("S101", out var s101))
+                    throw new ProductMappingIntegrityException("An accepted package product is missing from the S-128 surface table.");
+
+                var s57Published = s57.editionNumber == publication.S57Edition && s57.updateNumber.GetValueOrDefault() == publication.S57Update;
+                var s101Published = s101.editionNumber == publication.S101Edition && s101.updateNumber.GetValueOrDefault() == publication.S101Update;
+                if (existingAttachment) {
+                    if (!s57Published || !s101Published)
+                        throw new InvalidOperationException("The package attachment exists but S-128 product versions do not match; manual repair is required.");
+                    return;
+                }
+                if (s57Published || s101Published || s57.editionNumber > publication.S57Edition || s101.editionNumber > publication.S101Edition)
+                    throw new InvalidOperationException("An S-128 product version changed outside package finalization; manual review is required.");
+
+                var publishedAtUtc = DateTime.UtcNow;
+                var updated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                _geodatabase.ApplyEdits(() => {
+                    using var cursor = surface.Search(new QueryFilter { WhereClause = "upper(ps) = 'S-128' AND code = 'ElectronicProduct'" }, false);
+                    while (cursor.MoveNext()) {
+                        using var row = cursor.Current;
+                        if (row.IsNull("attributebindings")) continue;
+                        var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                        var specification = NormalizeProductSpecification(product.productSpecification?.name);
+                        if (specification == "S57" && string.Equals(product.datasetName, publication.S57DatasetName, StringComparison.OrdinalIgnoreCase)) {
+                            product.editionNumber = publication.S57Edition;
+                            product.updateNumber = publication.S57Update;
+                        }
+                        else if (specification == "S101" && string.Equals(product.datasetName, publication.S101DatasetName, StringComparison.OrdinalIgnoreCase)) {
+                            product.editionNumber = publication.S101Edition;
+                            product.updateNumber = publication.S101Update;
+                        }
+                        else continue;
+
+                        if (!updated.Add(specification))
+                            throw new ProductMappingIntegrityException("A duplicate S-128 ElectronicProduct appeared during publication.");
+                        // The issued dataset was built from the package snapshot; acceptance can arrive days later.
+                        product.issueDate = DateOnly.FromDateTime(publication.DetectedAtUtc);
+                        row["attributebindings"] = product.Flatten();
+                        row.Store();
+                        products[specification] = product;
+                    }
+                    if (updated.Count != 2)
+                        throw new ProductMappingIntegrityException("An accepted product disappeared during S-128 publication.");
+
+                    using var buffer = attachment.CreateRowBuffer();
+                    buffer["ps"] = "S-128.NuvionPro";
+                    buffer["code"] = nameof(Dataset);
+                    buffer["json"] = JsonSerializer.Serialize(new {
+                        publication.PackageId,
+                        SourceSha256 = sourceSha256,
+                        DatasetName = publication.S101DatasetName,
+                        Edition = publication.S101Edition,
+                        Update = publication.S101Update,
+                        ExportTypes = s101.editionNumber.GetValueOrDefault() == 0 ? ExportTypes.NewDataset : publication.S101Update > 0 ? ExportTypes.Update : ExportTypes.NewEdition,
+                        TimestampUTC = publishedAtUtc,
+                        ProductSpecification = "S-101"
+                    }, jsonSerializerOptions);
+                    using var data = new MemoryStream();
+                    using (var archive = new ZipArchive(data, ZipArchiveMode.Create, leaveOpen: true)) {
+                        Write(archive, "yaml", Encoding.UTF8.GetBytes(publication.DatasetYaml));
+                        Write(archive, "index", publication.CompilerIndex);
+                        Write(archive, "sign", publication.CatalogueSignature);
+                    }
+                    data.Position = 0;
+                    buffer["data_size"] = data.Length;
+                    buffer["data"] = data;
+                    attachment.CreateRow(buffer);
+                });
+
+                AddElectronicProduct(products["S57"]);
+                AddElectronicProduct(products["S101"]);
+                Log.Information("Accepted ENC package {PackageId} published in S-128.", publication.PackageId);
+            });
+
+            static void Write(ZipArchive archive, string name, byte[] bytes) {
+                using var stream = archive.CreateEntry(name).Open();
+                stream.Write(bytes);
+            }
         }
 
         #endregion

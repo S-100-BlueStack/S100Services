@@ -17,6 +17,8 @@ namespace ProductCatalogueAPI.Controllers
 {
     /// <summary>Result of an operator's direct check of the IC-ENC intake.</summary>
     public sealed record ReconcileIcEncDeliveryRequest(bool ReceivedByIcEnc);
+    /// <summary>Manual fallback for a verified IC-ENC notice when automated email processing cannot complete.</summary>
+    public sealed record ManualIcEncAcknowledgementRequest(string DatasetName, string ProductSpecification, int Edition, int Update, string Decision, string NoticeReference, string? Reason = null, Guid? DeliveryId = null);
 
     // [Authorize("productmanager:distribute")]
     [AllowAnonymous]
@@ -31,7 +33,8 @@ namespace ProductCatalogueAPI.Controllers
         IOptionsMonitor<SendToIcEncOptions> sendToIcEncOptions,
         TimeProvider timeProvider,
         IProductManager productManager,
-        IIcEncDeliveryRepository? deliveryRepository = null
+        IIcEncDeliveryRepository? deliveryRepository = null,
+        IIcEncAcknowledgementService? acknowledgementService = null
     ) : ControllerBase
     {
         private readonly ILogger<UploadController> _logger = logger;
@@ -43,6 +46,7 @@ namespace ProductCatalogueAPI.Controllers
         private readonly TimeProvider _timeProvider = timeProvider;
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
         private readonly IIcEncDeliveryRepository? _deliveryRepository = deliveryRepository;
+        private readonly IIcEncAcknowledgementService? _acknowledgementService = acknowledgementService;
 
         /// <summary>
         /// Queues delivery of the ready S-57 or S-101 candidate to IC-ENC. Simulation mode performs no transfer.
@@ -317,6 +321,39 @@ namespace ProductCatalogueAPI.Controllers
                 User?.Identity?.Name, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken))
                 return Conflict("The delivery is no longer uncertain or the product is no longer in transit.");
             return Ok();
+        }
+
+        /// <summary>
+        /// Manually applies a verified IC-ENC acceptance or rejection. The future shared-mailbox job
+        /// calls the same acknowledgement service using Email as the source and a stable message ID.
+        /// A transfer receipt is not evidence of acceptance.
+        /// </summary>
+        [HttpPost("acknowledgements")]
+        [ProducesResponseType(StatusCodes.Status202Accepted)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> AcknowledgeDelivery([FromBody] ManualIcEncAcknowledgementRequest request,
+            CancellationToken cancellationToken, [FromHeader(Name = "X-ICENC-Operator-Key")] string? operatorKey = null) {
+            if (_sendToIcEncOptions.CurrentValue.Mode != SendToIcEncMode.Live || _acknowledgementService is null)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable);
+            if (!HasLiveOperatorKey(operatorKey ?? Request.Headers["X-ICENC-Operator-Key"].ToString()))
+                return StatusCode(StatusCodes.Status403Forbidden);
+            if (request is null || !Enum.TryParse<ProductSpecification>(request.ProductSpecification, true, out var specification) ||
+                specification is not (ProductSpecification.S57 or ProductSpecification.S101) ||
+                !Enum.TryParse<IcEncDecision>(request.Decision, true, out var decision) ||
+                !Enum.IsDefined(decision))
+                return BadRequest("Specify S57 or S101 and Accepted or Rejected.");
+
+            try {
+                var result = await _acknowledgementService.RecordAsync(new IcEncAcknowledgement(request.DatasetName,
+                    specification, request.Edition, request.Update, decision, request.NoticeReference,
+                    IcEncAcknowledgementSource.Manual, Reason: request.Reason, DeliveryId: request.DeliveryId), cancellationToken);
+                if (result is null)
+                    return Conflict("No current delivered revision matches this notice, or a different outcome was already recorded.");
+                return Accepted(new { result.DeliveryId, result.PackageId, result.ReadyForFinalization, result.AlreadyRecorded });
+            }
+            catch (ArgumentException ex) { return BadRequest(ex.Message); }
         }
 
         private bool HasLiveOperatorKey(string? provided) {

@@ -100,27 +100,6 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
         transaction.Commit();
     }
 
-    /// <inheritdoc/>
-    public async Task ReleaseAcceptedAsync(CancellationToken cancellationToken = default) {
-        using var connection = _connectionFactory.Create();
-        connection.Open();
-        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
-        var completed = await connection.QueryAsync<EncPackage>(new CommandDefinition($"""
-            {SelectHeaderSql} p WITH (UPDLOCK, HOLDLOCK)
-            WHERE (p.s57_discarded = 1 OR EXISTS (
-                SELECT 1 FROM dbo.ProductExportTrack t JOIN dbo.Product product ON product.product_id = t.product_id
-                WHERE product.dataset_name = p.s57_dataset_name AND t.product_specification = 'S57' AND t.state = 13))
-              AND (p.s101_discarded = 1 OR EXISTS (
-                SELECT 1 FROM dbo.ProductExportTrack t JOIN dbo.Product product ON product.product_id = t.product_id
-                WHERE product.dataset_name = p.source_dataset_name AND t.product_specification = 'S101' AND t.state = 13));
-            """, transaction: transaction, cancellationToken: cancellationToken));
-        foreach (var package in completed) {
-            await UpsertReplayAsync(connection, transaction, package.SourceDatasetName, package.DetectedAtUtc, cancellationToken);
-            await connection.ExecuteAsync(new CommandDefinition("DELETE FROM dbo.EncPackage WHERE package_id = @Id", new { package.Id }, transaction, cancellationToken: cancellationToken));
-        }
-        transaction.Commit();
-    }
-
     private static Task UpsertReplayAsync(IDbConnection connection, IDbTransaction transaction, string sourceDatasetName, DateTime scanFromUtc, CancellationToken cancellationToken) => connection.ExecuteAsync(new CommandDefinition("""
         UPDATE dbo.EncPackageReplay WITH (UPDLOCK, HOLDLOCK)
         SET scan_from_utc = CASE WHEN scan_from_utc < @ScanFromUtc THEN scan_from_utc ELSE @ScanFromUtc END
