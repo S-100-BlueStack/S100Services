@@ -50,6 +50,14 @@ namespace DataCatalague.Api.Domain
             this.EnsureDoesntExist();
             this.Apply(new V1.PipelineCreated(PipelineId, DisplayName, Description, DateTime.UtcNow));
         }
+
+        public async Task CreateWorkspace(
+                    string DisplayName,
+                    string GeometryRef
+            ) {
+            this.EnsureExists();
+            this.Apply(new V1.WorkspaceAdded(DisplayName, GeometryRef, DateTime.UtcNow));
+        }
     }
 
     public static class PipelineCommands

@@ -125,10 +125,23 @@ namespace DataCatalague.Api.Controllers.V1
 
                 var result = cmd.Get()!;
 
+                this._logger.LogInformation("Created workspace {id}.", displayName);
 
-                throw new NotImplementedException();
+                var route = this.CreatedAtRoute(
+                    "GetPipeline.V1",
+                    new { id = result.State.Id, version = ApiVersions.V1Text },
+                    Map(result.State));
+
+                return route;
             }
 
+            [HttpPost("{id}/workspaces/{workspace}")]
+            [ProducesResponseType<PipelineResponse>(StatusCodes.Status200OK)]
+            [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+            [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+            public async Task<ActionResult<PipelineResponse>> LockWorkspace(string id, string workspace, CancellationToken cancellationToken) {
+                throw new NotImplementedException();
+            }
 
 
             private static PipelineResponse Map(Domain.PipelineState state) => new() {

@@ -15,7 +15,7 @@ namespace DataCatalague.Api.Services
                 );
 
             this.On<DispatcherCommands.UpdateSpecificationPackageType>()
-                .InState(ExpectedState.New)
+                .InState(ExpectedState.Existing)
                 .GetId(cmd => new(cmd.PackageTypeId))
                 .ActAsync(
                     (packagetype, cmd, _) => packagetype.UpdateSpecification(cmd.Version, cmd.Markdown)

@@ -2,6 +2,9 @@ using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Repositories;
 using DataCatalague.Api.Services;
+using Eventuous.SqlServer;
+using Eventuous.SqlServer.Subscriptions;
+using Eventuous.Subscriptions.Registrations;
 using Serilog;
 
 using IO = System.IO;
@@ -42,7 +45,27 @@ public static class Program
             builder.Services.AddSingleton<DispatchRepository>();
             builder.Services.AddSingleton<ArcGisDispatcher>();
 
-            builder.Services.AddEventStore<InMemoryEventStore>();
+            builder.Services.AddEventuousSqlServer(
+                "",
+                "eventuous",
+                initializeDatabase: true);
+
+            builder.Services.AddEventStore<SqlServerStore>();
+
+            //builder.Services.AddSubscription<
+            //    SqlServerAllStreamSubscription,
+            //    SqlServerAllStreamSubscriptionOptions>(
+            //    "MySubscription",
+            //    subscription => subscription
+            //        .AddEventHandler<MyEventHandler>());
+
+            //builder.Services.AddEventStore<InMemoryEventStore>();
+
+            //builder.Services.AddSubscription<
+            //    InMemoryAllStreamSubscription,
+            //    InMemoryAllStreamSubscriptionOptions>(
+            //    "my-subscription",
+            //    x => x.AddEventHandler<MyEventHandler>());
 
             builder.Services.AddCommandService<StreamCommandService, PackageTypeState>();
             builder.Services.AddCommandService<PackageCommandService, PackageState>();
@@ -52,17 +75,6 @@ public static class Program
             builder.Services.AddApiVersioningSupport();
             builder.Services.AddVersionedOpenApiDocuments();
             builder.Services.AddSecureTransport();
-
-
-            {
-                var uriLocal = new Uri(@"c:\temp\hello.txt");
-
-                var uriRelative = new Uri(@"\\server01\share\data\file.xml");
-
-                ;
-            }
-
-
 
             var app = builder.Build();
 

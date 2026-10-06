@@ -12,6 +12,13 @@ namespace DataCatalague.Api.Services
                 .ActAsync(
                     (pipeline, cmd, _) => pipeline.Create(cmd.PipelineId, cmd.DisplayName, cmd.Description)
                 );
+
+            this.On<PipelineCommands.CreateWorkspace>()
+                .InState(ExpectedState.Existing)
+                .GetId(cmd => new(cmd.PipelineId))
+                .ActAsync(
+                    (pipeline, cmd, _) => pipeline.CreateWorkspace(cmd.DisplayName, cmd.GeometryRef)
+                );
         }
     }
 }
