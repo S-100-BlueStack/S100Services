@@ -31,6 +31,9 @@ namespace S100FC.ProductCatalogue
 {
     public class ProductManagerGDB : IProductManager, INauticalProductManager, IElectronicProductManager, IDisposable
     {
+        // Abort implausibly broad archive matches before DPC can create any candidates or advance its watermark.
+        internal const int MaxAoisPerArchiveFeature = 600;
+
         public static async Task<IProductManager> CreateInstanceAsync(
             Func<Geodatabase> creator,
             string executionLane = "Unspecified"
@@ -562,6 +565,7 @@ namespace S100FC.ProductCatalogue
                     if (!aois.ContainsKey(name))
                         throw new InvalidOperationException($"Could not find product coverage surface for S-101 product '{name}'.");
                 }
+                Log.Information("DPC AOI-intersection matcher v2 active. S101AoiCount: {S101AoiCount}. MaxAoisPerArchiveFeature: {MaxAoisPerArchiveFeature}.", aois.Count, MaxAoisPerArchiveFeature);
 
                 foreach (var c in this._connections.Where(e => e.ProductSpecification.Equals("S-101", StringComparison.OrdinalIgnoreCase))) {
                     var uri = c.ConnectionFile!;
@@ -678,7 +682,7 @@ namespace S100FC.ProductCatalogue
                         EditDate = changedAt
                     };
 
-                    foreach (var productName in FindAffectedProducts(changedShape, productList)) {
+                    foreach (var productName in FindAffectedProducts(changedShape, productList, id, archiveRow.Code, baseTableName)) {
                         affectedProducts.Add(productName);
 
                         if (!result.TryGetValue(productName, out var productChanges)) {
@@ -708,7 +712,7 @@ namespace S100FC.ProductCatalogue
         }
 
         /// <summary>Only a real intersection with an AOI may attach an archived change to its product.</summary>
-        internal static IReadOnlyList<string> FindAffectedProducts(ArcGIS.Core.Geometry.Geometry feature, IReadOnlyList<ScanProductAoi> products) {
+        internal static IReadOnlyList<string> FindAffectedProducts(ArcGIS.Core.Geometry.Geometry feature, IReadOnlyList<ScanProductAoi> products, string? featureId = null, string? featureCode = null, string? tableName = null) {
             if (feature.SpatialReference is null)
                 throw new InvalidOperationException("An archived feature has no spatial reference; the scan watermark was preserved.");
             var result = new List<string>();
@@ -727,6 +731,14 @@ namespace S100FC.ProductCatalogue
                 }
                 if (GeometryEngine.Instance.Intersects(comparable, product.Aoi))
                     result.Add(product.Name);
+            }
+            if (result.Count > MaxAoisPerArchiveFeature) {
+                var bounds = feature.Extent;
+                var matching = result.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var sample = products.Where(product => matching.Contains(product.Name)).Take(3)
+                    .Select(product => $"{product.Name}: {product.Aoi.Extent.XMin},{product.Aoi.Extent.YMin} to {product.Aoi.Extent.XMax},{product.Aoi.Extent.YMax}");
+                Log.Error("DPC AOI-intersection matcher v2 rejected excessive spatial fan-out. Table: {TableName}. FeatureId: {FeatureId}. FeatureCode: {FeatureCode}. Matches: {Matches}. AvailableAois: {AvailableAois}. FeatureExtent: {XMin},{YMin} to {XMax},{YMax}. FeatureWkid: {Wkid}. ExampleMatchedAois: {ExampleMatchedAois}.", tableName, featureId, featureCode, result.Count, products.Count, bounds.XMin, bounds.YMin, bounds.XMax, bounds.YMax, feature.SpatialReference.Wkid, string.Join("; ", sample));
+                throw new InvalidOperationException($"Archive feature '{featureId}' matched {result.Count} S-101 AOIs. DPC stopped before creating packages; inspect the AOI geometries and spatial references in the error log.");
             }
             return result;
         }

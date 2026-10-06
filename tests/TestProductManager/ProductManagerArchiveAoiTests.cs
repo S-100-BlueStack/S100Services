@@ -32,4 +32,14 @@ public sealed class ProductManagerArchiveAoiTests
 
         Assert.Equal(new[] { "WEST", "EAST" }, ProductManagerGDB.FindAffectedProducts(MapPointBuilderEx.CreateMapPoint(1, 0.5, SpatialReferences.WGS84), products));
     }
+
+    [Fact]
+    public void ExcessiveFanoutStopsBeforeTheScanCanBuildPackages() {
+        var coverage = PolygonBuilderEx.CreatePolygon(EnvelopeBuilderEx.CreateEnvelope(-53, 64, -51, 66, SpatialReferences.WGS84));
+        var products = Enumerable.Range(0, ProductManagerGDB.MaxAoisPerArchiveFeature + 1)
+            .Select(number => new ProductManagerGDB.ScanProductAoi($"101GL{number:000}", coverage)).ToArray();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => ProductManagerGDB.FindAffectedProducts(MapPointBuilderEx.CreateMapPoint(-52, 65, SpatialReferences.WGS84), products, "feature-1", "LandArea", "surface"));
+        Assert.Contains("DPC stopped before creating packages", exception.Message);
+    }
 }

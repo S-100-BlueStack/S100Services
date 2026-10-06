@@ -189,19 +189,17 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
             CreateNoWindow = true,
-            RedirectStandardOutput = true,
+            RedirectStandardOutput = false,
             RedirectStandardError = true
         };
 
         using var process = StartCompilerProcessSafely(startInfo, datasetName, isS100Compiler);
-        var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
         await process.WaitForExitAsync(cancellationToken);
         var error = await standardError;
-        var output = await standardOutput;
 
         if (process.ExitCode != 0) {
-            _logger.LogError("Export compiler {CompilerName} failed for {DatasetName} with exit code {ExitCode}. Stderr: {CompilerError}. Stdout: {CompilerOutput}", Path.GetFileName(executable), datasetName, process.ExitCode, error, output);
+            _logger.LogError("Export compiler {CompilerName} failed for {DatasetName} with exit code {ExitCode}. Stderr: {CompilerError}.", Path.GetFileName(executable), datasetName, process.ExitCode, error);
             throw new InvalidOperationException($"The export compiler failed for '{datasetName}' with exit code {process.ExitCode}.");
         }
     }
