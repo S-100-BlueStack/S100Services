@@ -42,23 +42,6 @@ namespace DataCatalague.Api.Controllers.V1
 
             private readonly ILogger<PipelineController> _logger = logger;
 
-            //[HttpGet]
-            //[ProducesResponseType<PagedResponse<PipelineResponse>>(StatusCodes.Status200OK)]
-            //[ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-            //public async Task<ActionResult<PagedResponse<PipelineResponse>>> GetPipelines([FromQuery][Range(1, int.MaxValue)] int page = 1, [FromQuery][Range(1, 100)] int pageSize = DefaultPageSize, CancellationToken cancellationToken = default) {
-            //    this.logger.LogInformation(
-            //        "Listing pipelines page {Page} with page size {PageSize}.", page, pageSize);
-
-            //    var (items, totalCount) = await this.repository.GetPipelinesAsync((page - 1) * pageSize, pageSize, cancellationToken).ConfigureAwait(false);
-
-            //    return this.Ok(new PagedResponse<PipelineResponse> {
-            //        Items = items.Select(Map).ToList(),
-            //        Page = page,
-            //        PageSize = pageSize,
-            //        TotalCount = totalCount,
-            //    });
-            //}
-
             [HttpPost]
             [Consumes("application/json")]
             [ProducesResponseType<PipelineResponse>(StatusCodes.Status201Created)]
@@ -74,7 +57,7 @@ namespace DataCatalague.Api.Controllers.V1
                 var description = request.Description?.Trim();
                 ArgumentNullException.ThrowIfNullOrWhiteSpace(description);
 
-                var cmd = await this._service.Handle(new PipelineCommands.Create(CreateStreamId(), displayName, description), cancellationToken);
+                var cmd = await this._servicePipeline.Handle(new PipelineCommands.Create(CreateStreamId(), displayName, description), cancellationToken);
 
                 if (!cmd.Success)
                     return this.BadRequest();

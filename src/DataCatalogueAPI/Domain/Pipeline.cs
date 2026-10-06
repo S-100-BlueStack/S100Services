@@ -4,6 +4,8 @@ using static DataCatalague.Api.Domain.PipelineEvents.V1;
 
 namespace DataCatalague.Api.Domain
 {
+    public record Workspace(string DisplayName, string GeometryRef);
+
     public record PipelineId(string Value) : Id(Value);
 
     public record PipelineState : State<PipelineState>
@@ -13,6 +15,8 @@ namespace DataCatalague.Api.Domain
         public string DisplayName { get; set; } = string.Empty;
 
         public string? Description { get; set; } = string.Empty;
+
+        public Workspace[] Workspaces = [];
 
         public DateTimeOffset LastUpdatedUtc { get; set; }
 
@@ -31,6 +35,7 @@ namespace DataCatalague.Api.Domain
 
         static PipelineState WorkspaceAdded(PipelineState state, V1.WorkspaceAdded e)
             => state with {
+                Workspaces = [.. state.Workspaces, new(e.DisplayName, e.GeometryRef)],
                 LastUpdatedUtc = e.UTC,
             };
     }
@@ -76,6 +81,6 @@ namespace DataCatalague.Api.Domain
     }
 
     public static class PipelineExtension
-    {        
+    {
     }
 }
