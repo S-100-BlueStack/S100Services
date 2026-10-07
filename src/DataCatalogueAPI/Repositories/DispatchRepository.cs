@@ -170,8 +170,8 @@ namespace DataCatalague.Api.Repositories
             return polygon;
         }
 
-        public ValueTask<EventHandlingStatus> HandleEvent(IMessageConsumeContext context) {
-            throw new NotImplementedException();
+        public async ValueTask<EventHandlingStatus> HandleEvent(IMessageConsumeContext context) {
+            return EventHandlingStatus.Handled;
         }
     }
 }

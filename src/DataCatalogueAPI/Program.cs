@@ -52,6 +52,22 @@ public static class Program
             builder.Services.AddSingleton<DispatchRepository>();
             builder.Services.AddSingleton<ArcGisDispatcher>();
 
+            //builder.Services.AddEventuousSqlServer(
+            //    "",
+            //    "eventuous",
+            //    initializeDatabase: true);
+
+            //builder.Services.AddEventStore<SqlServerStore>();
+
+            builder.Services.AddCommandService<StreamCommandService, PackageTypeState>();
+            builder.Services.AddCommandService<PackageCommandService, PackageState>();
+            builder.Services.AddCommandService<PipelineCommandService, PipelineState>();
+
+            builder.Services.AddApplicationServices();
+            builder.Services.AddApiVersioningSupport();
+            builder.Services.AddVersionedOpenApiDocuments();
+            builder.Services.AddSecureTransport();
+
             builder.Services.AddSingleton<InMemoryEventStore>();
 
             builder.Services.AddSingleton<IEventStore>(
@@ -65,38 +81,6 @@ public static class Program
                 InMemoryAllStreamSubscriptionOptions>(
                 "dispatcher-subscription",
                 x => x.AddEventHandler<DispatchRepository>());
-
-
-            //builder.Services.AddEventuousSqlServer(
-            //    "",
-            //    "eventuous",
-            //    initializeDatabase: true);
-
-            //builder.Services.AddEventStore<SqlServerStore>();
-
-            //builder.Services.AddSubscription<
-            //    SqlServerAllStreamSubscription,
-            //    SqlServerAllStreamSubscriptionOptions>(
-            //    "MySubscription",
-            //    subscription => subscription
-            //        .AddEventHandler<MyEventHandler>());
-
-            //builder.Services.AddEventStore<InMemoryEventStore>();
-
-            //builder.Services.AddSubscription<
-            //    InMemoryAllStreamSubscription,
-            //    InMemoryAllStreamSubscriptionOptions>(
-            //    "my-subscription",
-            //    x => x.AddEventHandler<MyEventHandler>());
-
-            builder.Services.AddCommandService<StreamCommandService, PackageTypeState>();
-            builder.Services.AddCommandService<PackageCommandService, PackageState>();
-            builder.Services.AddCommandService<PipelineCommandService, PipelineState>();
-
-            builder.Services.AddApplicationServices();
-            builder.Services.AddApiVersioningSupport();
-            builder.Services.AddVersionedOpenApiDocuments();
-            builder.Services.AddSecureTransport();
 
             var app = builder.Build();
 
