@@ -305,6 +305,7 @@ public sealed class ExportOperationServiceTests
         public Task<DateTime?> GetReplayFromUtcAsync(CancellationToken cancellationToken = default) => Task.FromResult<DateTime?>(null);
         public Task<IReadOnlyDictionary<string, DateTime>> GetReplayBoundsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyDictionary<string, DateTime>>(new Dictionary<string, DateTime>());
         public Task MarkReplayAsync(string sourceDatasetName, DateTime scanFromUtc, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ClearReplayAsync(string sourceDatasetName, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default) => Task.FromResult(true);
         public Task SetErrorAsync(Guid packageId, string message, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default, bool preserveScanBound = false) { DiscardCalls++; PreserveScanBound = preserveScanBound; return Task.CompletedTask; }

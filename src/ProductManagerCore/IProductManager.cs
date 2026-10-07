@@ -51,6 +51,9 @@ namespace S100FC.ProductCatalogue
         /// <param name="cancellationToken">Signals cancellation before dispatch and between substantial snapshot-processing phases. An ArcGIS call already in progress cannot be interrupted unless that API supports cancellation.</param>
         /// <returns>A read-only YAML dataset snapshot containing the requested candidate version.</returns>
         Task<YAML.Dataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default);
+        /// <summary>Verifies that current changed features are present in the shared candidate snapshot.</summary>
+        Task<YAML.Dataset> CreateVerifiedExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, IReadOnlyCollection<string> requiredFeatureIds, CancellationToken cancellationToken = default) =>
+            CreateExportSnapshotAsync(name, exportType, edition, update, cancellationToken);
         Task<Dictionary<string, string>> GetDatasetAOIs();
         Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification);
         Task<bool> IsDirtyAsync(string name);

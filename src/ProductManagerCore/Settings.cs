@@ -45,6 +45,12 @@ namespace S100FC.ProductCatalogue
         public string? AttributeBindings { get; set; }
         public string? FeatureBindings { get; set; }
         public string? InformationBindings { get; set; }
+        public string? BeforeCode { get; set; }
+        public string? BeforeAttributeBindings { get; set; }
+        public string? BeforeFeatureBindings { get; set; }
+        public string? BeforeInformationBindings { get; set; }
+        public bool GeometryChanged { get; set; }
+        public bool CurrentInProduct { get; set; }
         public bool Deleted { get; set; } = false;
         public DateTime? EditDate {  get; set; }
     }

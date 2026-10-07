@@ -13,6 +13,8 @@ public interface IEncPackageRepository
     Task<IReadOnlyDictionary<string, DateTime>> GetReplayBoundsAsync(CancellationToken cancellationToken = default);
     /// <summary>Retains source edits while a manual hold or unrelated candidate blocks package creation.</summary>
     Task MarkReplayAsync(string sourceDatasetName, DateTime scanFromUtc, CancellationToken cancellationToken = default);
+    /// <summary>Clears a replay bound after all edits in its window have no net product change.</summary>
+    Task ClearReplayAsync(string sourceDatasetName, CancellationToken cancellationToken = default);
     /// <summary>Creates a package and clears its replay cursor atomically; returns false if one already exists.</summary>
     Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default);
     /// <summary>Records a package failure without losing its source YAML or rollback boundary.</summary>

@@ -1,4 +1,6 @@
 using ProductCatalogueAPI.Data.Models;
+using S100FC;
+using S100FC.YAML;
 using S100FC.ProductCatalogue;
 using System.Globalization;
 using System.Text.Json;
@@ -8,46 +10,80 @@ namespace ProductCatalogueAPI.Jobs;
 /// <summary>Provides the change paths, local work date, and YAML shared by the ENC package scan.</summary>
 internal static class EncChangeSummary
 {
-    /// <summary>Includes nested attribute paths and deletions in the package change summary.</summary>
+    /// <summary>Reports net changes between the archive state at the scan cursor and the latest state.</summary>
     internal static IReadOnlyCollection<string> GetObservedAttributePaths(ArchiveRow row) {
-        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        AddJsonPaths(paths, "attributes", row.AttributeBindings);
-        AddJsonPaths(paths, "featureBindings", row.FeatureBindings);
-        AddJsonPaths(paths, "informationBindings", row.InformationBindings);
         if (row.Deleted)
-            paths.Add("$deleted");
-        if (paths.Count == 0)
+            return row.BeforeCode is null ? [] : ["$deleted"];
+        var paths = new HashSet<string>(StringComparer.Ordinal);
+        AddChangedJsonPaths(paths, "attributes", row.BeforeAttributeBindings, row.AttributeBindings, nested: true);
+        AddChangedJsonPaths(paths, "featureBindings", row.BeforeFeatureBindings, row.FeatureBindings, nested: false);
+        AddChangedJsonPaths(paths, "informationBindings", row.BeforeInformationBindings, row.InformationBindings, nested: false);
+        if (row.BeforeCode is not null && !string.Equals(row.BeforeCode, row.Code, StringComparison.Ordinal))
+            paths.Add("$code");
+        if (row.GeometryChanged)
+            paths.Add("$geometry");
+        if (row.BeforeCode is null && paths.Count == 0)
             paths.Add("$feature");
-        return paths;
+        return paths.OrderBy(path => path, StringComparer.Ordinal).ToArray();
     }
 
-    private static void AddJsonPaths(ISet<string> paths, string prefix, string? json) {
-        if (string.IsNullOrWhiteSpace(json))
+    private static void AddChangedJsonPaths(ISet<string> paths, string prefix, string? beforeJson, string? afterJson, bool nested) {
+        if (string.IsNullOrWhiteSpace(beforeJson) && string.IsNullOrWhiteSpace(afterJson))
             return;
         try {
-            using var document = JsonDocument.Parse(json);
-            Visit(document.RootElement, prefix);
+            using var before = string.IsNullOrWhiteSpace(beforeJson) ? null : JsonDocument.Parse(beforeJson);
+            using var after = string.IsNullOrWhiteSpace(afterJson) ? null : JsonDocument.Parse(afterJson);
+            Diff(before?.RootElement, after?.RootElement, prefix);
         }
-        catch (JsonException) {
-            paths.Add(prefix);
+        catch (JsonException exception) {
+            throw new InvalidOperationException($"Archive {prefix} is not valid JSON; DPC preserved the watermark.", exception);
         }
 
-        void Visit(JsonElement element, string path) {
-            switch (element.ValueKind) {
-                case JsonValueKind.Object:
-                    foreach (var property in element.EnumerateObject())
-                        Visit(property.Value, $"{path}.{property.Name}");
-                    break;
-                case JsonValueKind.Array:
-                    if (element.GetArrayLength() == 0)
-                        paths.Add(path);
-                    else
-                        foreach (var item in element.EnumerateArray()) Visit(item, path);
-                    break;
-                default:
-                    paths.Add(path);
-                    break;
+        void Diff(JsonElement? before, JsonElement? after, string path) {
+            if (JsonEquals(before, after))
+                return;
+            if (nested && (before?.ValueKind == JsonValueKind.Object || after?.ValueKind == JsonValueKind.Object)) {
+                var names = (before?.ValueKind == JsonValueKind.Object ? before.Value.EnumerateObject().Select(p => p.Name) : [])
+                    .Concat(after?.ValueKind == JsonValueKind.Object ? after.Value.EnumerateObject().Select(p => p.Name) : [])
+                    .Distinct(StringComparer.Ordinal);
+                foreach (var name in names)
+                    Diff(Property(before, name), Property(after, name), $"{path}.{name}");
             }
+            else if (nested && (before?.ValueKind == JsonValueKind.Array || after?.ValueKind == JsonValueKind.Array)) {
+                var length = Math.Max(before?.ValueKind == JsonValueKind.Array ? before.Value.GetArrayLength() : 0,
+                    after?.ValueKind == JsonValueKind.Array ? after.Value.GetArrayLength() : 0);
+                if (length == 0) paths.Add(path);
+                for (var index = 0; index < length; index++)
+                    Diff(Element(before, index), Element(after, index), $"{path}[{index}]");
+            }
+            else {
+                paths.Add(path);
+            }
+        }
+    }
+
+    private static JsonElement? Property(JsonElement? element, string name) =>
+        element?.ValueKind == JsonValueKind.Object && element.Value.TryGetProperty(name, out var value) ? value : null;
+
+    private static JsonElement? Element(JsonElement? element, int index) =>
+        element?.ValueKind == JsonValueKind.Array && index < element.Value.GetArrayLength() ? element.Value[index] : null;
+
+    private static bool JsonEquals(JsonElement? left, JsonElement? right) {
+        if (!left.HasValue || !right.HasValue) return left.HasValue == right.HasValue;
+        if (left.Value.ValueKind != right.Value.ValueKind) return false;
+        switch (left.Value.ValueKind) {
+            case JsonValueKind.Object:
+                var properties = left.Value.EnumerateObject().ToArray();
+                return properties.Length == right.Value.EnumerateObject().Count() &&
+                    properties.All(property => right.Value.TryGetProperty(property.Name, out var other) && JsonEquals(property.Value, other));
+            case JsonValueKind.Array:
+                return left.Value.GetArrayLength() == right.Value.GetArrayLength() &&
+                    Enumerable.Range(0, left.Value.GetArrayLength()).All(index => JsonEquals(left.Value[index], right.Value[index]));
+            case JsonValueKind.String: return left.Value.GetString() == right.Value.GetString();
+            case JsonValueKind.Number:
+                return left.Value.TryGetDecimal(out var a) && right.Value.TryGetDecimal(out var b)
+                    ? a == b : left.Value.GetRawText() == right.Value.GetRawText();
+            default: return left.Value.GetRawText() == right.Value.GetRawText();
         }
     }
 
@@ -72,9 +108,14 @@ internal static class EncChangeSummary
 
     /// <summary>Serializes the changes in one source scan without a separate product-track summary.</summary>
     internal static string Serialize(string datasetName, ProductSpecification productSpecification, DateOnly workDate, DateTime firstDetectedAtUtc, DateTime lastDetectedAtUtc, IEnumerable<ProductChange> changes) {
-        var observedChanges = changes.ToArray();
+        var observedChanges = changes.Distinct().OrderBy(change => change.FeatureId, StringComparer.Ordinal)
+            .ThenBy(change => change.AttributePath, StringComparer.Ordinal).ToArray();
         if (observedChanges.Length == 0)
             throw new InvalidOperationException("An ENC package requires at least one archive change.");
+        foreach (var instant in observedChanges.Select(change => change.DetectedAtUtc).Append(firstDetectedAtUtc).Append(lastDetectedAtUtc)) {
+            if (instant.Kind != DateTimeKind.Utc)
+                throw new InvalidOperationException("ENC summary UTC fields require normalized UTC timestamps.");
+        }
         var lines = new List<string> {
             $"datasetName: {Quote(datasetName)}",
             $"productSpecification: {productSpecification}",
@@ -86,7 +127,7 @@ internal static class EncChangeSummary
         };
 
         foreach (var change in observedChanges) {
-            lines.Add($"  - featureId: {Quote(change.FeatureId)}");
+            lines.Add($"  - featureId: {change.FeatureId}");
             lines.Add($"    featureCode: {Quote(change.FeatureCode)}");
             lines.Add($"    attribute: {Quote(change.AttributePath)}");
             lines.Add($"    deleted: {change.Deleted.ToString().ToLowerInvariant()}");

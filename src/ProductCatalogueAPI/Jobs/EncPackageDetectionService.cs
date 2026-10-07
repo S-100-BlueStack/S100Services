@@ -31,8 +31,10 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         if (finalization is not null)
             await finalization.FinalizePendingAsync(cancellationToken);
         var scanStartedUtc = clock.GetUtcNow().UtcDateTime;
-        var sinceUtc = await productRepository.GetLastSuccessfulRunUtcAsync(nameof(DetectProductChangesJob))
-            ?? EncChangeSummary.GetCopenhagenDayStartUtc(scanStartedUtc);
+        var storedWatermark = await productRepository.GetLastSuccessfulRunUtcAsync(nameof(DetectProductChangesJob));
+        // SQL datetime2 has no Kind; JobRunState persists UTC instants, not ArcGIS wall time.
+        var sinceUtc = storedWatermark.HasValue ? DateTime.SpecifyKind(storedWatermark.Value, DateTimeKind.Utc)
+            : EncChangeSummary.GetCopenhagenDayStartUtc(scanStartedUtc);
         logger.LogInformation("ENC archive scan started. SinceUtc: {SinceUtc:O}. StartedUtc: {StartedUtc:O}.", sinceUtc, scanStartedUtc);
 
         var archiveScanTime = Stopwatch.StartNew();
@@ -72,8 +74,6 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 logger.LogInformation("ENC changes for {SourceDatasetName}: {ChangedFeatureCount} feature(s).", sourceName, changes.Count);
         }
 
-        // Archive transaction times can be ahead of the worker's clock. Their order within the
-        // geodatabase still determines whether a package contains a later edit.
         var workerUtc = clock.GetUtcNow().UtcDateTime;
         DateTime? latestArchiveEditUtc = null;
         foreach (var (sourceName, changes) in pending) {
@@ -85,7 +85,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             }
         }
         if (latestArchiveEditUtc > workerUtc.AddMinutes(5))
-            logger.LogWarning("S-101 archive timestamp is ahead of the worker clock. ArchiveEditUtc: {ArchiveEditUtc:O}. WorkerUtc: {WorkerUtc:O}. DifferenceMinutes: {DifferenceMinutes}. Package refresh uses archive edit order.", latestArchiveEditUtc, workerUtc, (latestArchiveEditUtc.Value - workerUtc).TotalMinutes);
+            throw new InvalidOperationException($"S-101 archive edit at {latestArchiveEditUtc:O} is more than five minutes ahead of the worker clock at {workerUtc:O}. Check the archive timestamp zone and clock synchronization; DPC preserved its watermark and candidates.");
 
         var active = await packages.GetActiveAsync(pending.Keys, cancellationToken);
         var completeScans = new Dictionary<DateTime, Dictionary<string, Dictionary<string, ArchiveRow>>>();
@@ -147,10 +147,22 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             }
 
             var summaryChanges = packageChanges.SelectMany(pair => EncChangeSummary.GetObservedAttributePaths(pair.Value)
-                .Select(path => new ProductChange(pair.Key, pair.Value.Code ?? string.Empty, path, pair.Value.EditDate ?? scanStartedUtc, pair.Value.Deleted)));
+                .Select(path => new ProductChange(pair.Key, pair.Value.Code, path, pair.Value.EditDate ?? scanStartedUtc, pair.Value.Deleted))).ToArray();
+            if (summaryChanges.Length == 0) {
+                if (previous is not null) {
+                    // An edit that reverts the package's source must also remove its stale candidates.
+                    await DiscardForRefreshAsync(previous, s57, ProductSpecification.S57, cancellationToken);
+                    await DiscardForRefreshAsync(previous, s101, ProductSpecification.S101, cancellationToken);
+                }
+                await packages.ClearReplayAsync(sourceName, cancellationToken);
+                logger.LogInformation("ENC archive rows had no net feature difference. SourceDatasetName: {SourceDatasetName}.", sourceName);
+                continue;
+            }
             var summary = EncChangeSummary.Serialize(sourceName, ProductSpecification.S101, EncChangeSummary.GetCopenhagenDate(scanStartedUtc), packageScanFromUtc, scanStartedUtc, summaryChanges);
             var edition = checked(s101.PublishedEdition + 1);
-            var dataset = await _products.CreateExportSnapshotAsync(sourceName, ExportTypes.NewEdition, edition, 0, cancellationToken);
+            var requiredFeatures = packageChanges.Where(pair => pair.Value.CurrentInProduct && !pair.Value.Deleted)
+                .Select(pair => pair.Key).ToArray();
+            var dataset = await _products.CreateVerifiedExportSnapshotAsync(sourceName, ExportTypes.NewEdition, edition, 0, requiredFeatures, cancellationToken);
             var yaml = dataset.Serialize();
             if (string.IsNullOrWhiteSpace(yaml))
                 throw new InvalidOperationException($"ENC source snapshot for '{sourceName}' was empty.");

@@ -33,7 +33,7 @@ namespace S100FC.ProductCatalogue
     public class ProductManagerGDB : IProductManager, INauticalProductManager, IElectronicProductManager, IDisposable
     {
         // Abort implausibly broad archive matches before DPC can create any candidates or advance its watermark.
-        internal const int MaxAoisPerArchiveFeature = 600;
+        internal const int MaxAoisPerArchiveFeature = 50;
 
         public static async Task<IProductManager> CreateInstanceAsync(
             Func<Geodatabase> creator,
@@ -77,6 +77,7 @@ namespace S100FC.ProductCatalogue
         private ElectronicProductMappingIndex _productMappings = ElectronicProductMappingIndex.Empty;
         // ArcGIS geometries stay on the product manager's single execution lane.
         private readonly Dictionary<string, DpcCoverageCache> _dpcCoverageCaches = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly Lazy<TimeZoneInfo> ArchiveUnspecifiedTimeZone = new(ResolveArchiveUnspecifiedTimeZone);
 
         private ProductManagerGDB(string executionLane) {
             if (string.IsNullOrWhiteSpace(executionLane))
@@ -366,6 +367,11 @@ namespace S100FC.ProductCatalogue
         }
 
         async Task<YAML.Dataset> IElectronicProductManager.CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken) {
+            return await CreateVerifiedExportSnapshotAsync(name, exportType, edition, update, [], cancellationToken);
+        }
+
+        /// <summary>Fails the package before persisting YAML if a detected current feature was omitted by topology or conversion.</summary>
+        public async Task<YAML.Dataset> CreateVerifiedExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, IReadOnlyCollection<string> requiredFeatureIds, CancellationToken cancellationToken) {
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentNullException(nameof(name));
             if (edition < 0)
@@ -387,7 +393,8 @@ namespace S100FC.ProductCatalogue
                 result.Shape,
                 exportType,
                 applyEdits: false,
-                cancellationToken: cancellationToken
+                cancellationToken: cancellationToken,
+                requiredFeatureIds: requiredFeatureIds
             );
             ExportSnapshotVersioning.ApplyCompilerCompatibleVersion(dataset, edition);
             cancellationToken.ThrowIfCancellationRequested();
@@ -539,6 +546,8 @@ namespace S100FC.ProductCatalogue
         }
 
         public async Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc) {
+            if (sinceUtc.Kind != DateTimeKind.Utc)
+                throw new ArgumentException("The archive scan watermark must be a UTC instant.", nameof(sinceUtc));
             var result = new Dictionary<string, Dictionary<string, ArchiveRow>>();
 
             await this.Dispatch(() => {
@@ -685,6 +694,8 @@ namespace S100FC.ProductCatalogue
 
             var sqlSyntax = connection.GetSQLSyntax();
 
+            // Nonversioned archive columns are stored in UTC; only ArcGIS-returned DateTime
+            // values without a Kind need interpretation as local wall time.
             var formattedSince = sqlSyntax.Format(
                 sinceUtc,
                 SQLDateTimeType.Timestamp);
@@ -702,6 +713,10 @@ namespace S100FC.ProductCatalogue
 
             string[] tableNames = ["point", "pointset", "curve", "surface"];
             var unclassifiedArchiveRows = 0;
+            var loggedArchiveClock = false;
+            var versionsById = new Dictionary<string, List<ArchiveVersion>>(StringComparer.OrdinalIgnoreCase);
+            var affectedIdsByProduct = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            var currentIdsByProduct = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var baseTableName in tableNames) {
                 using var fc = connection.OpenDataset<FeatureClass>(
@@ -759,34 +774,46 @@ namespace S100FC.ProductCatalogue
 
                     var fromDate = ReadArchiveUtc(row["GDB_FROM_DATE"]);
                     var toDate = ReadArchiveUtc(row["GDB_TO_DATE"]);
+                    if (!loggedArchiveClock) {
+                        Log.Information("DPC archive clock. Connection: {Connection}. RawFrom: {RawFrom:O}. RawKind: {RawKind}. NormalizedFromUtc: {FromUtc:O}. UnspecifiedZone: {Zone}.",
+                            connectionName, row["GDB_FROM_DATE"], (row["GDB_FROM_DATE"] as DateTime?)?.Kind, fromDate, ArchiveUnspecifiedTimeZone.Value.Id);
+                        loggedArchiveClock = true;
+                    }
                     // A removed or superseded archive row changed when it closed, not when it began.
                     var changedAt = toDate is { Year: < 9999 } && (!fromDate.HasValue || toDate > fromDate) ? toDate : fromDate;
                     if (changedAt is null)
                         throw new InvalidOperationException($"Archive feature '{id}' in '{baseTableName}' has no readable change date; DPC cannot advance its watermark safely.");
                     var archiveRow = new ArchiveRow {
-                        Code = row["Code"]?.ToString(),
+                        Code = row["Code"]?.ToString() ?? string.Empty,
                         AttributeBindings = row["attributebindings"]?.ToString(),
                         InformationBindings = row["informationbindings"]?.ToString(),
                         FeatureBindings = row["featurebindings"]?.ToString(),
                         Deleted = IsDeletedFeature(id, currentFeatureIds),
                         EditDate = changedAt
                     };
+                    if (!versionsById.TryGetValue(id, out var versions)) {
+                        versions = new List<ArchiveVersion>();
+                        versionsById[id] = versions;
+                    }
+                    versions.Add(new ArchiveVersion(archiveRow, fromDate, toDate, changedShape.Clone()));
 
                     var isDataCoverage = baseTableName == "surface" && string.Equals(archiveRow.Code, "DataCoverage", StringComparison.OrdinalIgnoreCase);
                     var nominalScale = isDataCoverage ? ReadCoverageScale(row) : ReadNominalScale(row, id);
                     foreach (var productName in FindAffectedProductsAtScale(changedShape, nominalScale, productList, isDataCoverage ? changedShape : null, id, archiveRow.Code, baseTableName)) {
                         affectedProducts.Add(productName);
 
-                        if (!result.TryGetValue(productName, out var productChanges)) {
-                            productChanges = new Dictionary<string, ArchiveRow>();
-                            result[productName] = productChanges;
+                        if (!affectedIdsByProduct.TryGetValue(productName, out var affectedIds)) {
+                            affectedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                            affectedIdsByProduct[productName] = affectedIds;
                         }
-
-                        // Archive cursors have no guaranteed row order; retain the newest change per feature.
-                        if (!productChanges.TryGetValue(id, out var previous) ||
-                            !previous.EditDate.HasValue ||
-                            archiveRow.EditDate > previous.EditDate)
-                            productChanges[id] = archiveRow;
+                        affectedIds.Add(id);
+                        if (toDate?.Year == 9999 && !archiveRow.Deleted) {
+                            if (!currentIdsByProduct.TryGetValue(productName, out var currentIds)) {
+                                currentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                                currentIdsByProduct[productName] = currentIds;
+                            }
+                            currentIds.Add(id);
+                        }
                     }
                 }
 
@@ -799,18 +826,77 @@ namespace S100FC.ProductCatalogue
                     affectedProducts.Count);
             }
 
+            foreach (var (productName, affectedIds) in affectedIdsByProduct) {
+                if (!result.TryGetValue(productName, out var productChanges)) {
+                    productChanges = new Dictionary<string, ArchiveRow>(StringComparer.OrdinalIgnoreCase);
+                    result[productName] = productChanges;
+                }
+                foreach (var id in affectedIds) {
+                    var change = ComposeArchiveChange(versionsById[id], sinceUtc);
+                    change.CurrentInProduct = currentIdsByProduct.TryGetValue(productName, out var currentIds) && currentIds.Contains(id);
+                    productChanges[id] = change;
+                }
+            }
+
             if (unclassifiedArchiveRows > 0)
                 throw new ArchiveChangeClassificationException(connectionName, unclassifiedArchiveRows);
         }
 
-        /// <summary>Interprets geodatabase archive dates as UTC before comparing them with the DPC cursor.</summary>
+        private sealed record ArchiveVersion(ArchiveRow Row, DateTime? FromUtc, DateTime? ToUtc, ArcGIS.Core.Geometry.Geometry Shape);
+
+        /// <summary>Compares the state at the scan cursor with the final archived state, regardless of cursor order.</summary>
+        private static ArchiveRow ComposeArchiveChange(IReadOnlyCollection<ArchiveVersion> versions, DateTime sinceUtc) {
+            var before = versions.Where(version => version.FromUtc <= sinceUtc && version.ToUtc > sinceUtc)
+                .OrderByDescending(version => version.FromUtc).FirstOrDefault();
+            var latest = versions.OrderByDescending(version => version.Row.EditDate).ThenByDescending(version => version.FromUtc).First();
+            var after = latest.Row.Deleted ? null : versions.Where(version => version.ToUtc?.Year == 9999)
+                .OrderByDescending(version => version.FromUtc).FirstOrDefault();
+            if (after is null && !latest.Row.Deleted)
+                throw new InvalidOperationException("An archived S-101 feature has no current version; DPC preserved the watermark.");
+
+            var row = after?.Row ?? latest.Row;
+            return new ArchiveRow {
+                Code = row.Code,
+                AttributeBindings = after?.Row.AttributeBindings,
+                FeatureBindings = after?.Row.FeatureBindings,
+                InformationBindings = after?.Row.InformationBindings,
+                BeforeCode = before?.Row.Code,
+                BeforeAttributeBindings = before?.Row.AttributeBindings,
+                BeforeFeatureBindings = before?.Row.FeatureBindings,
+                BeforeInformationBindings = before?.Row.InformationBindings,
+                GeometryChanged = before is not null && after is not null && !GeometryEngine.Instance.Equals(before.Shape, after.Shape),
+                Deleted = after is null,
+                EditDate = versions.Max(version => version.Row.EditDate)
+            };
+        }
+
+        /// <summary>Converts archive wall time to UTC; explicit UTC and offset values remain absolute instants.</summary>
         internal static DateTime? ReadArchiveUtc(object? value) => value switch {
             null or DBNull => null,
             DateTimeOffset offset => offset.UtcDateTime,
+            DateTime { Kind: DateTimeKind.Utc } date => date,
             DateTime { Kind: DateTimeKind.Local } date => date.ToUniversalTime(),
-            DateTime date => DateTime.SpecifyKind(date, DateTimeKind.Utc),
+            DateTime date => ConvertArchiveWallTimeToUtc(date),
             _ => throw new InvalidOperationException($"Unsupported geodatabase archive date value of type '{value.GetType().FullName}'.")
         };
+
+        private static DateTime ConvertArchiveWallTimeToUtc(DateTime date) {
+            var zone = ArchiveUnspecifiedTimeZone.Value;
+            if (zone.IsInvalidTime(date) || zone.IsAmbiguousTime(date))
+                throw new InvalidOperationException($"Archive date '{date:O}' is invalid or ambiguous in '{zone.Id}'; DPC preserved its watermark. Supply a UTC archive clock if available.");
+            return TimeZoneInfo.ConvertTimeToUtc(date, zone);
+        }
+
+        private static TimeZoneInfo ResolveArchiveUnspecifiedTimeZone() {
+            // The SDK exposes archive dates without an offset on this installation. Operators can
+            // choose UTC when their ArcGIS driver returns the raw UTC database value instead.
+            var name = Environment.GetEnvironmentVariable("S101_ARCHIVE_UNSPECIFIED_TIME_ZONE") ?? "Europe/Copenhagen";
+            if (name.Equals("Europe/Copenhagen", StringComparison.OrdinalIgnoreCase)) {
+                try { return TimeZoneInfo.FindSystemTimeZoneById(name); }
+                catch (TimeZoneNotFoundException) { return TimeZoneInfo.FindSystemTimeZoneById("Romance Standard Time"); }
+            }
+            return TimeZoneInfo.FindSystemTimeZoneById(name);
+        }
 
         /// <summary>Requires both matching coverage and the final S-128 AOI intersection at the feature's scale.</summary>
         internal static IReadOnlyList<string> FindAffectedProductsAtScale(ArcGIS.Core.Geometry.Geometry feature, long nominalScale, IReadOnlyList<DpcProductCoverage> products, ArcGIS.Core.Geometry.Geometry? archivedCoverage = null, string? featureId = null, string? featureCode = null, string? tableName = null) {
@@ -1118,7 +1204,7 @@ namespace S100FC.ProductCatalogue
             }, "ResolveExportSourceProduct", name, cancellationToken);
         }
 
-        private async Task<YAML.Dataset> CreateDatasetAsync(ElectronicProduct electronicProduct, ArcGIS.Core.Geometry.Polygon shape, ExportTypes exportType, bool applyEdits = true, CancellationToken cancellationToken = default) {
+        private async Task<YAML.Dataset> CreateDatasetAsync(ElectronicProduct electronicProduct, ArcGIS.Core.Geometry.Polygon shape, ExportTypes exportType, bool applyEdits = true, CancellationToken cancellationToken = default, IReadOnlyCollection<string>? requiredFeatureIds = null) {
             var timestamp = DateTime.UtcNow;
 
             var featureCatalogue = S100FC.Catalogues.FeatureCatalogue.Catalogues.Single(e => e.ProductID.Equals("S-101"));
@@ -1150,6 +1236,7 @@ namespace S100FC.ProductCatalogue
             var informationsTypesAdded = new HashSet<string>();
             var featureTypes = new List<YAML.Feature>();
             var featureTypesAdded = new HashSet<string>();
+            var exportedFeatureIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             return await this.DispatchMeasured(() => {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -1461,6 +1548,8 @@ namespace S100FC.ProductCatalogue
 
                                     //if (!lookup.Any())
                                     dataset?.AddFeature(feature!);
+                                    if (Guid.TryParse(uid, out var exportedId))
+                                        exportedFeatureIds.Add(exportedId.ToString("B"));
                                     //else {
                                     //    int _ = 1;
                                     //    foreach (var c in lookup) {
@@ -1489,6 +1578,8 @@ namespace S100FC.ProductCatalogue
                                 }
                                 catch (Exception ex) {
                                     Log.Error("Exception: {ex}", ex);
+                                    if (Guid.TryParse(_uid, out var failedId) && requiredFeatureIds?.Contains(failedId.ToString("B"), StringComparer.OrdinalIgnoreCase) == true)
+                                        throw new InvalidOperationException($"Detected S-101 feature '{_uid}' could not be included in the export snapshot.", ex);
                                     continue;
                                 }
                             }
@@ -1777,6 +1868,11 @@ namespace S100FC.ProductCatalogue
                     Log.Verbose("Adding {geometryType} with ID: {name}", geometry.GeometryType, name);
                 }
 
+                if (requiredFeatureIds is not null) {
+                    var missing = requiredFeatureIds.Where(id => !exportedFeatureIds.Contains(id)).ToArray();
+                    if (missing.Length > 0)
+                        throw new InvalidOperationException($"Detected S-101 feature(s) were omitted from the export snapshot: {string.Join(", ", missing)}. DPC preserved its watermark.");
+                }
                 dataset!.AddTopology(topology);
 
                 // Add Spatial Association Informationbindings. Must be handled after curves are added to dataset.

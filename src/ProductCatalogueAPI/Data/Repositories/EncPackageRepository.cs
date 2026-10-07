@@ -53,6 +53,12 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
     }
 
     /// <inheritdoc/>
+    public async Task ClearReplayAsync(string sourceDatasetName, CancellationToken cancellationToken = default) {
+        using var connection = _connectionFactory.Create();
+        await connection.ExecuteAsync(new CommandDefinition("DELETE FROM dbo.EncPackageReplay WHERE source_dataset_name = @SourceDatasetName;", new { SourceDatasetName = sourceDatasetName }, cancellationToken: cancellationToken));
+    }
+
+    /// <inheritdoc/>
     public async Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
         connection.Open();
