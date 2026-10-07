@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using DataCatalague.Api.Domain;
+using System.ComponentModel.DataAnnotations;
 
 namespace DataCatalague.Api.Models.V1
 {
@@ -27,22 +28,9 @@ namespace DataCatalague.Api.Models.V1
         [Required]
         public required string AbsoluteUri { get; init; }
 
-        public string? ShortId { get; init; } = null;
+        public PackageMetaData? MetaData { get; init; } = null;
 
-        public string? Type { get; init; } = null;
-
-        public long? Number { get; init; } = null;
-
-        public string? Status { get; init; } = null;
-
-        [Required]
-        public required string Title { get; init; }
-
-        public string? Source { get; init; } = null;
-
-        public string? Id { get; init; } = null;
-
-        public DateTime? CreatedUTC { get; init; } = null;
+        public DisplayScale? DisplayScale { get; init; } = null;
 
         [Required]
         public required string GeoJSON { get; init; }

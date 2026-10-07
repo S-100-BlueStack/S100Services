@@ -1,6 +1,14 @@
 ﻿using Eventuous;
 using static DataCatalague.Api.Domain.Events.DispatcherEvents;
 
+
+namespace DataCatalague.Api.Domain
+{
+    public record DisplayScale(long maximumDisplayScale = 1, long minimumDisplayScale = 19999999);
+
+    public record PackageMetaData(string? ShortId, string? Type, long? Number, string? Title, string? Source, string? RefId, DateTimeOffset? CreatedUTC);
+}
+
 namespace DataCatalague.Api.Domain
 {
     public class Category : Aggregate<CategoryState>
@@ -31,15 +39,10 @@ namespace DataCatalague.Api.Domain
                     string FileName,
                     string AbsoluteUri,
                     string GeometryRef,
-                    string? ShortId,
-                    string? Type,
-                    long? Number,
-                    string? Title,
-                    string? Source,
-                    string? RefId,
-                    DateTimeOffset? CreatedUTC) {
+                    PackageMetaData? MetaData,
+                    DisplayScale? DisplayScale) {
             this.EnsureDoesntExist();
-            this.Apply(new V1.PackageCreated(PackageId, Category, FileName, AbsoluteUri, GeometryRef, ShortId, Type, Number, Title, Source, RefId, CreatedUTC, DateTime.UtcNow));
+            this.Apply(new V1.PackageCreated(PackageId, Category, FileName, AbsoluteUri, GeometryRef, MetaData, DisplayScale, DateTime.UtcNow));
         }
     }
 
@@ -97,19 +100,9 @@ namespace DataCatalague.Api.Domain
 
         public string? GeometryRef { get; set; }
 
-        public string? ShortId { get; init; } = null;
+        public PackageMetaData? MetaData { get; set; } = null;
 
-        public string? Type { get; init; } = null;
-
-        public long? Number { get; init; } = null;
-
-        public string? Title { get; init; } = null;
-
-        public string? Source { get; init; } = null;
-
-        public string? RefId { get; init; } = null;
-
-        public DateTimeOffset? CreatedUTC { get; init; } = null;
+        public DisplayScale? DisplayScale { get; init; } = null;
 
         public DateTimeOffset LastUpdatedUtc { get; set; }
 
@@ -124,19 +117,10 @@ namespace DataCatalague.Api.Domain
                 FileName = e.FileName,
                 AbsoluteUri = new(e.AbsoluteUri),
                 GeometryRef = e.GeometryRef,
-                ShortId = e.ShortId,
-                Type = e.Type,
-                Number = e.Number,
-                Title = e.Title,
-                Source = e.Source,
-                RefId = e.RefId,
-                CreatedUTC = e.CreatedUTC,
+                MetaData = e.MetaData,
+                DisplayScale = e.DisplayScale,
                 LastUpdatedUtc = e.UTC,
             };
-    }
-
-    public static class Extension
-    {
     }
 }
 
@@ -149,7 +133,7 @@ namespace DataCatalague.Api.Domain.Commands
 
         public record UpdateSpecificationCategory(string CategoryId, string Version, string Markdown);
 
-        public record CreatePackage(string PackageId, string Category, string FileName, string AbsoluteUri, string GeometryRef, string? ShortId, string? Type, long? Number, string? Title, string? Source, string? RefId, DateTimeOffset? CreatedUTC);
+        public record CreatePackage(string PackageId, string Category, string FileName, string AbsoluteUri, string GeometryRef, PackageMetaData? MetaData, DisplayScale? DisplayScale);
     }
 
 }
@@ -182,13 +166,8 @@ namespace DataCatalague.Api.Domain.Events
                     string FileName,
                     string AbsoluteUri,
                     string GeometryRef,
-                    string? ShortId,
-                    string? Type,
-                    long? Number,
-                    string? Title,
-                    string? Source,
-                    string? RefId,
-                    DateTimeOffset? CreatedUTC,
+                    PackageMetaData? MetaData,
+                    DisplayScale? DisplayScale,
                     DateTimeOffset UTC
                 );
         }

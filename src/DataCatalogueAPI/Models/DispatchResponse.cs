@@ -1,4 +1,6 @@
-﻿namespace DataCatalague.Api.Models.V1
+﻿using DataCatalague.Api.Domain;
+
+namespace DataCatalague.Api.Models.V1
 {
     public class CategoryResponse
     {
@@ -25,17 +27,9 @@
 
         public required string? AbsoluteUri { get; init; }
 
-        public string? ShortId { get; init; } = null;
+        public PackageMetaData? MetaData { get; init; }
 
-        public string? Type { get; init; } = null;
-
-        public long? Number { get; init; } = null;
-
-        public string? Title { get; init; } = null;
-
-        public string? Source { get; init; } = null;
-
-        public string? RefId { get; init; } = null;
+        public DisplayScale? DisplayScale { get; init; }
 
         public DateTimeOffset? CreatedUTC { get; init; } = null;
 

@@ -176,7 +176,7 @@ namespace DataCatalague.Api.Controllers
 
                 var filename = IO.Path.GetFileName(request.AbsoluteUri);
 
-                var cmd = await this._servicePackage.Handle(new DispatcherCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, geometryRef, request.ShortId, request.Type, request.Number, request.Title, request.Source, request.Id, request.CreatedUTC), cancellationToken);
+                var cmd = await this._servicePackage.Handle(new DispatcherCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, geometryRef, request.MetaData, request.DisplayScale), cancellationToken);
 
                 if (!cmd.Success)
                     return this.BadRequest();
@@ -270,13 +270,8 @@ namespace DataCatalague.Api.Controllers
             Category = state.Category,
             FileName = state.FileName,
             AbsoluteUri = state.AbsoluteUri?.AbsolutePath,
-            ShortId = state.ShortId,
-            Type = state.Type,
-            Number = state.Number,
-            Title = state.Title,
-            Source = state.Source,
-            RefId = state.RefId,
-            CreatedUTC = state.CreatedUTC,
+            MetaData = state.MetaData,
+            DisplayScale = state.DisplayScale,
             LastUpdatedUtc = state.LastUpdatedUtc,
         };
 
