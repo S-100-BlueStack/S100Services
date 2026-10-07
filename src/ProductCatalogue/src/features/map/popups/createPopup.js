@@ -1,3 +1,4 @@
+import { createPackagePopupSnapshotSynchronization } from "./packagePopupSnapshot.js";
 import { createPopupErrorDetails } from "./popupErrorDetails.js";
 import { applyPopupProductStatusCell } from "./popupProductStatusCell.js";
 import { fetchProductPropertiesByDatasetName } from "../../data/api/productApi.js";
@@ -66,6 +67,24 @@ export function createPopup() {
         stopRefreshingPopup: null,
       };
 
+      const packageSnapshot =
+        productContext?.workUnit?.kind === "package"
+          ? createPackagePopupSnapshotSynchronization({
+              graphic,
+              productContext,
+              isConnected: () => !disposed && container.isConnected,
+              getAttributes: () => currentAttributes,
+              onSourcePublication: () => {
+                latestRefreshId += 1;
+              },
+              publish: (attributes) => {
+                currentAttributes = attributes;
+                render();
+              },
+              onInvalid: () => backendSync.stopRefreshingPopup?.(),
+            })
+          : null;
+
       function render() {
         renderPopupContent(container, currentAttributes, {
           graphic,
@@ -76,6 +95,10 @@ export function createPopup() {
       }
 
       async function refreshAndRender({ showFailureNotice = true } = {}) {
+        if (packageSnapshot && !packageSnapshot.isCurrent()) {
+          backendSync.stopRefreshingPopup?.();
+          return false;
+        }
         const refreshId = ++latestRefreshId;
         const datasetName =
           productContext?.datasetName ??
@@ -102,9 +125,17 @@ export function createPopup() {
         }
         const result = refreshRequest.result;
 
-        // Ignore stale refreshes. This prevents an older popup-open refresh from
-        // overwriting a newer freeze/unfreeze refresh.
-        if (disposed || !container.isConnected || refreshId !== latestRefreshId) {
+        // The same generation rejects older detail after a source publication
+        // as well as after a newer action refresh.
+        if (
+          disposed ||
+          !container.isConnected ||
+          refreshId !== latestRefreshId ||
+          (packageSnapshot && !packageSnapshot.isCurrent())
+        ) {
+          if (packageSnapshot && !packageSnapshot.isCurrent()) {
+            backendSync.stopRefreshingPopup?.();
+          }
           return false;
         }
         if (!result.success) {
@@ -152,9 +183,14 @@ export function createPopup() {
             refresh: refreshAndRender,
             watchActiveProductJobs,
             registerPopupRefreshHandler,
+            syncFromGraphic: packageSnapshot?.synchronize,
           });
           if (backendSync.enabled) {
-            void refreshAndRender({ showFailureNotice: false });
+            if (backendSync.start) {
+              void backendSync.start();
+            } else {
+              void refreshAndRender({ showFailureNotice: false });
+            }
           }
         }
       );
@@ -466,6 +502,11 @@ function createProductMetadataTable(columns, errorDetails) {
 
 function createProductMetadataRows(columns, errorDetails) {
   const rows = [
+    {
+      label: "Product",
+      getValue: (item) => formatProductTableValue(item?.datasetName),
+      shouldShow: () => columns.some((column) => column.presentation?.productIdentity),
+    },
     {
       label: "Edition",
       getValue: (item) => formatProductTableValue(item?.edition),

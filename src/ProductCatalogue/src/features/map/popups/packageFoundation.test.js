@@ -101,12 +101,12 @@ test("package columns prefer current normalized related export values and keep i
   assert.equal(columns[1].item.errorMessage, "Full validation failure");
 });
 
-test("missing related data only falls back to the primary attributes", () => {
+test("missing current member metadata never falls back to representative attributes", () => {
   const columns = createPopupProductMetadataColumns(
     { edition: 2, update: 4, status: 1, errorMessage: "Primary error" },
     packageContext()
   );
-  assert.equal(columns[0].item.edition, 2);
+  assert.equal(columns[0].item.edition, undefined);
   for (const key of ["edition", "update", "status", "errorMessage"])
     assert.equal(columns[1].item[key], undefined);
   assert.deepEqual(columns[1].item.validationArtifacts, []);
@@ -129,7 +129,7 @@ test("metadata presentation is declared by work-unit members rather than source 
     ["First", "Second"]
   );
   assert.equal(columns[0].item.edition, undefined);
-  assert.equal(columns[1].item.edition, 6);
+  assert.equal(columns[1].item.edition, undefined);
   assert.equal(
     columns.every((column) => column.presentation.statusCell && column.presentation.compactError),
     true

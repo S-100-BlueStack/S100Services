@@ -1,3 +1,4 @@
+import { normalizeWorkUnitMetadata } from "../../data/normalizers/workUnitMetadata.js";
 import { normalizeElectronicProductStatus } from "../domain/electronicProductStatus.js";
 import {
   assertUniqueProductIdentities,
@@ -237,6 +238,17 @@ function normalizeElectronicAois(payload, source) {
         status:
           normalizeElectronicProductStatus(raw.Status ?? raw.status) ?? raw.Status ?? raw.status,
         workUnitStatus: normalizeElectronicPackage(raw, source, datasetName),
+        workUnitMetadata:
+          source.workUnit?.kind === "package" && source.normalizer?.packageMembers
+            ? normalizeWorkUnitMetadata(
+                readFirstDefined(raw, ["package"]),
+                source.workUnit.members.map(({ key }) => ({
+                  key,
+                  field: source.normalizer.packageMembers[key]?.field ?? key,
+                })),
+                { aoi: true }
+              )
+            : undefined,
         displayScale: raw.DisplayScale ?? raw.displayScale,
         usageBand: raw.UsageBand ?? raw.usageBand,
         errorMessage: raw.ErrorMessage ?? raw.errorMessage,

@@ -269,3 +269,9 @@ Deleted: none. The candidate ZIP contains only these complete replacement/new fi
 Suggested commit after local acceptance: `feat(product-catalogue): integrate live ENC package AOI state`.
 
 The final response supplies the candidate ZIP SHA-256.
+
+## Subsequent F5 integration
+
+F5 supersedes the historical deferral of popup member metadata and package job-based
+freshness. See `enc-package-frontend-foundation.md` for current read-model/freshness
+boundaries. The F4 map status contract is preserved.
