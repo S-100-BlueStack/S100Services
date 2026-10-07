@@ -741,9 +741,8 @@ namespace S100FC.ProductCatalogue
                     WhereClause = archiveWhereClause
                 }, true);
 
-                var archiveRows = 0;
-
                 var uniqueChangedFeatureIds = new HashSet<string>();
+                var latestEditByFeature = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
                 var affectedProducts = new HashSet<string>();
 
                 while (cursor.MoveNext()) {
@@ -771,7 +770,6 @@ namespace S100FC.ProductCatalogue
                         continue;
                     }
 
-                    archiveRows++;
                     uniqueChangedFeatureIds.Add(id);
 
                     var fromDate = ReadArchiveUtc(row["GDB_FROM_DATE"]);
@@ -785,6 +783,8 @@ namespace S100FC.ProductCatalogue
                     var changedAt = toDate is { Year: < 9999 } && (!fromDate.HasValue || toDate > fromDate) ? toDate : fromDate;
                     if (changedAt is null)
                         throw new InvalidOperationException($"Archive feature '{id}' in '{baseTableName}' has no readable change date; DPC cannot advance its watermark safely.");
+                    if (!latestEditByFeature.TryGetValue(id, out var latestEdit) || changedAt.Value > latestEdit)
+                        latestEditByFeature[id] = changedAt.Value;
                     var archiveRow = new ArchiveRow {
                         Code = row["Code"]?.ToString() ?? string.Empty,
                         AttributeBindings = row["attributebindings"]?.ToString(),
@@ -819,13 +819,17 @@ namespace S100FC.ProductCatalogue
                     }
                 }
 
-                Log.Information(
-                    "Scanned archive changes in {tableName} for connection {connectionName}. Archive rows: {archiveRows}, unique changed features: {uniqueChangedFeatureIds}, affected products: {affectedProducts}",
-                    baseTableName,
-                    connectionName,
-                    archiveRows,
-                    uniqueChangedFeatureIds.Count,
-                    affectedProducts.Count);
+                if (uniqueChangedFeatureIds.Count == 0) {
+                    Log.Debug("Scanned archive changes in {TableName} for connection {ConnectionName}. SinceUtc: {SinceUtc:O}. No changed features.",
+                        baseTableName, connectionName, sinceUtc);
+                }
+                else {
+                    Log.Information("Scanned archive changes in {TableName} for connection {ConnectionName}. SinceUtc: {SinceUtc:O}. UniqueChangedFeatures: {UniqueChangedFeatures}. AffectedProducts: {AffectedProducts}.",
+                        baseTableName, connectionName, sinceUtc, uniqueChangedFeatureIds.Count, affectedProducts.Count);
+                    foreach (var (featureId, latestEditUtc) in latestEditByFeature.OrderBy(entry => entry.Key))
+                        Log.Information("DPC archive feature detected. TableName: {TableName}. FeatureId: {FeatureId}. LatestEditUtc: {LatestEditUtc:O}. SinceUtc: {SinceUtc:O}.",
+                            baseTableName, featureId, latestEditUtc, sinceUtc);
+                }
             }
 
             foreach (var (productName, affectedIds) in affectedIdsByProduct) {
@@ -1207,6 +1211,13 @@ namespace S100FC.ProductCatalogue
         }
 
         private async Task<YAML.Dataset> CreateDatasetAsync(ElectronicProduct electronicProduct, ArcGIS.Core.Geometry.Polygon shape, ExportTypes exportType, bool applyEdits = true, CancellationToken cancellationToken = default, IReadOnlyCollection<string>? requiredFeatureIds = null, ISet<string>? includedChangedFeatureIds = null) {
+            var logNewDataset = exportType == ExportTypes.NewDataset;
+            var creationTimer = Stopwatch.StartNew();
+            var creationSucceeded = false;
+            if (logNewDataset)
+                Log.Information("CreateNewDataset started. DatasetName: {DatasetName}. Edition: {Edition}. Update: {Update}.",
+                    electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
+            try {
             var timestamp = DateTime.UtcNow;
 
             var featureCatalogue = S100FC.Catalogues.FeatureCatalogue.Catalogues.Single(e => e.ProductID.Equals("S-101"));
@@ -1242,7 +1253,7 @@ namespace S100FC.ProductCatalogue
             var selectedFeatureIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var collapsedFeatureIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            return await this.DispatchMeasured(() => {
+            var createdDataset = await this.DispatchMeasured(() => {
                 cancellationToken.ThrowIfCancellationRequested();
                 using Geodatabase connection = this.OpenGeodatabase(uri);
 
@@ -1928,6 +1939,14 @@ namespace S100FC.ProductCatalogue
                 cancellationToken.ThrowIfCancellationRequested();
                 return dataset!;
             }, $"CreateDataset:{exportType}", electronicProduct.datasetName, cancellationToken);
+            creationSucceeded = true;
+            return createdDataset;
+            }
+            finally {
+                if (logNewDataset)
+                    Log.Information("CreateNewDataset finished. DatasetName: {DatasetName}. Success: {Success}. DurationMs: {DurationMs}.",
+                        electronicProduct.datasetName, creationSucceeded, creationTimer.ElapsedMilliseconds);
+            }
         }
 
         public async Task CreateAttachmentAsync(string name, ExportTypes exportType, string yaml, string index, string sign) {
