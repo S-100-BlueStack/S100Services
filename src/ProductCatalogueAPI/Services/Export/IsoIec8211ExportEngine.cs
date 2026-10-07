@@ -102,11 +102,11 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
 
     private async Task<ExportEngineResult> ExportS57Async(ExportEngineRequest request, CancellationToken cancellationToken) {
         ValidateRequest(request);
-        var outputDirectory = ExportOutputPath.GetCandidateDirectory(request.OutputRoot, request.DatasetName, request.ProductSpecification, request.Edition, request.Update);
+        var outputDirectory = Path.GetFullPath(ExportOutputPath.GetCandidateDirectory(request.OutputRoot, request.DatasetName, request.ProductSpecification, request.Edition, request.Update));
         PrepareOutputDirectory(request, outputDirectory);
 
         var featureCatalogue = Path.Combine(_artifactsPath, "101_FC_2.0.0.xml");
-        var pipeline = Path.Combine(_artifactsPath, "pipeline-S101-S57.yaml");
+        var pipeline = Path.GetFullPath(Path.Combine(_artifactsPath, "pipeline-S101-S57.yaml"));
         if (!File.Exists(featureCatalogue) || !File.Exists(pipeline))
             throw new FileNotFoundException("The S-57 mapping pipeline artifacts were not found.");
 
@@ -118,10 +118,15 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
         await File.WriteAllTextAsync(s101Yaml, request.DatasetYaml, Encoding.UTF8, cancellationToken);
 
         var mapperArguments = $"\"{s101Yaml}\" \"{s57Yaml}\" --fc \"{Path.GetFullPath(featureCatalogue)}\" --pipeline \"{pipeline}\"";
-        await RunProcessAsync(S100MapperPath, mapperArguments, outputDirectory, request.DatasetName, cancellationToken);
+        // The pipeline includes relative rule files, so the mapper must start beside it.
+        await RunProcessAsync(S100MapperPath, mapperArguments, Path.GetDirectoryName(pipeline)!, request.DatasetName, cancellationToken);
+        if (!File.Exists(s57Yaml) || new FileInfo(s57Yaml).Length == 0)
+            throw new InvalidOperationException($"The S-57 mapper did not create a non-empty YAML file for '{request.DatasetName}'.");
 
-        // This preserves the command contract of the existing S-57 compiler integration.
-        await RunProcessAsync(S57CompilerPath, $"\"{true}\" s57", outputDirectory, request.DatasetName, cancellationToken);
+        // The compiler takes the mapped S-57 YAML path and the output directory.
+        await RunProcessAsync(S57CompilerPath, $"\"{s57Yaml}\" \"{outputDirectory}\"", outputDirectory, request.DatasetName, cancellationToken);
+        if (!Directory.EnumerateFiles(outputDirectory, "*.000", SearchOption.AllDirectories).Any(path => new FileInfo(path).Length > 0))
+            throw new InvalidOperationException($"The S-57 compiler did not create a non-empty dataset for '{request.DatasetName}'.");
         var exchangeSet = await CreateZipAsync(outputDirectory, cancellationToken);
         return new ExportEngineResult(outputDirectory, [
             new ExportEngineArtifact(ProductArtifactKind.ExchangeSet, $"{request.DatasetName}-{request.Edition}-{request.Update:000}.zip", "application/zip", exchangeSet)
@@ -184,19 +189,17 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
             CreateNoWindow = true,
-            RedirectStandardOutput = true,
+            RedirectStandardOutput = false,
             RedirectStandardError = true
         };
 
         using var process = StartCompilerProcessSafely(startInfo, datasetName, isS100Compiler);
-        var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
         await process.WaitForExitAsync(cancellationToken);
         var error = await standardError;
-        _ = await standardOutput;
 
         if (process.ExitCode != 0) {
-            _logger.LogError("Export compiler {CompilerName} failed for {DatasetName} with exit code {ExitCode}. Error: {CompilerError}", Path.GetFileName(executable), datasetName, process.ExitCode, error);
+            _logger.LogError("Export compiler {CompilerName} failed for {DatasetName} with exit code {ExitCode}. Stderr: {CompilerError}.", Path.GetFileName(executable), datasetName, process.ExitCode, error);
             throw new InvalidOperationException($"The export compiler failed for '{datasetName}' with exit code {process.ExitCode}.");
         }
     }

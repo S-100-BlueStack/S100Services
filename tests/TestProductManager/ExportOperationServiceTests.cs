@@ -308,7 +308,6 @@ public sealed class ExportOperationServiceTests
         public Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default) => Task.FromResult(true);
         public Task SetErrorAsync(Guid packageId, string message, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default, bool preserveScanBound = false) { DiscardCalls++; PreserveScanBound = preserveScanBound; return Task.CompletedTask; }
-        public Task ReleaseAcceptedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class RecordingWorkflowRepository : IProductWorkflowRepository

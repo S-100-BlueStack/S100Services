@@ -10,9 +10,16 @@ using ProductCatalogueAPI.Services.Jobs;
 using ProductCatalogueAPI.Services.Locking;
 using ProductCatalogueAPI.Services.Export;
 using S100FC.ProductCatalogue;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace ProductCatalogueAPI.Controllers
 {
+    /// <summary>Result of an operator's direct check of the IC-ENC intake.</summary>
+    public sealed record ReconcileIcEncDeliveryRequest(bool ReceivedByIcEnc);
+    /// <summary>Manual fallback for a verified IC-ENC notice when automated email processing cannot complete.</summary>
+    public sealed record ManualIcEncAcknowledgementRequest(string DatasetName, string ProductSpecification, int Edition, int Update, string Decision, string NoticeReference, string? Reason = null, Guid? DeliveryId = null);
+
     // [Authorize("productmanager:distribute")]
     [AllowAnonymous]
     [ApiController]
@@ -25,7 +32,9 @@ namespace ProductCatalogueAPI.Controllers
         ISendToIcEncJobService sendToIcEncJobService,
         IOptionsMonitor<SendToIcEncOptions> sendToIcEncOptions,
         TimeProvider timeProvider,
-        IProductManager productManager
+        IProductManager productManager,
+        IIcEncDeliveryRepository? deliveryRepository = null,
+        IIcEncAcknowledgementService? acknowledgementService = null
     ) : ControllerBase
     {
         private readonly ILogger<UploadController> _logger = logger;
@@ -36,18 +45,23 @@ namespace ProductCatalogueAPI.Controllers
         private readonly IOptionsMonitor<SendToIcEncOptions> _sendToIcEncOptions = sendToIcEncOptions;
         private readonly TimeProvider _timeProvider = timeProvider;
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
+        private readonly IIcEncDeliveryRepository? _deliveryRepository = deliveryRepository;
+        private readonly IIcEncAcknowledgementService? _acknowledgementService = acknowledgementService;
 
         /// <summary>
-        /// Queues an IC-ENC send simulation without delivering data when simulation mode is enabled.
+        /// Queues delivery of the ready S-57 or S-101 candidate to IC-ENC. Simulation mode performs no transfer.
+        /// Live delivery requires X-ICENC-Operator-Key in the request header.
         /// </summary>
         [ProducesResponseType(typeof(ExportJobStartResponse), StatusCodes.Status202Accepted, "application/json")]
         [ProducesResponseType(typeof(ExportJobErrorResponse), StatusCodes.Status404NotFound, "application/json")]
         [ProducesResponseType(typeof(ExportJobErrorResponse), StatusCodes.Status409Conflict, "application/json")]
         [ProducesResponseType(typeof(ExportJobErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [HttpPost("{datasetName}", Name = "upload")]
         public async Task<IActionResult> UploadSingularProduct(
             string datasetName,
-            CancellationToken cancellationToken
+            CancellationToken cancellationToken,
+            [FromHeader(Name = "X-ICENC-Operator-Key")] string? operatorKey = null
         ) {
             var mode = _sendToIcEncOptions.CurrentValue.Mode;
             if (mode == SendToIcEncMode.Disabled) {
@@ -58,7 +72,7 @@ namespace ProductCatalogueAPI.Controllers
                 );
             }
 
-            if (mode != SendToIcEncMode.Simulation) {
+            if (mode is not (SendToIcEncMode.Simulation or SendToIcEncMode.Live)) {
                 return JobProblem(
                     StatusCodes.Status503ServiceUnavailable,
                     SendToIcEncContract.UnsupportedModeCode,
@@ -66,9 +80,26 @@ namespace ProductCatalogueAPI.Controllers
                 );
             }
 
+            if (mode == SendToIcEncMode.Live) {
+                var provided = operatorKey ?? Request.Headers["X-ICENC-Operator-Key"].ToString();
+                if (!HasLiveOperatorKey(provided))
+                    return StatusCode(StatusCodes.Status403Forbidden);
+            }
+
             ProductRecord? product;
+            ExportProductIdentity? identity = null;
             try {
-                product = await _productRepository.GetCurrentByNameAsync(datasetName);
+                if (mode == SendToIcEncMode.Live) {
+                    identity = ExportProductResolver.Resolve(_electronicProductManager, datasetName);
+                    var track = identity is null ? null : await _workflowRepository.GetTrackAsync(identity.DatasetName, identity.ProductSpecification, cancellationToken);
+                    product = track is null ? null : new ProductRecord {
+                        Name = track.DatasetName, State = track.State, EditionNo = track.CandidateEdition ?? track.PublishedEdition,
+                        UpdateNo = track.CandidateUpdate ?? track.PublishedUpdate, ProductSpecification = track.ProductSpecification.ToString(),
+                        IsManuallyFrozen = track.IsManuallyFrozen, ErrorCode = track.ErrorCode
+                    };
+                }
+                else
+                    product = await _productRepository.GetCurrentByNameAsync(datasetName);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
                 throw;
@@ -76,7 +107,7 @@ namespace ProductCatalogueAPI.Controllers
             catch (Exception ex) {
                 _logger.LogError(
                     ex,
-                    "IC-ENC send simulation setup failed while reading Product state. DatasetName: {DatasetName}. CorrelationId: {CorrelationId}",
+                    "IC-ENC send setup failed while reading Product state. DatasetName: {DatasetName}. CorrelationId: {CorrelationId}",
                     datasetName,
                     HttpContext.TraceIdentifier
                 );
@@ -97,9 +128,11 @@ namespace ProductCatalogueAPI.Controllers
 
             var allowsSevenCsValidationOverride = product.State == ProductState.Error &&
                 string.Equals(product.ErrorCode, SendToIcEncContract.SevenCsValidationFailedCode, StringComparison.Ordinal);
-            if (product.State is not (ProductState.Exported or ProductState.ReadyForDistribution) && !allowsSevenCsValidationOverride) {
+            if (product.IsManuallyFrozen || (mode == SendToIcEncMode.Live && product.State != ProductState.ReadyForDistribution) ||
+                product.State is not (ProductState.Exported or ProductState.ReadyForDistribution) &&
+                !(mode == SendToIcEncMode.Simulation && allowsSevenCsValidationOverride)) {
                 _logger.LogWarning(
-                    "IC-ENC send simulation rejected because Product state is invalid. DatasetName: {DatasetName}. ExpectedState: {ExpectedState}. ActualState: {ActualState}",
+                    "IC-ENC send rejected because Product state is invalid. DatasetName: {DatasetName}. ExpectedState: {ExpectedState}. ActualState: {ActualState}",
                     datasetName,
                     ProductState.Exported,
                     product.State
@@ -111,7 +144,7 @@ namespace ProductCatalogueAPI.Controllers
                 );
             }
 
-            if (allowsSevenCsValidationOverride) {
+            if (mode == SendToIcEncMode.Simulation && allowsSevenCsValidationOverride) {
                 _logger.LogWarning(
                     "IC-ENC send simulation manually allowed despite SevenCs validation findings. DatasetName: {DatasetName}. User: {User}",
                     datasetName,
@@ -123,18 +156,19 @@ namespace ProductCatalogueAPI.Controllers
 
             var request = new SendToIcEncJobRequest(
                 datasetName,
-                SendToIcEncMode.Simulation,
+                mode,
                 product.EditionNo,
                 product.UpdateNo,
                 HttpContext.TraceIdentifier,
                 _timeProvider.GetUtcNow(),
-                allowsSevenCsValidationOverride
+                mode == SendToIcEncMode.Simulation && allowsSevenCsValidationOverride,
+                identity?.ProductSpecification.ToString()
             );
 
             try {
                 var response = _sendToIcEncJobService.Enqueue(request);
                 _logger.LogInformation(
-                    "IC-ENC send simulation job enqueued. DatasetName: {DatasetName}. JobId: {JobId}. CorrelationId: {CorrelationId}",
+                    "IC-ENC send job enqueued. DatasetName: {DatasetName}. JobId: {JobId}. CorrelationId: {CorrelationId}",
                     datasetName,
                     response.JobId,
                     request.CorrelationId
@@ -267,6 +301,66 @@ namespace ProductCatalogueAPI.Controllers
         [HttpPut("{datasetName}/release-hold")]
         [HttpPut("{datasetName}/unfreeze")]
         public Task<IActionResult> ReleaseHoldLegacy(string datasetName, CancellationToken cancellationToken) => ReleaseHoldProduct(datasetName, cancellationToken);
+
+        /// <summary>
+        /// Resolves an uncertain delivery after an operator checks IC-ENC's intake.
+        /// Set ReceivedByIcEnc to false only after confirming that the receiver has no copy;
+        /// the candidate then becomes ready for another send. A confirmed receipt remains InTransit.
+        /// </summary>
+        [HttpPost("deliveries/{deliveryId:guid}/reconcile")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> ReconcileDelivery(Guid deliveryId, [FromBody] ReconcileIcEncDeliveryRequest request,
+            CancellationToken cancellationToken, [FromHeader(Name = "X-ICENC-Operator-Key")] string? operatorKey = null) {
+            if (_sendToIcEncOptions.CurrentValue.Mode != SendToIcEncMode.Live || _deliveryRepository is null)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable);
+            if (!HasLiveOperatorKey(operatorKey ?? Request.Headers["X-ICENC-Operator-Key"].ToString()))
+                return StatusCode(StatusCodes.Status403Forbidden);
+            if (!await _deliveryRepository.ReconcileAsync(deliveryId, request.ReceivedByIcEnc,
+                User?.Identity?.Name, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken))
+                return Conflict("The delivery is no longer uncertain or the product is no longer in transit.");
+            return Ok();
+        }
+
+        /// <summary>
+        /// Manually applies a verified IC-ENC acceptance or rejection. The future shared-mailbox job
+        /// calls the same acknowledgement service using Email as the source and a stable message ID.
+        /// A transfer receipt is not evidence of acceptance.
+        /// </summary>
+        [HttpPost("acknowledgements")]
+        [ProducesResponseType(StatusCodes.Status202Accepted)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> AcknowledgeDelivery([FromBody] ManualIcEncAcknowledgementRequest request,
+            CancellationToken cancellationToken, [FromHeader(Name = "X-ICENC-Operator-Key")] string? operatorKey = null) {
+            if (_sendToIcEncOptions.CurrentValue.Mode != SendToIcEncMode.Live || _acknowledgementService is null)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable);
+            if (!HasLiveOperatorKey(operatorKey ?? Request.Headers["X-ICENC-Operator-Key"].ToString()))
+                return StatusCode(StatusCodes.Status403Forbidden);
+            if (request is null || !Enum.TryParse<ProductSpecification>(request.ProductSpecification, true, out var specification) ||
+                specification is not (ProductSpecification.S57 or ProductSpecification.S101) ||
+                !Enum.TryParse<IcEncDecision>(request.Decision, true, out var decision) ||
+                !Enum.IsDefined(decision))
+                return BadRequest("Specify S57 or S101 and Accepted or Rejected.");
+
+            try {
+                var result = await _acknowledgementService.RecordAsync(new IcEncAcknowledgement(request.DatasetName,
+                    specification, request.Edition, request.Update, decision, request.NoticeReference,
+                    IcEncAcknowledgementSource.Manual, Reason: request.Reason, DeliveryId: request.DeliveryId), cancellationToken);
+                if (result is null)
+                    return Conflict("No current delivered revision matches this notice, or a different outcome was already recorded.");
+                return Accepted(new { result.DeliveryId, result.PackageId, result.ReadyForFinalization, result.AlreadyRecorded });
+            }
+            catch (ArgumentException ex) { return BadRequest(ex.Message); }
+        }
+
+        private bool HasLiveOperatorKey(string? provided) {
+            var configured = _sendToIcEncOptions.CurrentValue.OperatorKey;
+            return !string.IsNullOrEmpty(configured) && !string.IsNullOrEmpty(provided) &&
+                CryptographicOperations.FixedTimeEquals(SHA256.HashData(Encoding.UTF8.GetBytes(configured)), SHA256.HashData(Encoding.UTF8.GetBytes(provided)));
+        }
 
         private static ObjectResult JobProblem(int statusCode, string code, string message) {
             var result = new ObjectResult(new ExportJobErrorResponse {

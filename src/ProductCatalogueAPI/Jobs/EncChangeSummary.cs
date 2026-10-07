@@ -1,5 +1,6 @@
 using ProductCatalogueAPI.Data.Models;
 using S100FC.ProductCatalogue;
+using System.Globalization;
 using System.Text.Json;
 
 namespace ProductCatalogueAPI.Jobs;
@@ -71,16 +72,20 @@ internal static class EncChangeSummary
 
     /// <summary>Serializes the changes in one source scan without a separate product-track summary.</summary>
     internal static string Serialize(string datasetName, ProductSpecification productSpecification, DateOnly workDate, DateTime firstDetectedAtUtc, DateTime lastDetectedAtUtc, IEnumerable<ProductChange> changes) {
+        var observedChanges = changes.ToArray();
+        if (observedChanges.Length == 0)
+            throw new InvalidOperationException("An ENC package requires at least one archive change.");
         var lines = new List<string> {
             $"datasetName: {Quote(datasetName)}",
             $"productSpecification: {productSpecification}",
             $"workDate: {workDate:yyyy-MM-dd}",
             $"firstDetectedAtUtc: {firstDetectedAtUtc:O}",
             $"lastDetectedAtUtc: {lastDetectedAtUtc:O}",
+            $"latestArchiveEditUtc: {observedChanges.Max(change => change.DetectedAtUtc):O}",
             "changes:"
         };
 
-        foreach (var change in changes) {
+        foreach (var change in observedChanges) {
             lines.Add($"  - featureId: {Quote(change.FeatureId)}");
             lines.Add($"    featureCode: {Quote(change.FeatureCode)}");
             lines.Add($"    attribute: {Quote(change.AttributePath)}");
@@ -88,6 +93,30 @@ internal static class EncChangeSummary
             lines.Add($"    detectedAtUtc: {change.DetectedAtUtc:O}");
         }
         return string.Join(Environment.NewLine, lines) + Environment.NewLine;
+    }
+
+    /// <summary>Reads the archive clock recorded with a package, including summaries made before the explicit header existed.</summary>
+    internal static DateTime GetLatestArchiveEditUtc(string summaryYaml) {
+        DateTime? latest = null;
+        foreach (var line in summaryYaml.Split('\n')) {
+            var value = line.StartsWith("latestArchiveEditUtc: ", StringComparison.Ordinal)
+                ? line["latestArchiveEditUtc: ".Length..].Trim()
+                : line.StartsWith("    detectedAtUtc: ", StringComparison.Ordinal)
+                    ? line["    detectedAtUtc: ".Length..].Trim()
+                    : null;
+            if (value is null)
+                continue;
+            if (!DateTime.TryParseExact(value, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed))
+                throw new InvalidOperationException("An ENC package has an invalid archive timestamp in its change summary; its candidates were preserved.");
+            var utc = parsed.Kind switch {
+                DateTimeKind.Local => parsed.ToUniversalTime(),
+                DateTimeKind.Unspecified => DateTime.SpecifyKind(parsed, DateTimeKind.Utc),
+                _ => parsed
+            };
+            if (!latest.HasValue || utc > latest.Value)
+                latest = utc;
+        }
+        return latest ?? throw new InvalidOperationException("An ENC package has no archive timestamp in its change summary; its candidates were preserved.");
     }
 
     private static string Quote(string value) => $"\"{value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal)}\"";

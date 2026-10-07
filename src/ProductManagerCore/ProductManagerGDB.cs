@@ -18,7 +18,10 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
+using System.IO.Compression;
+using System.Globalization;
 using System.Reflection.Metadata;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -29,6 +32,9 @@ namespace S100FC.ProductCatalogue
 {
     public class ProductManagerGDB : IProductManager, INauticalProductManager, IElectronicProductManager, IDisposable
     {
+        // Abort implausibly broad archive matches before DPC can create any candidates or advance its watermark.
+        internal const int MaxAoisPerArchiveFeature = 600;
+
         public static async Task<IProductManager> CreateInstanceAsync(
             Func<Geodatabase> creator,
             string executionLane = "Unspecified"
@@ -69,6 +75,8 @@ namespace S100FC.ProductCatalogue
         private readonly ConcurrentDictionary<ElectronicProductKey, S100FC.S128.FeatureTypes.ElectronicProduct> _electronicProducts = new();
         private readonly ConcurrentDictionary<string, S100FC.S128.FeatureTypes.ElectronicProduct> _preferredElectronicProductsByName = new();
         private ElectronicProductMappingIndex _productMappings = ElectronicProductMappingIndex.Empty;
+        // ArcGIS geometries stay on the product manager's single execution lane.
+        private readonly Dictionary<string, DpcCoverageCache> _dpcCoverageCaches = new(StringComparer.OrdinalIgnoreCase);
 
         private ProductManagerGDB(string executionLane) {
             if (string.IsNullOrWhiteSpace(executionLane))
@@ -535,37 +543,144 @@ namespace S100FC.ProductCatalogue
 
             await this.Dispatch(() => {
                 var products = this._electronicProducts
-                    .Where(x => x.Key.ProductSpecification == "S101" && x.Value.optimumDisplayScale.HasValue)
-                    .Select(x => new {
-                        Name = x.Key.DatasetName,
-                        Product = x.Value,
-                        DisplayScale = x.Value.optimumDisplayScale!.Value,
-                        Aoi = this.GetProductAoiGeometry(x.Key.DatasetName, "S-101")
-                    })
-                    .Where(x => x.Aoi != null && !x.Aoi.IsEmpty)
-                    .ToList();
+                    .Where(entry => entry.Key.ProductSpecification == "S101")
+                    .ToDictionary(entry => entry.Key.DatasetName, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
 
-                foreach (var c in this._connections.Where(e => e.ProductSpecification.Equals("S-101", StringComparison.OrdinalIgnoreCase))) {
-                    var uri = c.ConnectionFile!;
-                    //  var dbScale = $"Database: {c.MinimumScale}-{c.MaximumScale}";
-                    var connectionName = c.ProductSpecification;
+                foreach (var connectionSettings in this._connections.Where(entry => entry.ProductSpecification.Equals("S-101", StringComparison.OrdinalIgnoreCase))) {
+                    var uri = connectionSettings.ConnectionFile!;
                     using var connection = this.OpenGeodatabase(uri);
-
                     var productsForConnection = products
-                        .Where(p => this.Connection(p.Product.productSpecification!.name!) == uri)
-                        .ToList();
-
+                        .Where(entry => this.Connection(entry.Value.productSpecification!.name!) == uri)
+                        .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
                     if (productsForConnection.Count == 0)
                         continue;
 
-                    ScanConnectionForPendingEdits(connection, connectionName, productsForConnection, sinceUtc, result);
+                    var cacheKey = uri.OriginalString;
+                    if (!_dpcCoverageCaches.TryGetValue(cacheKey, out var cache) || HasChangedDataCoverage(connection, cache.LoadedAtUtc)) {
+                        cache = BuildDpcCoverageCache(connection, productsForConnection);
+                        _dpcCoverageCaches[cacheKey] = cache;
+                        Log.Information("DPC coverage cache rebuilt. S101AoiCount: {S101AoiCount}. DataCoverageCount: {DataCoverageCount}. Connection: {Connection}.", cache.Products.Count, cache.DataCoverageCount, connectionSettings.ProductSpecification);
+                    }
+
+                    ScanConnectionForPendingEdits(connection, connectionSettings.ProductSpecification, cache.Products, sinceUtc, result);
                 }
             });
 
             return result;
         }
 
-        private void ScanConnectionForPendingEdits(Geodatabase connection, string connectionName, IEnumerable<dynamic> products, DateTime sinceUtc, Dictionary<string, Dictionary<string, ArchiveRow>> result) {
+        /// <summary>Pairs an S-101 product's S-128 AOI with its coverage at the same scale.</summary>
+        internal sealed record ScanProductAoi(string Name, ArcGIS.Core.Geometry.Geometry Aoi);
+
+        /// <summary>Contains only the S-101 DataCoverage polygons relevant to one S-128 product.</summary>
+        internal sealed record DpcProductCoverage(ScanProductAoi Product, long OptimumDisplayScale, IReadOnlyList<ArcGIS.Core.Geometry.Geometry> DataCoverages);
+
+        private sealed record DpcCoverageCache(IReadOnlyList<DpcProductCoverage> Products, int DataCoverageCount, DateTime LoadedAtUtc);
+
+        private DpcCoverageCache BuildDpcCoverageCache(Geodatabase source, IReadOnlyDictionary<string, ElectronicProduct> products) {
+            // Capture the lower bound before reading either geodatabase; edits during a rebuild are checked next time.
+            var loadedAtUtc = DateTime.UtcNow.AddSeconds(-2);
+            var coverages = new List<(long Scale, ArcGIS.Core.Geometry.Geometry Shape)>();
+            using (var surface = source.OpenDataset<FeatureClass>(QualifyTableName("surface"))) {
+                using var cursor = surface.Search(new QueryFilter { WhereClause = "UPPER(ps) = 'S-101' AND code = 'DataCoverage'" }, true);
+                while (cursor.MoveNext()) {
+                    var row = cursor.Current;
+                    if (row is not ArcGIS.Core.Data.Feature feature)
+                        throw new InvalidOperationException("An S-101 DataCoverage row has no feature geometry; DPC cannot rebuild its cache.");
+                    var scale = ReadCoverageScale(row);
+                    var shape = feature.GetShape();
+                    if (shape is null || shape.IsEmpty || shape.SpatialReference is null)
+                        throw new InvalidOperationException("An S-101 DataCoverage row has invalid geometry; DPC cannot rebuild its cache.");
+                    coverages.Add((scale, shape.Clone()));
+                }
+            }
+
+            var aois = new Dictionary<string, ArcGIS.Core.Geometry.Geometry>(StringComparer.OrdinalIgnoreCase);
+            using (var surface = _geodatabase!.OpenDataset<FeatureClass>(QualifyTableName("surface"))) {
+                using var cursor = surface.Search(CreateDatasetAoiQueryFilter(), true);
+                while (cursor.MoveNext()) {
+                    var row = cursor.Current;
+                    if (row.IsNull("attributebindings") || row is not ArcGIS.Core.Data.Feature feature)
+                        continue;
+                    var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                    var name = NormalizeDatasetName(product.datasetName);
+                    if (NormalizeProductSpecification(product.productSpecification?.name) != "S101" || !products.ContainsKey(name))
+                        continue;
+                    var shape = feature.GetShape();
+                    if (shape is null || shape.IsEmpty || shape.SpatialReference is null || !aois.TryAdd(name, shape.Clone()))
+                        throw new ProductDataIntegrityException(name, aois.ContainsKey(name) ? 2 : 0);
+                }
+            }
+
+            var coverageByScale = coverages.GroupBy(coverage => coverage.Scale)
+                .ToDictionary(group => group.Key, group => group.Select(coverage => coverage.Shape).ToArray());
+            var entries = new List<DpcProductCoverage>(products.Count);
+            foreach (var (name, product) in products) {
+                if (!aois.TryGetValue(name, out var aoi))
+                    throw new InvalidOperationException($"Could not find product coverage surface for S-101 product '{name}'.");
+                if (!product.optimumDisplayScale.HasValue || product.optimumDisplayScale.Value <= 0)
+                    throw new InvalidOperationException($"S-128 product '{name}' has no valid optimumDisplayScale.");
+                var optimumScale = Convert.ToInt64(product.optimumDisplayScale.Value, CultureInfo.InvariantCulture);
+                var matching = (coverageByScale.GetValueOrDefault(optimumScale) ?? [])
+                    .Where(coverage => GeometriesIntersect(coverage, aoi)).ToArray();
+                if (matching.Length == 0)
+                    Log.Warning("S-128 product {ProductName} has no intersecting S-101 DataCoverage at optimumDisplayScale {OptimumDisplayScale}.", name, optimumScale);
+                entries.Add(new DpcProductCoverage(new ScanProductAoi(name, aoi), optimumScale, matching));
+            }
+            return new DpcCoverageCache(entries, coverages.Count, loadedAtUtc);
+        }
+
+        private bool HasChangedDataCoverage(Geodatabase source, DateTime loadedAtUtc) {
+            using var surface = source.OpenDataset<FeatureClass>(QualifyTableName("surface"));
+            if (!surface.IsArchiveEnabled())
+                throw new InvalidOperationException("The S-101 surface is not archive enabled; DPC cannot detect DataCoverage cache changes.");
+            using var archive = surface.GetArchiveTable();
+            var syntax = source.GetSQLSyntax();
+            var since = syntax.Format(loadedAtUtc, SQLDateTimeType.Timestamp);
+            var maxDate = syntax.Format(new DateTime(9999, 12, 31), SQLDateTimeType.Timestamp);
+            using var cursor = archive.Search(new QueryFilter {
+                WhereClause = $"UPPER(ps) = 'S-101' AND code = 'DataCoverage' AND (GDB_FROM_DATE > {since} OR (GDB_TO_DATE > {since} AND GDB_TO_DATE < {maxDate}))"
+            }, true);
+            return cursor.MoveNext();
+        }
+
+        /// <summary>Reads the published S-101 coverage scale, including archived versions of a changed coverage.</summary>
+        private static long ReadCoverageScale(Row row) {
+            if (row.IsNull("attributebindings"))
+                throw new InvalidOperationException("S-101 DataCoverage has no attributeBindings or optimumDisplayScale.");
+            return ReadCoverageScale(Convert.ToString(row["attributebindings"])!);
+        }
+
+        /// <summary>Uses the DataCoverage attribute, not the nominal scale of another feature.</summary>
+        internal static long ReadCoverageScale(string attributeBindings) {
+            using var json = JsonDocument.Parse(attributeBindings);
+            if (json.RootElement.ValueKind != JsonValueKind.Object)
+                throw new InvalidOperationException("S-101 DataCoverage attributeBindings is not an object.");
+            foreach (var property in json.RootElement.EnumerateObject()) {
+                if (property.Name.Equals("optimumDisplayScale", StringComparison.OrdinalIgnoreCase) &&
+                    TryReadScale(property.Value.ToString(), out var scale))
+                    return scale;
+            }
+            throw new InvalidOperationException("S-101 DataCoverage has no valid optimumDisplayScale; DPC preserved its watermark.");
+        }
+
+        private static long ReadNominalScale(Row row, string featureId) {
+            if (row.FindField("nominalscale") < 0 || row.IsNull("nominalscale") ||
+                !TryReadScale(Convert.ToString(row["nominalscale"], CultureInfo.InvariantCulture), out var scale))
+                throw new InvalidOperationException($"S-101 archive feature '{featureId}' has no valid nominalscale; DPC preserved its watermark.");
+            return scale;
+        }
+
+        private static bool TryReadScale(string? value, out long scale) {
+            scale = 0;
+            if (!decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) ||
+                number <= 0 || number > long.MaxValue || number != decimal.Truncate(number))
+                return false;
+            scale = decimal.ToInt64(number);
+            return true;
+        }
+
+        private void ScanConnectionForPendingEdits(Geodatabase connection, string connectionName, IEnumerable<DpcProductCoverage> products, DateTime sinceUtc, Dictionary<string, Dictionary<string, ArchiveRow>> result) {
             var productList = products.ToList();
 
             var sqlSyntax = connection.GetSQLSyntax();
@@ -617,13 +732,12 @@ namespace S100FC.ProductCatalogue
                 while (cursor.MoveNext()) {
                     var row = cursor.Current;
 
-                    var id = row.UID();
-
-                    if (string.IsNullOrWhiteSpace(id)) {
-
-                        Log.Warning("Row in {tableName} for connection {connectionName} is missing UID. Skipping geometry check.", baseTableName, connectionName);
-                        unclassifiedArchiveRows++;
-                        continue;
+                    string id;
+                    try {
+                        id = ReadFeatureId(row);
+                    }
+                    catch (InvalidOperationException exception) {
+                        throw new InvalidOperationException($"S-101 archive row in '{baseTableName}' has no usable feature GUID; DPC preserved the watermark and candidates.", exception);
                     }
 
                     if (row is not ArcGIS.Core.Data.Feature feature) {
@@ -643,10 +757,12 @@ namespace S100FC.ProductCatalogue
                     archiveRows++;
                     uniqueChangedFeatureIds.Add(id);
 
-                    var fromDate = row["GDB_FROM_DATE"] as DateTime?;
-                    var toDate = row["GDB_TO_DATE"] as DateTime?;
+                    var fromDate = ReadArchiveUtc(row["GDB_FROM_DATE"]);
+                    var toDate = ReadArchiveUtc(row["GDB_TO_DATE"]);
                     // A removed or superseded archive row changed when it closed, not when it began.
                     var changedAt = toDate is { Year: < 9999 } && (!fromDate.HasValue || toDate > fromDate) ? toDate : fromDate;
+                    if (changedAt is null)
+                        throw new InvalidOperationException($"Archive feature '{id}' in '{baseTableName}' has no readable change date; DPC cannot advance its watermark safely.");
                     var archiveRow = new ArchiveRow {
                         Code = row["Code"]?.ToString(),
                         AttributeBindings = row["attributebindings"]?.ToString(),
@@ -656,8 +772,9 @@ namespace S100FC.ProductCatalogue
                         EditDate = changedAt
                     };
 
-                    foreach (var product in productList) {
-                        string productName = product.Name;
+                    var isDataCoverage = baseTableName == "surface" && string.Equals(archiveRow.Code, "DataCoverage", StringComparison.OrdinalIgnoreCase);
+                    var nominalScale = isDataCoverage ? ReadCoverageScale(row) : ReadNominalScale(row, id);
+                    foreach (var productName in FindAffectedProductsAtScale(changedShape, nominalScale, productList, isDataCoverage ? changedShape : null, id, archiveRow.Code, baseTableName)) {
                         affectedProducts.Add(productName);
 
                         if (!result.TryGetValue(productName, out var productChanges)) {
@@ -686,6 +803,66 @@ namespace S100FC.ProductCatalogue
                 throw new ArchiveChangeClassificationException(connectionName, unclassifiedArchiveRows);
         }
 
+        /// <summary>Interprets geodatabase archive dates as UTC before comparing them with the DPC cursor.</summary>
+        internal static DateTime? ReadArchiveUtc(object? value) => value switch {
+            null or DBNull => null,
+            DateTimeOffset offset => offset.UtcDateTime,
+            DateTime { Kind: DateTimeKind.Local } date => date.ToUniversalTime(),
+            DateTime date => DateTime.SpecifyKind(date, DateTimeKind.Utc),
+            _ => throw new InvalidOperationException($"Unsupported geodatabase archive date value of type '{value.GetType().FullName}'.")
+        };
+
+        /// <summary>Requires both matching coverage and the final S-128 AOI intersection at the feature's scale.</summary>
+        internal static IReadOnlyList<string> FindAffectedProductsAtScale(ArcGIS.Core.Geometry.Geometry feature, long nominalScale, IReadOnlyList<DpcProductCoverage> products, ArcGIS.Core.Geometry.Geometry? archivedCoverage = null, string? featureId = null, string? featureCode = null, string? tableName = null) {
+            if (nominalScale <= 0)
+                throw new InvalidOperationException($"Archive feature '{featureId}' has no positive nominalscale.");
+            var eligible = products.Where(product => product.OptimumDisplayScale == nominalScale &&
+                (archivedCoverage is not null && GeometriesIntersect(archivedCoverage, product.Product.Aoi) ||
+                 product.DataCoverages.Any(coverage => GeometriesIntersect(feature, coverage))))
+                .Select(product => product.Product).ToArray();
+            return FindAffectedProducts(feature, eligible, featureId, featureCode, tableName);
+        }
+
+        private static bool GeometriesIntersect(ArcGIS.Core.Geometry.Geometry source, ArcGIS.Core.Geometry.Geometry target) {
+            if (source.SpatialReference is null || target.SpatialReference is null)
+                throw new InvalidOperationException("An S-101 feature, DataCoverage, or S-128 AOI has no spatial reference; DPC preserved its watermark.");
+            var comparable = source.SpatialReference.IsEqual(target.SpatialReference)
+                ? source : GeometryEngine.Instance.Project(source, target.SpatialReference);
+            return GeometryEngine.Instance.Intersects(comparable, target);
+        }
+
+        /// <summary>Only a real intersection with an AOI may attach an archived change to its product.</summary>
+        internal static IReadOnlyList<string> FindAffectedProducts(ArcGIS.Core.Geometry.Geometry feature, IReadOnlyList<ScanProductAoi> products, string? featureId = null, string? featureCode = null, string? tableName = null) {
+            if (feature.SpatialReference is null)
+                throw new InvalidOperationException("An archived feature has no spatial reference; the scan watermark was preserved.");
+            var result = new List<string>();
+            var projections = new List<ArcGIS.Core.Geometry.Geometry>();
+            foreach (var product in products) {
+                if (product.Aoi.SpatialReference is null)
+                    throw new InvalidOperationException($"S-101 AOI '{product.Name}' has no spatial reference; the scan watermark was preserved.");
+                var comparable = feature;
+                if (!feature.SpatialReference.IsEqual(product.Aoi.SpatialReference)) {
+                    var projected = projections.FirstOrDefault(shape => shape.SpatialReference.IsEqual(product.Aoi.SpatialReference));
+                    if (projected is null) {
+                        projected = GeometryEngine.Instance.Project(feature, product.Aoi.SpatialReference);
+                        projections.Add(projected);
+                    }
+                    comparable = projected;
+                }
+                if (GeometryEngine.Instance.Intersects(comparable, product.Aoi))
+                    result.Add(product.Name);
+            }
+            if (result.Count > MaxAoisPerArchiveFeature) {
+                var bounds = feature.Extent;
+                var matching = result.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var sample = products.Where(product => matching.Contains(product.Name)).Take(3)
+                    .Select(product => $"{product.Name}: {product.Aoi.Extent.XMin},{product.Aoi.Extent.YMin} to {product.Aoi.Extent.XMax},{product.Aoi.Extent.YMax}");
+                Log.Error("DPC AOI-intersection matcher v2 rejected excessive spatial fan-out. Table: {TableName}. FeatureId: {FeatureId}. FeatureCode: {FeatureCode}. Matches: {Matches}. AvailableAois: {AvailableAois}. FeatureExtent: {XMin},{YMin} to {XMax},{YMax}. FeatureWkid: {Wkid}. ExampleMatchedAois: {ExampleMatchedAois}.", tableName, featureId, featureCode, result.Count, products.Count, bounds.XMin, bounds.YMin, bounds.XMax, bounds.YMax, feature.SpatialReference.Wkid, string.Join("; ", sample));
+                throw new InvalidOperationException($"Archive feature '{featureId}' matched {result.Count} S-101 AOIs. DPC stopped before creating packages; inspect the AOI geometries and spatial references in the error log.");
+            }
+            return result;
+        }
+
         /// <summary>Reads current feature GUIDs so archived deletes can be identified without a UID column.</summary>
         private static HashSet<string> ReadCurrentFeatureIds(FeatureClass featureClass) {
             var currentFeatureIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -695,12 +872,24 @@ namespace S100FC.ProductCatalogue
             }, true);
 
             while (cursor.MoveNext()) {
-                var id = cursor.Current.UID();
-                if (!string.IsNullOrWhiteSpace(id))
-                    currentFeatureIds.Add(id);
+                currentFeatureIds.Add(ReadFeatureId(cursor.Current));
             }
 
             return currentFeatureIds;
+        }
+
+        private static string ReadFeatureId(Row row) {
+            var rawGlobalId = row.FindField("GLOBALID") >= 0 && !row.IsNull("GLOBALID") ? row["GLOBALID"] : null;
+            return ResolveFeatureId(row.UID(), rawGlobalId);
+        }
+
+        /// <summary>Rejects an empty archive GUID and falls back to the actual GlobalID field when the row extension cannot read it.</summary>
+        internal static string ResolveFeatureId(string? extensionId, object? rawGlobalId) {
+            if (Guid.TryParse(extensionId, out var id) && id != Guid.Empty)
+                return id.ToString("B");
+            if (Guid.TryParse(Convert.ToString(rawGlobalId), out id) && id != Guid.Empty)
+                return id.ToString("B");
+            throw new InvalidOperationException($"UID returned '{extensionId ?? "<null>"}' and GLOBALID returned '{rawGlobalId ?? "<null>"}'.");
         }
 
         /// <summary>Identifies a deleted feature by its absence from the current feature class version.</summary>
@@ -731,7 +920,11 @@ namespace S100FC.ProductCatalogue
                     var delta = data["yaml"];
                     index = data["index"];
 
-                    if (!string.IsNullOrEmpty(delta))
+                    // Accepted ENC packages store a full snapshot. Legacy attachments store deltas.
+                    using var metadata = JsonDocument.Parse(Convert.ToString(cursor.Current["json"])!);
+                    if (metadata.RootElement.TryGetProperty("PackageId", out _))
+                        rootYAML = delta;
+                    else if (!string.IsNullOrEmpty(delta))
                         rootYAML = S100FC.YAML.DatasetComparer.AppendUpdate(rootYAML, delta);
                 }
 
@@ -1689,6 +1882,130 @@ namespace S100FC.ProductCatalogue
             });
         }
 
+        /// <summary>Publishes the two bound products and the source attachment in one geodatabase edit transaction.</summary>
+        async Task IElectronicProductManager.PublishAcceptedEncPackageAsync(EncPackagePublication publication, CancellationToken cancellationToken) {
+            ArgumentNullException.ThrowIfNull(publication);
+            if (publication.PackageId == Guid.Empty || string.IsNullOrWhiteSpace(publication.DatasetYaml) || publication.CompilerIndex.Length == 0)
+                throw new ArgumentException("The accepted package must include its identity, YAML and S-101 compiler index.", nameof(publication));
+
+            await Dispatch(() => {
+                cancellationToken.ThrowIfCancellationRequested();
+                var mapped = _productMappings.GetMapped(publication.S101DatasetName, "S-57");
+                if (mapped.Count != 1 || !string.Equals(mapped[0].datasetName, publication.S57DatasetName, StringComparison.OrdinalIgnoreCase))
+                    throw new ProductMappingIntegrityException("The accepted S-57 and S-101 products no longer have an exact ProductMapping binding.");
+
+                using var surface = _geodatabase!.OpenDataset<FeatureClass>(QualifyTableName("surface"));
+                using var attachment = _geodatabase.OpenDataset<Table>(QualifyTableName("attachment"));
+                var existingAttachment = false;
+                var sourceSha256 = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(publication.DatasetYaml)));
+                using (var existing = attachment.Search(new QueryFilter {
+                    WhereClause = $"json LIKE '%{publication.PackageId:D}%'"
+                }, true)) {
+                    while (existing.MoveNext()) {
+                        using var document = JsonDocument.Parse(Convert.ToString(existing.Current["json"])!);
+                        if (document.RootElement.TryGetProperty("PackageId", out var id) && id.GetGuid() == publication.PackageId) {
+                            if (existingAttachment || !document.RootElement.TryGetProperty("SourceSha256", out var hash) ||
+                                !string.Equals(hash.GetString(), sourceSha256, StringComparison.Ordinal) ||
+                                !document.RootElement.TryGetProperty("DatasetName", out var name) ||
+                                !string.Equals(name.GetString(), publication.S101DatasetName, StringComparison.OrdinalIgnoreCase))
+                                throw new InvalidOperationException("Conflicting S-128 attachment metadata exists for this package.");
+                            existingAttachment = true;
+                        }
+                    }
+                }
+
+                var products = new Dictionary<string, ElectronicProduct>(StringComparer.OrdinalIgnoreCase);
+                using (var cursor = surface.Search(CreateElectronicProductVersionQueryFilter(), true)) {
+                    while (cursor.MoveNext()) {
+                        var row = cursor.Current;
+                        if (row.IsNull("attributebindings")) continue;
+                        var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                        var specification = NormalizeProductSpecification(product.productSpecification?.name);
+                        var wanted = specification == "S57" && string.Equals(product.datasetName, publication.S57DatasetName, StringComparison.OrdinalIgnoreCase) ||
+                                     specification == "S101" && string.Equals(product.datasetName, publication.S101DatasetName, StringComparison.OrdinalIgnoreCase);
+                        if (wanted && !products.TryAdd(specification, product))
+                            throw new ProductMappingIntegrityException("Multiple S-128 ElectronicProduct rows match an accepted package product.");
+                    }
+                }
+                if (!products.TryGetValue("S57", out var s57) || !products.TryGetValue("S101", out var s101))
+                    throw new ProductMappingIntegrityException("An accepted package product is missing from the S-128 surface table.");
+
+                var s57Published = s57.editionNumber == publication.S57Edition && s57.updateNumber.GetValueOrDefault() == publication.S57Update;
+                var s101Published = s101.editionNumber == publication.S101Edition && s101.updateNumber.GetValueOrDefault() == publication.S101Update;
+                if (existingAttachment) {
+                    if (!s57Published || !s101Published)
+                        throw new InvalidOperationException("The package attachment exists but S-128 product versions do not match; manual repair is required.");
+                    return;
+                }
+                if (s57Published || s101Published || s57.editionNumber > publication.S57Edition || s101.editionNumber > publication.S101Edition)
+                    throw new InvalidOperationException("An S-128 product version changed outside package finalization; manual review is required.");
+
+                var publishedAtUtc = DateTime.UtcNow;
+                var updated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                _geodatabase.ApplyEdits(() => {
+                    using var cursor = surface.Search(new QueryFilter { WhereClause = "upper(ps) = 'S-128' AND code = 'ElectronicProduct'" }, false);
+                    while (cursor.MoveNext()) {
+                        using var row = cursor.Current;
+                        if (row.IsNull("attributebindings")) continue;
+                        var product = S100FC.AttributeFlattenExtensions.Unflatten<ElectronicProduct>(Convert.ToString(row["attributebindings"])!, typeof(ElectronicProduct));
+                        var specification = NormalizeProductSpecification(product.productSpecification?.name);
+                        if (specification == "S57" && string.Equals(product.datasetName, publication.S57DatasetName, StringComparison.OrdinalIgnoreCase)) {
+                            product.editionNumber = publication.S57Edition;
+                            product.updateNumber = publication.S57Update;
+                        }
+                        else if (specification == "S101" && string.Equals(product.datasetName, publication.S101DatasetName, StringComparison.OrdinalIgnoreCase)) {
+                            product.editionNumber = publication.S101Edition;
+                            product.updateNumber = publication.S101Update;
+                        }
+                        else continue;
+
+                        if (!updated.Add(specification))
+                            throw new ProductMappingIntegrityException("A duplicate S-128 ElectronicProduct appeared during publication.");
+                        // The issued dataset was built from the package snapshot; acceptance can arrive days later.
+                        product.issueDate = DateOnly.FromDateTime(publication.DetectedAtUtc);
+                        row["attributebindings"] = product.Flatten();
+                        row.Store();
+                        products[specification] = product;
+                    }
+                    if (updated.Count != 2)
+                        throw new ProductMappingIntegrityException("An accepted product disappeared during S-128 publication.");
+
+                    using var buffer = attachment.CreateRowBuffer();
+                    buffer["ps"] = "S-128.NuvionPro";
+                    buffer["code"] = nameof(Dataset);
+                    buffer["json"] = JsonSerializer.Serialize(new {
+                        publication.PackageId,
+                        SourceSha256 = sourceSha256,
+                        DatasetName = publication.S101DatasetName,
+                        Edition = publication.S101Edition,
+                        Update = publication.S101Update,
+                        ExportTypes = s101.editionNumber.GetValueOrDefault() == 0 ? ExportTypes.NewDataset : publication.S101Update > 0 ? ExportTypes.Update : ExportTypes.NewEdition,
+                        TimestampUTC = publishedAtUtc,
+                        ProductSpecification = "S-101"
+                    }, jsonSerializerOptions);
+                    using var data = new MemoryStream();
+                    using (var archive = new ZipArchive(data, ZipArchiveMode.Create, leaveOpen: true)) {
+                        Write(archive, "yaml", Encoding.UTF8.GetBytes(publication.DatasetYaml));
+                        Write(archive, "index", publication.CompilerIndex);
+                        Write(archive, "sign", publication.CatalogueSignature);
+                    }
+                    data.Position = 0;
+                    buffer["data_size"] = data.Length;
+                    buffer["data"] = data;
+                    attachment.CreateRow(buffer);
+                });
+
+                AddElectronicProduct(products["S57"]);
+                AddElectronicProduct(products["S101"]);
+                Log.Information("Accepted ENC package {PackageId} published in S-128.", publication.PackageId);
+            });
+
+            static void Write(ZipArchive archive, string name, byte[] bytes) {
+                using var stream = archive.CreateEntry(name).Open();
+                stream.Write(bytes);
+            }
+        }
+
         #endregion
 
 
@@ -2056,7 +2373,7 @@ namespace S100FC.ProductCatalogue
                     dispatchCompletedAt
                 ).TotalMilliseconds;
 
-                Log.Information(
+                Log.Verbose(
                     "AOI ArcGIS profiling completed. ExecutionLane: {ExecutionLane}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. Success: {Success}. ArcGisDispatchTotalMs: {ArcGisDispatchTotalMs}. ArcGisQueueWaitMs: {ArcGisQueueWaitMs}. ArcGisExecutionMs: {ArcGisExecutionMs}. ArcGisOpenAndSearchMs: {ArcGisOpenAndSearchMs}. ArcGisCursorMoveNextMs: {ArcGisCursorMoveNextMs}. ArcGisAttributeReadMs: {ArcGisAttributeReadMs}. ArcGisDatasetNameReadMs: {ArcGisDatasetNameReadMs}. ArcGisGeometryReadMs: {ArcGisGeometryReadMs}. ArcGisRectangleSerializationMs: {ArcGisRectangleSerializationMs}. DatasetNameFastPathCount: {DatasetNameFastPathCount}. DatasetNameUnflattenFallbackCount: {DatasetNameUnflattenFallbackCount}. RowsScanned: {RowsScanned}. RowsAccepted: {RowsAccepted}. RowsSkippedMissingAttributes: {RowsSkippedMissingAttributes}. RowsSkippedMissingDatasetName: {RowsSkippedMissingDatasetName}. RowsFailed: {RowsFailed}. GeometryCount: {GeometryCount}",
                     this._executionLane,
                     "GetDatasetAOIs",

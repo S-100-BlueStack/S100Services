@@ -19,6 +19,4 @@ public interface IEncPackageRepository
     Task SetErrorAsync(Guid packageId, string message, CancellationToken cancellationToken = default);
     /// <summary>Marks a candidate discarded; only an automatic package refresh replays its scan bound.</summary>
     Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default, bool preserveScanBound = false);
-    /// <summary>Releases packages whose non-discarded tracks have all reached an accepted terminal state.</summary>
-    Task ReleaseAcceptedAsync(CancellationToken cancellationToken = default);
 }

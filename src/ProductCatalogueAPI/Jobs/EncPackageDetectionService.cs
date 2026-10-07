@@ -16,7 +16,7 @@ public interface IEncPackageDetectionService
 }
 
 /// <summary>Coordinates a package scan across the system database, S-128 catalogue, and export engines.</summary>
-public sealed class EncPackageDetectionService(IProductRepository productRepository, IProductWorkflowRepository workflowRepository, IEncPackageRepository packages, IProductManager productManager, IExportOperationService exports, IDatasetLockService locks, TimeProvider clock, ILogger<EncPackageDetectionService> logger) : IEncPackageDetectionService
+public sealed class EncPackageDetectionService(IProductRepository productRepository, IProductWorkflowRepository workflowRepository, IEncPackageRepository packages, IProductManager productManager, IExportOperationService exports, IDatasetLockService locks, TimeProvider clock, ILogger<EncPackageDetectionService> logger, IEncPackageFinalizationService? finalization = null) : IEncPackageDetectionService
 {
     private readonly IElectronicProductManager _products = productManager.ElectronicProductManager;
 
@@ -28,11 +28,12 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             return;
         }
 
-        await packages.ReleaseAcceptedAsync(cancellationToken);
+        if (finalization is not null)
+            await finalization.FinalizePendingAsync(cancellationToken);
         var scanStartedUtc = clock.GetUtcNow().UtcDateTime;
         var sinceUtc = await productRepository.GetLastSuccessfulRunUtcAsync(nameof(DetectProductChangesJob))
             ?? EncChangeSummary.GetCopenhagenDayStartUtc(scanStartedUtc);
-        logger.LogInformation("ENC archive scan started. SinceUtc: {SinceUtc}. StartedUtc: {StartedUtc}.", sinceUtc, scanStartedUtc);
+        logger.LogInformation("ENC archive scan started. SinceUtc: {SinceUtc:O}. StartedUtc: {StartedUtc:O}.", sinceUtc, scanStartedUtc);
 
         var archiveScanTime = Stopwatch.StartNew();
         var pending = await _products.GetPendingEditsAsync(sinceUtc);
@@ -71,6 +72,21 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 logger.LogInformation("ENC changes for {SourceDatasetName}: {ChangedFeatureCount} feature(s).", sourceName, changes.Count);
         }
 
+        // Archive transaction times can be ahead of the worker's clock. Their order within the
+        // geodatabase still determines whether a package contains a later edit.
+        var workerUtc = clock.GetUtcNow().UtcDateTime;
+        DateTime? latestArchiveEditUtc = null;
+        foreach (var (sourceName, changes) in pending) {
+            foreach (var (featureId, change) in changes) {
+                if (change.EditDate is null)
+                    throw new InvalidOperationException($"ENC archive change for '{sourceName}', feature '{featureId}', has no readable archive timestamp. DPC preserved the watermark and existing candidates.");
+                if (!latestArchiveEditUtc.HasValue || change.EditDate > latestArchiveEditUtc)
+                    latestArchiveEditUtc = change.EditDate;
+            }
+        }
+        if (latestArchiveEditUtc > workerUtc.AddMinutes(5))
+            logger.LogWarning("S-101 archive timestamp is ahead of the worker clock. ArchiveEditUtc: {ArchiveEditUtc:O}. WorkerUtc: {WorkerUtc:O}. DifferenceMinutes: {DifferenceMinutes}. Package refresh uses archive edit order.", latestArchiveEditUtc, workerUtc, (latestArchiveEditUtc.Value - workerUtc).TotalMinutes);
+
         var active = await packages.GetActiveAsync(pending.Keys, cancellationToken);
         var completeScans = new Dictionary<DateTime, Dictionary<string, Dictionary<string, ArchiveRow>>>();
         foreach (var (sourceName, changes) in pending) {
@@ -93,7 +109,8 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             var packageScanFromUtc = replay.GetValueOrDefault(sourceName, sinceUtc);
             EncPackage? previous = null;
             if (active.TryGetValue(sourceName, out var existing)) {
-                if (!HasNewEdits(changes, existing.DetectedAtUtc, sinceUtc)) {
+                var packageArchiveEditUtc = EncChangeSummary.GetLatestArchiveEditUtc(existing.SummaryYaml);
+                if (!HasNewEdits(changes, packageArchiveEditUtc)) {
                     // A replayed archive row from the existing snapshot is not a reason to retry a failed export.
                     if (await CanRefreshAsync(existing, cancellationToken))
                         await RecoverIncompletePackageAsync(existing, cancellationToken);
@@ -139,7 +156,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 throw new InvalidOperationException($"ENC source snapshot for '{sourceName}' was empty.");
 
             if (previous is not null) {
-                logger.LogInformation("Refreshing ENC package after new edits. SourceDatasetName: {SourceDatasetName}. PreviousDetectedAtUtc: {PreviousDetectedAtUtc}.", sourceName, previous.DetectedAtUtc);
+                logger.LogInformation("Refreshing ENC package after a later archive edit. SourceDatasetName: {SourceDatasetName}. PreviousArchiveEditUtc: {PreviousArchiveEditUtc:O}. LatestArchiveEditUtc: {LatestArchiveEditUtc:O}. PackageCreatedUtc: {PackageCreatedUtc:O}.", sourceName, EncChangeSummary.GetLatestArchiveEditUtc(previous.SummaryYaml), changes.Values.Max(change => change.EditDate), previous.DetectedAtUtc);
                 try {
                     await DiscardForRefreshAsync(previous, s57, ProductSpecification.S57, cancellationToken);
                     await DiscardForRefreshAsync(previous, s101, ProductSpecification.S101, cancellationToken);
@@ -170,7 +187,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         }
 
         await productRepository.SetSuccessfulRunUtcAsync(nameof(DetectProductChangesJob), scanStartedUtc);
-        logger.LogInformation("ENC change scan completed. ChangedAoiCount: {ChangedAoiCount}. WatermarkUtc: {WatermarkUtc}.", pending.Count, scanStartedUtc);
+        logger.LogInformation("ENC change scan completed. ChangedAoiCount: {ChangedAoiCount}. WatermarkUtc: {WatermarkUtc:O}.", pending.Count, scanStartedUtc);
     }
 
     private async Task<bool> CanRefreshAsync(EncPackage package, CancellationToken cancellationToken) {
@@ -179,9 +196,12 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         return !IsRefreshBlocked(s57) && !IsRefreshBlocked(s101);
     }
 
-    /// <summary>Uses archive change times so replaying an old scan never rebuilds identical failed candidates.</summary>
-    internal static bool HasNewEdits(IReadOnlyDictionary<string, ArchiveRow> changes, DateTime detectedAtUtc, DateTime sinceUtc) =>
-        changes.Values.Any(change => change.EditDate > detectedAtUtc || change.EditDate is null && sinceUtc >= detectedAtUtc);
+    /// <summary>Requires a later archive edit before replacing a package; the global scan cursor is not evidence of a new edit.</summary>
+    internal static bool HasNewEdits(IReadOnlyDictionary<string, ArchiveRow> changes, DateTime lastArchivedEditUtc) {
+        if (changes.Values.Any(change => change.EditDate is null))
+            throw new InvalidOperationException("An ENC archive edit has no timestamp; the package cannot be refreshed safely.");
+        return changes.Values.Any(change => change.EditDate > lastArchivedEditUtc);
+    }
 
     /// <summary>Protects an operator hold, a build in progress, or a candidate submitted for approval.</summary>
     internal static bool IsRefreshBlocked(ProductExportTrackRecord? track) => track?.IsManuallyFrozen == true ||
