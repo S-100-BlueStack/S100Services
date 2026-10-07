@@ -7,8 +7,9 @@
         public required string Description { get; init; }
     }
 
-    public sealed class AddWorkspaceRequest {
+    public sealed class AddWorkspaceRequest
+    {
         public required string GeoJSON { get; init; }
-        public required string DisplayName { get; init; }        
+        public required string DisplayName { get; init; }
     }
 }

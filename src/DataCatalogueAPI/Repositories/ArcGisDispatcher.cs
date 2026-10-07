@@ -4,22 +4,22 @@ namespace DataCatalague.Api.Repositories
 {
     public sealed class ArcGisDispatcher : IDisposable
     {
-        private readonly BlockingCollection<Func<Task>> _queue = new();
+        private readonly BlockingCollection<Func<Task>> _queue = [];
         private readonly Thread _thread;
 
         public ArcGisDispatcher() {
-            _thread = new Thread(Run) {
+            this._thread = new Thread(this.Run) {
                 IsBackground = true,
                 Name = "ArcGIS Thread"
             };
 
-            _thread.Start();
+            this._thread.Start();
         }
 
-        private void Run() {            
+        private void Run() {
             ArcGIS.Core.Hosting.Host.Initialize();  // Initialize ONCE on the ArcGIS thread.
 
-            foreach (Func<Task> work in _queue.GetConsumingEnumerable()) {
+            foreach (Func<Task> work in this._queue.GetConsumingEnumerable()) {
                 work().GetAwaiter().GetResult();
             }
         }
@@ -28,7 +28,7 @@ namespace DataCatalague.Api.Repositories
             TaskCompletionSource<T> tcs =
                 new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            _queue.Add(() => {
+            this._queue.Add(() => {
                 try {
                     T result = action();
                     tcs.SetResult(result);
@@ -44,9 +44,9 @@ namespace DataCatalague.Api.Repositories
         }
 
         public void Dispose() {
-            _queue.CompleteAdding();
-            _thread.Join();
-            _queue.Dispose();
+            this._queue.CompleteAdding();
+            this._thread.Join();
+            this._queue.Dispose();
         }
     }
 }

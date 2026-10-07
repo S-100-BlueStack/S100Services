@@ -1,14 +1,12 @@
 ﻿using Asp.Versioning;
 using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
-using DataCatalague.Api.Domain.Commands;
 using DataCatalague.Api.Models.V1;
 using DataCatalague.Api.Repositories;
 using Eventuous;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using NanoidDotNet;
-using static NanoidDotNet.Nanoid;
 
 namespace DataCatalague.Api.Controllers.V1
 {
@@ -19,7 +17,7 @@ namespace DataCatalague.Api.Controllers.V1
         [Route("api/v{version:apiVersion}/pipelines")]
         [Produces("application/json")]
         public sealed class PipelineController(
-                IEventStore eventstore, 
+                IEventStore eventstore,
                 ICommandService<PipelineState> servicePipeline,
                 DispatchRepository dispatchRepository,
                 IOptions<DispatcherOptions> options,
@@ -47,7 +45,7 @@ namespace DataCatalague.Api.Controllers.V1
             [ProducesResponseType<PipelineResponse>(StatusCodes.Status201Created)]
             [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
             public async Task<ActionResult<PipelineResponse>> Create([FromBody] CreatePipelineRequest request, CancellationToken cancellationToken) {
-                ArgumentNullException.ThrowIfNull(request);                
+                ArgumentNullException.ThrowIfNull(request);
                 ArgumentNullException.ThrowIfNullOrWhiteSpace(request.DisplayName);
                 ArgumentNullException.ThrowIfNullOrWhiteSpace(request.Description);
 

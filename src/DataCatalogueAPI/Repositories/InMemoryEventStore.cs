@@ -3,7 +3,6 @@ using Eventuous.Subscriptions;
 using Eventuous.Subscriptions.Checkpoints;
 using Eventuous.Subscriptions.Context;
 using Eventuous.Subscriptions.Filters;
-using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 
@@ -26,8 +25,8 @@ namespace DataCatalague.Api.Repositories
         public Task<bool> StreamExists(StreamName streamName, CancellationToken cancellationToken) {
             cancellationToken.ThrowIfCancellationRequested();
 
-            lock (_gate) {
-                return Task.FromResult(_storage.ContainsKey(streamName));
+            lock (this._gate) {
+                return Task.FromResult(this._storage.ContainsKey(streamName));
             }
         }
 
@@ -44,19 +43,19 @@ namespace DataCatalague.Api.Repositories
                 throw new ArgumentException("At least one event must be appended.", nameof(events));
             }
 
-            lock (_gate) {
-                var existing = _storage.GetOrAdd(stream, static s => new InMemoryStream(s));
+            lock (this._gate) {
+                var existing = this._storage.GetOrAdd(stream, static s => new InMemoryStream(s));
                 var appendedEvents = existing.AppendEvents(expectedVersion, events);
                 var streamName = (string)stream;
 
                 foreach (var streamEvent in appendedEvents) {
-                    var globalPosition = (ulong)_global.Count;
-                    _global.Add(new InMemoryAllStreamEvent(streamName, streamEvent, globalPosition));
+                    var globalPosition = (ulong)this._global.Count;
+                    this._global.Add(new InMemoryAllStreamEvent(streamName, streamEvent, globalPosition));
                 }
 
                 return Task.FromResult(
                     new AppendEventsResult(
-                        (ulong)(_global.Count - 1),
+                        (ulong)(this._global.Count - 1),
                         existing.Version));
             }
         }
@@ -72,7 +71,7 @@ namespace DataCatalague.Api.Repositories
                 return Task.FromResult(Array.Empty<AppendEventsResult>());
             }
 
-            lock (_gate) {
+            lock (this._gate) {
                 var results = new AppendEventsResult[appends.Count];
                 var index = 0;
 
@@ -81,7 +80,7 @@ namespace DataCatalague.Api.Repositories
                         throw new ArgumentException("Each append must contain at least one event.", nameof(appends));
                     }
 
-                    var existing = _storage.GetOrAdd(
+                    var existing = this._storage.GetOrAdd(
                         append.StreamName,
                         static s => new InMemoryStream(s));
 
@@ -92,12 +91,12 @@ namespace DataCatalague.Api.Repositories
                     var streamName = (string)append.StreamName;
 
                     foreach (var streamEvent in appendedEvents) {
-                        var globalPosition = (ulong)_global.Count;
-                        _global.Add(new InMemoryAllStreamEvent(streamName, streamEvent, globalPosition));
+                        var globalPosition = (ulong)this._global.Count;
+                        this._global.Add(new InMemoryAllStreamEvent(streamName, streamEvent, globalPosition));
                     }
 
                     results[index++] = new AppendEventsResult(
-                        (ulong)(_global.Count - 1),
+                        (ulong)(this._global.Count - 1),
                         existing.Version);
                 }
 
@@ -114,8 +113,8 @@ namespace DataCatalague.Api.Repositories
             [EnumeratorCancellation] CancellationToken cancellationToken) {
             IReadOnlyList<StreamEvent> events;
 
-            lock (_gate) {
-                events = FindStream(stream, true).GetEvents(start, count);
+            lock (this._gate) {
+                events = this.FindStream(stream, true).GetEvents(start, count);
             }
 
             foreach (var streamEvent in events) {
@@ -132,8 +131,8 @@ namespace DataCatalague.Api.Repositories
             [EnumeratorCancellation] CancellationToken cancellationToken) {
             IReadOnlyList<StreamEvent> events;
 
-            lock (_gate) {
-                events = FindStream(stream, true).GetEventsBackwards(start, count);
+            lock (this._gate) {
+                events = this.FindStream(stream, true).GetEventsBackwards(start, count);
             }
 
             foreach (var streamEvent in events) {
@@ -151,8 +150,8 @@ namespace DataCatalague.Api.Repositories
             CancellationToken cancellationToken) {
             cancellationToken.ThrowIfCancellationRequested();
 
-            lock (_gate) {
-                FindStream(stream, expectedVersion.ExistingStream)
+            lock (this._gate) {
+                this.FindStream(stream, expectedVersion.ExistingStream)
                     .Truncate(expectedVersion, truncatePosition);
             }
 
@@ -166,10 +165,10 @@ namespace DataCatalague.Api.Repositories
             CancellationToken cancellationToken) {
             cancellationToken.ThrowIfCancellationRequested();
 
-            lock (_gate) {
-                var existing = FindStream(stream, expectedVersion.ExistingStream);
+            lock (this._gate) {
+                var existing = this.FindStream(stream, expectedVersion.ExistingStream);
                 existing.CheckVersion(expectedVersion);
-                _storage.TryRemove(stream, out _);
+                this._storage.TryRemove(stream, out _);
             }
 
             return Task.CompletedTask;
@@ -180,30 +179,30 @@ namespace DataCatalague.Api.Repositories
             int maxCount) {
             ArgumentOutOfRangeException.ThrowIfLessThan(maxCount, 1);
 
-            lock (_gate) {
+            lock (this._gate) {
                 var start = afterPosition.HasValue
                     ? checked((long)afterPosition.Value + 1)
                     : 0L;
 
-                if (start >= _global.Count) {
+                if (start >= this._global.Count) {
                     return [];
                 }
 
-                var count = Math.Min(maxCount, _global.Count - (int)start);
-                return _global.GetRange((int)start, count);
+                var count = Math.Min(maxCount, this._global.Count - (int)start);
+                return this._global.GetRange((int)start, count);
             }
         }
 
         internal ulong? GetLastGlobalPosition() {
-            lock (_gate) {
-                return _global.Count == 0
+            lock (this._gate) {
+                return this._global.Count == 0
                     ? null
-                    : (ulong)(_global.Count - 1);
+                    : (ulong)(this._global.Count - 1);
             }
         }
 
         private InMemoryStream FindStream(StreamName stream, bool failIfNotFound)
-            => !_storage.TryGetValue(stream, out var existing)
+            => !this._storage.TryGetValue(stream, out var existing)
                 ? failIfNotFound
                     ? throw new StreamNotFound(stream)
                     : new InMemoryStream(stream)
@@ -227,20 +226,20 @@ namespace DataCatalague.Api.Repositories
 
         public void CheckVersion(ExpectedStreamVersion expectedVersion) {
             if (expectedVersion != ExpectedStreamVersion.Any &&
-                expectedVersion.Value != Version) {
-                throw new WrongVersion(expectedVersion, Version);
+                expectedVersion.Value != this.Version) {
+                throw new WrongVersion(expectedVersion, this.Version);
             }
         }
 
         public IReadOnlyList<StreamEvent> AppendEvents(
             ExpectedStreamVersion expectedVersion,
             IReadOnlyCollection<NewStreamEvent> events) {
-            CheckVersion(expectedVersion);
+            this.CheckVersion(expectedVersion);
 
             var appendedEvents = new List<StreamEvent>(events.Count);
 
             foreach (var newEvent in events) {
-                var version = ++Version;
+                var version = ++this.Version;
                 var streamEvent = new StreamEvent(
                     newEvent.Id,
                     newEvent.Payload,
@@ -249,7 +248,7 @@ namespace DataCatalague.Api.Repositories
                     version,
                     DateTime.UtcNow);
 
-                _events.Add(new StoredEvent(streamEvent, version));
+                this._events.Add(new StoredEvent(streamEvent, version));
                 appendedEvents.Add(streamEvent);
             }
 
@@ -257,7 +256,7 @@ namespace DataCatalague.Api.Repositories
         }
 
         public IReadOnlyList<StreamEvent> GetEvents(StreamReadPosition from, int count) {
-            IEnumerable<StoredEvent> selected = _events
+            IEnumerable<StoredEvent> selected = this._events
                 .SkipWhile(x => x.Position < from.Value);
 
             if (count > 0) {
@@ -270,19 +269,19 @@ namespace DataCatalague.Api.Repositories
         }
 
         public IReadOnlyList<StreamEvent> GetEventsBackwards(StreamReadPosition from, int count) {
-            if (count <= 0 || _events.Count == 0) {
+            if (count <= 0 || this._events.Count == 0) {
                 return [];
             }
 
             var requestedPosition = from.Value;
-            var position = requestedPosition >= (long)_events.Count
-                ? _events.Count - 1
+            var position = requestedPosition >= this._events.Count
+                ? this._events.Count - 1
                 : (int)requestedPosition;
 
             var result = new List<StreamEvent>(Math.Min(count, position + 1));
 
             while (count-- > 0 && position >= 0) {
-                result.Add(_events[position--].Event);
+                result.Add(this._events[position--].Event);
             }
 
             return result;
@@ -291,8 +290,8 @@ namespace DataCatalague.Api.Repositories
         public void Truncate(
             ExpectedStreamVersion version,
             StreamTruncatePosition position) {
-            CheckVersion(version);
-            _events.RemoveAll(x => x.Position <= position.Value);
+            this.CheckVersion(version);
+            this._events.RemoveAll(x => x.Position <= position.Value);
         }
     }
 
@@ -313,7 +312,7 @@ namespace DataCatalague.Api.Repositories
             string checkpointId,
             CancellationToken cancellationToken) {
             cancellationToken.ThrowIfCancellationRequested();
-            return ValueTask.FromResult(_start with { Id = checkpointId });
+            return ValueTask.FromResult(this._start with { Id = checkpointId });
         }
 
         public ValueTask<Checkpoint> StoreCheckpoint(
@@ -322,7 +321,7 @@ namespace DataCatalague.Api.Repositories
             CancellationToken cancellationToken) {
             cancellationToken.ThrowIfCancellationRequested();
 
-            _start = checkpoint;
+            this._start = checkpoint;
             CheckpointStored?.Invoke(this, checkpoint);
 
             return ValueTask.FromResult(checkpoint);
@@ -364,7 +363,7 @@ namespace DataCatalague.Api.Repositories
         private readonly ulong? _startPosition;
 
         public InMemoryCheckpointStore(ulong? startPosition = null) {
-            _startPosition = startPosition;
+            this._startPosition = startPosition;
         }
 
         public ValueTask<Checkpoint> GetLastCheckpoint(
@@ -372,9 +371,9 @@ namespace DataCatalague.Api.Repositories
             CancellationToken cancellationToken) {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var checkpoint = _checkpoints.TryGetValue(checkpointId, out var existing)
+            var checkpoint = this._checkpoints.TryGetValue(checkpointId, out var existing)
                 ? existing
-                : new Checkpoint(checkpointId, _startPosition);
+                : new Checkpoint(checkpointId, this._startPosition);
 
             return ValueTask.FromResult(checkpoint);
         }
@@ -385,7 +384,7 @@ namespace DataCatalague.Api.Repositories
             CancellationToken cancellationToken) {
             cancellationToken.ThrowIfCancellationRequested();
 
-            _checkpoints[checkpoint.Id] = checkpoint;
+            this._checkpoints[checkpoint.Id] = checkpoint;
             CheckpointStored?.Invoke(this, checkpoint);
 
             return ValueTask.FromResult(checkpoint);
@@ -396,137 +395,137 @@ namespace DataCatalague.Api.Repositories
 }
 
 namespace DataCatalague.Api.Repositories
+{
+    public sealed class InMemoryAllStreamSubscription
+        : EventSubscriptionWithCheckpoint<InMemoryAllStreamSubscriptionOptions>
     {
-        public sealed class InMemoryAllStreamSubscription
-            : EventSubscriptionWithCheckpoint<InMemoryAllStreamSubscriptionOptions>
-        {
-            private readonly InMemoryEventStore _eventStore;
-            private readonly IEventSerializer _eventSerializer;
-            private readonly ConcurrentDictionary<Type, string> _eventTypes = new();
+        private readonly InMemoryEventStore _eventStore;
+        private readonly IEventSerializer _eventSerializer;
+        private readonly ConcurrentDictionary<Type, string> _eventTypes = new();
 
-            public InMemoryAllStreamSubscription(
-                InMemoryEventStore eventStore,
-                InMemoryAllStreamSubscriptionOptions options,
-                ICheckpointStore checkpointStore,
-                ConsumePipe consumePipe,
-                ILoggerFactory? loggerFactory = null,
-                IEventSerializer? eventSerializer = null,
-                IMetadataSerializer? metadataSerializer = null)
-                : base(
-                    options,
-                    checkpointStore,
-                    consumePipe,
-                    options.ConcurrencyLimit,
-                    SubscriptionKind.All,
-                    loggerFactory,
-                    eventSerializer,
-                    metadataSerializer) {
-                _eventStore = eventStore;
-                _eventSerializer = eventSerializer ?? EventSerializer.Default;
-            }
+        public InMemoryAllStreamSubscription(
+            InMemoryEventStore eventStore,
+            InMemoryAllStreamSubscriptionOptions options,
+            ICheckpointStore checkpointStore,
+            ConsumePipe consumePipe,
+            ILoggerFactory? loggerFactory = null,
+            IEventSerializer? eventSerializer = null,
+            IMetadataSerializer? metadataSerializer = null)
+            : base(
+                options,
+                checkpointStore,
+                consumePipe,
+                options.ConcurrencyLimit,
+                SubscriptionKind.All,
+                loggerFactory,
+                eventSerializer,
+                metadataSerializer) {
+            this._eventStore = eventStore;
+            this._eventSerializer = eventSerializer ?? EventSerializer.Default;
+        }
 
-            protected override async ValueTask Connect(SubscriptionRun run) {
-                ValidateOptions();
+        protected override async ValueTask Connect(SubscriptionRun run) {
+            this.ValidateOptions();
 
-                var checkpoint = await GetCheckpoint(run).ConfigureAwait(false);
-                var position = checkpoint.Position;
+            var checkpoint = await this.GetCheckpoint(run).ConfigureAwait(false);
+            var position = checkpoint.Position;
 
-                if (position is null && Options.StartFrom == InitialPosition.Latest) {
-                    position = _eventStore.GetLastGlobalPosition();
+            if (position is null && this.Options.StartFrom == InitialPosition.Latest) {
+                position = this._eventStore.GetLastGlobalPosition();
 
-                    if (position.HasValue) {
-                        await CheckpointStore.StoreCheckpoint(
-                                new Checkpoint(SubscriptionId, position),
-                                true,
-                                run.Token)
-                            .ConfigureAwait(false);
-                    }
-                }
-
-                var pumping = Task.Run(
-                    async () => {
-                        try {
-                            await Poll(position, run).ConfigureAwait(false);
-                        }
-                        catch (Exception) when (run.Token.IsCancellationRequested) {
-                            // The subscription run requested shutdown; this is not a transport failure.
-                        }
-                        catch (Exception exception) {
-                            run.Fail(DropReason.ServerError, exception);
-                        }
-                    },
-                    CancellationToken.None);
-
-                // Waiting for the pump during disconnect prevents a replacement run from
-                // reading while the previous run is still dispatching messages.
-                run.OnDisconnect(_ => new ValueTask(pumping));
-            }
-
-            private async Task Poll(
-                ulong? position,
-                SubscriptionRun run) {
-                while (!run.Token.IsCancellationRequested) {
-                    var events = _eventStore.ReadAll(position, Options.BatchSize);
-
-                    if (events.Count == 0) {
-                        await Task.Delay(Options.PollInterval, run.Token)
-                            .ConfigureAwait(false);
-
-                        continue;
-                    }
-
-                    foreach (var storedEvent in events) {
-                        run.Token.ThrowIfCancellationRequested();
-
-                        var context = CreateContext(storedEvent, run);
-
-                        await HandleInternal(run, context)
-                            .ConfigureAwait(false);
-
-                        position = storedEvent.GlobalPosition;
-                    }
+                if (position.HasValue) {
+                    await this.CheckpointStore.StoreCheckpoint(
+                            new Checkpoint(this.SubscriptionId, position),
+                            true,
+                            run.Token)
+                        .ConfigureAwait(false);
                 }
             }
 
-            private MessageConsumeContext CreateContext(
-                InMemoryAllStreamEvent storedEvent,
-                SubscriptionRun run) {
-                var streamEvent = storedEvent.Event;
-                var payload = streamEvent.Payload
-                    ?? throw new InvalidOperationException(
-                        $"Event {streamEvent.Id} in stream '{storedEvent.Stream}' has no payload.");
+            var pumping = Task.Run(
+                async () => {
+                    try {
+                        await this.Poll(position, run).ConfigureAwait(false);
+                    }
+                    catch (Exception) when (run.Token.IsCancellationRequested) {
+                        // The subscription run requested shutdown; this is not a transport failure.
+                    }
+                    catch (Exception exception) {
+                        run.Fail(DropReason.ServerError, exception);
+                    }
+                },
+                CancellationToken.None);
 
-                return new MessageConsumeContext(
-                    streamEvent.Id.ToString(),
-                    GetEventType(payload),
-                    streamEvent.ContentType,
-                    storedEvent.Stream,
-                    (ulong)streamEvent.Revision,
-                    (ulong)streamEvent.Revision,
-                    storedEvent.GlobalPosition,
-                    run.NextSequence(),
-                    streamEvent.Created,
-                    payload,
-                    streamEvent.Metadata,
-                    SubscriptionId,
-                    run.Token);
-            }
+            // Waiting for the pump during disconnect prevents a replacement run from
+            // reading while the previous run is still dispatching messages.
+            run.OnDisconnect(_ => new ValueTask(pumping));
+        }
 
-            private string GetEventType(object payload)
-                => _eventTypes.GetOrAdd(
-                    payload.GetType(),
-                    _ => _eventSerializer.SerializeEvent(payload).EventType);
+        private async Task Poll(
+            ulong? position,
+            SubscriptionRun run) {
+            while (!run.Token.IsCancellationRequested) {
+                var events = this._eventStore.ReadAll(position, this.Options.BatchSize);
 
-            private void ValidateOptions() {
-                ArgumentOutOfRangeException.ThrowIfLessThan(Options.ConcurrencyLimit, 1);
-                ArgumentOutOfRangeException.ThrowIfLessThan(Options.BatchSize, 1);
+                if (events.Count == 0) {
+                    await Task.Delay(this.Options.PollInterval, run.Token)
+                        .ConfigureAwait(false);
 
-                if (Options.PollInterval <= TimeSpan.Zero) {
-                    throw new ArgumentOutOfRangeException(
-                        nameof(Options.PollInterval),
-                        Options.PollInterval,
-                        "Poll interval must be greater than zero.");
+                    continue;
+                }
+
+                foreach (var storedEvent in events) {
+                    run.Token.ThrowIfCancellationRequested();
+
+                    var context = this.CreateContext(storedEvent, run);
+
+                    await this.HandleInternal(run, context)
+                        .ConfigureAwait(false);
+
+                    position = storedEvent.GlobalPosition;
                 }
             }
         }
+
+        private MessageConsumeContext CreateContext(
+            InMemoryAllStreamEvent storedEvent,
+            SubscriptionRun run) {
+            var streamEvent = storedEvent.Event;
+            var payload = streamEvent.Payload
+                ?? throw new InvalidOperationException(
+                    $"Event {streamEvent.Id} in stream '{storedEvent.Stream}' has no payload.");
+
+            return new MessageConsumeContext(
+                streamEvent.Id.ToString(),
+                this.GetEventType(payload),
+                streamEvent.ContentType,
+                storedEvent.Stream,
+                (ulong)streamEvent.Revision,
+                (ulong)streamEvent.Revision,
+                storedEvent.GlobalPosition,
+                run.NextSequence(),
+                streamEvent.Created,
+                payload,
+                streamEvent.Metadata,
+                this.SubscriptionId,
+                run.Token);
+        }
+
+        private string GetEventType(object payload)
+            => this._eventTypes.GetOrAdd(
+                payload.GetType(),
+                _ => this._eventSerializer.SerializeEvent(payload).EventType);
+
+        private void ValidateOptions() {
+            ArgumentOutOfRangeException.ThrowIfLessThan(this.Options.ConcurrencyLimit, 1);
+            ArgumentOutOfRangeException.ThrowIfLessThan(this.Options.BatchSize, 1);
+
+            if (this.Options.PollInterval <= TimeSpan.Zero) {
+                throw new ArgumentOutOfRangeException(
+                    nameof(this.Options.PollInterval),
+                    this.Options.PollInterval,
+                    "Poll interval must be greater than zero.");
+            }
+        }
     }
+}

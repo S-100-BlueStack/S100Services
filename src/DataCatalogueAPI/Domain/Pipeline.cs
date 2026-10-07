@@ -1,6 +1,5 @@
 ﻿using Eventuous;
 using static DataCatalague.Api.Domain.PipelineEvents;
-using static DataCatalague.Api.Domain.PipelineEvents.V1;
 
 namespace DataCatalague.Api.Domain
 {

@@ -3,9 +3,7 @@ using DataCatalague.Api.Domain;
 using DataCatalague.Api.Repositories;
 using DataCatalague.Api.Services;
 using Eventuous;
-using Eventuous.SqlServer;
-using Eventuous.SqlServer.Subscriptions;
-using Eventuous.Subscriptions.Registrations;
+using ICSharpCode.SharpZipLib.Zip;
 using Serilog;
 using System.Text.Json;
 using IO = System.IO;
@@ -36,10 +34,12 @@ public static class Program
 
             //ArcGIS.Core.Hosting.Host.Initialize();
 
-            foreach (var f in System.IO.Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory, $"*s100ed17*.geodatabase*")) {
-                if (IO.Path.GetFileName(f).Equals("s100ed17.geodatabase")) continue;
+            foreach (var f in System.IO.Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory, $"*s100ed17*.geodatabase*")) {                
                 System.IO.File.Delete(System.IO.Path.GetFullPath(f));
             }
+
+            FastZip fastZip = new();
+            fastZip.ExtractZip(IO.Path.GetFullPath(IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"s100ed17.zip")), IO.Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory), null);
 
             builder.Services.AddStreamConfiguration(builder.Configuration);
 

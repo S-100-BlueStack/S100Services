@@ -25,7 +25,7 @@ GET    /api/v2/dispatcher?page=1&pageSize=20
 **NoticeToMariners**
 
 ```
-POST /api/v1/dispatcher/packagetypes
+POST /api/v1/dispatcher/category
 Request body
 {
     "displayName": "Notice2Mariners",
@@ -50,7 +50,7 @@ Response body
 POST /api/v1/dispatcher/dispatch/packages
 Request body
 {
-  "packageTypeId": "yYzKXybaQVkcPJ44a5",
+  "category": "yYzKXybaQVkcPJ44a5",
   "absoluteUri": "database://fd142588-0d78-42f7-9326-67e28a0d042e",
   "geoJSON": "{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[102.0,0.5]}},{"type":"Feature","geometry":{"type":"LineString","coordinates":[[102.0,0.0],[103.0,1.0]]}}]}"
 }
