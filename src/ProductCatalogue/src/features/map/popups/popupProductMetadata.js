@@ -4,17 +4,28 @@ export function createPopupProductMetadataColumns(attributes, productContext) {
   const workUnit = productContext?.workUnit;
   if (workUnit?.kind === "package") {
     return workUnit.members.map((member) => {
-      const main = createMainProductMetadataItem(
-        member.key === workUnit.primaryMemberKey ? attributes : null
-      );
+      const current = attributes?.workUnitMetadata?.members?.[member.key];
+      const state = attributes?.workUnitStatus?.members?.find((item) => item.key === member.key);
+      const main = {
+        datasetName: current?.datasetName,
+        edition: current?.edition,
+        update: current?.update,
+        date: current?.issueDate,
+        status: state?.status,
+        errorMessage: undefined,
+        validationArtifacts: [],
+      };
       const related = findProductExportMetadataItem(attributes?.exportMetadata, [
         member.exportStandard,
       ]);
       return {
         key: member.key,
         label: member.label,
-        presentation: { statusCell: true, compactError: true },
-        item: related ? mergeSelectedExport(main, related) : main,
+        presentation: { statusCell: true, compactError: true, productIdentity: true },
+        item:
+          related && (!related.datasetName || related.datasetName === current?.datasetName)
+            ? { ...mergeSelectedExport(main, related), datasetName: main.datasetName }
+            : main,
       };
     });
   }

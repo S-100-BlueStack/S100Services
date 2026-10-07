@@ -216,7 +216,7 @@ Main-map package contexts expose a declarative `workUnit` with a primary member 
 members (`key`, `label`, `exportStandard`). `popupProductMetadata.js` projects one column per member;
 `createPopup.js` remains an arbitrary-column table renderer. For ENC-package the order is S-101,
 then S-57. Related normalized `exportMetadata` supplies current candidate values when present.
-Only the primary member may fall back to selected Graphic/main attributes. Missing S-57 metadata
+Both members use normalized current Product metadata. Missing member metadata
 stays empty; no version, status, error, membership identity or package workflow state is inferred.
 Simple/workspace contexts retain their existing single-column projection.
 
@@ -235,8 +235,9 @@ cleanup removes the overlay and its global listeners. No private Calcite/ArcGIS 
 Package capabilities hide Freeze/Unfreeze, Send, Cancel Export and manual Edition/Update Export.
 No package action calls the single-product backend. Read refresh and Collection retain the
 existing source-aware behavior. Package-originated Analyze/Review/History navigation is disabled
-until the later package-aware workspace/history phase. Pause/Resume, Discard, Send/Accept, scheduling, multi-level status
-filters, mixed-status hatching and the package backend read/action contracts are deferred.
+until the later package-aware workspace/history phase. Pause/Resume, Discard, Send/Accept, scheduling and package mutation contracts remain deferred.
+F1 workflow/member Status filtering, F2 mixed member-status hatching and F3 contextual
+facet counts are active; F5 does not change their semantics.
 
 ## Export state
 
@@ -436,3 +437,72 @@ Unknown Hangfire states remain pending and are logged; they are not automaticall
 The current frontend contract does not depend on the Hangfire worker running inside ProductCatalogueAPI. A later migration to the shared Hangfire API/worker application can retain the start, status and active-job HTTP contracts, provided the shared worker can execute the Product Catalogue job assembly and access the required ArcGIS, compiler, connection-file and filesystem dependencies.
 
 An external worker migration must be coordinated with the planned atomic operation-registry work. The current local dataset lock and Hangfire monitoring lookup are not sufficient as a final distributed ownership model across independently deployed workers.
+
+## F5 package popup read freshness
+
+`GET electronicproducts/{name}` supplies independent current S-101 and S-57
+Products. Transport normalizers project them into `workUnitMetadata.members`;
+initial ENC AOIs populate the same boundary from `Attributes.Package` current
+member fields. The popup shows a Product row in registry member order. Missing
+members stay missing; names are never derived. Active normalized export metadata
+overlays only its matching member's version, status, error and validation artifacts.
+Without an export, current Edition/Update and AOI `workUnitStatus` member status are
+shown. Workflow status never replaces member status. Only Status cells are colored;
+unchanged presentation retains the existing DOM/error-details focus identity.
+
+Connected package popups use `createWorkspaceFreshnessMonitor` with its 30,000 ms
+default. They prime revision, read Product detail once, then check revision again
+to catch a racing change. A failed initial detail read marks recovery required.
+Unchanged revisions cause no further detail read; changed revisions are acknowledged
+only after successful, current detail publication. Hidden documents suppress
+periodic checks; visibility re-entry shares the monitor's in-flight check. Disconnect
+destroys the monitor and invalidates pending detail completion. No additional focus
+or pageshow listener is installed. Package popups do not register Product-job watches or job-triggered Product-detail
+callbacks, and do not poll `jobs/active` or Hangfire jobs.
+
+Detail publication allows only `workUnitMetadata` and `exportMetadata`. Complete
+workflow/member map status, F1 filters, F2 symbols, F3 facets, geometry and source
+identity remain owned by normal Main-map source refresh (10 minutes). Popup freshness
+does not fetch global AOIs. A member status without an active export therefore
+converges through normal source refresh. Non-package job discovery and targeted
+Graphic refresh remain unchanged. All package mutations and Analyze/Review/History
+navigation remain unavailable.
+
+### F5 v2: normal source refresh and an open popup
+
+The connected package popup registers a local callback on the existing
+`registerPopupRefreshHandler` / `refreshOpenProductPopup` bridge. Stable Graphic
+source reconciliation uses this callback to replace the popup snapshot with the
+already-refreshed Graphic's AOI-owned state, including `workUnitStatus`, current
+`workUnitMetadata`, identity and filter/display fields. This callback performs no
+Product-detail or AOI request and starts no timer.
+
+Only the session's last accepted `exportMetadata` is preserved if the refreshed
+Graphic omits that field. An explicit replacement (including undefined/null)
+replaces it. The retained overlay is local to popup presentation and is not copied
+back into map/filter state. The existing revision monitor alone revalidates Product
+detail at its bounded 30-second cadence. A local source refresh supersedes publication of an older in-flight detail result
+without duplicating simultaneous detail reads. Metadata-signature rendering still preserves
+focus and error controls on semantic no-ops.
+
+Close/disconnect unregisters both the local bridge and freshness lifecycle. Delayed
+publication checks connection, source/dataset/Product identity, layer/source object
+identity, source visibility and Graphic membership using application state/public
+collection APIs. An invalid local callback unregisters its session.
+
+F1 workflow/member Status filtering, F2 mixed member-status hatching and F3 contextual
+facet counts are active. F5 preserves their semantics and source-refresh ownership.
+
+### F5 v3: shared publication generation
+
+A valid package source-refresh publication advances the same `latestRefreshId`
+owned by `createPopup.js` for targeted detail publication. A detail request begun
+before that publication is rejected entirely: neither its current member metadata
+nor its export/validation overlay is applied. The newer AOI snapshot and currently
+accepted overlay remain visible. The bridge is still network-free and starts no timer.
+
+A superseded detail returns false, so the revision monitor does not acknowledge
+that revision. The next bounded check can retry; superseded initial reads use the
+existing `requireRefresh()` recovery path and subsequent initial check. There is
+still one in-flight detail read and no separate generation owner. All v2 source,
+identity, connection and cleanup guards remain in place.

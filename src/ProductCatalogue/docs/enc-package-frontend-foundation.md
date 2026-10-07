@@ -57,8 +57,8 @@ assertions independently of the production source consolidation.
 ## Popup
 
 Ordered columns are S-101 and S-57. Existing related normalized `exportMetadata` provides the displayed
-candidate/current values. Only the primary S-101 member may fall back to main/selected attributes.
-Absent S-57 metadata is empty, including versions, status and errors. Metadata aliases remain at the
+candidate values over normalized current member metadata. Both current identities and versions
+come from the backend. Absent member metadata remains empty. Metadata aliases remain at the
 source boundary (`S100` is the existing normalized S-101 export metadata key).
 
 Only Status value cells use the existing status palette. Text remains visible and theme-dependent;
@@ -124,7 +124,7 @@ this task does not introduce package layouts or package mutation routes there.
 No backend source, API contract, migration, status enum, transport or job is changed. No dependencies
 or lockfiles are changed. No fabricated package state or demo-state infrastructure is introduced.
 
-Deferred: full read-only package popup metadata; package lifecycle actions Pause/Resume/Discard/Send/Accept;
+Deferred: package lifecycle actions Pause/Resume/Discard/Send/Accept;
 scheduling; final mixed-status symbol acceptance; Analyze/Review/Dashboard package UX. Live member state
 now feeds F1/F2/F3 through `workUnitStatus`. Popup columns still use their accepted metadata boundary;
 F4 does not add a broad popup/action model. Targeted Product-based Analyze/Review is unchanged and
@@ -164,7 +164,7 @@ npm run check
 3. Add the representative package repeatedly through the popup header. Collection contains one item,
    never one item per child. Refresh/reconciliation must not duplicate it.
 4. With real related export metadata, verify ordered S-101/S-57 independent versions and states.
-   With no related metadata, S-101 uses available main data and S-57 stays empty. Candidate values
+   With no active exports, both members use normalized current Product data. Candidate values
    must not create extra Current/Candidate columns.
 5. In light and dark themes, verify only Status cells are tinted and text remains legible. Test an
    error longer than the popup width: hover, Tab focus, Enter/Space, select/copy, scroll, Close,
@@ -285,3 +285,72 @@ node --test --test-reporter=tap \
   src/features/products/tests/normalizedWorkflow.test.js \
   src/features/products/tests/s101Terminology.contract.test.js
 ```
+
+## F5 package popup read freshness
+
+`GET electronicproducts/{name}` supplies independent current S-101 and S-57
+Products. Transport normalizers project them into `workUnitMetadata.members`;
+initial ENC AOIs populate the same boundary from `Attributes.Package` current
+member fields. The popup shows a Product row in registry member order. Missing
+members stay missing; names are never derived. Active normalized export metadata
+overlays only its matching member's version, status, error and validation artifacts.
+Without an export, current Edition/Update and AOI `workUnitStatus` member status are
+shown. Workflow status never replaces member status. Only Status cells are colored;
+unchanged presentation retains the existing DOM/error-details focus identity.
+
+Connected package popups use `createWorkspaceFreshnessMonitor` with its 30,000 ms
+default. They prime revision, read Product detail once, then check revision again
+to catch a racing change. A failed initial detail read marks recovery required.
+Unchanged revisions cause no further detail read; changed revisions are acknowledged
+only after successful, current detail publication. Hidden documents suppress
+periodic checks; visibility re-entry shares the monitor's in-flight check. Disconnect
+destroys the monitor and invalidates pending detail completion. No additional focus
+or pageshow listener is installed. Package popups do not register Product-job watches or job-triggered Product-detail
+callbacks, and do not poll `jobs/active` or Hangfire jobs.
+
+Detail publication allows only `workUnitMetadata` and `exportMetadata`. Complete
+workflow/member map status, F1 filters, F2 symbols, F3 facets, geometry and source
+identity remain owned by normal Main-map source refresh (10 minutes). Popup freshness
+does not fetch global AOIs. A member status without an active export therefore
+converges through normal source refresh. Non-package job discovery and targeted
+Graphic refresh remain unchanged. All package mutations and Analyze/Review/History
+navigation remain unavailable.
+
+### F5 v2: normal source refresh and an open popup
+
+The connected package popup registers a local callback on the existing
+`registerPopupRefreshHandler` / `refreshOpenProductPopup` bridge. Stable Graphic
+source reconciliation uses this callback to replace the popup snapshot with the
+already-refreshed Graphic's AOI-owned state, including `workUnitStatus`, current
+`workUnitMetadata`, identity and filter/display fields. This callback performs no
+Product-detail or AOI request and starts no timer.
+
+Only the session's last accepted `exportMetadata` is preserved if the refreshed
+Graphic omits that field. An explicit replacement (including undefined/null)
+replaces it. The retained overlay is local to popup presentation and is not copied
+back into map/filter state. The existing revision monitor alone revalidates Product
+detail at its bounded 30-second cadence. A local source refresh supersedes publication of an older in-flight detail result
+without duplicating simultaneous detail reads. Metadata-signature rendering still preserves
+focus and error controls on semantic no-ops.
+
+Close/disconnect unregisters both the local bridge and freshness lifecycle. Delayed
+publication checks connection, source/dataset/Product identity, layer/source object
+identity, source visibility and Graphic membership using application state/public
+collection APIs. An invalid local callback unregisters its session.
+
+F1 workflow/member Status filtering, F2 mixed member-status hatching and F3 contextual
+facet counts are active. F5 preserves their semantics and source-refresh ownership.
+
+### F5 v3: shared publication generation
+
+A valid package source-refresh publication advances the same `latestRefreshId`
+owned by `createPopup.js` for targeted detail publication. A detail request begun
+before that publication is rejected entirely: neither its current member metadata
+nor its export/validation overlay is applied. The newer AOI snapshot and currently
+accepted overlay remain visible. The bridge is still network-free and starts no timer.
+
+A superseded detail returns false, so the revision monitor does not acknowledge
+that revision. The next bounded check can retry; superseded initial reads use the
+existing `requireRefresh()` recovery path and subsequent initial check. There is
+still one in-flight detail read and no separate generation owner. All v2 source,
+identity, connection and cleanup guards remain in place.
