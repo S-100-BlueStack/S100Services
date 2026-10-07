@@ -103,10 +103,9 @@ namespace DataCatalague.Api.Controllers.V1
             public async Task<ActionResult<PipelineResponse>> AddWorkspace(string id, [FromBody] AddWorkspaceRequest request, CancellationToken cancellationToken) {
                 ArgumentNullException.ThrowIfNull(request);
                 ArgumentNullException.ThrowIfNullOrWhiteSpace(request.GeoJSON);
-                ArgumentNullException.ThrowIfNullOrWhiteSpace(request.DisplayName);
+                ArgumentNullException.ThrowIfNullOrWhiteSpace(request.DisplayName?.Trim());
 
                 var displayName = request.DisplayName?.Trim();
-                ArgumentNullException.ThrowIfNullOrWhiteSpace(displayName);
 
                 var pipeline = await this._eventStore.LoadState<PipelineState>(new(id), true, cancellationToken);
 
@@ -116,7 +115,7 @@ namespace DataCatalague.Api.Controllers.V1
                     return this._dispatchRepository.AddWorkspaceAOI(polygon, id, displayName);
                 });
 
-                var cmd = await this._servicePipeline.Handle(new PipelineCommands.CreateWorkspace(pipeline.State.Id, displayName, geometryRef), cancellationToken);
+                var cmd = await this._servicePipeline.Handle(new PipelineCommands.CreateWorkspace(pipeline.State.Id, displayName, request.DisplayScale, geometryRef), cancellationToken);
 
                 if (!cmd.Success)
                     return this.BadRequest();

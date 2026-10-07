@@ -76,13 +76,11 @@ namespace DataCatalague.Api.Controllers
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<CategoryResponse>> CreateCategory([FromBody] CreateCategoryRequest request, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNull(request);
+            ArgumentNullException.ThrowIfNullOrWhiteSpace(request.DisplayName?.Trim());
+            ArgumentNullException.ThrowIfNullOrWhiteSpace(request.Description?.Trim());
 
-            var displayName = request.DisplayName?.Trim();
+            var displayName = request.DisplayName?.Trim();            
             var description = request.Description?.Trim();
-
-            if (string.IsNullOrEmpty(displayName)) {
-                throw new ArgumentNullException(nameof(request.DisplayName));
-            }
 
             var cmd = await this._serviceCategory.Handle(new DispatcherCommands.CreateCategory(CreateStreamId(), displayName, description), cancellationToken);
 

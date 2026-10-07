@@ -3,7 +3,7 @@ using static DataCatalague.Api.Domain.PipelineEvents;
 
 namespace DataCatalague.Api.Domain
 {
-    public record Workspace(string DisplayName, string GeometryRef);
+    public record Workspace(string DisplayName, DisplayScale DisplayScale, string GeometryRef);
 
     public record PipelineId(string Value) : Id(Value);
 
@@ -34,7 +34,7 @@ namespace DataCatalague.Api.Domain
 
         static PipelineState WorkspaceAdded(PipelineState state, V1.WorkspaceAdded e)
             => state with {
-                Workspaces = [.. state.Workspaces, new(e.DisplayName, e.GeometryRef)],
+                Workspaces = [.. state.Workspaces, new(e.DisplayName, e.DisplayScale, e.GeometryRef)],
                 LastUpdatedUtc = e.UTC,
             };
     }
@@ -52,10 +52,11 @@ namespace DataCatalague.Api.Domain
 
         public async Task CreateWorkspace(
                     string DisplayName,
+                    DisplayScale DisplayScale,
                     string GeometryRef
             ) {
             this.EnsureExists();
-            this.Apply(new V1.WorkspaceAdded(DisplayName, GeometryRef, DateTime.UtcNow));
+            this.Apply(new V1.WorkspaceAdded(DisplayName, DisplayScale, GeometryRef, DateTime.UtcNow));
         }
     }
 
@@ -63,7 +64,7 @@ namespace DataCatalague.Api.Domain
     {
         public record Create(string PipelineId, string DisplayName, string? Description = default);
 
-        public record CreateWorkspace(string PipelineId, string DisplayName, string GeometryRef);
+        public record CreateWorkspace(string PipelineId, string DisplayName, DisplayScale DisplayScale, string GeometryRef);
     }
 
     public static class PipelineEvents
@@ -81,6 +82,7 @@ namespace DataCatalague.Api.Domain
             [EventType("V1.WorkspaceAdded")]
             public record WorkspaceAdded(
                     string DisplayName,
+                    DisplayScale DisplayScale,
                     string GeometryRef,
                     DateTimeOffset UTC
                 );

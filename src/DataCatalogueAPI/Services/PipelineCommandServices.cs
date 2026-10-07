@@ -17,7 +17,7 @@ namespace DataCatalague.Api.Services
                 .InState(ExpectedState.Existing)
                 .GetId(cmd => new(cmd.PipelineId))
                 .ActAsync(
-                    (pipeline, cmd, _) => pipeline.CreateWorkspace(cmd.DisplayName, cmd.GeometryRef)
+                    (pipeline, cmd, _) => pipeline.CreateWorkspace(cmd.DisplayName, cmd.DisplayScale, cmd.GeometryRef)
                 );
         }
     }
