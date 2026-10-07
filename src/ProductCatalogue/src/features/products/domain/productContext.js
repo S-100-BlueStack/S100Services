@@ -213,6 +213,7 @@ export function createWorkspaceProductContext({
   capabilities,
   exportConfiguration = null,
   contentConfiguration = null,
+  workUnit = null,
   data = null,
 } = {}) {
   const normalizedSourceId = normalizeText(sourceId);
@@ -244,6 +245,7 @@ export function createWorkspaceProductContext({
     datasetName: normalizedDatasetName,
     productType: normalizedProductType,
     layerId: null,
+    workUnit,
     capabilities,
     exportConfiguration,
     contentConfiguration,
@@ -522,7 +524,7 @@ function createResolvedProductContext({
     datasetName,
     productType,
     layerId,
-    workUnit: workUnit ? deepFreeze({ ...workUnit }) : null,
+    workUnit: workUnit ? deepFreeze(structuredClone(workUnit)) : null,
     capabilities: Object.freeze({ ...capabilities }),
     exportConfiguration,
     contentConfiguration: contentConfiguration ? deepFreeze({ ...contentConfiguration }) : null,

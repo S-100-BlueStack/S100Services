@@ -413,6 +413,7 @@ function createRegistryEntries(source, normalized) {
       productKey: attributes.productKey,
       datasetName: attributes.datasetName,
       productType: source.productType,
+      workUnit: source.workUnit,
       capabilities: source.capabilities,
       exportConfiguration: source.exportConfiguration,
       contentConfiguration: source.contentConfiguration,

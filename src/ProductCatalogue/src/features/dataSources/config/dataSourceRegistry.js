@@ -104,6 +104,7 @@ export function createDataSourceRegistry({
       freezeSupported: false,
       enabledInSchema1: false,
       mainMapSelectable: false,
+      workUnitSourceId: DATA_SOURCE_IDS.S101,
     }),
     createElectronicSource({
       id: DATA_SOURCE_IDS.S101,
@@ -118,8 +119,18 @@ export function createDataSourceRegistry({
         primaryMemberKey: "s101",
         navigationCapabilities: { analyze: false, review: false, history: false },
         members: [
-          { key: "s101", label: "S-101", exportStandard: "S100" },
-          { key: "s57", label: "S-57", exportStandard: "S57" },
+          {
+            key: "s101",
+            label: "S-101",
+            exportStandard: "S100",
+            sourceId: DATA_SOURCE_IDS.S101,
+          },
+          {
+            key: "s57",
+            label: "S-57",
+            exportStandard: "S57",
+            sourceId: DATA_SOURCE_IDS.S57,
+          },
         ],
       },
     }),
@@ -194,6 +205,7 @@ function createElectronicSource({
   enabledInSchema1,
   mainMapSelectable = true,
   workUnit = null,
+  workUnitSourceId = null,
 }) {
   const enabledByConfiguration = isConfigured(id, configuredIds);
   return {
@@ -289,6 +301,7 @@ function createElectronicSource({
       supported: true,
       providerType: "registry-source",
       resolution: "targeted-product-aoi",
+      ...(workUnitSourceId ? { workUnitSourceId } : {}),
     },
     filtering: {
       supported: true,
