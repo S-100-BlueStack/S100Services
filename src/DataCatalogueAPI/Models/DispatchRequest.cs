@@ -2,7 +2,7 @@
 
 namespace DataCatalague.Api.Models.V1
 {
-    public sealed class CreatePackageTypeRequest
+    public sealed class CreateCategoryRequest
     {
         [Required]
         public required string DisplayName { get; init; }
@@ -10,7 +10,7 @@ namespace DataCatalague.Api.Models.V1
         public required string? Description { get; init; }
     }
 
-    public sealed class UpdatePackageTypeSpecificationRequest
+    public sealed class UpdateCategorySpecificationRequest
     {
         [Required]
         public required string Version { get; init; }
@@ -22,10 +22,27 @@ namespace DataCatalague.Api.Models.V1
     public sealed class CreatePackageRequest
     {
         [Required]
-        public required string PackageTypeId { get; init; }
+        public required string Category { get; init; }
 
         [Required]
         public required string AbsoluteUri { get; init; }
+
+        public string? ShortId { get; init; } = null;
+
+        public string? Type { get; init; } = null;
+
+        public long? Number { get; init; } = null;
+
+        public string? Status { get; init; } = null;
+
+        [Required]
+        public required string Title { get; init; }
+
+        public string? Source { get; init; } = null;
+
+        public string? Id { get; init; } = null;
+
+        public DateTime? CreatedUTC { get; init; } = null;
 
         [Required]
         public required string GeoJSON { get; init; }

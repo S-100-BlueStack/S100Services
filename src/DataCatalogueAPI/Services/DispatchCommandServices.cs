@@ -4,21 +4,21 @@ using Eventuous;
 
 namespace DataCatalague.Api.Services
 {
-    public class StreamCommandService : CommandService<Domain.PackageType, PackageTypeState, PackageTypeId>
+    public class CategoryCommandService : CommandService<Domain.Category, CategoryState, CategoryId>
     {
-        public StreamCommandService(IEventStore store) : base(store) {
-            this.On<DispatcherCommands.CreatePackageType>()
+        public CategoryCommandService(IEventStore store) : base(store) {
+            this.On<DispatcherCommands.CreateCategory>()
                 .InState(ExpectedState.New)
-                .GetId(cmd => new(cmd.PackageTypeId))
+                .GetId(cmd => new(cmd.CategoryId))
                 .ActAsync(
-                    (packagetype, cmd, _) => packagetype.Create(cmd.PackageTypeId, cmd.DisplayName, cmd.Description)
+                    (category, cmd, _) => category.Create(cmd.CategoryId, cmd.DisplayName, cmd.Description)
                 );
 
-            this.On<DispatcherCommands.UpdateSpecificationPackageType>()
+            this.On<DispatcherCommands.UpdateSpecificationCategory>()
                 .InState(ExpectedState.Existing)
-                .GetId(cmd => new(cmd.PackageTypeId))
+                .GetId(cmd => new(cmd.CategoryId))
                 .ActAsync(
-                    (packagetype, cmd, _) => packagetype.UpdateSpecification(cmd.Version, cmd.Markdown)
+                    (category, cmd, _) => category.UpdateSpecification(cmd.Version, cmd.Markdown)
                 );
         }
     }
@@ -30,7 +30,7 @@ namespace DataCatalague.Api.Services
                 .InState(ExpectedState.New)
                 .GetId(cmd => new(cmd.PackageId))
                 .ActAsync(
-                    (package, cmd, _) => package.CreatePackage(cmd.PackageId, cmd.PackageTypeId, cmd.FileName, cmd.AbsoluteUri, cmd.GeometryRef)
+                    (package, cmd, _) => package.CreatePackage(cmd.PackageId, cmd.Category, cmd.FileName, cmd.AbsoluteUri, cmd.GeometryRef, cmd.ShortId, cmd.Type, cmd.Number, cmd.Title, cmd.Source, cmd.RefId, cmd.CreatedUTC)
                 );
         }
     }

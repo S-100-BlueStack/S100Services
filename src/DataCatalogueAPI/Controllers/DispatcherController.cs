@@ -18,7 +18,7 @@ using IO = System.IO;
        ├── Dispatch
        │     └── Package
        │
-       └── PackageType
+       └── Category
 
     Dispatch
       ID: 01J...
@@ -38,7 +38,7 @@ namespace DataCatalague.Api.Controllers
     [Produces("application/json")]
     public sealed class DispatcherController(
         IEventStore eventstore,
-        ICommandService<PackageTypeState> packageTypeService,
+        ICommandService<CategoryState> categoryService,
         ICommandService<PackageState> packageService,
         DispatchRepository dispatchRepository,
         IOptions<DispatcherOptions> options,
@@ -51,7 +51,7 @@ namespace DataCatalague.Api.Controllers
 
         private readonly IEventStore _eventStore = eventstore;
 
-        private readonly ICommandService<PackageTypeState> _servicePackageType = packageTypeService;
+        private readonly ICommandService<CategoryState> _serviceCategory = categoryService;
 
         private readonly ICommandService<PackageState> _servicePackage = packageService;
 
@@ -63,19 +63,19 @@ namespace DataCatalague.Api.Controllers
 
         private readonly ILogger<DispatcherController> _logger = logger;
 
-        [HttpGet("packagetypes")]
+        [HttpGet("categories")]
         [Consumes("application/json")]
-        [ProducesResponseType<PagedResponse<PackageTypeResponse>>(StatusCodes.Status200OK)]
+        [ProducesResponseType<PagedResponse<CategoryResponse>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-        public async Task<ActionResult<PagedResponse<PackageTypeResponse>>> GetPackageTypes(CancellationToken cancellationToken) {
+        public async Task<ActionResult<PagedResponse<CategoryResponse>>> GetCategories(CancellationToken cancellationToken) {
             return this.BadRequest();
         }
 
-        [HttpPost("packagetypes")]
+        [HttpPost("categories")]
         [Consumes("application/json")]
-        [ProducesResponseType<PackageTypeResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<CategoryResponse>(StatusCodes.Status201Created)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-        public async Task<ActionResult<PackageTypeResponse>> CreatePackageType([FromBody] CreatePackageTypeRequest request, CancellationToken cancellationToken) {
+        public async Task<ActionResult<CategoryResponse>> CreateCategory([FromBody] CreateCategoryRequest request, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNull(request);
 
             var displayName = request.DisplayName?.Trim();
@@ -85,55 +85,55 @@ namespace DataCatalague.Api.Controllers
                 throw new ArgumentNullException(nameof(request.DisplayName));
             }
 
-            var cmd = await this._servicePackageType.Handle(new DispatcherCommands.CreatePackageType(CreateStreamId(), displayName, description), cancellationToken);
+            var cmd = await this._serviceCategory.Handle(new DispatcherCommands.CreateCategory(CreateStreamId(), displayName, description), cancellationToken);
 
             if (!cmd.Success)
                 return this.BadRequest();
 
             var result = cmd.Get()!;
 
-            this._logger.LogInformation("CreatePackageType {id}.", result.State.Id);
+            this._logger.LogInformation("CreateCategory {id}.", result.State.Id);
 
             return this.CreatedAtRoute(
-                "GetPackageType.V1",
+                "GetCategory.V1",
                 new { id = result.State.Id, version = ApiVersions.V1Text },
                 Map(result.State));
         }
 
-        [HttpGet("packagetypes/{id}", Name = "GetPackageType.V1")]
+        [HttpGet("categoriess/{id}", Name = "GetCategory.V1")]
         [Consumes("application/json")]
-        [ProducesResponseType<PackageTypeResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<CategoryResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<PackageTypeResponse>> GetPackageType(string id, CancellationToken cancellationToken) {
+        public async Task<ActionResult<CategoryResponse>> GetCategory(string id, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNullOrEmpty(id);
 
             try {
-                var stream = await this._eventStore.LoadState<PackageTypeState, PackageTypeId>(this._streamNameMap, new(id), cancellationToken: cancellationToken);
+                var stream = await this._eventStore.LoadState<CategoryState, CategoryId>(this._streamNameMap, new(id), cancellationToken: cancellationToken);
                 return Map(stream.State);
             }
             catch {
-                this._logger.LogInformation("PackageType {id} was not found.", id);
+                this._logger.LogInformation("Category {id} was not found.", id);
 
                 return this.Problem(
-                    title: "PackageType not found.",
-                    detail: $"No packagetype exists with identifier {id}.",
+                    title: "Category not found.",
+                    detail: $"No category exists with identifier {id}.",
                     statusCode: StatusCodes.Status404NotFound);
             }
         }
 
-        [HttpPut("packagetypes/{id}/specification")]
+        [HttpPut("categoriess/{id}/specification")]
         [Consumes("application/json")]
-        [ProducesResponseType<PackageTypeResponse>(StatusCodes.Status202Accepted)]
+        [ProducesResponseType<CategoryResponse>(StatusCodes.Status202Accepted)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<PackageTypeResponse>> UpdatePackageTypeSpecification(string id, [FromBody] UpdatePackageTypeSpecificationRequest request, CancellationToken cancellationToken) {
+        public async Task<ActionResult<CategoryResponse>> UpdateCategorySpecification(string id, [FromBody] UpdateCategorySpecificationRequest request, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNullOrEmpty(id);
 
             ArgumentNullException.ThrowIfNullOrEmpty(request.Version);
             ArgumentNullException.ThrowIfNullOrEmpty(request.Markdown);
 
-            var cmd = await this._servicePackageType.Handle(new DispatcherCommands.UpdateSpecificationPackageType(id, request.Version, request.Markdown), cancellationToken);
+            var cmd = await this._serviceCategory.Handle(new DispatcherCommands.UpdateSpecificationCategory(id, request.Version, request.Markdown), cancellationToken);
 
             if (!cmd.Success)
                 return this.BadRequest();
@@ -141,7 +141,7 @@ namespace DataCatalague.Api.Controllers
             var result = cmd.Get()!;
 
 
-            this._logger.LogInformation("UpdatePackageTypeSpecification {version}.", result.State.Version);
+            this._logger.LogInformation("UpdateCategorySpecification {version}.", result.State.Version);
 
             return this.AcceptedAtRoute(
                 "GetPackage.V1",
@@ -158,13 +158,13 @@ namespace DataCatalague.Api.Controllers
         public async Task<ActionResult<PackageResponse>> CreatePackage([FromBody] CreatePackageRequest request, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNull(request);
 
-            ArgumentNullException.ThrowIfNullOrEmpty(request.PackageTypeId);
+            ArgumentNullException.ThrowIfNullOrEmpty(request.Category);
             ArgumentNullException.ThrowIfNullOrEmpty(request.AbsoluteUri);
             ArgumentNullException.ThrowIfNullOrEmpty(request.GeoJSON);
 
             try {
-                var packageType = await this._eventStore.LoadState<PackageTypeState>(new(request.PackageTypeId), true, cancellationToken);
-                if (packageType.State.IsTerminated)
+                var category = await this._eventStore.LoadState<CategoryState>(new(request.Category), true, cancellationToken);
+                if (category.State.IsTerminated)
                     return this.BadRequest();
 
                 var streamId = CreateStreamId();
@@ -177,7 +177,7 @@ namespace DataCatalague.Api.Controllers
 
                 var filename = IO.Path.GetFileName(request.AbsoluteUri);
 
-                var cmd = await this._servicePackage.Handle(new DispatcherCommands.CreatePackage(streamId, packageType.State.Id, filename, request.AbsoluteUri, geometryRef), cancellationToken);
+                var cmd = await this._servicePackage.Handle(new DispatcherCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, geometryRef, request.ShortId, request.Type, request.Number, request.Title, request.Source, request.Id, request.CreatedUTC), cancellationToken);
 
                 if (!cmd.Success)
                     return this.BadRequest();
@@ -257,7 +257,7 @@ namespace DataCatalague.Api.Controllers
 
 
 
-        private static PackageTypeResponse Map(Domain.PackageTypeState state) => new() {
+        private static CategoryResponse Map(Domain.CategoryState state) => new() {
             Id = state.Id,
             DisplayName = state.DisplayName,
             Description = state.Description,
@@ -268,9 +268,16 @@ namespace DataCatalague.Api.Controllers
 
         private static PackageResponse Map(Domain.PackageState state) => new() {
             Id = state.Id,
-            PackageTypeId = state.PackageTypeId,
+            Category = state.Category,
             FileName = state.FileName,
-            AbsoluteUri = state.Uri?.AbsolutePath,
+            AbsoluteUri = state.AbsoluteUri?.AbsolutePath,
+            ShortId = state.ShortId,
+            Type = state.Type,
+            Number = state.Number,
+            Title = state.Title,
+            Source = state.Source,
+            RefId = state.RefId,
+            CreatedUTC = state.CreatedUTC,
             LastUpdatedUtc = state.LastUpdatedUtc,
         };
 

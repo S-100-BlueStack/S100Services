@@ -2,7 +2,7 @@
 
 namespace DataCatalague.Api.Models.V1
 {
-    public class PackageTypeResponse
+    public class CategoryResponse
     {
         public required string Id { get; init; }
 
@@ -21,11 +21,25 @@ namespace DataCatalague.Api.Models.V1
     {
         public required string Id { get; init; }
 
-        public required string? PackageTypeId { get; init; }
+        public required string? Category { get; init; }
 
         public required string FileName { get; init; }
 
-        public required string? AbsoluteUri {  get; init; }        
+        public required string? AbsoluteUri {  get; init; }
+
+        public string? ShortId { get; init; } = null;
+
+        public string? Type { get; init; } = null;
+
+        public long? Number { get; init; } = null;
+
+        public string? Title { get; init; } = null;
+
+        public string? Source { get; init; } = null;
+
+        public string? RefId { get; init; } = null;
+
+        public DateTimeOffset? CreatedUTC { get; init; } = null;
 
         public DateTimeOffset LastUpdatedUtc { get; init; }
     }

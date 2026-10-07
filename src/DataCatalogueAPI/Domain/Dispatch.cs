@@ -3,15 +3,15 @@ using static DataCatalague.Api.Domain.Events.DispatcherEvents;
 
 namespace DataCatalague.Api.Domain
 {
-    public class PackageType : Aggregate<PackageTypeState>
+    public class Category : Aggregate<CategoryState>
     {
         public async Task Create(
-                    string PackageTypeId,
+                    string CategoryId,
                     string DisplayName,
                     string? Description
             ) {
             this.EnsureDoesntExist();
-            this.Apply(new V1.PackageTypeCreated(PackageTypeId, DisplayName, Description, DateTime.UtcNow));
+            this.Apply(new V1.CategoryCreated(CategoryId, DisplayName, Description, DateTime.UtcNow));
         }
 
         public async Task UpdateSpecification(
@@ -19,7 +19,7 @@ namespace DataCatalague.Api.Domain
                     string Markdown
             ) {
             this.EnsureExists();
-            this.Apply(new V1.PackageTypeSpecificationUpdated(Version, Markdown, DateTime.UtcNow));
+            this.Apply(new V1.CategorySpecificationUpdated(Version, Markdown, DateTime.UtcNow));
         }
     }
 
@@ -27,25 +27,32 @@ namespace DataCatalague.Api.Domain
     {
         public async Task CreatePackage(
                     string PackageId,
-                    string PackageTypeId, 
-                    string FileName, 
+                    string Category,
+                    string FileName,
                     string AbsoluteUri,
-                    string GeometryRef) {
+                    string GeometryRef,
+                    string? ShortId,
+                    string? Type,
+                    long? Number,
+                    string? Title,
+                    string? Source,
+                    string? RefId,
+                    DateTimeOffset? CreatedUTC) {
             this.EnsureDoesntExist();
-            this.Apply(new V1.PackageCreated(PackageId, PackageTypeId, FileName, AbsoluteUri, GeometryRef, DateTime.UtcNow));
+            this.Apply(new V1.PackageCreated(PackageId, Category, FileName, AbsoluteUri, GeometryRef, ShortId, Type, Number, Title, Source, RefId, CreatedUTC, DateTime.UtcNow));
         }
     }
 
 
-    public record PackageTypeId(string Value) : Id(Value);
+    public record CategoryId(string Value) : Id(Value);
 
-    public record PackageTypeState : State<PackageTypeState>
+    public record CategoryState : State<CategoryState>
     {
-        public PackageTypeId? Id { get; set; }
+        public CategoryId? Id { get; set; }
 
         public string DisplayName { get; set; } = string.Empty;
 
-        public string? Description { get; set; } = string.Empty;        
+        public string? Description { get; set; } = string.Empty;
 
         public Version? Version { get; set; } = null;
 
@@ -55,20 +62,20 @@ namespace DataCatalague.Api.Domain
 
         public DateTimeOffset LastUpdatedUtc { get; set; }
 
-        public PackageTypeState() {
-            this.On<V1.PackageTypeCreated>(Created);
+        public CategoryState() {
+            this.On<V1.CategoryCreated>(Created);
         }
 
-        static PackageTypeState Created(PackageTypeState state, V1.PackageTypeCreated e)
+        static CategoryState Created(CategoryState state, V1.CategoryCreated e)
             => state with {
-                Id = new(e.PackageTypeId),
+                Id = new(e.CategoryId),
                 DisplayName = e.DisplayName,
-                Description = e.Description,                
+                Description = e.Description,
                 IsTerminated = false,
                 LastUpdatedUtc = e.UTC,
             };
 
-        static PackageTypeState UpdateSpecification(PackageTypeState state, V1.PackageTypeSpecificationUpdated e)
+        static CategoryState UpdateSpecification(CategoryState state, V1.CategorySpecificationUpdated e)
             => state with {
                 Version = new Version(e.Version),
                 Markdown = e.Markdown,
@@ -82,13 +89,27 @@ namespace DataCatalague.Api.Domain
     {
         public PackageId? Id { get; set; }
 
-        public PackageTypeId? PackageTypeId { get; set; }
+        public CategoryId? Category { get; set; }
 
         public string FileName { get; set; } = string.Empty;
 
-        public Uri? Uri { get; set; }
+        public Uri? AbsoluteUri { get; set; }
 
         public string? GeometryRef { get; set; }
+
+        public string? ShortId { get; init; } = null;
+
+        public string? Type { get; init; } = null;
+
+        public long? Number { get; init; } = null;
+
+        public string? Title { get; init; } = null;
+
+        public string? Source { get; init; } = null;
+
+        public string? RefId { get; init; } = null;
+
+        public DateTimeOffset? CreatedUTC { get; init; } = null;
 
         public DateTimeOffset LastUpdatedUtc { get; set; }
 
@@ -99,16 +120,23 @@ namespace DataCatalague.Api.Domain
         static PackageState PackageCreated(PackageState state, V1.PackageCreated e)
             => state with {
                 Id = new(e.PackageId),
-                PackageTypeId = new(e.PackageTypeId),
+                Category = new(e.Category),
                 FileName = e.FileName,
-                Uri = new(e.AbsoluteUri),
+                AbsoluteUri = new(e.AbsoluteUri),
                 GeometryRef = e.GeometryRef,
-                LastUpdatedUtc = e.UTC,                
+                ShortId = e.ShortId,
+                Type = e.Type,
+                Number = e.Number,
+                Title = e.Title,
+                Source = e.Source,
+                RefId = e.RefId,
+                CreatedUTC = e.CreatedUTC,
+                LastUpdatedUtc = e.UTC,
             };
     }
 
     public static class Extension
-    {        
+    {
     }
 }
 
@@ -117,11 +145,11 @@ namespace DataCatalague.Api.Domain.Commands
 
     public static class DispatcherCommands
     {
-        public record CreatePackageType(string PackageTypeId, string DisplayName, string? Description = default);
+        public record CreateCategory(string CategoryId, string DisplayName, string? Description = default);
 
-        public record UpdateSpecificationPackageType(string PackageTypeId, string Version, string Markdown);
+        public record UpdateSpecificationCategory(string CategoryId, string Version, string Markdown);
 
-        public record CreatePackage(string PackageId, string PackageTypeId, string FileName, string AbsoluteUri, string GeometryRef);
+        public record CreatePackage(string PackageId, string Category, string FileName, string AbsoluteUri, string GeometryRef, string? ShortId, string? Type, long? Number, string? Title, string? Source, string? RefId, DateTimeOffset? CreatedUTC);
     }
 
 }
@@ -132,16 +160,16 @@ namespace DataCatalague.Api.Domain.Events
     {
         public static class V1
         {
-            [EventType("V1.PackageTypeCreated")]
-            public record PackageTypeCreated(
-                    string PackageTypeId,
+            [EventType("V1.CategoryCreated")]
+            public record CategoryCreated(
+                    string CategoryId,
                     string DisplayName,
                     string? Description,
                     DateTimeOffset UTC
                 );
 
-            [EventType("V1.PackageTypeSpecificationUpdated")]
-            public record PackageTypeSpecificationUpdated(
+            [EventType("V1.CategorySpecificationUpdated")]
+            public record CategorySpecificationUpdated(
                     string Version,
                     string Markdown,
                     DateTimeOffset UTC
@@ -150,10 +178,17 @@ namespace DataCatalague.Api.Domain.Events
             [EventType("V1.PackageCreated")]
             public record PackageCreated(
                     string PackageId,
-                    string PackageTypeId,
+                    string Category,
                     string FileName,
                     string AbsoluteUri,
                     string GeometryRef,
+                    string? ShortId,
+                    string? Type,
+                    long? Number,
+                    string? Title,
+                    string? Source,
+                    string? RefId,
+                    DateTimeOffset? CreatedUTC,
                     DateTimeOffset UTC
                 );
         }
