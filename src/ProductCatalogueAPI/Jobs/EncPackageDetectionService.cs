@@ -57,6 +57,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
             if (eligibleReplay.Count > 0) {
                 // A blocked AOI retains its cursor without repeatedly forcing a historic archive scan.
+                logger.LogInformation("ENC replay archive scan started. SinceUtc: {SinceUtc:O}. EligibleAoiCount: {EligibleAoiCount}.", eligibleReplay.Values.Min(), eligibleReplay.Count);
                 var replayed = await _products.GetPendingEditsAsync(eligibleReplay.Values.Min());
                 foreach (var (sourceName, changes) in replayed) {
                     if (eligibleReplay.TryGetValue(sourceName, out var lowerBound) && lowerBound <= sinceUtc && changes.Count > 0)
@@ -123,6 +124,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 }
 
                 if (!completeScans.TryGetValue(existing.ScanFromUtc, out var completeChanges)) {
+                    logger.LogInformation("ENC package history scan started. SourceDatasetName: {SourceDatasetName}. SinceUtc: {SinceUtc:O}.", sourceName, existing.ScanFromUtc);
                     completeChanges = await _products.GetPendingEditsAsync(existing.ScanFromUtc);
                     completeScans.Add(existing.ScanFromUtc, completeChanges);
                 }
@@ -161,7 +163,19 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             var edition = checked(s101.PublishedEdition + 1);
             var requiredFeatures = packageChanges.Where(pair => pair.Value.CurrentInProduct && !pair.Value.Deleted)
                 .Select(pair => pair.Key).ToArray();
-            var snapshot = await _products.CreateVerifiedExportSnapshotAsync(sourceName, ExportTypes.NewEdition, edition, 0, requiredFeatures, cancellationToken);
+            logger.LogInformation("ENC source dataset creation started. SourceDatasetName: {SourceDatasetName}. ExportType: {ExportType}. Edition: {Edition}. Update: {Update}. RequiredChangedFeatureCount: {RequiredChangedFeatureCount}.",
+                sourceName, ExportTypes.NewEdition, edition, 0, requiredFeatures.Length);
+            var snapshotTimer = Stopwatch.StartNew();
+            var snapshotSucceeded = false;
+            VerifiedExportSnapshot snapshot;
+            try {
+                snapshot = await _products.CreateVerifiedExportSnapshotAsync(sourceName, ExportTypes.NewEdition, edition, 0, requiredFeatures, cancellationToken);
+                snapshotSucceeded = true;
+            }
+            finally {
+                logger.LogInformation("ENC source dataset creation finished. SourceDatasetName: {SourceDatasetName}. Success: {Success}. DurationMs: {DurationMs}.",
+                    sourceName, snapshotSucceeded, snapshotTimer.ElapsedMilliseconds);
+            }
             var included = snapshot.IncludedChangedFeatureIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
             summaryChanges = summaryChanges.Where(change => !packageChanges[change.FeatureId].CurrentInProduct ||
                 packageChanges[change.FeatureId].Deleted || included.Contains(change.FeatureId)).ToArray();
