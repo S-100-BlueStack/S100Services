@@ -38,7 +38,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         logger.LogInformation("ENC archive scan started. SinceUtc: {SinceUtc:O}. StartedUtc: {StartedUtc:O}.", sinceUtc, scanStartedUtc);
 
         var archiveScanTime = Stopwatch.StartNew();
-        var pending = await _products.GetPendingEditsAsync(sinceUtc);
+        var pending = await _products.GetPendingEditsAsync(sinceUtc, scanStartedUtc);
         logger.LogInformation("ENC archive scan finished. DurationMs: {DurationMs}. ChangedAoiCount: {ChangedAoiCount}. UniqueChangedFeatureCount: {UniqueChangedFeatureCount}.",
             archiveScanTime.ElapsedMilliseconds, pending.Count, pending.Values.SelectMany(changes => changes.Keys).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         var replay = await packages.GetReplayBoundsAsync(cancellationToken);
@@ -58,7 +58,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             if (eligibleReplay.Count > 0) {
                 // A blocked AOI retains its cursor without repeatedly forcing a historic archive scan.
                 logger.LogInformation("ENC replay archive scan started. SinceUtc: {SinceUtc:O}. EligibleAoiCount: {EligibleAoiCount}.", eligibleReplay.Values.Min(), eligibleReplay.Count);
-                var replayed = await _products.GetPendingEditsAsync(eligibleReplay.Values.Min());
+                var replayed = await _products.GetPendingEditsAsync(eligibleReplay.Values.Min(), scanStartedUtc);
                 foreach (var (sourceName, changes) in replayed) {
                     if (eligibleReplay.TryGetValue(sourceName, out var lowerBound) && lowerBound <= sinceUtc && changes.Count > 0)
                         pending[sourceName] = changes;
@@ -125,7 +125,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
 
                 if (!completeScans.TryGetValue(existing.ScanFromUtc, out var completeChanges)) {
                     logger.LogInformation("ENC package history scan started. SourceDatasetName: {SourceDatasetName}. SinceUtc: {SinceUtc:O}.", sourceName, existing.ScanFromUtc);
-                    completeChanges = await _products.GetPendingEditsAsync(existing.ScanFromUtc);
+                    completeChanges = await _products.GetPendingEditsAsync(existing.ScanFromUtc, scanStartedUtc);
                     completeScans.Add(existing.ScanFromUtc, completeChanges);
                 }
                 if (!completeChanges.TryGetValue(sourceName, out packageChanges) || packageChanges.Count == 0)
