@@ -2,11 +2,12 @@ using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Repositories;
 using DataCatalague.Api.Services;
+using Eventuous;
 using Eventuous.SqlServer;
 using Eventuous.SqlServer.Subscriptions;
 using Eventuous.Subscriptions.Registrations;
 using Serilog;
-
+using System.Text.Json;
 using IO = System.IO;
 
 namespace DataCatalague.Api;
@@ -42,15 +43,36 @@ public static class Program
 
             builder.Services.AddStreamConfiguration(builder.Configuration);
 
+            IEventSerializer eventSerializer = new DefaultEventSerializer(
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+            EventSerializer.SetDefault(eventSerializer);
+
+            builder.Services.AddSingleton(eventSerializer);
             builder.Services.AddSingleton<DispatchRepository>();
             builder.Services.AddSingleton<ArcGisDispatcher>();
 
-            builder.Services.AddEventuousSqlServer(
-                "",
-                "eventuous",
-                initializeDatabase: true);
+            builder.Services.AddSingleton<InMemoryEventStore>();
 
-            builder.Services.AddEventStore<SqlServerStore>();
+            builder.Services.AddSingleton<IEventStore>(
+                serviceProvider =>
+                    serviceProvider.GetRequiredService<InMemoryEventStore>());
+
+            builder.Services.AddCheckpointStore<InMemoryCheckpointStore>();
+
+            builder.Services.AddSubscription<
+                InMemoryAllStreamSubscription,
+                InMemoryAllStreamSubscriptionOptions>(
+                "dispatcher-subscription",
+                x => x.AddEventHandler<DispatchRepository>());
+
+
+            //builder.Services.AddEventuousSqlServer(
+            //    "",
+            //    "eventuous",
+            //    initializeDatabase: true);
+
+            //builder.Services.AddEventStore<SqlServerStore>();
 
             //builder.Services.AddSubscription<
             //    SqlServerAllStreamSubscription,

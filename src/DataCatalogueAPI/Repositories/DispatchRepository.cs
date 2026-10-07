@@ -2,6 +2,8 @@
 using ArcGIS.Core.Geometry;
 using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Controllers;
+using Eventuous.Subscriptions;
+using Eventuous.Subscriptions.Context;
 using Microsoft.Extensions.Options;
 using S100BlueStack.Settings;
 using System.Collections.Concurrent;
@@ -12,7 +14,7 @@ using IO = System.IO;
 
 namespace DataCatalague.Api.Repositories
 {
-    public class DispatchRepository
+    public class DispatchRepository : IEventHandler
     {
         internal static readonly JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions {
             WriteIndented = false,
@@ -65,6 +67,8 @@ namespace DataCatalague.Api.Repositories
             _featureClassDefinitions = definitions.Item1;
             _standaloneTableDefinitions = definitions.Item2;
         }
+
+        public string DiagnosticName => nameof(DispatchRepository);
 
         public Guid AddAttachment(Stream stream, string fileName, DateTimeOffset dateTimeOffsetUtc) {
             using (var connector = createGeodatabase()) {
@@ -164,6 +168,10 @@ namespace DataCatalague.Api.Repositories
         public Polygon FromGeoJson(string geoJson) {
             var polygon = PolygonBuilderEx.FromJson(geoJson);
             return polygon;
+        }
+
+        public ValueTask<EventHandlingStatus> HandleEvent(IMessageConsumeContext context) {
+            throw new NotImplementedException();
         }
     }
 }
