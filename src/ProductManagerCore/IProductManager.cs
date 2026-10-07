@@ -9,6 +9,9 @@ namespace S100FC.ProductCatalogue
         int? Update
     );
 
+    /// <summary>Pairs the shared YAML snapshot with changed source features actually selected for its topology.</summary>
+    public sealed record VerifiedExportSnapshot(YAML.Dataset Dataset, IReadOnlyCollection<string> IncludedChangedFeatureIds);
+
     /// <summary>Contains the accepted versions and the immutable source snapshot to publish together in S-128.</summary>
     public sealed record EncPackagePublication(Guid PackageId, string S57DatasetName, int S57Edition, int S57Update, string S101DatasetName, int S101Edition, int S101Update, DateTime DetectedAtUtc, string DatasetYaml, byte[] CompilerIndex, byte[] CatalogueSignature);
 
@@ -51,9 +54,9 @@ namespace S100FC.ProductCatalogue
         /// <param name="cancellationToken">Signals cancellation before dispatch and between substantial snapshot-processing phases. An ArcGIS call already in progress cannot be interrupted unless that API supports cancellation.</param>
         /// <returns>A read-only YAML dataset snapshot containing the requested candidate version.</returns>
         Task<YAML.Dataset> CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken = default);
-        /// <summary>Verifies that current changed features are present in the shared candidate snapshot.</summary>
-        Task<YAML.Dataset> CreateVerifiedExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, IReadOnlyCollection<string> requiredFeatureIds, CancellationToken cancellationToken = default) =>
-            CreateExportSnapshotAsync(name, exportType, edition, update, cancellationToken);
+        /// <summary>Reports which edited features belong to the actual export selection; implementations must not guess.</summary>
+        Task<VerifiedExportSnapshot> CreateVerifiedExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, IReadOnlyCollection<string> requiredFeatureIds, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("This product manager cannot verify the ENC export selection.");
         Task<Dictionary<string, string>> GetDatasetAOIs();
         Task<Dictionary<string, string>> GetDatasetAOIs(string productSpecification);
         Task<bool> IsDirtyAsync(string name);

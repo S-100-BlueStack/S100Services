@@ -158,12 +158,22 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 logger.LogInformation("ENC archive rows had no net feature difference. SourceDatasetName: {SourceDatasetName}.", sourceName);
                 continue;
             }
-            var summary = EncChangeSummary.Serialize(sourceName, ProductSpecification.S101, EncChangeSummary.GetCopenhagenDate(scanStartedUtc), packageScanFromUtc, scanStartedUtc, summaryChanges);
             var edition = checked(s101.PublishedEdition + 1);
             var requiredFeatures = packageChanges.Where(pair => pair.Value.CurrentInProduct && !pair.Value.Deleted)
                 .Select(pair => pair.Key).ToArray();
-            var dataset = await _products.CreateVerifiedExportSnapshotAsync(sourceName, ExportTypes.NewEdition, edition, 0, requiredFeatures, cancellationToken);
-            var yaml = dataset.Serialize();
+            var snapshot = await _products.CreateVerifiedExportSnapshotAsync(sourceName, ExportTypes.NewEdition, edition, 0, requiredFeatures, cancellationToken);
+            var included = snapshot.IncludedChangedFeatureIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            summaryChanges = summaryChanges.Where(change => !packageChanges[change.FeatureId].CurrentInProduct ||
+                packageChanges[change.FeatureId].Deleted || included.Contains(change.FeatureId)).ToArray();
+            if (summaryChanges.Length == 0 || previous is not null &&
+                summaryChanges.All(change => change.DetectedAtUtc <= EncChangeSummary.GetLatestArchiveEditUtc(previous.SummaryYaml))) {
+                // Broad AOI intersections are not proof that a current feature belongs in the exported topology.
+                logger.LogInformation("ENC archive changes did not alter the export selection. SourceDatasetName: {SourceDatasetName}. ExcludedChangedFeatureCount: {ExcludedChangedFeatureCount}.", sourceName, requiredFeatures.Length - included.Count);
+                await packages.ClearReplayAsync(sourceName, cancellationToken);
+                continue;
+            }
+            var summary = EncChangeSummary.Serialize(sourceName, ProductSpecification.S101, EncChangeSummary.GetCopenhagenDate(scanStartedUtc), packageScanFromUtc, scanStartedUtc, summaryChanges);
+            var yaml = snapshot.Dataset.Serialize();
             if (string.IsNullOrWhiteSpace(yaml))
                 throw new InvalidOperationException($"ENC source snapshot for '{sourceName}' was empty.");
 

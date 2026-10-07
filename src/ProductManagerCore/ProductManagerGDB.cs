@@ -367,11 +367,11 @@ namespace S100FC.ProductCatalogue
         }
 
         async Task<YAML.Dataset> IElectronicProductManager.CreateExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, CancellationToken cancellationToken) {
-            return await CreateVerifiedExportSnapshotAsync(name, exportType, edition, update, [], cancellationToken);
+            return (await CreateVerifiedExportSnapshotAsync(name, exportType, edition, update, [], cancellationToken)).Dataset;
         }
 
-        /// <summary>Fails the package before persisting YAML if a detected current feature was omitted by topology or conversion.</summary>
-        public async Task<YAML.Dataset> CreateVerifiedExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, IReadOnlyCollection<string> requiredFeatureIds, CancellationToken cancellationToken) {
+        /// <summary>Distinguishes features outside the product's topology selection from selected features lost during conversion.</summary>
+        public async Task<VerifiedExportSnapshot> CreateVerifiedExportSnapshotAsync(string name, ExportTypes exportType, int edition, int update, IReadOnlyCollection<string> requiredFeatureIds, CancellationToken cancellationToken) {
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentNullException(nameof(name));
             if (edition < 0)
@@ -388,17 +388,19 @@ namespace S100FC.ProductCatalogue
             result.ElectronicProduct.updateNumber = update;
 
             // applyEdits must remain false: SQL owns unverified candidate versions until IC-ENC acceptance.
+            var included = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var dataset = await this.CreateDatasetAsync(
                 result.ElectronicProduct,
                 result.Shape,
                 exportType,
                 applyEdits: false,
                 cancellationToken: cancellationToken,
-                requiredFeatureIds: requiredFeatureIds
+                requiredFeatureIds: requiredFeatureIds,
+                includedChangedFeatureIds: included
             );
             ExportSnapshotVersioning.ApplyCompilerCompatibleVersion(dataset, edition);
             cancellationToken.ThrowIfCancellationRequested();
-            return dataset;
+            return new VerifiedExportSnapshot(dataset, included.ToArray());
         }
 
         async Task<bool> IElectronicProductManager.IsDirtyAsync(string name) {
@@ -1204,7 +1206,7 @@ namespace S100FC.ProductCatalogue
             }, "ResolveExportSourceProduct", name, cancellationToken);
         }
 
-        private async Task<YAML.Dataset> CreateDatasetAsync(ElectronicProduct electronicProduct, ArcGIS.Core.Geometry.Polygon shape, ExportTypes exportType, bool applyEdits = true, CancellationToken cancellationToken = default, IReadOnlyCollection<string>? requiredFeatureIds = null) {
+        private async Task<YAML.Dataset> CreateDatasetAsync(ElectronicProduct electronicProduct, ArcGIS.Core.Geometry.Polygon shape, ExportTypes exportType, bool applyEdits = true, CancellationToken cancellationToken = default, IReadOnlyCollection<string>? requiredFeatureIds = null, ISet<string>? includedChangedFeatureIds = null) {
             var timestamp = DateTime.UtcNow;
 
             var featureCatalogue = S100FC.Catalogues.FeatureCatalogue.Catalogues.Single(e => e.ProductID.Equals("S-101"));
@@ -1237,6 +1239,8 @@ namespace S100FC.ProductCatalogue
             var featureTypes = new List<YAML.Feature>();
             var featureTypesAdded = new HashSet<string>();
             var exportedFeatureIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var selectedFeatureIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var collapsedFeatureIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             return await this.DispatchMeasured(() => {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -1392,7 +1396,14 @@ namespace S100FC.ProductCatalogue
 
                             var _uid = current.UID();// Convert.ToString(current["UID"])!;
 
-                            if (collapse.Contains(_uid)) continue;
+                            var currentFeatureId = ReadFeatureId(current);
+                            if (requiredFeatureIds is not null && requiredFeatureIds.Contains(currentFeatureId, StringComparer.OrdinalIgnoreCase))
+                                selectedFeatureIds.Add(currentFeatureId);
+
+                            if (collapse.Contains(_uid)) {
+                                collapsedFeatureIds.Add(currentFeatureId);
+                                continue;
+                            }
 
                             string[] features = [_uid];
 
@@ -1548,6 +1559,7 @@ namespace S100FC.ProductCatalogue
 
                                     //if (!lookup.Any())
                                     dataset?.AddFeature(feature!);
+                                    exportedFeatureIds.Add(currentFeatureId);
                                     if (Guid.TryParse(uid, out var exportedId))
                                         exportedFeatureIds.Add(exportedId.ToString("B"));
                                     //else {
@@ -1869,9 +1881,16 @@ namespace S100FC.ProductCatalogue
                 }
 
                 if (requiredFeatureIds is not null) {
-                    var missing = requiredFeatureIds.Where(id => !exportedFeatureIds.Contains(id)).ToArray();
+                    var missing = requiredFeatureIds.Where(id => selectedFeatureIds.Contains(id) &&
+                        !exportedFeatureIds.Contains(id) && !collapsedFeatureIds.Contains(id)).ToArray();
                     if (missing.Length > 0)
-                        throw new InvalidOperationException($"Detected S-101 feature(s) were omitted from the export snapshot: {string.Join(", ", missing)}. DPC preserved its watermark.");
+                        throw new InvalidOperationException($"Selected S-101 feature(s) were omitted during topology mapping or YAML conversion: {string.Join(", ", missing)}. DPC preserved its watermark.");
+                    foreach (var id in requiredFeatureIds.Where(exportedFeatureIds.Contains))
+                        includedChangedFeatureIds?.Add(id);
+                    foreach (var id in requiredFeatureIds.Where(id => !selectedFeatureIds.Contains(id)))
+                        Log.Information("DPC source feature {FeatureId} is outside the topology selection for {DatasetName}; it is not required in this product's YAML.", id, electronicProduct.datasetName);
+                    foreach (var id in requiredFeatureIds.Where(collapsedFeatureIds.Contains))
+                        Log.Information("DPC source surface {FeatureId} collapsed during topology for {DatasetName}; it is not emitted as a feature.", id, electronicProduct.datasetName);
                 }
                 dataset!.AddTopology(topology);
 
