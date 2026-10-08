@@ -63,6 +63,9 @@ namespace S100FC.ProductCatalogue
         Task<string> GetDatasetBoundary(string name);
         Task<Dictionary<string, ArchiveRow>> GetPendingEditsAsync(string name);
         Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc);
+        /// <summary>Returns net archive changes between an exclusive UTC cursor and an inclusive, fixed UTC cutoff.</summary>
+        Task<Dictionary<string, Dictionary<string, ArchiveRow>>> GetPendingEditsAsync(DateTime sinceUtc, DateTime throughUtc) =>
+            throw new NotSupportedException("This product manager does not support bounded UTC archive scans.");
         ElectronicProduct? ElectronicProduct(string name);
         ElectronicProduct? ElectronicProduct(string name, string productSpecification);
         /// <summary>
