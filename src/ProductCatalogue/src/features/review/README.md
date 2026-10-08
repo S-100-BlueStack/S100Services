@@ -192,3 +192,68 @@ disable, full Refresh, changed-only freshness, removal/re-add, overlapping refre
 replacement, teardown and out-of-order completions using deferred promises. Page-event tests exercise
 the actual coordinator with explicit browser/API test boundaries. See
 [the implementation and manual verification record](../../../docs/fi-039-incremental-review.md).
+
+
+## F6C package-aware Review
+
+Status: **F6C v1 functionality manually accepted; v2 visual correction pending browser acceptance and local full check**.
+Authoritative merge baseline: `462776d5aef68cf71cb784506c580b82c97f1dcc`.
+
+`reviewProductSession.js` remains the sole content/publication owner. Its composition version guards
+async canonicalization inside that same session; no page generation counter, member session or
+freshness timer is introduced. Before list, route, records or freshness priming are committed,
+`resolveReviewComposition()` uses F6A's `resolveWorkUnit()` and shared resolution-claim reconciliation.
+Either mapped member resolves to the canonical representative. Complete proof replaces an earlier
+failed alias at its first logical occurrence; conflicting complete claims fail closed. Independent
+Products keep their relative order. Pending additions retain their requested composition and share
+in-flight resolution reads. Removal and package disable revoke operation ownership at input time.
+
+The session retains resolved proofs only for composition/alias reuse. Full generations and targeted
+loads resolve current ownership; a failed resolution cannot authorize an ordinary package fallback.
+The flat picker catalog validates the requested name. A canonical representative already proven by
+an S-57 entry is not rejected later merely because only that alias appeared in the catalog. An alias
+cannot re-add or reactivate an already selected package.
+
+Each package record uses `workUnit.identityKey` and a signature of ordered member identities,
+source/Product keys and authoritative specifications. A complete outer payload contains S-101 first,
+S-57 second, with exact ProductContexts, current member metadata and independent content states.
+Member detail reads run after FI-022 priming and optional member work, immediately before
+publication, and validate both concrete mappings. F6A's request-local
+`assertCurrent()` checks the source snapshot before and after optional content reads. Structural
+failure, changed identity/mapping or source replacement cannot publish a half-package. A rejected
+targeted replacement retains the last complete members, displays a separate refresh failure and
+returns false to FI-022 so that its revision remains unacknowledged. Full Refresh keeps its existing
+full-generation semantics, clearing payloads and rebuilding currently selected enabled records.
+
+History and artifacts use the existing capability-gated APIs with each member's own context. Optional
+failures remain per member and content type; IC-ENC stays Unavailable without a backend request.
+The shared `products/domain/packageValidationArtifacts.js` contains the unchanged F6B ownership
+algorithm. Analyze retains its original import through a compatibility re-export. Review filters the
+normalized combined response before member publication using both exact concrete name and
+ProductSpecification, preserves original secure owner download URLs and historical revisions, and
+shows a warning for omitted missing/ambiguous ownership. Ordinary artifacts remain unfiltered.
+
+The board renders one outer column and two vertical member sections with one package-level content
+selection. Existing defaults, workspace intent, individual overrides, indeterminate bulk controls and
+disabled composition stay in the existing domain layer. Async publications capture fresh FI-041
+snapshots immediately before rendering; they never restore a snapshot retained across an await.
+Unchanged columns retain their application-owned DOM, History disclosures and scroll state, and the
+board restores horizontal scroll and surviving control focus. Member sections inherit theme tokens
+and use the same card height/overflow states; no private ArcGIS/Calcite internals are accessed.
+
+The v2 presentation correction groups each member title and unchanged summary in an application-owned
+`pc-review-member__header` using `--pc-surface-alt`. Compact member content header strips use a softer
+mix of existing surface tokens, with the same 10px horizontal inset as the member header and content
+states. Ordinary Product headers, controls, focus rules and scroll owners remain unchanged.
+
+One canonical representative is observed by FI-022. Both member operation notifications request the
+existing coalesced monitor check rather than creating separate package refreshes. Changed-only loads
+run under one record operation and publish the full member payload atomically. Removing/re-adding,
+disable, full refresh, route replacement and destroy invalidate stale package member results.
+
+Registry-owned package navigation now enables Analyze and Review; floating History remains disabled.
+The Main-map package Tools menu includes Review and Product Collection retains its existing storage
+shape and per-destination permission checks. Ordinary popup menus are unchanged. No package mutation,
+export, lifecycle, scheduling or new backend contract is enabled.
+
+See [the F6C implementation and verification report](../../../docs/package-review-F6C-implementation-report.md).

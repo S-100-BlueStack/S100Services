@@ -22,6 +22,7 @@ import { createPopupExportActions } from "./popupExportConfig.js";
 import { isSupportedExportAction } from "./popupExportContract.js";
 import {
   openAnalyzePage,
+  openReviewPage,
   openProductHistory,
   sendImmediately,
   triggerExport,
@@ -322,6 +323,16 @@ function createToolsAction({ context, attributes }) {
       onClick: () => {
         openAnalyzePage(context.datasetName ?? attributes?.datasetName);
       },
+    });
+  }
+
+  if (
+    !isAnalyzeRoute() && context.workUnit?.kind === "package" &&
+    productContextSupportsCapability(context, PRODUCT_OPERATION_CAPABILITY.REVIEW)
+  ) {
+    items.push({
+      id: "review", label: "Review", icon: "list",
+      onClick: () => openReviewPage(context.datasetName ?? attributes?.datasetName),
     });
   }
 

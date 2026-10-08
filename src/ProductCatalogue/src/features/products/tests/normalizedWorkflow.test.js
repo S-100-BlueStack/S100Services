@@ -388,6 +388,7 @@ test("source migration drops retired configured-out mock selection intent", asyn
 test("Review validation diagnostics survive an independent History failure", async () => {
   const { loadReviewHistories } = await import("../../review/services/reviewHistoryLoader.js");
   const [product] = await loadReviewHistories(["PRODUCT"], {
+    resolutions: [{ status: "resolved", product: context("s101"), requestedDatasetName: "PRODUCT" }],
     workspaceProductService: {
       resolveProduct: async () => ({ status: "resolved", product: context("s101") }),
     },

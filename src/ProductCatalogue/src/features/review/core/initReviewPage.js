@@ -1,3 +1,5 @@
+import { resolveReviewComposition } from "../services/reviewWorkUnitResolver.js";
+import { getReviewResolutionAliases } from "../domain/reviewWorkUnits.js";
 import { createReviewProductSession } from "./reviewProductSession.js";
 import { loadStatuses } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
@@ -32,7 +34,9 @@ import { captureReviewProductListInteraction } from "../ui/reviewProductListInte
 import { captureReviewWorkspaceContentInteraction } from "../ui/reviewWorkspaceContentInteraction.js";
 
 export async function initReviewPage({ datasetNames } = {}) {
-  let productItems = createReviewProductItems(datasetNames);
+  const initialProductItems = createReviewProductItems(datasetNames);
+  let productItems = [];
+  let compositionResolutions = [];
   let workspaceContentIntent = createReviewWorkspaceContentIntent();
   let currentProducts = [];
   let productCatalog = createProductCatalogState();
@@ -57,7 +61,10 @@ export async function initReviewPage({ datasetNames } = {}) {
       productItems,
       products: currentProducts,
       loading: isLoadingReviewProducts,
-      productCatalog,
+      productCatalog: {
+        ...productCatalog,
+        excludedProductNames: getSelectedReviewProductNames(productItems),
+      },
       productListInteraction,
       workspaceContentInteraction,
     });
@@ -90,8 +97,41 @@ export async function initReviewPage({ datasetNames } = {}) {
   };
 
   const productSession = createReviewProductSession({
-    loadProduct: async (datasetName) => {
-      const [product] = await loadReviewHistories([datasetName]);
+    resolveItems: (items, options) => resolveReviewComposition(items, options),
+    onComposition: (
+      items,
+      { updateUrl = true, inheritIntent = false, resetIntent = false },
+      resolutions
+    ) => {
+      if (resetIntent) workspaceContentIntent = createReviewWorkspaceContentIntent();
+      const previousItems = productItems;
+      productItems = items.map((item) => {
+        const resolution = resolutions.find(
+          (value) =>
+            normalizeDatasetKey(value.product?.datasetName ?? value.requestedDatasetName) === item.id
+        );
+        const aliases = new Set(resolution ? getReviewResolutionAliases(resolution) : [item.id]);
+        const previous = resetIntent ? null : previousItems.find((value) => aliases.has(value.id));
+        // Content edits performed while canonicalization awaited remain authoritative.
+        return {
+          ...item,
+          ...(inheritIntent && previous ? { enabled: previous.enabled } : {}),
+          contentTypes:
+            previous?.contentTypes ??
+            (inheritIntent ? { ...workspaceContentIntent } : item.contentTypes),
+        };
+      });
+      compositionResolutions = resolutions;
+      const names = getEnabledReviewDatasetNames(productItems);
+      setReviewRouteUrl(names, { replace: !updateUrl });
+      document.title = createReviewDocumentTitle(names);
+      freshnessMonitor?.retain();
+      return productItems;
+    },
+    loadProduct: async (datasetName, { resolution } = {}) => {
+      const [product] = await loadReviewHistories([datasetName], {
+        ...(resolution ? { resolutions: [resolution] } : {}),
+      });
       return product;
     },
     prepare: async (datasetNames, { full }) => {
@@ -105,28 +145,29 @@ export async function initReviewPage({ datasetNames } = {}) {
     onChange: ({ products, loading }) => {
       currentProducts = products;
       isLoadingReviewProducts = loading;
-      renderCurrentReviewPage();
+      // Capture at publication time, never carry a snapshot across an await.
+      renderCurrentReviewPage({
+        productListInteraction: captureReviewProductListInteraction(),
+        workspaceContentInteraction: captureReviewWorkspaceContentInteraction(),
+      });
     },
   });
 
   const loadReviewProductItems = async (
     nextProductItems,
-    { updateUrl = true, full = false } = {}
+    { updateUrl = true, full = false, inheritIntent = false, resetIntent = false } = {}
   ) => {
     if (disposed) return;
     const validatedProductItems = validateReviewProductItems(nextProductItems);
-    productItems = validatedProductItems.items;
     notifyRejectedCatalogProducts(validatedProductItems);
-    const enabledNextDatasetNames = getEnabledReviewDatasetNames(productItems);
-
-    // Route publication belongs to the synchronous authoritative composition edit,
-    // never to an eventual Product completion from an older composition.
-    setReviewRouteUrl(enabledNextDatasetNames, { replace: !updateUrl });
-    document.title = createReviewDocumentTitle(enabledNextDatasetNames);
     const fullLoad = full || !hasLoadedComposition;
     hasLoadedComposition = true;
-    freshnessMonitor?.retain();
-    await productSession.reconcile(productItems, { full: fullLoad });
+    await productSession.reconcile(validatedProductItems.items, {
+      full: fullLoad,
+      updateUrl,
+      inheritIntent,
+      resetIntent,
+    });
   };
 
   const addDatasetNamesToReview = async (datasetNamesToAdd, { updateUrl = true } = {}) => {
@@ -137,7 +178,7 @@ export async function initReviewPage({ datasetNames } = {}) {
     }
 
     const validation = validateCatalogProductNames(normalizedDatasetNames, {
-      excludedProductNames: productItems.map((item) => item.datasetName),
+      excludedProductNames: getSelectedReviewProductNames(productSession.getItems()),
     });
 
     notifyRejectedCatalogProducts(validation);
@@ -146,7 +187,7 @@ export async function initReviewPage({ datasetNames } = {}) {
       return;
     }
 
-    let nextProductItems = productItems;
+    let nextProductItems = productSession.getItems();
 
     for (const datasetName of validation.valid) {
       nextProductItems = addReviewProductItem(nextProductItems, datasetName, {
@@ -156,13 +197,14 @@ export async function initReviewPage({ datasetNames } = {}) {
 
     await loadReviewProductItems(nextProductItems, {
       updateUrl,
+      inheritIntent: true,
     });
   };
 
   const replaceDatasetNamesInReview = async (nextDatasetNames, { updateUrl = true } = {}) => {
-    workspaceContentIntent = createReviewWorkspaceContentIntent();
     await loadReviewProductItems(createReviewProductItems(nextDatasetNames), {
       full: true,
+      resetIntent: true,
       updateUrl,
     });
   };
@@ -185,7 +227,7 @@ export async function initReviewPage({ datasetNames } = {}) {
     }
 
     await loadReviewProductItems(
-      toggleReviewProductItem(productItems, itemId, event.detail?.enabled),
+      toggleReviewProductItem(productSession.getItems(), itemId, event.detail?.enabled),
       {
         updateUrl: true,
       }
@@ -199,7 +241,7 @@ export async function initReviewPage({ datasetNames } = {}) {
       return;
     }
 
-    await loadReviewProductItems(removeReviewProductItem(productItems, itemId), {
+    await loadReviewProductItems(removeReviewProductItem(productSession.getItems(), itemId), {
       updateUrl: true,
     });
   };
@@ -244,7 +286,7 @@ export async function initReviewPage({ datasetNames } = {}) {
   };
 
   const handleReviewRefresh = async () => {
-    await loadReviewProductItems(productItems, { updateUrl: false, full: true });
+    await loadReviewProductItems(productSession.getItems(), { updateUrl: false, full: true });
   };
 
   freshnessMonitor = createWorkspaceFreshnessMonitor({
@@ -260,7 +302,13 @@ export async function initReviewPage({ datasetNames } = {}) {
     const enabledKeys = new Set(
       getEnabledReviewDatasetNames(productItems).map(normalizeDatasetKey)
     );
-    if (enabledKeys.has(normalizeDatasetKey(datasetName))) {
+    const related = compositionResolutions.some(
+      (resolution) =>
+        enabledKeys.has(
+          normalizeDatasetKey(resolution.product?.datasetName ?? resolution.requestedDatasetName)
+        ) && getReviewResolutionAliases(resolution).includes(normalizeDatasetKey(datasetName))
+    );
+    if (related || enabledKeys.has(normalizeDatasetKey(datasetName))) {
       void freshnessMonitor?.check();
     }
   });
@@ -285,9 +333,9 @@ export async function initReviewPage({ datasetNames } = {}) {
   renderCurrentReviewPage();
   await loadProductCatalogForPicker();
   if (!hasLoadedComposition) {
-    await loadReviewProductItems(productItems, { updateUrl: false, full: true });
+    await loadReviewProductItems(initialProductItems, { updateUrl: false, full: true });
   }
-  freshnessMonitor.start();
+  if (!disposed) freshnessMonitor.start();
 
   return {
     get products() {
@@ -327,14 +375,30 @@ export async function initReviewPage({ datasetNames } = {}) {
 
     const validation = validateProductCatalogSelection(
       productCatalog.products,
-      normalizedItems.map((item) => item.datasetName)
+      normalizedItems
+        .filter((item) => !productItems.some((previous) => previous.id === item.id))
+        .map((item) => item.datasetName)
     );
-    const validKeys = new Set(validation.valid.map((name) => name.toUpperCase()));
+    const validKeys = new Set([
+      ...validation.valid.map((name) => name.toUpperCase()),
+      ...productItems.map((item) => item.id),
+    ]);
 
     return {
       ...validation,
       items: normalizedItems.filter((item) => validKeys.has(item.datasetName.toUpperCase())),
     };
+  }
+
+  function getSelectedReviewProductNames(items) {
+    const keys = new Set(items.map((item) => item.id));
+    for (const resolution of compositionResolutions) {
+      const aliases = getReviewResolutionAliases(resolution);
+      if (aliases.some((alias) => keys.has(alias))) {
+        for (const alias of aliases) keys.add(alias);
+      }
+    }
+    return [...keys];
   }
 
   function validateCatalogProductNames(productNames, { excludedProductNames = [] } = {}) {

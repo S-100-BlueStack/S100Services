@@ -1,12 +1,23 @@
 import { serializeProductIdentity } from "../../dataSources/domain/productIdentity.js";
+import { getReviewWorkUnitSignature } from "../domain/reviewWorkUnits.js";
 import { normalizeReviewProductItems } from "../domain/reviewProductList.js";
 
 // This is the sole Review data-generation owner. Retained records carry pending work
 // across composition edits; a full load replaces the generation and all records.
-export function createReviewProductSession({ loadProduct, prepare = async () => {}, onChange }) {
+export function createReviewProductSession({
+  loadProduct,
+  prepare = async () => {},
+  resolveItems = null,
+  onComposition = null,
+  onChange,
+}) {
   let generation = 0;
+  let compositionVersion = 0;
+  let resolvingComposition = false;
   let disposed = false;
   let items = [];
+  let requestedItems = [];
+  const pendingResolutions = new Map();
   const records = new Map();
   const payloads = new Map();
 
@@ -22,13 +33,19 @@ export function createReviewProductSession({ loadProduct, prepare = async () => 
       .map((item) => {
         const record = records.get(item.id);
         return (
-          (record?.identity ? payloads.get(record.identity) : record?.failure) ?? {
+          (record?.identity
+            ? record.refreshError
+              ? { ...payloads.get(record.identity), refreshError: record.refreshError }
+              : payloads.get(record.identity)
+            : record?.failure) ?? {
             datasetName: item.datasetName,
             loadState: "loading",
           }
         );
       }),
-    loading: items.some((item) => item.enabled && records.get(item.id)?.operation?.visible),
+    loading:
+      resolvingComposition ||
+      items.some((item) => item.enabled && records.get(item.id)?.operation?.visible),
   });
 
   const publish = () => {
@@ -48,13 +65,32 @@ export function createReviewProductSession({ loadProduct, prepare = async () => 
       try {
         await ready;
         if (!owns(record, operation)) return false;
-        const product = await loadProduct(record.datasetName);
+        const product = await loadProduct(record.datasetName, {
+          resolution: record.identity || record.failure ? null : record.resolution,
+        });
         if (!owns(record, operation)) return false;
         if (normalizeKey(product?.datasetName) !== record.id) {
           throw new Error("Review Product response identity mismatch.");
         }
+        if (record.workUnitSignature) {
+          if (
+            product.resolutionFailed ||
+            product.workUnitSignature !== record.workUnitSignature ||
+            !product.members ||
+            getReviewWorkUnitSignature({
+              status: "resolved",
+              product: product.productContext,
+              workUnit: product.workUnit,
+              memberProducts: product.members.map((member) => member.productContext),
+            }) !== record.workUnitSignature
+          ) {
+            throw new Error(product.error ?? "Review package identity or member mapping changed.");
+          }
+        }
+        if (!visible && product.resolutionFailed) throw new Error(product.error);
         const context = product.productContext;
-        const identity = context ? serializeProductIdentity(context) : null;
+        const identity =
+          product.workUnit?.identityKey ?? (context ? serializeProductIdentity(context) : null);
         if (context && normalizeKey(context.datasetName) !== record.id) {
           throw new Error("Review Product context identity mismatch.");
         }
@@ -68,12 +104,18 @@ export function createReviewProductSession({ loadProduct, prepare = async () => 
           throw new Error("Review Product source identity is ambiguous.");
         }
         if (record.identity) payloads.delete(record.identity);
+        record.refreshError = null;
         record.identity = identity;
         record.failure = identity ? null : product;
         if (identity) payloads.set(identity, product);
         return true;
       } catch (error) {
         if (!owns(record, operation)) return false;
+        if (record.workUnitSignature && record.identity) {
+          record.refreshError =
+            error instanceof Error ? error.message : "Review package refresh failed.";
+          return false;
+        }
         if (!visible) {
           // A rejected loader invocation differs from a returned per-content
           // failure: retain the last payload and let FI-022 retry its revision.
@@ -101,22 +143,92 @@ export function createReviewProductSession({ loadProduct, prepare = async () => 
     return operation.promise;
   };
 
-  const reconcile = async (nextItems, { full = false } = {}) => {
+  const reconcile = async (nextItems, options = {}) => {
+    const { full = false } = options;
     if (disposed) return false;
+    const version = ++compositionVersion;
+    const retained = full
+      ? []
+      : [...records.values()].map((record) => record.resolution).filter(Boolean);
     if (full) {
       generation += 1;
       records.clear();
       payloads.clear();
+      pendingResolutions.clear();
     }
-    items = normalizeReviewProductItems(nextItems);
+    const normalized = normalizeReviewProductItems(nextItems);
+    requestedItems = normalized;
+    const requestedKeys = new Set(normalized.map((item) => item.id));
+    for (const key of pendingResolutions.keys()) {
+      if (!requestedKeys.has(key)) pendingResolutions.delete(key);
+    }
+    // Removal and package eligibility edits revoke ownership at input time,
+    // before another async canonicalization can yield to a member completion.
+    for (const record of records.values()) {
+      const requested = normalized.find((item) => item.id === record.id);
+      if (!requested) discard(record);
+      else if (!requested.enabled && record.workUnitSignature) record.operation = null;
+    }
+    const resolve = (name, load) => {
+      if (disposed || version !== compositionVersion) {
+        return Promise.resolve({
+          status: "failed",
+          requestedDatasetName: name,
+          error: "Superseded Review composition.",
+        });
+      }
+      const key = normalizeKey(name);
+      if (!pendingResolutions.has(key)) {
+        const promise = Promise.resolve().then(() => load(name));
+        pendingResolutions.set(key, promise);
+        void promise.then(
+          (result) => {
+            if (result.status !== "resolved" && pendingResolutions.get(key) === promise) {
+              pendingResolutions.delete(key);
+            }
+          },
+          () => {
+            if (pendingResolutions.get(key) === promise) pendingResolutions.delete(key);
+          }
+        );
+      }
+      return pendingResolutions.get(key);
+    };
+    resolvingComposition = Boolean(resolveItems);
+    if (resolvingComposition) publish();
+    const composition = resolveItems
+      ? await resolveItems(normalized, { full, retained, resolve })
+      : { items: normalized, resolutions: [] };
+    if (disposed || compositionVersion !== version) return false;
+    resolvingComposition = false;
+    items = normalizeReviewProductItems(
+      onComposition?.(composition.items, options, composition.resolutions) ?? composition.items
+    );
+    requestedItems = items;
+    const resolutions = new Map(
+      composition.resolutions.map((resolution) => [
+        normalizeKey(resolution.product?.datasetName ?? resolution.requestedDatasetName),
+        resolution,
+      ])
+    );
     const ids = new Set(items.map((item) => item.id));
     for (const record of records.values()) {
       if (!ids.has(record.id)) discard(record);
     }
     const newRecords = [];
     for (const item of items) {
+      const resolution = resolutions.get(item.id);
+      if (
+        resolution?.status !== "resolved" &&
+        records.get(item.id)?.resolution?.status === "resolved"
+      ) {
+        discard(records.get(item.id));
+      }
       if (!records.has(item.id)) {
         records.set(item.id, {
+          resolution: resolutions.get(item.id) ?? null,
+          workUnitSignature: getReviewWorkUnitSignature(resolutions.get(item.id)),
+          refreshError: null,
           id: item.id,
           datasetName: item.datasetName,
           identity: null,
@@ -125,6 +237,9 @@ export function createReviewProductSession({ loadProduct, prepare = async () => 
         });
       }
       const record = records.get(item.id);
+      // Package member promises may not publish while the work unit is disabled.
+      // Ordinary FI-039 records retain their established pending-load behavior.
+      if (!item.enabled && record.workUnitSignature) record.operation = null;
       if (item.enabled && !record.identity && !record.failure && !record.operation) {
         newRecords.push(record);
       }
@@ -179,9 +294,13 @@ export function createReviewProductSession({ loadProduct, prepare = async () => 
   return {
     reconcile,
     refresh,
+    getItems: () => normalizeReviewProductItems(requestedItems),
     destroy() {
       disposed = true;
       generation += 1;
+      compositionVersion += 1;
+      pendingResolutions.clear();
+      requestedItems = [];
       records.clear();
       payloads.clear();
       items = [];

@@ -41,6 +41,13 @@ function packageContext() {
   return mainMapContext(createDataSourceRegistry().byId.get("s101"));
 }
 
+function restrictedContext() {
+  const source = createDataSourceRegistry().byId.get("s101");
+  return mainMapContext({ ...source, workUnit: {
+    ...source.workUnit, navigationCapabilities: { analyze: true, review: false, history: false },
+  } });
+}
+
 function navigationHarness(t) {
   const previousWindow = globalThis.window;
   globalThis.window = { location: new URL("https://catalogue.example/") };
@@ -58,7 +65,7 @@ function navigationHarness(t) {
   };
 }
 
-test("Main-map package exposes only Analyze navigation and direct workspace capabilities survive", () => {
+test("Main-map package exposes Analyze and Review navigation and direct workspace capabilities survive", () => {
   const source = createDataSourceRegistry().byId.get("s101");
   const context = mainMapContext(source);
   const groups = createPopupActionGroups({ productContext: context });
@@ -68,12 +75,13 @@ test("Main-map package exposes only Analyze navigation and direct workspace capa
   );
   assert.deepEqual(
     groups[0][0].items.map((action) => action.id),
-    ["analyze"]
+    ["analyze", "review"]
   );
   assert.equal(context.capabilities.analyze, true);
   assert.equal(context.capabilities.productCollection, true);
   assert.equal(context.capabilities.backendProductRefresh, true);
-  for (const capability of ["review", "history"]) {
+  assert.equal(context.capabilities.review, true);
+  for (const capability of ["history"]) {
     assert.equal(context.capabilities[capability], false);
     assert.equal(source.capabilities[capability], true);
   }
@@ -104,7 +112,7 @@ test("package remains one stable item with immutable destination permissions thr
   assert.equal(snapshot.count, 1);
   assert.equal(snapshot.items[0].id, added.item.id);
   assert.equal(snapshot.items[0].id, context.identityKey);
-  assert.deepEqual(snapshot.items[0].navigationCapabilities, { analyze: true, review: false });
+  assert.deepEqual(snapshot.items[0].navigationCapabilities, { analyze: true, review: true });
   assert.equal(Object.isFrozen(snapshot.items[0].navigationCapabilities), true);
   assert.equal(snapshot.items[0].workUnit, undefined);
   removeProductCollectionProduct(context);
@@ -112,7 +120,7 @@ test("package remains one stable item with immutable destination permissions thr
 });
 
 for (const mixed of [false, true]) {
-  test(`package collection enables canonical Analyze and blocks Review (mixed: ${mixed})`, (t) => {
+  test(`package collection enables canonical Analyze and Review (mixed: ${mixed})`, (t) => {
     const navigation = navigationHarness(t);
     if (mixed) addProductCollectionProduct("SIMPLE");
     addProductCollectionProduct(packageContext());
@@ -121,16 +129,11 @@ for (const mixed of [false, true]) {
       navigation.calls[0].url,
       mixed ? "/Analyze?Datasets=SIMPLE%2CPRIMARY" : "/Analyze?Datasets=PRIMARY"
     );
-    for (const destination of ["review"]) {
-      const availability = getCollectionNavigationAvailability(
-        getProductCollectionSnapshot().items,
-        destination
-      );
-      assert.equal(availability.allowed, false);
-      assert.match(availability.reason, /not available for all collected work units/);
-      assert.equal(openProductCollection(destination, navigation), false);
-    }
-    assert.equal(navigation.calls.length, 1);
+    const availability = getCollectionNavigationAvailability(getProductCollectionSnapshot().items, "review");
+    assert.equal(availability.allowed, true);
+    assert.equal(openProductCollection("review", navigation), true);
+    assert.equal(navigation.calls[1].url, mixed ? "/Review?Datasets=SIMPLE%2CPRIMARY" : "/Review?Datasets=PRIMARY");
+    assert.equal(navigation.calls.length, 2);
   });
 }
 
@@ -168,10 +171,10 @@ test("dispatch rechecks the latest collection and never launches a previously en
     getCollectionNavigationAvailability(getProductCollectionSnapshot().items, "review").allowed,
     true
   );
-  addProductCollectionProduct(packageContext());
+  addProductCollectionProduct(restrictedContext());
   assert.equal(openProductCollection("review", navigation), false);
   assert.deepEqual(navigation.calls, []);
-  removeProductCollectionProduct(packageContext());
+  removeProductCollectionProduct(restrictedContext());
   assert.equal(openProductCollection("review", navigation), true);
   assert.equal(navigation.calls[0].url, "/Review?Datasets=SIMPLE");
 });
@@ -229,7 +232,7 @@ test("tray preserves disabled action layout and guards even a stale click callba
     originalActions.every((button) => !button.disabled),
     true
   );
-  addProductCollectionProduct(packageContext());
+  addProductCollectionProduct(restrictedContext());
   const blockedActions = tray.element.children[2].children;
   assert.deepEqual(
     blockedActions.map((button) => button.textContent),
@@ -245,4 +248,17 @@ test("tray preserves disabled action layout and guards even a stale click callba
   originalActions.find((button) => button.textContent === "Review").listeners.click();
   assert.deepEqual(opened, []);
   assert.deepEqual(navigation.calls, []);
+});
+
+test("package popup Review launches the canonical representative while History remains unavailable", (t) => {
+  navigationHarness(t);
+  const opened = [];
+  globalThis.window.open = (url, target) => { opened.push({ url, target }); return { opener: {} }; };
+  const context = packageContext();
+  const tools = createPopupActionGroups({ productContext: context }).flat().find((action) => action.id === "tools");
+  tools.items.find((action) => action.id === "review").onClick();
+  assert.deepEqual(opened, [{ url: "/Review?Datasets=PRIMARY", target: "_blank" }]);
+  assert.equal(tools.items.some((action) => action.id === "history"), false);
+  const restricted = createPopupActionGroups({ productContext: restrictedContext() }).flat().find((action) => action.id === "tools");
+  assert.equal(restricted.items.some((action) => action.id === "review"), false);
 });

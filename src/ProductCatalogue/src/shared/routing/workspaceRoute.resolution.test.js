@@ -75,6 +75,7 @@ for (const routeName of ["analyze", "review"]) {
     } else {
       const results = await loadReviewHistories(route.datasetNames, {
         workspaceProductService: service,
+        workspaceWorkUnitService: { resolveWorkUnit: (name) => service.resolveProduct(name) },
         fetchArtifacts: async () => [],
         fetchHistory: async (name, { productContext }) => {
           calls.push([name, productContext.sourceId]);

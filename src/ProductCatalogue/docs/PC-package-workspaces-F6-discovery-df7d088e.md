@@ -10,14 +10,21 @@ Authoritative baseline:
 
 `df7d088ea3f43c3afeef0faa93e108af4c9638f1`
 
-## Current implementation after F6B
+## Current implementation after F6C
 
 F6B implements package-aware Analyze against `a5360531032c2baeb8d5544cf7b8e7cb15a7551f`.
 The discovery findings below remain a historical design record. F6A reports are unchanged.
 Analyze now uses the canonical work-unit resolver, one S-101 route identity, one shared map Graphic,
-and ordered member presentation. Only package Analyze navigation is enabled.
-F6C Review and F6D floating Product History remain deferred; package Review/History navigation and
-Pause, Resume, Discard, Send, Accept and scheduling remain disabled/fail closed.
+and ordered member presentation. Package Analyze and Review navigation are enabled in the F6C
+candidate against `462776d5aef68cf71cb784506c580b82c97f1dcc`. F6C reuses F6A canonical resolution,
+one Review session record and FI-022 obligation per package, and two vertically stacked exact-member
+sections in one column. Validation ownership and resolution-claim reconciliation are shared domain
+helpers with Analyze compatibility preserved. Targeted structural failures retain complete accepted
+members and remain unacknowledged for freshness retry. Ordinary columns retain their own DOM/scroll
+and content state during an unrelated package replacement.
+F6D floating Product History remains deferred; package History navigation and Pause, Resume, Discard,
+Send, Accept, export and scheduling remain disabled/fail closed.
+See the [F6C implementation report](package-review-F6C-implementation-report.md).
 See the historical [F6B v1 implementation report](package-analyze-F6B-implementation-report.md),
 the historical [F6B v2 correction report](package-analyze-F6B-v2-correction-report.md),
 the historical [F6B v3 correction report](package-analyze-F6B-v3-correction-report.md),

@@ -83,7 +83,7 @@ test("workspace context copies and freezes the package declaration without freez
   assert.equal(product.capabilities.analyze, true);
 });
 
-test("registry declares ordered member sources and enables only package Analyze navigation and retains disabled actions", () => {
+test("registry declares ordered member sources and enables package Analyze and Review navigation and retains disabled actions", () => {
   const { registry } = harness();
   const source = registry.byId.get("s101");
   assert.deepEqual(
@@ -100,7 +100,7 @@ test("registry declares ordered member sources and enables only package Analyze 
   );
   assert.deepEqual(source.workUnit.navigationCapabilities, {
     analyze: true,
-    review: false,
+    review: true,
     history: false,
   });
   for (const key of [

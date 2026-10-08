@@ -1,3 +1,4 @@
+import { buildReviewUrl } from "../../review/routing/reviewRoute.js";
 import { buildAnalyzeUrl } from "../../analyze/routing/analyzeRoute.js";
 import { launchWorkspaceUrl } from "../../../app/routing/workspaceNavigation.js";
 import { changeFreezeState, uploadProduct } from "../../data/api/productApi.js";
@@ -48,6 +49,21 @@ export function openAnalyzePage(datasetName) {
 
   if (!result.opened) {
     noticeError("Analyze page was blocked", "Allow popups for this site and try again.");
+  }
+}
+
+export function openReviewPage(datasetName) {
+  if (!datasetName) {
+    noticeError("Cannot review product", "The selected feature does not have a datasetName.");
+    return;
+  }
+  const url = buildReviewUrl([datasetName]);
+  if (!url) {
+    noticeError("Workspace link unavailable", "Product names containing commas cannot be shared in a workspace URL.");
+    return;
+  }
+  if (!launchWorkspaceUrl(url, "review").opened) {
+    noticeError("Review page was blocked", "Allow popups for this site and try again.");
   }
 }
 

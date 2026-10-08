@@ -151,7 +151,7 @@ test("package actions cannot expose or dispatch old single-product mutations eve
     );
     assert.deepEqual(
       groups[0][0].items.map((action) => action.id),
-      ["analyze"]
+      ["analyze", "review"]
     );
   }
   assert.deepEqual(createPopupExportActions(context), []);

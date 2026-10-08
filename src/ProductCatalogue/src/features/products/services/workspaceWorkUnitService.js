@@ -224,6 +224,18 @@ export function createWorkspaceWorkUnitService({
         ...canonical,
         requestedDatasetName,
         providerErrors,
+        // Consumers validate the same source snapshot again after optional reads.
+        // This is a contract guard, not a second request or lifecycle owner.
+        assertCurrent: () => {
+          requireContract(owner.workUnit === declaration, "Package declaration was replaced.");
+          concreteMembers.forEach((member, index) =>
+            validateProduct(
+              { status: "resolved", product: memberProducts[index] },
+              sourceById.get(member.sourceId),
+              member.datasetName
+            )
+          );
+        },
         memberProducts: Object.freeze(memberProducts),
         productDetails: Object.freeze({
           [primaryName]: canonicalMetadata,

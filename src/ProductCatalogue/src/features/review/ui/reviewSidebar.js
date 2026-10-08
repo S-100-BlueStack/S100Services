@@ -95,7 +95,8 @@ function createProductAddForm(productCatalog, productItems) {
     showDefaultHelp: false,
     overlayResults: true,
     products: productCatalog?.products ?? [],
-    excludedProductNames: productItems.map((item) => item.datasetName),
+    excludedProductNames:
+      productCatalog?.excludedProductNames ?? productItems.map((item) => item.datasetName),
     loading: productCatalog?.loading ?? false,
     error: productCatalog?.error ?? null,
     requireCatalogMatch: true,
