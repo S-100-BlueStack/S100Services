@@ -168,3 +168,101 @@ The canonical route is `/Analyze?Datasets=ProductA,ProductB`. See
 [workspace routing](../../shared/routing/README.md) for the shared URL boundary and temporary
 legacy-path compatibility. The URL continues to represent enabled Products; disabled list entries
 remain local workspace composition state.
+
+## F6B package-aware Analyze
+
+Composition first resolves through `resolveAnalyzeWorkUnits()` and the F6A canonical work-unit
+resolver. The exact `resolveProduct()` API is unchanged. Both S-101 and mapped S-57 inputs resolve to
+one canonical S-101 dataset, retaining the first logical work-unit occurrence in mixed lists. The
+existing `Datasets=` grammar is unchanged; unrelated simple Products retain their exact identities.
+Request-scoped alias deduplication prevents redundant package resolutions within one composition.
+F6B v2 additionally reconciles the final result list by proven package membership. A later complete
+package resolution replaces any earlier failed/simple alias belonging to it while retaining the first
+logical occurrence position. Conflicting successful ownership/canonical/member claims produce a
+failed resolution instead of overlapping package items. Unproven failures remain exact failures.
+
+One outer model contains `workUnit` and ordered `members`. Each member retains its own exact
+ProductContext, identity, metadata, Product status, validation availability and read-only History.
+The sidebar reuses the ordinary Product card renderer for compact S-101/S-57 sections. Its outer
+label says `ENC package`; it does not substitute workflow status for a member's Product status.
+Members have no independent visibility or remove controls.
+
+Only the outer model reaches `createAnalyzeLayers()`. It owns the representative's shared AOI and
+one Graphic. Missing/malformed shared geometry, member context, identity or mapping fails the whole
+package. Optional validation diagnostics and History errors retain the existing truthful content
+warning/unavailable states. No incomplete metadata package is published as an ordinary Product.
+Layer creation cleans up already created layers on a subsequent renderer failure.
+
+F6B v4 projects only the accepted package model's member Product statuses at the dedicated package
+layer boundary. `workUnitStatus` contains `members: [{ key, datasetName, status }]`, with each value
+copied from the corresponding `memberKey`, `datasetName` and `status`. Missing status remains missing;
+no workflow status or representative status is used to fill it. Only package layer definitions opt
+into `WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION`. The ordinary compatibility/source layer paths and
+`analyzeGraphicProductContext.js` remain unchanged.
+
+The existing Esri transformer passes those attributes and the strategy to `createGraphicProperties()`
+and the central `resolveCorrectionSymbol()`. F2's member-only projection, existing palette and CIM
+hatches choose the initial symbol for the one shared polygon Graphic: no usable member status falls
+back to representative scalar status, one distinct supplied status is scalar, and distinct member
+statuses are mixed. Equal statuses never manufacture a hatch. No additional Product read occurs.
+Initial loads and successful targeted replacements use this same path. Failed/stale replacements
+retain the accepted Graphic/symbol under the unchanged v2/v3 lifecycle.
+
+F6B v5 scopes package member Internal Validation Reports before content publication. The backend
+`electronicproducts/{datasetName}/artifacts/history` returns validation artifacts from related S-101
+and S-57 export tracks, including prior candidate revisions. Requesting through a member alias does
+not establish ownership of every returned record. The shared `normalizeArtifactHistory()` remains
+unchanged and preserves `datasetName`, `productSpecification`, `trackId`, `revisionId` and the secured,
+API-rebased backend download URL.
+
+The Analyze-owned `selectPackageValidationArtifacts()` compares each normalized artifact's concrete
+dataset identity and specification with the exact member ProductContext. The specification comes from
+F6A-validated source AOI attributes, not member/source labels or dataset prefixes. Dataset comparison
+uses the existing trimmed, case-insensitive workspace identity convention; it does not match prefixes.
+Registry numeric 101/57 and enum S101/S57 forms normalize to the same ownership namespace. Unknown
+specifications are rejected rather than converted into an arbitrary Product.
+
+Records belonging to another Product are omitted. Missing/unknown ownership and conflicting owner
+claims for the same artifact ID or track ID are omitted with the existing member `loadError` warning.
+Unprovable member identity uses that same optional content-error boundary. Valid records keep their
+original normalized URL/object metadata; revision is not used to remove historical reports. No entire
+package is failed because an optional artifact is unattributable. Empty members retain the existing
+empty state. Ordinary Analyze retains its existing unfiltered artifact path; Review, History and the
+UI renderer are unchanged.
+
+The two member artifact requests remain independent. They often return the same combined history,
+but replacing them with a single canonical request would couple optional endpoint failures. V5 does
+not add a cache, retry topology or lifecycle to optimize that secondary concern. Logical request count
+is unchanged, and the existing package generation boundary prevents late artifact completion from
+republishing old member content.
+
+The existing workspace generation and freshness monitor remain the only lifecycle owners. Canonical
+composition is established before URL/list publication and before freshness priming. Initial/manual
+composition projection rereads member metadata after priming, validates it against the resolved
+mapping, and reuses the already validated exact contexts. Targeted revision refresh can reuse the
+resolver's detail reads. Histories resolve per member, but all children publish together after the
+same generation checks. Failed replacements retain the accepted package's complete member/geometry
+snapshot and show its load warning; the freshness monitor receives failure so it can retry.
+Each package uses a dedicated layer in the existing Analyze map pipeline, tagged with its canonical
+work-unit identity. Successful targeted refresh replaces only layers owned by successful refreshed
+packages, without changing view extent. Ordinary Product layers and Graphics remain unchanged even
+when their own sidebar refresh fails in the same batch. Only a popup selected on a replaced package
+layer is closed; unrelated popup and hover registrations are retained. Simple-only targeted refresh
+preserves the existing sidebar refresh behavior.
+F6B v3 constructs targeted package replacements off-map through a page-owned `add`/`remove`
+boundary. After the existing generation checks, the page publishes the staged layers and retains
+ownership while hover registration awaits. A newer full composition, newer targeted refresh or
+`destroy()` synchronously cancels pending replacements, removes only their published layers and
+unregisters only their hover state. The superseded promise need not finish first. The accepted package
+layer remains until replacement registration succeeds and the current generation commits it.
+Failed construction or registration cleans only replacement resources. Cancellation never closes an
+accepted package or ordinary Product popup. The existing load and targeted-refresh request IDs remain
+authoritative; the pending set is lifecycle ownership, not a new generation or cache. Shared ArcGIS
+infrastructure and dedicated package layer definitions are unchanged. There is no member timer,
+popup freshness listener, job polling or persistent package cache.
+
+Main-map and Collection package Analyze navigation is enabled using the primary representative.
+Review (F6C), floating package History (F6D) and package lifecycle actions remain deferred/fail closed.
+These changes do not change Review/History source or backend contracts.
+Independent backend reads are not a server transaction; the frontend guards identities, complete
+publication and superseded generations, without claiming a transactional backend snapshot.

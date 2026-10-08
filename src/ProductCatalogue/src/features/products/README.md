@@ -28,7 +28,7 @@ are not overlaid onto direct workspace capabilities; the Main-map overlay remain
 `createWorkspaceWorkUnitService({ registry, productService, fetchProduct }).resolveWorkUnit(name, options)`
 is the separate opt-in canonical work-unit boundary. When injecting dependencies, the exact Product
 service must use the same registry. Resolution options are forwarded to the exact API.
-No existing Analyze, Review, History, picker or routing caller has been switched to this API.
+Analyze composition now uses this boundary (F6B). Review and floating History remain exact callers.
 
 The package owner declares ordered members with explicit `sourceId` references. The secondary
 source also declares `workspace.workUnitSourceId`, so removing the owner cannot silently turn a
@@ -58,9 +58,12 @@ request. There is no polling, persistent package cache, refresh listener or addi
 The caller remains responsible for suppressing superseded requests. Independent backend reads are
 not a transactional snapshot; future workspace lifecycle slices must own freshness/publication.
 
-Package Analyze UI (F6B), Review UI (F6C) and floating History UI (F6D) remain deferred.
-Main-map package Analyze/Review/History navigation stays disabled. No route canonicalization,
-`Datasets=` grammar change, Collection presentation change or package mutation is introduced.
+Package Analyze UI (F6B) is implemented. Main-map/Collection Analyze navigation is enabled;
+Review UI (F6C) and floating History UI (F6D) and their package navigation remain deferred.
+Analyze canonicalizes mapped secondary names to the primary dataset using the existing `Datasets=`
+grammar. Collection presentation remains one package entry. No package mutation is introduced.
+Resolved packages also expose ordered `memberProducts` and request-scoped `productDetails` so Analyze
+can reuse validated exact contexts and detail reads without changing `resolveProduct()` semantics.
 Pause, Resume, Discard, Send, Accept and scheduling remain deferred/fail closed.
 The controlled [F6 discovery](../../../docs/PC-package-workspaces-F6-discovery-df7d088e.md)
 is preserved verbatim as supplemental design input.

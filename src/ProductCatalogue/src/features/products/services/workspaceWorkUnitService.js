@@ -198,9 +198,11 @@ export function createWorkspaceWorkUnitService({
 
       const primaryName = concreteMembers.find((member) => member.key === primary.key).datasetName;
       let canonical;
+      const memberProducts = [];
       for (const member of concreteMembers) {
         const result = await exact(member.datasetName);
         validateProduct(result, sourceById.get(member.sourceId), member.datasetName);
+        memberProducts.push(result.product);
         if (member.key === primary.key) canonical = result;
       }
       // A secondary entry must agree with the representative's current mapping.
@@ -222,6 +224,11 @@ export function createWorkspaceWorkUnitService({
         ...canonical,
         requestedDatasetName,
         providerErrors,
+        memberProducts: Object.freeze(memberProducts),
+        productDetails: Object.freeze({
+          [primaryName]: canonicalMetadata,
+          [requestedProduct.datasetName]: metadata,
+        }),
         workUnit: Object.freeze({
           kind: declaration.kind,
           identityKey: JSON.stringify([declaration.kind, owner.id, identity(primaryName)]),

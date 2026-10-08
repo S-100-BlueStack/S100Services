@@ -10,6 +10,28 @@ Authoritative baseline:
 
 `df7d088ea3f43c3afeef0faa93e108af4c9638f1`
 
+## Current implementation after F6B
+
+F6B implements package-aware Analyze against `a5360531032c2baeb8d5544cf7b8e7cb15a7551f`.
+The discovery findings below remain a historical design record. F6A reports are unchanged.
+Analyze now uses the canonical work-unit resolver, one S-101 route identity, one shared map Graphic,
+and ordered member presentation. Only package Analyze navigation is enabled.
+F6C Review and F6D floating Product History remain deferred; package Review/History navigation and
+Pause, Resume, Discard, Send, Accept and scheduling remain disabled/fail closed.
+See the historical [F6B v1 implementation report](package-analyze-F6B-implementation-report.md),
+the historical [F6B v2 correction report](package-analyze-F6B-v2-correction-report.md),
+the historical [F6B v3 correction report](package-analyze-F6B-v3-correction-report.md),
+the historical [F6B v4 correction report](package-analyze-F6B-v4-correction-report.md),
+and the current [F6B v5 correction report](package-analyze-F6B-v5-correction-report.md).
+V2 reconciles final alias claims and gives package map replacement a dedicated layer boundary,
+so unrelated ordinary Product Graphics/popups retain their existing freshness lifecycle.
+V3 preserves both v2 corrections and closes targeted package staging ownership: construction stays
+off-map, and published pending registration is synchronously cancelled by newer generations or destroy.
+V4 preserves that lifecycle and projects accepted Analyze member Product statuses onto the one shared
+package Graphic, opting only its layer into the existing F2 member-aware palette/CIM hatch pipeline.
+V5 preserves the accepted rendering/lifecycle and scopes combined validation artifact history to each
+exact member Product by concrete dataset identity and authoritative specification before publication.
+
 ## Goal
 
 Determine how the accepted ENC package work-unit model can extend from the Main map into

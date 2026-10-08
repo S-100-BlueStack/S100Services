@@ -117,7 +117,7 @@ export function createDataSourceRegistry({
       workUnit: {
         kind: "package",
         primaryMemberKey: "s101",
-        navigationCapabilities: { analyze: false, review: false, history: false },
+        navigationCapabilities: { analyze: true, review: false, history: false },
         members: [
           {
             key: "s101",

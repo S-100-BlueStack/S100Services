@@ -230,8 +230,12 @@ test("Analyze loads public metadata and validation history while retaining sourc
   const calls = [];
   const productContext = context("s57");
   const [product] = await fetchAnalyzeProducts(["PRODUCT"], {
-    workspaceProductService: {
-      resolveProduct: async () => ({ status: "resolved", product: productContext }),
+    workspaceWorkUnitService: {
+      resolveWorkUnit: async () => ({
+        status: "resolved",
+        product: productContext,
+        workUnit: null,
+      }),
     },
     get: async (path) => {
       calls.push(path);
@@ -346,8 +350,12 @@ test("v1 migration retains the formerly fixed source without enabling new source
 
 test("Analyze keeps metadata when validation history is malformed and does not invent a status", async () => {
   const [product] = await fetchAnalyzeProducts(["PRODUCT"], {
-    workspaceProductService: {
-      resolveProduct: async () => ({ status: "resolved", product: context("s101") }),
+    workspaceWorkUnitService: {
+      resolveWorkUnit: async () => ({
+        status: "resolved",
+        product: context("s101"),
+        workUnit: null,
+      }),
     },
     get: async (path) =>
       path.endsWith("history") ? { Success: false } : { Data: { Name: "PRODUCT" } },

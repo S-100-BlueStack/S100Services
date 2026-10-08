@@ -54,7 +54,7 @@ for (const routeName of ["analyze", "review"]) {
     const calls = [];
     if (routeName === "analyze") {
       const results = await fetchAnalyzeProducts(route.datasetNames, {
-        workspaceProductService: service,
+        workspaceWorkUnitService: { resolveWorkUnit: (name) => service.resolveProduct(name) },
         get: async (endpoint) => {
           calls.push(endpoint);
           if (endpoint.endsWith("/artifacts/history")) return { Data: [] };

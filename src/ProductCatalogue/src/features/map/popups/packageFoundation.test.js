@@ -145,7 +145,14 @@ test("package actions cannot expose or dispatch old single-product mutations eve
       attributes: { datasetName: "PRIMARY", status },
       frozen: status === 5,
     });
-    assert.deepEqual(groups, []);
+    assert.deepEqual(
+      groups.flat().map((action) => action.id),
+      ["tools"]
+    );
+    assert.deepEqual(
+      groups[0][0].items.map((action) => action.id),
+      ["analyze"]
+    );
   }
   assert.deepEqual(createPopupExportActions(context), []);
   for (const capability of [

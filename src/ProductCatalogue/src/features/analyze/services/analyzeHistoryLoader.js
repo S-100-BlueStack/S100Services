@@ -7,6 +7,10 @@ export async function loadAnalyzeProductHistories(
   const normalizedProducts = Array.isArray(products) ? products : [];
   const results = await Promise.allSettled(
     normalizedProducts.map(async (product) => {
+      if (product?.members) {
+        const members = await loadAnalyzeProductHistories(product.members, { fetchHistory });
+        return { ...product, members };
+      }
       if (product?.workspaceLoadState !== "loaded" || !product?.productContext) {
         throw new Error(
           product?.loadError ??

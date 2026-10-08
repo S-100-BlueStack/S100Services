@@ -306,7 +306,8 @@ function createProductCard(product) {
 
   const status = document.createElement("span");
   status.className = "analyze-product-card__status";
-  status.textContent = getStatusName(product.status);
+  status.textContent =
+    product.workUnit?.kind === "package" ? "ENC package" : getStatusName(product.status);
 
   summary.appendChild(title);
   summary.appendChild(status);
@@ -321,6 +322,18 @@ function createProductCard(product) {
         message: product.loadError ?? `Workspace data for ${product.datasetName} is unavailable.`,
       })
     );
+    card.append(summary, content);
+    return card;
+  }
+
+  if (product.members) {
+    for (const member of product.members) {
+      const section = createProductCard(member);
+      section.classList.add("analyze-package-member");
+      section.querySelector(".analyze-product-card__title").textContent =
+        `${member.memberLabel} · ${member.datasetName}`;
+      content.appendChild(section);
+    }
     card.append(summary, content);
     return card;
   }

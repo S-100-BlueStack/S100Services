@@ -21,7 +21,12 @@ import {
   removeAnalyzeDatasetItem,
   toggleAnalyzeDatasetItem,
 } from "../domain/analyzeDatasetList.js";
-import { fetchAnalyzeProducts } from "../api/analyzeApi.js";
+import {
+  canonicalizeAnalyzeItems,
+  retainAcceptedAnalyzePackages,
+  mergeAnalyzeRefresh,
+} from "../domain/analyzeWorkUnits.js";
+import { fetchAnalyzeProducts, resolveAnalyzeWorkUnits } from "../api/analyzeApi.js";
 import { createAnalyzeLayers } from "../map/createAnalyzeLayers.js";
 import { zoomToGraphicsExtent } from "../map/zoomToGraphics.js";
 import {
@@ -55,6 +60,58 @@ export async function initAnalyzePage({ datasetNames }) {
   const map = createMap();
   const view = createView(map);
   const hoverManager = createHoverManager(view);
+  // Pending replacements belong to the page from the public map.add boundary.
+  // Layer construction stays off-map; published staging remains cancellable
+  // while its layer views register. Existing request IDs decide authority.
+  const pendingPackageReplacements = new Set();
+  const cancelPendingPackageReplacements = () => {
+    for (const replacement of pendingPackageReplacements) replacement.cancel();
+  };
+  const createPackageReplacement = () => {
+    const ownedLayers = new Set();
+    const publishedLayers = new Set();
+    let cancelled = false;
+    const replacement = {
+      map: {
+        add(layer) {
+          if (!cancelled) ownedLayers.add(layer);
+        },
+        remove(layer) {
+          ownedLayers.delete(layer);
+          if (publishedLayers.delete(layer)) {
+            hoverManager.unregisterLayer(layer);
+            map.remove(layer);
+          }
+        },
+      },
+      publish() {
+        if (cancelled) return false;
+        for (const layer of ownedLayers) {
+          // Own the live layer before publishing, including a throwing add.
+          publishedLayers.add(layer);
+          map.add(layer);
+        }
+        return !cancelled;
+      },
+      cancel() {
+        cancelled = true;
+        for (const layer of publishedLayers) {
+          hoverManager.unregisterLayer(layer);
+          map.remove(layer);
+        }
+        publishedLayers.clear();
+        ownedLayers.clear();
+        pendingPackageReplacements.delete(replacement);
+      },
+      commit() {
+        pendingPackageReplacements.delete(replacement);
+        publishedLayers.clear();
+        ownedLayers.clear();
+      },
+    };
+    pendingPackageReplacements.add(replacement);
+    return replacement;
+  };
   const cleanupPopupHoverSync = registerPopupHoverSync(view, hoverManager);
   const renderSidebar = ({ loading = false } = {}) => {
     renderAnalyzeSidebar({
@@ -94,16 +151,26 @@ export async function initAnalyzePage({ datasetNames }) {
     { updateUrl = true, showLoader = true } = {}
   ) => {
     const requestId = ++loadRequestId;
+    cancelPendingPackageReplacements();
     activeWorkspaceLoadRequestId = requestId;
     const validatedDatasetItems = validateAnalyzeDatasetItems(nextDatasetItems);
-    datasetItems = validatedDatasetItems.items;
+    const resolutions = await resolveAnalyzeWorkUnits(
+      getEnabledAnalyzeDatasetNames(validatedDatasetItems.items)
+    );
+    if (requestId !== loadRequestId) return;
+    datasetItems = canonicalizeAnalyzeItems(validatedDatasetItems.items, [
+      ...currentProducts,
+      ...resolutions.map((resolution) => ({
+        datasetName: resolution.product?.datasetName ?? resolution.requestedDatasetName,
+        workUnit: resolution.workUnit,
+      })),
+    ]);
     notifyRejectedCatalogProducts(validatedDatasetItems);
     const enabledNextDatasetNames = getEnabledAnalyzeDatasetNames(datasetItems);
+    const acceptedProducts = currentProducts;
     // The Analyze route represents the active load set. Disabled names are local
     // UI composition state so users can pause products without losing the list.
-    if (updateUrl) {
-      setAnalyzeRouteUrl(enabledNextDatasetNames);
-    }
+    setAnalyzeRouteUrl(enabledNextDatasetNames, { replace: !updateUrl });
 
     document.title = createAnalyzeDocumentTitle(enabledNextDatasetNames);
     // Close stale popups before replacing analyze layers. ArcGIS popups can otherwise
@@ -159,7 +226,12 @@ export async function initAnalyzePage({ datasetNames }) {
 
       await ensureLookupsLoaded();
 
-      const products = await fetchAnalyzeProducts(enabledNextDatasetNames);
+      // Identity resolution precedes freshness priming. Read member metadata again after
+      // the seed so a revision observed during resolution cannot mask an older snapshot.
+      const products = retainAcceptedAnalyzePackages(
+        await fetchAnalyzeProducts(enabledNextDatasetNames, { resolutions, reuseDetails: false }),
+        acceptedProducts
+      );
 
       if (requestId !== loadRequestId) {
         return;
@@ -185,14 +257,14 @@ export async function initAnalyzePage({ datasetNames }) {
       });
 
       if (requestId !== loadRequestId) {
-        hoverManager.clear();
+        layers.forEach((layer) => hoverManager.unregisterLayer(layer));
         removeLayers(map, layers);
         return;
       }
       await registerHoverLayers(hoverManager, layers);
 
       if (requestId !== loadRequestId) {
-        hoverManager.clear();
+        layers.forEach((layer) => hoverManager.unregisterLayer(layer));
         removeLayers(map, layers);
         return;
       }
@@ -267,7 +339,9 @@ export async function initAnalyzePage({ datasetNames }) {
     }
 
     const refreshRequestId = ++targetedRefreshRequestId;
+    cancelPendingPackageReplacements();
     const workspaceLoadRequestId = loadRequestId;
+    let pendingReplacement = null;
     try {
       await ensureLookupsLoaded();
       const products = await fetchAnalyzeProducts(refreshNames);
@@ -288,14 +362,54 @@ export async function initAnalyzePage({ datasetNames }) {
         return false;
       }
 
-      currentProducts = mergeProductsByDatasetName(
-        currentProducts,
-        refreshedProducts,
-        enabledNames
+      const nextProducts = mergeAnalyzeRefresh(currentProducts, refreshedProducts, enabledNames);
+      const refreshedPackages = refreshedProducts.filter((product) => product.members);
+      if (!refreshedPackages.length) {
+        currentProducts = nextProducts;
+        renderSidebar({ loading: false });
+        return refreshedProducts.every((product) => product.workspaceLoadState === "loaded");
+      }
+      const refreshedPackageKeys = new Set(
+        refreshedPackages.map((product) => product.workUnit.identityKey)
       );
+      const replacedLayers = currentLayers.filter((layer) =>
+        refreshedPackageKeys.has(layer.appAnalyzeWorkUnitKey)
+      );
+      pendingReplacement = createPackageReplacement();
+      const layers = await createAnalyzeLayers(pendingReplacement.map, refreshedPackages);
+      if (
+        refreshRequestId !== targetedRefreshRequestId ||
+        workspaceLoadRequestId !== loadRequestId ||
+        activeWorkspaceLoadRequestId !== null
+      ) {
+        pendingReplacement.cancel();
+        return false;
+      }
+      if (!pendingReplacement.publish()) return false;
+      await registerHoverLayers(hoverManager, layers);
+      if (
+        refreshRequestId !== targetedRefreshRequestId ||
+        workspaceLoadRequestId !== loadRequestId ||
+        activeWorkspaceLoadRequestId !== null
+      ) {
+        pendingReplacement.cancel();
+        return false;
+      }
+      // Only the replaced package layers can invalidate their popup/hover state.
+      // A simple Product keeps its original Graphic even if its sidebar refresh failed.
+      if (replacedLayers.includes(view.popup?.selectedFeature?.layer)) closePopup(view);
+      replacedLayers.forEach((layer) => hoverManager.unregisterLayer(layer));
+      removeLayers(map, replacedLayers);
+      currentLayers = currentLayers
+        .filter((layer) => !replacedLayers.includes(layer))
+        .concat(layers);
+      pendingReplacement.commit();
+      pendingReplacement = null;
+      currentProducts = nextProducts;
       renderSidebar({ loading: false });
-      return true;
+      return refreshedProducts.every((product) => product.workspaceLoadState === "loaded");
     } catch (error) {
+      pendingReplacement?.cancel();
       if (
         refreshRequestId !== targetedRefreshRequestId ||
         workspaceLoadRequestId !== loadRequestId
@@ -437,6 +551,7 @@ export async function initAnalyzePage({ datasetNames }) {
     destroy() {
       loadRequestId += 1;
       targetedRefreshRequestId += 1;
+      cancelPendingPackageReplacements();
       activeWorkspaceLoadRequestId = null;
       productCatalogRequestId += 1;
       document.removeEventListener("pc-analyze-dataset-add", handleAnalyzeDatasetAdd);
@@ -458,6 +573,7 @@ export async function initAnalyzePage({ datasetNames }) {
       cleanupViewPadding?.();
       cleanupViewPadding = null;
       hoverManager.clear();
+      currentLayers.forEach((layer) => hoverManager.unregisterLayer(layer));
       removeLayers(map, currentLayers);
       currentLayers = [];
       currentProducts = [];
@@ -566,23 +682,6 @@ function normalizeDatasetKey(datasetName) {
   return String(datasetName ?? "")
     .trim()
     .toUpperCase();
-}
-
-function mergeProductsByDatasetName(currentProducts, refreshedProducts, enabledDatasetNames) {
-  const currentByDatasetName = new Map(
-    currentProducts.map((product) => [normalizeDatasetKey(product?.datasetName), product])
-  );
-
-  for (const product of refreshedProducts) {
-    const key = normalizeDatasetKey(product?.datasetName);
-    if (key) {
-      currentByDatasetName.set(key, product);
-    }
-  }
-
-  return enabledDatasetNames
-    .map((datasetName) => currentByDatasetName.get(normalizeDatasetKey(datasetName)))
-    .filter(Boolean);
 }
 
 async function loadLookupsSafely() {

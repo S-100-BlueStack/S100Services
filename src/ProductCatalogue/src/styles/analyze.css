@@ -623,3 +623,14 @@ body.pc-analyze-route {
     gap: 2px;
   }
 }
+
+/* Keep member presentation subordinate to the shared workspace item. */
+.analyze-package-member {
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
+}
+
+.analyze-package-member + .analyze-package-member {
+  margin-top: 0.375rem;
+}

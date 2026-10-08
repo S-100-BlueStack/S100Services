@@ -1,3 +1,4 @@
+import { normalizeElectronicProductResponse } from "../../data/normalizers/productResponse.js";
 import { normalizeArtifactHistory } from "../../data/normalizers/productArtifact.js";
 import { apiGet } from "../../../shared/api/apiClient.js";
 import { normalizeProductExportMetadata } from "../../data/normalizers/productExportMetadata.js";
@@ -10,37 +11,131 @@ import {
   WORKSPACE_PRODUCT_RESOLUTION_STATUS,
   getDefaultWorkspaceProductService,
 } from "../../products/services/workspaceProductService.js";
+import { createWorkspaceWorkUnitService } from "../../products/services/workspaceWorkUnitService.js";
+import { reconcileAnalyzeResolutions } from "../domain/analyzeWorkUnits.js";
 import { normalizeInternalValidationReports } from "../domain/internalValidationReports.js";
+import { selectPackageValidationArtifacts } from "../domain/packageValidationArtifacts.js";
 
 const ANALYZE_PRODUCT_ENDPOINT = "electronicproducts";
 
-export async function fetchAnalyzeProducts(
+export async function resolveAnalyzeWorkUnits(
   datasetNames,
-  { workspaceProductService = getDefaultWorkspaceProductService(), get = apiGet } = {}
+  {
+    workspaceProductService = getDefaultWorkspaceProductService(),
+    workspaceWorkUnitService = createWorkspaceWorkUnitService({
+      productService: workspaceProductService,
+    }),
+  } = {}
 ) {
-  const uniqueDatasetNames = [...new Set(datasetNames)];
+  const resolutions = [];
+  const aliases = new Set();
+  // Alias reuse is scoped to this composition. Reloads validate current mappings.
+  for (const datasetName of [...new Set(datasetNames)]) {
+    const key = datasetName.trim().toUpperCase();
+    if (aliases.has(key)) continue;
+    const resolution = await workspaceWorkUnitService.resolveWorkUnit(datasetName);
+    resolutions.push({ ...resolution, requestedDatasetName: datasetName });
+    aliases.add(key);
+    for (const member of resolution.workUnit?.members ?? []) {
+      aliases.add(member.datasetName.toUpperCase());
+    }
+  }
+  return reconcileAnalyzeResolutions(resolutions);
+}
+
+export async function fetchAnalyzeProducts(datasetNames, options = {}) {
+  const resolutions = reconcileAnalyzeResolutions(
+    options.resolutions ?? (await resolveAnalyzeWorkUnits(datasetNames, options))
+  );
   return Promise.all(
-    uniqueDatasetNames.map((datasetName) =>
-      fetchAnalyzeProduct(datasetName, { workspaceProductService, get })
+    resolutions.map((resolution) =>
+      fetchResolvedAnalyzeProduct(
+        resolution.requestedDatasetName,
+        resolution,
+        options.get ?? apiGet,
+        options.reuseDetails !== false
+      )
     )
   );
 }
 
-async function fetchAnalyzeProduct(datasetName, { workspaceProductService, get }) {
-  const resolution = await workspaceProductService.resolveProduct(datasetName);
+async function fetchResolvedAnalyzeProduct(datasetName, resolution, get, reuseDetails) {
   if (resolution.status !== WORKSPACE_PRODUCT_RESOLUTION_STATUS.RESOLVED) {
     return createFailedAnalyzeProduct(datasetName, resolution);
   }
-
+  if (resolution.workUnit?.kind === "package") {
+    const representative = resolution.product;
+    try {
+      const geometry = representative.data?.geometry;
+      if (!isAnalyzePackageGeometry(geometry)) {
+        throw new Error("Package shared AOI geometry is unavailable.");
+      }
+      const members = await Promise.all(
+        resolution.workUnit.members.map(async (member, index) => {
+          const context = resolution.memberProducts?.[index];
+          if (
+            !context ||
+            context.datasetName.toUpperCase() !== member.datasetName.toUpperCase() ||
+            context.sourceId !== member.sourceId
+          ) {
+            throw new Error("Package member Product context is incomplete or contradictory.");
+          }
+          const product = await fetchElectronicAnalyzeProduct(
+            context,
+            get,
+            reuseDetails ? resolution.productDetails?.[member.datasetName] : null,
+            resolution.workUnit
+          );
+          if (product.workspaceLoadState !== "loaded") throw new Error(product.loadError);
+          return { ...product, memberKey: member.key, memberLabel: member.label };
+        })
+      );
+      const primary = members.find(
+        (member) => member.memberKey === resolution.workUnit.primaryMemberKey
+      );
+      if (!primary || members.length < 2) throw new Error("Package Analyze model is incomplete.");
+      return {
+        ...primary,
+        productContext: representative,
+        aoiGeometry: geometry,
+        sourceFeature: null,
+        workUnit: resolution.workUnit,
+        members,
+      };
+    } catch (error) {
+      return {
+        ...createFailedAnalyzeProduct(representative.datasetName, {
+          product: representative,
+          error: error.message,
+        }),
+        workUnit: resolution.workUnit,
+      };
+    }
+  }
   const productContext = resolution.product;
   if (isCompatibilityProductContext(productContext)) {
     return fetchCompatibilityAnalyzeProduct(datasetName, { productContext, get });
   }
-
   if (productContext.capabilities?.backendProductRefresh) {
     return fetchElectronicAnalyzeProduct(productContext, get);
   }
   return createSourceAnalyzeProduct(productContext);
+}
+
+export function isAnalyzePackageGeometry(geometry) {
+  if (!geometry || typeof geometry !== "object") return false;
+  if (Number.isFinite(geometry.x) && Number.isFinite(geometry.y)) return true;
+  const position = (value) =>
+    Array.isArray(value) && value.length >= 2 && value.every(Number.isFinite);
+  if (Array.isArray(geometry.points) && geometry.points.length > 0) {
+    return geometry.points.every(position);
+  }
+  return [geometry.rings, geometry.paths].some(
+    (parts) =>
+      Array.isArray(parts) &&
+      parts.length > 0 &&
+      parts.every((part) => Array.isArray(part) && part.length >= 2 && part.every(position))
+  );
 }
 
 async function fetchCompatibilityAnalyzeProduct(datasetName, { productContext, get }) {
@@ -116,9 +211,9 @@ function normalizeAnalyzeProduct(
     raw: payload,
     isMock,
     loadError,
-    exportMetadata: normalizeProductExportMetadata(
-      readFirstDefined(product, ["exports", "Exports"])
-    ),
+    exportMetadata:
+      product.exportMetadata ??
+      normalizeProductExportMetadata(readFirstDefined(product, ["exports", "Exports"])),
   };
 }
 
@@ -262,17 +357,35 @@ function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-async function fetchElectronicAnalyzeProduct(productContext, get) {
+async function fetchElectronicAnalyzeProduct(productContext, get, detail = null, workUnit = null) {
   const datasetName = productContext.datasetName;
   const base = `${ANALYZE_PRODUCT_ENDPOINT}/${encodeURIComponent(datasetName)}`;
   try {
     const [metadata, artifacts] = await Promise.allSettled([
-      get(base, `Product metadata request failed for ${datasetName}`),
+      detail
+        ? Promise.resolve(detail)
+        : get(base, `Product metadata request failed for ${datasetName}`),
       get(`${base}/artifacts/history`, `Validation artifact history failed for ${datasetName}`),
     ]);
     if (metadata.status === "rejected") throw metadata.reason;
     if (metadata.value?.Success === false || metadata.value?.success === false) {
       throw new Error("Product metadata is unavailable.");
+    }
+    if (workUnit) {
+      const current = metadata.value?.workUnitMetadata
+        ? metadata.value
+        : normalizeElectronicProductResponse(metadata.value);
+      if (current.datasetName?.toUpperCase() !== datasetName.toUpperCase()) {
+        throw new Error("Package member metadata has no matching Product identity.");
+      }
+      for (const member of workUnit.members) {
+        if (
+          current.workUnitMetadata?.members?.[member.key]?.datasetName?.toUpperCase() !==
+          member.datasetName.toUpperCase()
+        ) {
+          throw new Error("Package member metadata contradicts the resolved work unit.");
+        }
+      }
     }
     const product = normalizeAnalyzeProduct(metadata.value, datasetName, { productContext });
     if (product.datasetName.toLowerCase() !== datasetName.toLowerCase()) {
@@ -283,7 +396,14 @@ async function fetchElectronicAnalyzeProduct(productContext, get) {
     try {
       if (artifacts.status === "rejected") throw artifacts.reason;
       const history = normalizeArtifactHistory(artifacts.value);
-      product.internalValidationReports = history.map((artifact) => ({
+      const selection = workUnit
+        ? selectPackageValidationArtifacts(history, productContext)
+        : { artifacts: history, hasUnattributedArtifacts: false };
+      if (selection.hasUnattributedArtifacts) {
+        product.loadError =
+          "Some validation artifacts have ambiguous or missing Product ownership and were not displayed.";
+      }
+      product.internalValidationReports = selection.artifacts.map((artifact) => ({
         id: artifact.id,
         title: artifact.fileName,
         status: "available",
