@@ -1,4 +1,8 @@
-import { createReviewPackageFixture, packageNames, waitForReview } from "../testSupport/reviewPackageFixture.js";
+import {
+  createReviewPackageFixture,
+  packageNames,
+  waitForReview,
+} from "../testSupport/reviewPackageFixture.js";
 import { loadReviewHistories as loadOwnedReviewHistories } from "../services/reviewHistoryLoader.js";
 import { createWorkspaceFreshnessMonitor } from "../../products/services/workspaceFreshnessMonitor.js";
 import { resolveReviewComposition } from "../services/reviewWorkUnitResolver.js";
@@ -30,7 +34,11 @@ async function harness({
   initial = ["A"],
   beforeReady = async () => {},
   catalog = [],
-  resolveWorkUnit = async (name) => ({ status: "resolved", product: result(name).productContext, requestedDatasetName: name }),
+  resolveWorkUnit = async (name) => ({
+    status: "resolved",
+    product: result(name).productContext,
+    requestedDatasetName: name,
+  }),
   fetchFreshness = null,
 } = {}) {
   const listeners = new Map();
@@ -46,10 +54,11 @@ async function harness({
   const context = {
     ...productList,
     getReviewResolutionAliases,
-    resolveReviewComposition: (items, options) => resolveReviewComposition(items, {
-      ...options,
-      workspaceWorkUnitService: { resolveWorkUnit },
-    }),
+    resolveReviewComposition: (items, options) =>
+      resolveReviewComposition(items, {
+        ...options,
+        workspaceWorkUnitService: { resolveWorkUnit },
+      }),
     createReviewProductSession,
     validateProductCatalogSelection,
     console,
@@ -70,7 +79,12 @@ async function harness({
     createWorkspaceFreshnessMonitor: (options) => {
       monitorOptions = options;
       if (fetchFreshness) {
-        monitor = createWorkspaceFreshnessMonitor({ ...options, fetchFreshness, documentRef: null, setIntervalFn: null });
+        monitor = createWorkspaceFreshnessMonitor({
+          ...options,
+          fetchFreshness,
+          documentRef: null,
+          setIntervalFn: null,
+        });
         return monitor;
       }
       return {
@@ -83,7 +97,10 @@ async function harness({
       };
     },
     getProductOperationState: () => ({ running: false }),
-    onProductOperationStateChanged: (callback) => { operationListener = callback; return () => {}; },
+    onProductOperationStateChanged: (callback) => {
+      operationListener = callback;
+      return () => {};
+    },
     loadReviewHistories: async (names, options) => {
       calls.push(...names);
       return Promise.all(names.map((name) => load(name, options)));
@@ -92,8 +109,14 @@ async function harness({
     getCurrentReviewRoute: () => ({ datasetNames: ["D"] }),
     setReviewRouteUrl: (names, options) => routes.push({ names: [...names], options }),
     renderReviewPage: (state) => renders.push(state),
-    captureReviewProductListInteraction: () => ({ type: "product-local", capture: ++interactionCapture }),
-    captureReviewWorkspaceContentInteraction: () => ({ type: "workspace-local", capture: ++interactionCapture }),
+    captureReviewProductListInteraction: () => ({
+      type: "product-local",
+      capture: ++interactionCapture,
+    }),
+    captureReviewWorkspaceContentInteraction: () => ({
+      type: "workspace-local",
+      capture: ++interactionCapture,
+    }),
   };
   const init = runInNewContext(`${source}\ninitReviewPage;`, context);
   const startup = init({ datasetNames: initial });
@@ -241,15 +264,26 @@ async function packagePage(options = {}) {
   const fixture = createReviewPackageFixture();
   const h = await harness({
     initial: [...packageNames, "Simple A"],
-    catalog: packageNames.map((name) => ({ name, datasetName: name })).concat([{ name: "Simple A", datasetName: "Simple A" }]),
+    catalog: packageNames
+      .map((name) => ({ name, datasetName: name }))
+      .concat([{ name: "Simple A", datasetName: "Simple A" }]),
     resolveWorkUnit: (name) => fixture.options.workspaceWorkUnitService.resolveWorkUnit(name),
     load: async (name, loaderOptions) => {
-      const [product] = await loadOwnedReviewHistories([name], { ...fixture.options, ...loaderOptions });
+      const [product] = await loadOwnedReviewHistories([name], {
+        ...fixture.options,
+        ...loaderOptions,
+      });
       return product;
     },
     ...options,
   });
-  return { ...h, fixture, get state() { return h.state; } };
+  return {
+    ...h,
+    fixture,
+    get state() {
+      return h.state;
+    },
+  };
 }
 
 for (const initial of [packageNames, [...packageNames].reverse()]) {
@@ -264,7 +298,10 @@ for (const initial of [packageNames, [...packageNames].reverse()]) {
 }
 
 test("S-57-only picker catalog does not reject its canonical representative on later edits", async () => {
-  const h = await packagePage({ initial: [packageNames[1]], catalog: [{ name: packageNames[1], datasetName: packageNames[1] }] });
+  const h = await packagePage({
+    initial: [packageNames[1]],
+    catalog: [{ name: packageNames[1], datasetName: packageNames[1] }],
+  });
   assert.deepEqual(h.routes.at(-1).names, [packageNames[0]]);
   await h.send("product-toggle", { id: packageNames[0].toUpperCase(), enabled: false });
   await h.send("product-toggle", { id: packageNames[0].toUpperCase(), enabled: true });
@@ -290,15 +327,28 @@ test("package composition preserves defaults, bulk intent, overrides and fresh i
   const h = await packagePage();
   assert.ok(h.state.productItems.every((item) => Object.values(item.contentTypes).every(Boolean)));
   h.send("content-bulk-toggle", { contentType: "history", enabled: false });
-  h.send("content-toggle", { id: packageNames[0].toUpperCase(), contentType: "history", enabled: true });
-  assert.equal(productList.getReviewContentTypeAggregateState(h.state.productItems, "history"), "mixed");
+  h.send("content-toggle", {
+    id: packageNames[0].toUpperCase(),
+    contentType: "history",
+    enabled: true,
+  });
+  assert.equal(
+    productList.getReviewContentTypeAggregateState(h.state.productItems, "history"),
+    "mixed"
+  );
   const before = h.calls.length;
   await h.send("product-add", { datasetName: packageNames[1] });
   assert.equal(h.calls.length, before);
-  assert.deepEqual(h.state.productItems.map((item) => item.contentTypes.history), [true, false]);
+  assert.deepEqual(
+    h.state.productItems.map((item) => item.contentTypes.history),
+    [true, false]
+  );
   assert.equal(h.state.productListInteraction.type, "product-local");
   await h.send("refresh");
-  assert.deepEqual(h.state.productItems.map((item) => item.contentTypes.history), [true, false]);
+  assert.deepEqual(
+    h.state.productItems.map((item) => item.contentTypes.history),
+    [true, false]
+  );
   await h.send("product-remove", { id: packageNames[0].toUpperCase() });
   await h.send("product-add", { datasetName: packageNames[1] });
   assert.equal(h.state.productItems[1].contentTypes.history, false);
@@ -310,11 +360,17 @@ test("related member operation notifications share one canonical freshness reloa
   const observations = [];
   const gate = deferred();
   let wait = false;
-  const h = await packagePage({ fetchFreshness: async (names) => {
-    observations.push([...names]);
-    if (wait) await gate.promise;
-    return names.map((datasetName) => ({ datasetName, available: true, revision: datasetName === packageNames[0] ? revision : "1" }));
-  } });
+  const h = await packagePage({
+    fetchFreshness: async (names) => {
+      observations.push([...names]);
+      if (wait) await gate.promise;
+      return names.map((datasetName) => ({
+        datasetName,
+        available: true,
+        revision: datasetName === packageNames[0] ? revision : "1",
+      }));
+    },
+  });
   wait = true;
   revision = "2";
   h.notifyOperation(packageNames[0]);
@@ -340,7 +396,10 @@ test("content edits during alias canonicalization retain current overrides and a
   h.fixture.controls.detailGate = null;
   gate.resolve();
   await add;
-  assert.deepEqual(h.state.productItems.map((item) => item.contentTypes.history), [true, false]);
+  assert.deepEqual(
+    h.state.productItems.map((item) => item.contentTypes.history),
+    [true, false]
+  );
   assert.ok(h.state.productListInteraction.capture > capture);
   assert.deepEqual(h.routes.at(-1).names, ["Simple A", packageNames[0]]);
   h.page.destroy();

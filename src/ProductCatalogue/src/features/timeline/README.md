@@ -2,7 +2,7 @@
 
 This feature area contains two related but separate concepts:
 
-- Product history: history for one selected product.
+- Product history: history for one selected Product or one resolved package work unit.
 - Map timeline: global map-level timeline state, snapshots, or time stops.
 
 The current UI implements product history content. The global map timeline is intentionally not implemented until the backend and database model are defined.
@@ -256,3 +256,43 @@ backend failures remain `failed`. Main map History carries the selected Graphic'
 through the History event, so a source switch cannot reinterpret stale mock content as compatibility
 content. Source deactivation closes an affected non-pinned source History panel, while unrelated pinned
 compatibility History remains independent.
+
+## F6D package-aware floating Product History
+
+The Main-map Tools/History action captures the clicked ProductContext and Graphic before any async
+work. The existing floating panel remains the sole generation owner. Its package loader resolves the
+F6A work unit first and proves the requested source identity, canonical S-101 representative and
+ordered S-101/S-57 member contexts. Names and workflow statuses never determine membership.
+
+One package header contains the canonical dataset name. Two accessible compact member sections show
+both specification labels and real dataset names. Each reuses the existing summary, event list,
+banner and state renderers. Events, counts, latest timestamps and expanded details remain independent;
+there is no merged chronological feed, total, synthetic event or package backend endpoint.
+
+Each member receives exactly one explicit source-aware History read. `validateOwnership: true` is an
+additive package-only API option that checks concrete raw dataset names before normalization and audit
+association. The loader also checks normalized result/event ownership. Missing names in empty payloads
+are not manufactured as backend evidence. Contradictory concrete ownership produces that member's
+error state. Ordinary explicit History and Dashboard's one-argument compatibility adapter retain their
+existing API behavior and audit association rules.
+
+Resolution, declaration/source validation and final Product metadata mapping checks are mandatory.
+A structural failure rejects the whole package, with no ordinary Product fallback. Optional History
+failure, unavailable content or empty history affects only its own section. Both member results are
+published together after ownership checks. The existing Product-level endpoints cannot provide a
+transactional package snapshot; a later backend change remains possible after the final checks.
+
+Every new open increments the panel generation before resolution. Close, Escape, destroy and newer
+opens revoke older work, including old errors/notices. Existing popup watchers close an unpinned panel
+on close or unrelated source-aware selection. A legitimate same-identity rerender is retained. The
+original source definition/layer, map membership, Graphic identity/mapping and runtime source generation
+are revalidated at async boundaries. A refreshed, replaced or disabled source invalidates pending
+publication for pinned and unpinned panels. No polling or additional observers are introduced.
+
+Pinning retains already accepted content as a snapshot even if its popup/source disappears; it does
+not authorize new reads from a removed source. A pinned pending request may complete after an unrelated
+popup selection only while its original source snapshot remains valid. A new open always supersedes it.
+
+Only package `navigationCapabilities.history` is enabled. Analyze/Review remain enabled, collection
+navigation remains Analyze/Review only, and package mutation/export/scheduling capabilities remain
+unavailable. Dashboard's route-local panel, map timeline and backend contracts are unchanged.

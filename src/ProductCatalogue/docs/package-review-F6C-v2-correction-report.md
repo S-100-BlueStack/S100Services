@@ -32,11 +32,11 @@ to controlled v1. Existing theme text, surface, border and focus tokens remain i
 
 Runtime: Node.js `v24.19.0`.
 
-| Check | Controlled v1 | v2 |
-| --- | --- | --- |
-| Broad `node --test` | 1,205 tests; 1,200 passed; 5 failed | 1,205 tests; 1,200 passed; 5 failed |
-| `node --test src/features/review/ui/*.test.js` | Not rerun separately | 18 passed; 0 failed |
-| `node --check` | Not rerun separately | Both v1-relative changed JS files passed; all 27 baseline-relative changed/new JS files also passed |
+| Check                                          | Controlled v1                       | v2                                                                                                  |
+| ---------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Broad `node --test`                            | 1,205 tests; 1,200 passed; 5 failed | 1,205 tests; 1,200 passed; 5 failed                                                                 |
+| `node --test src/features/review/ui/*.test.js` | Not rerun separately                | 18 passed; 0 failed                                                                                 |
+| `node --check`                                 | Not rerun separately                | Both v1-relative changed JS files passed; all 27 baseline-relative changed/new JS files also passed |
 
 Commands were run from `src/ProductCatalogue`. The stable package board test now verifies the public
 member header groups exactly the existing title and metadata, preceding the independent content cards.
@@ -85,7 +85,6 @@ npm run check
 ```
 
 ## Exact files changed relative to controlled v1
-
 
 ### Changed
 

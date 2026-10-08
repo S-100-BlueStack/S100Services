@@ -59,7 +59,10 @@ export function openReviewPage(datasetName) {
   }
   const url = buildReviewUrl([datasetName]);
   if (!url) {
-    noticeError("Workspace link unavailable", "Product names containing commas cannot be shared in a workspace URL.");
+    noticeError(
+      "Workspace link unavailable",
+      "Product names containing commas cannot be shared in a workspace URL."
+    );
     return;
   }
   if (!launchWorkspaceUrl(url, "review").opened) {
@@ -67,7 +70,7 @@ export function openReviewPage(datasetName) {
   }
 }
 
-export function openProductHistory(datasetName) {
+export function openProductHistory(datasetName, { productContext, graphic } = {}) {
   if (!datasetName) {
     noticeError("Cannot open history", "The selected feature does not have a datasetName.");
     return;
@@ -75,6 +78,8 @@ export function openProductHistory(datasetName) {
 
   dispatchProductHistoryOpen(datasetName, {
     source: "popup",
+    productContext,
+    graphic,
   });
 }
 

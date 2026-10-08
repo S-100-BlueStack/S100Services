@@ -93,7 +93,7 @@ export function createPopupActionGroups({
         productOperationState,
         refreshAndRender,
       }),
-      createToolsAction({ context, attributes: resolvedAttributes }),
+      createToolsAction({ context, attributes: resolvedAttributes, graphic }),
     ]),
   ].filter((actions) => actions.length > 0);
 }
@@ -312,7 +312,7 @@ function createRollbackAction({
   };
 }
 
-function createToolsAction({ context, attributes }) {
+function createToolsAction({ context, attributes, graphic }) {
   const items = [];
 
   if (productContextSupportsCapability(context, PRODUCT_OPERATION_CAPABILITY.ANALYZE)) {
@@ -327,11 +327,14 @@ function createToolsAction({ context, attributes }) {
   }
 
   if (
-    !isAnalyzeRoute() && context.workUnit?.kind === "package" &&
+    !isAnalyzeRoute() &&
+    context.workUnit?.kind === "package" &&
     productContextSupportsCapability(context, PRODUCT_OPERATION_CAPABILITY.REVIEW)
   ) {
     items.push({
-      id: "review", label: "Review", icon: "list",
+      id: "review",
+      label: "Review",
+      icon: "list",
       onClick: () => openReviewPage(context.datasetName ?? attributes?.datasetName),
     });
   }
@@ -345,7 +348,10 @@ function createToolsAction({ context, attributes }) {
       label: "History",
       icon: "clock",
       onClick: () => {
-        openProductHistory(context.datasetName ?? attributes?.datasetName);
+        openProductHistory(context.datasetName ?? attributes?.datasetName, {
+          productContext: context,
+          graphic: graphic ?? context.graphic,
+        });
       },
     });
   }

@@ -46,8 +46,11 @@ export function reconcileWorkspaceResolutions(resolutions, { surface = "Workspac
         resolution.workUnit.primaryMemberKey,
         members.map((member) => [member.key, member.sourceId, key(member.datasetName)]),
         resolution.memberProducts?.map((product) => [
-          product.sourceId, key(product.datasetName), product.identityKey,
-          product.productKey, product.data?.attributes?.productSpecification,
+          product.sourceId,
+          key(product.datasetName),
+          product.identityKey,
+          product.productKey,
+          product.data?.attributes?.productSpecification,
         ]),
       ]),
     });

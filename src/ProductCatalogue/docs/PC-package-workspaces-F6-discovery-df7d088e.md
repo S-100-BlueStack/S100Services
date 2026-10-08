@@ -22,8 +22,11 @@ sections in one column. Validation ownership and resolution-claim reconciliation
 helpers with Analyze compatibility preserved. Targeted structural failures retain complete accepted
 members and remain unacknowledged for freshness retry. Ordinary columns retain their own DOM/scroll
 and content state during an unrelated package replacement.
-F6D floating Product History remains deferred; package History navigation and Pause, Resume, Discard,
-Send, Accept, export and scheduling remain disabled/fail closed.
+F6D v1 implements one floating package Product History panel with a canonical S-101 header and two
+independent exact-member histories, ordered S-101/S-57. The existing panel owns request generation,
+popup/pin/close invalidation and source authority. Package History navigation is enabled in this
+candidate; Pause, Resume, Discard, Send, Accept, export and scheduling remain disabled/fail closed.
+See the [F6D implementation report](package-history-F6D-implementation-report.md).
 See the [F6C implementation report](package-review-F6C-implementation-report.md).
 See the historical [F6B v1 implementation report](package-analyze-F6B-implementation-report.md),
 the historical [F6B v2 correction report](package-analyze-F6B-v2-correction-report.md),
@@ -313,7 +316,10 @@ Package actions remain outside this scope and fail closed.
 - one package History panel;
 - separate S-101/S-57 histories using existing renderer;
 - no fabricated package timeline;
-- enable Main-map History capability only after this slice is accepted.
+- Main-map History capability enabled by the F6D v1 candidate;
+- raw and normalized member ownership validation, independent optional failures and mandatory mapping checks;
+- one existing panel generation with source snapshot checks and no extra polling lifecycle;
+- manual acceptance and authoritative local verification still required before commit.
 
 ## Decisions needed before implementation
 

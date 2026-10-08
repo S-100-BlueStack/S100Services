@@ -4,31 +4,74 @@ import { loadReviewHistories } from "./reviewHistoryLoader.js";
 import { resolveReviewComposition } from "./reviewWorkUnitResolver.js";
 import { reconcileWorkspaceResolutions } from "../../products/domain/workspaceResolutionClaims.js";
 import { getReviewWorkUnitSignature } from "../domain/reviewWorkUnits.js";
-import { getReviewHistoryPresentation, getReviewIcEncPresentation, getReviewValidationPresentation } from "../ui/reviewContentPresentation.js";
-import { createReviewPackageFixture, packageNames, deferred, waitForReview } from "../testSupport/reviewPackageFixture.js";
+import {
+  getReviewHistoryPresentation,
+  getReviewIcEncPresentation,
+  getReviewValidationPresentation,
+} from "../ui/reviewContentPresentation.js";
+import {
+  createReviewPackageFixture,
+  packageNames,
+  deferred,
+  waitForReview,
+} from "../testSupport/reviewPackageFixture.js";
 
-for (const names of [packageNames, [...packageNames].reverse(), [packageNames[1], packageNames[0], packageNames[1]]]) {
+for (const names of [
+  packageNames,
+  [...packageNames].reverse(),
+  [packageNames[1], packageNames[0], packageNames[1]],
+]) {
   test(`Review resolves aliases once with complete ordered members: ${JSON.stringify(names)}`, async () => {
     const h = createReviewPackageFixture();
     const composition = await resolveReviewComposition(names, h.options);
-    assert.deepEqual(composition.items.map((item) => item.datasetName), [packageNames[0]]);
+    assert.deepEqual(
+      composition.items.map((item) => item.datasetName),
+      [packageNames[0]]
+    );
     assert.equal(h.calls.exact.length, 2);
-    assert.deepEqual(h.calls.exact, names[0] === packageNames[0] ? packageNames : [...packageNames].reverse());
+    assert.deepEqual(
+      h.calls.exact,
+      names[0] === packageNames[0] ? packageNames : [...packageNames].reverse()
+    );
     const exactBefore = h.calls.exact.length;
-    const [product] = await loadReviewHistories([packageNames[0]], { ...h.options, resolutions: composition.resolutions });
+    const [product] = await loadReviewHistories([packageNames[0]], {
+      ...h.options,
+      resolutions: composition.resolutions,
+    });
     assert.equal(h.calls.exact.length, exactBefore);
     assert.equal(product.loadState, "loaded", product.error);
     assert.equal(product.workUnitSignature, getReviewWorkUnitSignature(composition.resolutions[0]));
-    assert.deepEqual(product.members.map((member) => [member.datasetName, member.sourceId, member.memberLabel, member.status, member.edition, member.update]), [
-      [packageNames[0], "s101", "S-101", 8, 3, 2], [packageNames[1], "s57", "S-57", 11, 7, 4],
-    ]);
+    assert.deepEqual(
+      product.members.map((member) => [
+        member.datasetName,
+        member.sourceId,
+        member.memberLabel,
+        member.status,
+        member.edition,
+        member.update,
+      ]),
+      [
+        [packageNames[0], "s101", "S-101", 8, 3, 2],
+        [packageNames[1], "s57", "S-57", 11, 7, 4],
+      ]
+    );
     assert.deepEqual(h.calls.history, packageNames);
     assert.deepEqual(h.calls.artifacts, packageNames);
     assert.equal(product.members[0].validationArtifacts.length, 2);
     assert.equal(product.members[1].validationArtifacts.length, 1);
     for (const [index, member] of product.members.entries()) {
-      assert.ok(member.validationArtifacts.every((artifact) => artifact.datasetName === packageNames[index] && artifact.productSpecification === (index ? "S57" : "S101")));
-      assert.ok(member.validationArtifacts.every((artifact) => artifact.url.includes(`${encodeURIComponent(packageNames[index])}/artifacts/`)));
+      assert.ok(
+        member.validationArtifacts.every(
+          (artifact) =>
+            artifact.datasetName === packageNames[index] &&
+            artifact.productSpecification === (index ? "S57" : "S101")
+        )
+      );
+      assert.ok(
+        member.validationArtifacts.every((artifact) =>
+          artifact.url.includes(`${encodeURIComponent(packageNames[index])}/artifacts/`)
+        )
+      );
       assert.match(member.artifactWarning, /ambiguous or missing/);
       assert.equal(getReviewHistoryPresentation(member).state, "empty");
       assert.equal(getReviewValidationPresentation(member).state, "content");
@@ -51,13 +94,25 @@ test("later complete proof reconciles an earlier failed alias in first-occurrenc
   const h = createReviewPackageFixture();
   const service = h.options.workspaceWorkUnitService;
   let first = true;
-  const composition = await resolveReviewComposition(["Simple A", packageNames[1], "Simple B", packageNames[0]], {
-    ...h.options, workspaceWorkUnitService: { resolveWorkUnit: (name) => {
-      if (name === packageNames[1] && first) { first = false; return { status: "failed", requestedDatasetName: name, error: "Early failure" }; }
-      return service.resolveWorkUnit(name);
-    } },
-  });
-  assert.deepEqual(composition.items.map((item) => item.datasetName), ["Simple A", packageNames[0], "Simple B"]);
+  const composition = await resolveReviewComposition(
+    ["Simple A", packageNames[1], "Simple B", packageNames[0]],
+    {
+      ...h.options,
+      workspaceWorkUnitService: {
+        resolveWorkUnit: (name) => {
+          if (name === packageNames[1] && first) {
+            first = false;
+            return { status: "failed", requestedDatasetName: name, error: "Early failure" };
+          }
+          return service.resolveWorkUnit(name);
+        },
+      },
+    }
+  );
+  assert.deepEqual(
+    composition.items.map((item) => item.datasetName),
+    ["Simple A", packageNames[0], "Simple B"]
+  );
   assert.equal(composition.resolutions[1].status, "resolved");
 });
 
@@ -66,7 +121,9 @@ test("consistent complete claims deduplicate and conflicting complete claims fai
   const proof = await h.options.workspaceWorkUnitService.resolveWorkUnit(packageNames[0]);
   const alias = { ...proof, requestedDatasetName: packageNames[1] };
   assert.equal(reconcileWorkspaceResolutions([alias, proof], { surface: "Review" }).length, 1);
-  const conflict = { ...proof, requestedDatasetName: packageNames[1],
+  const conflict = {
+    ...proof,
+    requestedDatasetName: packageNames[1],
     product: { ...proof.product, datasetName: "Conflicting owner" },
     workUnit: { ...proof.workUnit, identityKey: "different" },
   };
@@ -96,8 +153,14 @@ for (const field of ["failHistory", "failArtifacts"]) {
     assert.equal(product.members.length, 2);
     assert.equal(getReviewValidationPresentation(product.members[0]).state, "content");
     assert.equal(getReviewHistoryPresentation(product.members[0]).state, "empty");
-    assert.equal(getReviewValidationPresentation(product.members[1]).state, field === "failArtifacts" ? "failed" : "content");
-    assert.equal(getReviewHistoryPresentation(product.members[1]).state, field === "failHistory" ? "failed" : "empty");
+    assert.equal(
+      getReviewValidationPresentation(product.members[1]).state,
+      field === "failArtifacts" ? "failed" : "content"
+    );
+    assert.equal(
+      getReviewHistoryPresentation(product.members[1]).state,
+      field === "failHistory" ? "failed" : "empty"
+    );
   });
 }
 

@@ -43,9 +43,13 @@ function packageContext() {
 
 function restrictedContext() {
   const source = createDataSourceRegistry().byId.get("s101");
-  return mainMapContext({ ...source, workUnit: {
-    ...source.workUnit, navigationCapabilities: { analyze: true, review: false, history: false },
-  } });
+  return mainMapContext({
+    ...source,
+    workUnit: {
+      ...source.workUnit,
+      navigationCapabilities: { analyze: true, review: false, history: false },
+    },
+  });
 }
 
 function navigationHarness(t) {
@@ -65,7 +69,7 @@ function navigationHarness(t) {
   };
 }
 
-test("Main-map package exposes Analyze and Review navigation and direct workspace capabilities survive", () => {
+test("Main-map package exposes Analyze, Review and History while collection destinations stay unchanged", () => {
   const source = createDataSourceRegistry().byId.get("s101");
   const context = mainMapContext(source);
   const groups = createPopupActionGroups({ productContext: context });
@@ -75,14 +79,14 @@ test("Main-map package exposes Analyze and Review navigation and direct workspac
   );
   assert.deepEqual(
     groups[0][0].items.map((action) => action.id),
-    ["analyze", "review"]
+    ["analyze", "review", "history"]
   );
   assert.equal(context.capabilities.analyze, true);
   assert.equal(context.capabilities.productCollection, true);
   assert.equal(context.capabilities.backendProductRefresh, true);
   assert.equal(context.capabilities.review, true);
   for (const capability of ["history"]) {
-    assert.equal(context.capabilities[capability], false);
+    assert.equal(context.capabilities[capability], true);
     assert.equal(source.capabilities[capability], true);
   }
   const direct = createWorkspaceProductContext({
@@ -129,10 +133,16 @@ for (const mixed of [false, true]) {
       navigation.calls[0].url,
       mixed ? "/Analyze?Datasets=SIMPLE%2CPRIMARY" : "/Analyze?Datasets=PRIMARY"
     );
-    const availability = getCollectionNavigationAvailability(getProductCollectionSnapshot().items, "review");
+    const availability = getCollectionNavigationAvailability(
+      getProductCollectionSnapshot().items,
+      "review"
+    );
     assert.equal(availability.allowed, true);
     assert.equal(openProductCollection("review", navigation), true);
-    assert.equal(navigation.calls[1].url, mixed ? "/Review?Datasets=SIMPLE%2CPRIMARY" : "/Review?Datasets=PRIMARY");
+    assert.equal(
+      navigation.calls[1].url,
+      mixed ? "/Review?Datasets=SIMPLE%2CPRIMARY" : "/Review?Datasets=PRIMARY"
+    );
     assert.equal(navigation.calls.length, 2);
   });
 }
@@ -250,15 +260,28 @@ test("tray preserves disabled action layout and guards even a stale click callba
   assert.deepEqual(navigation.calls, []);
 });
 
-test("package popup Review launches the canonical representative while History remains unavailable", (t) => {
+test("package popup Review launches the canonical representative and History is available", (t) => {
   navigationHarness(t);
   const opened = [];
-  globalThis.window.open = (url, target) => { opened.push({ url, target }); return { opener: {} }; };
+  globalThis.window.open = (url, target) => {
+    opened.push({ url, target });
+    return { opener: {} };
+  };
   const context = packageContext();
-  const tools = createPopupActionGroups({ productContext: context }).flat().find((action) => action.id === "tools");
+  const tools = createPopupActionGroups({ productContext: context })
+    .flat()
+    .find((action) => action.id === "tools");
   tools.items.find((action) => action.id === "review").onClick();
   assert.deepEqual(opened, [{ url: "/Review?Datasets=PRIMARY", target: "_blank" }]);
-  assert.equal(tools.items.some((action) => action.id === "history"), false);
-  const restricted = createPopupActionGroups({ productContext: restrictedContext() }).flat().find((action) => action.id === "tools");
-  assert.equal(restricted.items.some((action) => action.id === "review"), false);
+  assert.equal(
+    tools.items.some((action) => action.id === "history"),
+    true
+  );
+  const restricted = createPopupActionGroups({ productContext: restrictedContext() })
+    .flat()
+    .find((action) => action.id === "tools");
+  assert.equal(
+    restricted.items.some((action) => action.id === "review"),
+    false
+  );
 });

@@ -108,7 +108,8 @@ export async function initReviewPage({ datasetNames } = {}) {
       productItems = items.map((item) => {
         const resolution = resolutions.find(
           (value) =>
-            normalizeDatasetKey(value.product?.datasetName ?? value.requestedDatasetName) === item.id
+            normalizeDatasetKey(value.product?.datasetName ?? value.requestedDatasetName) ===
+            item.id
         );
         const aliases = new Set(resolution ? getReviewResolutionAliases(resolution) : [item.id]);
         const previous = resetIntent ? null : previousItems.find((value) => aliases.has(value.id));

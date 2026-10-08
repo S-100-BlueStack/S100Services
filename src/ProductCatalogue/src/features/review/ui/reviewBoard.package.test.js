@@ -15,40 +15,82 @@ class Element {
   attributes = {};
   textContent = "";
   className = "";
-  classList = { add: (...names) => { this.className += ` ${names.join(" ")}`; } };
-  append(...children) { this.children.push(...children); }
-  appendChild(child) { this.children.push(child); return child; }
-  hasChildNodes() { return this.children.length > 0; }
-  setAttribute(name, value) { this.attributes[name] = value; }
+  classList = {
+    add: (...names) => {
+      this.className += ` ${names.join(" ")}`;
+    },
+  };
+  append(...children) {
+    this.children.push(...children);
+  }
+  appendChild(child) {
+    this.children.push(child);
+    return child;
+  }
+  hasChildNodes() {
+    return this.children.length > 0;
+  }
+  setAttribute(name, value) {
+    this.attributes[name] = value;
+  }
   addEventListener() {}
-  querySelectorAll(selector) { return byClass(this, selector.slice(1)); }
+  querySelectorAll(selector) {
+    return byClass(this, selector.slice(1));
+  }
 }
-const document = { createElement: () => new Element(), createDocumentFragment: () => new Element() };
-const historySource = (await readFile(new URL("../../timeline/ui/productHistoryRenderers.js", import.meta.url), "utf8"))
-  .replace(/^import "[^"]+";\s*/gm, "").replace(/export function/g, "function");
-const historyRenderers = runInNewContext(`${historySource}\n({createProductHistoryBanner,createProductHistoryStateMessage,formatHistoryTimestamp});`, { document });
+const document = {
+  createElement: () => new Element(),
+  createDocumentFragment: () => new Element(),
+};
+const historySource = (
+  await readFile(new URL("../../timeline/ui/productHistoryRenderers.js", import.meta.url), "utf8")
+)
+  .replace(/^import "[^"]+";\s*/gm, "")
+  .replace(/export function/g, "function");
+const historyRenderers = runInNewContext(
+  `${historySource}\n({createProductHistoryBanner,createProductHistoryStateMessage,formatHistoryTimestamp});`,
+  { document }
+);
 const boardSource = (await readFile(new URL("reviewBoard.js", import.meta.url), "utf8"))
   .replace(/^import "[^"]+";\s*/gm, "")
   .replace(/^import[\s\S]*?from "[^"]+";\s*/gm, "")
   .replace("export function createReviewBoard", "function createReviewBoard");
 const createBoard = runInNewContext(`${boardSource}\ncreateReviewBoard;`, {
-  document, ...list, ...presentation, ...historyRenderers, getStatusName: (status) => `Member status ${status}`,
+  document,
+  ...list,
+  ...presentation,
+  ...historyRenderers,
+  getStatusName: (status) => `Member status ${status}`,
 });
 const nodes = (node) => [node, ...node.children.flatMap(nodes)];
-const byClass = (root, name) => nodes(root).filter((node) => node.className.split(" ").includes(name));
+const byClass = (root, name) =>
+  nodes(root).filter((node) => node.className.split(" ").includes(name));
 
 test("board has one package column with two ordered member sections and one ordinary column", async () => {
   const h = createReviewPackageFixture();
   const products = await loadReviewHistories([...packageNames, "Simple A"], h.options);
   const items = list.createReviewProductItems([packageNames[0], "Simple A"]);
-  const board = createBoard({ productItems: items, enabledDatasetNames: items.map((item) => item.datasetName), products });
+  const board = createBoard({
+    productItems: items,
+    enabledDatasetNames: items.map((item) => item.datasetName),
+    products,
+  });
   const columns = byClass(board, "pc-review-column");
   assert.equal(columns.length, 2);
   const sections = byClass(columns[0], "pc-review-member");
-  assert.deepEqual(sections.map((section) => section.dataset.reviewMemberKey), ["s101", "s57"]);
+  assert.deepEqual(
+    sections.map((section) => section.dataset.reviewMemberKey),
+    ["s101", "s57"]
+  );
   assert.equal(byClass(columns[1], "pc-review-member").length, 0);
-  assert.match(byClass(sections[0], "pc-review-member__meta")[0].textContent, /Member status 8 · Edition: 3 · Update: 2/);
-  assert.match(byClass(sections[1], "pc-review-member__meta")[0].textContent, /Member status 11 · Edition: 7 · Update: 4/);
+  assert.match(
+    byClass(sections[0], "pc-review-member__meta")[0].textContent,
+    /Member status 8 · Edition: 3 · Update: 2/
+  );
+  assert.match(
+    byClass(sections[1], "pc-review-member__meta")[0].textContent,
+    /Member status 11 · Edition: 7 · Update: 4/
+  );
   assert.equal(byClass(columns[0], "pc-review-content-card").length, 6);
   assert.equal(byClass(columns[1], "pc-review-content-card").length, 3);
   for (const section of sections) {
@@ -60,8 +102,16 @@ test("board has one package column with two ordered member sections and one ordi
       byClass(section, "pc-review-member__meta")[0],
     ]);
     assert.equal(byClass(headers[0], "pc-review-content-card").length, 0);
-    assert.ok(byClass(section, "pc-review-content-card__status").some((node) => node.textContent === "Unavailable"));
-    assert.ok(byClass(section, "pc-review-content-card__status").some((node) => node.textContent === "0 events"));
+    assert.ok(
+      byClass(section, "pc-review-content-card__status").some(
+        (node) => node.textContent === "Unavailable"
+      )
+    );
+    assert.ok(
+      byClass(section, "pc-review-content-card__status").some(
+        (node) => node.textContent === "0 events"
+      )
+    );
   }
   const links = nodes(sections[1]).filter((node) => node.href);
   assert.equal(links.length, 1);
@@ -74,10 +124,18 @@ test("outer content and bulk toggles apply identically to both members without c
   let items = list.createReviewProductItems([packageNames[0]]);
   items = list.toggleReviewProductContentType(items, items[0].id, "history", false);
   items = list.toggleAllReviewProductContentTypes(items, "ic-enc-reports", false);
-  let board = createBoard({ productItems: items, enabledDatasetNames: [packageNames[0]], products });
+  let board = createBoard({
+    productItems: items,
+    enabledDatasetNames: [packageNames[0]],
+    products,
+  });
   assert.equal(byClass(board, "pc-review-column").length, 1);
   assert.equal(byClass(board, "pc-review-content-card").length, 2);
-  assert.ok(byClass(board, "pc-review-content-card").every((node) => node.dataset.reviewContentType === "internal-validation-reports"));
+  assert.ok(
+    byClass(board, "pc-review-content-card").every(
+      (node) => node.dataset.reviewContentType === "internal-validation-reports"
+    )
+  );
   items = list.toggleAllReviewProductContentTypes(items, "internal-validation-reports", false);
   board = createBoard({ productItems: items, enabledDatasetNames: [packageNames[0]], products });
   assert.equal(byClass(board, "pc-review-member").length, 2);
@@ -92,7 +150,11 @@ test("retained package refresh warning stays outside successful member presentat
   const h = createReviewPackageFixture();
   const [product] = await loadReviewHistories(packageNames, h.options);
   const items = list.createReviewProductItems([packageNames[0]]);
-  const board = createBoard({ productItems: items, enabledDatasetNames: [packageNames[0]], products: [{ ...product, refreshError: "Mapping rejected" }] });
+  const board = createBoard({
+    productItems: items,
+    enabledDatasetNames: [packageNames[0]],
+    products: [{ ...product, refreshError: "Mapping rejected" }],
+  });
   assert.equal(byClass(board, "pc-review-member").length, 2);
   assert.ok(nodes(board).some((node) => node.textContent === "Mapping rejected"));
   assert.equal(byClass(board, "pc-review-content-card").length, 6);
@@ -101,12 +163,26 @@ test("retained package refresh warning stays outside successful member presentat
 test("refreshing package A retains ordinary column DOM, scroll and disclosure state", async () => {
   const h = createReviewPackageFixture();
   const products = await loadReviewHistories([...packageNames, "Simple A"], h.options);
-  products[1] = { ...products[1], history: {
-    endpointAvailable: true,
-    events: [{ type: "status", title: "Stable history event", timestamp: "2026-10-01T12:00:00Z", details: [] }],
-  } };
+  products[1] = {
+    ...products[1],
+    history: {
+      endpointAvailable: true,
+      events: [
+        {
+          type: "status",
+          title: "Stable history event",
+          timestamp: "2026-10-01T12:00:00Z",
+          details: [],
+        },
+      ],
+    },
+  };
   const items = list.createReviewProductItems([packageNames[0], "Simple A"]);
-  const first = createBoard({ productItems: items, enabledDatasetNames: items.map((item) => item.datasetName), products });
+  const first = createBoard({
+    productItems: items,
+    enabledDatasetNames: items.map((item) => item.datasetName),
+    products,
+  });
   const columns = byClass(first, "pc-review-column");
   const ordinaryContent = byClass(columns[1], "pc-review-column__content")[0];
   const disclosure = byClass(columns[1], "pc-review-history-event")[0];
@@ -114,7 +190,12 @@ test("refreshing package A retains ordinary column DOM, scroll and disclosure st
   disclosure.open = true;
   h.controls.edition = 4;
   const [refreshed] = await loadReviewHistories([packageNames[0]], h.options);
-  const next = createBoard({ productItems: items, enabledDatasetNames: items.map((item) => item.datasetName), products: [refreshed, products[1]], previousBoard: first });
+  const next = createBoard({
+    productItems: items,
+    enabledDatasetNames: items.map((item) => item.datasetName),
+    products: [refreshed, products[1]],
+    previousBoard: first,
+  });
   const nextColumns = byClass(next, "pc-review-column");
   assert.notEqual(nextColumns[0], columns[0]);
   assert.equal(nextColumns[1], columns[1]);

@@ -97,11 +97,11 @@ regression suite; no Analyze UI or lifecycle is imported by Review.
 
 Runtime: Node.js `v24.19.0`. No project `node_modules` were supplied.
 
-| Check | Baseline | Candidate |
-| --- | --- | --- |
-| Broad `node --test` | 1,156 tests; 1,151 passed; 5 failed | 1,205 tests; 1,200 passed; 5 failed |
-| Focused production-path regression suite | Not used as a baseline claim | 305 tests; 305 passed |
-| `node --check` on every changed/new JS file | Not applicable | 27 files; 27 passed |
+| Check                                       | Baseline                            | Candidate                           |
+| ------------------------------------------- | ----------------------------------- | ----------------------------------- |
+| Broad `node --test`                         | 1,156 tests; 1,151 passed; 5 failed | 1,205 tests; 1,200 passed; 5 failed |
+| Focused production-path regression suite    | Not used as a baseline claim        | 305 tests; 305 passed               |
+| `node --check` on every changed/new JS file | Not applicable                      | 27 files; 27 passed                 |
 
 The broad failing test names match the actual merge baseline exactly. No new broad failure was
 introduced. They are listed below rather than inferred from historical F6B reports:

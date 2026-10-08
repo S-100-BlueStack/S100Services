@@ -101,7 +101,7 @@ test("registry declares ordered member sources and enables package Analyze and R
   assert.deepEqual(source.workUnit.navigationCapabilities, {
     analyze: true,
     review: true,
-    history: false,
+    history: true,
   });
   for (const key of [
     "freeze",

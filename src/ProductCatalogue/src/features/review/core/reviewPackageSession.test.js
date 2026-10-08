@@ -5,7 +5,12 @@ import { resolveReviewComposition } from "../services/reviewWorkUnitResolver.js"
 import { loadReviewHistories } from "../services/reviewHistoryLoader.js";
 import { createWorkspaceFreshnessMonitor } from "../../products/services/workspaceFreshnessMonitor.js";
 import { createReviewProductItems, toggleReviewProductItem } from "../domain/reviewProductList.js";
-import { createReviewPackageFixture, packageNames, deferred, waitForReview } from "../testSupport/reviewPackageFixture.js";
+import {
+  createReviewPackageFixture,
+  packageNames,
+  deferred,
+  waitForReview,
+} from "../testSupport/reviewPackageFixture.js";
 
 async function harness(t, { initial = [...packageNames, "Simple A"] } = {}) {
   const h = createReviewPackageFixture();
@@ -15,18 +20,36 @@ async function harness(t, { initial = [...packageNames, "Simple A"] } = {}) {
   const primes = [];
   const session = createReviewProductSession({
     resolveItems: (input, options) => resolveReviewComposition(input, { ...h.options, ...options }),
-    onComposition: (next) => { items = next; routes.push(next.map((item) => item.datasetName)); return next; },
+    onComposition: (next) => {
+      items = next;
+      routes.push(next.map((item) => item.datasetName));
+      return next;
+    },
     prepare: async (names) => primes.push([...names]),
     loadProduct: async (name, { resolution } = {}) => {
-      const [product] = await loadReviewHistories([name], { ...h.options, ...(resolution ? { resolutions: [resolution] } : {}) });
+      const [product] = await loadReviewHistories([name], {
+        ...h.options,
+        ...(resolution ? { resolutions: [resolution] } : {}),
+      });
       return product;
     },
-    onChange: (value) => { state = value; },
+    onChange: (value) => {
+      state = value;
+    },
   });
   t.after(() => session.destroy());
   await session.reconcile(createReviewProductItems(initial), { full: true });
-  return { ...h, session, routes, primes,
-    get state() { return state; }, get items() { return items; },
+  return {
+    ...h,
+    session,
+    routes,
+    primes,
+    get state() {
+      return state;
+    },
+    get items() {
+      return items;
+    },
   };
 }
 
@@ -74,8 +97,14 @@ for (const failure of ["missing", "remapped", "failExact"]) {
   });
 }
 
-for (const [edit, rejected] of ["remove", "remove-readd", "disable", "replace", "refresh", "destroy"]
-  .flatMap((edit) => [false, true].map((rejected) => [edit, rejected]))) {
+for (const [edit, rejected] of [
+  "remove",
+  "remove-readd",
+  "disable",
+  "replace",
+  "refresh",
+  "destroy",
+].flatMap((edit) => [false, true].map((rejected) => [edit, rejected]))) {
   test(`superseded package member completion cannot publish after ${edit} (rejected: ${rejected})`, async (t) => {
     const h = await harness(t);
     const gate = deferred();
@@ -83,10 +112,16 @@ for (const [edit, rejected] of ["remove", "remove-readd", "disable", "replace", 
     const pending = h.session.refresh([packageNames[0]]);
     await waitForReview(() => h.calls.artifacts.length >= 4);
     h.controls.artifactGate = null;
-    if (edit === "remove" || edit === "remove-readd") await h.session.reconcile(createReviewProductItems(["Simple A"]));
-    if (edit === "remove-readd") await h.session.reconcile(createReviewProductItems(["Simple A", packageNames[0]]));
-    if (edit === "disable") await h.session.reconcile(toggleReviewProductItem(h.items, packageNames[0].toUpperCase(), false));
-    if (edit === "replace") await h.session.reconcile(createReviewProductItems(["Simple B"]), { full: true });
+    if (edit === "remove" || edit === "remove-readd")
+      await h.session.reconcile(createReviewProductItems(["Simple A"]));
+    if (edit === "remove-readd")
+      await h.session.reconcile(createReviewProductItems(["Simple A", packageNames[0]]));
+    if (edit === "disable")
+      await h.session.reconcile(
+        toggleReviewProductItem(h.items, packageNames[0].toUpperCase(), false)
+      );
+    if (edit === "replace")
+      await h.session.reconcile(createReviewProductItems(["Simple B"]), { full: true });
     if (edit === "refresh") await h.session.reconcile(h.items, { full: true });
     if (edit === "destroy") h.session.destroy();
     const accepted = h.state;
@@ -119,7 +154,11 @@ test("rapid composition additions retain pending intent and share the same canon
   h.controls.detailGate = gate;
   const first = h.session.reconcile(createReviewProductItems(["Simple A", packageNames[1]]));
   await waitForReview(() => h.calls.detail.length > 0);
-  const second = h.session.reconcile([...h.session.getItems(), { datasetName: "Simple B" }, { datasetName: packageNames[0] }]);
+  const second = h.session.reconcile([
+    ...h.session.getItems(),
+    { datasetName: "Simple B" },
+    { datasetName: packageNames[0] },
+  ]);
   h.controls.detailGate = null;
   gate.resolve();
   assert.equal(await first, false);
@@ -139,8 +178,15 @@ test("FI-022 canonical prime and failed-refresh acknowledgement preserve retry s
     getRetainedDatasetNames: () => h.items.map((item) => item.datasetName),
     fetchFreshness: async (names) => {
       observations.push([...names]);
-      return names.map((datasetName) => ({ datasetName, available: true, revision: datasetName === packageNames[0] ? revision : "1" }));
-    }, onChanged: (names) => h.session.refresh(names), documentRef: null, setIntervalFn: null,
+      return names.map((datasetName) => ({
+        datasetName,
+        available: true,
+        revision: datasetName === packageNames[0] ? revision : "1",
+      }));
+    },
+    onChanged: (names) => h.session.refresh(names),
+    documentRef: null,
+    setIntervalFn: null,
   });
   t.after(() => monitor.destroy());
   await monitor.prime();

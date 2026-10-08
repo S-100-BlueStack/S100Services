@@ -1,7 +1,10 @@
 import "@esri/calcite-components/components/calcite-icon";
 import { watch } from "@arcgis/core/core/reactiveUtils.js";
 import { noticeError } from "../../notices/services/noticeService.js";
-import { resolveProductContext } from "../../products/domain/productContext.js";
+import {
+  isCompatibilityProductContext,
+  resolveProductContext,
+} from "../../products/domain/productContext.js";
 import { fetchProductHistory } from "../api/productHistoryApi.js";
 import { onProductHistoryOpen } from "../events/productHistoryEvents.js";
 import {
@@ -10,29 +13,38 @@ import {
   createProductHistoryStateMessage,
   createProductHistorySummary,
 } from "./productHistoryRenderers.js";
-export function initProductHistoryPanel({ view } = {}) {
+import { createDataSourceRegistry } from "../../dataSources/config/dataSourceRegistry.js";
+import { isPackageHistoryContext, loadPackageHistory } from "../services/packageHistoryLoader.js";
+
+export function initProductHistoryPanel({
+  view,
+  registry = createDataSourceRegistry(),
+  dataSourceController = null,
+  fetchHistory = fetchProductHistory,
+  loadPackage = loadPackageHistory,
+  watchPopup = watch,
+  notifyError = noticeError,
+} = {}) {
   const panel = createPanel();
 
   let popupVisibilityHandle = null;
   let popupSelectionHandle = null;
   let mapClickHandle = null;
   let requestId = 0;
+  let destroyed = false;
 
   document.body.append(panel.root);
 
-  const openHandle = onProductHistoryOpen(async ({ datasetName, source }) => {
-    await openHistory(datasetName, {
-      source,
-      productContext: resolveSelectedProductContext(view, datasetName),
-    });
-  });
+  const openHandle = onProductHistoryOpen(({ datasetName, source, productContext, graphic }) =>
+    openHistory(datasetName, { source, productContext, graphic })
+  );
 
   panel.closeButton.addEventListener("click", () => {
     setPinned(panel, false);
     closePanel();
   });
   if (view?.popup) {
-    popupVisibilityHandle = watch(
+    popupVisibilityHandle = watchPopup(
       () => view.popup.visible,
       (visible) => {
         if (!visible && !panel.isPinned) {
@@ -41,10 +53,10 @@ export function initProductHistoryPanel({ view } = {}) {
       }
     );
 
-    popupSelectionHandle = watch(
+    popupSelectionHandle = watchPopup(
       () => getPopupHistoryContextId(view),
       (contextId) => {
-        if (!contextId || panel.root.hidden || panel.isPinned) {
+        if (panel.root.hidden || panel.isPinned) {
           return;
         }
 
@@ -61,8 +73,9 @@ export function initProductHistoryPanel({ view } = {}) {
       // ArcGIS updates popup visibility/selection as part of the map click flow.
       // Defer the close check so we react to the settled popup state instead of
       // closing based on the state from before the click.
+      const clickRequestId = requestId;
       requestAnimationFrame(() => {
-        if (panel.root.hidden || panel.isPinned) {
+        if (clickRequestId !== requestId || panel.root.hidden || panel.isPinned) {
           return;
         }
         if (!hasVisiblePopupHistoryContext(view)) {
@@ -72,40 +85,105 @@ export function initProductHistoryPanel({ view } = {}) {
     });
   }
 
-  async function openHistory(datasetName, { source = "popup", productContext = null } = {}) {
-    if (!datasetName) {
-      noticeError("Cannot open history", "The selected feature does not have a datasetName.");
-      return;
-    }
-
-    if (source === "popup") {
-      setPinned(panel, false);
-    }
-
+  async function openHistory(datasetName, { source = "popup", productContext, graphic } = {}) {
     const currentRequestId = ++requestId;
-    panel.contextId = createHistoryContextId(datasetName);
+    if (destroyed) return;
+    const selectedGraphic = graphic ?? (source === "popup" ? view?.popup?.selectedFeature : null);
+    const context =
+      productContext ??
+      (selectedGraphic
+        ? resolveSelectedProductContext(
+            { popup: { selectedFeature: selectedGraphic } },
+            datasetName
+          )
+        : null);
+    const originId = context?.identityKey ?? createHistoryContextId(datasetName);
+    const originLayer = selectedGraphic?.layer;
+    const originDefinition = originLayer?.appSourceDefinition;
+    const originAttributes = selectedGraphic?.attributes;
+    const originMapping = JSON.stringify(originAttributes?.workUnitMetadata ?? null);
+    const sourceState = context && dataSourceController?.getState(context.sourceId);
+    const generation = sourceState?.generation;
+
+    if (source === "popup") setPinned(panel, false);
+    panel.contextId = originId;
     showPanel(panel);
     setBusy(panel, true);
-    renderLoading(panel, datasetName);
+    renderLoading(panel, datasetName ?? "Product history");
+
+    function hasAuthority() {
+      if (!isCurrentRequest(currentRequestId)) return false;
+      if (selectedGraphic && originLayer) {
+        const currentGraphic =
+          !panel.isPinned && source === "popup" ? view?.popup?.selectedFeature : selectedGraphic;
+        const state = dataSourceController?.getState(context?.sourceId);
+        if (
+          (sourceState &&
+            (!state?.enabled ||
+              state.requestedEnabled === false ||
+              state.generation !== generation)) ||
+          currentGraphic?.layer !== originLayer ||
+          resolveProductContext({ graphic: currentGraphic })?.identityKey !==
+            context?.identityKey ||
+          (originLayer.graphics && !originLayer.graphics.includes(currentGraphic)) ||
+          JSON.stringify(currentGraphic?.attributes?.workUnitMetadata ?? null) !== originMapping ||
+          originLayer.appSourceDefinition !== originDefinition ||
+          (originDefinition && registry.byId.get(context?.sourceId) !== originDefinition) ||
+          (view?.map?.allLayers && !view.map.allLayers.includes(originLayer))
+        )
+          return false;
+      }
+      if (source === "popup" && !panel.isPinned && view?.popup) {
+        if (!view.popup.visible || getPopupHistoryContextId(view) !== originId) return false;
+      }
+      return true;
+    }
+
+    function assertAuthority() {
+      if (!hasAuthority()) throw new Error("Product History request is no longer current.");
+    }
 
     try {
-      const history = await fetchProductHistory(datasetName, { productContext });
-
-      if (!isCurrentRequest(currentRequestId)) {
-        return;
+      assertAuthority();
+      if (
+        !datasetName ||
+        !context ||
+        context.datasetName?.toUpperCase() !== String(datasetName).trim().toUpperCase()
+      ) {
+        throw new Error("The selected Product History source context could not be resolved.");
       }
-
-      renderHistory(panel, history);
+      if (!isCompatibilityProductContext(context) && !registry.byId.has(context.sourceId)) {
+        throw new Error("Product History source is missing or replaced.");
+      }
+      // Compare captured action ownership before any await. A menu from another
+      // popup must not borrow the new selection's context.
+      if (
+        selectedGraphic &&
+        resolveProductContext({ graphic: selectedGraphic })?.identityKey !== context.identityKey
+      ) {
+        throw new Error("Product History popup identity is contradictory.");
+      }
+      const history = isPackageHistoryContext(context, registry)
+        ? await loadPackage(datasetName, {
+            productContext: context,
+            registry,
+            fetchHistory,
+            assertCurrent: assertAuthority,
+          })
+        : await fetchHistory(datasetName, { productContext: context });
+      assertAuthority();
+      if (history.workUnit?.kind === "package") renderPackageHistory(panel, history);
+      else renderHistory(panel, history);
     } catch (error) {
-      if (!isCurrentRequest(currentRequestId)) {
+      if (!isCurrentRequest(currentRequestId)) return;
+      if (!hasAuthority()) {
+        closePanel();
         return;
       }
       renderError(panel, datasetName, error);
-      noticeError("History failed to load", getErrorMessage(error));
+      notifyError("History failed to load", getErrorMessage(error));
     } finally {
-      if (isCurrentRequest(currentRequestId)) {
-        setBusy(panel, false);
-      }
+      if (isCurrentRequest(currentRequestId)) setBusy(panel, false);
     }
   }
 
@@ -116,10 +194,11 @@ export function initProductHistoryPanel({ view } = {}) {
   }
 
   function isCurrentRequest(currentRequestId) {
-    return currentRequestId === requestId;
+    return !destroyed && currentRequestId === requestId;
   }
   function destroy() {
-    requestId += 1;
+    closePanel();
+    destroyed = true;
     openHandle.remove();
     popupVisibilityHandle?.remove();
     popupSelectionHandle?.remove();
@@ -319,13 +398,8 @@ function resolveSelectedProductContext(view, datasetName) {
 }
 
 function getPopupHistoryContextId(view) {
-  const attributes = view?.popup?.selectedFeature?.attributes;
-
-  if (!attributes) {
-    return null;
-  }
-
-  return createHistoryContextId(attributes.datasetName ?? attributes.featureKey);
+  const graphic = view?.popup?.selectedFeature;
+  return graphic ? (resolveProductContext({ graphic })?.identityKey ?? null) : null;
 }
 
 function createHistoryContextId(value) {
@@ -339,4 +413,34 @@ function hasVisiblePopupHistoryContext(view) {
   }
 
   return Boolean(getPopupHistoryContextId(view));
+}
+
+function renderPackageHistory(panel, history) {
+  const sections = history.members.map((member, index) => {
+    const section = document.createElement("section");
+    section.className = "pc-product-history-member";
+    const heading = document.createElement("h3");
+    heading.id = `product-history-member-${index}`;
+    heading.className = "pc-product-history-member__heading";
+    heading.textContent = `${member.label} · ${member.datasetName}`;
+    section.setAttribute("aria-labelledby", heading.id);
+    const content = document.createElement("div");
+    content.className = "pc-product-history-member__content";
+    const memberPanel = { title: document.createElement("span"), content };
+    if (member.error) renderError(memberPanel, member.datasetName, new Error(member.error));
+    else {
+      renderHistory(memberPanel, member.history);
+      if (!member.history.events.length) {
+        for (const warning of member.history.warnings ?? []) {
+          content.appendChild(
+            createProductHistoryBanner({ title: "History note", message: warning })
+          );
+        }
+      }
+    }
+    section.append(heading, content);
+    return section;
+  });
+  panel.title.textContent = history.datasetName;
+  panel.content.replaceChildren(...sections);
 }

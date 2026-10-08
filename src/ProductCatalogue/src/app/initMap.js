@@ -107,7 +107,11 @@ export function initMap() {
     view,
     dataSourceController: dataSourceRuntime.controller,
   });
-  const productHistoryPanel = initProductHistoryPanel({ view });
+  const productHistoryPanel = initProductHistoryPanel({
+    view,
+    registry: dataSourceRuntime.registry,
+    dataSourceController: dataSourceRuntime.controller,
+  });
   const productCollectionTray = initProductCollectionTray();
   const mainMapSearchControls = initMainMapSearchControls();
   const productSearch = initMainMapProductSearch({

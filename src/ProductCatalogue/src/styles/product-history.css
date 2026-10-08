@@ -410,3 +410,27 @@ button.pc-product-history-list__summary:focus-visible {
     max-height: calc(100dvh - 76px);
   }
 }
+
+.pc-product-history-member + .pc-product-history-member {
+  margin-top: 12px;
+}
+
+.pc-product-history-member__heading {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  color: var(--pc-text);
+  background: var(--pc-surface-alt);
+  border: 1px solid var(--pc-border);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.pc-product-history-member__content {
+  min-width: 0;
+}
+
+.pc-product-history-panel__header > :first-child {
+  min-width: 0;
+}

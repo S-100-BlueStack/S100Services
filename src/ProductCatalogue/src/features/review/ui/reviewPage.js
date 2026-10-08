@@ -19,7 +19,8 @@ export function renderReviewPage({
   const page = getOrCreateReviewPage();
   const previousBoard = page.querySelector(".pc-review-board");
   const activeElement = document.activeElement;
-  const previousScrollLeft = previousBoard?.querySelector(".pc-review-board__columns")?.scrollLeft ?? 0;
+  const previousScrollLeft =
+    previousBoard?.querySelector(".pc-review-board__columns")?.scrollLeft ?? 0;
   const normalizedProductItems = normalizeReviewProductItems(productItems);
   const enabledDatasetNames = getEnabledReviewDatasetNames(normalizedProductItems);
 

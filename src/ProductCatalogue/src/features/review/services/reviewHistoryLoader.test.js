@@ -63,9 +63,15 @@ function createIdentityWorkspaceService() {
   // This fixture exercises ordinary source-aware Products. Package ownership has
   // separate complete-mapping tests rather than incomplete legacy AOI stubs.
   const definitions = registry.definitions.map((source) => ({
-    ...source, workUnit: null, workspace: { ...source.workspace, workUnitSourceId: null },
+    ...source,
+    workUnit: null,
+    workspace: { ...source.workspace, workUnitSourceId: null },
   }));
-  const ordinaryRegistry = { ...registry, definitions, byId: new Map(definitions.map((source) => [source.id, source])) };
+  const ordinaryRegistry = {
+    ...registry,
+    definitions,
+    byId: new Map(definitions.map((source) => [source.id, source])),
+  };
   const service = createWorkspaceProductService({
     registry: ordinaryRegistry,
     loadTargetedProduct: async (datasetName) => ({
@@ -114,11 +120,18 @@ function createIdentityWorkspaceService() {
       };
     },
   });
-  return { service, workUnitService: createWorkspaceWorkUnitService({ registry: ordinaryRegistry, productService: service }) };
+  return {
+    service,
+    workUnitService: createWorkspaceWorkUnitService({
+      registry: ordinaryRegistry,
+      productService: service,
+    }),
+  };
 }
 
 test("Review resolves same visible Product name independently by datasetName", async () => {
-  const { service: workspaceProductService, workUnitService: workspaceWorkUnitService } = createIdentityWorkspaceService();
+  const { service: workspaceProductService, workUnitService: workspaceWorkUnitService } =
+    createIdentityWorkspaceService();
   await workspaceProductService.loadCatalog();
   const historyCalls = [];
   const results = await loadReviewHistories(["101DK0041149E", "102DK0041149E"], {

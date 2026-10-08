@@ -193,7 +193,6 @@ replacement, teardown and out-of-order completions using deferred promises. Page
 the actual coordinator with explicit browser/API test boundaries. See
 [the implementation and manual verification record](../../../docs/fi-039-incremental-review.md).
 
-
 ## F6C package-aware Review
 
 Status: **F6C v1 functionality manually accepted; v2 visual correction pending browser acceptance and local full check**.
