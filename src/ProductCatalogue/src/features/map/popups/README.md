@@ -71,11 +71,21 @@ The S57 AOI contract remains available for deferred workspace compatibility.
 
 ## Current action status
 
-The Main-map ENC-package popup retains Product Collection but exposes no Analyze or History
-navigation; its empty Tools group is omitted. Work-unit navigation capabilities restrict the resolved
-Main-map context without changing direct product-based workspace resolution. Package-aware
-Analyze/Review/History navigation is deferred. Mutation capabilities and manual Export configuration
-remain disabled until a package-safe backend contract exists.
+At the F7A baseline (`bd4145e55e614eceae03d9fd732ae15b48c9a09a`), F6A-F6D
+package-aware Analyze, Review and floating History are accepted. Tools retains all three
+navigation entries, alongside the existing popup-header Product Collection action.
+
+F7A v3 uses one compact icon-only row: Pause/Resume, Discard, Send/Accept and
+Tools. Send and Accept share one logical control and never appear simultaneously.
+The default placeholder is unavailable Send. Hover/focus help explains that workflow
+action state is not connected. These package descriptors have no mutation callbacks. Legacy Product
+Freeze, Send, Export and Cancel Export capabilities remain off for packages.
+Package icons use public Calcite scale `m` in square 40px hit/focus surfaces. The
+application-owned tooltip is the sole visible package help; reconciliation removes
+obsolete native `title` attributes even when presentation metadata is unchanged.
+See [the current F7A v3 report](../../../../docs/package-popup-actions-F7A-v3-correction-report.md),
+[the historical F7A v2 report](../../../../docs/package-popup-actions-F7A-v2-correction-report.md)
+and [the historical F7A v1 report](../../../../docs/package-popup-actions-F7A-implementation-report.md).
 
 Simple electronic/compatibility Products expose capability-gated actions:
 
@@ -465,8 +475,8 @@ workflow/member map status, F1 filters, F2 symbols, F3 facets, geometry and sour
 identity remain owned by normal Main-map source refresh (10 minutes). Popup freshness
 does not fetch global AOIs. A member status without an active export therefore
 converges through normal source refresh. Non-package job discovery and targeted
-Graphic refresh remain unchanged. All package mutations and Analyze/Review/History
-navigation remain unavailable.
+Graphic refresh remain unchanged. All package mutations remain unavailable. F6A-F6D subsequently enabled
+package-aware Analyze/Review/History navigation; F7A preserves that accepted behavior.
 
 ### F5 v2: normal source refresh and an open popup
 
@@ -506,3 +516,60 @@ that revision. The next bounded check can retry; superseded initial reads use th
 existing `requireRefresh()` recovery path and subsequent initial check. There is
 still one in-flight detail read and no separate generation owner. All v2 source,
 identity, connection and cleanup guards remain in place.
+
+## F7A v3 package presentation boundary
+
+`packagePopupPresentation.js` is a popup-owned pure projection of a resolved
+registry work unit, not Review state. It validates the current Graphic/source and
+member identity. The actual action configuration returns the package branch before
+reading Product-operation availability or constructing any Product mutation callback.
+
+Each package descriptor separates `frontendSupported`, `backendAuthorized` and
+`dispatchImplemented`. The live frontend supports presentation, backend authorization
+is unknown, and dispatch is unconditionally false. Unexpected Graphic fields cannot
+supply workflow authorization, paused state, send count or scheduling. No package
+endpoint, DTO, storage, action simulator or confirmation flow is introduced.
+
+An optional `workflowPresentation` argument exists only on the pure helper for
+presentation fixtures and a future reviewed F7B adapter. It is never read from
+Graphic attributes or passed by live popup rendering. Its verified identity, explicit
+paused boolean, primary action, member identities and timezone-qualified timestamp
+are validated; even accepted fixture inputs cannot enable dispatch. F7B must establish
+run/generation identity and real backend authorization before introducing a dispatcher.
+
+Pause/Resume shares the stable `package-pause-resume` slot. Send/Accept shares the
+stable `package-send-accept` slot, selected only by an explicit optional presentation
+mode. Production supplies no mode, so only Send is shown. IC-ENC responses, Product
+statuses and candidates never imply Accept; an approved result does not require it.
+Discard retains its package-only identity with the shorter name. All three package
+controls are icon-only, and Tools keeps its right-side placement in one row. Package
+rows reconcile by ID; ordinary Product rows preserve their original reconciler.
+`popupActionDom.js` applies the optional package Tools current-session guard before
+opening menus. Package navigation callbacks also verify the connected anchor and
+current source. Existing Product callbacks and dropdown behavior remain unchanged.
+
+`packagePopupWorkflow.js` reconciles a sibling below `.popup-section` using a
+separate presentation signature. Source-owned `workUnitStatus.workflowStatus` is
+shown only when the existing status lookup has a known label. It never becomes an
+action permission or Pause flag. Detail still publishes only `workUnitMetadata`
+and `exportMetadata`; source refresh owns workflow/member statuses. No new data
+request, polling loop or generation owner is added.
+
+The existing snapshot/current-generation checks guard both action and workflow
+presentation. Invalid source, member identity or disconnected sessions stop freshness;
+invalid package publication clears the session's DOM/error overlay and unregisters
+the bridge. Same-state rendering retains action hosts, member table, error controls,
+selection and Tools dropdown. Workflow-only changes update just the summary text.
+`popupPackageActionDom.js` renders application-owned native buttons with public
+Calcite scale `m` icons in square 40px surfaces, explicit accessible names and
+`aria-disabled="true"`. Buttons remain
+focusable for help, while click/Enter/Space are blocked and no dispatcher exists even
+for forged configs. Hover and focus expose the same transient application-owned tooltip
+and description. Package controls have no native `title`; unchanged or forced reconciliation
+also removes obsolete native titles from reused controls. Tools and ordinary Product
+native tooltips and sizing retain their existing behavior.
+Escape dismisses help without moving focus; removal/disposal unregisters its temporary
+keydown/scroll/resize handlers. Same-state refresh retains focused controls and help.
+The existing workflow unavailable message remains below the table; the old permanent
+action explanation panel is removed. CSS uses popup theme tokens, square controls and
+one non-wrapping row, with local horizontal scrolling only at exceptionally narrow widths.

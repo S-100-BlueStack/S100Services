@@ -1,3 +1,7 @@
+import {
+  createPackagePopupPresentation,
+  isCurrentPackagePopupContext,
+} from "./packagePopupPresentation.js";
 import { getSendToIcEncCapability } from "../../data/stores/capabilityStore.js";
 import {
   createProductActionAvailability,
@@ -43,6 +47,34 @@ export function createPopupActionGroups({
   }
 
   const resolvedAttributes = attributes ?? context.graphic?.attributes ?? {};
+  // Package presentation must never reach Product availability or mutation dispatchers.
+  if (context.workUnit?.kind === "package") {
+    const selectedGraphic = graphic ?? context.graphic;
+    const presentation = createPackagePopupPresentation({
+      productContext: context,
+      graphic: selectedGraphic,
+      attributes: resolvedAttributes,
+    });
+    if (!presentation) return [];
+    const [pause, discard, primary] = presentation.actions;
+    const source = selectedGraphic.layer.appSourceDefinition;
+    const isCurrent = () =>
+      selectedGraphic.layer?.appSourceDefinition === source &&
+      isCurrentPackagePopupContext(context, selectedGraphic.attributes, selectedGraphic);
+    for (const action of presentation.actions) action.isCurrent = isCurrent;
+    const tools = createToolsAction({ context, attributes: resolvedAttributes, graphic });
+    if (tools) {
+      tools.isCurrent = isCurrent;
+      tools.items = tools.items.map((item) => ({
+        ...item,
+        onClick: (options) => {
+          if (options?.anchorElement?.isConnected && tools.isCurrent()) item.onClick(options);
+        },
+      }));
+    }
+    return [compactActions([pause, discard, primary, tools])];
+  }
+
   const datasetName = context.datasetName;
   const productOperationState = getProductOperationState(datasetName);
   const productHasRunningNonExportMutation =

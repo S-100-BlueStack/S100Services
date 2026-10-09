@@ -1,7 +1,7 @@
 import { isStatusFrozen } from "../state/featureState.js";
 import { resolveProductContext } from "../../products/domain/productContext.js";
 import { createPopupActionGroups } from "./popupActionConfig.js";
-import { createActionButton, updateActionButton } from "./popupActionDom.js";
+import { createActionButton, updateActionButton, disposeActionButton } from "./popupActionDom.js";
 import { closePopupActionDropdown } from "./popupActionDropdown.js";
 
 const ACTION_ROW_CLASS = "popup-action-bar__row";
@@ -28,6 +28,7 @@ export function createPopupActionBar({
   container.className = "popup-action-bar";
   container.setAttribute("aria-label", "Popup actions");
   reconcileActionRows(container, actionGroups, { force: true });
+  container.classList.toggle("popup-action-bar--package", context?.workUnit?.kind === "package");
 
   return container;
 }
@@ -54,6 +55,7 @@ export function updatePopupActionBar(
   if (actionGroups.length === 0) {
     const changed = container.childElementCount > 0;
     closeOpenDropdownIn(container);
+    disposeActionsIn(container);
     container.replaceChildren();
 
     return {
@@ -63,6 +65,7 @@ export function updatePopupActionBar(
   }
 
   const changed = reconcileActionRows(container, actionGroups, { force });
+  container.classList.toggle("popup-action-bar--package", context?.workUnit?.kind === "package");
 
   return {
     supported: true,
@@ -99,13 +102,17 @@ function reconcileActionRows(container, actionGroups, { force }) {
       changed = true;
     }
 
-    if (reconcileActionButtons(row, actions, { force })) {
+    const reconcile = actions.some((action) => action.id.startsWith("package-"))
+      ? reconcilePackageActionButtons
+      : reconcileActionButtons;
+    if (reconcile(row, actions, { force })) {
       changed = true;
     }
   }
 
   for (let rowIndex = actionGroups.length; rowIndex < rows.length; rowIndex += 1) {
     closeOpenDropdownIn(rows[rowIndex]);
+    disposeActionsIn(rows[rowIndex]);
     rows[rowIndex].remove();
     changed = true;
   }
@@ -135,6 +142,7 @@ function reconcileActionButtons(row, actions, { force }) {
 
   for (let actionIndex = actions.length; actionIndex < currentActions.length; actionIndex += 1) {
     closeOpenDropdownForAction(currentActions[actionIndex]);
+    disposeActionButton(currentActions[actionIndex]);
     currentActions[actionIndex].remove();
     changed = true;
   }
@@ -164,5 +172,39 @@ function closeOpenDropdownIn(container) {
 function closeOpenDropdownForAction(action) {
   if (action?.getAttribute?.("aria-expanded") === "true") {
     closePopupActionDropdown();
+  }
+}
+
+function reconcilePackageActionButtons(row, actions, { force }) {
+  let changed = false;
+  const existing = new Map(
+    Array.from(row.children).map((action) => [action.dataset.popupActionId, action])
+  );
+  for (const [index, config] of actions.entries()) {
+    let action = existing.get(config.id);
+    if (action) {
+      existing.delete(config.id);
+      changed = updateActionButton(action, config, { force }) || changed;
+    } else {
+      action = createActionButton(config);
+      changed = true;
+    }
+    if (row.children[index] !== action) {
+      row.insertBefore(action, row.children[index] ?? null);
+      changed = true;
+    }
+  }
+  for (const action of existing.values()) {
+    closeOpenDropdownForAction(action);
+    disposeActionButton(action);
+    action.remove();
+    changed = true;
+  }
+  return changed;
+}
+
+function disposeActionsIn(container) {
+  for (const action of container.querySelectorAll(".popup-action-bar__action")) {
+    disposeActionButton(action);
   }
 }

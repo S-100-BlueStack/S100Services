@@ -147,10 +147,20 @@ test("package actions cannot expose or dispatch old single-product mutations eve
     });
     assert.deepEqual(
       groups.flat().map((action) => action.id),
-      ["tools"]
+      ["package-pause-resume", "package-discard-export", "package-send-accept", "tools"]
+    );
+    assert.equal(
+      groups
+        .flat()
+        .filter((action) => action.id !== "tools")
+        .every((action) => action.disabled && action.onClick === undefined),
+      true
     );
     assert.deepEqual(
-      groups[0][0].items.map((action) => action.id),
+      groups
+        .flat()
+        .find((action) => action.id === "tools")
+        .items.map((action) => action.id),
       ["analyze", "review", "history"]
     );
   }

@@ -1,3 +1,9 @@
+import {
+  createUnavailablePackageAction,
+  updateUnavailablePackageAction,
+  disposeUnavailablePackageAction,
+  isUnavailablePackageAction,
+} from "./popupPackageActionDom.js";
 import { closePopupActionDropdown, togglePopupActionDropdown } from "./popupActionDropdown.js";
 import { bindVisibleFocusState } from "../../../shared/ui/focus/visibleFocus.js";
 import { createActionConfigSignature } from "./popupActionConfigSignature.js";
@@ -5,6 +11,9 @@ import { createActionConfigSignature } from "./popupActionConfigSignature.js";
 const actionStates = new WeakMap();
 
 export function createActionButton(actionConfig) {
+  if (actionConfig.controlKind === "unavailable-package") {
+    return createUnavailablePackageAction(actionConfig);
+  }
   const action = document.createElement("calcite-action");
   const state = {
     config: actionConfig,
@@ -28,7 +37,11 @@ export function createActionButton(actionConfig) {
     event.preventDefault();
     event.stopPropagation();
 
-    if (action.disabled || action.dataset.busy === "true") {
+    if (
+      action.disabled ||
+      action.dataset.busy === "true" ||
+      (currentConfig.isCurrent && (!action.isConnected || !currentConfig.isCurrent()))
+    ) {
       return;
     }
 
@@ -47,7 +60,11 @@ export function createActionButton(actionConfig) {
     const currentConfig = state.config;
     const hasDropdown = hasActionDropdown(currentConfig);
 
-    if (action.disabled || action.dataset.busy === "true") {
+    if (
+      action.disabled ||
+      action.dataset.busy === "true" ||
+      (currentConfig.isCurrent && (!action.isConnected || !currentConfig.isCurrent()))
+    ) {
       return;
     }
 
@@ -80,6 +97,9 @@ export function createActionButton(actionConfig) {
 }
 
 export function updateActionButton(action, actionConfig, { force = false } = {}) {
+  if (isUnavailablePackageAction(action)) {
+    return updateUnavailablePackageAction(action, actionConfig, { force });
+  }
   const state = actionStates.get(action);
 
   if (!state) {
@@ -264,4 +284,8 @@ function restoreDropdownFocus(action, focusedActionId) {
 
 function isEnabledDropdownItem(item) {
   return Boolean(item) && !item.disabled && item.dataset.busy !== "true";
+}
+
+export function disposeActionButton(action) {
+  disposeUnavailablePackageAction(action);
 }

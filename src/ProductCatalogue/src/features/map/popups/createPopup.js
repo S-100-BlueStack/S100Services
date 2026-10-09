@@ -1,8 +1,10 @@
+import { createPackagePopupPresentation } from "./packagePopupPresentation.js";
+import { updatePackagePopupWorkflow } from "./packagePopupWorkflow.js";
 import { createPackagePopupSnapshotSynchronization } from "./packagePopupSnapshot.js";
 import { createPopupErrorDetails } from "./popupErrorDetails.js";
 import { applyPopupProductStatusCell } from "./popupProductStatusCell.js";
 import { fetchProductPropertiesByDatasetName } from "../../data/api/productApi.js";
-import { getStatusName, getStatusIdByName } from "../../data/stores/statusStore.js";
+import { getStatusName, getStatusIdByName, getAllStatuses } from "../../data/stores/statusStore.js";
 import { noticeError } from "../../notices/services/noticeService.js";
 import { resolveProductContext } from "../../products/domain/productContext.js";
 import { attributesSupportLayerCapability } from "../config/layerDefinitions.js";
@@ -81,11 +83,31 @@ export function createPopup() {
                 currentAttributes = attributes;
                 render();
               },
-              onInvalid: () => backendSync.stopRefreshingPopup?.(),
+              onInvalid: invalidatePackagePresentation,
             })
           : null;
 
+      function invalidatePackagePresentation() {
+        disposed = true;
+        latestRefreshId += 1;
+        backendSync.stopRefreshingPopup?.();
+        const actionBar = getDirectChildByClass(container, "popup-action-bar");
+        // Clear this session's dropdown through the established action-bar cleanup.
+        if (actionBar) updatePopupActionBar(actionBar);
+        errorDetails.destroy();
+        container.replaceChildren();
+      }
+
       function render() {
+        if (disposed) return;
+        if (
+          packageSnapshot &&
+          ((container.isConnected && !packageSnapshot.isCurrent()) ||
+            !createPackagePopupPresentation({ productContext, attributes: currentAttributes }))
+        ) {
+          invalidatePackagePresentation();
+          return;
+        }
         renderPopupContent(container, currentAttributes, {
           graphic,
           productContext,
@@ -96,7 +118,7 @@ export function createPopup() {
 
       async function refreshAndRender({ showFailureNotice = true } = {}) {
         if (packageSnapshot && !packageSnapshot.isCurrent()) {
-          backendSync.stopRefreshingPopup?.();
+          invalidatePackagePresentation();
           return false;
         }
         const refreshId = ++latestRefreshId;
@@ -134,7 +156,7 @@ export function createPopup() {
           (packageSnapshot && !packageSnapshot.isCurrent())
         ) {
           if (packageSnapshot && !packageSnapshot.isCurrent()) {
-            backendSync.stopRefreshingPopup?.();
+            invalidatePackagePresentation();
           }
           return false;
         }
@@ -167,6 +189,8 @@ export function createPopup() {
         container,
         combineCleanups(
           () => {
+            const actionBar = getDirectChildByClass(container, "popup-action-bar");
+            if (packageSnapshot && actionBar) updatePopupActionBar(actionBar);
             errorDetails.destroy();
             disposed = true;
             latestRefreshId += 1;
@@ -177,6 +201,7 @@ export function createPopup() {
           () => backendSync.stopRefreshingPopup?.()
         ),
         () => {
+          if (disposed) return;
           backendSync = initializePopupBackendSynchronization({
             productContext,
             datasetName: popupDatasetName,
@@ -249,6 +274,17 @@ function renderPopupContent(
       container.insertBefore(nextActionBar, section);
     }
   }
+
+  updatePackagePopupWorkflow(
+    container,
+    createPackagePopupPresentation({
+      productContext,
+      attributes,
+      workflowStatusLabels: Object.fromEntries(
+        getAllStatuses().map((status) => [status.Id, status.Name])
+      ),
+    })
+  );
 
   // Job/action updates must not replace focused error controls or selected error text
   // when the metadata itself has not changed.

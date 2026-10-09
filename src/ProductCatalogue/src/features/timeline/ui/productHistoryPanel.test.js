@@ -206,7 +206,7 @@ test("actual Tools action captures context and sends one explicit read per membe
     .flat()
     .find((g) => g.id === "tools")
     .items.find((i) => i.id === "history")
-    .onClick();
+    .onClick({ anchorElement: { isConnected: true } });
   await settle();
   assert.deepEqual(
     h.calls.map(([name]) => name),

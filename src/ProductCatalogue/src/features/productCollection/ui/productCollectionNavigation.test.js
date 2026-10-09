@@ -75,10 +75,13 @@ test("Main-map package exposes Analyze, Review and History while collection dest
   const groups = createPopupActionGroups({ productContext: context });
   assert.deepEqual(
     groups.flat().map((action) => action.id),
-    ["tools"]
+    ["package-pause-resume", "package-discard-export", "package-send-accept", "tools"]
   );
   assert.deepEqual(
-    groups[0][0].items.map((action) => action.id),
+    groups
+      .flat()
+      .find((action) => action.id === "tools")
+      .items.map((action) => action.id),
     ["analyze", "review", "history"]
   );
   assert.equal(context.capabilities.analyze, true);
@@ -271,7 +274,9 @@ test("package popup Review launches the canonical representative and History is 
   const tools = createPopupActionGroups({ productContext: context })
     .flat()
     .find((action) => action.id === "tools");
-  tools.items.find((action) => action.id === "review").onClick();
+  tools.items
+    .find((action) => action.id === "review")
+    .onClick({ anchorElement: { isConnected: true } });
   assert.deepEqual(opened, [{ url: "/Review?Datasets=PRIMARY", target: "_blank" }]);
   assert.equal(
     tools.items.some((action) => action.id === "history"),
