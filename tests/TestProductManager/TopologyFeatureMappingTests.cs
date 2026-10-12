@@ -328,15 +328,15 @@ namespace TestProductCatalogueAPI
             var topologySurface = Assert.Single(dataset.Surfaces!);
 
             Assert.Equal(Foid(1), feature.Foid);
-            Assert.Equal("S100", topologySurface.Name);
+            Assert.Equal("S900", topologySurface.Name);
             Assert.Equal(topologySurface.Name, feature.Geometry);
             Assert.Equal("C200", topologySurface.Exterior);
             Assert.Equal("C300:1,C400:2", feature.Masks);
             AssertFinalTopologyReferencesExist(dataset);
 
             var yaml = dataset.Serialize();
-            Assert.Contains("Name: S100", yaml);
-            Assert.Contains("Geometry: S100", yaml);
+            Assert.Contains("Name: S900", yaml);
+            Assert.Contains("Geometry: S900", yaml);
             Assert.Contains("Exterior: C200", yaml);
             Assert.Contains("Masks: C300:1,C400:2", yaml);
             Assert.Contains("Name: C200", yaml);

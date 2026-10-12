@@ -40,7 +40,7 @@ public static class ExportOutputPath
     public static string GetCandidateDirectory(string outputRoot, string datasetName, ProductSpecification productSpecification, int edition, int update) {
         Validate(outputRoot, datasetName, edition, update);
 
-        // The S-101 compiler creates a dataset-name directory beneath the edition directory.
+        // The S-101 compiler writes S100_ROOT directly beneath the edition directory.
         if (productSpecification == ProductSpecification.S101)
             return Path.Combine(outputRoot, datasetName, edition.ToString(CultureInfo.InvariantCulture));
 
@@ -56,7 +56,7 @@ public static class ExportOutputPath
     /// <param name="update">The candidate update number used for input validation.</param>
     /// <returns>The directory containing the S-101 <c>.000</c> and update files.</returns>
     public static string GetS101DatasetFilesDirectory(string outputRoot, string datasetName, int edition, int update) {
-        return Path.Combine(GetCandidateDirectory(outputRoot, datasetName, ProductSpecification.S101, edition, update), datasetName, "S100_ROOT", "S-101", "DATASET_FILES");
+        return Path.Combine(GetCandidateDirectory(outputRoot, datasetName, ProductSpecification.S101, edition, update), "S100_ROOT", "S-101", "DATASET_FILES");
     }
     private static void Validate(string outputRoot, string datasetName, int edition, int update) {
         if (string.IsNullOrWhiteSpace(outputRoot))

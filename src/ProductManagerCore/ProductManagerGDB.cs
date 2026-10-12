@@ -1231,9 +1231,10 @@ namespace S100FC.ProductCatalogue
             var informationsTypesAdded = new HashSet<string>();
             var featureTypes = new List<YAML.Feature>();
             var featureTypesAdded = new HashSet<string>();
-            var exportedFeatureIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var selectedFeatureIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var collapsedFeatureIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // Only verified DPC snapshots need per-source feature membership accounting.
+            var featureTracker = requiredFeatureIds is null
+                ? null
+                : new VerifiedSourceFeatureTracker(electronicProduct.datasetName!, requiredFeatureIds);
 
             var createdDataset = await this.DispatchMeasured(() => {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -1391,9 +1392,19 @@ namespace S100FC.ProductCatalogue
                             hashSet.Add(oid);
 
                             var _uid = name;
+                            string? requiredSourceFeatureId = null;
+                            if (featureTracker is not null) {
+                                var sourceFeatureId = ReadFeatureId(current);
+                                if (featureTracker.RecordSelected(sourceFeatureId))
+                                    requiredSourceFeatureId = sourceFeatureId;
+                            }
 
                             // if (topology.matrix.Collapse.Contains(_uid)) continue;
-                            if (collapse.Contains(_uid)) continue;
+                            if (collapse.Contains(_uid)) {
+                                if (requiredSourceFeatureId is not null)
+                                    featureTracker!.RecordCollapsed(requiredSourceFeatureId);
+                                continue;
+                            }
                             var shapetype = def.GetShapeType();
 
                             var prim = shapetype switch {
@@ -1595,7 +1606,9 @@ namespace S100FC.ProductCatalogue
                                     };
 
                                     geometries.Add(new(geometrytype, geometry!));
-
+                                    // Record source membership only after this generated YAML feature and its geometry were added.
+                                    if (requiredSourceFeatureId is not null)
+                                        featureTracker!.RecordEmitted(requiredSourceFeatureId);
 
                                 }
                                 catch (Exception ex) {
@@ -1877,16 +1890,14 @@ namespace S100FC.ProductCatalogue
                     Log.Verbose("Adding {geometryType} with ID: {name}", geometry.GeometryType, name);
                 }
 
-                if (requiredFeatureIds is not null) {
-                    var missing = requiredFeatureIds.Where(id => selectedFeatureIds.Contains(id) &&
-                        !exportedFeatureIds.Contains(id) && !collapsedFeatureIds.Contains(id)).ToArray();
-                    if (missing.Length > 0)
-                        throw new InvalidOperationException($"Selected S-101 feature(s) were omitted during topology mapping or YAML conversion: {string.Join(", ", missing)}. DPC preserved its watermark.");
-                    foreach (var id in requiredFeatureIds.Where(exportedFeatureIds.Contains))
+                if (featureTracker is not null) {
+                    // A selected but unexported source feature must fail this scan before its watermark advances.
+                    var verification = featureTracker.Complete();
+                    foreach (var id in verification.Included)
                         includedChangedFeatureIds?.Add(id);
-                    foreach (var id in requiredFeatureIds.Where(id => !selectedFeatureIds.Contains(id)))
+                    foreach (var id in verification.OutsideSelection)
                         Log.Information("DPC source feature {FeatureId} is outside the topology selection for {DatasetName}; it is not required in this product's YAML.", id, electronicProduct.datasetName);
-                    foreach (var id in requiredFeatureIds.Where(collapsedFeatureIds.Contains))
+                    foreach (var id in verification.Collapsed)
                         Log.Information("DPC source surface {FeatureId} collapsed during topology for {DatasetName}; it is not emitted as a feature.", id, electronicProduct.datasetName);
                 }
                 dataset!.AddTopology(topology);

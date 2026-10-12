@@ -77,23 +77,30 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
 
         await RunProcessAsync(compilerExecutablePath, arguments, outputDirectory, request.DatasetName, cancellationToken, isS100Compiler: true);
 
-        //var datasetPath = Path.Combine(ExportOutputPath.GetS101DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update), $"{request.DatasetName}.{request.Update:000}");
-        //var datasetPath = Path.Combine(request.OutputRoot, request.DatasetName, request.Edition.ToString(), request.DatasetName, "S100_ROOT");
-        var datasetPath = Path.Combine(request.OutputRoot, request.DatasetName, request.Edition.ToString(), request.DatasetName, "S100_ROOT", "S-101", "DATASET_FILES", $"{request.DatasetName}.{request.Update:000}");
+        return await ReadS101ExportResultAsync(request, compilerIndexPath, previousIndexPath, cancellationToken);
+    }
+
+    /// <summary>Reads the S-101 exchange set from the compiler's actual edition-root layout.</summary>
+    /// <remarks>Separated from process execution so output validation and archiving can be regression-tested without a compiler.</remarks>
+    internal static async Task<ExportEngineResult> ReadS101ExportResultAsync(ExportEngineRequest request, string compilerIndexPath, string previousIndexPath, CancellationToken cancellationToken = default) {
+        cancellationToken.ThrowIfCancellationRequested();
+        var outputDirectory = ExportOutputPath.GetCandidateDirectory(request.OutputRoot, request.DatasetName, request.ProductSpecification, request.Edition, request.Update);
+        var datasetPath = Path.Combine(ExportOutputPath.GetS101DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update), $"{request.DatasetName}.{request.Update:000}");
         var datasetFile = new FileInfo(datasetPath);
         if (!datasetFile.Exists || datasetFile.Length == 0)
-            _logger.LogError("The S-101 compiler created a empty or non-existant dataset for '{DatasetName}'.", request.DatasetName); //throw new InvalidOperationException($"The S-101 compiler did not create a non-empty dataset for '{request.DatasetName}'.");
+            throw new InvalidOperationException($"The S-101 compiler did not create a non-empty dataset for '{request.DatasetName}'.");
 
-        var outputDatasetDirectory = Path.Combine(outputDirectory, request.DatasetName);
+        var s100Root = Path.Combine(outputDirectory, "S100_ROOT");
+        var signaturePath = Path.Combine(s100Root, "CATALOG.SIGN");
         var index = await File.ReadAllBytesAsync(compilerIndexPath, cancellationToken);
-        var signaturePath = Path.Combine(outputDatasetDirectory, "S100_ROOT", "CATALOG.SIGN");
         var signature = await File.ReadAllBytesAsync(signaturePath, cancellationToken);
-        var exchangeSet = await CreateZipAsync(outputDatasetDirectory, cancellationToken);
+        // Only S100_ROOT belongs in the exchange set; staging YAML and compiler indexes are separate artifacts.
+        var exchangeSet = await CreateZipAsync(s100Root, cancellationToken, "S100_ROOT");
         File.Delete(compilerIndexPath);
         if (File.Exists(previousIndexPath))
             File.Delete(previousIndexPath);
 
-        return new ExportEngineResult(outputDatasetDirectory, [
+        return new ExportEngineResult(outputDirectory, [
             new ExportEngineArtifact(ProductArtifactKind.CompilerIndex, Path.GetFileName(compilerIndexPath), "text/plain", index),
             new ExportEngineArtifact(ProductArtifactKind.CatalogueSignature, Path.GetFileName(signaturePath), "application/octet-stream", signature),
             new ExportEngineArtifact(ProductArtifactKind.ExchangeSet, $"{request.DatasetName}-{request.Edition}-{request.Update:000}.zip", "application/zip", exchangeSet)
@@ -204,12 +211,14 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
         }
     }
 
-    private static async Task<byte[]> CreateZipAsync(string directory, CancellationToken cancellationToken) {
+    private static async Task<byte[]> CreateZipAsync(string directory, CancellationToken cancellationToken, string? entryPrefix = null) {
         await using var stream = new MemoryStream();
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true)) {
             foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)) {
                 cancellationToken.ThrowIfCancellationRequested();
-                var entry = archive.CreateEntry(Path.GetRelativePath(directory, file), CompressionLevel.Optimal);
+                var relativePath = Path.GetRelativePath(directory, file);
+                var entryName = entryPrefix is null ? relativePath : $"{entryPrefix}/{relativePath.Replace(Path.DirectorySeparatorChar, '/')}";
+                var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
                 await using var entryStream = entry.Open();
                 await using var fileStream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
                 await fileStream.CopyToAsync(entryStream, cancellationToken);
