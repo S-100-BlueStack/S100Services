@@ -40,6 +40,7 @@ export function createPopupActionGroups({
   productContext,
   frozen,
   refreshAndRender,
+  packageActions,
 } = {}) {
   const context = productContext ?? resolveProductContext({ graphic, attributes });
   if (!context) {
@@ -54,6 +55,7 @@ export function createPopupActionGroups({
       productContext: context,
       graphic: selectedGraphic,
       attributes: resolvedAttributes,
+      workflowPresentation: packageActions?.projection(),
     });
     if (!presentation) return [];
     const [pause, discard, primary] = presentation.actions;
@@ -61,7 +63,25 @@ export function createPopupActionGroups({
     const isCurrent = () =>
       selectedGraphic.layer?.appSourceDefinition === source &&
       isCurrentPackagePopupContext(context, selectedGraphic.attributes, selectedGraphic);
-    for (const action of presentation.actions) action.isCurrent = isCurrent;
+    const actionState = packageActions?.projection();
+    for (const action of presentation.actions) {
+      action.isCurrent = isCurrent;
+      const enabled = actionState?.actionEligibility?.[action.operation] === true;
+      if (actionState && !enabled) {
+        action.disabledReason = getPackageActionHelp(
+          action.operation,
+          actionState,
+          action.helpText
+        );
+      }
+      if (enabled) {
+        action.controlKind = "live-package";
+        action.disabled = false;
+        action.disabledReason = null;
+        action.availability = { ...action.availability, dispatchImplemented: true };
+        action.onClick = () => packageActions.invoke(action.operation);
+      }
+    }
     const tools = createToolsAction({ context, attributes: resolvedAttributes, graphic });
     if (tools) {
       tools.isCurrent = isCurrent;
@@ -128,6 +148,33 @@ export function createPopupActionGroups({
       createToolsAction({ context, attributes: resolvedAttributes, graphic }),
     ]),
   ].filter((actions) => actions.length > 0);
+}
+
+function getPackageActionHelp(operation, state, description) {
+  let reason;
+  if (
+    (operation === "pause" || operation === "resume" || operation === "discard") &&
+    !state.liveVerified
+  ) {
+    reason =
+      state.restrictionCode === "PACKAGE_NOT_FOUND"
+        ? "No active package is available. Refresh the map."
+        : "Package state could not be verified. Refresh to try again.";
+  } else if (state.primaryAction === "accept" && operation !== "accept") {
+    reason = "Complete the current workflow before changing the package.";
+  } else if (
+    state.restrictionCode === "MEMBER_TRACK_MISSING" ||
+    state.restrictionCode === "MEMBERS_NOT_READY"
+  ) {
+    reason = "Both product tracks must finish processing before this action is available.";
+  } else if (operation === "send" && state.paused) {
+    reason = "Resume delivery before sending.";
+  } else if (operation === "send" || operation === "accept") {
+    reason = "This action is currently unavailable.";
+  } else {
+    reason = "This action is not available in the current package state.";
+  }
+  return `${description} ${reason}`;
 }
 
 function createFreezeAction({

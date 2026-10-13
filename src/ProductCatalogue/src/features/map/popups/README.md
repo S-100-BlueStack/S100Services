@@ -573,3 +573,35 @@ keydown/scroll/resize handlers. Same-state refresh retains focused controls and 
 The existing workflow unavailable message remains below the table; the old permanent
 action explanation panel is removed. CSS uses popup theme tokens, square controls and
 one non-wrapping row, with local horizontal scrolling only at exceptionally narrow widths.
+
+## October 2026 demo: live Pause/Resume and Discard, simulated Send/Accept
+
+See `src/ProductCatalogue/docs/package-demo-live-actions.md` and
+`src/ProductCatalogueAPI/docs/enc-package-demo-live-actions.md` for current
+setup, fail-closed behavior and acceptance checks. This replaces only F7A's
+**unavailable dispatch** boundary; icon row sizing, focus/Escape/help,
+source-aware package identity, member data and Tools remain unchanged.
+
+`packageActionSession.js` is the popup-owned action and request lifecycle.
+Pause/Resume and Discard require an authoritative backend package ID;
+Send/Accept, when explicitly opted in through `VITE_PACKAGE_DEMO_ENABLED=true`
+under `npm run dev`, only show a toast and toggle that same popup's primary
+action. The opt-in is independent of the URL and cannot enable simulation in
+production builds. No real Send/Accept endpoint is called. Normal frontend
+operation leaves Send/Accept disabled.
+
+### October 2026 follow-up: package action copy, incomplete tracks and Discard refresh
+
+Package tooltips now describe normal workflow actions rather than demo plumbing.
+Only the simulated Send/Accept notices state the demo boundary. The action
+session distinguishes an unavailable API/current package from an existing
+package whose member tracks are missing or still processing; absent server
+permission still never installs a live click dispatcher. Missing members cannot
+be synthesized from a dataset name or Graphic attributes.
+
+After a confirmed Discard Worker success, the existing popup generation owner
+invalidates old detail reads, clears its candidate overlay and performs one
+targeted Product-detail refresh. The regular source-refresh event still updates
+AOI-owned status and symbol data. The same popup, row and focus patterns remain;
+there is no new timer or polling owner. A failed detail read warns without
+undoing the successful Discard or reintroducing discarded candidate details.

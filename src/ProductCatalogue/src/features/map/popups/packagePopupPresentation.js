@@ -1,13 +1,11 @@
 import { resolveProductContext } from "../../products/domain/productContext.js";
 import { normalizeElectronicProductStatus } from "../../dataSources/domain/electronicProductStatus.js";
 
-export const PACKAGE_ACTION_UNAVAILABLE =
-  "Package actions are not yet connected. Workflow state and action eligibility are unavailable.";
+export const PACKAGE_ACTION_UNAVAILABLE = "Package state is unavailable. Refresh to try again.";
 
 /**
- * Popup-owned presentation only. workflowPresentation is an optional application
- * projection for F7B to map after contract review, never a live DTO or Graphic field.
- * Dispatch stays disabled even for verified presentation fixtures.
+ * Popup-owned presentation only. A validated action-session projection provides
+ * state and eligibility; the presentation itself never authorizes dispatch.
  */
 export function createPackagePopupPresentation({
   productContext,
@@ -52,7 +50,7 @@ export function createPackagePopupPresentation({
         typeof projection?.actionEligibility?.[operation] === "boolean"
           ? projection.actionEligibility[operation]
           : null,
-      // No input flag can install a package dispatcher in F7A.
+      // A verified projection is not permission to install a dispatcher.
       dispatchImplemented: false,
     },
     className: "popup-action-bar__action--package",
@@ -65,16 +63,16 @@ export function createPackagePopupPresentation({
         pauseOperation,
         paused === true ? "Resume" : "Pause",
         paused === true ? "play" : "pause",
-        paused === undefined
-          ? "Actual Pause state is unavailable until package workflow integration is connected."
-          : "Pause affects delivery only; detection, generation and validation may continue."
+        paused === true
+          ? "Resume delivery for this package."
+          : "Pause delivery while candidate generation and validation continue."
       ),
       action(
         "package-discard-export",
         "discard",
         "Discard",
         "x-circle",
-        "Discard both package candidates before sending. This is not Product Cancel Export."
+        "Discard the S-101 and S-57 candidates before delivery. This cannot be undone."
       ),
       action(
         "package-send-accept",
@@ -82,21 +80,22 @@ export function createPackagePopupPresentation({
         primaryLabel,
         primaryOperation === "accept" ? "check" : "send",
         primaryOperation === "accept"
-          ? "Acknowledge workflow results and allow completion; this does not approve a failed product."
+          ? "Acknowledge the results and complete the package workflow. Failed products are not approved."
           : eligible?.length
-            ? `Delivery includes: ${eligible.map((member) => member.datasetName).join(", ")}.`
-            : "The products eligible for delivery have not been verified."
+            ? `Send to IC-ENC: ${eligible.map((member) => member.datasetName).join(", ")}.`
+            : "Send eligible package products to IC-ENC."
       ),
     ],
-    explanation: PACKAGE_ACTION_UNAVAILABLE,
+    explanation: projection ? null : PACKAGE_ACTION_UNAVAILABLE,
     summary: {
       workflowText:
         typeof workflowLabel === "string" && workflowLabel.trim()
           ? `Package workflow: ${workflowLabel}`
           : "Package workflow status unavailable.",
-      unavailableText: "Package actions not yet connected.",
+      unavailableText:
+        projection?.liveVerified === false || !projection ? "Package state unavailable." : null,
       pausedText:
-        typeof paused === "boolean"
+        projection?.liveVerified !== false && typeof paused === "boolean"
           ? paused
             ? "Delivery paused; internal processing may continue."
             : "Delivery is not paused."
@@ -204,6 +203,7 @@ function validateWorkflowPresentation(projection, context, attributes) {
   const scheduledSendAt = isValidSendTimestamp(timestamp) ? timestamp : null;
   return {
     paused: projection.paused,
+    liveVerified: projection.liveVerified !== false,
     primaryAction: projection.primaryAction,
     eligibleMembers,
     actionEligibility: projection.actionEligibility,

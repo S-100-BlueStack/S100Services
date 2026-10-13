@@ -35,6 +35,7 @@ public static class BackendRegistrations
         services.AddScoped<IProductWorkflowRepository>(provider => provider.GetRequiredService<ProductRepository>());
         services.AddScoped<IEncPackageRepository, EncPackageRepository>();
         services.AddScoped<IEncPackageControlRepository, EncPackageControlRepository>();
+        services.AddScoped<IEncPackageActionService, EncPackageActionService>();
         services.AddScoped<IEncPackageAcknowledgementRepository, EncPackageAcknowledgementRepository>();
         services.AddScoped<IIcEncAcknowledgementService, IcEncAcknowledgementService>();
         services.AddScoped<IProductWorkspaceFreshnessRepository, ProductWorkspaceFreshnessRepository>();
@@ -83,6 +84,7 @@ public static class BackendRegistrations
         services.AddScoped<IEncPackageDetectionService, EncPackageDetectionService>();
         services.AddScoped<IEncPackageFinalizationService, EncPackageFinalizationService>();
         services.AddTransient<FinalizeEncPackageJob>();
+        services.AddTransient<DiscardEncPackageJob>();
         services.AddTransient<ExportOperationJob>();
         services.AddTransient<DetectProductChangesJob>();
 

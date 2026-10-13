@@ -1,4 +1,8 @@
-import { createPackagePopupPresentation } from "./packagePopupPresentation.js";
+import {
+  createPackagePopupPresentation,
+  isCurrentPackagePopupContext,
+} from "./packagePopupPresentation.js";
+import { createPackageActionSession } from "./packageActionSession.js";
 import { updatePackagePopupWorkflow } from "./packagePopupWorkflow.js";
 import { createPackagePopupSnapshotSynchronization } from "./packagePopupSnapshot.js";
 import { createPopupErrorDetails } from "./popupErrorDetails.js";
@@ -69,6 +73,36 @@ export function createPopup() {
         stopRefreshingPopup: null,
       };
 
+      const packageActions =
+        productContext?.workUnit?.kind === "package"
+          ? createPackageActionSession({
+              sourceName: productContext.datasetName,
+              identityKey: productContext.identityKey,
+              memberNames: () =>
+                Object.fromEntries(
+                  Object.entries(currentAttributes.workUnitMetadata?.members ?? {}).map(
+                    ([key, value]) => [key, value.datasetName]
+                  )
+                ),
+              isCurrent: () =>
+                !disposed &&
+                container.isConnected &&
+                isCurrentPackagePopupContext(productContext, currentAttributes, graphic),
+              onChange: () => render(),
+              onDiscardSucceeded: async () => {
+                if (disposed || !container.isConnected || !packageSnapshot?.isCurrent()) {
+                  return false;
+                }
+                // A completed Discard invalidates in-flight candidate detail and its
+                // overlay before the next server read. The AOI-owned statuses remain
+                // untouched until the normal source refresh publishes them.
+                latestRefreshId += 1;
+                currentAttributes = applyGraphicAttributes(graphic, { exportMetadata: null });
+                render();
+                return refreshAndRender({ showFailureNotice: false });
+              },
+            })
+          : null;
       const packageSnapshot =
         productContext?.workUnit?.kind === "package"
           ? createPackagePopupSnapshotSynchronization({
@@ -78,6 +112,7 @@ export function createPopup() {
               getAttributes: () => currentAttributes,
               onSourcePublication: () => {
                 latestRefreshId += 1;
+                void packageActions?.refresh();
               },
               publish: (attributes) => {
                 currentAttributes = attributes;
@@ -91,6 +126,7 @@ export function createPopup() {
         disposed = true;
         latestRefreshId += 1;
         backendSync.stopRefreshingPopup?.();
+        packageActions?.destroy();
         const actionBar = getDirectChildByClass(container, "popup-action-bar");
         // Clear this session's dropdown through the established action-bar cleanup.
         if (actionBar) updatePopupActionBar(actionBar);
@@ -113,6 +149,7 @@ export function createPopup() {
           productContext,
           refreshAndRender,
           errorDetails,
+          packageActions,
         });
       }
 
@@ -168,11 +205,15 @@ export function createPopup() {
           return false;
         }
 
+        const hadMembers = Object.keys(currentAttributes.workUnitMetadata?.members ?? {}).length;
         currentAttributes = applyGraphicAttributes(
           graphic,
           mergePopupProductRefreshAttributes(productContext, result.data)
         );
         render();
+        if (!hadMembers && Object.keys(currentAttributes.workUnitMetadata?.members ?? {}).length) {
+          void packageActions?.refresh();
+        }
 
         return true;
       }
@@ -192,6 +233,7 @@ export function createPopup() {
             const actionBar = getDirectChildByClass(container, "popup-action-bar");
             if (packageSnapshot && actionBar) updatePopupActionBar(actionBar);
             errorDetails.destroy();
+            packageActions?.destroy();
             disposed = true;
             latestRefreshId += 1;
           },
@@ -202,6 +244,7 @@ export function createPopup() {
         ),
         () => {
           if (disposed) return;
+          void packageActions?.start();
           backendSync = initializePopupBackendSynchronization({
             productContext,
             datasetName: popupDatasetName,
@@ -247,7 +290,7 @@ export function createPopup() {
 function renderPopupContent(
   container,
   attributes,
-  { graphic, productContext, refreshAndRender, errorDetails }
+  { graphic, productContext, refreshAndRender, errorDetails, packageActions }
 ) {
   const section = getOrCreatePopupSection(container);
   const actionBar = getDirectChildByClass(container, "popup-action-bar");
@@ -258,6 +301,7 @@ function renderPopupContent(
       graphic,
       productContext,
       refreshAndRender,
+      packageActions,
     });
     if (!actionBarUpdate.supported) {
       actionBar.remove();
@@ -268,6 +312,7 @@ function renderPopupContent(
       graphic,
       productContext,
       refreshAndRender,
+      packageActions,
     });
 
     if (nextActionBar) {
@@ -280,6 +325,7 @@ function renderPopupContent(
     createPackagePopupPresentation({
       productContext,
       attributes,
+      workflowPresentation: packageActions?.projection(),
       workflowStatusLabels: Object.fromEntries(
         getAllStatuses().map((status) => [status.Id, status.Name])
       ),

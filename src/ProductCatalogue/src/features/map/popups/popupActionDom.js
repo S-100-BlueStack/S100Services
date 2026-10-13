@@ -11,7 +11,7 @@ import { createActionConfigSignature } from "./popupActionConfigSignature.js";
 const actionStates = new WeakMap();
 
 export function createActionButton(actionConfig) {
-  if (actionConfig.controlKind === "unavailable-package") {
+  if (["unavailable-package", "live-package"].includes(actionConfig.controlKind)) {
     return createUnavailablePackageAction(actionConfig);
   }
   const action = document.createElement("calcite-action");

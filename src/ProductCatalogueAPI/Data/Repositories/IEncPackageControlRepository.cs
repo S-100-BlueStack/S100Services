@@ -20,5 +20,6 @@ public interface IEncPackageControlRepository
         byte[]? expectedControlVersion,
         bool isPaused,
         DateTime changedAtUtc,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool requirePreSend = false);
 }

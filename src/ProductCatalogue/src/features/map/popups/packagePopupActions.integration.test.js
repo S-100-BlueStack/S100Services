@@ -7,6 +7,7 @@ import { loadStatuses } from "../../data/stores/statusStore.js";
 import { createPackagePopupPresentation } from "./packagePopupPresentation.js";
 import { resolveProductContext } from "../../products/domain/productContext.js";
 import { createActionButton, updateActionButton, disposeActionButton } from "./popupActionDom.js";
+import { createPopupProductMetadataColumns } from "./popupProductMetadata.js";
 
 // A public DOM test double: no Calcite/ArcGIS internals or browser behavior is emulated.
 function createHarness() {
@@ -163,6 +164,8 @@ function createHarness() {
   const requests = [];
   let nextInterval = 0;
   let revision = "a";
+  let actionsSnapshot = null;
+  let discardHandler = () => {};
   let detail = async () => ({
     name: "PRIMARY",
     s101: { name: "PRIMARY", edition: 1, update: 0 },
@@ -205,6 +208,22 @@ function createHarness() {
         ]);
       if (url.startsWith("/electronicproducts/workspace/freshness?")) {
         return json([{ datasetName: "PRIMARY", available: true, revision }]);
+      }
+      if (url === "/electronicproducts/packages/PRIMARY/actions" && actionsSnapshot) {
+        return json(actionsSnapshot);
+      }
+      if (url === "/electronicproducts/packages/PRIMARY/discard" && options.method === "POST") {
+        discardHandler();
+        return json({ jobId: "discard-test" });
+      }
+      if (url === "/electronicproducts/packages/discard-jobs/discard-test") {
+        return json({ status: "Succeeded" });
+      }
+      if (url === "/electronicproducts/packages/PRIMARY/actions") {
+        return new Response(JSON.stringify({ code: "PACKAGE_ACTIONS_DISABLED" }), {
+          status: 503,
+          headers: { "content-type": "application/json" },
+        });
       }
       assert.equal(
         url,
@@ -281,6 +300,12 @@ function createHarness() {
     detail(callback) {
       detail = callback;
     },
+    actions(value) {
+      actionsSnapshot = value;
+    },
+    onDiscard(callback) {
+      discardHandler = callback;
+    },
     destroy() {
       popup?.remove();
       notify();
@@ -294,6 +319,74 @@ function createHarness() {
     },
   };
 }
+
+test("completed Discard updates current popup attributes without closing the popup", async () => {
+  const h = createHarness();
+  let discarded = false;
+  const current = {
+    name: "PRIMARY",
+    s101: { name: "PRIMARY", edition: 1, update: 0 },
+    s57: { name: "SECONDARY", edition: 4, update: 0 },
+  };
+  h.detail(async () => ({
+    ...current,
+    exports: discarded
+      ? []
+      : [
+          {
+            type: "S100",
+            datasetName: "PRIMARY",
+            edition: 6,
+            update: 2,
+            status: "Error",
+            errorMessage: "Old candidate failure",
+          },
+        ],
+  }));
+  h.actions({
+    packageId: "71ccb411-30f7-4b58-bb85-4af5f6c9872e",
+    sourceDatasetName: "PRIMARY",
+    paused: false,
+    canPause: true,
+    canResume: false,
+    canDiscard: true,
+    eligibleMembers: [],
+  });
+  h.onDiscard(() => {
+    discarded = true;
+  });
+  try {
+    await loadStatuses();
+    const popup = h.open();
+    await h.settle();
+    const context = resolveProductContext({ graphic: h.graphic });
+    const getColumns = () => createPopupProductMetadataColumns(h.graphic.attributes, context);
+    assert.equal(getColumns()[0].item.edition, 6);
+    assert.equal(getColumns()[0].item.errorMessage, "Old candidate failure");
+    const section = popup.querySelector(".popup-section");
+    const discardButton = popup.querySelectorAll(".popup-action-bar__action")[1];
+    assert.equal(discardButton.getAttribute("aria-disabled"), "false");
+    discardButton.click();
+    await h.settle();
+    assert.equal(discarded, true);
+    assert.equal(getColumns()[0].item.edition, 1);
+    assert.equal(getColumns()[0].item.errorMessage, undefined);
+    assert.equal(h.doc.body.contains(popup), true);
+    assert.equal(popup.querySelector(".popup-section"), section);
+    assert.equal(popup.querySelectorAll(".popup-action-bar__action")[1], discardButton);
+    assert.equal(
+      h.requests.filter((item) => item.url === "/electronicproducts/PRIMARY").length >= 2,
+      true
+    );
+    assert.equal(
+      h.requests.filter((item) => item.url === "/electronicproducts/packages/PRIMARY/discard")
+        .length,
+      1
+    );
+  } finally {
+    h.destroy();
+  }
+});
 
 test("actual popup keeps table, error overlay, selection owner, focus and Tools dropdown during summary refresh", async () => {
   const h = createHarness();
@@ -320,7 +413,7 @@ test("actual popup keeps table, error overlay, selection owner, focus and Tools 
     );
     assert.equal(tools.scale, "m");
     assert.equal(tools.getAttribute("title"), "Tools");
-    const count = h.requests.length;
+    const count = h.requests.filter((request) => !request.url.endsWith("/actions")).length;
     for (const action of controls.filter((control) => control !== tools)) {
       assert.equal(action.tagName, "button");
       assert.equal(action.disabled, false);
@@ -333,7 +426,7 @@ test("actual popup keeps table, error overlay, selection owner, focus and Tools 
       assert.equal(action.children[0].hasAttribute("title"), false);
       action.emit("pointerenter");
       const hoverHelp = h.doc.body.querySelector(".popup-package-action-help");
-      assert.match(hoverHelp.textContent, /not yet connected/);
+      assert.match(hoverHelp.textContent, /Package state is unavailable/);
       assert.equal(hoverHelp.textContent.startsWith(action.getAttribute("aria-label")), true);
       action.emit("pointerleave");
       assert.equal(h.doc.body.querySelector(".popup-package-action-help"), null);
@@ -350,7 +443,7 @@ test("actual popup keeps table, error overlay, selection owner, focus and Tools 
       action.emit("keydown", { key: " " });
       assert.equal(action.dataset.busy, "false");
     }
-    assert.equal(h.requests.length, count);
+    assert.equal(h.requests.filter((request) => !request.url.endsWith("/actions")).length, count);
 
     // Install a real error trigger through normalized member candidate metadata.
     h.graphic.attributes.exportMetadata = {
@@ -375,7 +468,7 @@ test("actual popup keeps table, error overlay, selection owner, focus and Tools 
     assert.equal(h.doc.body.querySelector(".popup-error-details"), overlay);
     assert.equal(h.doc.activeElement, overlay);
     assert.notEqual(table, retainedTable);
-    assert.equal(h.requests.length, count);
+    assert.equal(h.requests.filter((request) => !request.url.endsWith("/actions")).length, count);
 
     tools.emit("keydown", { key: "ArrowDown" });
     h.frames();
@@ -479,7 +572,7 @@ for (const [name, invalidate] of [
     try {
       const popup = h.open();
       await h.settle();
-      const requestCount = h.requests.length;
+      const requestCount = h.requests.filter((request) => !request.url.endsWith("/actions")).length;
       const packageAction = popup.querySelectorAll(".popup-action-bar__action")[0];
       packageAction.focus();
       assert.ok(h.doc.body.querySelector(".popup-package-action-help"));
@@ -499,7 +592,10 @@ for (const [name, invalidate] of [
       assert.equal(h.doc.body.querySelector(".popup-action-dropdown"), null);
       assert.equal(h.intervals.size, 0);
       assert.deepEqual(await refreshOpenProductPopup("PRIMARY"), { matched: 0, refreshed: 0 });
-      assert.equal(h.requests.length, requestCount);
+      assert.equal(
+        h.requests.filter((request) => !request.url.endsWith("/actions")).length,
+        requestCount
+      );
     } finally {
       h.destroy();
     }
@@ -577,7 +673,7 @@ test("shared Send/Accept updates accessible name, icon and help without replacin
     assert.equal(h.doc.activeElement, button);
     assert.equal(h.doc.body.querySelector(".popup-package-action-help"), help);
     assert.match(help.textContent, /^Accept\./);
-    assert.match(help.textContent, /does not approve a failed product/);
+    assert.match(help.textContent, /Failed products are not approved/);
     assert.equal(h.doc.body.querySelectorAll(".popup-package-action-help").length, 1);
     assert.equal(updateActionButton(button, model("accept").actions[2]), false);
     for (let i = 0; i < 3; i++) {
@@ -612,7 +708,7 @@ test("actual popup preserves focused package icon and its tooltip during refresh
     const button = popup.querySelectorAll(".popup-action-bar__action")[2];
     button.focus();
     const help = h.doc.body.querySelector(".popup-package-action-help");
-    const requests = h.requests.length;
+    const requests = h.requests.filter((request) => !request.url.endsWith("/actions")).length;
     for (const action of popup.querySelectorAll(".popup-action-bar__action").slice(0, 3)) {
       action.setAttribute("title", "Obsolete tooltip before popup refresh");
     }
@@ -627,14 +723,20 @@ test("actual popup preserves focused package icon and its tooltip during refresh
       assert.equal(action.hasAttribute("title"), false);
       assert.equal(action.children[0].scale, "m");
     }
-    assert.equal(h.requests.length, requests);
+    assert.equal(
+      h.requests.filter((request) => !request.url.endsWith("/actions")).length,
+      requests
+    );
     h.close();
     assert.equal(h.doc.body.querySelector(".popup-package-action-help"), null);
     button.emit("pointerenter");
     button.click();
     assert.equal(h.doc.body.querySelector(".popup-package-action-help"), null);
     assert.equal(h.intervals.size, 0);
-    assert.equal(h.requests.length, requests);
+    assert.equal(
+      h.requests.filter((request) => !request.url.endsWith("/actions")).length,
+      requests
+    );
   } finally {
     h.destroy();
   }
@@ -707,7 +809,7 @@ test("package controls remove obsolete native titles during unchanged and forced
       button.emit("pointerenter");
       button.focus();
       const help = h.doc.body.querySelector(".popup-package-action-help");
-      assert.match(help.textContent, /not yet connected/);
+      assert.match(help.textContent, /Package state is unavailable/);
       assert.equal(help.textContent.startsWith(config.label), true);
       for (const force of [false, false, true]) {
         button.setAttribute("title", "Obsolete native tooltip");

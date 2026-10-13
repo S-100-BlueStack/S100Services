@@ -31,7 +31,8 @@ public sealed class EncPackageControlRepository(DbConnectionFactory connectionFa
         byte[]? expectedControlVersion,
         bool isPaused,
         DateTime changedAtUtc,
-        CancellationToken cancellationToken = default) {
+        CancellationToken cancellationToken = default,
+        bool requirePreSend = false) {
         if (expectedPackageId == Guid.Empty)
             throw new ArgumentException("A current package snapshot identifier is required.", nameof(expectedPackageId));
         if (changedAtUtc.Kind != DateTimeKind.Utc)
@@ -60,6 +61,25 @@ public sealed class EncPackageControlRepository(DbConnectionFactory connectionFa
 
         if (!MatchesVersion(previous?.RowVersion, expectedControlVersion))
             return new(EncPackagePauseWriteStatus.VersionConflict, null);
+
+        if (requirePreSend) {
+            // The control row/range is locked before track rows, matching live delivery
+            // reservation order. A completed,
+            // sending or still-processing member never accepts a new Pause/Resume command.
+            var states = (await connection.QueryAsync<ProductState>(new CommandDefinition("""
+                SELECT t.state FROM dbo.ProductExportTrack t WITH (UPDLOCK, HOLDLOCK)
+                INNER JOIN dbo.Product p ON p.product_id = t.product_id
+                INNER JOIN dbo.EncPackage ep ON ep.package_id = @PackageId
+                WHERE ((p.dataset_name = ep.source_dataset_name AND t.product_specification = 'S101')
+                   OR (p.dataset_name = ep.s57_dataset_name AND t.product_specification = 'S57'))
+                  AND NOT EXISTS (SELECT 1 FROM dbo.ProductExportTrackFreezeHold h WITH (UPDLOCK, HOLDLOCK)
+                                  WHERE h.product_export_track_id = t.product_export_track_id);
+                """, new { PackageId = expectedPackageId }, transaction, cancellationToken: cancellationToken))).ToArray();
+            if (states.Length != 2 || states.Any(state => state is not (
+                ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected)))
+                return new(EncPackagePauseWriteStatus.NotEligible, null);
+        }
+
 
         var changed = previous is null ? isPaused : previous.IsPaused != isPaused;
         if (changed) {

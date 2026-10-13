@@ -11,6 +11,7 @@ export function createPopupActionBar({
   graphic,
   productContext,
   refreshAndRender,
+  packageActions,
 } = {}) {
   const context = productContext ?? resolveProductContext({ graphic, attributes });
   const actionGroups = getActionGroups({
@@ -18,6 +19,7 @@ export function createPopupActionBar({
     graphic,
     attributes,
     refreshAndRender,
+    packageActions,
   });
 
   if (actionGroups.length === 0) {
@@ -35,7 +37,7 @@ export function createPopupActionBar({
 
 export function updatePopupActionBar(
   container,
-  { attributes, graphic, productContext, refreshAndRender, force = false } = {}
+  { attributes, graphic, productContext, refreshAndRender, packageActions, force = false } = {}
 ) {
   if (!container) {
     return {
@@ -50,6 +52,7 @@ export function updatePopupActionBar(
     graphic,
     attributes,
     refreshAndRender,
+    packageActions,
   });
 
   if (actionGroups.length === 0) {
@@ -73,7 +76,7 @@ export function updatePopupActionBar(
   };
 }
 
-function getActionGroups({ context, graphic, attributes, refreshAndRender }) {
+function getActionGroups({ context, graphic, attributes, refreshAndRender, packageActions }) {
   if (!context) {
     return [];
   }
@@ -85,6 +88,7 @@ function getActionGroups({ context, graphic, attributes, refreshAndRender }) {
     productContext: context,
     frozen: isStatusFrozen(resolvedAttributes?.status),
     refreshAndRender,
+    packageActions,
   });
 }
 

@@ -31,3 +31,10 @@ public sealed class EncPackage
     /// <summary>Gets or sets a package-level failure that requires acknowledgement.</summary>
     public string? ErrorMessage { get; set; }
 }
+
+/// <summary>Only these exact pre-send outputs may be cleaned up after the SQL transaction.</summary>
+public sealed record EncPackageDiscardOutput(string DatasetName, ProductSpecification Specification, int Edition, int Update);
+
+public enum EncPackageDiscardStatus { Discarded, NotFound, Conflict }
+
+public sealed record EncPackageDiscardResult(EncPackageDiscardStatus Status, IReadOnlyList<EncPackageDiscardOutput> Outputs);

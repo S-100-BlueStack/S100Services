@@ -84,11 +84,11 @@ test("registry package exposes isolated disabled controls and unchanged Tools na
     false
   );
   assert.equal(model.actions[0].label, "Pause");
-  assert.match(model.actions[0].helpText, /Actual Pause state is unavailable/);
+  assert.match(model.actions[0].helpText, /Pause delivery/);
   assert.equal(model.actions[2].label, "Send");
   assert.equal(model.summary.pausedText, null);
   assert.equal(model.summary.scheduledSendAt, null);
-  assert.match(model.explanation, /not yet connected/);
+  assert.match(model.explanation, /Package state is unavailable/);
 });
 
 test("presentation fixtures support Resume, exact eligible Send counts and Accept without dispatch", () => {
@@ -129,7 +129,7 @@ test("presentation fixtures support Resume, exact eligible Send counts and Accep
       outcomeText: "S-101 will be committed; the failed S-57 candidate will not be committed.",
     }),
   });
-  assert.match(accept.actions[2].helpText, /does not approve a failed product/);
+  assert.match(accept.actions[2].helpText, /Failed products are not approved/);
   assert.equal(accept.actions[2].id, first.actions[2].id);
   assert.equal(accept.actions[2].label, "Accept");
   assert.equal(accept.actions[2].icon, "check");
@@ -301,4 +301,81 @@ test("package presentation follows a declaration rather than source name or data
   options.productContext = resolveProductContext({ graphic: options.graphic });
   assert.equal(createPackagePopupPresentation(options).actions[0].label, "Pause");
   assert.equal(createPopupActionGroups(options).flat().at(-1).id, "tools");
+});
+
+test("verified live Pause and Discard dispatch only through the package session", async () => {
+  const options = selection();
+  const calls = [];
+  const state = projection(options.productContext, {
+    liveVerified: true,
+    actionEligibility: { pause: true, resume: false, discard: true, send: false, accept: false },
+  });
+  const controls = createPopupActionGroups({
+    ...options,
+    packageActions: {
+      projection: () => state,
+      invoke: async (operation) => {
+        calls.push(operation);
+        return true;
+      },
+    },
+  }).flat();
+  assert.equal(controls[0].controlKind, "live-package");
+  assert.equal(controls[1].controlKind, "live-package");
+  assert.equal(controls[2].disabled, true);
+  assert.equal(controls[2].onClick, undefined);
+  assert.equal(controls[0].label, "Pause");
+  await controls[0].onClick();
+  await controls[1].onClick();
+  assert.deepEqual(calls, ["pause", "discard"]);
+});
+
+test("incomplete member processing explains disabled live controls without implementation language", () => {
+  const options = selection();
+  const state = projection(options.productContext, {
+    liveVerified: true,
+    restrictionCode: "MEMBER_TRACK_MISSING",
+    actionEligibility: { pause: false, resume: false, discard: false, send: true, accept: false },
+  });
+  const actions = createPopupActionGroups({
+    ...options,
+    packageActions: {
+      projection: () => state,
+      invoke: async () => assert.fail("Disabled action dispatched"),
+    },
+  }).flat();
+  assert.match(actions[0].disabledReason, /Both product tracks must finish processing/);
+  assert.match(actions[1].disabledReason, /Both product tracks must finish processing/);
+  assert.match(actions[1].disabledReason, /Discard the S-101 and S-57 candidates/);
+  assert.doesNotMatch(actions[1].disabledReason, /\bdemo\b|\blive\b|not connected/i);
+  assert.equal(actions[0].disabled, true);
+  assert.equal(actions[1].disabled, true);
+  assert.equal(actions[2].disabled, false);
+});
+
+test("demo-only Send has no fabricated delivery Pause state or live mutation", async () => {
+  const options = selection();
+  const calls = [];
+  const state = projection(options.productContext, {
+    liveVerified: false,
+    actionEligibility: { pause: false, resume: false, discard: false, send: true, accept: false },
+  });
+  const model = createPackagePopupPresentation({ ...options, workflowPresentation: state });
+  assert.equal(model.summary.pausedText, null);
+  assert.match(model.summary.unavailableText, /Package state unavailable/);
+  const controls = createPopupActionGroups({
+    ...options,
+    packageActions: {
+      projection: () => state,
+      invoke: async (operation) => {
+        calls.push(operation);
+        return true;
+      },
+    },
+  }).flat();
+  assert.equal(controls[0].disabled, true);
+  assert.equal(controls[1].disabled, true);
+  assert.equal(controls[2].controlKind, "live-package");
+  await controls[2].onClick();
+  assert.deepEqual(calls, ["send"]);
 });

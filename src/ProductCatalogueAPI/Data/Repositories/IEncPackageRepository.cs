@@ -5,6 +5,10 @@ namespace ProductCatalogueAPI.Data.Repositories;
 /// <summary>Persists one active package per S-101 AOI and any source scan that must be replayed.</summary>
 public interface IEncPackageRepository
 {
+    /// <summary>Gets one exact current snapshot without loading its YAML.</summary>
+    Task<EncPackage?> GetByIdAsync(Guid packageId, CancellationToken cancellationToken = default);
+    /// <summary>Atomically discards both unsent member candidates for the exact snapshot.</summary>
+    Task<EncPackageDiscardResult> TryDiscardPackageAsync(Guid expectedPackageId, string actor, DateTime nowUtc, CancellationToken cancellationToken = default);
     /// <summary>Gets active packages for a set of S-101 AOIs in one SQL read.</summary>
     Task<IReadOnlyDictionary<string, EncPackage>> GetActiveAsync(IEnumerable<string> sourceDatasetNames, CancellationToken cancellationToken = default, bool includeSourceYaml = true);
     /// <summary>Gets the oldest pending scan bound for edits observed while a package was locked or after acceptance.</summary>

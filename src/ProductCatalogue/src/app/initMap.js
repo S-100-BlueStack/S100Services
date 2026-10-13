@@ -199,6 +199,10 @@ export function initMap() {
       }
     },
   });
+  const refreshAfterPackageAction = () => {
+    void refreshService.refresh({ source: "package-action" });
+  };
+  window.addEventListener("pc-package-action-refresh", refreshAfterPackageAction);
   return {
     map,
     view,
@@ -223,6 +227,7 @@ export function initMap() {
     locator,
     navbarPopoverCoordinator,
     destroy() {
+      window.removeEventListener("pc-package-action-refresh", refreshAfterPackageAction);
       cleanupKeyboardClose?.();
       cleanupOverlapPicker?.();
       cleanupPopupHoverSync?.();

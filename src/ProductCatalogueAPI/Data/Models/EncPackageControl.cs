@@ -24,7 +24,8 @@ public enum EncPackagePauseWriteStatus
     Changed,
     Unchanged,
     SnapshotNotFound,
-    VersionConflict
+    VersionConflict,
+    NotEligible
 }
 
 public sealed record EncPackagePauseWriteResult(EncPackagePauseWriteStatus Status, EncPackageControlState? State);

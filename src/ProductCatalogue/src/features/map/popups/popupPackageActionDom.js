@@ -18,6 +18,7 @@ export function createUnavailablePackageAction(config) {
     signature: null,
     configuredClasses: [],
     disposed: false,
+    localBusy: false,
     hovered: false,
     focused: false,
     helpHovered: false,
@@ -28,13 +29,30 @@ export function createUnavailablePackageAction(config) {
   };
   states.set(button, state);
 
-  button.addEventListener("click", (event) => {
+  button.addEventListener("click", async (event) => {
     event.preventDefault();
     event.stopPropagation();
+    if (
+      state.config.controlKind !== "live-package" ||
+      state.config.disabled ||
+      state.localBusy ||
+      !isCurrent(button, state)
+    )
+      return;
+    state.localBusy = true;
+    updateUnavailablePackageAction(button, state.config, { force: true });
+    try {
+      await state.config.onClick?.({ anchorElement: button });
+    } finally {
+      state.localBusy = false;
+      updateUnavailablePackageAction(button, state.config, { force: true });
+    }
   });
   button.addEventListener("keydown", (event) => {
     if (["Enter", " "].includes(event.key)) {
-      event.preventDefault();
+      // Native button activation handles Enter and Space; do not cancel it for live actions.
+      if (state.config.controlKind !== "live-package" || state.config.disabled)
+        event.preventDefault();
       event.stopPropagation();
     }
   });
@@ -88,15 +106,19 @@ export function updateUnavailablePackageAction(button, config, { force = false }
     ];
     for (const name of state.configuredClasses) button.classList.add(name);
     button.setAttribute("aria-label", config.label);
-    button.setAttribute("aria-disabled", "true");
-    button.setAttribute("aria-description", config.disabledReason);
+    const disabled = config.controlKind !== "live-package" || config.disabled || state.localBusy;
+    button.setAttribute("aria-disabled", String(disabled));
+    button.setAttribute(
+      "aria-description",
+      config.disabledReason ?? config.helpText ?? config.label
+    );
     button.removeAttribute("title");
     // Native disabled would remove the keyboard path to the explanation.
     button.disabled = false;
     button.tabIndex = 0;
     button.dataset.popupActionId = config.id;
     button.dataset.onboardingTarget = "popup-actions";
-    button.dataset.busy = "false";
+    button.dataset.busy = String(state.localBusy);
     state.icon.icon = config.icon;
     if (state.help) state.help.textContent = getHelpText(config);
   }
@@ -117,7 +139,7 @@ function isCurrent(button, state) {
 }
 
 function getHelpText(config) {
-  return `${config.label}. ${config.disabledReason}`;
+  return `${config.label}. ${config.disabledReason ?? config.helpText ?? ""}`.trim();
 }
 
 function showHelp(button, state) {

@@ -24,6 +24,20 @@ public sealed class IcEncDeliveryRepository(DbConnectionFactory connectionFactor
         using var connection = connectionFactory.Create();
         connection.Open();
         using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+        // Package Pause is an authoritative delivery gate. Lock it before the track row,
+        // matching the package-action transaction order and closing the Send/Pause race.
+        var isPackagePaused = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
+            SELECT CONVERT(bit, CASE WHEN EXISTS (
+                SELECT 1 FROM dbo.EncPackage ep WITH (UPDLOCK, HOLDLOCK)
+                INNER JOIN dbo.EncPackageControl control WITH (UPDLOCK, HOLDLOCK)
+                    ON control.source_dataset_name = ep.source_dataset_name
+                WHERE control.is_paused = 1 AND (
+                    (ep.source_dataset_name = @DatasetName AND @Specification = 'S101') OR
+                    (ep.s57_dataset_name = @DatasetName AND @Specification = 'S57'))
+            ) THEN 1 ELSE 0 END);
+            """, new { DatasetName = datasetName, Specification = specification.ToString() }, transaction, cancellationToken: cancellationToken));
+        if (isPackagePaused) return null;
+
         var track = await connection.QuerySingleOrDefaultAsync<DeliveryTrack>(new CommandDefinition("""
             SELECT t.product_export_track_id AS Id, t.state AS State, t.candidate_edition AS Edition,
                    t.candidate_update AS [Update]

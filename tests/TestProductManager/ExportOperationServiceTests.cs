@@ -106,7 +106,10 @@ public sealed class ExportOperationServiceTests
 
     [Fact]
     public async Task DiscardRestoresThePreviousStateAndClearsOnlyTheSqlCandidateAndFilesystemOutput() {
-        var repository = new RecordingWorkflowRepository { CandidateEdition = 5, CandidateUpdate = 0, InitialState = ProductState.ReadyForDistribution };
+        var repository = new RecordingWorkflowRepository { InitialState = ProductState.ChangesDetected };
+        var track = Assert.IsType<ProductExportTrackRecord>(await repository.GetTrackAsync("101DK001", ProductSpecification.S101));
+        await repository.BeginExportAsync(track.Id, 5, 0, "developer", DateTime.UtcNow);
+        await repository.SetStateAsync(track.Id, ProductState.ReadyForDistribution, "developer", DateTime.UtcNow);
         var products = new RecordingElectronicProductManager();
         var engine = new RecordingExportEngine();
         var service = CreateService(products, repository, engine, new SummaryResponse());
@@ -114,7 +117,7 @@ public sealed class ExportOperationServiceTests
         var result = await service.ExecuteDiscardAsync("101DK001", "developer");
 
         Assert.Equal(ExportOperationContract.DiscardCompletedCode, result.Code);
-        Assert.Equal(ProductState.ReadyForDistribution, repository.Track.State);
+        Assert.Equal(ProductState.ChangesDetected, repository.Track.State);
         Assert.Null(repository.Track.CandidateEdition);
         Assert.Null(repository.Track.CandidatePreviousState);
         Assert.Equal(1, engine.DeleteCalls);
@@ -124,9 +127,11 @@ public sealed class ExportOperationServiceTests
 
     [Fact]
     public async Task DiscardRestoresPreviousStateAndPreservesManualHold() {
-        var repository = new RecordingWorkflowRepository { CandidateEdition = 5, CandidateUpdate = 0, InitialState = ProductState.ChangesDetected };
-        var track = await repository.GetTrackAsync("101DK001", ProductSpecification.S101);
-        track!.IsManuallyFrozen = true;
+        var repository = new RecordingWorkflowRepository { InitialState = ProductState.ChangesDetected };
+        var track = Assert.IsType<ProductExportTrackRecord>(await repository.GetTrackAsync("101DK001", ProductSpecification.S101));
+        await repository.BeginExportAsync(track.Id, 5, 0, "developer", DateTime.UtcNow);
+        await repository.SetStateAsync(track.Id, ProductState.Error, "developer", DateTime.UtcNow);
+        track.IsManuallyFrozen = true;
         var products = new RecordingElectronicProductManager();
         var engine = new RecordingExportEngine();
         var service = CreateService(products, repository, engine, new SummaryResponse());
@@ -296,6 +301,8 @@ public sealed class ExportOperationServiceTests
 
     private sealed class RecordingPackageRepository : IEncPackageRepository
     {
+        public Task<EncPackage?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult<EncPackage?>(null);
+        public Task<EncPackageDiscardResult> TryDiscardPackageAsync(Guid id, string actor, DateTime atUtc, CancellationToken cancellationToken = default) => Task.FromResult(new EncPackageDiscardResult(EncPackageDiscardStatus.NotFound, []));
         public int DiscardCalls { get; private set; }
         public bool PreserveScanBound { get; private set; }
         public Task<IReadOnlyDictionary<string, EncPackage>> GetActiveAsync(IEnumerable<string> sourceDatasetNames, CancellationToken cancellationToken = default, bool includeSourceYaml = true) =>
