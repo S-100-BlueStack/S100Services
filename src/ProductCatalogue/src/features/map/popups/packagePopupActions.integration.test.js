@@ -412,7 +412,10 @@ test("actual popup keeps table, error overlay, selection owner, focus and Tools 
       ["package-pause-resume", "package-discard-export", "package-send-accept", "tools"]
     );
     assert.equal(tools.scale, "m");
-    assert.equal(tools.getAttribute("title"), "Tools");
+    assert.equal(tools.hasAttribute("title"), false);
+    tools.emit("pointerenter");
+    assert.equal(h.doc.body.querySelector(".popup-action-help").textContent, "More actions");
+    tools.emit("pointerleave");
     const count = h.requests.filter((request) => !request.url.endsWith("/actions")).length;
     for (const action of controls.filter((control) => control !== tools)) {
       assert.equal(action.tagName, "button");
@@ -426,8 +429,7 @@ test("actual popup keeps table, error overlay, selection owner, focus and Tools 
       assert.equal(action.children[0].hasAttribute("title"), false);
       action.emit("pointerenter");
       const hoverHelp = h.doc.body.querySelector(".popup-package-action-help");
-      assert.match(hoverHelp.textContent, /Package state is unavailable/);
-      assert.equal(hoverHelp.textContent.startsWith(action.getAttribute("aria-label")), true);
+      assert.match(hoverHelp.textContent, /Unable to (pause|discard|send)/);
       action.emit("pointerleave");
       assert.equal(h.doc.body.querySelector(".popup-package-action-help"), null);
       action.focus();
@@ -621,7 +623,7 @@ test("future Pause/Resume fixture updates the same host without a callback, load
     h.doc.body.appendChild(action);
     action.focus();
     const help = h.doc.body.querySelector(".popup-package-action-help");
-    assert.match(help.textContent, /^Pause\./);
+    assert.equal(help.textContent, "Unable to pause this package right now");
     action.setAttribute("title", "Obsolete Pause tooltip");
     assert.equal(updateActionButton(action, model(true).actions[0]), true);
     assert.equal(action.getAttribute("aria-label"), "Resume");
@@ -629,7 +631,7 @@ test("future Pause/Resume fixture updates the same host without a callback, load
     assert.equal(action.children[0].scale, "m");
     assert.equal(action.hasAttribute("title"), false);
     assert.equal(h.doc.body.querySelector(".popup-package-action-help"), help);
-    assert.match(help.textContent, /^Resume\./);
+    assert.equal(help.textContent, "Unable to resume this package right now");
     assert.equal(h.doc.body.querySelectorAll(".popup-package-action-help").length, 1);
     assert.equal(action.dataset.popupActionId, "package-pause-resume");
     assert.equal(h.doc.activeElement, action);
@@ -672,8 +674,7 @@ test("shared Send/Accept updates accessible name, icon and help without replacin
     assert.equal(button.classList.contains("is-visible-focused"), true);
     assert.equal(h.doc.activeElement, button);
     assert.equal(h.doc.body.querySelector(".popup-package-action-help"), help);
-    assert.match(help.textContent, /^Accept\./);
-    assert.match(help.textContent, /Failed products are not approved/);
+    assert.equal(help.textContent, "Unable to accept this package right now");
     assert.equal(h.doc.body.querySelectorAll(".popup-package-action-help").length, 1);
     assert.equal(updateActionButton(button, model("accept").actions[2]), false);
     for (let i = 0; i < 3; i++) {
@@ -742,7 +743,7 @@ test("actual popup preserves focused package icon and its tooltip during refresh
   }
 });
 
-test("package help can be hovered and Escape removes its transient listeners without moving focus", async () => {
+test("package help is pointer-transparent and Escape removes its transient listeners without moving focus", async () => {
   const h = createHarness();
   try {
     const popup = h.open();
@@ -750,10 +751,8 @@ test("package help can be hovered and Escape removes its transient listeners wit
     const button = popup.querySelectorAll(".popup-action-bar__action")[0];
     button.emit("pointerenter");
     const help = h.doc.body.querySelector(".popup-package-action-help");
+    assert.equal(help.listeners.get("pointerenter")?.size ?? 0, 0);
     button.emit("pointerleave", { relatedTarget: help });
-    help.emit("pointerenter");
-    assert.equal(h.doc.body.querySelector(".popup-package-action-help"), help);
-    help.emit("pointerleave", { relatedTarget: h.doc.body });
     assert.equal(h.doc.body.querySelector(".popup-package-action-help"), null);
     button.focus();
     assert.equal(h.doc.listeners.get("scroll")?.size, 1);
@@ -809,8 +808,7 @@ test("package controls remove obsolete native titles during unchanged and forced
       button.emit("pointerenter");
       button.focus();
       const help = h.doc.body.querySelector(".popup-package-action-help");
-      assert.match(help.textContent, /Package state is unavailable/);
-      assert.equal(help.textContent.startsWith(config.label), true);
+      assert.equal(help.textContent, `Unable to ${config.operation} this package right now`);
       for (const force of [false, false, true]) {
         button.setAttribute("title", "Obsolete native tooltip");
         assert.equal(updateActionButton(button, config, { force }), true);
@@ -838,7 +836,7 @@ test("package controls remove obsolete native titles during unchanged and forced
   }
 });
 
-test("ordinary Product controls retain their Calcite sizing and native help when package help is changed", () => {
+test("ordinary Product controls retain Calcite sizing and use the shared popup tooltip", () => {
   const h = createHarness();
   try {
     const config = {
@@ -853,15 +851,21 @@ test("ordinary Product controls retain their Calcite sizing and native help when
     assert.equal(action.tagName, "calcite-action");
     assert.equal(action.scale, "m");
     assert.equal(action.disabled, true);
-    assert.equal(action.getAttribute("title"), config.disabledReason);
+    assert.equal(action.hasAttribute("title"), false);
+    action.emit("pointerenter");
+    const help = h.doc.body.querySelector(".popup-action-help");
+    assert.equal(help.textContent, "This product cannot be changed right now");
     assert.equal(
       updateActionButton(action, { ...config, disabledReason: "Updated Product explanation." }),
       true
     );
-    assert.equal(action.getAttribute("title"), "Updated Product explanation.");
+    assert.equal(action.hasAttribute("title"), false);
+    assert.equal(h.doc.body.querySelector(".popup-action-help"), help);
+    assert.equal(help.textContent, "This product cannot be changed right now");
     action.click();
     assert.equal(h.requests.length, 0);
-    assert.equal(h.doc.body.querySelectorAll(".popup-package-action-help").length, 0);
+    action.emit("pointerleave");
+    assert.equal(h.doc.body.querySelectorAll(".popup-action-help").length, 0);
   } finally {
     h.destroy();
   }

@@ -1,0 +1,21 @@
+/* Shared, application-owned hover and focus help (not framework shadow DOM). */
+.pc-help-tooltip {
+  position: fixed;
+  pointer-events: none;
+  z-index: 10000;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: 6px 8px;
+  border: 1px solid var(--pc-border);
+  border-radius: 0;
+  color: var(--pc-text);
+  background: var(--pc-surface-alt);
+  box-shadow: var(--pc-shadow);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

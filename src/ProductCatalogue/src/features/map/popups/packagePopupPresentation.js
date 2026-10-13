@@ -1,7 +1,7 @@
 import { resolveProductContext } from "../../products/domain/productContext.js";
 import { normalizeElectronicProductStatus } from "../../dataSources/domain/electronicProductStatus.js";
 
-export const PACKAGE_ACTION_UNAVAILABLE = "Package state is unavailable. Refresh to try again.";
+export const PACKAGE_ACTION_UNAVAILABLE = "This action is unavailable right now.";
 
 /**
  * Popup-owned presentation only. A validated action-session projection provides
@@ -42,7 +42,7 @@ export function createPackagePopupPresentation({
     controlKind: "unavailable-package",
     textEnabled: false,
     disabled: true,
-    disabledReason: `${helpText} ${PACKAGE_ACTION_UNAVAILABLE}`,
+    disabledReason: `Unable to ${operation} this package right now.`,
     loading: false,
     availability: {
       frontendSupported: true,
@@ -63,16 +63,14 @@ export function createPackagePopupPresentation({
         pauseOperation,
         paused === true ? "Resume" : "Pause",
         paused === true ? "play" : "pause",
-        paused === true
-          ? "Resume delivery for this package."
-          : "Pause delivery while candidate generation and validation continue."
+        paused === true ? "Resume delivery for this package." : "Pause delivery for this package."
       ),
       action(
         "package-discard-export",
         "discard",
         "Discard",
         "x-circle",
-        "Discard the S-101 and S-57 candidates before delivery. This cannot be undone."
+        "Discard the S-101 and S-57 package. This cannot be undone."
       ),
       action(
         "package-send-accept",
@@ -80,26 +78,20 @@ export function createPackagePopupPresentation({
         primaryLabel,
         primaryOperation === "accept" ? "check" : "send",
         primaryOperation === "accept"
-          ? "Acknowledge the results and complete the package workflow. Failed products are not approved."
-          : eligible?.length
-            ? `Send to IC-ENC: ${eligible.map((member) => member.datasetName).join(", ")}.`
-            : "Send eligible package products to IC-ENC."
+          ? "Accept the package results."
+          : "Send the package to IC-ENC."
       ),
     ],
     explanation: projection ? null : PACKAGE_ACTION_UNAVAILABLE,
     summary: {
       workflowText:
-        typeof workflowLabel === "string" && workflowLabel.trim()
+        typeof workflowLabel === "string" &&
+        workflowLabel.trim() &&
+        workflowLabel.trim().toLowerCase() !== "idle"
           ? `Package workflow: ${workflowLabel}`
-          : "Package workflow status unavailable.",
-      unavailableText:
-        projection?.liveVerified === false || !projection ? "Package state unavailable." : null,
-      pausedText:
-        projection?.liveVerified !== false && typeof paused === "boolean"
-          ? paused
-            ? "Delivery paused; internal processing may continue."
-            : "Delivery is not paused."
           : null,
+      unavailableText: null,
+      pausedText: projection?.liveVerified !== false && paused === true ? "Delivery paused." : null,
       scheduledSendAt: projection?.scheduledSendAt ?? null,
       outcomeText: projection?.outcomeText ?? null,
     },

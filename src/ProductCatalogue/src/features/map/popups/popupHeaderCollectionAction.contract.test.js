@@ -34,7 +34,10 @@ test("Copy dataset name remains independent from Product Collection capability",
     controller,
     /ensureCollectionButton\(header, feature, view\);\s*ensureCopyButton\(header, attr\.datasetName\);/
   );
-  assert.match(controller, /btn\.title = "Copy dataset name";/);
+  assert.match(
+    controller,
+    /btn\.popupHelp = bindPopupActionHelp\(btn, "Copy the product name\."\);/
+  );
 });
 
 test("popup action bar fails closed through central Product context and action resolution", async () => {
@@ -74,7 +77,7 @@ test("popup Product Collection uses graph-bar and preserves selected state prese
     controller,
     /const title = isSelected \? "Remove from collection" : "Add to collection";/
   );
-  assert.match(controller, /btn\.title = title;/);
+  assert.match(controller, /btn\.popupHelp\?\.update\(/);
   assert.match(controller, /btn\.text = title;/);
   assert.match(controller, /btn\.toggleAttribute\("data-added", isSelected\);/);
   assert.match(controller, /btn\.setAttribute\("aria-label", title\);/);

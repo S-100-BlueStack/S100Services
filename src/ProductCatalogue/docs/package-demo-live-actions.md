@@ -16,7 +16,7 @@ One popup-local session owns the action read, in-flight mutation, optional Worke
 
 Pause/Resume returns an updated authoritative Pause/version projection; Discard is not reported successful until its Worker job succeeds. After confirmed Discard, the popup invalidates its old candidate overlay and performs an immediate targeted Product-detail read for the selected package. The established Main-map source refresh then updates AOI-owned workflow/member statuses and map symbols. The operation's success is independent of whether this additional read succeeds; an unsuccessful detail refresh displays a warning and does not restore the obsolete candidate overlay. Publication uses the existing popup generation/identity guard, so an older in-flight detail request cannot reintroduce a discarded candidate.
 
-Tooltips describe the intended action and, when it is disabled, the verified workflow restriction. They do not include development/demo implementation notes. Only Send/Accept toasts identify the two actions as a simulation. A package with missing or incomplete Product tracks remains readable from the action endpoint with `canPause`, `canResume` and `canDiscard` set to `false`, and a stable `restrictionCode` (`MEMBER_TRACK_MISSING` or `MEMBERS_NOT_READY`). This does **not** loosen backend mutation checks; incomplete/unsafe packages cannot be paused or discarded by this candidate.
+Tooltips use the application-wide visual help surface with content-sized width, viewport clamping and no trailing full stop. They describe the intended action and, when it is disabled, the verified workflow restriction. They do not include development/demo implementation notes. Only Send/Accept toasts identify the two actions as a simulation. A package with missing or incomplete Product tracks remains readable from the action endpoint with `canPause`, `canResume` and `canDiscard` set to `false`, and a stable `restrictionCode` (`MEMBER_TRACK_MISSING` or `MEMBERS_NOT_READY`). This does **not** loosen backend mutation checks; incomplete/unsafe packages cannot be paused or discarded by this candidate.
 
 ## Required demonstration setup
 
@@ -35,3 +35,12 @@ npm run check
 ```
 
 The true backend Pause and Discard workflows must be tested separately; passing frontend tests cannot establish SQL safety. Never demo against production or real live-IC-ENC dispatch.
+
+## Popup presentation follow-up
+
+Main-map popup action help is unified across package, ordinary Product, dropdown and
+application-owned header actions. A valid inactive (`Idle`) workflow without pause or schedule
+has no footer; absent workflow state has no placeholder footer. Non-idle workflow, real pause
+and any backend-provided schedule can still appear. All backend eligibility and actual
+Pause/Resume/Discard effects remain unchanged, and simulated Send/Accept remains explicit
+in notices rather than hover help.

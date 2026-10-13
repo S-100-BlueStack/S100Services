@@ -1,3 +1,4 @@
+import { bindPopupActionHelp } from "./popupActionHelp.js";
 import { addNotice } from "../../notices/state/noticeStore.js";
 import { getStatusColor } from "../../data/stores/statusStore.js";
 import {
@@ -157,6 +158,7 @@ function removeHeaderButton(header, selector) {
   }
 
   btn.cleanup?.();
+  btn.popupHelp?.destroy();
   btn.remove();
 }
 
@@ -173,7 +175,8 @@ function ensureCopyButton(header, datasetName) {
     btn.className = "popup-copy-btn";
     btn.icon = "copy-to-clipboard";
     btn.scale = "m";
-    btn.title = "Copy dataset name";
+    btn.setAttribute("aria-label", "Copy dataset name");
+    btn.popupHelp = bindPopupActionHelp(btn, "Copy the product name.");
     btn.appearance = "transparent";
 
     actions.prepend(btn);
@@ -221,6 +224,7 @@ function ensureCollectionButton(header, feature, view) {
         btn.className = "popup-product-collection-btn";
         btn.scale = "m";
         btn.appearance = "transparent";
+        btn.popupHelp = bindPopupActionHelp(btn);
 
         actions.prepend(btn);
         btn.addEventListener("click", () => {
@@ -291,7 +295,9 @@ function syncCollectionButtonState(btn) {
   const isSelected = hasProductCollectionProduct(productIdentity);
   const title = isSelected ? "Remove from collection" : "Add to collection";
   btn.icon = isSelected ? "check" : "graph-bar";
-  btn.title = title;
+  btn.popupHelp?.update(
+    title === "Remove from collection" ? "Remove from collection." : "Add to collection."
+  );
   btn.text = title;
   btn.toggleAttribute("data-added", isSelected);
   btn.setAttribute("aria-label", title);

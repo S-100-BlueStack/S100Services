@@ -1,4 +1,4 @@
-﻿/* =========================================================
+/* =========================================================
    Popup content
    These are your own popup DOM nodes, so styling them here is stable.
    ========================================================= */
@@ -282,23 +282,6 @@
   opacity: 1;
   background: var(--pc-popup-surface-alt);
   box-shadow: inset 0 0 0 2px var(--pc-popup-focus-ring);
-}
-
-.popup-package-action-help {
-  position: fixed;
-  z-index: 10000;
-  box-sizing: border-box;
-  width: min(280px, calc(100vw - 16px));
-  max-height: calc(100vh - 16px);
-  overflow: auto;
-  padding: 6px 8px;
-  border: 1px solid var(--pc-popup-border);
-  border-radius: 0;
-  color: var(--pc-popup-text);
-  background: var(--pc-popup-surface-alt);
-  font-size: 12px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
 }
 
 .popup-package-workflow {

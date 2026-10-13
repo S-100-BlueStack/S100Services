@@ -22,6 +22,7 @@ test("S-101 presentation stays separate from the normalized product-resolved exp
     actionConfig,
     actionDom,
     actionDropdown,
+    popupHelpText,
     actionSignature,
     productActions,
     exportState,
@@ -40,6 +41,7 @@ test("S-101 presentation stays separate from the normalized product-resolved exp
     readSource("src/features/map/popups/popupActionConfig.js"),
     readSource("src/features/map/popups/popupActionDom.js"),
     readSource("src/features/map/popups/popupActionDropdown.js"),
+    readSource("src/features/map/popups/popupActionHelpText.js"),
     readSource("src/features/map/popups/popupActionConfigSignature.js"),
     readSource("src/features/map/popups/popupProductActions.js"),
     readSource("src/features/map/popups/popupExportState.js"),
@@ -76,16 +78,13 @@ test("S-101 presentation stays separate from the normalized product-resolved exp
     /compactActions\(\[[\s\S]*?createFreezeAction\([\s\S]*?createSendAction\([\s\S]*?\]\),\s*compactActions\(\[[\s\S]*?createExportAction\([\s\S]*?createRollbackAction\([\s\S]*?createToolsAction\(/
   );
   assert.doesNotMatch(actionConfig, /sourceId\s*===\s*["'](?:paper-charts|s102)["']/);
-  assert.match(
-    actionDom,
-    /actionConfig\.disabledReason \?\? actionConfig\.helpText \?\? actionConfig\.label/
-  );
+  assert.match(actionDom, /state\.help\.update\(tooltipText\)/);
   assert.match(actionDom, /const textEnabled = actionConfig\.textEnabled !== false/);
   assert.match(actionDom, /action\.toggleAttribute\("text-enabled", textEnabled\)/);
   assert.match(actionDom, /action\.setAttribute\("aria-label", ariaLabel\)/);
   assert.match(actionDom, /configuredAriaLabel: false/);
   assert.match(actionDom, /else if \(state\.configuredAriaLabel\)/);
-  assert.match(actionDropdown, /itemConfig\.disabledReason \?\? itemConfig\.helpText \?\? null/);
+  assert.match(actionDropdown, /bindPopupActionHelp\(tooltipAnchor, helpText\)/);
   assert.match(actionSignature, /helpText: actionConfig\?\.helpText \?\? null/);
   assert.match(productActions, /label: `Exporting \${exportLabel}`/);
   assert.match(productActions, /presentationLabel: exportLabel/);
@@ -103,8 +102,9 @@ test("S-101 presentation stays separate from the normalized product-resolved exp
   assert.match(exportTarget, /S101: "S101"/);
   assert.match(productJob, /S101: "S-101"/);
 
-  assert.match(tooltips, /"export-s100": "Open S-101 export actions\."/);
-  assert.match(tooltips, /"s100-export-edition": "Export a new S-101 Edition for this product\."/);
-  assert.match(tooltips, /"s100-export-update": "S-101 Update export is currently disabled\."/);
-  assert.match(tooltips, /tools: "Open additional product tools\."/);
+  assert.match(tooltips, /"export-s100": "Export S-101"/);
+  assert.match(tooltips, /"s100-export-edition": "Export S-101 Edition"/);
+  assert.match(tooltips, /"s100-export-update": "Export S-101 Update"/);
+  assert.match(popupHelpText, /tools: "More actions\."/);
+  assert.match(actionDom, /action\.removeAttribute\("title"\)/);
 });

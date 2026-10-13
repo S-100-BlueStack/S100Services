@@ -28,8 +28,12 @@ The action UI provides:
   refresh for implemented capability-gated operations.
 - `popupExportState.js` tracks popup-local export leaf state by deterministic Product identity.
 - `popupActionDom.js` creates and reconciles top-level action button DOM.
-- `popupActionDropdown.js` creates the dropdown, disabled tooltip, keyboard, focus, Escape, and
-  outside-click behavior.
+- `popupActionHelp.js` binds popup-scoped hover/focus and Escape behavior to the shared
+  `shared/ui/tooltips/helpTooltip.js` visual tooltip. The global delegated helper
+  excludes popup-owned `data-popup-help` controls.
+- `popupActionHelpText.js` keeps action descriptions short without changing authorization.
+- `popupActionDropdown.js` creates the dropdown, keyboard, focus, Escape, and outside-click
+  behavior; `popupActionHelp.js` owns its short tooltips.
 - `createPopup.js` renders electronic Product popup content and subscribes to export and
   Product-operation state.
 - `features/dataSources/map/createDataSourcePopup.js` selects the electronic popup for backend-refresh
@@ -567,11 +571,12 @@ focusable for help, while click/Enter/Space are blocked and no dispatcher exists
 for forged configs. Hover and focus expose the same transient application-owned tooltip
 and description. Package controls have no native `title`; unchanged or forced reconciliation
 also removes obsolete native titles from reused controls. Tools and ordinary Product
-native tooltips and sizing retain their existing behavior.
+actions use the same application-owned help; their sizing is unchanged.
 Escape dismisses help without moving focus; removal/disposal unregisters its temporary
 keydown/scroll/resize handlers. Same-state refresh retains focused controls and help.
-The existing workflow unavailable message remains below the table; the old permanent
-action explanation panel is removed. CSS uses popup theme tokens, square controls and
+The workflow footer is omitted when it has no meaningful information. Idle and missing
+package-state placeholders are not displayed; a real non-idle workflow, pause or scheduled
+send remains visible. The old permanent action explanation panel is removed. CSS uses popup theme tokens, square controls and
 one non-wrapping row, with local horizontal scrolling only at exceptionally narrow widths.
 
 ## October 2026 demo: live Pause/Resume and Discard, simulated Send/Accept
@@ -605,3 +610,22 @@ targeted Product-detail refresh. The regular source-refresh event still updates
 AOI-owned status and symbol data. The same popup, row and focus patterns remain;
 there is no new timer or polling owner. A failed detail read warns without
 undoing the successful Discard or reintroducing discarded candidate details.
+
+### Popup help consistency (October 2026)
+
+The package buttons, ordinary Product actions, Tools/Export menu entries, and application-owned
+popup-header Copy/Collection buttons use `bindPopupActionHelp`. No native `title` is set on these
+controls; the global title helper skips `data-popup-help` targets. Tooltip text is brief and
+intended for normal operation; demo disclosure remains in Send/Accept notices only.
+
+A single viewport-clamped tooltip is shown at a time. It follows the mouse with a small offset,
+while keyboard-focus help remains anchored to its control. Tooltips cannot capture pointer events
+or block hover on neighboring Tools/Export menu items. Tooltip state updates in place with action
+changes and is disposed with its owner. Escape dismisses action help; inside an open Tools menu,
+Escape also follows the established menu-close path. Non-interactive headings and empty action-bar
+areas do not show tooltips merely because they have accessible labels. Product error triggers show
+only the existing selectable error overlay on hover/focus, which can be pinned by clicking.
+
+The change covers application-owned popup actions; ArcGIS/Calcite-supplied framework controls
+are not modified through private component internals. It makes no change to backend eligibility,
+workflow state, Product attributes or action dispatch.

@@ -26,7 +26,7 @@ export function readLastUpdatedPresentation(element) {
 
   return {
     text: element.textContent ?? "",
-    title: element.getAttribute("title") ?? "",
+    title: element.getAttribute("title") ?? element.getAttribute("data-app-original-title") ?? "",
     ariaLabel: element.getAttribute("aria-label") ?? "",
   };
 }

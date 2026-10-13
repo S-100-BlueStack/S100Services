@@ -68,11 +68,7 @@ export function createPopupActionGroups({
       action.isCurrent = isCurrent;
       const enabled = actionState?.actionEligibility?.[action.operation] === true;
       if (actionState && !enabled) {
-        action.disabledReason = getPackageActionHelp(
-          action.operation,
-          actionState,
-          action.helpText
-        );
+        action.disabledReason = getPackageActionHelp(action.operation, actionState);
       }
       if (enabled) {
         action.controlKind = "live-package";
@@ -150,31 +146,22 @@ export function createPopupActionGroups({
   ].filter((actions) => actions.length > 0);
 }
 
-function getPackageActionHelp(operation, state, description) {
-  let reason;
-  if (
-    (operation === "pause" || operation === "resume" || operation === "discard") &&
-    !state.liveVerified
-  ) {
-    reason =
-      state.restrictionCode === "PACKAGE_NOT_FOUND"
-        ? "No active package is available. Refresh the map."
-        : "Package state could not be verified. Refresh to try again.";
-  } else if (state.primaryAction === "accept" && operation !== "accept") {
-    reason = "Complete the current workflow before changing the package.";
-  } else if (
-    state.restrictionCode === "MEMBER_TRACK_MISSING" ||
-    state.restrictionCode === "MEMBERS_NOT_READY"
-  ) {
-    reason = "Both product tracks must finish processing before this action is available.";
-  } else if (operation === "send" && state.paused) {
-    reason = "Resume delivery before sending.";
-  } else if (operation === "send" || operation === "accept") {
-    reason = "This action is currently unavailable.";
-  } else {
-    reason = "This action is not available in the current package state.";
+function getPackageActionHelp(operation, state) {
+  const action = operation === "discard" ? "discard" : operation;
+  if (!state.liveVerified) {
+    if (state.restrictionCode === "PACKAGE_NOT_FOUND") {
+      return `No S-101 and S-57 package is available to ${action}.`;
+    }
+    return `Unable to ${action} this package right now.`;
   }
-  return `${description} ${reason}`;
+  if (state.primaryAction === "accept" && operation !== "accept") {
+    return "Accept the results before continuing.";
+  }
+  if (["MEMBER_TRACK_MISSING", "MEMBERS_NOT_READY"].includes(state.restrictionCode)) {
+    return `This package is not ready to ${action}.`;
+  }
+  if (operation === "send" && state.paused) return "Resume the package before sending.";
+  return `Unable to ${action} this package right now.`;
 }
 
 function createFreezeAction({

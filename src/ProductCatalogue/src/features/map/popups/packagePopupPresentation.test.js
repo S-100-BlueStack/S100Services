@@ -88,7 +88,7 @@ test("registry package exposes isolated disabled controls and unchanged Tools na
   assert.equal(model.actions[2].label, "Send");
   assert.equal(model.summary.pausedText, null);
   assert.equal(model.summary.scheduledSendAt, null);
-  assert.match(model.explanation, /Package state is unavailable/);
+  assert.equal(model.summary.unavailableText, null);
 });
 
 test("presentation fixtures support Resume, exact eligible Send counts and Accept without dispatch", () => {
@@ -98,8 +98,7 @@ test("presentation fixtures support Resume, exact eligible Send counts and Accep
     workflowPresentation: projection(options.productContext),
   });
   assert.equal(first.actions[2].label, "Send (1)");
-  assert.match(first.actions[2].helpText, /PRIMARY/);
-  assert.doesNotMatch(first.actions[2].helpText, /SECONDARY/);
+  assert.equal(first.actions[2].helpText, "Send the package to IC-ENC.");
   const paused = createPackagePopupPresentation({
     ...options,
     workflowPresentation: projection(options.productContext, {
@@ -116,7 +115,7 @@ test("presentation fixtures support Resume, exact eligible Send counts and Accep
   assert.equal(paused.actions[0].id, first.actions[0].id);
   assert.equal(paused.actions[2].label, "Send (2)");
   assert.equal(paused.summary.scheduledSendAt, "2026-10-09T10:00:00Z");
-  assert.match(paused.summary.pausedText, /internal processing may continue/);
+  assert.equal(paused.summary.pausedText, "Delivery paused.");
   assert.notEqual(
     createActionConfigSignature(paused.actions[0]),
     createActionConfigSignature(first.actions[0])
@@ -129,7 +128,7 @@ test("presentation fixtures support Resume, exact eligible Send counts and Accep
       outcomeText: "S-101 will be committed; the failed S-57 candidate will not be committed.",
     }),
   });
-  assert.match(accept.actions[2].helpText, /Failed products are not approved/);
+  assert.equal(accept.actions[2].helpText, "Accept the package results.");
   assert.equal(accept.actions[2].id, first.actions[2].id);
   assert.equal(accept.actions[2].label, "Accept");
   assert.equal(accept.actions[2].icon, "check");
@@ -279,10 +278,7 @@ test("known source-owned workflow status is text only and unknown status has no 
   assert.equal(model.actions[2].label, "Send");
   for (const value of [999, "package-paused", {}, null, undefined]) {
     options.attributes.workUnitStatus.workflowStatus = value;
-    assert.equal(
-      createPackagePopupPresentation(options).summary.workflowText,
-      "Package workflow status unavailable."
-    );
+    assert.equal(createPackagePopupPresentation(options).summary.workflowText, null);
   }
 });
 
@@ -344,9 +340,8 @@ test("incomplete member processing explains disabled live controls without imple
       invoke: async () => assert.fail("Disabled action dispatched"),
     },
   }).flat();
-  assert.match(actions[0].disabledReason, /Both product tracks must finish processing/);
-  assert.match(actions[1].disabledReason, /Both product tracks must finish processing/);
-  assert.match(actions[1].disabledReason, /Discard the S-101 and S-57 candidates/);
+  assert.equal(actions[0].disabledReason, "This package is not ready to pause.");
+  assert.equal(actions[1].disabledReason, "This package is not ready to discard.");
   assert.doesNotMatch(actions[1].disabledReason, /\bdemo\b|\blive\b|not connected/i);
   assert.equal(actions[0].disabled, true);
   assert.equal(actions[1].disabled, true);
@@ -362,7 +357,7 @@ test("demo-only Send has no fabricated delivery Pause state or live mutation", a
   });
   const model = createPackagePopupPresentation({ ...options, workflowPresentation: state });
   assert.equal(model.summary.pausedText, null);
-  assert.match(model.summary.unavailableText, /Package state unavailable/);
+  assert.equal(model.summary.unavailableText, null);
   const controls = createPopupActionGroups({
     ...options,
     packageActions: {
@@ -378,4 +373,38 @@ test("demo-only Send has no fabricated delivery Pause state or live mutation", a
   assert.equal(controls[2].controlKind, "live-package");
   await controls[2].onClick();
   assert.deepEqual(calls, ["send"]);
+});
+
+test("Idle and unavailable workflow states do not produce a footer", () => {
+  const options = selection();
+  const idle = createPackagePopupPresentation({
+    ...options,
+    workflowStatusLabels: { 11: "Idle" },
+  });
+  assert.equal(idle.summary.workflowText, null);
+  assert.equal(idle.summary.unavailableText, null);
+  assert.equal(idle.summary.pausedText, null);
+  const nonIdle = createPackagePopupPresentation({
+    ...options,
+    workflowStatusLabels: { 11: "Error" },
+  });
+  assert.equal(nonIdle.summary.workflowText, "Package workflow: Error");
+});
+
+test("unavailable package tooltips are specific without exposing backend details", () => {
+  const options = selection();
+  const state = projection(options.productContext, {
+    liveVerified: false,
+    restrictionCode: "PACKAGE_NOT_FOUND",
+    actionEligibility: { pause: false, resume: false, discard: false, send: true, accept: false },
+  });
+  const actions = createPopupActionGroups({
+    ...options,
+    packageActions: { projection: () => state, invoke: () => assert.fail("Should not dispatch") },
+  }).flat();
+  assert.equal(actions[0].disabledReason, "No S-101 and S-57 package is available to pause.");
+  assert.equal(actions[1].disabledReason, "No S-101 and S-57 package is available to discard.");
+  assert.equal(actions[1].onClick, undefined);
+  assert.equal(actions[1].disabled, true);
+  assert.equal(actions[2].disabled, false);
 });

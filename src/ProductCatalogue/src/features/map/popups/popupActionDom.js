@@ -7,6 +7,8 @@ import {
 import { closePopupActionDropdown, togglePopupActionDropdown } from "./popupActionDropdown.js";
 import { bindVisibleFocusState } from "../../../shared/ui/focus/visibleFocus.js";
 import { createActionConfigSignature } from "./popupActionConfigSignature.js";
+import { bindPopupActionHelp } from "./popupActionHelp.js";
+import { getPopupActionHelpText } from "./popupActionHelpText.js";
 
 const actionStates = new WeakMap();
 
@@ -21,6 +23,7 @@ export function createActionButton(actionConfig) {
     localBusy: false,
     configuredAriaLabel: false,
     configuredClassNames: [],
+    help: bindPopupActionHelp(action),
   };
 
   actionStates.set(action, state);
@@ -107,7 +110,7 @@ export function updateActionButton(action, actionConfig, { force = false } = {})
   }
 
   const nextSignature = createActionConfigSignature(actionConfig);
-  const changed = force || state.signature !== nextSignature;
+  const changed = force || state.signature !== nextSignature || action.hasAttribute("title");
   const openDropdownState = changed ? captureOpenDropdownState(action) : null;
 
   state.config = actionConfig;
@@ -128,13 +131,12 @@ function applyActionConfig(action, state) {
   const blocksClickWhileLoading = showsLoading && !hasDropdown;
   const disabled = Boolean(actionConfig.disabled) || state.localBusy;
   const busy = state.localBusy || blocksClickWhileLoading;
-  const title = actionConfig.disabledReason ?? actionConfig.helpText ?? actionConfig.label;
   const textEnabled = actionConfig.textEnabled !== false;
   const ariaLabel = actionConfig.ariaLabel ?? null;
 
   action.icon = actionConfig.icon;
   action.text = actionConfig.label;
-  action.title = title;
+  action.title = "";
   action.scale = "m";
   action.appearance = "transparent";
   action.disabled = disabled;
@@ -149,7 +151,10 @@ function applyActionConfig(action, state) {
   action.dataset.busy = String(Boolean(busy));
 
   action.setAttribute("text", actionConfig.label);
-  action.setAttribute("title", title);
+  action.removeAttribute("title");
+  const tooltipText = getPopupActionHelpText(actionConfig);
+  action.setAttribute("aria-description", tooltipText);
+  state.help.update(tooltipText);
   action.toggleAttribute("text-enabled", textEnabled);
   if (ariaLabel) {
     action.setAttribute("aria-label", ariaLabel);
@@ -287,5 +292,6 @@ function isEnabledDropdownItem(item) {
 }
 
 export function disposeActionButton(action) {
+  actionStates.get(action)?.help.destroy();
   disposeUnavailablePackageAction(action);
 }

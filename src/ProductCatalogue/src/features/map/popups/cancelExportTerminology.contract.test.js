@@ -55,5 +55,5 @@ test("Cancel Export presentation uses the normalized CancelExport wire contract"
   assert.match(productJob, /ROLLBACK: "CancelExport"/);
   assert.match(operationState, /ROLLBACK: "rollback"/);
   assert.match(operationState, /\[PRODUCT_OPERATION_TYPE\.ROLLBACK\]: "Cancel Export"/);
-  assert.match(tooltips, /rollback: "Cancel the current export for this product\."/);
+  assert.match(tooltips, /rollback: "Cancel export"/);
 });

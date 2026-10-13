@@ -1,116 +1,120 @@
+import { bindHelpTooltip, normalizeHelpText } from "./helpTooltip.js";
+
 const GLOBAL_HELP_RULES = [
   {
     selector: "[data-nav-home-link]",
-    title: "Open the main Product Catalogue map.",
+    title: "Open the map",
     mode: "replace-generic",
   },
   {
     selector: "[data-nav-dashboard-link]",
-    title: "Open the operational activity dashboard.",
+    title: "Open Dashboard",
     mode: "replace-generic",
   },
   {
     selector: "[data-nav-analyze-link]",
-    title: "Open Analyze to inspect selected products and reports.",
+    title: "Open Analyze",
     mode: "replace-generic",
   },
   {
     selector: "[data-nav-review-link]",
-    title: "Open Review to compare multiple products side by side.",
+    title: "Open Review",
     mode: "replace-generic",
   },
   {
     selector: "#filter-button",
-    title: "Open product filters for display scale, status and usage band.",
+    title: "Filter products",
+    mode: "replace-generic",
+  },
+  {
+    selector: "#data-sources-button",
+    title: "Choose data sources",
     mode: "replace-generic",
   },
   {
     selector: "#refresh-button",
-    title: "Refresh product data from the API.",
+    title: "Refresh products",
     mode: "replace-generic",
   },
   {
     selector: "#notification-button",
-    title: "Open notifications and recent system messages.",
+    title: "View notifications",
     mode: "replace-generic",
   },
   {
     selector: "#documentation-button",
-    title: "Open product catalogue help and documentation.",
+    title: "Open help",
     mode: "replace-generic",
   },
   {
     selector: "#preferences-button, #settings-button, [data-preferences-button]",
-    title: "Open preferences and reset saved frontend state.",
+    title: "Open preferences",
     mode: "replace-generic",
   },
   {
     selector: ".main-map-product-search__input",
-    title: "Search for a product and open it on the map.",
+    title: "Find a product on the map",
     mode: "replace-generic",
   },
   {
     selector: "#main-map-locator-button",
-    title: "Search for an address or place in Denmark or Greenland and move the map there.",
+    title: "Find a place on the map",
     mode: "replace-generic",
   },
   {
     selector: ".main-map-product-search__option",
-    title: (element) => element.title || `Open ${getElementText(element)} on the map.`,
+    title: (element) => getAuthoredTitle(element) || `Open ${getElementText(element)} on the map`,
     mode: "fill-empty",
   },
   {
     selector: ".pc-product-picker__input",
-    title: "Search existing products or type a product name.",
+    title: "Find or enter a product",
     mode: "replace-generic",
   },
   {
     selector: ".pc-product-picker__button",
-    title: "Add the selected or typed product.",
+    title: "Add product",
     mode: "replace-generic",
   },
   {
     selector: ".pc-product-picker__option",
-    title: (element) => element.title || `Add ${getElementText(element)}.`,
+    title: (element) => getAuthoredTitle(element) || `Add ${getElementText(element)}`,
     mode: "fill-empty",
   },
   {
     selector: "[data-clear-all-filters], .pc-filter-clear-all",
-    title: "Clear all active product filters.",
+    title: "Clear all filters",
     mode: "replace-generic",
   },
   {
     selector: ".pc-filter-select-all, [data-filter-select-all]",
-    title: "Select all values for this filter.",
+    title: "Select all values",
     mode: "replace-generic",
   },
   {
     selector: ".pc-filter-clear, [data-filter-clear]",
-    title: "Clear this filter selection.",
+    title: "Clear selection",
     mode: "replace-generic",
   },
   {
     selector: ".pc-filter-reset, [data-filter-reset]",
-    title: "Reset this filter to its default range.",
+    title: "Reset range",
     mode: "replace-generic",
   },
   {
     selector: "calcite-slider[data-filter-range]",
-    title: "Limit visible products by this display scale range.",
+    title: "Filter by display scale",
     mode: "fill-empty",
   },
   {
     selector: ".pc-dashboard-refresh-button",
-    title: "Reload dashboard activity for the applied range.",
+    title: "Refresh activity",
     mode: "replace-generic",
   },
   {
     selector: ".pc-dashboard-range-date-button",
     title: (element) => {
-      const openHelp = `${getAriaLabel(element) || "Range date"}. Open the date picker.`;
-      return element.hasAttribute("aria-keyshortcuts")
-        ? `${openHelp} Press Delete or Backspace to clear the optional date.`
-        : openHelp;
+      return `Choose ${getAriaLabel(element) || "date"}`;
     },
     mode: "replace-generic",
   },
@@ -121,17 +125,17 @@ const GLOBAL_HELP_RULES = [
   },
   {
     selector: ".pc-dashboard-date-picker__day",
-    title: (element) => `Select ${element.dataset.dateValue || getElementText(element)}.`,
+    title: (element) => `Select ${element.dataset.dateValue || getElementText(element)}`,
     mode: "replace-generic",
   },
   {
     selector: ".pc-dashboard-date-picker__clear",
-    title: "Clear the optional To date and keep the range open-ended.",
+    title: "Clear end date",
     mode: "replace-generic",
   },
   {
     selector: ".pc-dashboard-summary-row, .pc-dashboard-summary-panel__row",
-    title: "Filter the dashboard activity list by this summary value.",
+    title: "Filter activity by this value",
     mode: "fill-empty",
   },
   {
@@ -146,7 +150,7 @@ const GLOBAL_HELP_RULES = [
   },
   {
     selector: ".pc-dashboard-history-panel__close",
-    title: "Close product history.",
+    title: "Close history",
     mode: "replace-generic",
   },
   {
@@ -157,12 +161,12 @@ const GLOBAL_HELP_RULES = [
   {
     selector: ".product-collection-tray button, .product-collection-tray [role='button']",
     title: (element) =>
-      element.title || createActionTextHelp(element, "Use this Product Collection action."),
+      getAuthoredTitle(element) || createActionTextHelp(element, "Product Collection action"),
     mode: "fill-empty",
   },
   {
     selector: ".pc-history-event__toggle, .product-history-event__toggle",
-    title: "Expand or collapse this history entry.",
+    title: "Expand or collapse history",
     mode: "fill-empty",
   },
   {
@@ -172,19 +176,48 @@ const GLOBAL_HELP_RULES = [
     mode: "fill-empty",
   },
 ];
+
+const INTERACTIVE_HELP_TAGS = new Set([
+  "a",
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "summary",
+  "calcite-action",
+  "calcite-button",
+  "calcite-input",
+  "calcite-combobox",
+]);
+const INTERACTIVE_HELP_ROLES = new Set([
+  "button",
+  "link",
+  "menuitem",
+  "tab",
+  "checkbox",
+  "radio",
+  "combobox",
+  "slider",
+  "switch",
+]);
+
 let helpTooltipsInitialized = false;
 let helpTooltipObserver = null;
 let pendingApply = false;
+let activeAnchor = null;
+let activeBinding = null;
 
+/** Register one delegated, application-owned tooltip system across the whole app. */
 export function initGlobalHelpTooltips() {
-  if (helpTooltipsInitialized) {
-    return;
-  }
-
+  if (helpTooltipsInitialized) return;
   helpTooltipsInitialized = true;
 
   const start = () => {
     applyGlobalHelpTooltips();
+    document.addEventListener("pointerover", onPointerOver, true);
+    document.addEventListener("pointerout", onPointerOut, true);
+    document.addEventListener("focusin", onFocusIn, true);
+    document.addEventListener("focusout", onFocusOut, true);
     observeTooltipTargets();
   };
 
@@ -192,164 +225,251 @@ export function initGlobalHelpTooltips() {
     document.addEventListener("DOMContentLoaded", start, { once: true });
     return;
   }
-
   start();
 }
+
+/** Convert existing authored titles to custom help without changing action behavior. */
 export function applyGlobalHelpTooltips(root = document) {
+  if (!root?.querySelectorAll) return;
   for (const rule of GLOBAL_HELP_RULES) {
-    applyHelpRule(root, rule);
+    root.querySelectorAll(rule.selector).forEach((element) => prepareHelpElement(element, rule));
+  }
+  root.querySelectorAll("[title], [aria-label]").forEach((element) => {
+    if (!element.hasAttribute("data-popup-help")) prepareHelpElement(element);
+  });
+  if (activeAnchor) {
+    if (!activeAnchor.isConnected) clearActiveBinding();
+    else activeBinding?.update(resolveHelpText(activeAnchor));
   }
 }
 
-function observeTooltipTargets() {
-  if (helpTooltipObserver || !document.documentElement) {
-    return;
+function prepareHelpElement(element, matchingRule = null) {
+  if (element.hasAttribute("data-popup-help")) return;
+  const rule = matchingRule ?? findRule(element);
+  if (!isApplicationControl(element, rule)) return;
+  if (element.hasAttribute("title")) {
+    // A producer may set a new title as its state changes. Capture every change.
+    element.setAttribute("data-app-original-title", element.getAttribute("title") ?? "");
+    element.removeAttribute("title");
   }
-
-  helpTooltipObserver = new MutationObserver(() => {
-    scheduleTooltipApply();
-  });
-
-  helpTooltipObserver.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-  });
-}
-function scheduleTooltipApply() {
-  if (pendingApply) {
-    return;
+  const help = resolveHelpText(element, rule);
+  if (!help) return;
+  element.setAttribute("data-app-help", "");
+  // Preserve authored accessible names; name previously derived from title when needed.
+  if (!element.hasAttribute("aria-label") && isIconOnlyControl(element)) {
+    element.setAttribute("aria-label", help);
   }
-
-  pendingApply = true;
-
-  window.requestAnimationFrame(() => {
-    pendingApply = false;
-    applyGlobalHelpTooltips();
-  });
 }
 
-function applyHelpRule(root, rule) {
-  if (!root?.querySelectorAll) {
+function onPointerOver(event) {
+  if (isTooltipTarget(event.target)) return;
+  activateHelp(event.target);
+}
+
+function onFocusIn(event) {
+  activateHelp(event.target);
+}
+
+function activateHelp(start) {
+  const anchor = findHelpAnchor(start);
+  if (!anchor) {
+    clearActiveBinding();
     return;
   }
+  const text = resolveHelpText(anchor);
+  if (!text) {
+    clearActiveBinding();
+    return;
+  }
+  if (anchor !== activeAnchor) {
+    clearActiveBinding();
+    activeAnchor = anchor;
+    activeBinding = bindHelpTooltip(anchor, text);
+  } else {
+    activeBinding?.update(text);
+  }
+  // Delegated events run even if a newly inserted control was not scanned yet.
+  activeBinding?.show();
+}
 
-  root.querySelectorAll(rule.selector).forEach((element) => {
-    const title = resolveTitle(rule.title, element);
+function onPointerOut(event) {
+  if (!activeAnchor?.contains?.(event.target)) return;
+  if (activeAnchor.contains(event.relatedTarget) || isTooltipTarget(event.relatedTarget)) return;
+  if (activeAnchor.contains(document.activeElement)) return;
+  activeBinding?.hide();
+}
 
-    if (!title || !shouldSetTitle(element, title, rule.mode)) {
-      return;
+function isTooltipTarget(target) {
+  return Boolean(target?.closest?.(".pc-help-tooltip"));
+}
+
+function onFocusOut(event) {
+  if (!activeAnchor?.contains?.(event.target)) return;
+  if (activeAnchor.contains(event.relatedTarget) || activeAnchor.matches?.(":hover")) return;
+  activeBinding?.hide();
+}
+
+function clearActiveBinding() {
+  activeBinding?.destroy();
+  activeBinding = null;
+  activeAnchor = null;
+}
+
+function findHelpAnchor(start) {
+  let element = start?.nodeType === 3 ? start.parentElement : start;
+  while (element?.getAttribute && element !== document.documentElement) {
+    // The popup binds its own help, but shares the same visual tooltip surface.
+    if (element.hasAttribute("data-popup-help")) return null;
+    const rule = findRule(element);
+    if (isApplicationControl(element, rule) && hasHelpSource(element, rule)) {
+      prepareHelpElement(element, rule);
+      return element;
     }
-    setHelpTitle(element, title);
-  });
-}
-
-function resolveTitle(titleOrFactory, element) {
-  const title = typeof titleOrFactory === "function" ? titleOrFactory(element) : titleOrFactory;
-
-  return normalizeText(title);
-}
-
-function shouldSetTitle(element, nextTitle, mode) {
-  const currentTitle = normalizeText(element.getAttribute("title"));
-
-  if (!currentTitle) {
-    return true;
+    element = element.parentElement;
   }
+  return null;
+}
 
-  if (currentTitle === nextTitle) {
+function hasHelpSource(element, rule) {
+  return Boolean(
+    rule ||
+    element.hasAttribute("data-app-help") ||
+    element.hasAttribute("title") ||
+    element.hasAttribute("data-app-original-title") ||
+    element.hasAttribute("aria-label")
+  );
+}
+
+function isApplicationControl(element, rule) {
+  // Error text already has a separate copyable overlay on hover and focus.
+  // Never add a second tooltip or treat its dialog as an action.
+  if (element.matches?.(".popup-product-error") || element.closest?.(".popup-error-details")) {
     return false;
   }
 
-  if (mode === "replace") {
-    return true;
-  }
-  if (mode === "replace-generic") {
-    return isGenericTooltip(element, currentTitle);
+  // aria-label on a table heading or action-row container is an accessible name,
+  // not a request to show hover help. Preserve such labels without a tooltip.
+  if (!rule && !getAuthoredTitle(element) && !isInteractiveHelpTarget(element)) {
+    return false;
   }
 
-  return false;
+  // Never attach delegated help to ArcGIS-owned map chrome, even if a generic
+  // aria-label selector matches its internal button. Application popup help is
+  // bound explicitly and custom map overlays use their own stable host classes.
+  if (element.closest?.("#viewDiv")) {
+    const ownedSurface = element.closest?.(
+      ".popup-container, .popup-action-dropdown, .main-map-product-search, .main-map-locator, .product-collection-tray, .overlap-picker"
+    );
+    if (ownedSurface) return true;
+    return Boolean(rule && rule !== GLOBAL_HELP_RULES.at(-1));
+  }
+  return true;
 }
 
-function setHelpTitle(element, title) {
-  element.setAttribute("title", title);
-
-  // Preserve explicit accessible names, but add one for icon-only controls that only had visual text.
-  if (!element.hasAttribute("aria-label") && isIconOnlyControl(element)) {
-    element.setAttribute("aria-label", title);
-  }
+function isInteractiveHelpTarget(element) {
+  const tag = element.tagName?.toLowerCase();
+  const role = element.getAttribute?.("role");
+  return (
+    INTERACTIVE_HELP_TAGS.has(tag) ||
+    INTERACTIVE_HELP_ROLES.has(role) ||
+    (element.hasAttribute?.("tabindex") && Number(element.getAttribute("tabindex")) >= 0)
+  );
 }
+
+function findRule(element) {
+  return GLOBAL_HELP_RULES.find((rule) => element.matches?.(rule.selector)) ?? null;
+}
+
+function resolveHelpText(element, rule = findRule(element)) {
+  const authoredTitle = getAuthoredTitle(element);
+  if (rule) {
+    const ruleText = typeof rule.title === "function" ? rule.title(element) : rule.title;
+    if (
+      authoredTitle &&
+      (rule.mode === "fill-empty" ||
+        (rule.mode === "replace-generic" && !isGenericTooltip(element, authoredTitle)))
+    ) {
+      return normalizeHelpText(authoredTitle);
+    }
+    return normalizeHelpText(ruleText || authoredTitle);
+  }
+  return normalizeHelpText(authoredTitle || getAriaLabel(element));
+}
+
+function getAuthoredTitle(element) {
+  return normalizeText(
+    element.getAttribute("title") ?? element.getAttribute("data-app-original-title")
+  );
+}
+
 function isGenericTooltip(element, title) {
   const text = getElementText(element);
   const ariaLabel = getAriaLabel(element);
   const label = normalizeText(element.getAttribute("label"));
   const calciteText = normalizeText(element.getAttribute("text"));
-
   return [text, ariaLabel, label, calciteText].some((value) => value && value === title);
 }
+
 function isIconOnlyControl(element) {
   return (
     element.tagName.toLowerCase() === "calcite-action" ||
-    (element instanceof HTMLButtonElement && !getElementText(element))
+    (typeof HTMLButtonElement !== "undefined" &&
+      element instanceof HTMLButtonElement &&
+      !getElementText(element))
   );
 }
 
 function createDashboardLinkHelp(element) {
-  const text = getElementText(element);
   const dashboardLinkHelp = {
-    Review: "Open this product in Product Review.",
-    Analyze: "Open this product in Analyze.",
-    History: "Open product history in the Dashboard side panel.",
-    "IC-ENC": "Open the IC-ENC report when report links are available.",
-    Validation: "Open the internal validation report when report links are available.",
+    Review: "Open Review",
+    Analyze: "Open Analyze",
+    History: "Open product history",
+    "IC-ENC": "Open the IC-ENC report",
+    Validation: "Open the validation report",
   };
-
   return (
-    dashboardLinkHelp[text] || createActionTextHelp(element, "Use this dashboard activity action.")
+    dashboardLinkHelp[getElementText(element)] || createActionTextHelp(element, "Dashboard action")
   );
 }
+
 function createAnalyzeCollapseActionHelp(element) {
   const text = getElementText(element);
-
-  if (text === "Open all") {
-    return "Open all product sections on this Analyze page.";
-  }
-
-  if (text === "Collapse all") {
-    return "Collapse all product sections on this Analyze page.";
-  }
-
-  return createActionTextHelp(element, "Use this Analyze action.");
+  if (text === "Open all") return "Open all sections";
+  if (text === "Collapse all") return "Collapse all sections";
+  return createActionTextHelp(element, "Analyze action");
 }
 
 function createPopupActionHelp(element) {
-  const actionId = element.dataset.actionId ?? element.getAttribute("data-action-id") ?? "";
+  const actionId = element.dataset?.actionId ?? element.getAttribute("data-action-id") ?? "";
   const actionHelp = {
-    "freeze-feature": "Freeze this product so it waits for manual handling.",
-    "unfreeze-feature": "Unfreeze this product so it can continue in the workflow.",
-    "send-immediately": "Send this product to IC-ENC immediately.",
-    export: "Open export options for this product.",
-    "export-all": "Export actions for all product formats. Currently unavailable.",
-    "export-all-edition": "All Edition export is currently disabled.",
-    "export-all-update": "All Update export is currently disabled.",
-    "export-s57": "S-57 export actions. Currently unavailable.",
-    "s57-export-edition": "S-57 Edition export is currently disabled.",
-    "s57-export-update": "S-57 Update export is currently disabled.",
-    "export-s100": "Open S-101 export actions.",
-    "s100-export-edition": "Export a new S-101 Edition for this product.",
-    "s100-export-update": "S-101 Update export is currently disabled.",
-    rollback: "Cancel the current export for this product.",
-    analyze: "Open this product in Analyze.",
-    history: "Open product history.",
-    tools: "Open additional product tools.",
+    "freeze-feature": "Freeze product",
+    "unfreeze-feature": "Unfreeze product",
+    "send-immediately": "Send product to IC-ENC",
+    export: "Export product",
+    "export-all": "Export all formats",
+    "export-all-edition": "Export all editions",
+    "export-all-update": "Export all updates",
+    "export-s57": "Export S-57",
+    "s57-export-edition": "Export S-57 Edition",
+    "s57-export-update": "Export S-57 Update",
+    "export-s100": "Export S-101",
+    "s100-export-edition": "Export S-101 Edition",
+    "s100-export-update": "Export S-101 Update",
+    rollback: "Cancel export",
+    analyze: "Open Analyze",
+    history: "Open product history",
+    tools: "More actions",
   };
-  return actionHelp[actionId] || createActionTextHelp(element, "Use this product action.");
+  return actionHelp[actionId] || createActionTextHelp(element, "Product action");
 }
 
 function createActionTextHelp(element, fallback) {
-  const text =
-    getElementText(element) || getAriaLabel(element) || normalizeText(element.getAttribute("text"));
-
-  return text ? `${text}.` : fallback;
+  return (
+    getElementText(element) ||
+    getAriaLabel(element) ||
+    normalizeText(element.getAttribute("text")) ||
+    fallback
+  );
 }
 
 function getElementText(element) {
@@ -359,8 +479,29 @@ function getElementText(element) {
 function getAriaLabel(element) {
   return normalizeText(element.getAttribute("aria-label"));
 }
+
 function normalizeText(value) {
   return String(value ?? "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function observeTooltipTargets() {
+  if (helpTooltipObserver || !document.documentElement) return;
+  helpTooltipObserver = new MutationObserver(scheduleTooltipApply);
+  helpTooltipObserver.observe(document.documentElement, {
+    childList: true,
+    attributes: true,
+    attributeFilter: ["title", "aria-label", "label", "text", "disabled", "aria-disabled"],
+    subtree: true,
+  });
+}
+
+function scheduleTooltipApply() {
+  if (pendingApply) return;
+  pendingApply = true;
+  window.requestAnimationFrame(() => {
+    pendingApply = false;
+    applyGlobalHelpTooltips();
+  });
 }

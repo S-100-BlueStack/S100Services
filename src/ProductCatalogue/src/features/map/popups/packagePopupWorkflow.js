@@ -7,6 +7,15 @@ export function updatePackagePopupWorkflow(container, presentation) {
     section?.remove();
     return;
   }
+  const summary = presentation.summary;
+  const values = [summary.workflowText, summary.pausedText];
+  if (summary.scheduledSendAt) values.push(`Planned send: ${summary.scheduledSendAt}`);
+  if (summary.outcomeText) values.push(summary.outcomeText);
+  const lines = values.filter(Boolean);
+  if (!lines.length) {
+    section?.remove();
+    return;
+  }
   if (!section) {
     section = document.createElement("div");
     section.className = "popup-package-workflow";
@@ -14,17 +23,10 @@ export function updatePackagePopupWorkflow(container, presentation) {
     section.setAttribute("aria-label", "Package workflow");
     container.appendChild(section);
   }
-  const summary = presentation.summary;
   const signature = JSON.stringify(summary);
   if (section.presentationSignature === signature) return;
 
   // Update text in existing nodes; selection/focus in unrelated sections is untouched.
-  const values = [summary.workflowText, summary.unavailableText, summary.pausedText];
-  if (summary.scheduledSendAt) {
-    values.push(`Planned send: ${summary.scheduledSendAt}`);
-  }
-  if (summary.outcomeText) values.push(summary.outcomeText);
-  const lines = values.filter(Boolean);
   for (const [index, value] of lines.entries()) {
     let line = section.children[index];
     if (!line) {

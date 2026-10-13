@@ -231,7 +231,7 @@ export function createPopup() {
         combineCleanups(
           () => {
             const actionBar = getDirectChildByClass(container, "popup-action-bar");
-            if (packageSnapshot && actionBar) updatePopupActionBar(actionBar);
+            if (actionBar) updatePopupActionBar(actionBar);
             errorDetails.destroy();
             packageActions?.destroy();
             disposed = true;
