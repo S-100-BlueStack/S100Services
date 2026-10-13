@@ -380,10 +380,14 @@ namespace S100FC.ProductCatalogue
                 throw new ArgumentOutOfRangeException(nameof(update));
 
             cancellationToken.ThrowIfCancellationRequested();
+            var sourceResolutionTimer = EncDetectionPerformance.IsEnabled ? Stopwatch.StartNew() : null;
             var result = await this.GetElectronicProductAsync(
                 name.ToUpperInvariant(),
                 cancellationToken
             );
+            if (sourceResolutionTimer is not null)
+                Log.Information("ENC detection profile. DatasetName: {DatasetName}. Phase: ResolveSourceProduct. DurationMs: {DurationMs}.",
+                    name, sourceResolutionTimer.Elapsed.TotalMilliseconds);
             result.ElectronicProduct.editionNumber = edition;
             result.ElectronicProduct.updateNumber = update;
 
@@ -570,11 +574,17 @@ namespace S100FC.ProductCatalogue
                         continue;
 
                     var cacheKey = uri.OriginalString;
+                    var coverageTimer = EncDetectionPerformance.IsEnabled ? Stopwatch.StartNew() : null;
+                    var rebuiltCoverage = false;
                     if (!_dpcCoverageCaches.TryGetValue(cacheKey, out var cache) || HasChangedDataCoverage(connection, cache.LoadedAtUtc)) {
+                        rebuiltCoverage = true;
                         cache = BuildDpcCoverageCache(connection, productsForConnection);
                         _dpcCoverageCaches[cacheKey] = cache;
                         Log.Information("DPC coverage cache rebuilt. S101AoiCount: {S101AoiCount}. DataCoverageCount: {DataCoverageCount}. Connection: {Connection}.", cache.Products.Count, cache.DataCoverageCount, connectionSettings.ProductSpecification);
                     }
+                    if (coverageTimer is not null)
+                        Log.Information("ENC detection profile. Phase: CoverageCache. Connection: {Connection}. Rebuilt: {Rebuilt}. AoiCount: {AoiCount}. DataCoverageCount: {DataCoverageCount}. DurationMs: {DurationMs}.",
+                            connectionSettings.ProductSpecification, rebuiltCoverage, cache.Products.Count, cache.DataCoverageCount, coverageTimer.Elapsed.TotalMilliseconds);
 
                     ScanConnectionForPendingEdits(connection, connectionSettings.ProductSpecification, cache.Products, window, result);
                 }
@@ -726,6 +736,8 @@ namespace S100FC.ProductCatalogue
             var currentIdsByProduct = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var baseTableName in tableNames) {
+                var archiveTableTimer = EncDetectionPerformance.IsEnabled ? Stopwatch.StartNew() : null;
+                var archiveRowsRead = 0;
                 using var fc = connection.OpenDataset<FeatureClass>(
                     this.QualifyTableName(baseTableName));
 
@@ -749,6 +761,8 @@ namespace S100FC.ProductCatalogue
                 var affectedProducts = new HashSet<string>();
 
                 while (cursor.MoveNext()) {
+                    if (archiveTableTimer is not null)
+                        archiveRowsRead++;
                     var row = cursor.Current;
 
                     string id;
@@ -842,6 +856,9 @@ namespace S100FC.ProductCatalogue
                         Log.Information("DPC archive feature detected. TableName: {TableName}. FeatureId: {FeatureId}. LatestEditUtc: {LatestEditUtc:O}. SinceUtc: {SinceUtc:O}.",
                             baseTableName, featureId, latestEditUtc, sinceUtc);
                 }
+                if (archiveTableTimer is not null)
+                    Log.Information("ENC detection profile. Phase: ArchiveTable. TableName: {TableName}. Connection: {Connection}. RowsRead: {RowsRead}. UniqueChangedFeatures: {UniqueChangedFeatures}. AffectedAoiCount: {AffectedAoiCount}. DurationMs: {DurationMs}.",
+                        baseTableName, connectionName, archiveRowsRead, uniqueChangedFeatureIds.Count, affectedProducts.Count, archiveTableTimer.Elapsed.TotalMilliseconds);
             }
 
             foreach (var (productName, affectedIds) in affectedIdsByProduct) {
@@ -1196,6 +1213,7 @@ namespace S100FC.ProductCatalogue
             var logNewDataset = exportType == ExportTypes.NewDataset;
             var creationTimer = Stopwatch.StartNew();
             var creationSucceeded = false;
+            EncDetectionPhaseProfiler? profiler = null;
             if (logNewDataset)
                 Log.Information("CreateNewDataset started. DatasetName: {DatasetName}. Edition: {Edition}. Update: {Update}.",
                     electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
@@ -1235,8 +1253,14 @@ namespace S100FC.ProductCatalogue
             var featureTracker = requiredFeatureIds is null
                 ? null
                 : new VerifiedSourceFeatureTracker(electronicProduct.datasetName!, requiredFeatureIds);
+            profiler = requiredFeatureIds is null ? null : EncDetectionPhaseProfiler.CreateIfEnabled(
+                electronicProduct.datasetName!, electronicProduct.editionNumber ?? 0, electronicProduct.updateNumber ?? 0,
+                requiredFeatureIds.Count);
 
             var createdDataset = await this.DispatchMeasured(() => {
+                profiler?.Next("OpenConnections");
+                var selectedFeatureRows = 0;
+                var emittedYamlFeatures = 0;
                 cancellationToken.ThrowIfCancellationRequested();
                 using Geodatabase connection = this.OpenGeodatabase(uri);
 
@@ -1251,7 +1275,9 @@ namespace S100FC.ProductCatalogue
 
 
                 // TODO: Fix S101_QueryDataCoverage. Returns empty array and causes BuildTopology to fail.
+                profiler?.Next("DataCoverage");
                 var filters = s101Geodatabase.S101_QueryDataCoverage(shape, nominalscale).Select(result => result.Filter).ToArray();
+                profiler?.Next("BuildTopology", filters.Length);
                 var result = connection.BuildTopology(filters, loggerFactory: loggerFactory)!;
 
                 var topology = result.matrix;
@@ -1259,6 +1285,8 @@ namespace S100FC.ProductCatalogue
                 var collapse = topology.Collapse;
 
                 cancellationToken.ThrowIfCancellationRequested();
+                profiler?.Next("InformationTypes", filters.Length,
+                    profiler is null ? 0 : selection.Values.Sum(ids => ids.Count()));
 
                 // InformationTypes
                 try {
@@ -1305,6 +1333,7 @@ namespace S100FC.ProductCatalogue
                     Log.Information("Table: informationtype: {message} ", ex.Message);
                 }
 
+                profiler?.Next("FeatureTypes", informationTypes.Count);
                 // FeatureType
                 try {
                     using var featureType = connection.OpenDataset<Table>(this.QualifyTableName("featuretype"));
@@ -1351,6 +1380,7 @@ namespace S100FC.ProductCatalogue
                     Log.Information("Table: featuretype: {message} ", ex.Message);
                 }
 
+                profiler?.Next("FeatureTables", featureTypes.Count);
                 //  Features
                 foreach (var def in connection.GetDefinitions<FeatureClassDefinition>()) {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -1370,6 +1400,8 @@ namespace S100FC.ProductCatalogue
                     }
 
                     var hashSet = new HashSet<long>();
+                    var tableStartedAt = profiler?.Timestamp() ?? 0;
+                    var tableEmittedFeatures = 0;
 
                     using var fc = connection.OpenDataset<FeatureClass>(def.GetName());
                     if (selection.ContainsKey(tableName.ToLowerInvariant()) && selection[tableName.ToLowerInvariant()].Any()) {
@@ -1599,6 +1631,8 @@ namespace S100FC.ProductCatalogue
                                     }
 
                                     dataset?.AddFeature(feature!);
+                                    if (profiler is not null)
+                                        tableEmittedFeatures++;
 
                                     var geometrytype = code!.ToLower() switch {
                                         "sounding" => MultipointBuilderEx.CreateMultipoint(current.GetShape() as MapPoint),
@@ -1617,6 +1651,11 @@ namespace S100FC.ProductCatalogue
                                 }
                             }
                         }
+                    }
+                    if (profiler is not null) {
+                        selectedFeatureRows += hashSet.Count;
+                        emittedYamlFeatures += tableEmittedFeatures;
+                        profiler.Detail($"FeatureTable:{tableName}", tableStartedAt, hashSet.Count, tableEmittedFeatures);
                     }
                     //if (selection.ContainsKey(tableName.ToLowerInvariant()) && selection[tableName.ToLowerInvariant()].Any()) {
                     //    using var cursor = fc.Search(new QueryFilter {
@@ -1882,6 +1921,7 @@ namespace S100FC.ProductCatalogue
                 //    }
                 //}
 
+                profiler?.Next("GeometryAssembly", selectedFeatureRows, emittedYamlFeatures);
                 //  Geometries
                 foreach (var (geometry, name) in geometries.OrderBy(e => e.geometry.GeometryType)) {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -1890,6 +1930,7 @@ namespace S100FC.ProductCatalogue
                     Log.Verbose("Adding {geometryType} with ID: {name}", geometry.GeometryType, name);
                 }
 
+                profiler?.Next("MembershipVerification", geometries.Count);
                 if (featureTracker is not null) {
                     // A selected but unexported source feature must fail this scan before its watermark advances.
                     var verification = featureTracker.Complete();
@@ -1900,6 +1941,7 @@ namespace S100FC.ProductCatalogue
                     foreach (var id in verification.Collapsed)
                         Log.Information("DPC source surface {FeatureId} collapsed during topology for {DatasetName}; it is not emitted as a feature.", id, electronicProduct.datasetName);
                 }
+                profiler?.Next("TopologyAndAssociations", requiredFeatureIds?.Count ?? 0, includedChangedFeatureIds?.Count ?? 0);
                 dataset!.AddTopology(topology);
 
                 // Add Spatial Association Informationbindings. Must be handled after curves are added to dataset.
@@ -1910,6 +1952,7 @@ namespace S100FC.ProductCatalogue
                     curve?.AddAssociation(sa.Value);
                 }
 
+                profiler?.Next("ApplyEdits", spatialAssociations.Count);
                 // Apply Edits
 
                 if (applyEdits) {
@@ -1934,12 +1977,15 @@ namespace S100FC.ProductCatalogue
                     AddElectronicProduct(electronicProduct);
                 }
                 cancellationToken.ThrowIfCancellationRequested();
+                profiler?.Finish(true, selectedFeatureRows, emittedYamlFeatures);
                 return dataset!;
             }, $"CreateDataset:{exportType}", electronicProduct.datasetName, cancellationToken);
             creationSucceeded = true;
             return createdDataset;
             }
             finally {
+                // The dispatch delegate may never run if it was cancelled while queued.
+                profiler?.Finish(false);
                 if (logNewDataset)
                     Log.Information("CreateNewDataset finished. DatasetName: {DatasetName}. Success: {Success}. DurationMs: {DurationMs}.",
                         electronicProduct.datasetName, creationSucceeded, creationTimer.ElapsedMilliseconds);

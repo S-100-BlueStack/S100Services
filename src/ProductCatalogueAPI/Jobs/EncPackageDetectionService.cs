@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Services.Locking;
@@ -16,7 +17,7 @@ public interface IEncPackageDetectionService
 }
 
 /// <summary>Coordinates a package scan across the system database, S-128 catalogue, and export engines.</summary>
-public sealed class EncPackageDetectionService(IProductRepository productRepository, IProductWorkflowRepository workflowRepository, IEncPackageRepository packages, IProductManager productManager, IExportOperationService exports, IDatasetLockService locks, TimeProvider clock, ILogger<EncPackageDetectionService> logger, IEncPackageFinalizationService? finalization = null) : IEncPackageDetectionService
+public sealed class EncPackageDetectionService(IProductRepository productRepository, IProductWorkflowRepository workflowRepository, IEncPackageRepository packages, IProductManager productManager, IExportOperationService exports, IDatasetLockService locks, TimeProvider clock, ILogger<EncPackageDetectionService> logger, IConfiguration configuration, IEncPackageFinalizationService? finalization = null) : IEncPackageDetectionService
 {
     private readonly IElectronicProductManager _products = productManager.ElectronicProductManager;
 
@@ -27,6 +28,9 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             logger.LogInformation("ENC change scan skipped because another scan is running.");
             return;
         }
+
+        // Load the diagnostic flag from the Worker's normal appsettings configuration.
+        EncDetectionPerformance.Configure(configuration[EncDetectionPerformance.ConfigurationKey]);
 
         if (finalization is not null)
             await finalization.FinalizePendingAsync(cancellationToken);
@@ -187,7 +191,11 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 continue;
             }
             var summary = EncChangeSummary.Serialize(sourceName, ProductSpecification.S101, EncChangeSummary.GetCopenhagenDate(scanStartedUtc), packageScanFromUtc, scanStartedUtc, summaryChanges);
+            var serializationTimer = EncDetectionPerformance.IsEnabled ? Stopwatch.StartNew() : null;
             var yaml = snapshot.Dataset.Serialize();
+            if (serializationTimer is not null)
+                logger.LogInformation("ENC detection profile. SourceDatasetName: {SourceDatasetName}. Phase: SerializeYaml. DurationMs: {DurationMs}. YamlCharacterCount: {YamlCharacterCount}. IncludedChangedFeatureCount: {IncludedChangedFeatureCount}.",
+                    sourceName, serializationTimer.Elapsed.TotalMilliseconds, yaml?.Length ?? 0, included.Count);
             if (string.IsNullOrWhiteSpace(yaml))
                 throw new InvalidOperationException($"ENC source snapshot for '{sourceName}' was empty.");
 
