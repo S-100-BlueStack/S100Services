@@ -18,7 +18,10 @@ public sealed class EncPackageActionsController(IEncPackageActionService actions
     public async Task<IActionResult> GetActions(string sourceName, CancellationToken cancellationToken) {
         if (!actions.Enabled) return StatusCode(503, new { code = "PACKAGE_ACTIONS_DISABLED", message = "ENC package actions are disabled." });
         var snapshot = await actions.ReadAsync(sourceName, cancellationToken);
-        return snapshot is null ? NotFound(new { code = "PACKAGE_NOT_FOUND", message = "No current ENC package is available." }) : Ok(snapshot);
+        // Absence and missing control state share the legacy null read result.
+        // Do not infer package absence or grant authorization from this endpoint.
+        // The independent AOI/status projection explicitly reports package presence.
+        return snapshot is null ? Ok(new { actionsAvailable = false }) : Ok(snapshot);
     }
 
     [HttpPost("{sourceName}/pause")]

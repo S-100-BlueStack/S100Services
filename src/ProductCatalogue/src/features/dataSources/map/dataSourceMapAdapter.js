@@ -1,4 +1,7 @@
 import { reconcileGraphicsLayers } from "../../map/core/reconcileGraphicsLayers.js";
+import { resolveFeatureKey } from "../../map/core/featureIdentity.js";
+import { serializeProductIdentity } from "../domain/productIdentity.js";
+import { applyGraphicAttributes } from "../../map/state/featureState.js";
 import { getLayer, registerLayer, unregisterLayer } from "../../map/core/layerRegistry.js";
 import { clearPopupExportUiState } from "../../map/popups/popupExportState.js";
 import { createDataSourcePopupTemplate } from "./createDataSourcePopup.js";
@@ -154,6 +157,56 @@ export function createDataSourceMapAdapter({
     return true;
   }
 
+  function publishProductStatus({ source, datasetName, attributes, isCurrent }) {
+    if (!isCurrent?.() || !isSourceRendered(source?.id)) {
+      return { published: false, reason: "source-not-current" };
+    }
+    const sourceName = String(datasetName ?? "")
+      .trim()
+      .toUpperCase();
+    const matches = getSourceLayers(source.id).flatMap((layer) =>
+      getGraphics(layer)
+        .filter(
+          (graphic) =>
+            graphic?.attributes?.sourceId === source.id &&
+            String(graphic.attributes.datasetName ?? "")
+              .trim()
+              .toUpperCase() === sourceName
+        )
+        .map((graphic) => ({ layer, graphic }))
+    );
+    if (matches.length !== 1) {
+      return { published: false, reason: "missing-or-ambiguous-graphic" };
+    }
+    const { layer, graphic } = matches[0];
+    const featureKey = graphic.attributes.featureKey;
+    const productKey = String(graphic.attributes.productKey ?? "").trim();
+    const expectedIdentityKey = productKey
+      ? serializeProductIdentity({ sourceId: source.id, productKey })
+      : null;
+    // The map transformer prefixes featureKey with layerId. It must never be
+    // compared directly with the unprefixed, source-aware productIdentityKey.
+    const expectedFeatureKey = expectedIdentityKey
+      ? resolveFeatureKey({ featureKey: expectedIdentityKey }, layer.customId)
+      : null;
+    if (
+      !expectedIdentityKey ||
+      graphic.attributes.productIdentityKey !== expectedIdentityKey ||
+      !featureKey ||
+      featureKey !== expectedFeatureKey ||
+      productKey.toUpperCase() !== sourceName ||
+      layer._index?.get(featureKey) !== graphic ||
+      !isCurrent()
+    ) {
+      return { published: false, reason: "graphic-identity-changed" };
+    }
+    const changed = Object.entries(attributes).some(
+      ([key, value]) => JSON.stringify(graphic.attributes[key]) !== JSON.stringify(value)
+    );
+    if (changed) applyGraphicAttributes(graphic, attributes);
+    return { published: true, changed, layers: getSourceLayers(source.id) };
+  }
+
   function getSourceLayers(sourceId) {
     return [...(sourceLayers.get(sourceId) ?? [])];
   }
@@ -215,6 +268,7 @@ export function createDataSourceMapAdapter({
     discardCandidate,
     getSourceLayers,
     isSourceRendered,
+    publishProductStatus,
   };
 }
 

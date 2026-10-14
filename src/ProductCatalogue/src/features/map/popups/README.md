@@ -521,6 +521,25 @@ existing `requireRefresh()` recovery path and subsequent initial check. There is
 still one in-flight detail read and no separate generation owner. All v2 source,
 identity, connection and cleanup guards remain in place.
 
+### External Product operations: AOI status drift
+
+An externally completed Product operation (for example, a Swagger-initiated
+standalone Discard) can change Product-detail `status` before the Main-map AOI
+source refreshes. An open package popup compares that authoritative primary-track
+status with the primary member in its current AOI `workUnitStatus`. A recognized,
+identity-consistent mismatch requests **one targeted active-source reload** through
+the existing source controller; detail never writes workflow/member status,
+symbols, filters or identity to a Graphic. Source reconciliation updates the map
+and the open popup using the existing generation and stable-Graphic mechanisms.
+
+Only connected, current popup detail results may issue this request. A map-owned
+coordinator coalesces in-flight source requests, uses a 30-second retry cooldown
+and skips disabled/loading sources or an already-running global refresh. Failed
+source loads retain the existing map representation. No global AOI polling or
+new backend contract is introduced: without an open popup, status converges
+through normal auto/manual source refresh. The existing package-Discard action
+uses its own full refresh signal rather than also requesting a targeted reload.
+
 ## F7A v3 package presentation boundary
 
 `packagePopupPresentation.js` is a popup-owned pure projection of a resolved
@@ -629,3 +648,23 @@ only the existing selectable error overlay on hover/focus, which can be pinned b
 The change covers application-owned popup actions; ArcGIS/Calcite-supplied framework controls
 are not modified through private component internals. It makes no change to backend eligibility,
 workflow state, Product attributes or action dispatch.
+
+### Targeted package-status reconciliation (October 2026)
+
+A current popup compares the primary Product-detail status with the AOI-owned
+S-101 member state. On drift it delegates to the Main-map source controller,
+which fetches `GET /electronicproducts/{sourceName}/status` and validates the
+same canonical S-101/S-57 package projection as the full AOI path. Only the
+matching Graphic is updated; symbols, filters and popup reconciliation use
+existing public application-owned boundaries. No geometry or full AOI list is
+requested in this flow. An in-flight full source refresh, deactivation or
+replacement supersedes a stale targeted result. Failed/partial responses do not
+publish any status, and normal manual/periodic AOI refresh remains available.
+
+`Package.HasActivePackage` is server-owned and never inferred from standalone
+track errors. Missing packages suppress the package action read and controls.
+If a package disappears between reads, the action endpoint returns an explicit
+200 `actionsAvailable: false` response without claiming package absence;
+backend authorization remains required
+for every real mutation. The existing popup generation, focus, tooltip and
+navigation semantics are unchanged.

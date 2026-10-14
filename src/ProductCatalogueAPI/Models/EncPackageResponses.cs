@@ -29,7 +29,11 @@ public enum EncPackageStatus
 public sealed record EncPackageProductResponse(string DatasetName, ProductSpecification ProductSpecification, int CurrentEdition, int CurrentUpdate, DateOnly? IssueDate, int? CandidateEdition, int? CandidateUpdate, ProductState Status, bool Held, bool Discarded, string? ErrorMessage);
 
 /// <summary>Exposes one S-101 AOI with its shared package and two independent export tracks.</summary>
-public sealed record EncPackageResponse(PackageLayer Layer, string SourceDatasetName, int? UsageBand, int? DisplayScale, DateTime? DetectedAtUtc, EncPackageStatus Status, string? ErrorMessage, EncPackageProductResponse S57, EncPackageProductResponse S101);
+public sealed record EncPackageResponse(PackageLayer Layer, string SourceDatasetName, int? UsageBand, int? DisplayScale, DateTime? DetectedAtUtc, EncPackageStatus Status, string? ErrorMessage, EncPackageProductResponse S57, EncPackageProductResponse S101)
+{
+    /// <summary>True only when an active EncPackage exists; never inferred from member track states.</summary>
+    public bool HasActivePackage { get; init; }
+}
 
 /// <summary>Computes a package status from both tracks so send and acceptance changes are visible immediately.</summary>
 public static class EncPackageStatusResolver

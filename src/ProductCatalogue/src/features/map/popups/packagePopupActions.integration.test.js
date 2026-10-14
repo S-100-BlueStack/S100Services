@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createDataSourceRegistry } from "../../dataSources/config/dataSourceRegistry.js";
 import { createPopup } from "./createPopup.js";
-import { refreshOpenProductPopup } from "./popupRefreshBridge.js";
+import {
+  refreshOpenProductPopup,
+  registerPopupSourceStatusRefreshHandler,
+} from "./popupRefreshBridge.js";
 import { loadStatuses } from "../../data/stores/statusStore.js";
 import { createPackagePopupPresentation } from "./packagePopupPresentation.js";
 import { resolveProductContext } from "../../products/domain/productContext.js";
@@ -246,6 +249,7 @@ function createHarness() {
       productIdentityKey: JSON.stringify([source.id, "PRIMARY"]),
       productType: source.productType,
       datasetName: "PRIMARY",
+      hasActivePackage: true,
       workUnitMetadata: {
         members: {
           s101: { datasetName: "PRIMARY", edition: 1, update: 0 },
@@ -487,6 +491,64 @@ test("actual popup keeps table, error overlay, selection owner, focus and Tools 
     await h.settle();
     assert.equal(h.doc.activeElement, tools);
   } finally {
+    h.destroy();
+  }
+});
+
+test("actual popup requests source status revalidation after a newer external Product detail", async () => {
+  const h = createHarness();
+  const observations = [];
+  const unregister = registerPopupSourceStatusRefreshHandler((observation) => {
+    observations.push(observation);
+    return { success: true };
+  });
+  h.detail(async () => ({
+    name: "PRIMARY",
+    status: 1,
+    s101: { name: "PRIMARY", edition: 1, update: 0 },
+    s57: { name: "SECONDARY", edition: 4, update: 0 },
+    exports: [],
+  }));
+  try {
+    await loadStatuses();
+    const popup = h.open();
+    await h.settle();
+    assert.equal(popup.isConnected, true);
+    assert.deepEqual(observations, [{ sourceId: "s101", datasetName: "PRIMARY" }]);
+    assert.equal(h.graphic.attributes.workUnitStatus.members[0].status, 11);
+    assert.equal(h.graphic.attributes.workUnitStatus.members[1].status, 15);
+    assert.equal(h.requests.filter(({ url }) => url === "/electronicproducts/PRIMARY").length, 1);
+  } finally {
+    unregister();
+    h.destroy();
+  }
+});
+
+test("closed popup never requests a source reload from a late Product detail", async () => {
+  const h = createHarness();
+  const observations = [];
+  const unregister = registerPopupSourceStatusRefreshHandler((observation) => {
+    observations.push(observation);
+    return { success: true };
+  });
+  let finish;
+  h.detail(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+  );
+  try {
+    await loadStatuses();
+    h.open();
+    await h.settle();
+    assert.equal(typeof finish, "function");
+    h.close();
+    finish({ name: "PRIMARY", status: 1 });
+    await h.settle();
+    assert.deepEqual(observations, []);
+  } finally {
+    unregister();
     h.destroy();
   }
 });
@@ -866,6 +928,22 @@ test("ordinary Product controls retain Calcite sizing and use the shared popup t
     assert.equal(h.requests.length, 0);
     action.emit("pointerleave");
     assert.equal(h.doc.body.querySelectorAll(".popup-action-help").length, 0);
+  } finally {
+    h.destroy();
+  }
+});
+
+test("standalone Product with no active package does not probe package actions", async () => {
+  const h = createHarness();
+  try {
+    h.graphic.attributes.hasActivePackage = false;
+    await loadStatuses();
+    const popup = h.open();
+    await h.settle();
+    assert.equal(
+      h.requests.some(({ url }) => url.endsWith("/actions")),
+      false
+    );
   } finally {
     h.destroy();
   }

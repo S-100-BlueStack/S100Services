@@ -12,7 +12,7 @@ public sealed class S101ExchangeSetOutputTests : IDisposable
     private readonly string _root = Path.Combine(Path.GetTempPath(), $"pc-s101-output-{Guid.NewGuid():N}");
 
     [Fact]
-    public async Task NewEditionArtifactsUseCompilerRootWithoutStagingFiles() {
+    public async Task NewEditionArtifactsUseDatasetSpecificCompilerRootWithoutStagingFiles() {
         var request = CreateRequest(edition: 1, update: 0);
         var outputDirectory = GetCandidateDirectory(request);
         var datasetDirectory = GetDatasetDirectory(request);
@@ -20,8 +20,8 @@ public sealed class S101ExchangeSetOutputTests : IDisposable
 
         var sourceBytes = new byte[] { 1, 2, 3 };
         await File.WriteAllBytesAsync(Path.Combine(datasetDirectory, $"{DatasetName}.000"), sourceBytes);
-        await File.WriteAllTextAsync(Path.Combine(outputDirectory, "S100_ROOT", "CATALOG.SIGN"), "signature");
-        await File.WriteAllTextAsync(Path.Combine(outputDirectory, "S100_ROOT", "CATALOG.XML"), "catalogue");
+        await File.WriteAllTextAsync(GetSignaturePath(request), "signature");
+        await File.WriteAllTextAsync(Path.Combine(GetExchangeSetDirectory(request), "CATALOG.XML"), "catalogue");
         var inputYaml = Path.Combine(outputDirectory, $"temp_{DatasetName}.yaml");
         await File.WriteAllTextAsync(inputYaml, "staging source YAML");
         var previousIndex = Path.Combine(outputDirectory, "prev.idx");
@@ -71,7 +71,7 @@ public sealed class S101ExchangeSetOutputTests : IDisposable
         if (emptyDataset)
             await File.WriteAllBytesAsync(Path.Combine(datasetDirectory, $"{DatasetName}.000"), []);
 
-        await File.WriteAllTextAsync(Path.Combine(outputDirectory, "S100_ROOT", "CATALOG.SIGN"), "signature");
+        await File.WriteAllTextAsync(GetSignaturePath(request), "signature");
         var indexPath = await WriteIndexAsync(outputDirectory, update: 0);
         var previousIndex = Path.Combine(outputDirectory, "prev.idx");
         await File.WriteAllTextAsync(previousIndex, "previous index");
@@ -85,6 +85,23 @@ public sealed class S101ExchangeSetOutputTests : IDisposable
     }
 
     [Fact]
+    public async Task LegacyEditionRootCannotStandInForNewCompilerOutput() {
+        var request = CreateRequest(edition: 1, update: 0);
+        var outputDirectory = GetCandidateDirectory(request);
+        var legacyDirectory = Path.Combine(outputDirectory, "S100_ROOT", "S-101", "DATASET_FILES");
+        Directory.CreateDirectory(legacyDirectory);
+        await File.WriteAllBytesAsync(Path.Combine(legacyDirectory, $"{DatasetName}.000"), [1]);
+        await File.WriteAllTextAsync(Path.Combine(outputDirectory, "S100_ROOT", "CATALOG.SIGN"), "old signature");
+        var indexPath = await WriteIndexAsync(outputDirectory, update: 0);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            IsoIec8211ExportEngine.ReadS101ExportResultAsync(request, indexPath, Path.Combine(outputDirectory, "prev.idx")));
+
+        Assert.Contains("non-empty dataset", error.Message, StringComparison.Ordinal);
+        Assert.True(File.Exists(indexPath));
+    }
+
+    [Fact]
     public async Task UpdateExchangeSetKeepsTheEditionDatasetAlongsideTheUpdate() {
         var request = CreateRequest(edition: 2, update: 1);
         var outputDirectory = GetCandidateDirectory(request);
@@ -92,7 +109,7 @@ public sealed class S101ExchangeSetOutputTests : IDisposable
         Directory.CreateDirectory(datasetDirectory);
         await File.WriteAllBytesAsync(Path.Combine(datasetDirectory, $"{DatasetName}.000"), [1]);
         await File.WriteAllBytesAsync(Path.Combine(datasetDirectory, $"{DatasetName}.001"), [2]);
-        await File.WriteAllTextAsync(Path.Combine(outputDirectory, "S100_ROOT", "CATALOG.SIGN"), "signature");
+        await File.WriteAllTextAsync(GetSignaturePath(request), "signature");
         var indexPath = await WriteIndexAsync(outputDirectory, update: 1);
 
         var result = await IsoIec8211ExportEngine.ReadS101ExportResultAsync(request, indexPath, Path.Combine(outputDirectory, "prev.idx"));
@@ -102,6 +119,27 @@ public sealed class S101ExchangeSetOutputTests : IDisposable
         Assert.NotNull(archive.GetEntry($"S100_ROOT/S-101/DATASET_FILES/{DatasetName}.000"));
         Assert.NotNull(archive.GetEntry($"S100_ROOT/S-101/DATASET_FILES/{DatasetName}.001"));
         Assert.Equal($"{DatasetName}-2-001.zip", exchangeSetArtifact.FileName);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UpdateWithoutBaseDatasetInNewLayoutFailsClosed(bool emptyBase) {
+        var request = CreateRequest(edition: 2, update: 1);
+        var outputDirectory = GetCandidateDirectory(request);
+        var datasetDirectory = GetDatasetDirectory(request);
+        Directory.CreateDirectory(datasetDirectory);
+        await File.WriteAllBytesAsync(Path.Combine(datasetDirectory, $"{DatasetName}.001"), [2]);
+        if (emptyBase)
+            await File.WriteAllBytesAsync(Path.Combine(datasetDirectory, $"{DatasetName}.000"), []);
+        await File.WriteAllTextAsync(GetSignaturePath(request), "signature");
+        var indexPath = await WriteIndexAsync(outputDirectory, update: 1);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            IsoIec8211ExportEngine.ReadS101ExportResultAsync(request, indexPath, Path.Combine(outputDirectory, "prev.idx")));
+
+        Assert.Contains("non-empty base dataset", error.Message, StringComparison.Ordinal);
+        Assert.True(File.Exists(indexPath));
     }
 
     [Fact]
@@ -114,7 +152,7 @@ public sealed class S101ExchangeSetOutputTests : IDisposable
         var updateDataset = Path.Combine(datasetDirectory, $"{DatasetName}.001");
         await File.WriteAllBytesAsync(baseDataset, [1]);
         await File.WriteAllBytesAsync(updateDataset, [2]);
-        var signaturePath = Path.Combine(outputDirectory, "S100_ROOT", "CATALOG.SIGN");
+        var signaturePath = GetSignaturePath(request);
         await File.WriteAllTextAsync(signaturePath, "signature");
 
         var engine = new IsoIec8211ExportEngine(NullLogger<IsoIec8211ExportEngine>.Instance, _root);
@@ -146,6 +184,12 @@ public sealed class S101ExchangeSetOutputTests : IDisposable
 
     private static string GetDatasetDirectory(ExportEngineRequest request) =>
         ExportOutputPath.GetS101DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update);
+
+    private static string GetExchangeSetDirectory(ExportEngineRequest request) =>
+        ExportOutputPath.GetS101ExchangeSetDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update);
+
+    private static string GetSignaturePath(ExportEngineRequest request) =>
+        Path.Combine(GetExchangeSetDirectory(request), "CATALOG.SIGN");
 
     private static async Task<string> WriteIndexAsync(string directory, int update) {
         var indexPath = Path.Combine(directory, $"1OSTSO_{update:000}.idx");

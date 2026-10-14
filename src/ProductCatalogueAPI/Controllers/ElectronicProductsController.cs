@@ -278,36 +278,11 @@ namespace ProductCatalogueAPI.Controllers
                     var s101Track = s101Tracks?.FirstOrDefault(track => track.ProductSpecification == ProductSpecification.S101);
                     var s57Track = s57Tracks?.FirstOrDefault(track => track.ProductSpecification == ProductSpecification.S57);
                     packages.TryGetValue(mappedProduct.DatasetName, out var activePackage);
-                    var status = EncPackageStatusResolver.Resolve(activePackage, s57Track, s101Track);
-                    var packageError = status == EncPackageStatus.Error
-                        ? EncPackageStatusResolver.GetErrorMessage(activePackage, s57Track, s101Track)
-                        : null;
-                    var package = new EncPackageResponse(selectedLayer, mappedProduct.DatasetName, mappedProduct.Product.specificUsage,
-                        mappedProduct.Product.optimumDisplayScale, activePackage?.DetectedAtUtc, status, packageError,
-                        CreatePackageProduct(mappedProduct.S57, ProductSpecification.S57, s57Track, activePackage?.S57Discarded == true),
-                        CreatePackageProduct(mappedProduct.Product, ProductSpecification.S101, s101Track, activePackage?.S101Discarded == true));
-
                     responses.Add(new AOIResponse
                     {
                         Geometry = mappedProduct.Geometry,
-                        // JsonSerializer.Deserialize(polygon),
-                        Attributes = new Attributes
-                        {
-                            DatasetName = mappedProduct.Product.datasetName,
-                            Package = package,
-                            Status = status switch {
-                                EncPackageStatus.Error => ProductStatus.Error,
-                                EncPackageStatus.InTransit => ProductStatus.InTransit,
-                                EncPackageStatus.Ready => ProductStatus.ReadyForDistribution,
-                                EncPackageStatus.Building => ProductStatus.Exporting,
-                                EncPackageStatus.Held => ProductStatus.Frozen,
-                                _ => Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString())
-                            },
-                            // Products without a SQL workflow track remain idle until internal work begins.
-                            DisplayScale = mappedProduct.Product.optimumDisplayScale,
-                            UsageBand = mappedProduct.Product.specificUsage,
-                            ErrorMessage = status == EncPackageStatus.Error ? packageError : current?.ErrorMessage
-                        }
+                        Attributes = CreateEncPackageAttributes(selectedLayer, mappedProduct.Product, mappedProduct.S57,
+                            current, s101Track, s57Track, activePackage)
                     });
                 }
                 mappingStopwatch.Stop();
@@ -338,6 +313,51 @@ namespace ProductCatalogueAPI.Controllers
                     cacheState
                 );
             }
+        }
+
+        /// <summary>
+        /// Gets the authoritative ENC package/member status for one S-101 AOI without geometry.
+        /// Uses the same projection as the full ENC AOI endpoint, including standalone tracks.
+        /// </summary>
+        [ProducesResponseType(typeof(ApiResponse<Attributes>), StatusCodes.Status200OK, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound, "application/json")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict, "application/json")]
+        [HttpGet("{name}/status", Name = "GetElectronicProductPackageStatus")]
+        [ResponseCache(NoStore = true)]
+        public async Task<IActionResult> GetElectronicProductPackageStatus(string name, CancellationToken cancellationToken)
+        {
+            var sw = Stopwatch.StartNew();
+            var requestedName = name.Trim();
+            var product = _electronicProductManager.ElectronicProduct(requestedName, ProductSpecification.S101.ToString());
+            if (product is null || !MatchesProductSpecification(product, ProductSpecification.S101) ||
+                !string.Equals(product.datasetName?.Trim(), requestedName, StringComparison.OrdinalIgnoreCase))
+                return NotFound(new ApiResponse { Success = false, Message = "No matching S-101 ENC source exists.", DurationMs = sw.ElapsedMilliseconds });
+
+            var sourceName = product.datasetName!.Trim();
+            var mapped = _electronicProductManager.GetMappedElectronicProducts(sourceName, ProductSpecification.S57.ToString());
+            if (mapped.Count != 1 || string.IsNullOrWhiteSpace(mapped[0].datasetName) ||
+                !MatchesProductSpecification(mapped[0], ProductSpecification.S57) ||
+                string.Equals(sourceName, mapped[0].datasetName!.Trim(), StringComparison.OrdinalIgnoreCase))
+                return Conflict(new ApiResponse { Success = false, Message = "The ENC source does not have one valid mapped S-57 product.", DurationMs = sw.ElapsedMilliseconds });
+
+            var s57 = mapped[0];
+            var tracks = await _workflowRepository.GetTracksByNamesAsync([sourceName, s57.datasetName!], cancellationToken);
+            var s101Track = tracks.FirstOrDefault(track => track.ProductSpecification == ProductSpecification.S101 &&
+                string.Equals(track.DatasetName, sourceName, StringComparison.OrdinalIgnoreCase));
+            var s57Track = tracks.FirstOrDefault(track => track.ProductSpecification == ProductSpecification.S57 &&
+                string.Equals(track.DatasetName, s57.datasetName, StringComparison.OrdinalIgnoreCase));
+            var active = _packageRepository is null
+                ? null
+                : (await _packageRepository.GetActiveAsync([sourceName], cancellationToken, includeSourceYaml: false))
+                    .GetValueOrDefault(sourceName);
+            var current = (await _repository.GetCurrentByNamesAsync([sourceName], ProductSpecification.S101))
+                .FirstOrDefault(record => string.Equals(record.Name, sourceName, StringComparison.OrdinalIgnoreCase));
+            return Ok(new ApiResponse<Attributes>
+            {
+                Data = CreateEncPackageAttributes(PackageLayer.ENC, product, s57, current, s101Track, s57Track, active),
+                TotalHits = 1,
+                DurationMs = sw.ElapsedMilliseconds
+            });
         }
 
         /// <summary>
@@ -826,6 +846,42 @@ namespace ProductCatalogueAPI.Controllers
             return string.IsNullOrWhiteSpace(product?.datasetName)
                 ? null
                 : new CurrentElectronicProductResponse(product.datasetName.Trim(), product.editionNumber, product.updateNumber, product.issueDate);
+        }
+
+        /// <summary>Shared status projection for complete AOI loads and single-product status reads.</summary>
+        private static Attributes CreateEncPackageAttributes(
+            PackageLayer layer, ElectronicProduct product, ElectronicProduct s57,
+            ProductRecord? current, ProductExportTrackRecord? s101Track,
+            ProductExportTrackRecord? s57Track, EncPackage? activePackage)
+        {
+            var status = EncPackageStatusResolver.Resolve(activePackage, s57Track, s101Track);
+            var packageError = status == EncPackageStatus.Error
+                ? EncPackageStatusResolver.GetErrorMessage(activePackage, s57Track, s101Track)
+                : null;
+            var package = new EncPackageResponse(layer, product.datasetName!.Trim(), product.specificUsage,
+                product.optimumDisplayScale, activePackage?.DetectedAtUtc, status, packageError,
+                CreatePackageProduct(s57, ProductSpecification.S57, s57Track, activePackage?.S57Discarded == true),
+                CreatePackageProduct(product, ProductSpecification.S101, s101Track, activePackage?.S101Discarded == true))
+            {
+                HasActivePackage = activePackage is not null
+            };
+            return new Attributes
+            {
+                DatasetName = product.datasetName,
+                Package = package,
+                Status = status switch
+                {
+                    EncPackageStatus.Error => ProductStatus.Error,
+                    EncPackageStatus.InTransit => ProductStatus.InTransit,
+                    EncPackageStatus.Ready => ProductStatus.ReadyForDistribution,
+                    EncPackageStatus.Building => ProductStatus.Exporting,
+                    EncPackageStatus.Held => ProductStatus.Frozen,
+                    _ => Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString())
+                },
+                DisplayScale = product.optimumDisplayScale,
+                UsageBand = product.specificUsage,
+                ErrorMessage = status == EncPackageStatus.Error ? packageError : current?.ErrorMessage
+            };
         }
 
         /// <summary>Separates the published catalogue version from the SQL candidate version in a package response.</summary>

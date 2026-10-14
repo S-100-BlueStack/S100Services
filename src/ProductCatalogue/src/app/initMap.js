@@ -20,6 +20,8 @@ import {
 import { createAttributeFilterService } from "../features/map/filters/attributeFilterService.js";
 import { initAttributeFilterPanel } from "../features/map/filters/attributeFilterPanel.js";
 import { closePopupActionDropdown } from "../features/map/popups/popupActionDropdown.js";
+import { registerPopupSourceStatusRefreshHandler } from "../features/map/popups/popupRefreshBridge.js";
+import { createSourceStatusRefreshCoordinator } from "../features/dataSources/services/sourceStatusRefreshCoordinator.js";
 import { initProductCollectionTray } from "../features/productCollection/ui/productCollectionTray.js";
 import { initProductHistoryPanel } from "../features/timeline/ui/productHistoryPanel.js";
 import { createConfiguredLocatorSearchSources } from "../features/map/locator/locatorSearchSources.js";
@@ -202,6 +204,13 @@ export function initMap() {
   const refreshAfterPackageAction = () => {
     void refreshService.refresh({ source: "package-action" });
   };
+  const sourceStatusRefresh = createSourceStatusRefreshCoordinator({
+    dataSourceController: dataSourceRuntime.controller,
+    isGlobalRefreshInProgress: () => refreshService.isRefreshInProgress(),
+  });
+  const unregisterPopupSourceStatusRefresh = registerPopupSourceStatusRefreshHandler(
+    sourceStatusRefresh.request
+  );
   window.addEventListener("pc-package-action-refresh", refreshAfterPackageAction);
   return {
     map,
@@ -228,6 +237,8 @@ export function initMap() {
     navbarPopoverCoordinator,
     destroy() {
       window.removeEventListener("pc-package-action-refresh", refreshAfterPackageAction);
+      unregisterPopupSourceStatusRefresh();
+      sourceStatusRefresh.destroy();
       cleanupKeyboardClose?.();
       cleanupOverlapPicker?.();
       cleanupPopupHoverSync?.();

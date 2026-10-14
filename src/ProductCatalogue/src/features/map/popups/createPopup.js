@@ -22,8 +22,12 @@ import {
 import { onPopupExportStateChanged } from "./popupExportState.js";
 import { onProductOperationStateChanged } from "../../products/state/productOperationState.js";
 import { watchActiveProductJobs } from "../../products/services/productJobService.js";
-import { registerPopupRefreshHandler } from "./popupRefreshBridge.js";
+import {
+  registerPopupRefreshHandler,
+  requestPopupSourceStatusRefresh,
+} from "./popupRefreshBridge.js";
 import { createPopupProductMetadataColumns } from "./popupProductMetadata.js";
+import { detectPackagePopupStatusDrift } from "./popupSourceStatusDrift.js";
 
 const GENERIC_POPUP_EXCLUDED_FIELDS = new Set([
   "featureKey",
@@ -78,6 +82,7 @@ export function createPopup() {
           ? createPackageActionSession({
               sourceName: productContext.datasetName,
               identityKey: productContext.identityKey,
+              hasActivePackage: () => graphic.attributes?.hasActivePackage === true,
               memberNames: () =>
                 Object.fromEntries(
                   Object.entries(currentAttributes.workUnitMetadata?.members ?? {}).map(
@@ -99,7 +104,7 @@ export function createPopup() {
                 latestRefreshId += 1;
                 currentAttributes = applyGraphicAttributes(graphic, { exportMetadata: null });
                 render();
-                return refreshAndRender({ showFailureNotice: false });
+                return refreshAndRender({ showFailureNotice: false, syncSourceOnDrift: false });
               },
             })
           : null;
@@ -153,7 +158,7 @@ export function createPopup() {
         });
       }
 
-      async function refreshAndRender({ showFailureNotice = true } = {}) {
+      async function refreshAndRender({ showFailureNotice = true, syncSourceOnDrift = true } = {}) {
         if (packageSnapshot && !packageSnapshot.isCurrent()) {
           invalidatePackagePresentation();
           return false;
@@ -205,12 +210,23 @@ export function createPopup() {
           return false;
         }
 
+        const drift =
+          syncSourceOnDrift && packageSnapshot
+            ? detectPackagePopupStatusDrift({
+                productContext,
+                attributes: graphic.attributes,
+                detail: result.data,
+              })
+            : null;
         const hadMembers = Object.keys(currentAttributes.workUnitMetadata?.members ?? {}).length;
         currentAttributes = applyGraphicAttributes(
           graphic,
           mergePopupProductRefreshAttributes(productContext, result.data)
         );
         render();
+        if (drift && !disposed && packageSnapshot?.isCurrent()) {
+          void requestPopupSourceStatusRefresh(drift);
+        }
         if (!hadMembers && Object.keys(currentAttributes.workUnitMetadata?.members ?? {}).length) {
           void packageActions?.refresh();
         }

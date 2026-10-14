@@ -4,8 +4,12 @@ import {
   createDataSourceRegistry,
   getRuntimeSelectableDataSources,
 } from "../config/dataSourceRegistry.js";
-import { normalizeDataSourcePayload } from "../services/dataSourceNormalizer.js";
+import {
+  normalizeDataSourcePayload,
+  normalizeTargetedElectronicStatus,
+} from "../services/dataSourceNormalizer.js";
 import { createDataSourceLoader } from "../services/dataSourceLoader.js";
+import { createTargetedProductStatusLoader } from "../services/targetedProductStatusLoader.js";
 import { createAttributeFilterService } from "../../map/filters/attributeFilterService.js";
 import { createSourceAwareProductSearchIndex } from "../../map/search/sourceAwareProductSearchIndex.js";
 import { createDataSourceDerivedStateCoordinator } from "../services/dataSourceDerivedStateCoordinator.js";
@@ -15,6 +19,9 @@ import {
 } from "../../map/symbology/correctionSymbolResolver.js";
 import { getCorrectionSymbol } from "../../map/symbology/correctionSymbols.js";
 import { reconcileGraphicsLayers } from "../../map/core/reconcileGraphicsLayers.js";
+import { applyGraphicAttributes } from "../../map/state/featureState.js";
+import { createDataSourceMapAdapter } from "../map/dataSourceMapAdapter.js";
+import { reconcileSourceInteractions } from "../map/reconcileSourceInteractions.js";
 import { createDataSourceController } from "../services/dataSourceController.js";
 import { createLiveEncAoi } from "./fixtures/liveEncAoi.js";
 
@@ -33,6 +40,11 @@ function createLayer(payload) {
     geometry: { ...geometry, type: "polygon" },
     symbol: resolveSymbol(attributes),
   }));
+  // This matches the application-owned Esri Graphic transformer: featureKey is
+  // layer-prefixed while productIdentityKey remains the source-aware identity.
+  for (const graphic of graphics) {
+    graphic.attributes.featureKey = `${source.layerDefinitions[0].id}:${graphic.attributes.productIdentityKey}`;
+  }
   // Normalized products and layer attributes are the same application read model.
   const layer = {
     customId: "s101-products",
@@ -334,4 +346,159 @@ test("superseded source generation cannot publish older live package member stat
   assert.equal(committed.workUnitStatus.members[1].status, 11);
   assert.deepEqual(controller.getActiveSourceIds(), ["s101"]);
   controller.destroy();
+});
+
+test("targeted ENC status agrees with the full AOI projection without geometry", () => {
+  const aoi = createLiveEncAoi({ s101Status: 1, s57Status: 15 });
+  aoi.Attributes.Package.HasActivePackage = false;
+  const normalized = attributesOf(aoi);
+  const patch = normalizeTargetedElectronicStatus(
+    aoi.Attributes,
+    source,
+    aoi.Attributes.DatasetName
+  );
+  assert.equal(patch.status, normalized.status);
+  assert.deepEqual(patch.workUnitStatus, normalized.workUnitStatus);
+  assert.deepEqual(patch.workUnitMetadata, normalized.workUnitMetadata);
+  assert.equal(patch.hasActivePackage, false);
+  assert.equal(patch.errorMessage, normalized.errorMessage ?? null);
+  assert.equal(Object.hasOwn(patch, "geometry"), false);
+});
+
+test("targeted ENC status fails closed on contradictory or incomplete identities", () => {
+  const aoi = createLiveEncAoi();
+  aoi.Attributes.Package.HasActivePackage = true;
+  const correct = aoi.Attributes.DatasetName;
+  assert.throws(
+    () => normalizeTargetedElectronicStatus(aoi.Attributes, source, "OTHER"),
+    /identity/
+  );
+  delete aoi.Attributes.Package.HasActivePackage;
+  assert.throws(
+    () => normalizeTargetedElectronicStatus(aoi.Attributes, source, correct),
+    /incomplete/
+  );
+  aoi.Attributes.Package.HasActivePackage = true;
+  aoi.Attributes.Package.S57.DatasetName = correct;
+  assert.throws(
+    () => normalizeTargetedElectronicStatus(aoi.Attributes, source, correct),
+    /contradictory/
+  );
+});
+
+test("targeted status updates existing ENC Graphic symbol and retains S-57 independently", () => {
+  const original = createLiveEncAoi({ s101Status: 15, s57Status: 1 });
+  const updated = createLiveEncAoi({ s101Status: 1, s57Status: 1 });
+  original.Attributes.Package.HasActivePackage = false;
+  updated.Attributes.Package.HasActivePackage = false;
+  const layer = createLayer([original]);
+  const graphic = layer.graphics[0];
+  const previousSymbol = graphic.symbol;
+  const patch = normalizeTargetedElectronicStatus(
+    updated.Attributes,
+    source,
+    updated.Attributes.DatasetName
+  );
+  applyGraphicAttributes(graphic, patch);
+  assert.equal(layer.graphics[0], graphic);
+  assert.equal(graphic.attributes.workUnitStatus.members[0].status, 1);
+  assert.equal(graphic.attributes.workUnitStatus.members[1].status, 1);
+  assert.equal(graphic.attributes.hasActivePackage, false);
+  assert.equal(graphic.attributes.status, patch.status);
+  assert.equal(areCorrectionSymbolsEquivalent(graphic.symbol, getCorrectionSymbol(1)), true);
+  assert.notDeepEqual(graphic.symbol, previousSymbol);
+});
+
+test("targeted status publishes to a real layer-prefixed ENC Graphic without AOI reload", async () => {
+  const initial = createLiveEncAoi({ workflowStatus: 15, s101Status: 15, s57Status: 1 });
+  const idle = createLiveEncAoi({ workflowStatus: 1, s101Status: 1, s57Status: 1 });
+  initial.Attributes.Package.HasActivePackage = false;
+  idle.Attributes.Package.HasActivePackage = false;
+  const currentLayers = [];
+  const registryLayers = new Map();
+  const adapter = createDataSourceMapAdapter({
+    map: {
+      layers: currentLayers,
+      add(layer) {
+        currentLayers.push(layer);
+      },
+      remove(layer) {
+        const index = currentLayers.indexOf(layer);
+        if (index >= 0) currentLayers.splice(index, 1);
+      },
+    },
+    layerRegistry: {
+      registerLayer(layer) {
+        registryLayers.set(layer.customId, layer);
+      },
+      unregisterLayer(layer) {
+        registryLayers.delete(layer.customId);
+      },
+      getLayer(id) {
+        return registryLayers.get(id) ?? null;
+      },
+    },
+    createLayer: async () => createLayer([initial]),
+  });
+  const candidate = await adapter.prepareSource({
+    source,
+    normalized: normalize([initial]),
+    generation: 1,
+  });
+  const committed = adapter.commitSource(candidate, { isCurrent: () => true });
+  assert.equal(committed.committed, true);
+  const graphic = committed.layers[0].graphics[0];
+  const oldSymbol = graphic.symbol;
+  const identity = graphic.attributes.productIdentityKey;
+  assert.equal(graphic.attributes.featureKey, `${source.layerDefinitions[0].id}:${identity}`);
+  // Exercise the real HTTP JSON envelope (ApiResponse<Attributes>) before
+  // the map adapter. The direct AOI fixture alone missed the production failure.
+  const load = createTargetedProductStatusLoader({
+    request: async () => ({
+      success: true,
+      status: 200,
+      data: { Success: true, Data: idle.Attributes, TotalHits: 1 },
+    }),
+  });
+  const response = await load(source, idle.Attributes.DatasetName);
+  const patch = normalizeTargetedElectronicStatus(response, source, idle.Attributes.DatasetName);
+  const publication = adapter.publishProductStatus({
+    source,
+    datasetName: idle.Attributes.DatasetName,
+    attributes: patch,
+    isCurrent: () => true,
+  });
+  assert.deepEqual(
+    { published: publication.published, changed: publication.changed },
+    { published: true, changed: true }
+  );
+  assert.equal(committed.layers[0].graphics[0], graphic);
+  assert.equal(graphic.attributes.workUnitStatus.members[0].status, 1);
+  assert.equal(graphic.attributes.workUnitStatus.members[1].status, 1);
+  assert.equal(graphic.attributes.productIdentityKey, identity);
+  assert.equal(graphic.attributes.featureKey, `${source.layerDefinitions[0].id}:${identity}`);
+  assert.notDeepEqual(graphic.symbol, oldSymbol);
+  let popupRefreshes = 0;
+  const popup = { visible: true, selectedFeature: graphic };
+  reconcileSourceInteractions({
+    sourceId: source.id,
+    layers: committed.layers,
+    view: { popup },
+    refreshPopup(datasetName) {
+      assert.equal(datasetName, idle.Attributes.DatasetName);
+      assert.equal(graphic.attributes.workUnitStatus.members[0].status, 1);
+      popupRefreshes += 1;
+      return true;
+    },
+  });
+  assert.equal(popupRefreshes, 1);
+  assert.equal(popup.selectedFeature, graphic);
+  const again = adapter.publishProductStatus({
+    source,
+    datasetName: idle.Attributes.DatasetName,
+    attributes: patch,
+    isCurrent: () => true,
+  });
+  assert.equal(again.published, true);
+  assert.equal(again.changed, false);
 });

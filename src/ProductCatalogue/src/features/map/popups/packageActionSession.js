@@ -21,6 +21,7 @@ export function createPackageActionSession({
   sourceName,
   identityKey,
   memberNames,
+  hasActivePackage = () => true,
   isCurrent,
   onChange,
   onDiscardSucceeded,
@@ -104,6 +105,15 @@ export function createPackageActionSession({
   async function refresh() {
     if (!current() || busy || hasDiscarded) return false;
     const id = ++requestId;
+    // The AOI/source projection explicitly identifies active package ownership.
+    // No package is ordinary; do not probe a mutation-only endpoint for it.
+    if (hasActivePackage() !== true) {
+      snapshot = null;
+      simulatedAccept = false;
+      restrictionCode = "PACKAGE_NOT_FOUND";
+      publish();
+      return false;
+    }
     try {
       const response = await request(`${path}/actions`, {
         method: "GET",
@@ -112,9 +122,13 @@ export function createPackageActionSession({
       });
       if (!current() || id !== requestId) return false;
       snapshot = response.success ? validate(response.data) : null;
+      const packageMissing =
+        response.data?.packageAvailable === false ||
+        response.data?.PackageAvailable === false ||
+        response.status === 404;
       restrictionCode =
         snapshot?.restrictionCode ??
-        (response.status === 404 ? "PACKAGE_NOT_FOUND" : "PACKAGE_STATE_UNAVAILABLE");
+        (packageMissing ? "PACKAGE_NOT_FOUND" : "PACKAGE_STATE_UNAVAILABLE");
       if (!snapshot) simulatedAccept = false;
       publish();
       return Boolean(snapshot);
@@ -135,7 +149,7 @@ export function createPackageActionSession({
   }
 
   function projection() {
-    if (!current()) return null;
+    if (!current() || hasActivePackage() !== true) return null;
     if (!snapshot && !demoEnabled) return null;
     return {
       verified: true,

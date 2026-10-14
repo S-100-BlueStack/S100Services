@@ -11,6 +11,8 @@ export function createDataSourceController({
   persistence,
   loadSource,
   normalizeSource,
+  loadTargetedStatus,
+  normalizeTargetedStatus,
   mapAdapter,
   lifecycle,
   noticeError = () => {},
@@ -286,6 +288,66 @@ export function createDataSourceController({
     return createSummary("refresh", results);
   }
 
+  async function refreshProductStatus(sourceId, datasetName) {
+    if (destroyed) return { success: false, skipped: true, reason: "destroyed" };
+    const source = getDataSourceDefinition(registry, sourceId);
+    const name = String(datasetName ?? "").trim();
+    const state = sourceStates.get(sourceId);
+    const context = operationContexts.get(sourceId);
+    if (!source?.targetedStatus || !name || !loadTargetedStatus || !normalizeTargetedStatus) {
+      return { success: false, skipped: true, reason: "unsupported" };
+    }
+    if (
+      !state?.enabled ||
+      !state.requestedEnabled ||
+      state.loading ||
+      !context ||
+      context.abortController.signal.aborted
+    ) {
+      return { success: false, skipped: true, reason: "inactive-or-loading" };
+    }
+    const generation = state.generation;
+    const isCurrent = () =>
+      isCurrentOperation(sourceId, generation, true) &&
+      !sourceStates.get(sourceId)?.loading &&
+      !context.abortController.signal.aborted;
+    try {
+      const response = await loadTargetedStatus(source, name, {
+        signal: context.abortController.signal,
+      });
+      if (!isCurrent()) return createStaleResult(sourceId, generation);
+      const attributes = normalizeTargetedStatus(response, source, name);
+      if (!isCurrent()) return createStaleResult(sourceId, generation);
+      const publication = mapAdapter.publishProductStatus({
+        source,
+        datasetName: name,
+        attributes,
+        isCurrent,
+      });
+      if (!publication.published) {
+        return { sourceId, success: false, skipped: true, reason: publication.reason };
+      }
+      if (publication.changed) {
+        const publishedGeneration = generation + 1;
+        updateState(sourceId, { generation: publishedGeneration });
+        onLayersChanged({ sourceId, type: "refreshed" });
+        lifecycle?.emit?.("refreshed", {
+          sourceId,
+          source,
+          reason: "targeted-product-status",
+          generation: publishedGeneration,
+          layers: publication.layers,
+        });
+      }
+      return { sourceId, success: true, changed: publication.changed };
+    } catch (error) {
+      if (!isCurrent()) return createStaleResult(sourceId, generation);
+      // The last complete AOI remains authoritative when a targeted read fails.
+      console.warn("[Data sources] Targeted Product status refresh failed", error);
+      return { sourceId, success: false, error };
+    }
+  }
+
   async function resetToDefaults({ reason = "local-reset", silent = false } = {}) {
     assertNotDestroyed();
     selectionRevision += 1;
@@ -441,6 +503,7 @@ export function createDataSourceController({
     activateSource,
     deactivateSource,
     refreshActive,
+    refreshProductStatus,
     resetToDefaults,
     getState,
     getStates,

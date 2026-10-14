@@ -40,7 +40,8 @@ public static class ExportOutputPath
     public static string GetCandidateDirectory(string outputRoot, string datasetName, ProductSpecification productSpecification, int edition, int update) {
         Validate(outputRoot, datasetName, edition, update);
 
-        // The S-101 compiler writes S100_ROOT directly beneath the edition directory.
+        // The edition root owns staging input and index files; the compiler's
+        // exchange-set output is placed in a dataset-specific subdirectory.
         if (productSpecification == ProductSpecification.S101)
             return Path.Combine(outputRoot, datasetName, edition.ToString(CultureInfo.InvariantCulture));
 
@@ -48,7 +49,15 @@ public static class ExportOutputPath
     }
 
     /// <summary>
-    /// Gets the S-101 dataset-files directory produced by the compiler inside an edition exchange set.
+    /// Gets the S-101 exchange-set root emitted beneath the compiler's dataset-specific directory.
+    /// This is distinct from the edition directory containing staging YAML and index files.
+    /// </summary>
+    public static string GetS101ExchangeSetDirectory(string outputRoot, string datasetName, int edition, int update) {
+        return Path.Combine(GetCandidateDirectory(outputRoot, datasetName, ProductSpecification.S101, edition, update), datasetName, "S100_ROOT");
+    }
+
+    /// <summary>
+    /// Gets the S-101 dataset-files directory produced by the compiler inside its exchange set.
     /// </summary>
     /// <param name="outputRoot">The configured root export directory.</param>
     /// <param name="datasetName">The authoritative dataset name.</param>
@@ -56,7 +65,7 @@ public static class ExportOutputPath
     /// <param name="update">The candidate update number used for input validation.</param>
     /// <returns>The directory containing the S-101 <c>.000</c> and update files.</returns>
     public static string GetS101DatasetFilesDirectory(string outputRoot, string datasetName, int edition, int update) {
-        return Path.Combine(GetCandidateDirectory(outputRoot, datasetName, ProductSpecification.S101, edition, update), "S100_ROOT", "S-101", "DATASET_FILES");
+        return Path.Combine(GetS101ExchangeSetDirectory(outputRoot, datasetName, edition, update), "S-101", "DATASET_FILES");
     }
     private static void Validate(string outputRoot, string datasetName, int edition, int update) {
         if (string.IsNullOrWhiteSpace(outputRoot))

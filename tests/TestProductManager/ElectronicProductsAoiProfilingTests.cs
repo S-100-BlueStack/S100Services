@@ -72,6 +72,40 @@ namespace TestProductCatalogueAPI
         }
 
         [Fact]
+        public async Task TargetedEncStatusMatchesGlobalStatusWithoutGeometryOrArcGisBoundaryReads()
+        {
+            const string sourceName = "101DK001GSOUT";
+            var s57Name = $"57{sourceName}";
+            var productManager = new FakeElectronicProductManager(
+                new Dictionary<string, string> { [sourceName] = "{\"rings\":[]}" },
+                new Dictionary<string, ElectronicProduct> {
+                    [sourceName] = CreateElectronicProduct(sourceName, 90_000, 1),
+                    [s57Name] = CreateElectronicProduct(s57Name, 90_000, 1, "S-57")
+                });
+            var workflows = new InMemoryProductRepository();
+            var s101 = await workflows.GetOrCreateTrackAsync(sourceName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 0, 0);
+            await workflows.GetOrCreateTrackAsync(s57Name, ProductSpecification.S57, ExportEngineKind.IsoIec8211, 1, 0);
+            await workflows.SetStateAsync(s101.Id, ProductState.Error, "system", DateTime.UtcNow, "VALIDATION", "S-101 failed.");
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var controller = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
+                new FakeProductManager(productManager), workflows, workflows) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+
+            var global = Assert.Single(Assert.IsType<List<AOIResponse>>(
+                Assert.IsType<OkObjectResult>(await controller.GetAllElectronicProductsAOI()).Value));
+            var result = Assert.IsType<ApiResponse<Attributes>>(
+                Assert.IsType<OkObjectResult>(await controller.GetElectronicProductPackageStatus(sourceName, CancellationToken.None)).Value);
+            Assert.Equal(global.Attributes?.Status, result.Data?.Status);
+            Assert.Equal(global.Attributes?.Package?.Status, result.Data?.Package?.Status);
+            Assert.Equal(global.Attributes?.Package?.S101.Status, result.Data?.Package?.S101.Status);
+            Assert.Equal(global.Attributes?.Package?.S57.Status, result.Data?.Package?.S57.Status);
+            Assert.False(result.Data!.Package!.HasActivePackage);
+            Assert.Equal(0, productManager.TargetedBoundaryCallCount);
+            Assert.Equal(1, productManager.BulkAoiCallCount);
+        }
+
+        [Fact]
         public async Task ProductDetailDoesNotShowDiscardedPublishedTrackAsAnExport() {
             const string sourceName = "101DK001GSOUT";
             var s57Name = $"57{sourceName}";

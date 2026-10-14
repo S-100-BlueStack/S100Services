@@ -217,6 +217,10 @@ function createElectronicSource({
     userSelectable: mainMapSelectable,
     defaultEnabled: mainMapSelectable,
     workUnit,
+    targetedStatus:
+      workUnit?.kind === "package"
+        ? { type: "electronic-package-status", path: "electronicproducts" }
+        : null,
     loader: workUnit
       ? {
           type: "http-json",

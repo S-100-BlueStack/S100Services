@@ -80,17 +80,25 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
         return await ReadS101ExportResultAsync(request, compilerIndexPath, previousIndexPath, cancellationToken);
     }
 
-    /// <summary>Reads the S-101 exchange set from the compiler's actual edition-root layout.</summary>
+    /// <summary>Reads the S-101 exchange set from the compiler's dataset-specific output layout.</summary>
     /// <remarks>Separated from process execution so output validation and archiving can be regression-tested without a compiler.</remarks>
     internal static async Task<ExportEngineResult> ReadS101ExportResultAsync(ExportEngineRequest request, string compilerIndexPath, string previousIndexPath, CancellationToken cancellationToken = default) {
         cancellationToken.ThrowIfCancellationRequested();
         var outputDirectory = ExportOutputPath.GetCandidateDirectory(request.OutputRoot, request.DatasetName, request.ProductSpecification, request.Edition, request.Update);
-        var datasetPath = Path.Combine(ExportOutputPath.GetS101DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update), $"{request.DatasetName}.{request.Update:000}");
+        var datasetFilesDirectory = ExportOutputPath.GetS101DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update);
+        var datasetPath = Path.Combine(datasetFilesDirectory, $"{request.DatasetName}.{request.Update:000}");
         var datasetFile = new FileInfo(datasetPath);
         if (!datasetFile.Exists || datasetFile.Length == 0)
             throw new InvalidOperationException($"The S-101 compiler did not create a non-empty dataset for '{request.DatasetName}'.");
+        // An update must not archive only its .NNN while the existing edition's
+        // .000 remains in an older compiler layout outside this exchange set.
+        if (request.Update > 0) {
+            var baseDataset = new FileInfo(Path.Combine(datasetFilesDirectory, $"{request.DatasetName}.000"));
+            if (!baseDataset.Exists || baseDataset.Length == 0)
+                throw new InvalidOperationException($"The S-101 exchange set is missing a non-empty base dataset for '{request.DatasetName}'.");
+        }
 
-        var s100Root = Path.Combine(outputDirectory, "S100_ROOT");
+        var s100Root = ExportOutputPath.GetS101ExchangeSetDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update);
         var signaturePath = Path.Combine(s100Root, "CATALOG.SIGN");
         var index = await File.ReadAllBytesAsync(compilerIndexPath, cancellationToken);
         var signature = await File.ReadAllBytesAsync(signaturePath, cancellationToken);
