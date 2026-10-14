@@ -38,12 +38,20 @@ namespace TestProductCatalogueAPI
                 new Dictionary<string, string> { [s101Name] = "{\"rings\":[]}" },
                 new Dictionary<string, ElectronicProduct> { [s101Name] = s101, [s57Name] = s57 });
             using var cache = new MemoryCache(new MemoryCacheOptions());
+            var productManager = new FakeProductManager(products);
+            var workflows = new InMemoryProductRepository();
+            // Product detail uses a single lookup; the AOI-only recording repository
+            // intentionally rejects that method to enforce batch reads.
+            var detailController = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
+                productManager, workflows, workflows) {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
             var controller = new ElectronicProductsController(new RecordingLogger<ElectronicProductsController>(), cache,
-                new FakeProductManager(products), new RecordingProductRepository(new Dictionary<string, ProductRecord?>()), new InMemoryProductRepository()) {
+                productManager, new RecordingProductRepository(new Dictionary<string, ProductRecord?>()), workflows) {
                 ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
             };
 
-            var detail = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(await controller.GetElectronicProduct(s101Name)).Value).Data!;
+            var detail = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(await detailController.GetElectronicProduct(s101Name)).Value).Data!;
             Assert.Empty(detail.Exports!);
             Assert.Equal(s57Name, detail.S57?.Name);
             Assert.Equal(4, detail.S57?.Edition);
@@ -89,6 +97,7 @@ namespace TestProductCatalogueAPI
             Assert.Equal("S57", s57Export.Type);
             Assert.Equal(5, s57Export.Edition);
 
+            await workflows.SetStateAsync(s57.Id, ProductState.ReadyForDistribution, "operator", DateTime.UtcNow);
             await workflows.DiscardCandidateAsync(s57.Id, "operator", DateTime.UtcNow);
             var afterDiscard = await controller.GetElectronicProduct(sourceName);
             var discarded = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(afterDiscard).Value);

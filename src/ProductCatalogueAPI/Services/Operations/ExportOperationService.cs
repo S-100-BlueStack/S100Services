@@ -40,10 +40,18 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
         targetDatasetName = publicVersion.DatasetName;
         var initialPublishedEdition = publicVersion.Edition ?? 0;
         var initialPublishedUpdate = publicVersion.Update ?? 0;
+        var sourceDatasetName = ResolveSourceDatasetName(targetDatasetName, productSpecification);
+        // A manual Product export must not overwrite the shared YAML/revision of an
+        // active ENC package. Only the detector may use ExecutePackageExportAsync.
+        if (datasetYamlOverride is null && packages is not null) {
+            var active = (await packages.GetActiveAsync([sourceDatasetName], cancellationToken, includeSourceYaml: false))
+                .GetValueOrDefault(sourceDatasetName);
+            if (active is not null)
+                throw new ExportOperationRejectedException("This Product belongs to an active ENC package. Use the package workflow.");
+        }
         var track = await _workflowRepository.GetOrCreateTrackAsync(targetDatasetName, productSpecification, engine.Kind, initialPublishedEdition, initialPublishedUpdate, cancellationToken);
         EnsureExportCanStart(track);
         var (edition, update) = GetCandidateVersion(track, revisionType);
-        var sourceDatasetName = ResolveSourceDatasetName(targetDatasetName, productSpecification);
 
         cancellationToken.ThrowIfCancellationRequested();
         beforeMutation?.Invoke();
@@ -158,32 +166,53 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
         var product = ResolveRequiredExportProduct(datasetName);
         var targetDatasetName = product.DatasetName;
         var productSpecification = product.ProductSpecification;
+        var sourceName = ResolveSourceDatasetName(targetDatasetName, productSpecification);
+        EncPackage? active = null;
+        if (packages is not null)
+            active = (await packages.GetActiveAsync([sourceName], cancellationToken, includeSourceYaml: false)).GetValueOrDefault(sourceName);
+
+        // The public/manual route must never discard just one member of a live package.
+        // DPC's own pre-send replacement uses the explicit internal scan-bound option.
+        if (active is not null && !preservePackageScanBound)
+            throw new ExportOperationRejectedException("This Product belongs to an active ENC package. Discard the whole package.");
+        if (active is not null && productSpecification == ProductSpecification.S57 &&
+            !string.Equals(active.S57DatasetName, targetDatasetName, StringComparison.OrdinalIgnoreCase))
+            throw new ExportOperationRejectedException("The ENC package member mapping has changed. Discard was not started.");
+
         var track = await _workflowRepository.GetTrackAsync(targetDatasetName, productSpecification, cancellationToken)
             ?? throw new ExportOperationRejectedException($"No {productSpecification} export track exists for '{datasetName}'.");
+        if (!ProductCandidateRecovery.CanDiscard(track.State, track.CandidatePreviousState, track.CandidateEdition, track.CandidateUpdate))
+            throw new ExportOperationRejectedException("There is no eligible unsent Product candidate to discard.");
 
-        EncPackage? active = null;
-        if (packages is not null) {
-            var sourceName = ResolveSourceDatasetName(targetDatasetName, productSpecification);
-            active = (await packages.GetActiveAsync([sourceName], cancellationToken, includeSourceYaml: false)).GetValueOrDefault(sourceName);
-        }
-        if (!track.CandidateEdition.HasValue || !track.CandidateUpdate.HasValue) {
-            if (active is null || active.ErrorMessage is null && track.State is not (ProductState.Error or ProductState.Rejected))
-                throw new ExportOperationRejectedException("There is no unverified candidate export to discard.");
-            beforeMutation?.Invoke();
-            if (track.State is ProductState.Error or ProductState.Rejected)
-                await _workflowRepository.DiscardCandidateAsync(track.Id, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
-            await packages!.DiscardAsync(targetDatasetName, productSpecification, cancellationToken, preservePackageScanBound);
-            return new ExportOperationResult(ExportOperationContract.DiscardCompletedCode, "The failed ENC candidate was discarded.");
-        }
-        if (track.State is ProductState.InTransit or ProductState.AcceptedForDistribution or ProductState.Published)
-            throw new ExportOperationRejectedException($"A candidate in state {track.State} cannot be discarded.");
+        // Keep the candidate output identity before Discard clears the SQL-owned fields.
+        // The repository may mutate the returned track object in place.
+        var candidateOutput = track.CandidateEdition is int edition && track.CandidateUpdate is int update
+            ? new ExportOutputIdentity(targetDatasetName, productSpecification, edition, update, _electronicProductManager.OutputFolder)
+            : null;
 
+        // The repository repeats the final-state guard, including IC-ENC reservations,
+        // while holding the track row in its serializable transaction.
         beforeMutation?.Invoke();
-        var engine = _exportEngines.GetRequiredEngine(productSpecification);
-        await engine.DeleteOutputAsync(new ExportOutputIdentity(targetDatasetName, productSpecification, track.CandidateEdition.Value, track.CandidateUpdate.Value, _electronicProductManager.OutputFolder), cancellationToken);
         await _workflowRepository.DiscardCandidateAsync(track.Id, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
-        if (active is not null)
-            await packages!.DiscardAsync(targetDatasetName, productSpecification, cancellationToken, preservePackageScanBound);
+        if (active is not null) {
+            // Once the track transaction commits, cancellation must not skip the
+            // matching package flag/removal in the detector-owned refresh flow.
+            await packages!.DiscardAsync(targetDatasetName, productSpecification, CancellationToken.None, preservePackageScanBound);
+        }
+
+        // SQL owns the result. A failed filesystem cleanup must not misreport a committed
+        // Discard as rolled back; the Worker holds the Product lock until this finishes.
+        if (candidateOutput is not null) {
+            try {
+                await _exportEngines.GetRequiredEngine(productSpecification).DeleteOutputAsync(
+                    candidateOutput, cancellationToken);
+            }
+            catch (Exception exception) {
+                _logger.LogWarning(exception,
+                    "Product candidate was discarded in SQL, but output cleanup requires review. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.",
+                    targetDatasetName, productSpecification);
+            }
+        }
         _logger.LogInformation("Unverified candidate export discarded. DatasetName: {DatasetName}. ProductSpecification: {ProductSpecification}.", targetDatasetName, productSpecification);
         return new ExportOperationResult(ExportOperationContract.DiscardCompletedCode, ExportOperationContract.DiscardCompletedMessage);
     }
@@ -216,7 +245,7 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
     private static void EnsureExportCanStart(ProductExportTrackRecord track) {
         if (track.IsManuallyFrozen)
             throw new ExportOperationRejectedException($"An export could not be created now because the {track.ProductSpecification} product has a manual hold.");
-        if (track.State is ProductState.Frozen or ProductState.InTransit or ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or ProductState.AcceptedForDistribution)
+        if (track.State is ProductState.Frozen or ProductState.InTransit or ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or ProductState.AcceptedForDistribution or ProductState.Rejected)
             throw new ExportOperationRejectedException($"An export could not be created now. Current {track.ProductSpecification} state: {track.State}.");
     }
 

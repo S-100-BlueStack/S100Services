@@ -145,10 +145,14 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
 
             var s101 = await workflowRepository.GetOrCreateTrackAsync(sourceName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, s101Version.Edition ?? 0, s101Version.Update ?? 0, cancellationToken);
             var s57 = await workflowRepository.GetOrCreateTrackAsync(s57Name, ProductSpecification.S57, ExportEngineKind.IsoIec8211, s57Version.Edition ?? 0, s57Version.Update ?? 0, cancellationToken);
-            if (IsRefreshBlocked(s101) || IsRefreshBlocked(s57) || previous is null &&
-                (s101.State is ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected ||
-                 s57.State is ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected)) {
+            var hasUnownedCandidate = HasUnownedFinalCandidate(previous, s101, s57);
+            if (IsRefreshBlocked(s101) || IsRefreshBlocked(s57) || hasUnownedCandidate) {
+                // An unrelated manual Product export is not an ENC package. Never
+                // adopt its candidate or invent an active package to expose actions.
                 await packages.MarkReplayAsync(sourceName, replay.GetValueOrDefault(sourceName, sinceUtc), cancellationToken);
+                if (hasUnownedCandidate)
+                    logger.LogWarning("ENC package creation deferred because a Product candidate has no active package owner. SourceDatasetName: {SourceDatasetName}. S101State: {S101State}. S57State: {S57State}. Recover the standalone candidate before replay.",
+                        sourceName, s101.State, s57.State);
                 continue;
             }
 
@@ -250,6 +254,12 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
     /// <summary>Protects an operator hold, a build in progress, or a candidate submitted for approval.</summary>
     internal static bool IsRefreshBlocked(ProductExportTrackRecord? track) => track?.IsManuallyFrozen == true ||
         track?.State is ProductState.Frozen or ProductState.InTransit or ProductState.AcceptedForDistribution or ProductState.Published or ProductState.Exporting or ProductState.Validating;
+
+    /// <summary>A standalone final Product candidate cannot be adopted by a newly detected package.</summary>
+    internal static bool HasUnownedFinalCandidate(EncPackage? activePackage, ProductExportTrackRecord s101, ProductExportTrackRecord s57) =>
+        activePackage is null &&
+        (s101.State is ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected ||
+         s57.State is ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected);
 
     private async Task DiscardForRefreshAsync(EncPackage package, ProductExportTrackRecord track, ProductSpecification specification, CancellationToken cancellationToken) {
         if (specification == ProductSpecification.S57 ? package.S57Discarded : package.S101Discarded)

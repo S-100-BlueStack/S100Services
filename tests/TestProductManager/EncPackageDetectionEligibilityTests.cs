@@ -23,6 +23,19 @@ public sealed class EncPackageDetectionEligibilityTests
         Assert.Equal(blocked, EncPackageDetectionService.IsRefreshBlocked(track));
     }
 
+    [Theory]
+    [InlineData(ProductState.Error, true)]
+    [InlineData(ProductState.Rejected, true)]
+    [InlineData(ProductState.ReadyForDistribution, true)]
+    [InlineData(ProductState.Idle, false)]
+    public void StandaloneFinalProductBlocksAutomaticPackageAdoption(ProductState state, bool expected) {
+        var s101 = new ProductExportTrackRecord { State = state };
+        var s57 = new ProductExportTrackRecord { State = ProductState.Idle };
+        Assert.Equal(expected, EncPackageDetectionService.HasUnownedFinalCandidate(null, s101, s57));
+        Assert.False(EncPackageDetectionService.HasUnownedFinalCandidate(
+            new EncPackage { SourceDatasetName = "101DK001" }, s101, s57));
+    }
+
     [Fact]
     public void ManualHoldBlocksRefreshEvenWhenTheCandidateFailed() {
         var track = new ProductExportTrackRecord { State = ProductState.Error, IsManuallyFrozen = true };

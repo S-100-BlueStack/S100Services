@@ -81,7 +81,7 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
             if (track is null || track.IsFrozen ||
                 track.Edition.HasValue != track.Update.HasValue ||
                 track.State is ProductState.InTransit or ProductState.AcceptedForDistribution or ProductState.Published or ProductState.Exporting or ProductState.Validating or ProductState.Frozen ||
-                track.PreviousState is ProductState.InTransit or ProductState.AcceptedForDistribution or ProductState.Exporting or ProductState.Validating or ProductState.Frozen ||
+                track.PreviousState is ProductState.InTransit or ProductState.AcceptedForDistribution or ProductState.ReadyForDistribution or ProductState.Published or ProductState.Exporting or ProductState.Validating or ProductState.Frozen ||
                 (member.Discarded && (track.Edition.HasValue || track.PreviousState.HasValue)) ||
                 (!member.Discarded && track.State is not (ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected)) ||
                 (!member.Discarded && !track.Edition.HasValue && track.State is not (ProductState.Error or ProductState.Rejected)))
@@ -105,7 +105,7 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
 
         var outputs = new List<EncPackageDiscardOutput>(2);
         foreach (var track in candidates.Where(value => !value.Discarded)) {
-            var restored = track.PreviousState ?? ProductState.Idle;
+            var restored = ProductCandidateRecovery.RestoredState(track.PreviousState);
             var restoredAt = nowUtc.AddTicks(1);
             await connection.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO dbo.ProductStateHistory

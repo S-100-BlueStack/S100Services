@@ -121,6 +121,7 @@ public sealed class ExportOperationServiceTests
         Assert.Null(repository.Track.CandidateEdition);
         Assert.Null(repository.Track.CandidatePreviousState);
         Assert.Equal(1, engine.DeleteCalls);
+        Assert.Equal(new ExportOutputIdentity("101DK001", ProductSpecification.S101, 5, 0, "output"), engine.LastDeletedOutput);
         Assert.Equal(0, products.SnapshotCalls);
         Assert.Equal(0, products.AttachmentCalls);
     }
@@ -143,24 +144,147 @@ public sealed class ExportOperationServiceTests
         Assert.Null(repository.Track.CandidateEdition);
         Assert.Null(repository.Track.CandidatePreviousState);
         Assert.Equal(1, engine.DeleteCalls);
+        Assert.Equal(new ExportOutputIdentity("101DK001", ProductSpecification.S101, 5, 0, "output"), engine.LastDeletedOutput);
         Assert.Equal(0, products.SnapshotCalls);
         Assert.Equal(0, products.AttachmentCalls);
     }
 
     [Fact]
-    public async Task DiscardAcknowledgesFailureBeforeCandidateCreationAndDoesNotReplayUnchangedPackage() {
+    public async Task InternalPackageRefreshAcknowledgesFailureBeforeCandidateCreation() {
         var repository = new RecordingWorkflowRepository { InitialState = ProductState.Error };
         var packages = new RecordingPackageRepository();
         var engine = new RecordingExportEngine();
         var service = CreateService(new RecordingElectronicProductManager(), repository, engine, new SummaryResponse(), packages: packages);
 
-        await service.ExecuteDiscardAsync("101DK001", "developer");
+        await service.ExecuteDiscardAsync("101DK001", "system", preservePackageScanBound: true);
 
         Assert.Equal(ProductState.Idle, repository.Track.State);
         Assert.Null(repository.Track.CandidateEdition);
         Assert.Equal(0, engine.DeleteCalls);
         Assert.Equal(1, packages.DiscardCalls);
-        Assert.False(packages.PreserveScanBound);
+        Assert.True(packages.PreserveScanBound);
+    }
+
+    [Fact]
+    public async Task ManualDiscardRecoversStandaloneErrorWithoutCandidateVersion() {
+        var repository = new RecordingWorkflowRepository { InitialState = ProductState.Error };
+        var engine = new RecordingExportEngine();
+        var service = CreateService(new RecordingElectronicProductManager(), repository, engine, new SummaryResponse(),
+            packages: new RecordingPackageRepository { HasActivePackage = false });
+
+        var result = await service.ExecuteDiscardAsync("101DK001", "operator");
+
+        Assert.Equal(ExportOperationContract.DiscardCompletedCode, result.Code);
+        Assert.Equal(ProductState.Idle, repository.Track.State);
+        Assert.Null(repository.Track.CandidateEdition);
+        Assert.Equal(0, engine.DeleteCalls);
+    }
+
+    [Fact]
+    public async Task ManualDiscardCannotSplitAnActiveEncPackage() {
+        var repository = new RecordingWorkflowRepository { CandidateEdition = 5, CandidateUpdate = 0, InitialState = ProductState.Error };
+        var engine = new RecordingExportEngine();
+        var packages = new RecordingPackageRepository();
+        var track = await repository.GetTrackAsync("101DK001", ProductSpecification.S101);
+        var service = CreateService(new RecordingElectronicProductManager(), repository, engine, new SummaryResponse(), packages: packages);
+
+        var exception = await Assert.ThrowsAsync<ExportOperationRejectedException>(
+            () => service.ExecuteDiscardAsync("101DK001", "operator"));
+
+        Assert.Contains("whole package", exception.Message);
+        Assert.Equal(ProductState.Error, track!.State);
+        Assert.Equal(5, track.CandidateEdition);
+        Assert.Equal(0, engine.DeleteCalls);
+        Assert.Equal(0, packages.DiscardCalls);
+    }
+
+    [Fact]
+    public async Task ManualExportCannotReplaceActiveEncPackageYamlOrCandidate() {
+        var repository = new RecordingWorkflowRepository { InitialState = ProductState.Error, CandidateEdition = 5, CandidateUpdate = 0 };
+        var engine = new RecordingExportEngine();
+        var products = new RecordingElectronicProductManager();
+        var service = CreateService(products, repository, engine, new SummaryResponse(), packages: new RecordingPackageRepository());
+
+        await Assert.ThrowsAsync<ExportOperationRejectedException>(
+            () => service.ExecuteExportAsync("101DK001", ExportRevisionType.NewEdition, "operator"));
+
+        Assert.Equal(0, products.SnapshotCalls);
+        Assert.Equal(0, engine.ExportCalls);
+    }
+
+    [Fact]
+    public async Task ExternalRejectionCannotBeRetriedWithoutAcknowledgement() {
+        var repository = new RecordingWorkflowRepository { InitialState = ProductState.Rejected };
+        var engine = new RecordingExportEngine();
+        var service = CreateService(new RecordingElectronicProductManager(), repository, engine, new SummaryResponse());
+
+        await Assert.ThrowsAsync<ExportOperationRejectedException>(
+            () => service.ExecuteExportAsync("101DK001", ExportRevisionType.NewEdition, "operator"));
+
+        Assert.Equal(ProductState.Rejected, repository.Track.State);
+        Assert.Equal(0, engine.ExportCalls);
+    }
+
+    [Fact]
+    public async Task StandaloneDiscardCannotBypassExternalRejectionAcknowledgement() {
+        var repository = new RecordingWorkflowRepository { InitialState = ProductState.Rejected, CandidateEdition = 5, CandidateUpdate = 0 };
+        var engine = new RecordingExportEngine();
+        var service = CreateService(new RecordingElectronicProductManager(), repository, engine, new SummaryResponse());
+
+        await Assert.ThrowsAsync<ExportOperationRejectedException>(
+            () => service.ExecuteDiscardAsync("101DK001", "operator"));
+
+        Assert.Equal(ProductState.Rejected, repository.Track.State);
+        Assert.Equal(0, engine.DeleteCalls);
+    }
+
+    [Theory]
+    [InlineData(ProductState.Exporting)]
+    [InlineData(ProductState.Validating)]
+    [InlineData(ProductState.InTransit)]
+    [InlineData(ProductState.AcceptedForDistribution)]
+    [InlineData(ProductState.Published)]
+    public async Task ManualDiscardRejectsNonFinalOrSubmittedProductStates(ProductState state) {
+        var repository = new RecordingWorkflowRepository { CandidateEdition = 5, CandidateUpdate = 0, InitialState = state };
+        var engine = new RecordingExportEngine();
+        var service = CreateService(new RecordingElectronicProductManager(), repository, engine, new SummaryResponse());
+
+        await Assert.ThrowsAsync<ExportOperationRejectedException>(
+            () => service.ExecuteDiscardAsync("101DK001", "operator"));
+
+        Assert.Equal(state, repository.Track.State);
+        Assert.Equal(0, engine.DeleteCalls);
+    }
+
+    [Fact]
+    public async Task DiscardRemainsSuccessfulWhenOutputCleanupFailsAfterSqlCommit() {
+        var repository = new RecordingWorkflowRepository { CandidateEdition = 5, CandidateUpdate = 0, InitialState = ProductState.Error };
+        var engine = new RecordingExportEngine { FailOnDelete = true };
+        var service = CreateService(new RecordingElectronicProductManager(), repository, engine, new SummaryResponse());
+
+        var result = await service.ExecuteDiscardAsync("101DK001", "operator");
+
+        Assert.Equal(ExportOperationContract.DiscardCompletedCode, result.Code);
+        Assert.Equal(ProductState.Idle, repository.Track.State);
+        Assert.Null(repository.Track.CandidateEdition);
+        Assert.Equal(1, engine.DeleteCalls);
+        Assert.Equal(new ExportOutputIdentity("101DK001", ProductSpecification.S101, 5, 0, "output"), engine.LastDeletedOutput);
+    }
+
+    [Fact]
+    public async Task RetryingAfterErrorPreservesOriginalStateForLaterDiscard() {
+        var repository = new InMemoryProductRepository();
+        var track = await repository.GetOrCreateTrackAsync("101DK001", ProductSpecification.S101, ExportEngineKind.IsoIec8211, 4, 2);
+        await repository.SetStateAsync(track.Id, ProductState.ChangesDetected, "system", DateTime.UtcNow);
+        await repository.BeginExportAsync(track.Id, 5, 0, "system", DateTime.UtcNow);
+        await repository.SetStateAsync(track.Id, ProductState.Error, "system", DateTime.UtcNow);
+        await repository.BeginExportAsync(track.Id, 5, 0, "system", DateTime.UtcNow);
+        await repository.SetStateAsync(track.Id, ProductState.Error, "system", DateTime.UtcNow);
+        await repository.DiscardCandidateAsync(track.Id, "operator", DateTime.UtcNow);
+
+        var restored = await repository.GetTrackAsync("101DK001", ProductSpecification.S101);
+        Assert.Equal(ProductState.ChangesDetected, restored!.State);
+        Assert.Null(restored.CandidateEdition);
     }
 
     [Fact]
@@ -293,10 +417,12 @@ public sealed class ExportOperationServiceTests
         public ExportEngineKind Kind => ExportEngineKind.IsoIec8211;
         public int ExportCalls { get; private set; }
         public int DeleteCalls { get; private set; }
+        public ExportOutputIdentity? LastDeletedOutput { get; private set; }
+        public bool FailOnDelete { get; init; }
         public ExportEngineRequest? LastRequest { get; private set; }
         public bool Supports(ProductSpecification productSpecification) => productSpecification is ProductSpecification.S57 or ProductSpecification.S101;
         public Task<ExportEngineResult> ExportAsync(ExportEngineRequest request, CancellationToken cancellationToken = default) { ExportCalls++; LastRequest = request; return Task.FromResult(new ExportEngineResult("output", [])); }
-        public Task DeleteOutputAsync(ExportOutputIdentity output, CancellationToken cancellationToken = default) { DeleteCalls++; return Task.CompletedTask; }
+        public Task DeleteOutputAsync(ExportOutputIdentity output, CancellationToken cancellationToken = default) { DeleteCalls++; LastDeletedOutput = output; return FailOnDelete ? Task.FromException(new IOException("Test cleanup failure")) : Task.CompletedTask; }
     }
 
     private sealed class RecordingPackageRepository : IEncPackageRepository
@@ -305,10 +431,11 @@ public sealed class ExportOperationServiceTests
         public Task<EncPackageDiscardResult> TryDiscardPackageAsync(Guid id, string actor, DateTime atUtc, CancellationToken cancellationToken = default) => Task.FromResult(new EncPackageDiscardResult(EncPackageDiscardStatus.NotFound, []));
         public int DiscardCalls { get; private set; }
         public bool PreserveScanBound { get; private set; }
+        public bool HasActivePackage { get; init; } = true;
         public Task<IReadOnlyDictionary<string, EncPackage>> GetActiveAsync(IEnumerable<string> sourceDatasetNames, CancellationToken cancellationToken = default, bool includeSourceYaml = true) =>
-            Task.FromResult<IReadOnlyDictionary<string, EncPackage>>(new Dictionary<string, EncPackage> {
-                ["101DK001"] = new() { Id = Guid.NewGuid(), SourceDatasetName = "101DK001", S57DatasetName = "DK3BIDQE", ErrorMessage = "Failed export" }
-            });
+            Task.FromResult<IReadOnlyDictionary<string, EncPackage>>(HasActivePackage
+                ? new Dictionary<string, EncPackage> { ["101DK001"] = new() { Id = Guid.NewGuid(), SourceDatasetName = "101DK001", S57DatasetName = "DK3BIDQE", ErrorMessage = "Failed export" } }
+                : new Dictionary<string, EncPackage>());
         public Task<DateTime?> GetReplayFromUtcAsync(CancellationToken cancellationToken = default) => Task.FromResult<DateTime?>(null);
         public Task<IReadOnlyDictionary<string, DateTime>> GetReplayBoundsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyDictionary<string, DateTime>>(new Dictionary<string, DateTime>());
         public Task MarkReplayAsync(string sourceDatasetName, DateTime scanFromUtc, CancellationToken cancellationToken = default) => Task.CompletedTask;

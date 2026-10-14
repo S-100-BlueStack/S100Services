@@ -271,14 +271,30 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
     public async Task BeginExportAsync(Guid trackId, int candidateEdition, int candidateUpdate, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
         var affected = await connection.ExecuteAsync(new CommandDefinition("""
-            UPDATE dbo.ProductExportTrack
-            SET candidate_previous_state = state,
+            UPDATE t
+            SET candidate_previous_state = CASE
+                    WHEN state IN (@Error, @Rejected) THEN
+                        CASE WHEN candidate_previous_state IS NULL OR candidate_previous_state IN (@Error, @Rejected)
+                            THEN @Idle ELSE candidate_previous_state END
+                    ELSE state END,
                 state = @State,
                 candidate_edition = @CandidateEdition,
                 candidate_update = @CandidateUpdate,
                 updated_at_utc = @OccurredAtUtc
-            WHERE product_export_track_id = @TrackId
-              AND state NOT IN (@Frozen, @InTransit, @Exporting, @Validating);
+            FROM dbo.ProductExportTrack t
+            WHERE t.product_export_track_id = @TrackId
+              AND t.state NOT IN (@Frozen, @InTransit, @Exporting, @Validating, @Ready, @Accepted, @Rejected)
+              AND NOT EXISTS (
+                  SELECT 1 FROM dbo.ProductExportTrackFreezeHold WITH (UPDLOCK, HOLDLOCK)
+                  WHERE product_export_track_id = @TrackId
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM dbo.ProductIcEncDelivery d WITH (UPDLOCK, HOLDLOCK)
+                  INNER JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id
+                  WHERE d.product_export_track_id = t.product_export_track_id
+                    AND t.candidate_edition IS NOT NULL AND t.candidate_update IS NOT NULL
+                    AND r.edition_number = t.candidate_edition AND r.update_number = t.candidate_update
+              );
 
             IF @@ROWCOUNT = 1
                 INSERT INTO dbo.ProductStateHistory
@@ -296,7 +312,12 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
                 Frozen = ProductState.Frozen,
                 InTransit = ProductState.InTransit,
                 Exporting = ProductState.Exporting,
-                Validating = ProductState.Validating
+                Validating = ProductState.Validating,
+                Ready = ProductState.ReadyForDistribution,
+                Accepted = ProductState.AcceptedForDistribution,
+                Error = ProductState.Error,
+                Rejected = ProductState.Rejected,
+                Idle = ProductState.Idle
             }, cancellationToken: cancellationToken));
 
         if (affected == 0)
@@ -335,11 +356,24 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
             WHERE product_export_track_id = @TrackId;
             """, new { TrackId = trackId }, transaction, cancellationToken: cancellationToken));
 
-        if (candidate is null || candidate.CandidateEdition.HasValue != candidate.CandidateUpdate.HasValue ||
-            !candidate.CandidateEdition.HasValue && candidate.State is not (ProductState.Error or ProductState.Rejected))
-            throw new InvalidOperationException("The product track has no failed or unverified candidate to discard.");
+        if (candidate is null || !ProductCandidateRecovery.CanDiscard(candidate.State, candidate.PreviousState,
+            candidate.CandidateEdition, candidate.CandidateUpdate))
+            throw new InvalidOperationException("The product track has no eligible unsent candidate to discard.");
 
-        var previousState = candidate.PreviousState ?? ProductState.Idle;
+        // Even an Error/Rejected track is not disposable after a Send reservation.
+        // Lock matching revision reservations before the track state/history is changed.
+        var reserved = await connection.ExecuteScalarAsync<int>(new CommandDefinition("""
+            SELECT COUNT(1) FROM dbo.ProductIcEncDelivery d WITH (UPDLOCK, HOLDLOCK)
+            INNER JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id
+            WHERE d.product_export_track_id = @TrackId
+              AND (@Edition IS NULL OR @Update IS NULL OR
+                   (r.edition_number = @Edition AND r.update_number = @Update));
+            """, new { TrackId = trackId, Edition = candidate.CandidateEdition, Update = candidate.CandidateUpdate },
+            transaction, cancellationToken: cancellationToken));
+        if (reserved != 0)
+            throw new InvalidOperationException("The Product candidate has a delivery reservation and cannot be discarded.");
+
+        var previousState = ProductCandidateRecovery.RestoredState(candidate.PreviousState);
         var restoredAtUtc = occurredAtUtc.AddTicks(1);
 
         await connection.ExecuteAsync(new CommandDefinition("""
@@ -713,7 +747,21 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     }
 
     /// <inheritdoc/>
-    public Task BeginExportAsync(Guid trackId, int candidateEdition, int candidateUpdate, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.CandidatePreviousState = track.State; track.State = ProductState.Exporting; track.CandidateEdition = candidateEdition; track.CandidateUpdate = candidateUpdate; track.UpdatedAtUtc = occurredAtUtc; } return Task.CompletedTask; }
+    public Task BeginExportAsync(Guid trackId, int candidateEdition, int candidateUpdate, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        lock (_gate) {
+            var track = FindTrack(trackId);
+            if (track.IsManuallyFrozen || track.State is ProductState.Frozen or ProductState.InTransit or
+                ProductState.Exporting or ProductState.Validating or ProductState.ReadyForDistribution or
+                ProductState.AcceptedForDistribution or ProductState.Rejected)
+                throw new InvalidOperationException("The export track is not eligible for another candidate.");
+            track.CandidatePreviousState = ProductCandidateRecovery.PreviousStateForReplacement(track.State, track.CandidatePreviousState);
+            track.State = ProductState.Exporting;
+            track.CandidateEdition = candidateEdition;
+            track.CandidateUpdate = candidateUpdate;
+            track.UpdatedAtUtc = occurredAtUtc;
+        }
+        return Task.CompletedTask;
+    }
 
     /// <inheritdoc/>
     public Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.State = state; track.UpdatedAtUtc = occurredAtUtc; track.ErrorCode = errorCode; track.ErrorMessage = errorMessage; } return Task.CompletedTask; }
@@ -748,10 +796,9 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
     public Task DiscardCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
         lock (_gate) {
             var track = FindTrack(trackId);
-            if (track.CandidateEdition.HasValue != track.CandidateUpdate.HasValue ||
-                !track.CandidateEdition.HasValue && track.State is not (ProductState.Error or ProductState.Rejected))
-                throw new InvalidOperationException("The product track has no failed or unverified candidate to discard.");
-            track.State = track.CandidatePreviousState ?? ProductState.Idle;
+            if (!ProductCandidateRecovery.CanDiscard(track.State, track.CandidatePreviousState, track.CandidateEdition, track.CandidateUpdate))
+                throw new InvalidOperationException("The product track has no eligible unsent candidate to discard.");
+            track.State = ProductCandidateRecovery.RestoredState(track.CandidatePreviousState);
             track.CandidateEdition = null;
             track.CandidateUpdate = null;
             track.CandidatePreviousState = null;
