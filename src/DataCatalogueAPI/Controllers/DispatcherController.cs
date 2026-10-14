@@ -1,4 +1,5 @@
-﻿using Asp.Versioning;
+﻿using ArcGIS.Core.Data.UtilityNetwork.Trace;
+using Asp.Versioning;
 using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Domain.Commands;
@@ -79,7 +80,7 @@ namespace DataCatalague.Api.Controllers
             ArgumentNullException.ThrowIfNullOrWhiteSpace(request.DisplayName?.Trim());
             ArgumentNullException.ThrowIfNullOrWhiteSpace(request.Description?.Trim());
 
-            var displayName = request.DisplayName?.Trim();            
+            var displayName = request.DisplayName?.Trim();
             var description = request.Description?.Trim();
 
             var cmd = await this._serviceCategory.Handle(new DispatcherCommands.CreateCategory(CreateStreamId(), displayName, description), cancellationToken);
@@ -174,7 +175,7 @@ namespace DataCatalague.Api.Controllers
 
                 var filename = IO.Path.GetFileName(request.AbsoluteUri);
 
-                var cmd = await this._servicePackage.Handle(new DispatcherCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, geometryRef, request.MetaData, request.DisplayScale), cancellationToken);
+                var cmd = await this._servicePackage.Handle(new DispatcherCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, geometryRef, request.Severity, request.MetaData, request.DisplayScale), cancellationToken);
 
                 if (!cmd.Success)
                     return this.BadRequest();
@@ -214,6 +215,56 @@ namespace DataCatalague.Api.Controllers
                     statusCode: StatusCodes.Status404NotFound);
             }
         }
+
+        [HttpPut("dispatch/packages/{id}/geometry")]
+        [Consumes("application/json")]
+        [ProducesResponseType<PackageResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<PackageResponse>> AddGeometry(string id, CancellationToken cancellationToken) {
+            ArgumentNullException.ThrowIfNullOrEmpty(id);
+
+            try {
+                var stream = await this._eventStore.LoadState<PackageState>(new(id), true, cancellationToken);
+
+                throw new NotImplementedException();
+
+                return Map(stream.State);
+            }
+            catch {
+                this._logger.LogInformation("Package {id} was not found.", id);
+
+                return this.Problem(
+                    title: "Package not found.",
+                    detail: $"No package exists with identifier {id}.",
+                    statusCode: StatusCodes.Status404NotFound);
+            }
+        }
+
+
+
+        [HttpPost("severity")]
+        [Consumes("application/json")]
+        [ProducesResponseType<SeverityResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<SeverityResponse>> AddSeverity([FromBody] AddSeverityAreaRequest request, CancellationToken cancellationToken) {
+            ArgumentNullException.ThrowIfNull(request);
+            ArgumentNullException.ThrowIfNullOrEmpty(request.GeoJSON);
+
+            var geometryRef = await this._dispatcher.ExecuteAsync(() => {
+                var polygon = this._dispatchRepository.FromGeoJson(request.GeoJSON);
+
+                return this._dispatchRepository.AddSeverityAOI(polygon, request.Severity);
+            });
+
+            this._logger.LogInformation("Created severity area {id}.", geometryRef);
+
+            return new SeverityResponse {
+                GeometryRef = geometryRef,
+            };
+        }
+
 
 
         [HttpPost("repository")]

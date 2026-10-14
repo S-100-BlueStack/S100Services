@@ -134,6 +134,26 @@ namespace DataCatalague.Api.Repositories
             }
         }
 
+        public string AddSeverityAOI(Polygon geometry, ulong severity) {
+            using (var connector = this.createGeodatabase()) {
+                using var fc = geometry.GeometryType switch {
+                    GeometryType.Polygon => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["surface"].GetName()),
+                    _ => throw new NotImplementedException(),
+                };
+
+                using var buffer = fc.CreateRowBuffer();
+                buffer["ps"] = "";
+                buffer["code"] = "SeverityCoverage";
+                buffer["attributebindings"] = JsonSerializer.Serialize(new {
+                    severity,
+                }, jsonSerializerOptions);
+                buffer["shape"] = geometry;
+
+                var row = fc.CreateRow(buffer);
+                return $"{fc.GetName().Split('.')[^1]}::{row.GetGlobalID():B}";
+            }
+        }
+
         public string AddWorkspaceAOI(Geometry geometry, string pipelineId, string displayName) {
             using (var connector = this.createGeodatabase()) {
                 using var fc = geometry.GeometryType switch {

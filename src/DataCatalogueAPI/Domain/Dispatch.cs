@@ -39,10 +39,28 @@ namespace DataCatalague.Api.Domain
                     string FileName,
                     string AbsoluteUri,
                     string GeometryRef,
+                    ulong Severity,
                     PackageMetaData? MetaData,
                     DisplayScale? DisplayScale) {
             this.EnsureDoesntExist();
             this.Apply(new V1.PackageCreated(PackageId, Category, FileName, AbsoluteUri, GeometryRef, MetaData, DisplayScale, DateTime.UtcNow));
+            this.Apply(new V1.SeverityUpdated(Severity, DateTime.UtcNow));
+        }
+
+        public async Task AddDetailedGEometry(
+                    string? PointRef,
+                    string? CurveRef,
+                    string? SurfaceRef
+            ) {
+            this.EnsureExists();
+            this.Apply(new V1.DetailedGeometryAdded(PointRef, CurveRef, SurfaceRef, DateTime.UtcNow));
+        }
+
+        public async Task UpdateSeverity(
+                    ulong Severity
+            ) {
+            this.EnsureExists();
+            this.Apply(new V1.SeverityUpdated(Severity, DateTime.UtcNow));
         }
     }
 
@@ -100,6 +118,8 @@ namespace DataCatalague.Api.Domain
 
         public string? GeometryRef { get; set; }
 
+        public ulong? Severity { get; set; } = ulong.MaxValue;
+
         public PackageMetaData? MetaData { get; set; } = null;
 
         public DisplayScale? DisplayScale { get; init; } = null;
@@ -133,7 +153,11 @@ namespace DataCatalague.Api.Domain.Commands
 
         public record UpdateSpecificationCategory(string CategoryId, string Version, string Markdown);
 
-        public record CreatePackage(string PackageId, string Category, string FileName, string AbsoluteUri, string GeometryRef, PackageMetaData? MetaData, DisplayScale? DisplayScale);
+        public record CreatePackage(string PackageId, string Category, string FileName, string AbsoluteUri, string GeometryRef, ulong Severity, PackageMetaData? MetaData, DisplayScale? DisplayScale);
+
+        public record AddDetailedGeometry(string PackageId, string? PointRef, string? CurveRef, string? SurfaceRef);
+
+        public record UpdateSeverity(string PackageId, ulong Severity);
     }
 
 }
@@ -168,6 +192,20 @@ namespace DataCatalague.Api.Domain.Events
                     string GeometryRef,
                     PackageMetaData? MetaData,
                     DisplayScale? DisplayScale,
+                    DateTimeOffset UTC
+                );
+
+            [EventType("V1.DetailedGeometryAdded")]
+            public record DetailedGeometryAdded(
+                    string? PointRef,
+                    string? CurveRef,
+                    string? SurfaceRef,
+                    DateTimeOffset UTC
+                );
+
+            [EventType("V1.SeverityUpdated")]
+            public record SeverityUpdated(
+                    ulong Severity,
                     DateTimeOffset UTC
                 );
         }

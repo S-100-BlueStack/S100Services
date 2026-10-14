@@ -28,9 +28,20 @@ namespace DataCatalague.Api.Models.V1
         [Required]
         public required string AbsoluteUri { get; init; }
 
+        public ulong Severity { get; init; } = ulong.MaxValue;
+
         public PackageMetaData? MetaData { get; init; } = null;
 
         public DisplayScale? DisplayScale { get; init; } = null;
+
+        [Required]
+        public required string GeoJSON { get; init; }
+    }
+
+    public sealed class AddSeverityAreaRequest
+    {
+        [Required]
+        public required ulong Severity { get; init; } = ulong.MaxValue;
 
         [Required]
         public required string GeoJSON { get; init; }
