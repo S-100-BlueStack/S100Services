@@ -41,7 +41,9 @@ public static class Program
             FastZip fastZip = new();
             fastZip.ExtractZip(IO.Path.GetFullPath(IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"s100ed17.zip")), IO.Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory), null);
 
-            builder.Services.AddStreamConfiguration(builder.Configuration);
+            builder.Services
+                .AddDispatcherConfiguration(builder.Configuration)
+                .AddPackageConfiguration(builder.Configuration);
 
             IEventSerializer eventSerializer = new DefaultEventSerializer(
                 new JsonSerializerOptions(JsonSerializerDefaults.Web));

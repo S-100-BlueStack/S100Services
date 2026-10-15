@@ -1,0 +1,166 @@
+﻿using ArcGIS.Core.Data;
+using ArcGIS.Core.Geometry;
+using DataCatalague.Api.Configuration;
+using Eventuous.Subscriptions;
+using Eventuous.Subscriptions.Context;
+using Microsoft.Extensions.Options;
+using System.Text.Json;
+using IO = System.IO;
+
+namespace DataCatalague.Api.Repositories
+{
+    public class PackageRepository : IEventHandler
+    {
+        internal static readonly JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions {
+            WriteIndented = false,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            PropertyNameCaseInsensitive = true,
+        };
+
+        private readonly IOptions<PackagesOptions> _options;
+
+        private readonly ILogger<PackageRepository> _logger;
+
+        private readonly Func<Geodatabase> createGeodatabase = () => { throw new NotImplementedException(); };
+
+        private readonly IReadOnlyDictionary<string, FeatureClassDefinition> _featureClassDefinitions;
+        private readonly IReadOnlyDictionary<string, TableDefinition> _standaloneTableDefinitions;
+
+        public PackageRepository(ArcGisDispatcher arcDispatcher, IOptions<PackagesOptions> options, ILogger<PackageRepository> logger) {
+            this._options = options ?? throw new ArgumentNullException(nameof(options));
+            this._logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+            var geodatabase = options.Value.Geodatabase;
+
+            if (IO.File.Exists(geodatabase) && ".sde".Equals(IO.Path.GetExtension(geodatabase), StringComparison.OrdinalIgnoreCase)) {
+                this.createGeodatabase = () => { return new Geodatabase(new DatabaseConnectionFile(new Uri(IO.Path.GetFullPath(IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, geodatabase))))); };
+            }
+            else if (IO.Directory.Exists(geodatabase) && ".gdb".Equals(IO.Path.GetExtension(geodatabase), StringComparison.OrdinalIgnoreCase)) {
+                this.createGeodatabase = () => { return new Geodatabase(new FileGeodatabaseConnectionPath(new Uri(IO.Path.GetFullPath(IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, geodatabase))))); };
+            }
+            else if (".geodatabase".Equals(IO.Path.GetExtension(geodatabase), StringComparison.OrdinalIgnoreCase)) {
+                this.createGeodatabase = () => {
+                    return new Geodatabase(new MobileGeodatabaseConnectionPath(new Uri(IO.Path.GetFullPath(IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, geodatabase)))));
+                };
+            }
+            else if (geodatabase.StartsWith("https://")) {
+                this.createGeodatabase = () => { return new Geodatabase(new ServiceConnectionProperties(new Uri(geodatabase))); };
+            }
+            else
+                throw new System.ArgumentOutOfRangeException(nameof(options.Value.Geodatabase));
+
+            var definitions = arcDispatcher.ExecuteAsync(() => {
+                using var connector = this.createGeodatabase();
+
+                var syntax = connector.GetSQLSyntax();
+
+                return (
+                    connector.GetDefinitions<FeatureClassDefinition>().ToDictionary(e => syntax.ParseTableName(e.GetName()).Item3.ToLowerInvariant(), e => e),
+                    connector.GetDefinitions<TableDefinition>().ToDictionary(e => syntax.ParseTableName(e.GetName()).Item3.ToLowerInvariant(), e => e));
+            }).ConfigureAwait(false).GetAwaiter().GetResult();
+
+            this._featureClassDefinitions = definitions.Item1;
+            this._standaloneTableDefinitions = definitions.Item2;
+        }
+
+        public string DiagnosticName => nameof(DispatchRepository);
+
+        public Guid AddAttachment(Stream stream, string fileName, DateTimeOffset dateTimeOffsetUtc) {
+            using (var connector = this.createGeodatabase()) {
+                using (Table attachment = connector.OpenDataset<Table>(this._standaloneTableDefinitions["attachment"].GetName())) {
+                    using var rowBuffer = attachment.CreateRowBuffer();
+                    using var insertCursor = attachment.CreateInsertCursor();
+
+                    var supportFile = new S100BlueStack.Settings.SupportFile {
+                        FileName = fileName,
+                        date = DateOnly.FromDateTime(dateTimeOffsetUtc.Date),
+
+                        s100_SupportFileFormat = Path.GetExtension(fileName).ToLower() switch {
+                            ".txt" => S100FC.S100.S100_SupportFileFormat.TXT,
+                            ".mp4" => S100FC.S100.S100_SupportFileFormat.VIDEO,
+                            ".mov" => S100FC.S100.S100_SupportFileFormat.VIDEO,
+                            ".avi" => S100FC.S100.S100_SupportFileFormat.VIDEO,
+                            ".flv" => S100FC.S100.S100_SupportFileFormat.VIDEO,
+                            ".webm" => S100FC.S100.S100_SupportFileFormat.VIDEO,
+                            ".mkv" => S100FC.S100.S100_SupportFileFormat.VIDEO,
+                            ".mpeg" => S100FC.S100.S100_SupportFileFormat.VIDEO,
+                            ".mpg" => S100FC.S100.S100_SupportFileFormat.VIDEO,
+                            ".xml" => S100FC.S100.S100_SupportFileFormat.XML,
+                            ".xslt" => S100FC.S100.S100_SupportFileFormat.XSLT,
+                            ".zip" => S100FC.S100.S100_SupportFileFormat.other,
+                            _ => throw new NotSupportedException($"Illegal file extension for support files: {Path.GetExtension(fileName).ToLower()}")
+                        }
+                    };
+
+                    var memoryStream = new MemoryStream();
+                    stream.CopyTo(memoryStream);
+                    memoryStream.Position = 0;
+
+                    rowBuffer["ps"] = "S-100";
+                    rowBuffer["code"] = "supportfile";
+                    rowBuffer["json"] = JsonSerializer.Serialize(supportFile, jsonSerializerOptions);
+                    rowBuffer["data_size"] = memoryStream.Length;
+                    rowBuffer["data"] = memoryStream;
+
+                    var row = attachment.CreateRow(rowBuffer);
+
+                    return Guid.Parse($"{row.GetGlobalID():B}");
+                }
+            }
+        }
+
+        public string AddPackageAOI(Geometry geometry, string packageId, string absoluteUri) {
+            using (var connector = this.createGeodatabase()) {
+                using var fc = geometry.GeometryType switch {
+                    GeometryType.Point => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["point"].GetName()),
+                    GeometryType.Multipoint => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["pointset"].GetName()),
+                    GeometryType.Polyline => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["curve"].GetName()),
+                    GeometryType.Polygon => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["surface"].GetName()),
+                    _ => throw new NotImplementedException(),
+                };
+
+                using var buffer = fc.CreateRowBuffer();
+                buffer["ps"] = "";
+                buffer["code"] = "PackageCoverage";
+                buffer["attributebindings"] = JsonSerializer.Serialize(new {
+                    packageId,
+                    absoluteUri,
+                }, jsonSerializerOptions);
+                buffer["shape"] = geometry;
+
+                var row = fc.CreateRow(buffer);
+
+                return $"{fc.GetName().Split('.')[^1]}::{row.GetGlobalID():B}";
+            }
+        }
+
+        public string AddSeverityAOI(Polygon geometry, ulong severity) {
+            using (var connector = this.createGeodatabase()) {
+                using var fc = geometry.GeometryType switch {
+                    GeometryType.Polygon => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["surface"].GetName()),
+                    _ => throw new NotImplementedException(),
+                };
+
+                using var buffer = fc.CreateRowBuffer();
+                buffer["ps"] = "";
+                buffer["code"] = "SeverityCoverage";
+                buffer["attributebindings"] = JsonSerializer.Serialize(new {
+                    severity,
+                }, jsonSerializerOptions);
+                buffer["shape"] = geometry;
+
+                var row = fc.CreateRow(buffer);
+                return $"{fc.GetName().Split('.')[^1]}::{row.GetGlobalID():B}";
+            }
+        }
+
+        public Polygon FromGeoJson(string geoJson) {
+            var polygon = PolygonBuilderEx.FromJson(geoJson);
+            return polygon;
+        }
+
+        public async ValueTask<EventHandlingStatus> HandleEvent(IMessageConsumeContext context) {
+            return EventHandlingStatus.Handled;
+        }
+    }
+}
