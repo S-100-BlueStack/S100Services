@@ -52,6 +52,7 @@ public static class Program
 
             builder.Services.AddSingleton(eventSerializer);
             builder.Services.AddSingleton<DispatchRepository>();
+            builder.Services.AddSingleton<PackageRepository>();
             builder.Services.AddSingleton<ArcGisDispatcher>();
 
             //builder.Services.AddEventuousSqlServer(

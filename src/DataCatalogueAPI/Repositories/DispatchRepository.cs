@@ -1,9 +1,12 @@
 ﻿using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
 using DataCatalague.Api.Configuration;
+using DataCatalague.Api.Domain;
+using DataCatalague.Api.Domain.Events;
 using Eventuous.Subscriptions;
 using Eventuous.Subscriptions.Context;
 using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using IO = System.IO;
 
@@ -184,7 +187,32 @@ namespace DataCatalague.Api.Repositories
             return polygon;
         }
 
-        public async ValueTask<EventHandlingStatus> HandleEvent(IMessageConsumeContext context) {
+        private ConcurrentDictionary<string, CategoryState> _categories = [];
+
+        public string[] Categories => [.. this._categories.Keys];
+
+        public CategoryState GetCategory(string id) => this._categories[id];
+
+        public async ValueTask<EventHandlingStatus> HandleEvent(IMessageConsumeContext context) {            
+            return context.Message switch {
+                DispatcherEvents.V1.CategoryCreated evt => this.Handle_CategoryCreated(evt),
+                PackagesEvents.V1.PackageCreated evt => this.Handle_PackageCreated(evt),
+                _ => EventHandlingStatus.Ignored,
+            };
+        }
+
+        private EventHandlingStatus Handle_CategoryCreated(DispatcherEvents.V1.CategoryCreated evt) {
+            var state = new CategoryState();
+            state = state.When(evt);
+            this._categories.TryAdd(evt.CategoryId, state);
+
+            return EventHandlingStatus.Handled;
+        }
+
+        private EventHandlingStatus Handle_PackageCreated(PackagesEvents.V1.PackageCreated evt) {
+            var state = new PackageState();
+            state = state.When(evt);          
+
             return EventHandlingStatus.Handled;
         }
     }
