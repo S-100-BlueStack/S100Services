@@ -3,6 +3,7 @@ using Hangfire.Server;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Services.Export;
 using ProductCatalogueAPI.Services.Locking;
+using ProductCatalogueAPI.Services.History;
 using ProductCatalogueAPI.Services.Operations;
 using S100FC.ProductCatalogue;
 
@@ -19,7 +20,8 @@ namespace ProductCatalogueAPI.Jobs
         IProductManager productManager,
         IDatasetLockService datasetLockService,
         IExportOperationService exportOperationService,
-        ILogger<ExportOperationJob> logger
+        ILogger<ExportOperationJob> logger,
+        IProductExportHistory history
     )
     {
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
@@ -75,6 +77,8 @@ namespace ProductCatalogueAPI.Jobs
             );
 
             if (datasetLock == null) {
+                if (ProductHistoryTerminal.Supports(request.OperationType))
+                    await history.RecordNotStartedAsync(request, context);
                 _logger.LogWarning(
                     "Product Manager job could not acquire dataset lock. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}",
                     context.JobId,
@@ -89,6 +93,19 @@ namespace ProductCatalogueAPI.Jobs
                 );
             }
 
+            if (ProductHistoryTerminal.Supports(request.OperationType)) {
+                await history.ExecuteAsync(request, context, start =>
+                    ExecuteLockedAsync(request, context, productSpecification, start, cancellationToken));
+            }
+            else {
+                await ExecuteLockedAsync(request, context, productSpecification, null, cancellationToken);
+            }
+        }
+
+        private async Task<ExportOperationResult> ExecuteLockedAsync(
+            ExportOperationJobRequest request, IExportJobExecutionContext context,
+            ProductSpecification productSpecification, Func<Task>? startAudit,
+            CancellationToken cancellationToken) {
             var executionStarted = context.GetJobParameter<bool?>(
                 ExportJobParameterNames.ExecutionStarted
             ) == true;
@@ -146,6 +163,12 @@ namespace ProductCatalogueAPI.Jobs
                 );
             }
 
+            if (ProductHistoryEventContract.NormalizeDatasetName(currentVersion.DatasetName) !=
+                ProductHistoryEventContract.NormalizeDatasetName(request.DatasetName)) {
+                throw CreateSafeFailure(context, ExportJobContract.ProductDataIntegrityErrorCode,
+                    ExportJobContract.ProductDataIntegrityJobMessage);
+            }
+
             if (currentVersion.Edition != request.ExpectedEdition ||
                 currentVersion.Update != request.ExpectedUpdate) {
                 _logger.LogWarning(
@@ -183,10 +206,16 @@ namespace ProductCatalogueAPI.Jobs
                 );
             }
 
+            var mutationMayHaveStarted = false;
             try {
                 cancellationToken.ThrowIfCancellationRequested();
-                Action markExecutionStarted = () =>
-                    context.SetJobParameter(ExportJobParameterNames.ExecutionStarted, true);
+                if (startAudit is not null)
+                    await startAudit();
+                Action markExecutionStarted = () => {
+                    mutationMayHaveStarted = true;
+                    if (startAudit is null)
+                        context.SetJobParameter(ExportJobParameterNames.ExecutionStarted, true);
+                };
 
                 var result = request.OperationType switch {
                     ExportOperationType.NewDataset => await _exportOperationService.ExecuteExportAsync(
@@ -207,6 +236,19 @@ namespace ProductCatalogueAPI.Jobs
                         null
                     )
                 };
+
+                if (startAudit is not null) {
+                    _logger.LogInformation(
+                        "Product Manager job completed. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. ResultCode: {ResultCode}. WarningCode: {WarningCode}",
+                        context.JobId,
+                        request.DatasetName,
+                        request.OperationType,
+                        request.CorrelationId,
+                        result.Code,
+                        result.Warning?.Code
+                    );
+                    return result;
+                }
 
                 context.SetJobParameter(ExportJobParameterNames.ResultCode, result.Code);
                 context.SetJobParameter(ExportJobParameterNames.ResultMessage, result.Message);
@@ -231,6 +273,7 @@ namespace ProductCatalogueAPI.Jobs
                     result.Code,
                     result.Warning?.Code
                 );
+                return result;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
                 context.SetJobParameter(
@@ -281,7 +324,7 @@ namespace ProductCatalogueAPI.Jobs
                 );
                 context.SetJobParameter(
                     ExportJobParameterNames.ErrorMessage,
-                    ex.Message
+                    startAudit is null ? ex.Message : "The Product operation was rejected by a precondition."
                 );
 
                 _logger.LogWarning(
@@ -290,13 +333,13 @@ namespace ProductCatalogueAPI.Jobs
                     request.DatasetName,
                     request.OperationType,
                     request.CorrelationId,
-                    ex.Message
+                    startAudit is null ? ex.Message : "The Product operation was rejected by a precondition."
                 );
 
                 throw new ExportOperationJobException(
                     ExportJobContract.ProductOperationRejectedCode,
-                    ex.Message
-                );
+                    startAudit is null ? ex.Message : "The Product operation was rejected by a precondition."
+                ) { IsPreExecutionRejection = !mutationMayHaveStarted };
             }
             catch (Exception ex) {
                 var (code, message) = request.OperationType switch {
@@ -361,5 +404,7 @@ namespace ProductCatalogueAPI.Jobs
         : Exception($"{code}: {message}")
     {
         public string Code { get; } = code;
+        // Set only by the execution owner when the service rejected before its mutation hook.
+        public bool IsPreExecutionRejection { get; init; }
     }
 }

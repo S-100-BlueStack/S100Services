@@ -15,6 +15,8 @@ namespace ProductCatalogueAPI.Services.Jobs
 
         public ExportJobStartResponse Enqueue(ExportOperationJobRequest request) {
             try {
+                if (request.OperationId == Guid.Empty)
+                    request = request with { OperationId = Guid.NewGuid() };
                 var jobId = _backgroundJobClient.Enqueue<ExportOperationJob>(job =>
                     job.RunAsync(request, null!, CancellationToken.None)
                 );

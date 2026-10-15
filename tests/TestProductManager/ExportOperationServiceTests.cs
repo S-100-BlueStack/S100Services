@@ -25,6 +25,10 @@ public sealed class ExportOperationServiceTests
         var result = await service.ExecuteExportAsync("101DK001", ExportRevisionType.NewEdition, "developer");
 
         Assert.Equal(ExportOperationContract.ExportCompletedCode, result.Code);
+        Assert.Equal(repository.CompletionStateId, result.StateRecordId);
+        Assert.Equal(repository.Track.DatasetName, result.DatasetName);
+        Assert.Equal(repository.Track.CandidateEdition, result.ResultEdition);
+        Assert.Equal(repository.Track.CandidateUpdate, result.ResultUpdate);
         Assert.Equal(1, products.SnapshotCalls);
         Assert.Equal(0, products.AttachmentCalls);
         Assert.Equal((5, 0), products.LastSnapshotVersion);
@@ -40,7 +44,10 @@ public sealed class ExportOperationServiceTests
         var engine = new RecordingExportEngine();
         var service = CreateService(products, repository, engine, new SummaryResponse());
 
-        await service.ExecutePackageExportAsync("DK3BIDQE", ExportRevisionType.NewEdition, "shared-enc-yaml", "summary-yaml");
+        var result = await service.ExecutePackageExportAsync("DK3BIDQE", ExportRevisionType.NewEdition, "shared-enc-yaml", "summary-yaml");
+        Assert.Null(result.StateRecordId);
+        Assert.Equal(0, repository.CompletionCalls);
+        Assert.Equal(ProductState.ReadyForDistribution, repository.Track.State);
 
         Assert.Equal(0, products.SnapshotCalls);
         Assert.Equal("shared-enc-yaml", engine.LastRequest?.DatasetYaml);
@@ -447,6 +454,8 @@ public sealed class ExportOperationServiceTests
 
     private sealed class RecordingWorkflowRepository : IProductWorkflowRepository
     {
+        public int CompletionCalls { get; private set; }
+        public Guid CompletionStateId { get; } = Guid.NewGuid();
         public ProductState InitialState { get; init; } = ProductState.Idle;
         public int? CandidateEdition { get; init; }
         public int? CandidateUpdate { get; init; }
@@ -460,6 +469,12 @@ public sealed class ExportOperationServiceTests
         public Task<ProductExportTrackRecord> GetOrCreateTrackAsync(string datasetName, ProductSpecification productSpecification, ExportEngineKind engine, int publishedEdition, int publishedUpdate, CancellationToken cancellationToken = default) => Task.FromResult(EnsureTrack(datasetName, productSpecification));
         public Task BeginExportAsync(Guid trackId, int candidateEdition, int candidateUpdate, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { Track.CandidatePreviousState = Track.State; Track.State = ProductState.Exporting; Track.CandidateEdition = candidateEdition; Track.CandidateUpdate = candidateUpdate; return Task.CompletedTask; }
         public Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default) { Track.State = state; LastErrorCode = errorCode; LastErrorMessage = errorMessage; return Task.CompletedTask; }
+        public Task<Guid> CompleteExportWithHistoryAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+            Assert.Equal(ProductState.Validating, Track.State);
+            CompletionCalls++;
+            Track.State = ProductState.ReadyForDistribution;
+            return Task.FromResult(CompletionStateId);
+        }
         public Task<bool> SetManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { var changed = !Track.IsManuallyFrozen; Track.IsManuallyFrozen = true; return Task.FromResult(changed); }
         public Task<bool> ClearManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { var changed = Track.IsManuallyFrozen; Track.IsManuallyFrozen = false; return Task.FromResult(changed); }
         public Task DiscardCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { Track.State = Track.CandidatePreviousState ?? ProductState.Idle; Track.CandidateEdition = null; Track.CandidateUpdate = null; Track.CandidatePreviousState = null; return Task.CompletedTask; }

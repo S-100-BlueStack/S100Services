@@ -37,6 +37,11 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
         var publicVersion = await _electronicProductManager.ReadElectronicProductVersionAsync(targetDatasetName, productSpecification.ToString(), cancellationToken)
             ?? throw new ExportOperationRejectedException($"Electronic product '{datasetName}' was not found in the public S-128 catalogue.");
 
+        if (datasetYamlOverride is null &&
+            (!string.Equals(datasetName.Trim(), targetDatasetName, StringComparison.OrdinalIgnoreCase) ||
+             !string.Equals(datasetName.Trim(), publicVersion.DatasetName?.Trim(), StringComparison.OrdinalIgnoreCase)))
+            throw new ExportOperationRejectedException("The resolved Product identity does not match the requested export.");
+
         targetDatasetName = publicVersion.DatasetName;
         var initialPublishedEdition = publicVersion.Edition ?? 0;
         var initialPublishedUpdate = publicVersion.Update ?? 0;
@@ -150,9 +155,19 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
                 }
             }
 
-            await _workflowRepository.SetStateAsync(track.Id, ProductState.ReadyForDistribution, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken: cancellationToken);
+            Guid? completionStateId = null;
+            if (datasetYamlOverride is null)
+                completionStateId = await _workflowRepository.CompleteExportWithHistoryAsync(track.Id, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+            else
+                await _workflowRepository.SetStateAsync(track.Id, ProductState.ReadyForDistribution, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken: cancellationToken);
             _logger.LogInformation("Candidate export is ready for distribution. DatasetName: {DatasetName}. SourceDatasetName: {SourceDatasetName}. ProductSpecification: {ProductSpecification}. Edition: {Edition}. Update: {Update}. S128Published: {S128Published}", targetDatasetName, sourceDatasetName, productSpecification, edition, update, false);
-            return new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage);
+            return new ExportOperationResult(ExportOperationContract.ExportCompletedCode, ExportOperationContract.ExportCompletedMessage) {
+                StateRecordId = completionStateId,
+                DatasetName = targetDatasetName,
+                ExportTarget = productSpecification.ToString(),
+                ResultEdition = edition,
+                ResultUpdate = update
+            };
         }
         catch (Exception ex) when (exportStarted) {
             await SetErrorBestEffortAsync(track.Id, user, ex);

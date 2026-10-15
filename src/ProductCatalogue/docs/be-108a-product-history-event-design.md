@@ -2,7 +2,7 @@
 
 Documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`
 
-Status: **Batch 1 foundation ported to workflow-redesign baseline `2ec17a5c47aa353256d0a3445620bebe83e6eecf` and technically verified on 2026-09-11. Post-port manual History smoke and commit remain pending. Batch 2 is not started.**
+Status: **Batch 1 remains the accepted foundation. Batch 2 manual Export producers and recovery are implemented as an uncommitted candidate against `e06f8808677cf8f00b1e1a7621d40df4a9982a82`; local .NET, database-owner and runtime acceptance remain required. Section 18 supersedes the older Batch 2 operation vocabulary and hosting proposal.**
 
 This document remains the source of truth for BE-108A. The original design is retained where it still applies; section 17 records the Batch 1 implementation after adaptation to the normalized Product workflow architecture.
 
@@ -618,3 +618,147 @@ Batch 1 adds or retains:
 The audit table may already exist from an earlier BE-108A deployment. The port intentionally keeps its schema stable and retargets only the state-reference prerequisite to the normalized workflow state-history table.
 
 Batch 2 must begin with a fresh discovery pass against the then-current workflow implementation before producer-side state-ID capture or recovery metadata is designed.
+
+## 18. Batch 2 manual Export producers and recovery
+
+Implementation baseline: `e06f8808677cf8f00b1e1a7621d40df4a9982a82`.
+Candidate status: implemented; not built or run against .NET/SQL Server in the delivery environment.
+
+### 18.1 Supported operations and preserved boundaries
+
+`NewDataset`, `ExportEdition`, and `ExportUpdate` produce the existing `Export`
+audit event type. Each application-owned `OperationId` identifies one logical
+operation, independently of the audit row `Id`, Hangfire `JobId`, diagnostic
+`CorrelationId`, and committed `StateRecordId`.
+
+There is no supported distinct Rollback action in this workflow. `Discard` and
+legacy `CancelExport` remove an unverified candidate. Their existing business
+behavior is preserved and neither is relabeled as Rollback. A Discard audit
+producer requires an explicit event-type/semantics decision and is deferred.
+The Batch 1 Rollback read/normalization contract remains intact.
+
+Package export continues through `ExecutePackageExportAsync` without a manual
+Product audit producer or a change to package-member states. Detection, source
+snapshots, compiler layout, validation, Send/Accept, and frontend code are
+unchanged. The History endpoint retains its existing endpoint-specific envelope;
+no generic `ApiResponse` or API endpoint is introduced.
+
+### 18.2 Lifecycle and replay protection
+
+1. Enqueue assigns an application-generated operation ID to the serialized
+   request. The client filter also stores it as `ProductManagerOperationId`.
+   Legacy requests without this property can reuse the durable parameter or
+   receive it under the existing Product track lock before creating an event.
+2. `ExportOperationJob` holds its existing independent Product track lock for
+   preconditions, execution, metadata, and finalization. The coordinator creates
+   and reads back a pending audit event before invoking Product operations.
+   An unavailable pending write/read stops with `PRODUCT_HISTORY_UNAVAILABLE`.
+   Lock contention records Failed only for a fresh operation identity; it never
+   finalizes an existing event belonging to the operation holding the lock.
+3. After the job's authoritative version preconditions, the coordinator first
+   persists `ProductManagerExecutionStarted`, then awaits the audit service's
+   durable `ExecutionStartedAtUtc` checkpoint. Failure at either boundary stops
+   before the operation service is invoked. No synchronous wait is introduced.
+4. The existing `beforeMutation` hook records whether workflow mutation may have
+   begun. A service precondition rejection can be classified as confirmed Failed
+   only when the execution owner observed rejection before this hook. Exceptions
+   after the hook, interrupted execution, and uncertain checkpoint writes use
+   RequiresManualReview. Errors before any checkpoint attempt use Failed.
+5. Manual completion uses `CompleteExportWithHistoryAsync`. A serializable SQL
+   transaction changes the validating track to ReadyForDistribution and inserts
+   its immutable state-history row. `OUTPUT INSERTED.product_state_history_id`
+   returns the exact committed identity. The result includes the resolved
+   Product identity and actual candidate version. No timestamp/latest-row or
+   expected-version inference is used to find the state ID.
+6. A single `ProductManagerHistoryTerminalV1` parameter stores the complete
+   application-owned terminal receipt before finalization: operation/job/Product
+   identities, operation subtype, outcome, state ID, result version, fixed public
+   result code/message, and reviewed warning metadata. Partial writes to the
+   older public job parameters are not recovery evidence.
+7. Audit finalization and exact-state validation are best effort after business
+   success. Failure does not throw back into Hangfire. The receipt remains
+   recoverable; public job result parameters are written independently using
+   reviewed constants. If even the receipt cannot be stored, the audit remains
+   pending and a later terminal observation requires manual review.
+
+A requeue never repeats an operation with an existing pending or finalized audit
+identity. A matching successful terminal receipt preserves business success and
+allows idempotent finalization, including after Worker restart. SQL outages leave
+that receipt intact. Conflicting identities or evidence fail closed; an existing
+terminal audit outcome is immutable. Without a receipt, an interrupted pending
+attempt requires manual review even if no start timestamp is visible. A legacy
+unaudited job whose execution guard is already set cannot be adopted as a fresh
+operation. Audit uniqueness is an integrity guard, not a replacement for Product
+locks or a distributed business-operation registry.
+
+### 18.3 Recovery evidence and decisions
+
+`ProductHistoryReconciliation` reacquires the same Product track lock, rereads the
+pending row, and reads Hangfire's current state and serialized request. It does
+not infer the current state by sorting monitoring-history timestamps. It compares
+both request and application-owned job parameters with the audit identity.
+
+| Evidence                                                                                                    | Audit behavior                                           |
+| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Processing, Enqueued, Scheduled, Awaiting                                                                   | Leave pending                                            |
+| Missing/expired job, unknown state, missing or inconsistent identity                                        | Leave pending and log                                    |
+| Terminal job with complete matching success receipt and exact valid completion row                          | Succeeded or SucceededWithWarning                        |
+| Terminal job with reviewed failure receipt                                                                  | Use its confirmed Failed or RequiresManualReview outcome |
+| Failed/Deleted without receipt and without either execution-start marker                                    | Failed                                                   |
+| Failed/Deleted after either start marker, or Succeeded without a receipt                                    | RequiresManualReview                                     |
+| Invalid state ID, target, version, receipt content, or state reference already claimed by another operation | Leave pending and log; never manufacture an association  |
+
+The read-only recovery repository validates the exact `ProductStateHistory` ID
+against its Product, independent export target, ReadyForDistribution state and
+result version. It rejects another operation's existing reference to the same
+row. It does not modify Product tables. Bounded keyset pages scan stale pending
+events so an old unknown job cannot starve later events. Cancellation is honored
+between rows/pages. Repeated and concurrent recovery use the existing lock and
+the foundation's compare-and-finalize guard.
+
+### 18.4 Current hosting ownership
+
+The baseline `ProductCatalogueProcessProfile` explicitly makes Api HTTP-only
+with zero Hangfire workers and Worker non-HTTP with one Hangfire worker.
+`BackendRegistrations.AddProductCatalogueExportExecution` returns immediately
+for Api. The new reconciliation services and hosted registration are added only
+below that Worker gate.
+
+The existing Worker owns both recurring registration and execution of
+`product-history-reconciliation`, every 15 minutes in UTC on `default`. The
+stale threshold is 15 minutes. Registration is idempotent under that fixed ID.
+No additional server, worker thread, process role, or queue consumer is created.
+The historical API-hosted `productmanager-maintenance` proposal is superseded.
+A long-running export/detection job can delay a reconciliation sweep because
+this preserves the current single-worker contract. This is recovery latency,
+not authority to run Export outside its lock.
+
+### 18.5 Public messages and frontend association
+
+Existing approved `ProductHistorySafeMessages` remain the only source of public
+audit outcome/code/message. Successful job receipts use the established Export
+success constants. Warning text is mapped to the reviewed generic warning,
+never copied from arbitrary exception/producer text. Raw exceptions remain in
+internal logs, not public audit metadata. No validation report, path, credential,
+stack trace, or arbitrary frontend string is stored in the new receipt.
+
+The state ID references the ReadyForDistribution completion row. The frontend
+may infer an ordinary status transition for that row. Such a row must remain
+visible beside the explicit Export audit event: suppression still requires a
+unique exact state ID, matching inferred Export type, and successful explicit
+outcome. There is one explicit public audit event per logical operation, not
+necessarily one total timeline row.
+
+### 18.6 Deployment and verification
+
+No dependency or schema change is required. Existing database-owner Batch 1
+scripts remain prerequisites; no automatic migration is added. Deploy API and
+Worker together after local build/test acceptance. Restart Worker and verify
+one recurring job on `default`, with no API Hangfire server.
+
+Tests cover producer failure injection, checkpoint ordering, exact state IDs,
+post-success persistence outages, restart/requeue, nonterminal/unknown states,
+identity/reference rejection, concurrent lock behavior, single hosting ownership,
+SQL transaction/query contracts, and frontend no-false-association regressions.
+The delivery report records checks actually run and the local acceptance steps.
+Do not run opt-in database-owner tests without a configured approved database.

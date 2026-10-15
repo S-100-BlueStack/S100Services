@@ -25,7 +25,15 @@ public enum ExportOperationType
 public sealed record ExportOperationWarning(string Code, string Message);
 
 /// <summary>Represents the safe public result of an export operation.</summary>
-public sealed record ExportOperationResult(string Code, string Message, ExportOperationWarning? Warning = null);
+public sealed record ExportOperationResult(string Code, string Message, ExportOperationWarning? Warning = null)
+{
+    /// <summary>The exact committed completion row; never inferred from time or version.</summary>
+    public Guid? StateRecordId { get; init; }
+    public string? DatasetName { get; init; }
+    public string? ExportTarget { get; init; }
+    public int? ResultEdition { get; init; }
+    public int? ResultUpdate { get; init; }
+}
 
 /// <summary>Indicates that a read-only product snapshot could not be serialized.</summary>
 public sealed class ExportSourceUnavailableException(string datasetName) : Exception($"The generated dataset for '{datasetName}' could not be serialized.")

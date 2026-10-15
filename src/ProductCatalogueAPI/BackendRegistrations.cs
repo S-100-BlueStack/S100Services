@@ -80,6 +80,12 @@ public static class BackendRegistrations
         services.AddSingleton<IExportEngine, GmlExportEngine>();
         services.AddSingleton<IExportEngineRegistry, ExportEngineRegistry>();
         services.AddSingleton<ISevenCsService, SevenCsService>();
+        services.AddScoped<IProductExportHistory, ProductExportHistory>();
+        services.AddScoped<IProductHistoryRecoveryRepository, ProductHistoryRecoveryRepository>();
+        services.AddSingleton<IProductHistoryJobReader>(_ => new ProductHistoryJobReader(JobStorage.Current));
+        services.AddScoped<ProductHistoryReconciliation>();
+        services.AddTransient<ProductHistoryReconciliationJob>();
+        services.AddHostedService<ProductHistoryReconciliationRegistration>();
         services.AddScoped<IExportOperationService, ExportOperationService>();
         services.AddScoped<IEncPackageDetectionService, EncPackageDetectionService>();
         services.AddScoped<IEncPackageFinalizationService, EncPackageFinalizationService>();

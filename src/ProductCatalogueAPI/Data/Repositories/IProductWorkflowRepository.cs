@@ -30,6 +30,10 @@ public interface IProductWorkflowRepository
     /// <summary>Changes a track state and appends immutable history without altering published S-128 version values.</summary>
     Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default);
 
+    /// <summary>Commits ReadyForDistribution and returns that exact immutable history row identity.</summary>
+    Task<Guid> CompleteExportWithHistoryAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("This workflow repository cannot capture export completion history.");
+
     /// <summary>Creates an independent manual hold without changing the underlying workflow state.</summary>
     Task<bool> SetManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default);
 

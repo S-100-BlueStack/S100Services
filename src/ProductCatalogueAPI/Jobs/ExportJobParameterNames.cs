@@ -11,6 +11,8 @@ namespace ProductCatalogueAPI.Jobs
         public const string ExpectedUpdate = "ProductManagerExpectedUpdate";
         public const string CorrelationId = "ProductManagerCorrelationId";
         public const string CreatedAtUtc = "ProductManagerCreatedAtUtc";
+        public const string OperationId = "ProductManagerOperationId";
+        public const string HistoryTerminal = "ProductManagerHistoryTerminalV1";
         public const string ExecutionStarted = "ProductManagerExecutionStarted";
         public const string Mode = "ProductManagerMode";
         public const string OperationOutcome = "ProductManagerOperationOutcome";
@@ -25,6 +27,8 @@ namespace ProductCatalogueAPI.Jobs
 
     public static class ExportJobContract
     {
+        public const string HistoryUnavailableCode = "PRODUCT_HISTORY_UNAVAILABLE";
+        public const string HistoryUnavailableMessage = "Product History could not be recorded. The operation was not started.";
         public const string QueuedStatus = "Queued";
         public const string RunningStatus = "Running";
         public const string SucceededStatus = "Succeeded";

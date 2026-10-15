@@ -38,7 +38,7 @@ namespace ProductCatalogueAPI.Jobs
             ArgumentNullException.ThrowIfNull(request);
             ValidateRequest(request);
 
-            return CreateSharedParameters(
+            var parameters = CreateSharedParameters(
                 request.DatasetName,
                 ExportOperationContract.ToPublicValue(request.OperationType),
                 request.ProductSpecification,
@@ -46,7 +46,10 @@ namespace ProductCatalogueAPI.Jobs
                 request.ExpectedUpdate,
                 request.CorrelationId,
                 request.CreatedAtUtc
-            );
+            ).ToDictionary(parameter => parameter.Key, parameter => parameter.Value, StringComparer.Ordinal);
+            parameters[ExportJobParameterNames.OperationId] = request.OperationId == Guid.Empty
+                ? Guid.NewGuid() : request.OperationId;
+            return parameters;
         }
 
         public static IReadOnlyDictionary<string, object?> CreateParameters(

@@ -9,6 +9,7 @@ namespace ProductCatalogueAPI.Jobs
         int? ExpectedEdition,
         int? ExpectedUpdate,
         string CorrelationId,
-        DateTimeOffset CreatedAtUtc
+        DateTimeOffset CreatedAtUtc,
+        Guid OperationId = default
     );
 }

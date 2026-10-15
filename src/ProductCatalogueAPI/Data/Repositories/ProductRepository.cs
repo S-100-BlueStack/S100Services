@@ -343,6 +343,34 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
     }
 
     /// <inheritdoc/>
+    public async Task<Guid> CompleteExportWithHistoryAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        using var connection = _connectionFactory.Create();
+        connection.Open();
+        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+        var historyId = Guid.NewGuid();
+        // The ready state and its immutable identity must commit together. A guessed
+        // latest row could belong to another operation or independent product track.
+        var insertedId = await connection.QuerySingleAsync<Guid>(new CommandDefinition("""
+            UPDATE dbo.ProductExportTrack
+            SET state = @Ready, updated_at_utc = @OccurredAtUtc
+            WHERE product_export_track_id = @TrackId AND state = @Validating
+              AND candidate_edition IS NOT NULL AND candidate_update IS NOT NULL;
+            IF @@ROWCOUNT <> 1
+                THROW 51080, 'The export completion state is not eligible.', 1;
+
+            INSERT INTO dbo.ProductStateHistory
+                (product_state_history_id, product_export_track_id, state, edition_number, update_number, owner, occurred_at_utc)
+            OUTPUT INSERTED.product_state_history_id
+            SELECT @HistoryId, product_export_track_id, @Ready, candidate_edition, candidate_update, @Owner, @OccurredAtUtc
+            FROM dbo.ProductExportTrack WHERE product_export_track_id = @TrackId;
+            """, new { TrackId = trackId, HistoryId = historyId, Ready = ProductState.ReadyForDistribution,
+                Validating = ProductState.Validating, Owner = owner, OccurredAtUtc = occurredAtUtc },
+            transaction, cancellationToken: cancellationToken));
+        transaction.Commit();
+        return insertedId;
+    }
+
+    /// <inheritdoc/>
     public async Task DiscardCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
         connection.Open();
@@ -765,6 +793,27 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
 
     /// <inheritdoc/>
     public Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.State = state; track.UpdatedAtUtc = occurredAtUtc; track.ErrorCode = errorCode; track.ErrorMessage = errorMessage; } return Task.CompletedTask; }
+
+    /// <inheritdoc/>
+    public Task<Guid> CompleteExportWithHistoryAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate) {
+            var track = FindTrack(trackId);
+            if (track.State != ProductState.Validating || track.CandidateEdition is null || track.CandidateUpdate is null)
+                throw new InvalidOperationException("The export completion state is not eligible.");
+            var historyId = Guid.NewGuid();
+            track.State = ProductState.ReadyForDistribution;
+            track.UpdatedAtUtc = occurredAtUtc;
+            foreach (var current in _products.Where(row => row.Name == track.DatasetName &&
+                NormalizeProductSpecification(row.ProductSpecification) == track.ProductSpecification.ToString() && row.Date_to == MaxDate))
+                current.Date_to = occurredAtUtc;
+            _products.Add(new ProductRecord { Id = historyId, Name = track.DatasetName,
+                ProductSpecification = track.ProductSpecification.ToString(), State = track.State,
+                EditionNo = track.CandidateEdition.Value, UpdateNo = track.CandidateUpdate.Value,
+                Owner = owner, Date_From = occurredAtUtc, Date_to = MaxDate });
+            return Task.FromResult(historyId);
+        }
+    }
 
     /// <inheritdoc/>
     public Task<bool> SetManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
