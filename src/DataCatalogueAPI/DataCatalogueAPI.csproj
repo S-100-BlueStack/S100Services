@@ -58,7 +58,7 @@
 		<PackageReference Include="Eventuous.Subscriptions" Version="0.17.0" />
 
 		<!-- Built-in OpenAPI document generation. -->
-		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
 
 		<!--
       Pinned deliberately. The .NET 10 OpenAPI generator is built against the
@@ -84,6 +84,7 @@
 
 		<!-- Logging. Console, Debug and File sinks come along transitively. -->
 		<PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+		<PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
 	</ItemGroup>
 
 	<ItemGroup>
