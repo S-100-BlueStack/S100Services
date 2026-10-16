@@ -148,7 +148,7 @@ namespace DataCatalague.Api.Controllers.V1
                 LastUpdatedUtc = state.LastUpdatedUtc,
             };
 
-            private const string _alphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            private const string _alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
 
             private static string CreateStreamId() => Nanoid.Generate(_alphabet, 18);
         }
