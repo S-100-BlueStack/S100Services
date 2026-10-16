@@ -55,7 +55,7 @@ namespace DataCatalague.Api.Controllers
             ArgumentNullException.ThrowIfNullOrEmpty(request.GeoJSON);
 
             try {
-                var category = await this._eventStore.LoadState<CategoryState>(new(request.Category), true, cancellationToken);
+                var category = await this._eventStore.LoadState<CategoryState, CategoryId>(this._streamNameMap, new(request.Category), true, cancellationToken);
                 if (category.State.IsTerminated)
                     return this.BadRequest();
 
@@ -97,10 +97,10 @@ namespace DataCatalague.Api.Controllers
             ArgumentNullException.ThrowIfNullOrEmpty(id);
 
             try {
-                var stream = await this._eventStore.LoadState<PackageState>(new(id), true, cancellationToken);
+                var stream = await this._eventStore.LoadState<PackageState, PackageId>(this._streamNameMap, new(id), cancellationToken: cancellationToken);
                 return Map(stream.State);
             }
-            catch {
+            catch (StreamNotFound) {
                 this._logger.LogInformation("Package {id} was not found.", id);
 
                 return this.Problem(
@@ -119,7 +119,7 @@ namespace DataCatalague.Api.Controllers
             ArgumentNullException.ThrowIfNullOrEmpty(id);
 
             try {
-                var stream = await this._eventStore.LoadState<PackageState>(new(id), true, cancellationToken);
+                var stream = await this._eventStore.LoadState<PackageState, PackageId>(this._streamNameMap, new(id), cancellationToken: cancellationToken);
 
                 throw new NotImplementedException();
 
@@ -175,6 +175,9 @@ namespace DataCatalague.Api.Controllers
             Category = state.Category,
             FileName = state.FileName,
             AbsoluteUri = state.AbsoluteUri?.AbsolutePath,
+            GeometryRef = GeometryReferenceResponse.FromStoredReference(state.GeometryRef),
+            DetailedGeometry = DetailedGeometryResponse.FromState(state.DetailedGeometry),
+            Severity = state.Severity,
             MetaData = state.MetaData,
             DisplayScale = state.DisplayScale,
             LastUpdatedUtc = state.LastUpdatedUtc,

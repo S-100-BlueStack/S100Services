@@ -6,6 +6,7 @@ using DataCatalague.Api.Domain.Commands;
 using DataCatalague.Api.Models;
 using DataCatalague.Api.Models.V1;
 using DataCatalague.Api.Repositories;
+using DataCatalague.Api.Services;
 using Eventuous;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -68,7 +69,14 @@ namespace DataCatalague.Api.Controllers
         [ProducesResponseType<PagedResponse<CategoryResponse>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<PagedResponse<CategoryResponse>>> GetCategories(CancellationToken cancellationToken) {
-            return this.BadRequest();
+            var categories = _dispatchRepository.Categories;
+
+            return this.Ok(new PagedResponse<CategoryResponse> {
+                Items = categories.Select(e => Map(_dispatchRepository.GetCategory(e))).ToArray(),
+                Page = 1,
+                PageSize = Math.Max(DefaultPageSize, categories.Length),
+                TotalCount = categories.Length,
+            });
         }
 
         [HttpPost("categories")]
@@ -98,7 +106,7 @@ namespace DataCatalague.Api.Controllers
                 Map(result.State));
         }
 
-        [HttpGet("categoriess/{id}", Name = "GetCategory.V1")]
+        [HttpGet("categories/{id}", Name = "GetCategory.V1")]
         [Consumes("application/json")]
         [ProducesResponseType<CategoryResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -107,10 +115,10 @@ namespace DataCatalague.Api.Controllers
             ArgumentNullException.ThrowIfNullOrEmpty(id);
 
             try {
-                var stream = await this._eventStore.LoadState<CategoryState, CategoryId>(this._streamNameMap, new(id), cancellationToken: cancellationToken);
+                var stream = await this._eventStore.LoadState<CategoryState, CategoryId>(this._streamNameMap, new(id), true, cancellationToken);
                 return Map(stream.State);
             }
-            catch {
+            catch (StreamNotFound) {
                 this._logger.LogInformation("Category {id} was not found.", id);
 
                 return this.Problem(
@@ -120,7 +128,7 @@ namespace DataCatalague.Api.Controllers
             }
         }
 
-        [HttpPut("categoriess/{id}/specification")]
+        [HttpPut("categories/{id}/specification")]
         [Consumes("application/json")]
         [ProducesResponseType<CategoryResponse>(StatusCodes.Status202Accepted)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -142,7 +150,7 @@ namespace DataCatalague.Api.Controllers
             this._logger.LogInformation("UpdateCategorySpecification {version}.", result.State.Version);
 
             return this.AcceptedAtRoute(
-                "GetPackage.V1",
+                "GetCategory.V1",
                 new { id = result.State.Id, version = ApiVersions.V1Text },
                 Map(result.State));
         }

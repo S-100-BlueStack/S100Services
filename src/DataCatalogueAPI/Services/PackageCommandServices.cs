@@ -18,7 +18,7 @@ namespace DataCatalague.Api.Services
                 .InState(ExpectedState.Existing)
                 .GetId(cmd => new(cmd.PackageId))
                 .ActAsync(
-                    (package, cmd, _) => package.AddDetailedGEometry(cmd.PointRef, cmd.CurveRef, cmd.SurfaceRef)
+                    (package, cmd, _) => package.AddDetailedGEometry(cmd.PointRef, cmd.CurveRef, cmd.SurfaceRef, cmd.PointRefs)
                 );
 
             this.On<PackagesCommands.UpdateSeverity>()

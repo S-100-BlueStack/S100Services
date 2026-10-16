@@ -33,7 +33,7 @@ public static class ApplicationServicesConfiguration
         services.AddHealthChecks();
 
         //services.AddSingleton<IDataRepository, InMemoryProductRepository>();
-        services.AddSingleton<IEventStore, InMemoryEventStore>();
+        // The shared in-memory event store is registered in Program.cs.
 
         //services.AddSingleton<IProductRepository, InMemoryProductRepository>();
 

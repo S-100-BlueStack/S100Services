@@ -196,6 +196,7 @@ namespace DataCatalague.Api.Repositories
         public async ValueTask<EventHandlingStatus> HandleEvent(IMessageConsumeContext context) {            
             return context.Message switch {
                 DispatcherEvents.V1.CategoryCreated evt => this.Handle_CategoryCreated(evt),
+                DispatcherEvents.V1.CategorySpecificationUpdated evt => this.Handle_CategorySpecificationUpdated(evt),
                 PackagesEvents.V1.PackageCreated evt => this.Handle_PackageCreated(evt),
                 _ => EventHandlingStatus.Ignored,
             };
@@ -204,7 +205,15 @@ namespace DataCatalague.Api.Repositories
         private EventHandlingStatus Handle_CategoryCreated(DispatcherEvents.V1.CategoryCreated evt) {
             var state = new CategoryState();
             state = state.When(evt);
-            this._categories.TryAdd(evt.CategoryId, state);
+            var added = this._categories.TryAdd(evt.CategoryId, state);
+
+            return EventHandlingStatus.Handled;
+        }
+
+        private EventHandlingStatus Handle_CategorySpecificationUpdated(DispatcherEvents.V1.CategorySpecificationUpdated evt) {
+            var state = new CategoryState();
+            state = state.When(evt);
+            //var added = this._categories.TryAdd(evt, state);
 
             return EventHandlingStatus.Handled;
         }

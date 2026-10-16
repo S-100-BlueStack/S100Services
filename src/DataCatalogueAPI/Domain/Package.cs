@@ -6,6 +6,16 @@ namespace DataCatalague.Api.Domain
 {
     public record DisplayScale(long maximumDisplayScale = 1, long minimumDisplayScale = 19999999);
 
+    /// <summary>References to the complete detail geometries, separate from the package AOI.</summary>
+    /// <param name="PointRef">The point geometry reference when stored as exactly one feature; otherwise null.</param>
+    /// <param name="CurveRef">The multipart curve reference, if present.</param>
+    /// <param name="SurfaceRef">The polygon reference, if present.</param>
+    public record DetailedGeometry(string? PointRef, string? CurveRef, string? SurfaceRef)
+    {
+        /// <summary>All point feature references; a Multipoint feature contributes one reference.</summary>
+        public IReadOnlyList<string> PointRefs { get; init; } = PointRef is null ? [] : [PointRef];
+    }
+
     public record PackageMetaData(string? ShortId, string? Type, long? Number, string? Title, string? Source, string? RefId, DateTimeOffset? CreatedUTC);
 }
 
@@ -27,13 +37,10 @@ namespace DataCatalague.Api.Domain
             this.Apply(new V1.SeverityUpdated(Severity, DateTime.UtcNow));
         }
 
-        public async Task AddDetailedGEometry(
-                    string? PointRef,
-                    string? CurveRef,
-                    string? SurfaceRef
-            ) {
+        public Task AddDetailedGEometry(string? PointRef, string? CurveRef, string? SurfaceRef, IReadOnlyList<string>? PointRefs = null) {
             this.EnsureExists();
-            this.Apply(new V1.DetailedGeometryAdded(PointRef, CurveRef, SurfaceRef, DateTime.UtcNow));
+            this.Apply(new V1.DetailedGeometryAdded(PointRef, CurveRef, SurfaceRef, DateTime.UtcNow, PointRefs?.ToArray()));
+            return Task.CompletedTask;
         }
 
         public async Task UpdateSeverity(
@@ -60,6 +67,9 @@ namespace DataCatalague.Api.Domain
 
         public ulong? Severity { get; set; } = ulong.MaxValue;
 
+        /// <summary>The complete geometries referenced by the latest DetailedGeometryAdded event.</summary>
+        public DetailedGeometry? DetailedGeometry { get; init; }
+
         public PackageMetaData? MetaData { get; set; } = null;
 
         public DisplayScale? DisplayScale { get; init; } = null;
@@ -68,6 +78,8 @@ namespace DataCatalague.Api.Domain
 
         public PackageState() {
             this.On<V1.PackageCreated>(PackageCreated);
+            this.On<V1.SeverityUpdated>((state, e) => state with { Severity = e.Severity, LastUpdatedUtc = e.UTC });
+            this.On<V1.DetailedGeometryAdded>((state, e) => state with { DetailedGeometry = new(e.PointRef, e.CurveRef, e.SurfaceRef) { PointRefs = e.PointRefs?.ToArray() ?? (e.PointRef is null ? [] : [e.PointRef]) }, LastUpdatedUtc = e.UTC });
         }
 
         static PackageState PackageCreated(PackageState state, V1.PackageCreated e)
@@ -91,7 +103,7 @@ namespace DataCatalague.Api.Domain.Commands
     {
         public record CreatePackage(string PackageId, string Category, string FileName, string AbsoluteUri, string GeometryRef, ulong Severity, PackageMetaData? MetaData, DisplayScale? DisplayScale);
 
-        public record AddDetailedGeometry(string PackageId, string? PointRef, string? CurveRef, string? SurfaceRef);
+        public record AddDetailedGeometry(string PackageId, string? PointRef, string? CurveRef, string? SurfaceRef, IReadOnlyList<string>? PointRefs = null);
 
         public record UpdateSeverity(string PackageId, ulong Severity);
     }
@@ -116,12 +128,7 @@ namespace DataCatalague.Api.Domain.Events
                 );
 
             [EventType("V1.DetailedGeometryAdded")]
-            public record DetailedGeometryAdded(
-                    string? PointRef,
-                    string? CurveRef,
-                    string? SurfaceRef,
-                    DateTimeOffset UTC
-                );
+            public record DetailedGeometryAdded(string? PointRef, string? CurveRef, string? SurfaceRef, DateTimeOffset UTC, IReadOnlyList<string>? PointRefs = null);
 
             [EventType("V1.SeverityUpdated")]
             public record SeverityUpdated(

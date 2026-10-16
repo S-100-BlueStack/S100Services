@@ -45,6 +45,7 @@ namespace DataCatalague.Api.Domain
 
         public CategoryState() {
             this.On<V1.CategoryCreated>(Created);
+            this.On<V1.CategorySpecificationUpdated>(UpdateSpecification);
         }
 
         static CategoryState Created(CategoryState state, V1.CategoryCreated e)

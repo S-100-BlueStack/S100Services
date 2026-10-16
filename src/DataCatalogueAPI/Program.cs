@@ -1,5 +1,6 @@
-using DataCatalague.Api.Configuration;
+﻿using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
+using DataCatalague.Api.Initialization;
 using DataCatalague.Api.Repositories;
 using DataCatalague.Api.Services;
 using Eventuous;
@@ -51,9 +52,11 @@ public static class Program
             EventSerializer.SetDefault(eventSerializer);
 
             builder.Services.AddSingleton(eventSerializer);
+            builder.Services.AddSingleton<StreamNameMap>();
             builder.Services.AddSingleton<DispatchRepository>();
             builder.Services.AddSingleton<PackageRepository>();
             builder.Services.AddSingleton<ArcGisDispatcher>();
+            builder.Services.AddTransient<SampleDataInitialization>();
 
             //builder.Services.AddEventuousSqlServer(
             //    "",
@@ -84,9 +87,15 @@ public static class Program
                 InMemoryAllStreamSubscription,
                 InMemoryAllStreamSubscriptionOptions>(
                 "dispatcher-subscription",
-                x => x.AddEventHandler<DispatchRepository>());
+                // The type overload creates a subscription-keyed instance. Resolve the
+                // singleton used by controllers so they read the populated category cache.
+                x => x.AddEventHandler(sp => sp.GetRequiredService<DispatchRepository>(), ownsHandler: false));
 
             var app = builder.Build();
+
+            using (var scope = app.Services.CreateScope()) {
+                await scope.ServiceProvider.GetRequiredService<SampleDataInitialization>().InitializeAsync(app.Lifetime.ApplicationStopping).ConfigureAwait(false);
+            }
 
             app.ConfigureRequestPipeline();
 

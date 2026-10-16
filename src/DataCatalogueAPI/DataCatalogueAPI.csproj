@@ -97,6 +97,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <Content Update="Samples\Notices2Mariner\*.json">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	    <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+	  </Content>
 	  <None Update="s100ed17.geodatabase">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </None>
