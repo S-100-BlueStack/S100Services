@@ -171,6 +171,35 @@ namespace DataCatalague.Api.Controllers
         }
 
 
+        [HttpPost("bind")]
+        [Consumes("application/json")]
+        [ProducesResponseType<BindResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<BindResponse>> Bind([FromBody] BindRequest request, CancellationToken cancellationToken) {
+            ArgumentNullException.ThrowIfNull(request);
+            ArgumentNullException.ThrowIfNullOrEmpty(request.PackageId);
+            ArgumentNullException.ThrowIfNullOrEmpty(request.PipelineId);
+
+            try {
+                var package = await this._eventStore.LoadState<PackageState>(new(request.PackageId), true, cancellationToken);
+
+                var pipeline = await this._eventStore.LoadState<PipelineState>(new(request.PipelineId), true, cancellationToken);
+
+
+            }
+            catch {
+                this._logger.LogInformation("Package/Pipeline {package}/{pipeline} was not found.", request.PackageId, request.PipelineId);
+
+                return this.Problem(
+                    title: "Package or pipeline not found.",
+                    detail: $"No package or pipeline exists with identifier {request.PackageId}|{request.PipelineId}.",
+                    statusCode: StatusCodes.Status404NotFound);
+            }
+
+
+            throw new NotImplementedException();
+        }
 
         private static CategoryResponse Map(Domain.CategoryState state) => new() {
             Id = state.Id,

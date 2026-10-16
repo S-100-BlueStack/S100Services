@@ -28,4 +28,12 @@ namespace DataCatalague.Api.Models.V1
         [Required]
         public required string GeoJSON { get; init; }
     }
+
+    public sealed class BindRequest {
+        [Required]
+        public required string PackageId { get; init; }
+
+        [Required]
+        public required string PipelineId { get; init; }
+    }
 }

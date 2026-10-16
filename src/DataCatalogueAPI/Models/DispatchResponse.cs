@@ -21,4 +21,8 @@ namespace DataCatalague.Api.Models.V1
     {
         public required string GeometryRef { get; init; }
     }
+
+    public sealed class BindResponse {
+
+    }
 }
