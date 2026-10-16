@@ -22,7 +22,14 @@ namespace DataCatalague.Api.Models.V1
         public required string GeometryRef { get; init; }
     }
 
-    public sealed class BindResponse {
+    public sealed class BindingResponse {
+        public required string Id { get; init; }
+
+        public required string PackageId { get; init; }
+
+        public required string? PipelineId { get; init; }
+
+        public required DateTimeOffset LastUpdatedUtc { get; init; }
 
     }
 }

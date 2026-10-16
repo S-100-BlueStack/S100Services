@@ -1,5 +1,7 @@
 ﻿using Eventuous;
+using Microsoft.AspNetCore.Http.HttpResults;
 using static DataCatalague.Api.Domain.Events.DispatcherEvents;
+using static DataCatalague.Api.Domain.Events.DispatcherEvents.V1;
 
 namespace DataCatalague.Api.Domain
 {
@@ -61,6 +63,41 @@ namespace DataCatalague.Api.Domain
                 LastUpdatedUtc = e.UTC,
             };
     }
+
+
+    public class Binding : Aggregate<BindingState> {
+        public async Task Create(
+                    string BindingId,
+                    string PackageId,
+                    string PipelineId                   
+            ) {
+            this.EnsureDoesntExist();
+            this.Apply(new V1.Binded(BindingId, PackageId, PipelineId, DateTime.UtcNow));
+        }
+    }
+
+    public record BindingId(string Value) : Id(Value);
+
+    public record BindingState : State<BindingState> {
+        public BindingId? Id { get; set; }
+
+        public PackageId? PackageId { get; set; }
+
+        public PipelineId? PipelineId { get; set; }
+
+        public DateTimeOffset LastUpdatedUtc { get; set; }
+
+        public BindingState() {
+            this.On<V1.Binded>(Binded);
+        }
+
+        static BindingState Binded(BindingState state, V1.Binded e)
+            => state with {
+                PackageId = new(e.PackageId),
+                PipelineId = new(e.PipelineId),
+                LastUpdatedUtc =e.UTC,
+            };
+    }
 }
 
 namespace DataCatalague.Api.Domain.Commands
@@ -71,6 +108,8 @@ namespace DataCatalague.Api.Domain.Commands
         public record CreateCategory(string CategoryId, string DisplayName, string? Description = default);
 
         public record UpdateSpecificationCategory(string CategoryId, string Version, string Markdown);
+
+        public record Bind(string BindingId, string PackageId, string PipelineId);
     }
 }
 
@@ -93,7 +132,16 @@ namespace DataCatalague.Api.Domain.Events
                     string Version,
                     string Markdown,
                     DateTimeOffset UTC
-                );            
+                );
+
+
+            [EventType("V1.Binded")]
+            public record Binded(
+                    string BindingId,
+                    string PackageId,
+                    string PipelineId,
+                    DateTimeOffset UTC
+                );
         }
     }
 }

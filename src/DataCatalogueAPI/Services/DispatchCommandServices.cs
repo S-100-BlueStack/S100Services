@@ -21,5 +21,18 @@ namespace DataCatalague.Api.Services
                     (category, cmd, _) => category.UpdateSpecification(cmd.Version, cmd.Markdown)
                 );
         }
-    }    
+    }
+
+    public class BindingCommandService : CommandService<Domain.Binding, BindingState, BindingId>
+    {
+        public BindingCommandService(IEventStore store) : base(store) {
+            this.On<DispatcherCommands.Bind>()
+                .InState(ExpectedState.New)
+                .GetId(cmd => new(cmd.BindingId))
+                .ActAsync(
+                    (binding, cmd, _) => binding.Create(cmd.BindingId, cmd.PackageId, cmd.PipelineId)
+                );
+
+        }
+    }
 }

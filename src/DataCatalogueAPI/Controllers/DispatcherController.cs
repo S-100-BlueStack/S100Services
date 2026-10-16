@@ -1,4 +1,5 @@
-﻿using Asp.Versioning;
+﻿using ArcGIS.Core.Data.DDL;
+using Asp.Versioning;
 using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Domain.Commands;
@@ -38,7 +39,7 @@ namespace DataCatalague.Api.Controllers
     public sealed class DispatcherController(
         IEventStore eventstore,
         ICommandService<CategoryState> categoryService,
-        ICommandService<PackageState> packageService,
+        ICommandService<BindingState> bindingService,
         DispatchRepository dispatchRepository,
         IOptions<DispatcherOptions> options,
         ArcGisDispatcher dispatcher,
@@ -52,7 +53,7 @@ namespace DataCatalague.Api.Controllers
 
         private readonly ICommandService<CategoryState> _serviceCategory = categoryService;
 
-        private readonly ICommandService<PackageState> _servicePackage = packageService;
+        private readonly ICommandService<BindingState> _serviceBinding = bindingService;
 
         private readonly DispatchRepository _dispatchRepository = dispatchRepository;
 
@@ -79,7 +80,7 @@ namespace DataCatalague.Api.Controllers
             ArgumentNullException.ThrowIfNullOrWhiteSpace(request.DisplayName?.Trim());
             ArgumentNullException.ThrowIfNullOrWhiteSpace(request.Description?.Trim());
 
-            var displayName = request.DisplayName?.Trim();
+            var displayName = request.DisplayName?.Trim()!;
             var description = request.Description?.Trim();
 
             var cmd = await this._serviceCategory.Handle(new DispatcherCommands.CreateCategory(CreateStreamId(), displayName, description), cancellationToken);
@@ -171,12 +172,12 @@ namespace DataCatalague.Api.Controllers
         }
 
 
-        [HttpPost("bind")]
+        [HttpPost("bindings")]
         [Consumes("application/json")]
-        [ProducesResponseType<BindResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<BindingResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<BindResponse>> Bind([FromBody] BindRequest request, CancellationToken cancellationToken) {
+        public async Task<ActionResult<BindingResponse>> CreateBinding([FromBody] BindRequest request, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNull(request);
             ArgumentNullException.ThrowIfNullOrEmpty(request.PackageId);
             ArgumentNullException.ThrowIfNullOrEmpty(request.PipelineId);
@@ -186,6 +187,19 @@ namespace DataCatalague.Api.Controllers
 
                 var pipeline = await this._eventStore.LoadState<PipelineState>(new(request.PipelineId), true, cancellationToken);
 
+                var cmd = await this._serviceBinding.Handle(new DispatcherCommands.Bind($"{request.PackageId}::{request.PipelineId}", request.PackageId, request.PipelineId), cancellationToken);
+
+                if (!cmd.Success)
+                    return this.BadRequest();
+
+                var result = cmd.Get()!;
+
+                this._logger.LogInformation("Bind {package} => {pipeline}.", result.State.PackageId, result.State.PipelineId);
+
+                return this.CreatedAtRoute(
+                    "GetBinding.V1",
+                    new { id = result.State.Id, version = ApiVersions.V1Text },
+                    Map(result.State));
 
             }
             catch {
@@ -196,10 +210,31 @@ namespace DataCatalague.Api.Controllers
                     detail: $"No package or pipeline exists with identifier {request.PackageId}|{request.PipelineId}.",
                     statusCode: StatusCodes.Status404NotFound);
             }
-
-
-            throw new NotImplementedException();
         }
+
+        [HttpGet("bindings/{id}", Name = "GetBinding.V1")]
+        [Consumes("application/json")]
+        [ProducesResponseType<BindingResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<BindingResponse>> GetBinding(string id, CancellationToken cancellationToken) {
+            ArgumentNullException.ThrowIfNullOrEmpty(id);
+
+            try {
+                var stream = await this._eventStore.LoadState<BindingState, BindingId>(this._streamNameMap, new(id), cancellationToken: cancellationToken);
+                return Map(stream.State);
+            }
+            catch {
+                this._logger.LogInformation("Binding {id} was not found.", id);
+
+                return this.Problem(
+                    title: "Binding not found.",
+                    detail: $"No binding exists with identifier {id}.",
+                    statusCode: StatusCodes.Status404NotFound);
+            }
+        }
+
+
 
         private static CategoryResponse Map(Domain.CategoryState state) => new() {
             Id = state.Id,
@@ -207,6 +242,13 @@ namespace DataCatalague.Api.Controllers
             Description = state.Description,
             Version = state.Version?.ToString(),
             Specification = state.Markdown,
+            LastUpdatedUtc = state.LastUpdatedUtc,
+        };
+
+        private static BindingResponse Map(Domain.BindingState state) => new() {
+            Id = state.Id,
+            PackageId = state.PackageId,
+            PipelineId = state.PipelineId,
             LastUpdatedUtc = state.LastUpdatedUtc,
         };
 

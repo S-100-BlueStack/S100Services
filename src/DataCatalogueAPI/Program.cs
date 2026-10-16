@@ -63,6 +63,7 @@ public static class Program
             //builder.Services.AddEventStore<SqlServerStore>();
 
             builder.Services.AddCommandService<CategoryCommandService, CategoryState>();
+            builder.Services.AddCommandService<BindingCommandService, BindingState>();
             builder.Services.AddCommandService<PackageCommandService, PackageState>();
             builder.Services.AddCommandService<PipelineCommandService, PipelineState>();
 

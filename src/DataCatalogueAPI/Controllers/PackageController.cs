@@ -19,7 +19,6 @@ namespace DataCatalague.Api.Controllers
     [Produces("application/json")]
     public sealed class PackageController(
         IEventStore eventstore,
-        ICommandService<CategoryState> categoryService,
         ICommandService<PackageState> packageService,
         PackageRepository packageRepository,
         IOptions<PackagesOptions> options,
@@ -31,8 +30,6 @@ namespace DataCatalague.Api.Controllers
         readonly StreamNameMap _streamNameMap = new();
 
         private readonly IEventStore _eventStore = eventstore;
-
-        private readonly ICommandService<CategoryState> _serviceCategory = categoryService;
 
         private readonly ICommandService<PackageState> _servicePackage = packageService;
 
