@@ -4,6 +4,7 @@ using DataCatalague.Api.PackageTypes;
 using System.Text.Json;
 using DataCatalague.Api.Models.V1;
 using Microsoft.AspNetCore.Mvc;
+using System.IO.Compression;
 
 namespace DataCatalague.Api.Initialization;
 
@@ -47,10 +48,37 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
 
 
 
-        // Create a sample general submission package from the ZIP file in the Samples/GeneralSubmission directory.
+        // General submissions are ZIP-based; the manifest supplies the AOI until a real submission ingestion flow exists.
+        var submissionDirectory = Path.Combine(AppContext.BaseDirectory, "Samples", "GeneralSubmission");
+        var submissionFiles = Directory.GetFiles(submissionDirectory, "*.zip").Order(StringComparer.Ordinal).ToArray();
+        if (submissionFiles.Length != 2) {
+            throw new InvalidDataException($"Expected two general submission ZIP samples in '{submissionDirectory}', found {submissionFiles.Length}.");
+        }
 
+        foreach (var file in submissionFiles) {
+            using var archive = ZipFile.OpenRead(file);
+            var manifest = archive.GetEntry("submission.json") ?? throw new InvalidDataException($"Sample '{Path.GetFileName(file)}' has no submission.json.");
+            if (archive.GetEntry("contract.txt") is null || archive.GetEntry("aoi.shp") is null || archive.GetEntry("aoi.shx") is null || archive.GetEntry("aoi.dbf") is null || archive.GetEntry("aoi.prj") is null) {
+                throw new InvalidDataException($"Sample '{Path.GetFileName(file)}' must contain a contract and complete AOI shapefile.");
+            }
+            await using var stream = manifest.Open();
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var data = document.RootElement;
+            var title = data.GetProperty("title").GetString();
+            var aoi = data.GetProperty("aoi").GetRawText();
+            var request = new CreatePackageRequest {
+                Category = "GeneralSubmission",
+                AbsoluteUri = new Uri(Path.GetFullPath(file)).AbsoluteUri,
+                GeoJSON = aoi,
+                MetaData = new PackageMetaData(null, "GeneralSubmission", null, title, data.GetProperty("source").GetString(), null, DateTimeOffset.UtcNow),
+                CategoryData = data.Clone()
+            };
+            var created = await packages.CreatePackage(request, cancellationToken).ConfigureAwait(false);
+            RequireSuccess(created, $"create general submission '{Path.GetFileName(file)}'");
+            logger.LogInformation("Created general submission sample {FileName}.", Path.GetFileName(file));
+        }
 
-        logger.LogInformation("Sample initialization completed. CreatedPackages: {CreatedPackages}.", files.Length);
+        logger.LogInformation("Sample initialization completed. CreatedPackages: {CreatedPackages}.", files.Length + submissionFiles.Length);
     }
 
     private static CreatePackageRequest CreateRequest(string json, string sourceFile) {

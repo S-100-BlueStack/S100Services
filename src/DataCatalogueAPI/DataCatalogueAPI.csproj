@@ -48,6 +48,16 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <None Remove="Samples\GeneralSubmission\CoastalWorksSubmission.zip" />
+	  <None Remove="Samples\GeneralSubmission\HarbourSurveySubmission.zip" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Content Include="Samples\GeneralSubmission\CoastalWorksSubmission.zip" />
+	  <Content Include="Samples\GeneralSubmission\HarbourSurveySubmission.zip" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<!-- API versioning for controller-based APIs. -->
 		<PackageReference Include="Asp.Versioning.Mvc" Version="10.2.1" />
 		<PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="10.2.1" />
@@ -97,6 +107,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <Content Update="Samples\GeneralSubmission\*.zip">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	    <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+	  </Content>
 	  <Content Update="Samples\NoticesToMariners\*.json">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	    <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
