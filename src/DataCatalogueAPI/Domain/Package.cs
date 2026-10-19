@@ -37,7 +37,7 @@ namespace DataCatalague.Api.Domain
             this.Apply(new V1.SeverityUpdated(Severity, DateTime.UtcNow));
         }
 
-        public Task AddDetailedGEometry(string? PointRef, string? CurveRef, string? SurfaceRef, IReadOnlyList<string>? PointRefs = null) {
+        public Task AddDetailedGeometry(string? PointRef, string? CurveRef, string? SurfaceRef, IReadOnlyList<string>? PointRefs = null) {
             this.EnsureExists();
             this.Apply(new V1.DetailedGeometryAdded(PointRef, CurveRef, SurfaceRef, DateTime.UtcNow, PointRefs?.ToArray()));
             return Task.CompletedTask;
