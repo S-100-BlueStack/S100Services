@@ -6,7 +6,6 @@ using DataCatalague.Api.Domain.Commands;
 using DataCatalague.Api.Models;
 using DataCatalague.Api.Models.V1;
 using DataCatalague.Api.Repositories;
-using DataCatalague.Api.Services;
 using Eventuous;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -83,6 +82,7 @@ namespace DataCatalague.Api.Controllers
         [Consumes("application/json")]
         [ProducesResponseType<CategoryResponse>(StatusCodes.Status201Created)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
         public async Task<ActionResult<CategoryResponse>> CreateCategory([FromBody] CreateCategoryRequest request, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNull(request);
             ArgumentNullException.ThrowIfNullOrWhiteSpace(request.DisplayName?.Trim());
@@ -91,7 +91,14 @@ namespace DataCatalague.Api.Controllers
             var displayName = request.DisplayName?.Trim()!;
             var description = request.Description?.Trim();
 
-            var cmd = await this._serviceCategory.Handle(new DispatcherCommands.CreateCategory(CreateStreamId(), displayName, description), cancellationToken);
+            if (request.Id is not null && !System.Text.RegularExpressions.Regex.IsMatch(request.Id, @"\A[a-zA-Z0-9_-]{1,200}\z")) {
+                return this.BadRequest(new ProblemDetails { Title = "Invalid category identifier." });
+            }
+            var categoryId = request.Id ?? CreateStreamId();
+            if (await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new CategoryId(categoryId)), cancellationToken)) {
+                return this.Conflict(new ProblemDetails { Title = "Category already exists.", Detail = $"Category '{categoryId}' already exists." });
+            }
+            var cmd = await this._serviceCategory.Handle(new DispatcherCommands.CreateCategory(categoryId, displayName, description), cancellationToken);
 
             if (!cmd.Success)
                 return this.BadRequest();

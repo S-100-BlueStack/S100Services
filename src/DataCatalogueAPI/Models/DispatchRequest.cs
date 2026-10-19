@@ -5,6 +5,11 @@ namespace DataCatalague.Api.Models.V1
 {
     public sealed class CreateCategoryRequest
     {
+        /// <summary>An optional stable category identity, such as a core package type name.</summary>
+        [StringLength(200, MinimumLength = 1)]
+        [RegularExpression(@"\A[a-zA-Z0-9_-]+\z")]
+        public string? Id { get; init; }
+
         [Required]
         public required string DisplayName { get; init; }
 

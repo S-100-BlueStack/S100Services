@@ -1,4 +1,5 @@
-﻿using Asp.Versioning;
+﻿using ArcGIS.Core.Geometry;
+using Asp.Versioning;
 using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Domain.Commands;
@@ -10,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using NanoidDotNet;
 using IO = System.IO;
+using System.ComponentModel.DataAnnotations;
 
 namespace DataCatalague.Api.Controllers
 {
@@ -26,6 +28,10 @@ namespace DataCatalague.Api.Controllers
         ILogger<PackageController> logger) : ControllerBase
     {
         private const int DefaultPageSize = 20;
+
+        // The in-memory store and geometry repository cannot share a transaction.
+        // Serialize creates so duplicate source IDs are checked before writing geometry.
+        private static readonly SemaphoreSlim CreationGate = new(1, 1);
 
         readonly StreamNameMap _streamNameMap = new();
 
@@ -47,32 +53,52 @@ namespace DataCatalague.Api.Controllers
         [ProducesResponseType<PackageResponse>(StatusCodes.Status201Created)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
         public async Task<ActionResult<PackageResponse>> CreatePackage([FromBody] CreatePackageRequest request, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNull(request);
 
-            ArgumentNullException.ThrowIfNullOrEmpty(request.Category);
-            ArgumentNullException.ThrowIfNullOrEmpty(request.AbsoluteUri);
-            ArgumentNullException.ThrowIfNullOrEmpty(request.GeoJSON);
-
+            // Sample initialization invokes this action directly, bypassing MVC model validation.
+            var validationErrors = new List<ValidationResult>();
+            if (!Validator.TryValidateObject(request, new ValidationContext(request), validationErrors, validateAllProperties: true)
+                || !Uri.TryCreate(request.AbsoluteUri, UriKind.Absolute, out _)) {
+                return this.BadRequest(new ProblemDetails { Title = "Invalid package request.", Detail = "A category, absolute source URI, geometry and valid optional identifier are required." });
+            }
+            await CreationGate.WaitAsync(cancellationToken);
             try {
                 var category = await this._eventStore.LoadState<CategoryState, CategoryId>(this._streamNameMap, new(request.Category), true, cancellationToken);
                 if (category.State.IsTerminated)
                     return this.BadRequest();
 
-                var streamId = CreateStreamId();
+                var streamId = request.Id ?? CreateStreamId();
+                if (await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new PackageId(streamId)), cancellationToken)) {
+                    return this.Conflict(new ProblemDetails { Title = "Package already exists.", Detail = $"Package '{streamId}' already exists." });
+                }
 
-                var geometryRef = await this._dispatcher.ExecuteAsync(() => {
+                var references = await this._dispatcher.ExecuteAsync(() => {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (request.DetailedGeometry is { } geometry) {
+                        var aoi = PolygonBuilderEx.FromJson(geometry.Aoi);
+                        var points = geometry.Points is null ? null : MultipointBuilderEx.FromJson(geometry.Points);
+                        var curves = geometry.Curves is null ? null : PolylineBuilderEx.FromJson(geometry.Curves);
+                        var surfaces = geometry.Surfaces is null ? null : PolygonBuilderEx.FromJson(geometry.Surfaces);
+                        if ((points is null && curves is null && surfaces is null) || points?.IsEmpty == true || curves?.IsEmpty == true || surfaces?.IsEmpty == true) {
+                            throw new InvalidDataException("Detailed geometry must contain at least one group, and supplied groups must not be empty.");
+                        }
+                        return this._packageRepository.AddPackageGeometries(aoi, points, curves, surfaces, streamId, request.AbsoluteUri, cancellationToken);
+                    }
                     var polygon = this._packageRepository.FromGeoJson(request.GeoJSON);
-
-                    return this._packageRepository.AddPackageAOI(polygon, streamId, request.AbsoluteUri);
+                    return (Aoi: this._packageRepository.AddPackageAOI(polygon, streamId, request.AbsoluteUri), Details: (DetailedGeometry?)null);
                 });
 
                 var filename = IO.Path.GetFileName(request.AbsoluteUri);
 
-                var cmd = await this._servicePackage.Handle(new PackagesCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, geometryRef, request.Severity, request.MetaData, request.DisplayScale), cancellationToken);
+                // Once geometry commits, finish recording its references even if the caller disconnects.
+                var cmd = await this._servicePackage.Handle(new PackagesCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, references.Aoi, request.Severity, request.MetaData, request.DisplayScale, references.Details), CancellationToken.None);
 
-                if (!cmd.Success)
+                if (!cmd.Success) {
+                    this._logger.LogError("Package command failed after geometry persistence. PackageId: {PackageId}, Aoi: {Aoi}, Details: {@Details}.", streamId, references.Aoi, references.Details);
                     return this.BadRequest();
+                }
 
                 var result = cmd.Get()!;
 
@@ -83,8 +109,14 @@ namespace DataCatalague.Api.Controllers
                     new { id = result.State.Id, version = ApiVersions.V1Text },
                     Map(result.State));
             }
+            catch (InvalidDataException exception) {
+                return this.BadRequest(new ProblemDetails { Title = "Invalid package geometry.", Detail = exception.Message });
+            }
             catch (StreamNotFound) {
                 return this.BadRequest();
+            }
+            finally {
+                CreationGate.Release();
             }
         }
 
@@ -97,7 +129,7 @@ namespace DataCatalague.Api.Controllers
             ArgumentNullException.ThrowIfNullOrEmpty(id);
 
             try {
-                var stream = await this._eventStore.LoadState<PackageState, PackageId>(this._streamNameMap, new(id), cancellationToken: cancellationToken);
+                var stream = await this._eventStore.LoadState<PackageState, PackageId>(this._streamNameMap, new(id), true, cancellationToken);
                 return Map(stream.State);
             }
             catch (StreamNotFound) {

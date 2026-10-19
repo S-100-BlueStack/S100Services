@@ -5,6 +5,14 @@ namespace DataCatalague.Api.Models.V1
 {
     public sealed class CreatePackageRequest
     {
+        /// <summary>An optional stable source identity; omitted values receive a generated identity.</summary>
+        [StringLength(200, MinimumLength = 1)]
+        [RegularExpression(@"\A[a-zA-Z0-9_-]+\z")]
+        public string? Id { get; init; }
+
+        /// <summary>Complete Esri geometry groups; the AOI is recomputed after projection when supplied.</summary>
+        public PackageGeometry? DetailedGeometry { get; init; }
+
         [Required]
         public required string Category { get; init; }
 

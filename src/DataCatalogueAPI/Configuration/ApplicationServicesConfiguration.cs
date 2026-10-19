@@ -22,6 +22,7 @@ public static class ApplicationServicesConfiguration
 
         services
             .AddControllers()
+            .AddControllersAsServices()
             .AddJsonOptions(options => {
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             });

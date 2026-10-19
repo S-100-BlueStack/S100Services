@@ -136,13 +136,13 @@ namespace DataCatalague.Api.Repositories
             }
         }
 
-        /// <summary>Stores a sample AOI and its complete detail groups in one geodatabase transaction.</summary>
+        /// <summary>Stores a package AOI and its complete detail groups in one geodatabase transaction.</summary>
         /// <param name="aoi">The WGS84 envelope rectangle.</param>
         /// <param name="points">All detailed points, if present.</param>
         /// <param name="curves">All detailed line parts, if present.</param>
         /// <param name="surfaces">All detailed polygon rings, if present.</param>
         /// <param name="packageId">The package identity written to attribute bindings.</param>
-        /// <param name="absoluteUri">The URI of the original sample file.</param>
+        /// <param name="absoluteUri">The URI of the original source document.</param>
         /// <param name="cancellationToken">Cancels before or between row writes.</param>
         /// <returns>References used by PackageCreated and DetailedGeometryAdded.</returns>
         public (string Aoi, DetailedGeometry Details) AddPackageGeometries(Polygon aoi, Multipoint? points, Polyline? curves, Polygon? surfaces, string packageId, string absoluteUri, CancellationToken cancellationToken) {
@@ -216,7 +216,7 @@ namespace DataCatalague.Api.Repositories
                     return $"{fc.GetName().Split('.')[^1]}::{row.GetGlobalID():B}";
                 }
                 catch (GeodatabaseGeometryException exception) {
-                    this._logger.LogError(exception, "Sample geometry write failed. PackageId: {PackageId}, Table: {Table}, ShapeField: {ShapeField}, GeometryType: {GeometryType}, HasZ: {HasZ}, HasM: {HasM}.", packageId, fc.GetName(), definition.GetShapeField(), compatible.GeometryType, compatible.HasZ, compatible.HasM);
+                    this._logger.LogError(exception, "Package geometry write failed. PackageId: {PackageId}, Table: {Table}, ShapeField: {ShapeField}, GeometryType: {GeometryType}, HasZ: {HasZ}, HasM: {HasM}.", packageId, fc.GetName(), definition.GetShapeField(), compatible.GeometryType, compatible.HasZ, compatible.HasM);
                     throw new InvalidOperationException($"Could not write package '{packageId}' geometry to '{fc.GetName()}' ({expectedType}, HasZ={hasZ}, HasM={hasM}). See the geometry diagnostics for the native error.", exception);
                 }
             }
@@ -228,12 +228,12 @@ namespace DataCatalague.Api.Repositories
                 Multipoint points => new MultipointBuilderEx(points),
                 Polyline curve => new PolylineBuilderEx(curve),
                 Polygon surface => new PolygonBuilderEx(surface),
-                _ => throw new InvalidOperationException($"Unsupported sample geometry type '{geometry.GeometryType}'."),
+                _ => throw new InvalidOperationException($"Unsupported package geometry type '{geometry.GeometryType}'."),
             };
             builder.HasZ = hasZ;
             builder.HasM = hasM;
             builder.HasID = false;
-            // Samples have XY only. Zero is a development-only Z placeholder
+            // Incoming geometries have XY only. Zero is the Z placeholder
             // when the destination requires Z; missing measures remain NaN.
             if (hasZ && builder is MapPointBuilderEx pointBuilder) {
                 pointBuilder.Z = 0;

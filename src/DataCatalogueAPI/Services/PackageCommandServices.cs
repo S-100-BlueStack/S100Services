@@ -11,7 +11,7 @@ namespace DataCatalague.Api.Services
                 .InState(ExpectedState.New)
                 .GetId(cmd => new(cmd.PackageId))
                 .ActAsync(
-                    (package, cmd, _) => package.CreatePackage(cmd.PackageId, cmd.Category, cmd.FileName, cmd.AbsoluteUri, cmd.GeometryRef, cmd.Severity, cmd.MetaData, cmd.DisplayScale)
+                    (package, cmd, _) => package.CreatePackage(cmd.PackageId, cmd.Category, cmd.FileName, cmd.AbsoluteUri, cmd.GeometryRef, cmd.Severity, cmd.MetaData, cmd.DisplayScale, cmd.DetailedGeometry)
                 );
 
             this.On<PackagesCommands.AddDetailedGeometry>()

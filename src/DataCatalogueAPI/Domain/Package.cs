@@ -31,10 +31,13 @@ namespace DataCatalague.Api.Domain
                     string GeometryRef,
                     ulong Severity,
                     PackageMetaData? MetaData,
-                    DisplayScale? DisplayScale) {
+                    DisplayScale? DisplayScale, DetailedGeometry? DetailedGeometry = null) {
             this.EnsureDoesntExist();
             this.Apply(new V1.PackageCreated(PackageId, Category, FileName, AbsoluteUri, GeometryRef, MetaData, DisplayScale, DateTime.UtcNow));
             this.Apply(new V1.SeverityUpdated(Severity, DateTime.UtcNow));
+            if (DetailedGeometry is not null) {
+                this.Apply(new V1.DetailedGeometryAdded(DetailedGeometry.PointRef, DetailedGeometry.CurveRef, DetailedGeometry.SurfaceRef, DateTime.UtcNow, DetailedGeometry.PointRefs.ToArray()));
+            }
         }
 
         public Task AddDetailedGeometry(string? PointRef, string? CurveRef, string? SurfaceRef, IReadOnlyList<string>? PointRefs = null) {
@@ -101,7 +104,7 @@ namespace DataCatalague.Api.Domain.Commands
 
     public static class PackagesCommands
     {
-        public record CreatePackage(string PackageId, string Category, string FileName, string AbsoluteUri, string GeometryRef, ulong Severity, PackageMetaData? MetaData, DisplayScale? DisplayScale);
+        public record CreatePackage(string PackageId, string Category, string FileName, string AbsoluteUri, string GeometryRef, ulong Severity, PackageMetaData? MetaData, DisplayScale? DisplayScale, DetailedGeometry? DetailedGeometry = null);
 
         public record AddDetailedGeometry(string PackageId, string? PointRef, string? CurveRef, string? SurfaceRef, IReadOnlyList<string>? PointRefs = null);
 

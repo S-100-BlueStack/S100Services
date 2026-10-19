@@ -1,67 +1,65 @@
-﻿using ArcGIS.Core.Geometry;
+﻿using DataCatalague.Api.Controllers;
 using DataCatalague.Api.Domain;
-using DataCatalague.Api.Domain.Commands;
-using DataCatalague.Api.Repositories;
-using Eventuous;
+using DataCatalague.Api.Domain.PackageTypes;
+using DataCatalague.Api.Models.V1;
+using Microsoft.AspNetCore.Mvc;
 
 namespace DataCatalague.Api.Initialization;
 
-/// <summary>Builds development data exclusively through constructor-injected application services.</summary>
-/// <remarks>Creates sample values and commands; service construction and lifetime belong to the host container.</remarks>
-/// <param name="store">The shared in-memory event store.</param>
-/// <param name="categories">The existing category command service.</param>
-/// <param name="packages">The existing package command service.</param>
-/// <param name="repository">The registered package geometry repository.</param>
-/// <param name="dispatcher">The registered ArcGIS thread dispatcher.</param>
-/// <param name="streamNames">The stream name map registered by Program.</param>
+/// <summary>Creates development data through the registered controllers after the in-memory stores are reset.</summary>
+/// <param name="dispatcher">The dispatcher controller resolved from the host container.</param>
+/// <param name="packages">The package controller resolved from the same container.</param>
 /// <param name="logger">Receives sample initialization progress.</param>
-public sealed class SampleDataInitialization(IEventStore store, ICommandService<CategoryState> categories, ICommandService<PackageState> packages, PackageRepository repository, ArcGisDispatcher dispatcher, StreamNameMap streamNames, ILogger<SampleDataInitialization> logger)
+public sealed class SampleDataInitialization(DispatcherController dispatcher, PackageController packages, ILogger<SampleDataInitialization> logger)
 {
-    /// <summary>Registers the categories and sample packages through the existing command services.</summary>
-    /// <param name="cancellationToken">Cancels sample reading and command persistence.</param>
-    /// <returns>A task that completes when all samples have been registered.</returns>
+    /// <summary>Creates the core categories and notice packages in the fresh development stores.</summary>
+    /// <param name="cancellationToken">Cancels sample reading and controller operations.</param>
+    /// <returns>A task that completes when all sample packages have been created.</returns>
     public async Task InitializeAsync(CancellationToken cancellationToken) {
-        var directory = Path.Combine(AppContext.BaseDirectory, "Samples", "Notices2Mariner");
+        // Startup resets both stores; duplicate protection belongs to the creation actions.
+        foreach (var type in Enum.GetValues<PackageType>()) {
+            var categoryId = type.ToString();
+            var displayName = type == PackageType.NoticeToMariners ? "Notices to Mariners" : categoryId;
+            var created = await dispatcher.CreateCategory(new CreateCategoryRequest {
+                Id = categoryId,
+                DisplayName = displayName,
+                Description = $"Incoming {displayName} packages.",
+            }, cancellationToken).ConfigureAwait(false);
+            RequireSuccess(created, $"create category '{categoryId}'");
+        }
+
+        var directory = Path.Combine(AppContext.BaseDirectory, "Samples", "NoticesToMariners");
         var files = Directory.GetFiles(directory, "*.json").Order(StringComparer.Ordinal).ToArray();
         if (files.Length == 0) { throw new InvalidDataException($"No notice samples found in '{directory}'."); }
-        var samples = new List<(string File, NoticeSample Notice)>();
+
         foreach (var file in files) {
-            samples.Add((file, NoticeSample.Parse(await File.ReadAllTextAsync(file, cancellationToken).ConfigureAwait(false))));
-        }
-        if (samples.Select(sample => sample.Notice.Id).Distinct(StringComparer.Ordinal).Count() != samples.Count) {
-            throw new InvalidDataException("Notice sample files contain duplicate notice IDs.");
-        }
-
-        foreach (var category in new[] { "Notices2Mariner", "Standard" }) {
-            if (!await store.StreamExists(streamNames.GetStreamName(new CategoryId(category)), cancellationToken).ConfigureAwait(false)) {
-                (await categories.Handle(new DispatcherCommands.CreateCategory(category, category), cancellationToken).ConfigureAwait(false)).ThrowIfError();
-                logger.LogInformation("Created sample category {CategoryId}.", category);
-            }
-            else {
-                logger.LogInformation("Sample category {CategoryId} already exists.", category);
-            }
-            var state = await store.LoadState<CategoryState, CategoryId>(streamNames, new(category), true, cancellationToken).ConfigureAwait(false);
-            if (state.State.Id?.Value != category || state.State.IsTerminated) {
-                throw new InvalidOperationException($"Sample category '{category}' is unavailable.");
-            }
+            var request = CreateRequest(await File.ReadAllTextAsync(file, cancellationToken).ConfigureAwait(false), file);
+            logger.LogInformation("Creating notice sample {FileName} as package {PackageId}.", Path.GetFileName(file), request.Id);
+            var created = await packages.CreatePackage(request, cancellationToken).ConfigureAwait(false);
+            RequireSuccess(created, $"create notice package '{request.Id}'");
         }
 
-        foreach (var (file, notice) in samples) {
-            if (await store.StreamExists(streamNames.GetStreamName(new PackageId(notice.Id)), cancellationToken).ConfigureAwait(false)) { continue; }
-            logger.LogInformation("Registering notice sample {FileName} as package {PackageId} ({ShortId}).", Path.GetFileName(file), notice.Id, notice.MetaData.ShortId);
-            var uri = new Uri(file).AbsoluteUri;
-            var geometry = notice.Geometry;
-            var references = await dispatcher.ExecuteAsync(() => {
-                var aoi = PolygonBuilderEx.FromJson(geometry.Aoi);
-                var points = geometry.Points is null ? null : MultipointBuilderEx.FromJson(geometry.Points);
-                var curves = geometry.Curves is null ? null : PolylineBuilderEx.FromJson(geometry.Curves);
-                var surfaces = geometry.Surfaces is null ? null : PolygonBuilderEx.FromJson(geometry.Surfaces);
-                return repository.AddPackageGeometries(aoi, points, curves, surfaces, notice.Id, uri, cancellationToken);
-            }).ConfigureAwait(false);
+        logger.LogInformation("Sample initialization completed. CreatedPackages: {CreatedPackages}.", files.Length);
+    }
 
-            (await packages.Handle(new PackagesCommands.CreatePackage(notice.Id, "Notices2Mariner", Path.GetFileName(file), uri, references.Aoi, ulong.MaxValue, notice.MetaData, null), cancellationToken).ConfigureAwait(false)).ThrowIfError();
-            (await packages.Handle(new PackagesCommands.AddDetailedGeometry(notice.Id, references.Details.PointRef, references.Details.CurveRef, references.Details.SurfaceRef, references.Details.PointRefs), cancellationToken).ConfigureAwait(false)).ThrowIfError();
+    private static CreatePackageRequest CreateRequest(string json, string sourceFile) {
+        var notice = NoticeToMariners.Parse(json);
+        return new CreatePackageRequest {
+            Id = notice.Id,
+            Category = nameof(PackageType.NoticeToMariners),
+            AbsoluteUri = new Uri(sourceFile).AbsoluteUri,
+            GeoJSON = notice.Geometry.Aoi,
+            DetailedGeometry = notice.Geometry,
+            MetaData = notice.MetaData,
+        };
+    }
+
+    private static T RequireSuccess<T>(ActionResult<T> response, string operation) {
+        if (response.Value is { } value) { return value; }
+        if (response.Result is ObjectResult { Value: T result } objectResult && objectResult.StatusCode is >= 200 and < 300) {
+            return result;
         }
-        logger.LogInformation("Sample initialization completed: two categories and {PackageCount} notice packages registered.", samples.Count);
+        var status = (response.Result as ObjectResult)?.StatusCode;
+        throw new InvalidOperationException($"Could not {operation}; controller returned {status?.ToString() ?? response.Result?.GetType().Name ?? "no result"}.");
     }
 }

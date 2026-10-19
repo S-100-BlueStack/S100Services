@@ -24,15 +24,15 @@ GET    /api/v2/dispatcher?page=1&pageSize=20
 
 `Program.Main` resolves `SampleDataInitialization` once in a startup DI scope
 and calls `InitializeAsync` after building the app and before `RunAsync`.
-Its constructor receives the existing event store, command services, repository,
-ArcGIS dispatcher, configuration and logger. Creating this scope does not rebuild
-the singleton event store, dispatcher or repository. Database connections opened
-by repository methods are normal short-lived operations against the existing
-database. There is no hosted initializer or new event type.
-`Initialization/SampleDataInitialization.cs` creates the `Notices2Mariner` and
-`Standard` categories and registers every bundled JSON file in
-`Samples/Notices2Mariner` as a package using the existing category/package
-command services. The 14 supplied files are copied to build and publish output.
+Its constructor receives the DI-registered `DispatcherController`,
+`PackageController` and logger. It creates categories through
+`DispatcherController.CreateCategory` and packages through
+`PackageController.CreatePackage`. Request mapping is a private function in the
+initializer; no extra dispatcher package endpoint or mapping service is used.
+`Initialization/SampleDataInitialization.cs` creates the `NoticeToMariners` and
+`Standard` category IDs. The notice category's display name is **Notices to
+Mariners**. Every bundled JSON file in `Samples/NoticesToMariners` is registered
+as a package. The 14 supplied files are copied to build and publish output.
 
 The source notice UUID is the package ID and metadata `RefId`. Metadata maps
 `shortId`, `type`, `number` and `created` directly; `Title` and `Source` come from
@@ -42,7 +42,7 @@ file URIs in `PackageCreated`; source status is not used to filter these samples
 There is no invented severity mapping: the existing `ulong.MaxValue` default is
 used, and display scale stays null.
 
-`Initialization/NoticeSample.cs` reads every geometry from every part and
+`Domain/PackageTypes/NoticeToMariners.cs` reads every geometry from every part and
 converts GeoJSON into Esri JSON in WGS84. The AOI is always a rectangle covering
 the combined detailed geometry envelope in the target coordinate system.
 Point-only/collapsed extents are expanded by 0.000005 degrees on each collapsed
@@ -81,68 +81,51 @@ Event storage stays in memory. Geometry rows use the disposable
 requires `Packages:Geodatabase` to refer to that file in the application output
 folder. Existing ArcGIS runtime, archive and package archive-folder prerequisites
 still apply. No SQL connection or migration is required. A fresh process rebuilds
-the development data. Calling the initializer again in the same process skips
-existing package streams. Failures propagate and stop startup.
+the development data. The initializer assumes fresh stores and performs no stream existence lookups.
+Creation actions retain their duplicate guards; calling initialization again in
+the same process can therefore fail on an existing category or package.
+Failures propagate and stop startup.
 
 Example: `GET /api/v1/packages/00e4d439-a4fc-49cd-b0b1-0abcd35c9247`.
 To add more development notices, add JSON files in the same source folder.
 To stop sample loading later, remove the startup initialization scope in
 `Program.cs`. This delivery does not add or change any test project.
 
-## Initial configuration
+## Notice naming and initial configuration
 
-**NoticeToMariners**
+Use the following names consistently:
 
+| Purpose | Name |
+| --- | --- |
+| One notice / domain record | `NoticeToMariners` |
+| Package type / default category ID | `NoticeToMariners` |
+| Category display name | Notices to Mariners |
+| Sample collection folder | `Samples/NoticesToMariners` |
+| Danish display name | Efterretninger for Søfarende |
+
+`Notice` is singular for one item; `Mariners` remains plural because a notice is
+addressed to seafarers collectively. Use `To` in identifiers rather than `2`.
+
+Sample initialization creates the default category using the equivalent of:
+
+```http
+POST /api/v1/dispatcher/categories
+Content-Type: application/json
 ```
-POST /api/v1/dispatcher/category
-Request body
-{
-    "displayName": "Notice2Mariners",
-    "description": "A Notice to Mariners (EfS) is an official weekly or periodic publication issued by national hydrographic offices to provide safety-critical updates for nautical charts and publications."
-}
-Response body
-{
-  "id": "yYzKXybaQVkcPJ44a5",
-  "displayName": "Notice2Mariners",
-  "description": "A Notice to Mariners (EfS) is an official weekly or periodic publication issued by national hydrographic offices to provide safety-critical updates for nautical charts and publications.",
-  "lastUpdatedUtc": "2026-10-04T17:46:27.3119026+00:00"
-}
 
-
-POST api/v1/dispatcher/repository	
-Response body
+```json
 {
-  "absoluteUri": "database://fd142588-0d78-42f7-9326-67e28a0d042e"
-}
-
-
-POST /api/v1/dispatcher/dispatch/packages
-Request body
-{
-  "category": "yYzKXybaQVkcPJ44a5",
-  "absoluteUri": "database://fd142588-0d78-42f7-9326-67e28a0d042e",
-  "geoJSON": "{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[102.0,0.5]}},{"type":"Feature","geometry":{"type":"LineString","coordinates":[[102.0,0.0],[103.0,1.0]]}}]}"
+  "id": "NoticeToMariners",
+  "displayName": "Notices to Mariners",
+  "description": "Incoming Notices to Mariners packages."
 }
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+Package creation uses the existing `POST /api/v1/packages` endpoint with
+`category` set to `NoticeToMariners`. The category ID identifies the stream;
+the display name is the human-readable label. Sample startup recreates the
+in-memory data with these names; no stored-data migration is needed for this
+development setup.
 
 ## How the pieces fit together
 
@@ -221,8 +204,8 @@ states directly from the in-memory event store, without waiting for the
 background subscription. Categories created through POST are included as well.
 `GET /api/v1/dispatcher/categories/{id}` reads an individual category. The old
 `categoriess` routes remain aliases. Specification events are replayed when
-reading category state. Sample startup logs each created/existing category and
-verifies that it can be loaded before creating packages.
+reading category state. Sample startup creates categories before packages through the registered
+controllers, without looking up streams before creation.
 
 Package category values identify category streams; they are not SQL foreign keys.
 The HTTP package creation endpoint rejects missing/terminated categories before

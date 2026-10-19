@@ -1,19 +1,19 @@
 using DataCatalague.Api.Domain;
 using System.Text.Json;
 
-namespace DataCatalague.Api.Initialization;
+namespace DataCatalague.Api.Domain.PackageTypes;
 
-/// <summary>A notice sample mapped to the existing package metadata and Esri geometry JSON.</summary>
+/// <summary>An incoming Notice to Mariners mapped to package metadata and Esri geometry JSON.</summary>
 /// <param name="Id">The source notice UUID, also used as the package identity.</param>
 /// <param name="MetaData">Metadata read from the source notice.</param>
 /// <param name="Geometry">The rectangular AOI and complete detailed geometries in WGS84.</param>
-public sealed record NoticeSample(string Id, PackageMetaData MetaData, SampleGeometry Geometry)
+public sealed record NoticeToMariners(string Id, PackageMetaData MetaData, PackageGeometry Geometry)
 {
     /// <summary>Reads the supplied notice format without depending on ArcGIS runtime initialization.</summary>
     /// <param name="json">The original notice JSON.</param>
-    /// <returns>The sample ready for package creation.</returns>
-    /// <exception cref="InvalidDataException">The sample has invalid or unsupported geometry.</exception>
-    public static NoticeSample Parse(string json) {
+    /// <returns>The notice ready for package creation.</returns>
+    /// <exception cref="InvalidDataException">The notice has invalid or unsupported geometry.</exception>
+    public static NoticeToMariners Parse(string json) {
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
         var id = Guid.Parse(root.GetProperty("id").GetString()!).ToString("D");
@@ -51,13 +51,13 @@ public sealed record NoticeSample(string Id, PackageMetaData MetaData, SampleGeo
         var xmax = coordinates.Max(point => point[0]);
         var ymax = coordinates.Max(point => point[1]);
         // A point or an axis-aligned line has a zero-area envelope. Give only
-        // those collapsed dimensions a roughly metre-wide extent in these samples.
+        // those collapsed dimensions a roughly metre-wide extent in WGS84.
         const double padding = 0.000005;
         if (xmin == xmax) { xmin -= padding; xmax += padding; }
         if (ymin == ymax) { ymin -= padding; ymax += padding; }
         double[][] rectangle = [[xmin, ymin], [xmin, ymax], [xmax, ymax], [xmax, ymin], [xmin, ymin]];
         var spatialReference = new { wkid = 4326 };
-        return new(id, metadata, new SampleGeometry(
+        return new(id, metadata, new PackageGeometry(
             JsonSerializer.Serialize(new { rings = new[] { rectangle }, spatialReference }),
             points.Count == 0 ? null : JsonSerializer.Serialize(new { points, spatialReference }),
             paths.Count == 0 ? null : JsonSerializer.Serialize(new { paths, spatialReference }),
@@ -79,13 +79,13 @@ public sealed record NoticeSample(string Id, PackageMetaData MetaData, SampleGeo
             case "MultiPolygon":
                 foreach (var polygon in coordinates.EnumerateArray()) { AddPolygon(polygon, rings); }
                 break;
-            default: throw new InvalidDataException($"Unsupported sample geometry type '{type}'.");
+            default: throw new InvalidDataException($"Unsupported notice geometry type '{type}'.");
         }
     }
 
     private static double[] Position(JsonElement position) {
         if (position.GetArrayLength() != 2) {
-            throw new InvalidDataException("Notice samples must contain two-dimensional longitude/latitude coordinates.");
+            throw new InvalidDataException("Notices must contain two-dimensional longitude/latitude coordinates.");
         }
         var x = position[0].GetDouble();
         var y = position[1].GetDouble();
@@ -97,7 +97,7 @@ public sealed record NoticeSample(string Id, PackageMetaData MetaData, SampleGeo
 
     private static double[][] Line(JsonElement coordinates) {
         var positions = coordinates.EnumerateArray().Select(Position).ToArray();
-        if (positions.Length < 2) { throw new InvalidDataException("A sample line must contain at least two positions."); }
+        if (positions.Length < 2) { throw new InvalidDataException("A notice line must contain at least two positions."); }
         return positions;
     }
 
@@ -106,13 +106,13 @@ public sealed record NoticeSample(string Id, PackageMetaData MetaData, SampleGeo
         foreach (var ring in coordinates.EnumerateArray()) {
             var positions = ring.EnumerateArray().Select(Position).ToArray();
             if (positions.Length < 4 || !positions[0].SequenceEqual(positions[^1])) {
-                throw new InvalidDataException("A sample polygon must contain closed rings with at least four positions.");
+                throw new InvalidDataException("A notice polygon must contain closed rings with at least four positions.");
             }
             var area = 0d;
             for (var i = 0; i < positions.Length - 1; i++) {
                 area += positions[i][0] * positions[i + 1][1] - positions[i + 1][0] * positions[i][1];
             }
-            if (area == 0) { throw new InvalidDataException("A sample polygon ring has zero area."); }
+            if (area == 0) { throw new InvalidDataException("A notice polygon ring has zero area."); }
             // Esri JSON uses clockwise shells and counterclockwise holes.
             if ((index == 0 && area > 0) || (index > 0 && area < 0)) { Array.Reverse(positions); }
             rings.Add(positions);
@@ -120,10 +120,3 @@ public sealed record NoticeSample(string Id, PackageMetaData MetaData, SampleGeo
         }
     }
 }
-
-/// <summary>Esri JSON for the AOI and the detailed point, curve and surface groups.</summary>
-/// <param name="Aoi">The envelope rectangle as a polygon.</param>
-/// <param name="Points">All source Point/MultiPoint coordinates, or null.</param>
-/// <param name="Curves">All source line parts, or null.</param>
-/// <param name="Surfaces">All source polygon rings, including holes, or null.</param>
-public sealed record SampleGeometry(string Aoi, string? Points, string? Curves, string? Surfaces);
