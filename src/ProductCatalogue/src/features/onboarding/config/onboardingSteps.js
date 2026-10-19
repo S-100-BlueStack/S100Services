@@ -1,5 +1,5 @@
 export const ONBOARDING_FLOW_VERSION = 2;
-export const MAIN_ONBOARDING_FLOW_VERSION = 3;
+export const MAIN_ONBOARDING_FLOW_VERSION = 4;
 
 export function getOnboardingFlowVersion(routeName) {
   const normalizedRouteName = String(routeName ?? "main")
@@ -39,15 +39,16 @@ export const ONBOARDING_STEPS = Object.freeze({
     {
       id: "main-product-search",
       title: "Find a Product",
-      description: "Product search finds loaded active Products and opens the selected Product.",
+      description:
+        "Product search stays visible in the main-map navbar. It finds loaded active Products and opens the selected Product.",
       selectors: ["[data-onboarding-target='product-search']"],
-      placement: "adjacent-horizontal",
+      placement: "below",
     },
     {
       id: "main-locator",
       title: "Find a location",
       description:
-        "Locator searches addresses, populated places and postal locations in Denmark and Greenland. Choosing a result moves the map without selecting a Product.",
+        "Open the navbar Locator action to search addresses, populated places and postal locations in Denmark and Greenland. Choosing a result moves the map without selecting a Product.",
       selectors: ["#main-map-locator-button"],
       placement: "below",
     },

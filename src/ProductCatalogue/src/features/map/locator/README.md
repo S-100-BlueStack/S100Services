@@ -93,8 +93,12 @@ markers.
 
 ## Main-map layout and lifecycle
 
-`mainMapSearchControls.js` is the neutral layout boundary for the two sibling controls. It owns
-placement, positioning, slots, and the compact inline open/closed layout. The same neutral boundary
+`mainMapSearchControls.js` is the neutral layout boundary for the two sibling controls. FI-027
+moves the shared search controls into the Main-map navbar before Filters and Data sources. Product
+search remains visible, while the Locator action expands the second field as before. At narrower
+widths, the Main-map navbar wraps without changing the underlying Locator session lifecycle.
+
+The layout owns independent host slots and the compact inline open/closed presentation. The same neutral boundary
 owns the decorative open/close transition: the Locator slot remains present while its `flex-basis`
 collapses so the action can slide back with the field instead of jumping when Search is removed. The
 layout marks this interval as `closing` and finalizes `closed` on the slot's `transitionend`. A newer
@@ -115,9 +119,9 @@ behavior, and popup opening. Locator still owns geographic Search component life
 sources. The layout receives only a neutral Locator open-state flag. It does not import either feature
 implementation.
 
-The app composition layer injects Product search's public `close()` boundary when Locator opens so an
-open Product suggestion list can close without clearing the Product query or coupling Locator to
-Product-search internals.
+The app composition layer closes active Filters/Data sources popovers, then invokes Product search's
+public `close()` boundary when Locator opens. This closes an open Product suggestion list without
+clearing its query or coupling Locator to Product-search internals.
 
 Each Locator open creates a fresh `arcgis-search` session. Closing the Locator first marks that
 session inactive, then sets `autoNavigateDisabled = true`, calls the component's documented `clear()`

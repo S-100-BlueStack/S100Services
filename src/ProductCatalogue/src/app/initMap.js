@@ -121,6 +121,12 @@ export function initMap() {
     productSearchIndex,
     host: mainMapSearchControls.productSearchHost,
   });
+  const closeNavbarPopoversOnProductFocus = () =>
+    navbarPopoverCoordinator.closeAll({ restoreFocus: false });
+  mainMapSearchControls.productSearchHost?.addEventListener(
+    "focusin",
+    closeNavbarPopoversOnProductFocus
+  );
   const locatorConfiguration = createConfiguredLocatorSearchSources();
   const locator = initMainMapLocator({
     view,
@@ -130,7 +136,10 @@ export function initMap() {
     navigationOptions: locatorConfiguration.navigationOptions,
     resetSourceState: locatorConfiguration.resetTransientState,
     unavailableReason: locatorConfiguration.unavailableReason,
-    onOpen: () => productSearch.close(),
+    onOpen: () => {
+      navbarPopoverCoordinator.closeAll({ restoreFocus: false });
+      productSearch.close();
+    },
     onOpenStateChange: mainMapSearchControls.setLocatorOpen,
   });
   const cleanupKeyboardClose = bindMainMapKeyboardClose({
@@ -245,6 +254,10 @@ export function initMap() {
       refreshService.destroy?.();
       locator?.destroy?.();
       productSearch?.destroy?.();
+      mainMapSearchControls.productSearchHost?.removeEventListener(
+        "focusin",
+        closeNavbarPopoversOnProductFocus
+      );
       mainMapSearchControls?.destroy?.();
       filterPanel?.destroy?.();
       dataSourceRuntime.destroy();

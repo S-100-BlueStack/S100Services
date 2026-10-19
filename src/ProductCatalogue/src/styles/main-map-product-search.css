@@ -14,7 +14,7 @@
   background: var(--pc-surface);
   border: 1px solid var(--pc-border);
   border-radius: 0;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+  box-shadow: none;
   font: inherit;
   font-size: 12px;
   line-height: 1.25;

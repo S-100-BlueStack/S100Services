@@ -29,10 +29,21 @@ test("returns route-specific default state when no introduction preference exist
   );
 });
 test("bumps only the Main-map onboarding storage version", () => {
-  assert.equal(getOnboardingStorageKey("main"), "pc.onboarding.main.v3");
+  assert.equal(getOnboardingStorageKey("main"), "pc.onboarding.main.v4");
   assert.equal(getOnboardingStorageKey("dashboard"), "pc.onboarding.dashboard.v2");
   assert.equal(getOnboardingStorageKey("analyze"), "pc.onboarding.analyze.v2");
   assert.equal(getOnboardingStorageKey("review"), "pc.onboarding.review.v2");
+});
+test("FI-027 does not reuse completed Main-map v3 onboarding", () => {
+  const storage = createMemoryStorage({
+    "pc.onboarding.main.v3": JSON.stringify({
+      version: 3,
+      dismissedWelcome: true,
+      completed: true,
+    }),
+  });
+
+  assert.deepEqual(readOnboardingState("main", storage), createDefaultOnboardingState("main"));
 });
 test("uses a separate localStorage key for every route", () => {
   assert.notEqual(getOnboardingStorageKey("main"), getOnboardingStorageKey("dashboard"));

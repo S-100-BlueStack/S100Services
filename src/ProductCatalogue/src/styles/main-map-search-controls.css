@@ -1,28 +1,25 @@
 /* =========================================================
-   Shared Main-map search controls layout
+   Main-map navbar search layout
    ========================================================= */
 #main-map-search-controls {
-  position: fixed;
-  z-index: 850;
-  top: var(--main-map-search-controls-top, 64px);
-  left: 50%;
+  position: relative;
+  z-index: 2;
   display: flex;
   box-sizing: border-box;
-  width: min(416px, calc(100vw - 32px));
-  min-width: 0;
+  flex: 0 1 324px;
+  min-width: 190px;
   align-items: flex-start;
   gap: 4px;
   color: var(--pc-text);
-  transform: translateX(-50%);
-  transition: width 140ms ease-out;
+  transition: flex-basis 140ms ease-out;
 }
 
 #main-map-search-controls[data-locator-open="true"] {
-  width: min(748px, calc(100vw - 32px));
+  flex-basis: 540px;
 }
 
 .main-map-search-controls__product {
-  flex: 1 1 380px;
+  flex: 1 1 288px;
   min-width: 0;
 }
 
@@ -38,26 +35,64 @@
 }
 
 #main-map-search-controls[data-locator-open="true"] .main-map-search-controls__product {
-  flex: 1 1 380px;
+  flex: 1 1 250px;
 }
 
 #main-map-search-controls[data-locator-open="true"] .main-map-search-controls__locator {
-  flex: 1 1 360px;
+  flex: 1 1 290px;
   gap: 4px;
 }
 
-@media (max-width: 640px) {
-  #main-map-search-controls,
-  #main-map-search-controls[data-locator-open="true"] {
-    right: 10px;
-    left: 10px;
-    width: auto;
-    transform: none;
+@media (max-width: 1150px) {
+  #header.has-main-map-search {
+    height: auto;
+    min-height: 50px;
+    flex-wrap: wrap;
+    row-gap: 4px;
+    padding-block: 4px;
   }
 
-  #main-map-search-controls[data-locator-open="true"] .main-map-search-controls__product,
-  #main-map-search-controls[data-locator-open="true"] .main-map-search-controls__locator {
-    flex: 1 1 0;
+  #header.has-main-map-search .header-right {
+    flex: 1 1 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+
+  #main-map-search-controls {
+    flex: 1 1 324px;
+    max-width: 410px;
+    min-width: 160px;
+    margin-right: auto;
+  }
+
+  #main-map-search-controls[data-locator-open="true"] {
+    flex-basis: 520px;
+    max-width: 640px;
+  }
+}
+
+@media (max-width: 650px) {
+  #header.has-main-map-search {
+    column-gap: 8px;
+  }
+
+  #header.has-main-map-search .header-center {
+    flex: 1 1 auto;
+    gap: 12px;
+    overflow-x: auto;
+    font-size: 13px;
+  }
+
+  #header.has-main-map-search .header-right {
+    flex-wrap: wrap;
+  }
+
+  #main-map-search-controls,
+  #main-map-search-controls[data-locator-open="true"] {
+    flex: 1 1 100%;
+    max-width: none;
+    min-width: 0;
+    margin-right: 0;
   }
 }
 

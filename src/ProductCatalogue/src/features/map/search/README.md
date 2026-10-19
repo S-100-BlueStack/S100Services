@@ -7,18 +7,23 @@ This workflow remains separate from Locator/FI-012 and from backend or connected
 
 ## Shared Main-map search controls
 
-`mainMapSearchControls.js` owns only the shared overlay placement, independent host slots, and the
-neutral inline open/closed layout for Product search and Locator. It also owns the decorative Locator
-slot transition. Closing immediately targets the collapsed layout, keeps the empty application-owned
+`mainMapSearchControls.js` mounts independent Product search and Locator hosts at the start of the
+Main-map navbar's right-side controls, before Filters and Data sources. Product search is permanently
+visible; the Locator action expands the adjacent Locator search field on demand. Dashboard, Analyze
+and Review do not mount the Main-map search controls. At narrower widths the Main-map navbar wraps
+so the search and existing controls remain reachable.
+
+The layout boundary owns the decorative Locator slot transition. Closing immediately targets the collapsed layout, keeps the empty application-owned
 Locator slot present while `flex-basis` collapses, and finalizes the layout state on `transitionend`.
 Reopening during that transition cancels the old completion through a generation/state guard. Reduced
 motion finalizes the collapsed layout immediately. None of this keeps an ArcGIS Search session alive.
 Product search still owns its index, suggestions, Product navigation, selected Product behavior, and
 popup opening. Locator owns geographic source configuration and geographic navigation.
 
-The app composition layer may call Product search's public `close()` boundary when Locator opens so
-the two suggestion surfaces do not overlap. This does not clear the Product query, change Product
-selection, or create a dependency from Locator to Product-search internals.
+The app composition layer closes open Filters/Data sources popovers when either search receives
+focus, and calls Product search's public `close()` boundary when Locator opens so the two suggestion
+surfaces do not overlap. These actions never clear the Product query, change Product selection, or
+create a dependency between the two search implementations.
 
 ## Index provider contract
 

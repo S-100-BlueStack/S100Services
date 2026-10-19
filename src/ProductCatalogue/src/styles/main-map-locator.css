@@ -12,16 +12,12 @@
   flex: 0 0 32px;
   width: 32px;
   height: 32px;
-  box-shadow:
-    inset 0 0 0 1px var(--pc-border),
-    0 8px 20px rgba(0, 0, 0, 0.22);
+  box-shadow: inset 0 0 0 1px var(--pc-border);
   transition: box-shadow 120ms ease-out;
 }
 
 .main-map-locator__button:hover {
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--pc-text-muted), var(--pc-border) 45%),
-    0 8px 20px rgba(0, 0, 0, 0.22);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc-text-muted), var(--pc-border) 45%);
 }
 
 .main-map-locator__button:focus-within {
@@ -36,8 +32,21 @@
 
   box-shadow:
     inset 0 0 0 1px var(--pc-focus-ring),
-    inset 0 -2px 0 var(--pc-focus-ring),
-    0 8px 20px rgba(0, 0, 0, 0.22);
+    inset 0 -2px 0 var(--pc-focus-ring);
+}
+
+/* Keep Locator's semantic light/dark action tokens when it is inside the navbar. */
+#header .main-map-locator__button {
+  --calcite-color-foreground-1: var(--pc-surface);
+  --calcite-color-text-3: var(--pc-text);
+  --calcite-action-background-color-hover: var(--pc-surface-alt);
+
+  border-radius: 0;
+}
+
+#header .main-map-locator__button:hover {
+  --calcite-color-foreground-1: var(--pc-surface-alt);
+  --calcite-action-background-color-hover: var(--pc-surface-alt);
 }
 
 .main-map-locator__button--unavailable {
