@@ -41,6 +41,13 @@ namespace DataCatalague.Api.Domain
             }
         }
 
+        /// <summary>Records the AOI and detail references together so replay cannot expose mismatched geometries.</summary>
+        public Task ReplaceGeometry(string aoi, DetailedGeometry details, string fingerprint) {
+            this.EnsureExists();
+            this.Apply(new V1.GeometryReplaced(aoi, details, fingerprint, DateTimeOffset.UtcNow));
+            return Task.CompletedTask;
+        }
+
         public Task AddDetailedGeometry(string? PointRef, string? CurveRef, string? SurfaceRef, IReadOnlyList<string>? PointRefs = null) {
             this.EnsureExists();
             this.Apply(new V1.DetailedGeometryAdded(PointRef, CurveRef, SurfaceRef, DateTime.UtcNow, PointRefs?.ToArray()));
@@ -74,6 +81,9 @@ namespace DataCatalague.Api.Domain
         /// <summary>The complete geometries referenced by the latest DetailedGeometryAdded event.</summary>
         public DetailedGeometry? DetailedGeometry { get; init; }
 
+        /// <summary>Fingerprint of the latest replacement request, used to make identical PUT retries a no-op.</summary>
+        public string? GeometryFingerprint { get; init; }
+
         public PackageMetaData? MetaData { get; set; } = null;
 
         /// <summary>Opaque category-defined JSON, replayed without coupling the aggregate to any package type.</summary>
@@ -85,8 +95,9 @@ namespace DataCatalague.Api.Domain
 
         public PackageState() {
             this.On<V1.PackageCreated>(PackageCreated);
+            this.On<V1.GeometryReplaced>((state, e) => state with { GeometryRef = e.Aoi, DetailedGeometry = e.Details, GeometryFingerprint = e.Fingerprint, LastUpdatedUtc = e.UTC });
             this.On<V1.SeverityUpdated>((state, e) => state with { Severity = e.Severity, LastUpdatedUtc = e.UTC });
-            this.On<V1.DetailedGeometryAdded>((state, e) => state with { DetailedGeometry = new(e.PointRef, e.CurveRef, e.SurfaceRef) { PointRefs = e.PointRefs?.ToArray() ?? (e.PointRef is null ? [] : [e.PointRef]) }, LastUpdatedUtc = e.UTC });
+            this.On<V1.DetailedGeometryAdded>((state, e) => state with { GeometryFingerprint = null, DetailedGeometry = new(e.PointRef, e.CurveRef, e.SurfaceRef) { PointRefs = e.PointRefs?.ToArray() ?? (e.PointRef is null ? [] : [e.PointRef]) }, LastUpdatedUtc = e.UTC });
         }
 
         static PackageState PackageCreated(PackageState state, V1.PackageCreated e)
@@ -113,6 +124,9 @@ namespace DataCatalague.Api.Domain.Commands
 
         public record AddDetailedGeometry(string PackageId, string? PointRef, string? CurveRef, string? SurfaceRef, IReadOnlyList<string>? PointRefs = null);
 
+        /// <summary>Replaces the complete geometry reference set of an existing package.</summary>
+        public record ReplaceGeometry(string PackageId, string Aoi, DetailedGeometry Details, string Fingerprint);
+
         public record UpdateSeverity(string PackageId, ulong Severity);
     }
 }
@@ -138,6 +152,10 @@ namespace DataCatalague.Api.Domain.Events
 
             [EventType("V1.DetailedGeometryAdded")]
             public record DetailedGeometryAdded(string? PointRef, string? CurveRef, string? SurfaceRef, DateTimeOffset UTC, IReadOnlyList<string>? PointRefs = null);
+
+            /// <summary>The complete geometry reference set committed by a replacement request.</summary>
+            [EventType("V1.GeometryReplaced")]
+            public record GeometryReplaced(string Aoi, DetailedGeometry Details, string Fingerprint, DateTimeOffset UTC);
 
             [EventType("V1.SeverityUpdated")]
             public record SeverityUpdated(

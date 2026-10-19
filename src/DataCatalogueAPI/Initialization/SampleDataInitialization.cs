@@ -14,14 +14,34 @@ namespace DataCatalague.Api.Initialization;
 /// <param name="logger">Receives sample initialization progress.</param>
 public sealed class SampleDataInitialization(DispatcherController dispatcher, PackageController packages, ILogger<SampleDataInitialization> logger)
 {
-    /// <summary>Creates the core categories and notice packages in the fresh development stores.</summary>
+    /// <summary>Creates the core categories, their sample specifications and sample packages in the fresh development stores.</summary>
     /// <param name="cancellationToken">Cancels sample reading and controller operations.</param>
     /// <returns>A task that completes when all sample packages have been created.</returns>
     public async Task InitializeAsync(CancellationToken cancellationToken) {
         // Create Categories for the sample packages. These are required by the package controller to accept the sample packages.
         foreach (var category in new[] {
-            (Id: "NoticeToMariners", Name: "Notices to Mariners", Prefix: "NM", Description: "Published navigation notices."),
-            (Id: "GeneralSubmission", Name: "General Submissions", Prefix: "GS", Description: "Unclassified submissions supplied as ZIP files containing a contract and AOI shapefile.")
+            (Id: "NoticeToMariners", Name: "Notices to Mariners", Prefix: "NM", Description: "Published navigation notices.", Specification: """
+                # Notices to Mariners
+
+                Development sample specification for published navigation notices.
+
+                - Source: Niord notice JSON from `Samples/NoticesToMariners`.
+                - Package identifier: the notice's `shortId`, including the year.
+                - Source metadata and category-specific notice data are preserved on the package.
+                - The AOI is the rectangular envelope of the detailed geometry.
+                - Detailed geometry may contain points, curves and surfaces.
+                """),
+            (Id: "GeneralSubmission", Name: "General Submissions", Prefix: "GS", Description: "Unclassified submissions supplied as ZIP files containing a contract and AOI shapefile.", Specification: """
+                # General Submissions
+
+                Development sample specification for general submissions.
+
+                - Source: ZIP archives from `Samples/GeneralSubmission`.
+                - Package identifiers are allocated in `GS-NNN-YY` format.
+                - Each sample contains `submission.json`, `contract.txt` and a complete AOI shapefile (`aoi.shp`, `aoi.shx`, `aoi.dbf`, `aoi.prj`).
+                - The sample initializer reads the title, source and AOI from `submission.json`.
+                - The manifest is preserved as category-specific package data.
+                """)
         }) {
             var created = await dispatcher.CreateCategory(new CreateCategoryRequest {
                 Id = category.Id,
@@ -30,6 +50,12 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
                 Description = category.Description,
             }, cancellationToken).ConfigureAwait(false);
             RequireSuccess(created, $"create category '{category.Id}'");
+
+            var specificationUpdated = await dispatcher.UpdateCategorySpecification(category.Id, new UpdateCategorySpecificationRequest {
+                Version = "1.0",
+                Markdown = category.Specification,
+            }, cancellationToken).ConfigureAwait(false);
+            RequireSuccess(specificationUpdated, $"update specification for category '{category.Id}'");
         }
 
 

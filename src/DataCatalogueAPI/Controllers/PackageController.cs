@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using NanoidDotNet;
 using System.Globalization;
+using DataCatalague.Api.Services;
 using IO = System.IO;
 using System.ComponentModel.DataAnnotations;
 
@@ -24,11 +25,14 @@ namespace DataCatalague.Api.Controllers
         IEventStore eventstore,
         ICommandService<PackageState> packageService,
         PackageRepository packageRepository,
+        PackageGeometryService geometryService,
         IOptions<PackagesOptions> options,
         ArcGisDispatcher dispatcher,
         ILogger<PackageController> logger) : ControllerBase
     {
         private const int DefaultPageSize = 20;
+
+        private readonly PackageGeometryService _geometryService = geometryService;
 
         // The in-memory store and geometry repository cannot share a transaction.
         // Serialize creates so duplicate source IDs are checked before writing geometry.
@@ -158,28 +162,34 @@ namespace DataCatalague.Api.Controllers
             }
         }
 
+        /// <summary>Replaces the package's complete detail geometry and recomputes its rectangular AOI.</summary>
+        /// <param name="id">The existing package identifier.</param>
+        /// <param name="request">Esri JSON strings for the AOI fallback and detail groups; omitted groups are removed.</param>
+        /// <param name="cancellationToken">Cancels work before the geometry transaction commits.</param>
+        /// <returns>The package containing the persisted geometry references.</returns>
         [HttpPut("{id}/geometry")]
         [Consumes("application/json")]
         [ProducesResponseType<PackageResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<PackageResponse>> AddGeometry(string id, CancellationToken cancellationToken) {
-            ArgumentNullException.ThrowIfNullOrEmpty(id);
-
-            try {
-                var stream = await this._eventStore.LoadState<PackageState, PackageId>(this._streamNameMap, new(id), cancellationToken: cancellationToken);
-
-                throw new NotImplementedException();
-
-                return Map(stream.State);
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<PackageResponse>> AddGeometry(string id, [FromBody] AddPackageGeometryRequest request, CancellationToken cancellationToken) {
+            if (string.IsNullOrWhiteSpace(id)) {
+                this.ModelState.AddModelError(nameof(id), "A package identifier is required.");
+                return this.ValidationProblem(this.ModelState);
             }
-            catch {
-                this._logger.LogInformation("Package {id} was not found.", id);
 
-                return this.Problem(
-                    title: "Package not found.",
-                    detail: $"No package exists with identifier {id}.",
-                    statusCode: StatusCodes.Status404NotFound);
+            this._logger.LogInformation("Replacing package geometry. PackageId: {PackageId}, User: {User}, HasPoints: {HasPoints}, HasCurves: {HasCurves}, HasSurfaces: {HasSurfaces}.", id, this.User?.Identity?.Name, request?.Points is not null, request?.Curves is not null, request?.Surfaces is not null);
+            try {
+                var state = await this._geometryService.ReplaceAsync(id, request!, cancellationToken);
+                if (state is null) {
+                    return this.Problem(title: "Package not found.", detail: $"No package exists with identifier {id}.", statusCode: StatusCodes.Status404NotFound);
+                }
+                return Map(state);
+            }
+            catch (InvalidDataException exception) {
+                this.ModelState.AddModelError(nameof(request), exception.Message);
+                return this.ValidationProblem(this.ModelState);
             }
         }
 

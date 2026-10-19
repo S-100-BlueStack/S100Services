@@ -195,8 +195,8 @@ namespace DataCatalague.Api.Repositories
                     var xmax = extents.Max(extent => extent.XMax);
                     var ymax = extents.Max(extent => extent.YMax);
                     var fallback = projected.Extent;
-                    if (xmin == xmax) { xmin = fallback.XMin; xmax = fallback.XMax; }
-                    if (ymin == ymax) { ymin = fallback.YMin; ymax = fallback.YMax; }
+                    if (xmin == xmax) { xmin = Math.Min(xmin, fallback.XMin); xmax = Math.Max(xmax, fallback.XMax); }
+                    if (ymin == ymax) { ymin = Math.Min(ymin, fallback.YMin); ymax = Math.Max(ymax, fallback.YMax); }
                     projected = PolygonBuilderEx.CreatePolygon(EnvelopeBuilderEx.CreateEnvelope(xmin, ymin, xmax, ymax, spatialReference));
                 }
                 var expectedType = definition.GetShapeType();

@@ -21,6 +21,11 @@ namespace DataCatalague.Api.Services
                     (package, cmd, _) => package.AddDetailedGeometry(cmd.PointRef, cmd.CurveRef, cmd.SurfaceRef, cmd.PointRefs)
                 );
 
+            this.On<PackagesCommands.ReplaceGeometry>()
+                .InState(ExpectedState.Existing)
+                .GetId(cmd => new(cmd.PackageId))
+                .ActAsync((package, cmd, _) => package.ReplaceGeometry(cmd.Aoi, cmd.Details, cmd.Fingerprint));
+
             this.On<PackagesCommands.UpdateSeverity>()
                 .InState(ExpectedState.Existing)
                 .GetId(cmd => new(cmd.PackageId))

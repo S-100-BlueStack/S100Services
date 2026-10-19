@@ -32,6 +32,7 @@ public static class ApplicationServicesConfiguration
         services.AddProblemDetails();
 
         services.AddHealthChecks();
+        services.AddTransient<DataCatalague.Api.Services.PackageGeometryService>();
 
         //services.AddSingleton<IDataRepository, InMemoryProductRepository>();
         // The shared in-memory event store is registered in Program.cs.
