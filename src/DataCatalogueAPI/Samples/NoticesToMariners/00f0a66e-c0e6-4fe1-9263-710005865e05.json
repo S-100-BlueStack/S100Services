@@ -1,1 +1,123 @@
-{"id":"00f0a66e-c0e6-4fe1-9263-710005865e05","created":"2025-01-13T10:23:16.000+00:00","updated":"2025-02-03T12:38:47.000+00:00","messageSeries":{"seriesId":"dma-nm"},"number":36,"shortId":"NM-036-25","mainType":"NM","type":"TEMPORARY_NOTICE","status":"CANCELLED","areas":[{"id":566,"active":true,"parent":{"id":453,"mrn":"urn:mrn:iho:country:dk","active":true,"descs":[{"lang":"da","name":"Danmark"},{"lang":"en","name":"Denmark"}]},"descs":[{"lang":"da","name":"Nordsøen"},{"lang":"en","name":"The North Sea"}]}],"charts":[{"chartNumber":"93","internationalNumber":1044,"active":true,"scale":375000},{"chartNumber":"2000","active":true,"scale":2500000}],"publishDateFrom":"2025-01-13T14:06:31.000+00:00","publishDateTo":"2025-02-03T12:38:47.000+00:00","followUpDate":"2025-02-06T23:00:00.000+00:00","originalInformation":true,"parts":[{"indexNo":0,"type":"DETAILS","eventDates":[{"allDay":false,"fromDate":"2025-01-13T14:06:31.000+00:00","toDate":"2025-02-03T12:38:47.000+00:00"}],"geometry":{"type":"FeatureCollection","id":"b97dd74e-f14b-478e-b13e-5e5bf338f845","features":[{"type":"Feature","id":"a66f956b-aa75-435d-8ebe-863146310dcf","geometry":{"type":"Point","coordinates":[5.27736,56.62822666666668]},"properties":{"name:0:en":"yellow spar buoy with cross topmark Fl(5)Y 20s","name:0:da":"gul stage med krydstopbetegnelse Fl(5)Y 20s","startCoordIndex":1}}]},"descs":[{"lang":"da","subject":"Afmærket måleudstyr udlægges midlertidigt","details":"<p><strong>I perioden 1. februar 2025 - 1. februar 2026, </strong>udl&aelig;gges afm&aelig;rket m&aring;leudstyr midlertidigt p&aring; n&aelig;vnte position som anf&oslash;rt.&nbsp;</p>\n<ul class=\"positions\">\n<li>56&deg; 37,694'N - 005&deg; 16,642'E, gul stage med krydstopbetegnelse Fl(5)Y 20s.</li>\n</ul>"},{"lang":"en","subject":"Buoyed Measuring equipment to be deployed temporarily","details":"<p><strong>In the period 1 February 2025 - 1 February 2026,</strong> buoyed measuring equipment will be deployed temporariliy as stated on the mentioned position.&nbsp;</p>\n<ul class=\"positions\">\n<li>56&deg; 37.694'N - 005&deg; 16.642'E, yellow spar buoy with cross topmark Fl(5)Y 20s.</li>\n</ul>"}],"hideSubject":true}],"descs":[{"lang":"da","title":"Danmark. Nordsøen. Nini Oliefelt. Afmærket måleudstyr udlægges midlertidigt.","vicinity":"Nini Oliefelt","source":"INEOS Energy 9. januar 2025"},{"lang":"en","title":"Denmark. The North Sea. Nini Oilfield. Buoyed Measuring equipment to be deployed temporarily.","vicinity":"Nini Oilfield","source":"INEOS Energy 9 January 2025"}]}
+{
+  "id": "00f0a66e-c0e6-4fe1-9263-710005865e05",
+  "created": "2025-01-13T10:23:16.000+00:00",
+  "updated": "2025-02-03T12:38:47.000+00:00",
+  "messageSeries": {
+    "seriesId": "dma-nm"
+  },
+  "number": 36,
+  "shortId": "NM-036-25",
+  "mainType": "NM",
+  "type": "TEMPORARY_NOTICE",
+  "status": "CANCELLED",
+  "areas": [
+    {
+      "id": 566,
+      "active": true,
+      "parent": {
+        "id": 453,
+        "mrn": "urn:mrn:iho:country:dk",
+        "active": true,
+        "descs": [
+          {
+            "lang": "da",
+            "name": "Danmark"
+          },
+          {
+            "lang": "en",
+            "name": "Denmark"
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "name": "Nordsøen"
+        },
+        {
+          "lang": "en",
+          "name": "The North Sea"
+        }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "chartNumber": "93",
+      "internationalNumber": 1044,
+      "active": true,
+      "scale": 375000
+    },
+    {
+      "chartNumber": "2000",
+      "active": true,
+      "scale": 2500000
+    }
+  ],
+  "publishDateFrom": "2025-01-13T14:06:31.000+00:00",
+  "publishDateTo": "2025-02-03T12:38:47.000+00:00",
+  "followUpDate": "2025-02-06T23:00:00.000+00:00",
+  "originalInformation": true,
+  "parts": [
+    {
+      "indexNo": 0,
+      "type": "DETAILS",
+      "eventDates": [
+        {
+          "allDay": false,
+          "fromDate": "2025-01-13T14:06:31.000+00:00",
+          "toDate": "2025-02-03T12:38:47.000+00:00"
+        }
+      ],
+      "geometry": {
+        "type": "FeatureCollection",
+        "id": "b97dd74e-f14b-478e-b13e-5e5bf338f845",
+        "features": [
+          {
+            "type": "Feature",
+            "id": "a66f956b-aa75-435d-8ebe-863146310dcf",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                5.27736,
+                56.62822666666668
+              ]
+            },
+            "properties": {
+              "name:0:en": "yellow spar buoy with cross topmark Fl(5)Y 20s",
+              "name:0:da": "gul stage med krydstopbetegnelse Fl(5)Y 20s",
+              "startCoordIndex": 1
+            }
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "subject": "Afmærket måleudstyr udlægges midlertidigt",
+          "details": "<p><strong>I perioden 1. februar 2025 - 1. februar 2026, </strong>udl&aelig;gges afm&aelig;rket m&aring;leudstyr midlertidigt p&aring; n&aelig;vnte position som anf&oslash;rt.&nbsp;</p>\n<ul class=\"positions\">\n<li>56&deg; 37,694'N - 005&deg; 16,642'E, gul stage med krydstopbetegnelse Fl(5)Y 20s.</li>\n</ul>"
+        },
+        {
+          "lang": "en",
+          "subject": "Buoyed Measuring equipment to be deployed temporarily",
+          "details": "<p><strong>In the period 1 February 2025 - 1 February 2026,</strong> buoyed measuring equipment will be deployed temporariliy as stated on the mentioned position.&nbsp;</p>\n<ul class=\"positions\">\n<li>56&deg; 37.694'N - 005&deg; 16.642'E, yellow spar buoy with cross topmark Fl(5)Y 20s.</li>\n</ul>"
+        }
+      ],
+      "hideSubject": true
+    }
+  ],
+  "descs": [
+    {
+      "lang": "da",
+      "title": "Danmark. Nordsøen. Nini Oliefelt. Afmærket måleudstyr udlægges midlertidigt.",
+      "vicinity": "Nini Oliefelt",
+      "source": "INEOS Energy 9. januar 2025"
+    },
+    {
+      "lang": "en",
+      "title": "Denmark. The North Sea. Nini Oilfield. Buoyed Measuring equipment to be deployed temporarily.",
+      "vicinity": "Nini Oilfield",
+      "source": "INEOS Energy 9 January 2025"
+    }
+  ]
+}

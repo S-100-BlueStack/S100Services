@@ -1,1 +1,120 @@
-{"id":"0a8213be-5230-4330-9aed-a326d1d70292","created":"2025-07-09T06:54:05.000+00:00","updated":"2025-07-30T09:59:28.000+00:00","messageSeries":{"seriesId":"dma-nm"},"number":551,"shortId":"NM-551-25","mainType":"NM","type":"PERMANENT_NOTICE","status":"EXPIRED","areas":[{"id":466,"active":true,"parent":{"id":453,"mrn":"urn:mrn:iho:country:dk","active":true,"descs":[{"lang":"da","name":"Danmark"},{"lang":"en","name":"Denmark"}]},"descs":[{"lang":"da","name":"Østersøen"},{"lang":"en","name":"The Baltic Sea"}]}],"charts":[{"chartNumber":"189","internationalNumber":1336,"active":true,"scale":100000},{"chartNumber":"188","active":true,"scale":250000}],"publishDateFrom":"2025-07-09T08:16:45.000+00:00","publishDateTo":"2025-07-30T09:59:28.000+00:00","originalInformation":true,"parts":[{"indexNo":0,"type":"DETAILS","eventDates":[{"allDay":false,"fromDate":"2025-07-09T08:16:45.000+00:00","toDate":"2025-07-30T09:59:28.000+00:00"}],"geometry":{"type":"FeatureCollection","id":"3cc52082-cb41-4410-a2fd-b433ed61e1e1","features":[{"type":"Feature","id":"8b437148-dd4d-46e1-9140-69813b0db3fe","geometry":{"type":"Point","coordinates":[14.68166471379173,55.09666645391076]},"properties":{"startCoordIndex":1}}]},"descs":[{"lang":"da","subject":"Vrag fjernet","details":"<ul class=\"positions\">\n<li>55&deg; 05,800'N - 014&deg; 40,900'E.</li>\n</ul>"},{"lang":"en","subject":"Wreck removed","details":"<ul class=\"positions\">\n<li>55&deg; 05.800'N - 014&deg; 40.900'E.</li>\n</ul>"}],"hideSubject":true}],"descs":[{"lang":"da","title":"Danmark. Østersøen. Bornholm. Rønne. Vrag fjernet.","vicinity":"Bornholm. Rønne","source":"MT Højgaard 20. juni 2025"},{"lang":"en","title":"Denmark. The Baltic Sea. Bornholm. Rønne. Wreck removed.","vicinity":"Bornholm. Rønne","source":"MT Højgaard 20 June 2025"}]}
+{
+  "id": "0a8213be-5230-4330-9aed-a326d1d70292",
+  "created": "2025-07-09T06:54:05.000+00:00",
+  "updated": "2025-07-30T09:59:28.000+00:00",
+  "messageSeries": {
+    "seriesId": "dma-nm"
+  },
+  "number": 551,
+  "shortId": "NM-551-25",
+  "mainType": "NM",
+  "type": "PERMANENT_NOTICE",
+  "status": "EXPIRED",
+  "areas": [
+    {
+      "id": 466,
+      "active": true,
+      "parent": {
+        "id": 453,
+        "mrn": "urn:mrn:iho:country:dk",
+        "active": true,
+        "descs": [
+          {
+            "lang": "da",
+            "name": "Danmark"
+          },
+          {
+            "lang": "en",
+            "name": "Denmark"
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "name": "Østersøen"
+        },
+        {
+          "lang": "en",
+          "name": "The Baltic Sea"
+        }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "chartNumber": "189",
+      "internationalNumber": 1336,
+      "active": true,
+      "scale": 100000
+    },
+    {
+      "chartNumber": "188",
+      "active": true,
+      "scale": 250000
+    }
+  ],
+  "publishDateFrom": "2025-07-09T08:16:45.000+00:00",
+  "publishDateTo": "2025-07-30T09:59:28.000+00:00",
+  "originalInformation": true,
+  "parts": [
+    {
+      "indexNo": 0,
+      "type": "DETAILS",
+      "eventDates": [
+        {
+          "allDay": false,
+          "fromDate": "2025-07-09T08:16:45.000+00:00",
+          "toDate": "2025-07-30T09:59:28.000+00:00"
+        }
+      ],
+      "geometry": {
+        "type": "FeatureCollection",
+        "id": "3cc52082-cb41-4410-a2fd-b433ed61e1e1",
+        "features": [
+          {
+            "type": "Feature",
+            "id": "8b437148-dd4d-46e1-9140-69813b0db3fe",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                14.68166471379173,
+                55.09666645391076
+              ]
+            },
+            "properties": {
+              "startCoordIndex": 1
+            }
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "subject": "Vrag fjernet",
+          "details": "<ul class=\"positions\">\n<li>55&deg; 05,800'N - 014&deg; 40,900'E.</li>\n</ul>"
+        },
+        {
+          "lang": "en",
+          "subject": "Wreck removed",
+          "details": "<ul class=\"positions\">\n<li>55&deg; 05.800'N - 014&deg; 40.900'E.</li>\n</ul>"
+        }
+      ],
+      "hideSubject": true
+    }
+  ],
+  "descs": [
+    {
+      "lang": "da",
+      "title": "Danmark. Østersøen. Bornholm. Rønne. Vrag fjernet.",
+      "vicinity": "Bornholm. Rønne",
+      "source": "MT Højgaard 20. juni 2025"
+    },
+    {
+      "lang": "en",
+      "title": "Denmark. The Baltic Sea. Bornholm. Rønne. Wreck removed.",
+      "vicinity": "Bornholm. Rønne",
+      "source": "MT Højgaard 20 June 2025"
+    }
+  ]
+}

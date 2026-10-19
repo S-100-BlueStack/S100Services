@@ -1,1 +1,122 @@
-{"id":"0a28d11e-5909-4348-bb8d-64e93684965c","created":"2024-06-26T08:54:52.000+00:00","updated":"2024-06-26T09:14:32.000+00:00","messageSeries":{"seriesId":"dma-nm"},"number":653,"shortId":"NM-653-24","mainType":"NM","type":"PRELIMINARY_NOTICE","status":"PUBLISHED","areas":[{"id":566,"active":true,"parent":{"id":453,"mrn":"urn:mrn:iho:country:dk","active":true,"descs":[{"lang":"da","name":"Danmark"},{"lang":"en","name":"Denmark"}]},"descs":[{"lang":"da","name":"Nordsøen"},{"lang":"en","name":"The North Sea"}]}],"charts":[{"chartNumber":"93","internationalNumber":1044,"active":true,"scale":375000}],"publishDateFrom":"2024-06-26T09:14:32.000+00:00","followUpDate":"2024-09-01T22:00:00.000+00:00","references":[{"messageId":"NM-652-24","type":"UPDATE"}],"originalInformation":true,"parts":[{"indexNo":0,"type":"DETAILS","eventDates":[{"allDay":false,"fromDate":"2024-06-26T09:14:32.000+00:00"}],"geometry":{"type":"FeatureCollection","id":"a6c38f84-5fec-49a1-9410-e2845a9e46b8","features":[{"type":"Feature","id":"9f0ea4d9-53e1-4667-972b-c7e10187e887","geometry":{"type":"Point","coordinates":[4.233216666666666,55.879916666666674]},"properties":{"name:0:en":"Platform RAVN","name:0:da":"Platform RAVN","startCoordIndex":1}}]},"descs":[{"lang":"da","subject":"Platform nedtages og fjernes. Undervandsarbejde","details":"<p><strong>I perioden 1. juli - 1. september 2024</strong>, nedtages og fjernes platformen p&aring; n&aelig;vnte postion. I forbindelse med nedtagningen udf&oslash;res der undervandsarbejde.</p>\n<ul class=\"positions\">\n<li>55&deg; 52,795'N - 004&deg; 13,993'E, Platform RAVN.</li>\n</ul>\n<p></p>\n<p>Arbejdet udf&oslash;res af fart&oslash;jerne&nbsp;&raquo;GULLIVER&laquo; (LXGK) og &raquo;MULTRATUG&laquo; (PCDB) som begge kan kontaktes p&aring; VHF kanal 16.</p>\n<p>Skibsfarten anmodes om at vise hensyn ved passage.&nbsp;</p>"},{"lang":"en","subject":"Platform to be dismantled and removed. Subsea work","details":"<p><strong>In the period 1 July - 1 September 2024</strong>,&nbsp; the platform at the mentioned position will be dismantled and removed. In connection with the dismantling, subsea work is performed.</p>\n<ul class=\"positions\">\n<li>55&deg; 52.795'N - 004&deg; 13.993'E, Platform RAVN.</li>\n</ul>\n<p></p>\n<p>The work will be carried out by the vessels \"GULLIVER\" (LXGK) and \"MULTRATUG\" (PCDB), both of which can be contacted on VHF&nbsp;channel 16.</p>\n<p>Mariners are requested to pass with caution.</p>"}],"hideSubject":true}],"descs":[{"lang":"da","title":"Danmark. Nordsøen. Oliefelterne. Platform Ravn. Platform nedtages og fjernes. Undervandsarbejde.","vicinity":"Oliefelterne. Platform Ravn","source":"Wintershall Noordzee B.V 24. juni 2024"},{"lang":"en","title":"Denmark. The North Sea. Oilfields. Platform Ravn. Platform to be dismantled and removed. Subsea work.","vicinity":"Oilfields. Platform Ravn","source":"Wintershall Noordzee B.V 24 June 2024"}]}
+{
+  "id": "0a28d11e-5909-4348-bb8d-64e93684965c",
+  "created": "2024-06-26T08:54:52.000+00:00",
+  "updated": "2024-06-26T09:14:32.000+00:00",
+  "messageSeries": {
+    "seriesId": "dma-nm"
+  },
+  "number": 653,
+  "shortId": "NM-653-24",
+  "mainType": "NM",
+  "type": "PRELIMINARY_NOTICE",
+  "status": "PUBLISHED",
+  "areas": [
+    {
+      "id": 566,
+      "active": true,
+      "parent": {
+        "id": 453,
+        "mrn": "urn:mrn:iho:country:dk",
+        "active": true,
+        "descs": [
+          {
+            "lang": "da",
+            "name": "Danmark"
+          },
+          {
+            "lang": "en",
+            "name": "Denmark"
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "name": "Nordsøen"
+        },
+        {
+          "lang": "en",
+          "name": "The North Sea"
+        }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "chartNumber": "93",
+      "internationalNumber": 1044,
+      "active": true,
+      "scale": 375000
+    }
+  ],
+  "publishDateFrom": "2024-06-26T09:14:32.000+00:00",
+  "followUpDate": "2024-09-01T22:00:00.000+00:00",
+  "references": [
+    {
+      "messageId": "NM-652-24",
+      "type": "UPDATE"
+    }
+  ],
+  "originalInformation": true,
+  "parts": [
+    {
+      "indexNo": 0,
+      "type": "DETAILS",
+      "eventDates": [
+        {
+          "allDay": false,
+          "fromDate": "2024-06-26T09:14:32.000+00:00"
+        }
+      ],
+      "geometry": {
+        "type": "FeatureCollection",
+        "id": "a6c38f84-5fec-49a1-9410-e2845a9e46b8",
+        "features": [
+          {
+            "type": "Feature",
+            "id": "9f0ea4d9-53e1-4667-972b-c7e10187e887",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                4.233216666666666,
+                55.879916666666674
+              ]
+            },
+            "properties": {
+              "name:0:en": "Platform RAVN",
+              "name:0:da": "Platform RAVN",
+              "startCoordIndex": 1
+            }
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "subject": "Platform nedtages og fjernes. Undervandsarbejde",
+          "details": "<p><strong>I perioden 1. juli - 1. september 2024</strong>, nedtages og fjernes platformen p&aring; n&aelig;vnte postion. I forbindelse med nedtagningen udf&oslash;res der undervandsarbejde.</p>\n<ul class=\"positions\">\n<li>55&deg; 52,795'N - 004&deg; 13,993'E, Platform RAVN.</li>\n</ul>\n<p></p>\n<p>Arbejdet udf&oslash;res af fart&oslash;jerne&nbsp;&raquo;GULLIVER&laquo; (LXGK) og &raquo;MULTRATUG&laquo; (PCDB) som begge kan kontaktes p&aring; VHF kanal 16.</p>\n<p>Skibsfarten anmodes om at vise hensyn ved passage.&nbsp;</p>"
+        },
+        {
+          "lang": "en",
+          "subject": "Platform to be dismantled and removed. Subsea work",
+          "details": "<p><strong>In the period 1 July - 1 September 2024</strong>,&nbsp; the platform at the mentioned position will be dismantled and removed. In connection with the dismantling, subsea work is performed.</p>\n<ul class=\"positions\">\n<li>55&deg; 52.795'N - 004&deg; 13.993'E, Platform RAVN.</li>\n</ul>\n<p></p>\n<p>The work will be carried out by the vessels \"GULLIVER\" (LXGK) and \"MULTRATUG\" (PCDB), both of which can be contacted on VHF&nbsp;channel 16.</p>\n<p>Mariners are requested to pass with caution.</p>"
+        }
+      ],
+      "hideSubject": true
+    }
+  ],
+  "descs": [
+    {
+      "lang": "da",
+      "title": "Danmark. Nordsøen. Oliefelterne. Platform Ravn. Platform nedtages og fjernes. Undervandsarbejde.",
+      "vicinity": "Oliefelterne. Platform Ravn",
+      "source": "Wintershall Noordzee B.V 24. juni 2024"
+    },
+    {
+      "lang": "en",
+      "title": "Denmark. The North Sea. Oilfields. Platform Ravn. Platform to be dismantled and removed. Subsea work.",
+      "vicinity": "Oilfields. Platform Ravn",
+      "source": "Wintershall Noordzee B.V 24 June 2024"
+    }
+  ]
+}
