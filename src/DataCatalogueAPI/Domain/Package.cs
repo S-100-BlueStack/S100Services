@@ -1,4 +1,5 @@
 ﻿using Eventuous;
+using System.Text.Json;
 using static DataCatalague.Api.Domain.Events.PackagesEvents;
 
 
@@ -31,9 +32,9 @@ namespace DataCatalague.Api.Domain
                     string GeometryRef,
                     ulong Severity,
                     PackageMetaData? MetaData,
-                    DisplayScale? DisplayScale, DetailedGeometry? DetailedGeometry = null) {
+                    DisplayScale? DisplayScale, DetailedGeometry? DetailedGeometry = null, JsonElement? CategoryData = null) {
             this.EnsureDoesntExist();
-            this.Apply(new V1.PackageCreated(PackageId, Category, FileName, AbsoluteUri, GeometryRef, MetaData, DisplayScale, DateTime.UtcNow));
+            this.Apply(new V1.PackageCreated(PackageId, Category, FileName, AbsoluteUri, GeometryRef, MetaData, DisplayScale, DateTime.UtcNow, CategoryData));
             this.Apply(new V1.SeverityUpdated(Severity, DateTime.UtcNow));
             if (DetailedGeometry is not null) {
                 this.Apply(new V1.DetailedGeometryAdded(DetailedGeometry.PointRef, DetailedGeometry.CurveRef, DetailedGeometry.SurfaceRef, DateTime.UtcNow, DetailedGeometry.PointRefs.ToArray()));
@@ -75,6 +76,9 @@ namespace DataCatalague.Api.Domain
 
         public PackageMetaData? MetaData { get; set; } = null;
 
+        /// <summary>Opaque category-defined JSON, replayed without coupling the aggregate to any package type.</summary>
+        public JsonElement? CategoryData { get; init; }
+
         public DisplayScale? DisplayScale { get; init; } = null;
 
         public DateTimeOffset LastUpdatedUtc { get; set; }
@@ -93,6 +97,7 @@ namespace DataCatalague.Api.Domain
                 AbsoluteUri = new(e.AbsoluteUri),
                 GeometryRef = e.GeometryRef,
                 MetaData = e.MetaData,
+                CategoryData = e.CategoryData,
                 DisplayScale = e.DisplayScale,
                 LastUpdatedUtc = e.UTC,
             };
@@ -104,7 +109,7 @@ namespace DataCatalague.Api.Domain.Commands
 
     public static class PackagesCommands
     {
-        public record CreatePackage(string PackageId, string Category, string FileName, string AbsoluteUri, string GeometryRef, ulong Severity, PackageMetaData? MetaData, DisplayScale? DisplayScale, DetailedGeometry? DetailedGeometry = null);
+        public record CreatePackage(string PackageId, string Category, string FileName, string AbsoluteUri, string GeometryRef, ulong Severity, PackageMetaData? MetaData, DisplayScale? DisplayScale, DetailedGeometry? DetailedGeometry = null, JsonElement? CategoryData = null);
 
         public record AddDetailedGeometry(string PackageId, string? PointRef, string? CurveRef, string? SurfaceRef, IReadOnlyList<string>? PointRefs = null);
 
@@ -127,7 +132,8 @@ namespace DataCatalague.Api.Domain.Events
                     string GeometryRef,
                     PackageMetaData? MetaData,
                     DisplayScale? DisplayScale,
-                    DateTimeOffset UTC
+                    DateTimeOffset UTC,
+                    JsonElement? CategoryData = null
                 );
 
             [EventType("V1.DetailedGeometryAdded")]

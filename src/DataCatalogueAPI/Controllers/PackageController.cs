@@ -1,4 +1,4 @@
-﻿using ArcGIS.Core.Geometry;
+using ArcGIS.Core.Geometry;
 using Asp.Versioning;
 using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
@@ -10,6 +10,7 @@ using Eventuous;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using NanoidDotNet;
+using System.Globalization;
 using IO = System.IO;
 using System.ComponentModel.DataAnnotations;
 
@@ -69,7 +70,22 @@ namespace DataCatalague.Api.Controllers
                 if (category.State.IsTerminated)
                     return this.BadRequest();
 
-                var streamId = request.Id ?? CreateStreamId();
+                // All categories share the same annual numbering format; use UTC to avoid timezone-dependent year boundaries.
+                var year = DateTime.UtcNow.ToString("yy", CultureInfo.InvariantCulture);
+                var streamId = request.Id;
+                if (streamId is null) {
+                    if (string.IsNullOrEmpty(category.State.Prefix)) {
+                        return this.BadRequest(new ProblemDetails { Title = "Category has no identifier prefix." });
+                    }
+                    // The creation gate serializes allocation and persistence within this API instance.
+                    for (long number = 0; ; number++) {
+                        streamId = $"{category.State.Prefix}-{number.ToString("D3", CultureInfo.InvariantCulture)}-{year}";
+                        if (!await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new PackageId(streamId)), cancellationToken)) break;
+                    }
+                }
+                if (!System.Text.RegularExpressions.Regex.IsMatch(streamId, $@"\A{System.Text.RegularExpressions.Regex.Escape(category.State.Prefix)}-[0-9]{{3,}}-[0-9]{{2}}\z")) {
+                    return this.BadRequest(new ProblemDetails { Title = "Package ID must match PREFIX-NNN-YY (with at least three sequence digits)." });
+                }
                 if (await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new PackageId(streamId)), cancellationToken)) {
                     return this.Conflict(new ProblemDetails { Title = "Package already exists.", Detail = $"Package '{streamId}' already exists." });
                 }
@@ -93,7 +109,7 @@ namespace DataCatalague.Api.Controllers
                 var filename = IO.Path.GetFileName(request.AbsoluteUri);
 
                 // Once geometry commits, finish recording its references even if the caller disconnects.
-                var cmd = await this._servicePackage.Handle(new PackagesCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, references.Aoi, request.Severity, request.MetaData, request.DisplayScale, references.Details), CancellationToken.None);
+                var cmd = await this._servicePackage.Handle(new PackagesCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, references.Aoi, request.Severity, request.MetaData, request.DisplayScale, references.Details, request.CategoryData), CancellationToken.None);
 
                 if (!cmd.Success) {
                     this._logger.LogError("Package command failed after geometry persistence. PackageId: {PackageId}, Aoi: {Aoi}, Details: {@Details}.", streamId, references.Aoi, references.Details);
@@ -211,6 +227,7 @@ namespace DataCatalague.Api.Controllers
             DetailedGeometry = DetailedGeometryResponse.FromState(state.DetailedGeometry),
             Severity = state.Severity,
             MetaData = state.MetaData,
+            CategoryData = state.CategoryData,
             DisplayScale = state.DisplayScale,
             LastUpdatedUtc = state.LastUpdatedUtc,
         };

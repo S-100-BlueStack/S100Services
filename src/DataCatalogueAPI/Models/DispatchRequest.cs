@@ -14,6 +14,10 @@ namespace DataCatalague.Api.Models.V1
         public required string DisplayName { get; init; }
 
         public required string? Description { get; init; }
+
+        /// <summary>Unique two- or three-letter package identifier prefix.</summary>
+        [Required, RegularExpression(@"\A[A-Z]{2,3}\z")]
+        public required string Prefix { get; init; }
     }
 
     public sealed class UpdateCategorySpecificationRequest

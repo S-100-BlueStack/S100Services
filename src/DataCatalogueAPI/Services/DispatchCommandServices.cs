@@ -11,7 +11,7 @@ namespace DataCatalague.Api.Services
                 .InState(ExpectedState.New)
                 .GetId(cmd => new(cmd.CategoryId))
                 .ActAsync(
-                    (category, cmd, _) => category.Create(cmd.CategoryId, cmd.DisplayName, cmd.Description)
+                    (category, cmd, _) => category.Create(cmd.CategoryId, cmd.DisplayName, cmd.Description, cmd.Prefix)
                 );
 
             this.On<DispatcherCommands.UpdateSpecificationCategory>()

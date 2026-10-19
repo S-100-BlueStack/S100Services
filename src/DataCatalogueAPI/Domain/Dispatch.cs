@@ -10,10 +10,10 @@ namespace DataCatalague.Api.Domain
         public async Task Create(
                     string CategoryId,
                     string DisplayName,
-                    string? Description
+                    string? Description, string Prefix
             ) {
             this.EnsureDoesntExist();
-            this.Apply(new V1.CategoryCreated(CategoryId, DisplayName, Description, DateTime.UtcNow));
+            this.Apply(new V1.CategoryCreated(CategoryId, DisplayName, Description, DateTime.UtcNow, Prefix));
         }
 
         public async Task UpdateSpecification(
@@ -32,6 +32,8 @@ namespace DataCatalague.Api.Domain
         public CategoryId? Id { get; set; }
 
         public string DisplayName { get; set; } = string.Empty;
+
+        public string Prefix { get; set; } = string.Empty;
 
         public string? Description { get; set; } = string.Empty;
 
@@ -52,6 +54,7 @@ namespace DataCatalague.Api.Domain
             => state with {
                 Id = new(e.CategoryId),
                 DisplayName = e.DisplayName,
+                Prefix = e.Prefix ?? string.Empty,
                 Description = e.Description,
                 IsTerminated = false,
                 LastUpdatedUtc = e.UTC,
@@ -106,7 +109,7 @@ namespace DataCatalague.Api.Domain.Commands
 
     public static class DispatcherCommands
     {
-        public record CreateCategory(string CategoryId, string DisplayName, string? Description = default);
+        public record CreateCategory(string CategoryId, string DisplayName, string? Description, string Prefix);
 
         public record UpdateSpecificationCategory(string CategoryId, string Version, string Markdown);
 
@@ -125,7 +128,8 @@ namespace DataCatalague.Api.Domain.Events
                     string CategoryId,
                     string DisplayName,
                     string? Description,
-                    DateTimeOffset UTC
+                    DateTimeOffset UTC,
+                    string? Prefix = null
                 );
 
             [EventType("V1.CategorySpecificationUpdated")]

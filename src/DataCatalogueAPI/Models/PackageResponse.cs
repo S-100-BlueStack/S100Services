@@ -1,4 +1,5 @@
 ﻿using DataCatalague.Api.Domain;
+using System.Text.Json;
 
 namespace DataCatalague.Api.Models.V1
 {
@@ -22,6 +23,8 @@ namespace DataCatalague.Api.Models.V1
         public ulong? Severity { get; init; }
 
         public PackageMetaData? MetaData { get; init; }
+
+        public JsonElement? CategoryData { get; init; }
 
         public DisplayScale? DisplayScale { get; init; }
 

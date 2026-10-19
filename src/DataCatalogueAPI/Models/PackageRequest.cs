@@ -1,11 +1,12 @@
-﻿using DataCatalague.Api.Domain;
+using DataCatalague.Api.Domain;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 
 namespace DataCatalague.Api.Models.V1
 {
     public sealed class CreatePackageRequest
     {
-        /// <summary>An optional stable source identity; omitted values receive a generated identity.</summary>
+        /// <summary>An optional catalogue identity in PREFIX-NNN-YY format; omitted values receive a generated yearly identity. Source identities belong in MetaData.RefId.</summary>
         [StringLength(200, MinimumLength = 1)]
         [RegularExpression(@"\A[a-zA-Z0-9_-]+\z")]
         public string? Id { get; init; }
@@ -22,6 +23,9 @@ namespace DataCatalague.Api.Models.V1
         public ulong Severity { get; init; } = ulong.MaxValue;
 
         public PackageMetaData? MetaData { get; init; } = null;
+
+        /// <summary>Category-specific data, whose schema is defined by the category.</summary>
+        public JsonElement? CategoryData { get; init; }
 
         public DisplayScale? DisplayScale { get; init; } = null;
 

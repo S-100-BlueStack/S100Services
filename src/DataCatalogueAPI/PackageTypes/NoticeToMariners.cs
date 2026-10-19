@@ -1,13 +1,13 @@
 using DataCatalague.Api.Domain;
 using System.Text.Json;
 
-namespace DataCatalague.Api.Domain.PackageTypes;
+namespace DataCatalague.Api.PackageTypes;
 
 /// <summary>An incoming Notice to Mariners mapped to package metadata and Esri geometry JSON.</summary>
-/// <param name="Id">The source notice UUID, also used as the package identity.</param>
+/// <param name="Id">The original source notice UUID, stored separately from the catalogue package ID.</param>
 /// <param name="MetaData">Metadata read from the source notice.</param>
 /// <param name="Geometry">The rectangular AOI and complete detailed geometries in WGS84.</param>
-public sealed record NoticeToMariners(string Id, PackageMetaData MetaData, PackageGeometry Geometry)
+public sealed record NoticeToMariners(string Id, PackageMetaData MetaData, PackageGeometry Geometry, NoticeToMarinersData Data)
 {
     /// <summary>Reads the supplied notice format without depending on ArcGIS runtime initialization.</summary>
     /// <param name="json">The original notice JSON.</param>
@@ -61,7 +61,13 @@ public sealed record NoticeToMariners(string Id, PackageMetaData MetaData, Packa
             JsonSerializer.Serialize(new { rings = new[] { rectangle }, spatialReference }),
             points.Count == 0 ? null : JsonSerializer.Serialize(new { points, spatialReference }),
             paths.Count == 0 ? null : JsonSerializer.Serialize(new { paths, spatialReference }),
-            rings.Count == 0 ? null : JsonSerializer.Serialize(new { rings, spatialReference })));
+            rings.Count == 0 ? null : JsonSerializer.Serialize(new { rings, spatialReference })),
+            new NoticeToMarinersData(
+                root.TryGetProperty("charts", out var charts) ? charts.Deserialize<JsonElement[]>() ?? [] : [],
+                root.GetProperty("parts").EnumerateArray().Select(part => new NoticePartData(
+                    part.TryGetProperty("indexNo", out var index) ? index.GetInt32() : 0,
+                    Text(part, "type"),
+                    part.TryGetProperty("descs", out var descs) ? descs.Deserialize<JsonElement[]>() ?? [] : [])).ToArray()));
     }
 
     private static string? Text(JsonElement element, string property)
@@ -120,3 +126,8 @@ public sealed record NoticeToMariners(string Id, PackageMetaData MetaData, Packa
         }
     }
 }
+/// <summary>Category-defined notice content retained independently of the generic package aggregate.</summary>
+public sealed record NoticeToMarinersData(JsonElement[] Charts, NoticePartData[] Parts);
+
+/// <summary>All language descriptions for an individual notice part, including unmodified HTML.</summary>
+public sealed record NoticePartData(int IndexNo, string? Type, JsonElement[] Descs);

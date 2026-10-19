@@ -94,11 +94,17 @@ namespace DataCatalague.Api.Controllers
             if (request.Id is not null && !System.Text.RegularExpressions.Regex.IsMatch(request.Id, @"\A[a-zA-Z0-9_-]{1,200}\z")) {
                 return this.BadRequest(new ProblemDetails { Title = "Invalid category identifier." });
             }
+            if (string.IsNullOrEmpty(request.Prefix) || !System.Text.RegularExpressions.Regex.IsMatch(request.Prefix, @"\A[A-Z]{2,3}\z")) {
+                return this.BadRequest(new ProblemDetails { Title = "Category prefix must contain two or three uppercase letters." });
+            }
+            if (this._dispatchRepository.Categories.Any(id => string.Equals(this._dispatchRepository.GetCategory(id).Prefix, request.Prefix, StringComparison.Ordinal))) {
+                return this.Conflict(new ProblemDetails { Title = "Category prefix already in use." });
+            }
             var categoryId = request.Id ?? CreateStreamId();
             if (await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new CategoryId(categoryId)), cancellationToken)) {
                 return this.Conflict(new ProblemDetails { Title = "Category already exists.", Detail = $"Category '{categoryId}' already exists." });
             }
-            var cmd = await this._serviceCategory.Handle(new DispatcherCommands.CreateCategory(categoryId, displayName, description), cancellationToken);
+            var cmd = await this._serviceCategory.Handle(new DispatcherCommands.CreateCategory(categoryId, displayName, description, request.Prefix), cancellationToken);
 
             if (!cmd.Success)
                 return this.BadRequest();
@@ -254,6 +260,7 @@ namespace DataCatalague.Api.Controllers
         private static CategoryResponse Map(Domain.CategoryState state) => new() {
             Id = state.Id,
             DisplayName = state.DisplayName,
+            Prefix = state.Prefix,
             Description = state.Description,
             Version = state.Version?.ToString(),
             Specification = state.Markdown,
