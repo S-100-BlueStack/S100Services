@@ -66,46 +66,85 @@ namespace DataCatalague.Api.Controllers
             var validationErrors = new List<ValidationResult>();
             if (!Validator.TryValidateObject(request, new ValidationContext(request), validationErrors, validateAllProperties: true)
                 || !Uri.TryCreate(request.AbsoluteUri, UriKind.Absolute, out _)) {
-                return this.BadRequest(new ProblemDetails { Title = "Invalid package request.", Detail = "A category, absolute source URI, geometry and valid optional identifier are required." });
+                return this.BadRequest(new ProblemDetails {
+                    Title = "Invalid package request.",
+                    Detail = "A category, absolute source URI, geometry and valid optional identifier are required."
+                });
             }
+
             await CreationGate.WaitAsync(cancellationToken);
             try {
-                var category = await this._eventStore.LoadState<CategoryState, CategoryId>(this._streamNameMap, new(request.Category), true, cancellationToken);
-                if (category.State.IsTerminated)
-                    return this.BadRequest();
+                var categoryId = new CategoryId(request.Category);
+                var categoryStream = this._streamNameMap.GetStreamName(categoryId);
 
-                // All categories share the same annual numbering format; use UTC to avoid timezone-dependent year boundaries.
+                if (!await this._eventStore.StreamExists(categoryStream, cancellationToken)) {
+                    return this.BadRequest(new ProblemDetails {
+                        Title = "Category does not exist.",
+                        Detail = $"No category exists with identifier '{request.Category}'."
+                    });
+                }
+
+                var category = await this._eventStore.LoadState<CategoryState, CategoryId>(this._streamNameMap, categoryId, true, cancellationToken);
+
+                if (category.State.IsTerminated) {
+                    return this.BadRequest(new ProblemDetails {
+                        Title = "Category is terminated.",
+                        Detail = $"Category '{request.Category}' no longer accepts packages."
+                    });
+                }
+
+                // Use UTC so annual identifiers do not depend on the server's timezone.
                 var year = DateTime.UtcNow.ToString("yy", CultureInfo.InvariantCulture);
                 var streamId = request.Id;
+
                 if (streamId is null) {
                     if (string.IsNullOrEmpty(category.State.Prefix)) {
-                        return this.BadRequest(new ProblemDetails { Title = "Category has no identifier prefix." });
+                        return this.BadRequest(new ProblemDetails {
+                            Title = "Category has no identifier prefix."
+                        });
                     }
+
                     // The creation gate serializes allocation and persistence within this API instance.
                     for (long number = 0; ; number++) {
                         streamId = $"{category.State.Prefix}-{number.ToString("D3", CultureInfo.InvariantCulture)}-{year}";
-                        if (!await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new PackageId(streamId)), cancellationToken)) break;
+                        if (!await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new PackageId(streamId)), cancellationToken)) {
+                            break;
+                        }
                     }
                 }
+
                 if (!System.Text.RegularExpressions.Regex.IsMatch(streamId, $@"\A{System.Text.RegularExpressions.Regex.Escape(category.State.Prefix)}-[0-9]{{3,}}-[0-9]{{2}}\z")) {
-                    return this.BadRequest(new ProblemDetails { Title = "Package ID must match PREFIX-NNN-YY (with at least three sequence digits)." });
+                    return this.BadRequest(new ProblemDetails {
+                        Title = "Package ID must match PREFIX-NNN-YY (with at least three sequence digits)."
+                    });
                 }
+
                 if (await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new PackageId(streamId)), cancellationToken)) {
-                    return this.Conflict(new ProblemDetails { Title = "Package already exists.", Detail = $"Package '{streamId}' already exists." });
+                    return this.Conflict(new ProblemDetails {
+                        Title = "Package already exists.",
+                        Detail = $"Package '{streamId}' already exists."
+                    });
                 }
 
                 var references = await this._dispatcher.ExecuteAsync(() => {
                     cancellationToken.ThrowIfCancellationRequested();
+
                     if (request.DetailedGeometry is { } geometry) {
                         var aoi = PolygonBuilderEx.FromJson(geometry.Aoi);
                         var points = geometry.Points is null ? null : MultipointBuilderEx.FromJson(geometry.Points);
                         var curves = geometry.Curves is null ? null : PolylineBuilderEx.FromJson(geometry.Curves);
                         var surfaces = geometry.Surfaces is null ? null : PolygonBuilderEx.FromJson(geometry.Surfaces);
-                        if ((points is null && curves is null && surfaces is null) || points?.IsEmpty == true || curves?.IsEmpty == true || surfaces?.IsEmpty == true) {
+
+                        if ((points is null && curves is null && surfaces is null)
+                            || points?.IsEmpty == true
+                            || curves?.IsEmpty == true
+                            || surfaces?.IsEmpty == true) {
                             throw new InvalidDataException("Detailed geometry must contain at least one group, and supplied groups must not be empty.");
                         }
+
                         return this._packageRepository.AddPackageGeometries(aoi, points, curves, surfaces, streamId, request.AbsoluteUri, cancellationToken);
                     }
+
                     var polygon = this._packageRepository.FromGeoJson(request.GeoJSON);
                     return (Aoi: this._packageRepository.AddPackageAOI(polygon, streamId, request.AbsoluteUri), Details: (DetailedGeometry?)null);
                 });
@@ -130,10 +169,10 @@ namespace DataCatalague.Api.Controllers
                     Map(result.State));
             }
             catch (InvalidDataException exception) {
-                return this.BadRequest(new ProblemDetails { Title = "Invalid package geometry.", Detail = exception.Message });
-            }
-            catch (StreamNotFound) {
-                return this.BadRequest();
+                return this.BadRequest(new ProblemDetails {
+                    Title = "Invalid package geometry.",
+                    Detail = exception.Message
+                });
             }
             finally {
                 CreationGate.Release();
