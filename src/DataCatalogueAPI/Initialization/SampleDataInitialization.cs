@@ -1,18 +1,17 @@
 using DataCatalague.Api.Controllers;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.PackageTypes;
-using System.Text.Json;
 using DataCatalague.Api.Models.V1;
 using Microsoft.AspNetCore.Mvc;
-using System.IO.Compression;
 
 namespace DataCatalague.Api.Initialization;
 
 /// <summary>Creates development data through the registered controllers after the in-memory stores are reset.</summary>
 /// <param name="dispatcher">The dispatcher controller resolved from the host container.</param>
 /// <param name="packages">The package controller resolved from the same container.</param>
+/// <param name="packageTypes">The registered category-specific source readers.</param>
 /// <param name="logger">Receives sample initialization progress.</param>
-public sealed class SampleDataInitialization(DispatcherController dispatcher, PackageController packages, ILogger<SampleDataInitialization> logger)
+public sealed class SampleDataInitialization(DispatcherController dispatcher, PackageController packages, PackageTypeFactory packageTypes, ILogger<SampleDataInitialization> logger)
 {
     /// <summary>Creates the core categories, their sample specifications and sample packages in the fresh development stores.</summary>
     /// <param name="cancellationToken">Cancels sample reading and controller operations.</param>
@@ -39,8 +38,9 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
                 - Source: ZIP archives from `Samples/GeneralSubmission`.
                 - Package identifiers are allocated in `GS-NNN-YY` format.
                 - Each sample contains `submission.json`, `contract.txt` and a complete AOI shapefile (`aoi.shp`, `aoi.shx`, `aoi.dbf`, `aoi.prj`).
-                - The sample initializer reads the title, source and AOI from `submission.json`.
-                - The manifest is preserved as category-specific package data.
+                - The sample initializer reads the title and source from `submission.json`; geometry comes only from the shapefile.
+                - The full shapefile polygon is saved as detailed geometry; its envelope becomes the AOI.
+                - Manifest metadata is preserved as category-specific data without embedded coordinates.
                 """)
         }) {
             var created = await dispatcher.CreateCategory(new CreateCategoryRequest {
@@ -65,7 +65,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
         if (files.Length == 0) { throw new InvalidDataException($"No notice samples found in '{directory}'."); }
 
         foreach (var file in files) {
-            var request = CreateRequest(await File.ReadAllTextAsync(file, cancellationToken).ConfigureAwait(false), file);
+            var request = await packageTypes.CreateRequestAsync("NoticeToMariners", file, cancellationToken).ConfigureAwait(false);
             logger.LogInformation("Creating notice sample {FileName} as package {PackageId}.", Path.GetFileName(file), request.Id);
             var created = await packages.CreatePackage(request, cancellationToken).ConfigureAwait(false);
             RequireSuccess(created, $"create notice package '{request.Id}'");
@@ -74,7 +74,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
 
 
 
-        // General submissions are ZIP-based; the manifest supplies the AOI until a real submission ingestion flow exists.
+        // Both source formats use registered readers and the same creation flow.
         var submissionDirectory = Path.Combine(AppContext.BaseDirectory, "Samples", "GeneralSubmission");
         var submissionFiles = Directory.GetFiles(submissionDirectory, "*.zip").Order(StringComparer.Ordinal).ToArray();
         if (submissionFiles.Length != 2) {
@@ -82,46 +82,13 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
         }
 
         foreach (var file in submissionFiles) {
-            using var archive = ZipFile.OpenRead(file);
-            var manifest = archive.GetEntry("submission.json") ?? throw new InvalidDataException($"Sample '{Path.GetFileName(file)}' has no submission.json.");
-            if (archive.GetEntry("contract.txt") is null || archive.GetEntry("aoi.shp") is null || archive.GetEntry("aoi.shx") is null || archive.GetEntry("aoi.dbf") is null || archive.GetEntry("aoi.prj") is null) {
-                throw new InvalidDataException($"Sample '{Path.GetFileName(file)}' must contain a contract and complete AOI shapefile.");
-            }
-            await using var stream = manifest.Open();
-            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-            var data = document.RootElement;
-            var title = data.GetProperty("title").GetString();
-            var aoi = data.GetProperty("aoi").GetRawText();
-            var request = new CreatePackageRequest {
-                Category = "GeneralSubmission",
-                AbsoluteUri = new Uri(Path.GetFullPath(file)).AbsoluteUri,
-                EsriJSON = aoi,
-                MetaData = new PackageMetaData(null, "GeneralSubmission", null, title, data.GetProperty("source").GetString(), null, DateTimeOffset.UtcNow),
-                CategoryData = data.Clone()
-            };
+            var request = await packageTypes.CreateRequestAsync("GeneralSubmission", file, cancellationToken).ConfigureAwait(false);
             var created = await packages.CreatePackage(request, cancellationToken).ConfigureAwait(false);
             RequireSuccess(created, $"create general submission '{Path.GetFileName(file)}'");
             logger.LogInformation("Created general submission sample {FileName}.", Path.GetFileName(file));
         }
 
         logger.LogInformation("Sample initialization completed. CreatedPackages: {CreatedPackages}.", files.Length + submissionFiles.Length);
-    }
-
-    private static CreatePackageRequest CreateRequest(string json, string sourceFile) {
-        var notice = NoticeToMariners.Parse(json);
-        if (string.IsNullOrWhiteSpace(notice.MetaData.ShortId)) {
-            throw new InvalidDataException($"Notice sample '{Path.GetFileName(sourceFile)}' has no shortId.");
-        }
-        return new CreatePackageRequest {
-            // Niords assigns the public notice ID; its UUID remains available separately in MetaData.RefId.
-            Id = notice.MetaData.ShortId,
-            Category = "NoticeToMariners",
-            AbsoluteUri = new Uri(sourceFile).AbsoluteUri,
-            EsriJSON = notice.Geometry.Aoi,
-            DetailedGeometry = notice.Geometry,
-            MetaData = notice.MetaData,
-            CategoryData = JsonSerializer.SerializeToElement(notice.Data),
-        };
     }
 
     private static T RequireSuccess<T>(ActionResult<T> response, string operation) {

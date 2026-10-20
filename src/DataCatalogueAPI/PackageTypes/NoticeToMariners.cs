@@ -131,3 +131,27 @@ public sealed record NoticeToMarinersData(JsonElement[] Charts, NoticePartData[]
 
 /// <summary>All language descriptions for an individual notice part, including unmodified HTML.</summary>
 public sealed record NoticePartData(int IndexNo, string? Type, JsonElement[] Descs);
+
+/// <summary>Adapts the existing notice parser to the common source-file creation interface.</summary>
+public sealed class NoticeToMarinersPackageType : IPackageType
+{
+    /// <inheritdoc />
+    public string CategoryType => "NoticeToMariners";
+
+    /// <inheritdoc />
+    public async Task<DataCatalague.Api.Models.V1.CreatePackageRequest> CreateRequestAsync(string sourceFile, CancellationToken cancellationToken) {
+        var notice = NoticeToMariners.Parse(await File.ReadAllTextAsync(sourceFile, cancellationToken).ConfigureAwait(false));
+        if (string.IsNullOrWhiteSpace(notice.MetaData.ShortId)) {
+            throw new InvalidDataException($"Notice '{Path.GetFileName(sourceFile)}' has no shortId.");
+        }
+        return new() {
+            Id = notice.MetaData.ShortId,
+            Category = CategoryType,
+            AbsoluteUri = new Uri(Path.GetFullPath(sourceFile)).AbsoluteUri,
+            EsriJSON = notice.Geometry.Aoi,
+            DetailedGeometry = notice.Geometry,
+            MetaData = notice.MetaData,
+            CategoryData = JsonSerializer.SerializeToElement(notice.Data),
+        };
+    }
+}

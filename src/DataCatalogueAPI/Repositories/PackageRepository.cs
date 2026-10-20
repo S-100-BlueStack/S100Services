@@ -4,6 +4,7 @@ using ArcGIS.Core.Geometry;
 using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Domain.Events;
+using Eventuous;
 using Eventuous.Subscriptions;
 using Eventuous.Subscriptions.Context;
 using Microsoft.Extensions.Options;
@@ -20,6 +21,8 @@ namespace DataCatalague.Api.Repositories
             PropertyNameCaseInsensitive = true,
         };
 
+        private readonly InMemoryEventStore _eventStore;
+
         private readonly IOptions<PackagesOptions> _options;
 
         private readonly ILogger<PackageRepository> _logger;
@@ -29,7 +32,8 @@ namespace DataCatalague.Api.Repositories
         private readonly IReadOnlyDictionary<string, FeatureClassDefinition> _featureClassDefinitions;
         private readonly IReadOnlyDictionary<string, TableDefinition> _standaloneTableDefinitions;
 
-        public PackageRepository(ArcGisDispatcher arcDispatcher, IOptions<PackagesOptions> options, ILogger<PackageRepository> logger) {
+        public PackageRepository(ArcGisDispatcher arcDispatcher, IOptions<PackagesOptions> options, ILogger<PackageRepository> logger, InMemoryEventStore eventStore) {
+            this._eventStore = eventStore;
             this._options = options ?? throw new ArgumentNullException(nameof(options));
             this._logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -64,6 +68,34 @@ namespace DataCatalague.Api.Repositories
 
             this._featureClassDefinitions = definitions.Item1;
             this._standaloneTableDefinitions = definitions.Item2;
+        }
+
+        /// <summary>Loads current package states directly from the application's shared in-memory event store.</summary>
+        /// <param name="category">An optional exact category identifier.</param>
+        /// <param name="cancellationToken">Cancels state reads.</param>
+        /// <returns>All matching packages ordered by catalogue identifier.</returns>
+        public async Task<IReadOnlyList<PackageState>> GetPackagesAsync(string? category, CancellationToken cancellationToken) {
+            cancellationToken.ThrowIfCancellationRequested();
+            // Use committed creation events rather than a subscription projection so a
+            // just-created package is immediately visible, including during startup.
+            var ids = this._eventStore.ReadAll(null, int.MaxValue)
+                .Select(item => item.Event.Payload)
+                .OfType<PackagesEvents.V1.PackageCreated>()
+                .Where(item => category is null || string.Equals(item.Category, category, StringComparison.Ordinal))
+                .Select(item => item.PackageId)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            var map = new StreamNameMap();
+            var packages = new List<PackageState>(ids.Length);
+            foreach (var id in ids) {
+                cancellationToken.ThrowIfCancellationRequested();
+                var packageId = new PackageId(id);
+                if (!await this._eventStore.StreamExists(map.GetStreamName(packageId), cancellationToken)) { continue; }
+                var state = await this._eventStore.LoadState<PackageState, PackageId>(map, packageId, true, cancellationToken);
+                packages.Add(state.State);
+            }
+            return packages;
         }
 
         public string DiagnosticName => nameof(DispatchRepository);

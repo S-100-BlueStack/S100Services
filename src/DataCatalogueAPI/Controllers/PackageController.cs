@@ -179,6 +179,22 @@ namespace DataCatalague.Api.Controllers
             }
         }
 
+        /// <summary>Lists all packages, optionally filtered by their category identifier.</summary>
+        /// <param name="category">An exact category identifier; omitted values return all categories.</param>
+        /// <param name="cancellationToken">Cancels package state reads.</param>
+        /// <returns>All matching packages in catalogue identifier order.</returns>
+        [HttpGet]
+        [ProducesResponseType<PagedResponse<PackageResponse>>(StatusCodes.Status200OK)]
+        public async Task<ActionResult<PagedResponse<PackageResponse>>> GetPackages(CancellationToken cancellationToken, [FromQuery] string? category = null) {
+            var packages = await this._packageRepository.GetPackagesAsync(category, cancellationToken);
+            return this.Ok(new PagedResponse<PackageResponse> {
+                Items = packages.Select(Map).ToArray(),
+                Page = 1,
+                PageSize = Math.Max(DefaultPageSize, packages.Count),
+                TotalCount = packages.Count,
+            });
+        }
+
         [HttpGet("{id}", Name = "GetPackage.V1")]
         [Consumes("application/json")]
         [ProducesResponseType<PackageResponse>(StatusCodes.Status200OK)]

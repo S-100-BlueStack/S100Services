@@ -1,4 +1,5 @@
 using DataCatalague.Api.Repositories;
+using DataCatalague.Api.PackageTypes;
 using Eventuous;
 using System.Text.Json.Serialization;
 
@@ -33,6 +34,9 @@ public static class ApplicationServicesConfiguration
 
         services.AddHealthChecks();
         services.AddTransient<DataCatalague.Api.Services.PackageGeometryService>();
+        services.AddTransient<IPackageType, NoticeToMarinersPackageType>();
+        services.AddTransient<IPackageType, GenericSubmission>();
+        services.AddTransient<PackageTypeFactory>();
 
         //services.AddSingleton<IDataRepository, InMemoryProductRepository>();
         // The shared in-memory event store is registered in Program.cs.
