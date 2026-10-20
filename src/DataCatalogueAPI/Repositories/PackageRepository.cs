@@ -1,8 +1,9 @@
 ﻿using ArcGIS.Core.Data;
 using ArcGIS.Core.Data.Exceptions;
-using DataCatalague.Api.Domain;
 using ArcGIS.Core.Geometry;
 using DataCatalague.Api.Configuration;
+using DataCatalague.Api.Domain;
+using DataCatalague.Api.Domain.Events;
 using Eventuous.Subscriptions;
 using Eventuous.Subscriptions.Context;
 using Microsoft.Extensions.Options;
@@ -274,6 +275,17 @@ namespace DataCatalague.Api.Repositories
         }
 
         public async ValueTask<EventHandlingStatus> HandleEvent(IMessageConsumeContext context) {
+            return context.Message switch {
+                PackagesEvents.V1.PackageCreated evt => this.Handle_PackageCreated(evt),
+                _ => EventHandlingStatus.Ignored,
+            };
+        }
+
+
+        private EventHandlingStatus Handle_PackageCreated(PackagesEvents.V1.PackageCreated evt) {
+            var state = new PackageState();
+            state = state.When(evt);
+
             return EventHandlingStatus.Handled;
         }
     }

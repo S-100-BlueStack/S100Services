@@ -29,16 +29,12 @@ public sealed class PackageGeometryService(IEventStore eventStore, StreamNameMap
             throw new InvalidDataException("Supply Aoi and at least one of Points, Curves or Surfaces as Esri JSON strings.");
         }
 
-        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(request)));
         await GeometryGate.WaitAsync(cancellationToken);
         try {
             // Check existence without throwing an expected StreamNotFound exception in the debugger.
             if (!await eventStore.StreamExists(streamNameMap.GetStreamName(new PackageId(id)), cancellationToken)) { return null; }
             var stream = await eventStore.LoadState<PackageState, PackageId>(streamNameMap, new(id), true, cancellationToken);
-            if (stream.State.GeometryFingerprint == fingerprint) {
-                logger.LogInformation("Package geometry request already applied. PackageId: {PackageId}.", id);
-                return stream.State;
-            }
+
             var absoluteUri = stream.State.AbsoluteUri?.AbsoluteUri ?? throw new InvalidOperationException($"Package '{id}' has no source URI.");
             var references = await dispatcher.ExecuteAsync(() => {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -49,7 +45,7 @@ public sealed class PackageGeometryService(IEventStore eventStore, StreamNameMap
             try {
                 // These stores cannot share a transaction. Once ArcGIS commits, finish
                 // recording the references even if the HTTP client has disconnected.
-                var result = await commands.Handle(new PackagesCommands.ReplaceGeometry(id, references.Aoi, references.Details, fingerprint), CancellationToken.None);
+                var result = await commands.Handle(new PackagesCommands.ReplaceGeometry(id, references.Aoi, references.Details), CancellationToken.None);
                 if (!result.Success) {
                     throw new InvalidOperationException($"Could not record geometry replacement for package '{id}'.");
                 }
@@ -59,7 +55,7 @@ public sealed class PackageGeometryService(IEventStore eventStore, StreamNameMap
             catch (Exception exception) {
                 // Keep existing rows: old events still refer to them. Log newly committed
                 // references so a failed event write can be diagnosed without losing data.
-                logger.LogError(exception, "Geometry committed but package event persistence failed. PackageId: {PackageId}, Aoi: {Aoi}, Details: {@Details}, Fingerprint: {Fingerprint}.", id, references.Aoi, references.Details, fingerprint);
+                logger.LogError(exception, "Geometry committed but package event persistence failed. PackageId: {PackageId}, Aoi: {Aoi}, Details: {@Details}", id, references.Aoi, references.Details);
                 throw;
             }
         }

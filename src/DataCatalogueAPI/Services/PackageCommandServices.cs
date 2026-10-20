@@ -24,7 +24,7 @@ namespace DataCatalague.Api.Services
             this.On<PackagesCommands.ReplaceGeometry>()
                 .InState(ExpectedState.Existing)
                 .GetId(cmd => new(cmd.PackageId))
-                .ActAsync((package, cmd, _) => package.ReplaceGeometry(cmd.Aoi, cmd.Details, cmd.Fingerprint));
+                .ActAsync((package, cmd, _) => package.ReplaceGeometry(cmd.Aoi, cmd.Details));
 
             this.On<PackagesCommands.UpdateSeverity>()
                 .InState(ExpectedState.Existing)
