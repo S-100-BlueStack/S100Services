@@ -95,7 +95,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
             var request = new CreatePackageRequest {
                 Category = "GeneralSubmission",
                 AbsoluteUri = new Uri(Path.GetFullPath(file)).AbsoluteUri,
-                GeoJSON = aoi,
+                EsriJSON = aoi,
                 MetaData = new PackageMetaData(null, "GeneralSubmission", null, title, data.GetProperty("source").GetString(), null, DateTimeOffset.UtcNow),
                 CategoryData = data.Clone()
             };
@@ -117,7 +117,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
             Id = notice.MetaData.ShortId,
             Category = "NoticeToMariners",
             AbsoluteUri = new Uri(sourceFile).AbsoluteUri,
-            GeoJSON = notice.Geometry.Aoi,
+            EsriJSON = notice.Geometry.Aoi,
             DetailedGeometry = notice.Geometry,
             MetaData = notice.MetaData,
             CategoryData = JsonSerializer.SerializeToElement(notice.Data),

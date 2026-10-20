@@ -102,7 +102,7 @@ namespace DataCatalague.Api.Controllers.V1
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
             public async Task<ActionResult<PipelineResponse>> AddWorkspace(string id, [FromBody] AddWorkspaceRequest request, CancellationToken cancellationToken) {
                 ArgumentNullException.ThrowIfNull(request);
-                ArgumentNullException.ThrowIfNullOrWhiteSpace(request.GeoJSON);
+                ArgumentNullException.ThrowIfNullOrWhiteSpace(request.EsriJSON);
                 ArgumentNullException.ThrowIfNullOrWhiteSpace(request.DisplayName?.Trim());
 
                 var displayName = request.DisplayName?.Trim();
@@ -110,7 +110,7 @@ namespace DataCatalague.Api.Controllers.V1
                 var pipeline = await this._eventStore.LoadState<PipelineState>(new(id), true, cancellationToken);
 
                 var geometryRef = await this._dispatcher.ExecuteAsync(() => {
-                    var polygon = this._dispatchRepository.FromGeoJson(request.GeoJSON);
+                    var polygon = this._dispatchRepository.FromEsriJson(request.EsriJSON);
 
                     return this._dispatchRepository.AddWorkspaceAOI(polygon, id, displayName);
                 });

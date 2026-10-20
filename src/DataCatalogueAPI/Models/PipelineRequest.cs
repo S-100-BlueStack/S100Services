@@ -11,7 +11,8 @@ namespace DataCatalague.Api.Models.V1
 
     public sealed class AddWorkspaceRequest
     {
-        public required string GeoJSON { get; init; }
+        /// <summary>An Esri JSON polygon encoded as a string, containing rings and a spatialReference; GeoJSON is not accepted.</summary>
+        public required string EsriJSON { get; init; }
 
         public required string DisplayName { get; init; }
 

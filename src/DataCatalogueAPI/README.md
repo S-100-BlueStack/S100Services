@@ -20,6 +20,34 @@ GET    /api/v2/dispatcher?page=1&pageSize=20
 ```
 
 
+## Geometry JSON format
+
+Package creation (`CreatePackageRequest`), severity areas (`AddSeverityAreaRequest`)
+and workspaces (`AddWorkspaceRequest`) accept **Esri JSON**, not GeoJSON. Their
+C# property is `EsriJSON`, exposed as `esriJSON` in JSON request bodies and OpenAPI.
+Replace the previous request field `geoJSON` with `esriJSON` in API clients;
+there is no legacy field alias.
+
+The value is a JSON-encoded **string**, for example:
+
+```json
+{
+  "esriJSON": "{\"rings\":[[[12,55],[12,56],[13,56],[13,55],[12,55]]],\"spatialReference\":{\"wkid\":4326}}"
+}
+```
+
+This fragment shows the geometry field only; supply the other required fields
+for the endpoint. Esri polygon JSON uses `rings` and `spatialReference`, whereas
+GeoJSON uses `type` and `coordinates`. The repository helper `FromEsriJson`
+passes Esri JSON directly to `PolygonBuilderEx.FromJson`; it performs no format
+conversion. Detailed geometry request fields (`aoi`, `points`, `curves`,
+`surfaces`) also contain Esri JSON strings and retain their existing names.
+
+Niord notice samples are different: their source geometry is genuinely GeoJSON.
+`PackageTypes/NoticeToMariners.cs` converts those source geometries to Esri JSON
+before passing them to the package API. The original notice sample JSON is
+therefore retained in its source format.
+
 ## Startup sample data
 
 `Program.Main` resolves `SampleDataInitialization` once in a startup DI scope
@@ -42,7 +70,7 @@ file URIs in `PackageCreated`; source status is not used to filter these samples
 There is no invented severity mapping: the existing `ulong.MaxValue` default is
 used, and display scale stays null.
 
-`Domain/PackageTypes/NoticeToMariners.cs` reads every geometry from every part and
+`PackageTypes/NoticeToMariners.cs` reads every geometry from every part and
 converts GeoJSON into Esri JSON in WGS84. The AOI is always a rectangle covering
 the combined detailed geometry envelope in the target coordinate system.
 Point-only/collapsed extents are expanded by 0.000005 degrees on each collapsed

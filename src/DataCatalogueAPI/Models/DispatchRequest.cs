@@ -34,8 +34,9 @@ namespace DataCatalague.Api.Models.V1
         [Required]
         public required ulong Severity { get; init; } = ulong.MaxValue;
 
+        /// <summary>An Esri JSON polygon encoded as a string, containing rings and a spatialReference; GeoJSON is not accepted.</summary>
         [Required]
-        public required string GeoJSON { get; init; }
+        public required string EsriJSON { get; init; }
     }
 
     public sealed class BindRequest {

@@ -29,8 +29,9 @@ namespace DataCatalague.Api.Models.V1
 
         public DisplayScale? DisplayScale { get; init; } = null;
 
+        /// <summary>An Esri JSON polygon encoded as a string, containing rings and a spatialReference; GeoJSON is not accepted.</summary>
         [Required]
-        public required string GeoJSON { get; init; }
+        public required string EsriJSON { get; init; }
     }
 
     public sealed class UploadFileRequest

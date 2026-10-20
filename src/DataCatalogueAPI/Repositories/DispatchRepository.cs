@@ -183,8 +183,11 @@ namespace DataCatalague.Api.Repositories
             }
         }
 
-        public Polygon FromGeoJson(string geoJson) {
-            var polygon = PolygonBuilderEx.FromJson(geoJson);
+        /// <summary>Parses an Esri JSON polygon; this does not convert GeoJSON.</summary>
+        /// <param name="esriJson">An Esri JSON polygon with rings and a spatialReference.</param>
+        /// <returns>The parsed ArcGIS polygon.</returns>
+        public Polygon FromEsriJson(string esriJson) {
+            var polygon = PolygonBuilderEx.FromJson(esriJson);
             return polygon;
         }
 

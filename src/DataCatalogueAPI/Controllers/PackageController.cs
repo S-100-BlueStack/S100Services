@@ -145,7 +145,7 @@ namespace DataCatalague.Api.Controllers
                         return this._packageRepository.AddPackageGeometries(aoi, points, curves, surfaces, streamId, request.AbsoluteUri, cancellationToken);
                     }
 
-                    var polygon = this._packageRepository.FromGeoJson(request.GeoJSON);
+                    var polygon = this._packageRepository.FromEsriJson(request.EsriJSON);
                     return (Aoi: this._packageRepository.AddPackageAOI(polygon, streamId, request.AbsoluteUri), Details: (DetailedGeometry?)null);
                 });
 

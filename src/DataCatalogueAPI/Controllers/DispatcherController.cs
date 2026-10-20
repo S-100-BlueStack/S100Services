@@ -177,10 +177,10 @@ namespace DataCatalague.Api.Controllers
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<SeverityResponse>> AddSeverity([FromBody] AddSeverityAreaRequest request, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNull(request);
-            ArgumentNullException.ThrowIfNullOrEmpty(request.GeoJSON);
+            ArgumentNullException.ThrowIfNullOrEmpty(request.EsriJSON);
 
             var geometryRef = await this._dispatcher.ExecuteAsync(() => {
-                var polygon = this._dispatchRepository.FromGeoJson(request.GeoJSON);
+                var polygon = this._dispatchRepository.FromEsriJson(request.EsriJSON);
 
                 return this._dispatchRepository.AddSeverityAOI(polygon, request.Severity);
             });
