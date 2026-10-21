@@ -3,20 +3,34 @@ using DataCatalague.Api.Domain;
 using DataCatalague.Api.PackageTypes;
 using DataCatalague.Api.Models.V1;
 using Microsoft.AspNetCore.Mvc;
+using PipelineController = DataCatalague.Api.Controllers.V1.DataCatalague.Api.Controllers.PipelineController;
 
 namespace DataCatalague.Api.Initialization;
 
 /// <summary>Creates development data through the registered controllers after the in-memory stores are reset.</summary>
 /// <param name="dispatcher">The dispatcher controller resolved from the host container.</param>
 /// <param name="packages">The package controller resolved from the same container.</param>
+/// <param name="pipelines">The pipeline controller resolved from the same container.</param>
 /// <param name="packageTypes">The registered category-specific source readers.</param>
 /// <param name="logger">Receives sample initialization progress.</param>
-public sealed class SampleDataInitialization(DispatcherController dispatcher, PackageController packages, PackageTypeFactory packageTypes, ILogger<SampleDataInitialization> logger)
+public sealed class SampleDataInitialization(DispatcherController dispatcher, PackageController packages, PipelineController pipelines, PackageTypeFactory packageTypes, ILogger<SampleDataInitialization> logger)
 {
-    /// <summary>Creates the core categories, their sample specifications and sample packages in the fresh development stores.</summary>
+    /// <summary>Creates sample pipelines, categories, packages and explicit bindings in the fresh development stores.</summary>
     /// <param name="cancellationToken">Cancels sample reading and controller operations.</param>
-    /// <returns>A task that completes when all sample packages have been created.</returns>
+    /// <returns>A task that completes when sample creation and binding readback have succeeded.</returns>
     public async Task InitializeAsync(CancellationToken cancellationToken) {
+        var pipelineSamples = new List<PipelineResponse>();
+        foreach (var sample in new[] {
+            (Name: "ENC", Description: "Electronic navigational chart production."),
+            (Name: "Paper Chart", Description: "Paper chart production."),
+        }) {
+            var created = await pipelines.Create(new CreatePipelineRequest { DisplayName = sample.Name, Description = sample.Description }, cancellationToken).ConfigureAwait(false);
+            var pipeline = RequireSuccess(created, $"create pipeline '{sample.Name}'");
+            pipelineSamples.Add(pipeline);
+            logger.LogInformation("Created sample pipeline {DisplayName}. PipelineId: {PipelineId}.", pipeline.DisplayName, pipeline.Id);
+        }
+        var packageSamples = new List<PackageResponse>();
+
         // Create Categories for the sample packages. These are required by the package controller to accept the sample packages.
         foreach (var category in new[] {
             (Id: "NoticeToMariners", Name: "Notices to Mariners", Prefix: "NM", Description: "Published navigation notices.", Specification: """
@@ -68,7 +82,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
             var request = await packageTypes.CreateRequestAsync("NoticeToMariners", file, cancellationToken).ConfigureAwait(false);
             logger.LogInformation("Creating notice sample {FileName} as package {PackageId}.", Path.GetFileName(file), request.MetaData?.ShortId);
             var created = await packages.CreatePackage(request, cancellationToken).ConfigureAwait(false);
-            RequireSuccess(created, $"create notice package '{request.MetaData?.ShortId}'");
+            packageSamples.Add(RequireSuccess(created, $"create notice package '{request.MetaData?.ShortId}'"));
         }
 
 
@@ -84,11 +98,28 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
         foreach (var file in submissionFiles) {
             var request = await packageTypes.CreateRequestAsync("GeneralSubmission", file, cancellationToken).ConfigureAwait(false);
             var created = await packages.CreatePackage(request, cancellationToken).ConfigureAwait(false);
-            RequireSuccess(created, $"create general submission '{Path.GetFileName(file)}'");
+            packageSamples.Add(RequireSuccess(created, $"create general submission '{Path.GetFileName(file)}'"));
             logger.LogInformation("Created general submission sample {FileName}.", Path.GetFileName(file));
         }
 
-        logger.LogInformation("Sample initialization completed. CreatedPackages: {CreatedPackages}.", files.Length + submissionFiles.Length);
+        // Arbitrary fixture assignments only. Production callers choose bindings using professional judgment.
+        // Sorted source files and a fixed pattern keep the demo repeatable without inspecting package content.
+        int?[] assignments = [0, null, 1, 1, null, 0, null, 1];
+        var bindingCount = 0;
+        for (var index = 0; index < packageSamples.Count; index++) {
+            if (assignments[index % assignments.Length] is not { } pipelineIndex) { continue; }
+            var package = packageSamples[index];
+            var pipeline = pipelineSamples[pipelineIndex];
+            var created = await dispatcher.CreateBinding(new BindRequest { PackageId = package.Id, PipelineId = pipeline.Id }, cancellationToken).ConfigureAwait(false);
+            var binding = RequireSuccess(created, $"bind package '{package.Id}' to pipeline '{pipeline.DisplayName}'");
+            var persisted = RequireSuccess(await dispatcher.GetBinding(binding.Id, cancellationToken).ConfigureAwait(false), $"read binding '{binding.Id}'");
+            if (persisted.Id != binding.Id || persisted.PackageId != package.Id || persisted.PipelineId != pipeline.Id) {
+                throw new InvalidOperationException($"Binding '{binding.Id}' did not retain the requested package and pipeline.");
+            }
+            bindingCount++;
+        }
+
+        logger.LogInformation("Sample initialization completed. CreatedPipelines: {CreatedPipelines}, CreatedPackages: {CreatedPackages}, CreatedBindings: {CreatedBindings}, UnboundPackages: {UnboundPackages}.", pipelineSamples.Count, packageSamples.Count, bindingCount, packageSamples.Count - bindingCount);
     }
 
     private static T RequireSuccess<T>(ActionResult<T> response, string operation) {

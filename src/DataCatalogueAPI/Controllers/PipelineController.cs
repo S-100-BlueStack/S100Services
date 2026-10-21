@@ -1,6 +1,7 @@
 ﻿using Asp.Versioning;
 using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
+using DataCatalague.Api.Models;
 using DataCatalague.Api.Models.V1;
 using DataCatalague.Api.Repositories;
 using Eventuous;
@@ -20,6 +21,7 @@ namespace DataCatalague.Api.Controllers.V1
                 IEventStore eventstore,
                 ICommandService<PipelineState> servicePipeline,
                 DispatchRepository dispatchRepository,
+                IPipelineRepository pipelineRepository,
                 IOptions<DispatcherOptions> options,
                 ArcGisDispatcher dispatcher,
                 ILogger<PipelineController> logger) : ControllerBase
@@ -39,6 +41,21 @@ namespace DataCatalague.Api.Controllers.V1
             private readonly ArcGisDispatcher _dispatcher = dispatcher;
 
             private readonly ILogger<PipelineController> _logger = logger;
+
+            /// <summary>Lists all pipelines in catalogue identifier order.</summary>
+            /// <param name="cancellationToken">Cancels the pipeline listing.</param>
+            /// <returns>All pipelines using the same response envelope as categories and packages.</returns>
+            [HttpGet]
+            [ProducesResponseType<PagedResponse<PipelineResponse>>(StatusCodes.Status200OK)]
+            public async Task<ActionResult<PagedResponse<PipelineResponse>>> GetPipelines(CancellationToken cancellationToken) {
+                var pipelines = await pipelineRepository.GetPipelinesAsync(cancellationToken);
+                return this.Ok(new PagedResponse<PipelineResponse> {
+                    Items = [.. pipelines.Select(Map)],
+                    Page = 1,
+                    PageSize = Math.Max(DefaultPageSize, pipelines.Count),
+                    TotalCount = pipelines.Count,
+                });
+            }
 
             [HttpPost]
             [Consumes("application/json")]
@@ -80,19 +97,11 @@ namespace DataCatalague.Api.Controllers.V1
             public async Task<ActionResult<PipelineResponse>> GetPipeline(string id, CancellationToken cancellationToken) {
                 ArgumentNullException.ThrowIfNullOrEmpty(id);
 
-                try {
-                    var pipeline = await this._eventStore.LoadState<PipelineState, PipelineId>(this._streamNameMap, new(id), cancellationToken: cancellationToken);
-
-                    return this.Ok(Map(pipeline.State));
+                if (!await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new PipelineId(id)), cancellationToken)) {
+                    return this.NotFound(new ProblemDetails { Title = "Pipeline not found.", Detail = $"No pipeline exists with identifier {id}." });
                 }
-                catch {
-                    this._logger.LogInformation("Pipeline {id} was not found.", id);
-
-                    return this.Problem(
-                        title: "Pipeline not found.",
-                        detail: $"No pipeline exists with identifier {id}.",
-                        statusCode: StatusCodes.Status404NotFound);
-                }
+                var pipeline = await this._eventStore.LoadState<PipelineState, PipelineId>(this._streamNameMap, new(id), true, cancellationToken);
+                return this.Ok(Map(pipeline.State));
             }
 
 

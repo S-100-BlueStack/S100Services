@@ -195,64 +195,57 @@ namespace DataCatalague.Api.Controllers
 
         [HttpPost("bindings")]
         [Consumes("application/json")]
-        [ProducesResponseType<BindingResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<BindingResponse>(StatusCodes.Status201Created)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
         public async Task<ActionResult<BindingResponse>> CreateBinding([FromBody] BindRequest request, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNull(request);
-            ArgumentNullException.ThrowIfNullOrEmpty(request.PackageId);
-            ArgumentNullException.ThrowIfNullOrEmpty(request.PipelineId);
-
-            try {
-                var package = await this._eventStore.LoadState<PackageState>(new(request.PackageId), true, cancellationToken);
-
-                var pipeline = await this._eventStore.LoadState<PipelineState>(new(request.PipelineId), true, cancellationToken);
-
-                var cmd = await this._serviceBinding.Handle(new DispatcherCommands.Bind($"{request.PackageId}::{request.PipelineId}", request.PackageId, request.PipelineId), cancellationToken);
-
-                if (!cmd.Success)
-                    return this.BadRequest();
-
-                var result = cmd.Get()!;
-
-                this._logger.LogInformation("Bind {package} => {pipeline}.", result.State.PackageId, result.State.PipelineId);
-
-                return this.CreatedAtRoute(
-                    "GetBinding.V1",
-                    new { id = result.State.Id, version = ApiVersions.V1Text },
-                    Map(result.State));
-
+            if (string.IsNullOrWhiteSpace(request.PackageId) || string.IsNullOrWhiteSpace(request.PipelineId)) {
+                return this.BadRequest(new ProblemDetails { Title = "Package and pipeline identifiers are required." });
             }
-            catch {
-                this._logger.LogInformation("Package/Pipeline {package}/{pipeline} was not found.", request.PackageId, request.PipelineId);
 
-                return this.Problem(
-                    title: "Package or pipeline not found.",
-                    detail: $"No package or pipeline exists with identifier {request.PackageId}|{request.PipelineId}.",
-                    statusCode: StatusCodes.Status404NotFound);
+            // Command services use typed stream names; raw IDs address different streams.
+            if (!await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new PackageId(request.PackageId)), cancellationToken)) {
+                return this.NotFound(new ProblemDetails { Title = "Package not found.", Detail = $"No package exists with identifier {request.PackageId}." });
             }
+            if (!await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new PipelineId(request.PipelineId)), cancellationToken)) {
+                return this.NotFound(new ProblemDetails { Title = "Pipeline not found.", Detail = $"No pipeline exists with identifier {request.PipelineId}." });
+            }
+
+            // One stream per pair prevents duplicate links while allowing a package in multiple pipelines.
+            var bindingId = $"{request.PackageId}::{request.PipelineId}";
+            var streamName = this._streamNameMap.GetStreamName(new BindingId(bindingId));
+            if (await this._eventStore.StreamExists(streamName, cancellationToken)) {
+                return this.Conflict(new ProblemDetails { Title = "Package is already bound to this pipeline." });
+            }
+
+            var cmd = await this._serviceBinding.Handle(new DispatcherCommands.Bind(bindingId, request.PackageId, request.PipelineId), cancellationToken);
+            if (!cmd.Success) {
+                // A concurrent caller may have created the same pair after the existence check.
+                if (await this._eventStore.StreamExists(streamName, cancellationToken)) {
+                    return this.Conflict(new ProblemDetails { Title = "Package is already bound to this pipeline." });
+                }
+                this._logger.LogError("Could not bind package {PackageId} to pipeline {PipelineId}.", request.PackageId, request.PipelineId);
+                return this.Problem(title: "Could not create binding.", statusCode: StatusCodes.Status500InternalServerError);
+            }
+
+            var result = cmd.Get()!;
+            this._logger.LogInformation("Bound package {PackageId} to pipeline {PipelineId}. BindingId: {BindingId}.", request.PackageId, request.PipelineId, result.State.Id);
+            return this.CreatedAtRoute("GetBinding.V1", new { id = result.State.Id, version = ApiVersions.V1Text }, Map(result.State));
         }
 
         [HttpGet("bindings/{id}", Name = "GetBinding.V1")]
-        [Consumes("application/json")]
         [ProducesResponseType<BindingResponse>(StatusCodes.Status200OK)]
-        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<BindingResponse>> GetBinding(string id, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNullOrEmpty(id);
-
-            try {
-                var stream = await this._eventStore.LoadState<BindingState, BindingId>(this._streamNameMap, new(id), cancellationToken: cancellationToken);
-                return Map(stream.State);
+            if (!await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new BindingId(id)), cancellationToken)) {
+                return this.NotFound(new ProblemDetails { Title = "Binding not found.", Detail = $"No binding exists with identifier {id}." });
             }
-            catch {
-                this._logger.LogInformation("Binding {id} was not found.", id);
 
-                return this.Problem(
-                    title: "Binding not found.",
-                    detail: $"No binding exists with identifier {id}.",
-                    statusCode: StatusCodes.Status404NotFound);
-            }
+            var stream = await this._eventStore.LoadState<BindingState, BindingId>(this._streamNameMap, new(id), true, cancellationToken);
+            return Map(stream.State);
         }
 
 

@@ -97,6 +97,7 @@ namespace DataCatalague.Api.Domain
 
         static BindingState Binded(BindingState state, V1.Binded e)
             => state with {
+                Id = new(e.BindingId),
                 PackageId = new(e.PackageId),
                 PipelineId = new(e.PipelineId),
                 LastUpdatedUtc =e.UTC,

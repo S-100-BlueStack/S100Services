@@ -55,6 +55,8 @@ public static class Program
             builder.Services.AddSingleton<StreamNameMap>();
             builder.Services.AddSingleton<DispatchRepository>();
             builder.Services.AddSingleton<PackageRepository>();
+            builder.Services.AddSingleton<InMemoryPipelineRepository>();
+            builder.Services.AddSingleton<IPipelineRepository>(sp => sp.GetRequiredService<InMemoryPipelineRepository>());
             builder.Services.AddSingleton<ArcGisDispatcher>();
 
             builder.Services.AddTransient<SampleDataInitialization>();
@@ -91,7 +93,8 @@ public static class Program
                 // The type overload creates a subscription-keyed instance. Resolve the
                 // singletons used by controllers so they read the populated caches.
                 x => x.AddEventHandler(sp => sp.GetRequiredService<DispatchRepository>(), ownsHandler: false)
-                    .AddEventHandler(sp => sp.GetRequiredService<PackageRepository>(), ownsHandler: false));
+                    .AddEventHandler(sp => sp.GetRequiredService<PackageRepository>(), ownsHandler: false)
+                    .AddEventHandler(sp => sp.GetRequiredService<InMemoryPipelineRepository>(), ownsHandler: false));
 
             var app = builder.Build();
 

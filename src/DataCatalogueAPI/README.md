@@ -48,16 +48,44 @@ Niord notice samples are different: their source geometry is genuinely GeoJSON.
 before passing them to the package API. The original notice sample JSON is
 therefore retained in its source format.
 
+## Pipeline listing
+
+`GET /api/v1/pipelines` returns all pipelines in identifier order using the same
+`items`, `page`, `pageSize` and `totalCount` envelope as categories and packages.
+An empty catalogue returns an empty `items` array and zero `totalCount`.
+`InMemoryPipelineRepository` projects pipeline creation and workspace events
+through the existing dispatcher subscription. The controller and subscription
+resolve the same singleton; listing does not scan the event store. Like the
+other subscription-backed listings, newly created pipelines appear once their
+events have been processed, including startup's ENC and Paper Chart pipelines.
+
 ## Startup sample data
 
 `Program.Main` resolves `SampleDataInitialization` once in a startup DI scope
 and calls `InitializeAsync` after building the app and before `RunAsync`.
 Its constructor receives the DI-registered `DispatcherController`,
-`PackageController`, `PackageTypeFactory` and logger. Registered `IPackageType`
+`PackageController`, `PipelineController`, `PackageTypeFactory` and logger. Registered `IPackageType`
 readers prepare the shared request, and all packages go through
 `PackageController.CreatePackage`. Startup creates the `NoticeToMariners` and
 `GeneralSubmission` categories and imports the supplied notice JSON and submission
 ZIP samples.
+
+Startup also creates `ENC` and `Paper Chart` through `PipelineController.Create`.
+After importing packages in sorted file order, it applies the repeating sample
+pattern ENC, unbound, Paper Chart, Paper Chart, unbound, ENC, unbound, Paper Chart.
+With the supplied 14 notices and two submissions this creates 10 bindings and
+leaves six packages unbound. This is arbitrary development fixture data, not a
+production routing rule. Humans or agents explicitly select package/pipeline
+pairs through `POST /api/v1/dispatcher/bindings` using professional judgment.
+
+Bindings use typed package/pipeline stream names and persist their own ID.
+Creation returns 201 and a retrievable binding URL; missing package/pipeline IDs
+return 404, and an existing pair returns 409. A package can be bound to multiple
+pipelines. `GET /api/v1/dispatcher/bindings/{id}` reads the saved link. Startup
+reads each sample link back through this controller and checks its IDs.
+Pipeline IDs are logged at startup and can be read using
+`GET /api/v1/pipelines/{id}`. Missing bindings/pipelines return 404; unexpected
+store failures and cancellation are no longer disguised as missing records.
 
 Every package receives an 18-character lowercase alphanumeric Nanoid, using the
 same alphabet and length as Pipeline. This internal ID is used in routes, event

@@ -43,8 +43,6 @@
 		<Compile Remove="IProductRepository.cs" />
 		<Compile Remove="Models\CreateProductRequest.cs" />
 		<Compile Remove="Models\ProductResponse.cs" />
-		<Compile Remove="Repositories\InMemoryPipelineRepository.cs" />
-		<Compile Remove="Repositories\IPipelineRepository.cs" />
 	</ItemGroup>
 
 	<ItemGroup>
