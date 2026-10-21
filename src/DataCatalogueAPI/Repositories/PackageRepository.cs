@@ -8,6 +8,7 @@ using Eventuous;
 using Eventuous.Subscriptions;
 using Eventuous.Subscriptions.Context;
 using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using IO = System.IO;
 
@@ -21,7 +22,7 @@ namespace DataCatalague.Api.Repositories
             PropertyNameCaseInsensitive = true,
         };
 
-        private readonly InMemoryEventStore _eventStore;
+        private readonly ConcurrentDictionary<string, PackageState> _packages = new(StringComparer.Ordinal);
 
         private readonly IOptions<PackagesOptions> _options;
 
@@ -32,8 +33,7 @@ namespace DataCatalague.Api.Repositories
         private readonly IReadOnlyDictionary<string, FeatureClassDefinition> _featureClassDefinitions;
         private readonly IReadOnlyDictionary<string, TableDefinition> _standaloneTableDefinitions;
 
-        public PackageRepository(ArcGisDispatcher arcDispatcher, IOptions<PackagesOptions> options, ILogger<PackageRepository> logger, InMemoryEventStore eventStore) {
-            this._eventStore = eventStore;
+        public PackageRepository(ArcGisDispatcher arcDispatcher, IOptions<PackagesOptions> options, ILogger<PackageRepository> logger) {
             this._options = options ?? throw new ArgumentNullException(nameof(options));
             this._logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -70,35 +70,21 @@ namespace DataCatalague.Api.Repositories
             this._standaloneTableDefinitions = definitions.Item2;
         }
 
-        /// <summary>Loads current package states directly from the application's shared in-memory event store.</summary>
+        /// <summary>Returns a snapshot of packages projected by the subscription.</summary>
         /// <param name="category">An optional exact category identifier.</param>
-        /// <param name="cancellationToken">Cancels state reads.</param>
-        /// <returns>All matching packages ordered by catalogue identifier.</returns>
-        public async Task<IReadOnlyList<PackageState>> GetPackagesAsync(string? category, CancellationToken cancellationToken) {
+        /// <param name="cancellationToken">Cancels the listing before the snapshot is read.</param>
+        /// <returns>All matching projected packages ordered by catalogue identifier.</returns>
+        public Task<IReadOnlyList<PackageState>> GetPackagesAsync(string? category, CancellationToken cancellationToken) {
             cancellationToken.ThrowIfCancellationRequested();
-            // Use committed creation events rather than a subscription projection so a
-            // just-created package is immediately visible, including during startup.
-            var ids = this._eventStore.ReadAll(null, int.MaxValue)
-                .Select(item => item.Event.Payload)
-                .OfType<PackagesEvents.V1.PackageCreated>()
-                .Where(item => category is null || string.Equals(item.Category, category, StringComparison.Ordinal))
-                .Select(item => item.PackageId)
-                .Distinct(StringComparer.Ordinal)
-                .Order(StringComparer.Ordinal)
+            IReadOnlyList<PackageState> packages = this._packages.ToArray()
+                .Where(item => category is null || string.Equals(item.Value.Category?.Value, category, StringComparison.Ordinal))
+                .OrderBy(item => item.Key, StringComparer.Ordinal)
+                .Select(item => item.Value)
                 .ToArray();
-            var map = new StreamNameMap();
-            var packages = new List<PackageState>(ids.Length);
-            foreach (var id in ids) {
-                cancellationToken.ThrowIfCancellationRequested();
-                var packageId = new PackageId(id);
-                if (!await this._eventStore.StreamExists(map.GetStreamName(packageId), cancellationToken)) { continue; }
-                var state = await this._eventStore.LoadState<PackageState, PackageId>(map, packageId, true, cancellationToken);
-                packages.Add(state.State);
-            }
-            return packages;
+            return Task.FromResult(packages);
         }
 
-        public string DiagnosticName => nameof(DispatchRepository);
+        public string DiagnosticName => nameof(PackageRepository);
 
         public Guid AddAttachment(Stream stream, string fileName, DateTimeOffset dateTimeOffsetUtc) {
             using (var connector = this.createGeodatabase()) {
@@ -309,19 +295,35 @@ namespace DataCatalague.Api.Repositories
             return polygon;
         }
 
-        public async ValueTask<EventHandlingStatus> HandleEvent(IMessageConsumeContext context) {
-            return context.Message switch {
+        /// <summary>Projects package events into the singleton repository's in-memory listing.</summary>
+        /// <param name="context">The subscription event and its originating stream.</param>
+        /// <returns>Handled for package events, ignored for unrelated events, or failure when creation is missing.</returns>
+        public ValueTask<EventHandlingStatus> HandleEvent(IMessageConsumeContext context) {
+            var status = context.Message switch {
                 PackagesEvents.V1.PackageCreated evt => this.Handle_PackageCreated(evt),
+                PackagesEvents.V1.SeverityUpdated evt => this.Handle_PackageUpdated(context.Stream.GetId(), evt),
+                PackagesEvents.V1.DetailedGeometryAdded evt => this.Handle_PackageUpdated(context.Stream.GetId(), evt),
+                PackagesEvents.V1.GeometryReplaced evt => this.Handle_PackageUpdated(context.Stream.GetId(), evt),
                 _ => EventHandlingStatus.Ignored,
             };
+            return ValueTask.FromResult(status);
         }
 
-
         private EventHandlingStatus Handle_PackageCreated(PackagesEvents.V1.PackageCreated evt) {
-            var state = new PackageState();
-            state = state.When(evt);
-
+            this._packages.TryAdd(evt.PackageId, new PackageState().When(evt));
             return EventHandlingStatus.Handled;
+        }
+
+        private EventHandlingStatus Handle_PackageUpdated(string packageId, object evt) {
+            while (this._packages.TryGetValue(packageId, out var state)) {
+                var updated = state.When(evt);
+                if (this._packages.TryUpdate(packageId, updated, state)) {
+                    return EventHandlingStatus.Handled;
+                }
+            }
+
+            this._logger.LogError("Cannot project package event before package creation. PackageId: {PackageId}, EventType: {EventType}.", packageId, evt.GetType().Name);
+            return EventHandlingStatus.Failure;
         }
     }
 }

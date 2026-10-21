@@ -188,7 +188,7 @@ namespace DataCatalague.Api.Controllers
         public async Task<ActionResult<PagedResponse<PackageResponse>>> GetPackages(CancellationToken cancellationToken, [FromQuery] string? category = null) {
             var packages = await this._packageRepository.GetPackagesAsync(category, cancellationToken);
             return this.Ok(new PagedResponse<PackageResponse> {
-                Items = packages.Select(Map).ToArray(),
+                Items = [.. packages.Select(Map)],
                 Page = 1,
                 PageSize = Math.Max(DefaultPageSize, packages.Count),
                 TotalCount = packages.Count,

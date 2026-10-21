@@ -89,8 +89,9 @@ public static class Program
                 InMemoryAllStreamSubscriptionOptions>(
                 "dispatcher-subscription",
                 // The type overload creates a subscription-keyed instance. Resolve the
-                // singleton used by controllers so they read the populated category cache.
-                x => x.AddEventHandler(sp => sp.GetRequiredService<DispatchRepository>(), ownsHandler: false));
+                // singletons used by controllers so they read the populated caches.
+                x => x.AddEventHandler(sp => sp.GetRequiredService<DispatchRepository>(), ownsHandler: false)
+                    .AddEventHandler(sp => sp.GetRequiredService<PackageRepository>(), ownsHandler: false));
 
             var app = builder.Build();
 
