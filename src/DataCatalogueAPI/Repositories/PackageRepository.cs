@@ -22,6 +22,11 @@ namespace DataCatalague.Api.Repositories
             PropertyNameCaseInsensitive = true,
         };
 
+        /// <summary>The maximum number of packages returned in a listing page.</summary>
+        public const int MaximumPageSize = 200;
+
+        private readonly ArcGisDispatcher _arcDispatcher;
+
         private readonly ConcurrentDictionary<string, PackageState> _packages = new(StringComparer.Ordinal);
 
         private readonly IOptions<PackagesOptions> _options;
@@ -34,6 +39,7 @@ namespace DataCatalague.Api.Repositories
         private readonly IReadOnlyDictionary<string, TableDefinition> _standaloneTableDefinitions;
 
         public PackageRepository(ArcGisDispatcher arcDispatcher, IOptions<PackagesOptions> options, ILogger<PackageRepository> logger) {
+            this._arcDispatcher = arcDispatcher ?? throw new ArgumentNullException(nameof(arcDispatcher));
             this._options = options ?? throw new ArgumentNullException(nameof(options));
             this._logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -70,18 +76,165 @@ namespace DataCatalague.Api.Repositories
             this._standaloneTableDefinitions = definitions.Item2;
         }
 
-        /// <summary>Returns a snapshot of packages projected by the subscription.</summary>
+        /// <summary>Returns a bounded page from the subscription projection, optionally intersecting current package AOIs.</summary>
         /// <param name="category">An optional exact category identifier.</param>
-        /// <param name="cancellationToken">Cancels the listing before the snapshot is read.</param>
-        /// <returns>All matching projected packages ordered by catalogue identifier.</returns>
-        public Task<IReadOnlyList<PackageState>> GetPackagesAsync(string? category, CancellationToken cancellationToken) {
+        /// <param name="cancellationToken">Cancels before and between spatial rows and metadata reads.</param>
+        /// <param name="geometry">Optional Esri JSON envelope or polygon with an explicit spatial reference.</param>
+        /// <param name="page">One-based page number.</param>
+        /// <param name="pageSize">Page size between 1 and <see cref="MaximumPageSize"/>.</param>
+        /// <returns>A page in ordinal catalogue identifier order and its total matching count.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">A paging argument is outside the supported range.</exception>
+        /// <exception cref="InvalidDataException">The supplied query geometry is invalid or cannot be projected.</exception>
+        public async Task<(IReadOnlyList<PackageState> Items, int TotalCount)> GetPackagesAsync(string? category, CancellationToken cancellationToken, string? geometry = null, int page = 1, int pageSize = 20) {
+            ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
+            ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(pageSize, MaximumPageSize);
             cancellationToken.ThrowIfCancellationRequested();
-            IReadOnlyList<PackageState> packages = this._packages.ToArray()
+
+            KeyValuePair<string, PackageState>[] candidates;
+            if (geometry is null) {
+                candidates = this._packages.ToArray();
+            }
+            else {
+                var matches = await this._arcDispatcher.ExecuteAsync(() => this.FindIntersectingAois(geometry, cancellationToken));
+                var resolved = new List<KeyValuePair<string, PackageState>>(matches.Count);
+                foreach (var match in matches) {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    // Replacements retain old coverage rows for event history. Only the AOI
+                    // currently referenced by the subscription may contribute to the result.
+                    if (this._packages.TryGetValue(match.Key, out var state) && state.GeometryRef is { } reference && match.Value.Contains(reference)) {
+                        resolved.Add(new(match.Key, state));
+                    }
+                }
+                candidates = resolved.ToArray();
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            // Count and page use the same captured states; no event-store reads or geometry hydration.
+            var matching = candidates
                 .Where(item => category is null || string.Equals(item.Value.Category?.Value, category, StringComparison.Ordinal))
                 .OrderBy(item => item.Key, StringComparer.Ordinal)
-                .Select(item => item.Value)
                 .ToArray();
-            return Task.FromResult(packages);
+            var offset = ((long)page - 1) * pageSize;
+            IReadOnlyList<PackageState> items = offset >= matching.Length
+                ? []
+                : matching.Skip((int)offset).Take(pageSize).Select(item => item.Value).ToArray();
+            cancellationToken.ThrowIfCancellationRequested();
+            return (items, matching.Length);
+        }
+
+        private Dictionary<string, HashSet<string>> FindIntersectingAois(string json, CancellationToken cancellationToken) {
+            cancellationToken.ThrowIfCancellationRequested();
+            var geometry = ParseQueryGeometry(json);
+            using var connector = this.createGeodatabase();
+            using var featureClass = connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["surface"].GetName());
+            using var definition = featureClass.GetDefinition();
+            var spatialReference = definition.GetSpatialReference();
+            if (spatialReference is null || spatialReference.IsUnknown) {
+                throw new InvalidOperationException("The package AOI feature class must have a known spatial reference.");
+            }
+            try {
+                if (!geometry.SpatialReference.IsEqual(spatialReference)) {
+                    geometry = GeometryEngine.Instance.Project(geometry, spatialReference);
+                }
+                ValidateQueryGeometry(geometry);
+            }
+            catch (Exception exception) when (exception is ArcGIS.Core.Geometry.Exceptions.GeometryException or ArgumentException) {
+                throw new InvalidDataException("The query geometry cannot be projected into the package AOI spatial reference.", exception);
+            }
+
+            var filter = new SpatialQueryFilter {
+                FilterGeometry = geometry,
+                SpatialRelationship = SpatialRelationship.Intersects,
+                WhereClause = "code = 'PackageCoverage'",
+                SubFields = $"{definition.GetGlobalIDField()},attributebindings",
+            };
+            var matches = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+            var featureClassName = featureClass.GetName().Split('.')[^1];
+            cancellationToken.ThrowIfCancellationRequested();
+            using var cursor = featureClass.Search(filter, false);
+            while (cursor.MoveNext()) {
+                using var row = cursor.Current;
+                cancellationToken.ThrowIfCancellationRequested();
+                // Query only IDs/bindings. The geodatabase applies the spatial index and
+                // intersection; fetching shapes here would duplicate that work in memory.
+                var globalId = row.GetGlobalID();
+                var bindings = row["attributebindings"] as string;
+                string? packageId;
+                try {
+                    using var document = JsonDocument.Parse(bindings ?? "null");
+                    var root = document.RootElement;
+                    packageId = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("packageId", out var id) && id.ValueKind == JsonValueKind.String
+                        ? id.GetString() : null;
+                }
+                catch (System.Text.Json.JsonException exception) {
+                    // Stored-data corruption is a server error, not a bad client AOI.
+                    throw new InvalidOperationException($"Package coverage '{globalId:B}' has invalid attribute bindings.", exception);
+                }
+                if (string.IsNullOrWhiteSpace(packageId)) {
+                    throw new InvalidOperationException($"Package coverage '{globalId:B}' has no packageId in its attribute bindings.");
+                }
+                if (!matches.TryGetValue(packageId, out var references)) {
+                    references = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    matches.Add(packageId, references);
+                }
+                references.Add($"{featureClassName}::{globalId:B}");
+            }
+            return matches;
+        }
+
+        private static Geometry ParseQueryGeometry(string json) {
+            try {
+                using var document = JsonDocument.Parse(json);
+                var root = document.RootElement;
+                if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("spatialReference", out var sr) || sr.ValueKind != JsonValueKind.Object) {
+                    throw new InvalidDataException("geometry must be an Esri JSON envelope or polygon with an explicit spatialReference.");
+                }
+                var hasWkid = sr.TryGetProperty("wkid", out var wkid) && wkid.ValueKind == JsonValueKind.Number && wkid.TryGetInt32(out var value) && value > 0;
+                var hasWkt = sr.TryGetProperty("wkt", out var wkt) && wkt.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(wkt.GetString());
+                if (!hasWkid && !hasWkt) {
+                    throw new InvalidDataException("geometry.spatialReference must contain a positive wkid or a nonempty wkt.");
+                }
+
+                Geometry geometry;
+                if (root.TryGetProperty("rings", out _) || root.TryGetProperty("curveRings", out _)) {
+                    geometry = PolygonBuilderEx.FromJson(json);
+                }
+                else {
+                    // Check the raw bounds before ArcGIS can normalize an inverted envelope.
+                    var bounds = new double[4];
+                    string[] names = ["xmin", "ymin", "xmax", "ymax"];
+                    for (var index = 0; index < names.Length; index++) {
+                        if (!root.TryGetProperty(names[index], out var coordinate) || coordinate.ValueKind != JsonValueKind.Number
+                            || !coordinate.TryGetDouble(out bounds[index]) || !double.IsFinite(bounds[index])) {
+                            throw new InvalidDataException("geometry must contain polygon rings or finite xmin, ymin, xmax and ymax envelope coordinates.");
+                        }
+                    }
+                    if (bounds[0] >= bounds[2] || bounds[1] >= bounds[3]) {
+                        throw new InvalidDataException("An envelope must have xmin < xmax and ymin < ymax.");
+                    }
+                    // Project the rectangle as a polygon to preserve its footprint when
+                    // coordinate systems differ, rather than projecting its bounding box.
+                    geometry = PolygonBuilderEx.CreatePolygon(EnvelopeBuilderEx.FromJson(json));
+                }
+                ValidateQueryGeometry(geometry);
+                return geometry;
+            }
+            catch (Exception exception) when (exception is System.Text.Json.JsonException or ArcGIS.Core.Geometry.Exceptions.GeometryException or ArgumentException) {
+                throw new InvalidDataException("Invalid Esri JSON geometry. Supply a nonempty envelope or polygon with a known spatial reference.", exception);
+            }
+        }
+
+        private static void ValidateQueryGeometry(Geometry geometry) {
+            if (geometry.IsEmpty || geometry.SpatialReference is null || geometry.SpatialReference.IsUnknown) {
+                throw new InvalidDataException("The query geometry must be nonempty and have a known spatial reference.");
+            }
+            var extent = geometry.Extent;
+            if (!double.IsFinite(extent.XMin) || !double.IsFinite(extent.YMin) || !double.IsFinite(extent.XMax) || !double.IsFinite(extent.YMax)
+                || extent.Width <= 0 || extent.Height <= 0
+                || geometry is Polygon polygon && (!double.IsFinite(polygon.Area) || polygon.Area == 0 || polygon.Points.Any(point => !double.IsFinite(point.X) || !double.IsFinite(point.Y)))) {
+                throw new InvalidDataException("The query geometry must have finite coordinates and a nonzero area in the target spatial reference.");
+            }
         }
 
         public string DiagnosticName => nameof(PackageRepository);

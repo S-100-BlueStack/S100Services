@@ -48,6 +48,89 @@ Niord notice samples are different: their source geometry is genuinely GeoJSON.
 before passing them to the package API. The original notice sample JSON is
 therefore retained in its source format.
 
+## Package search and pagination
+
+`GET /api/v1/packages` keeps the existing response envelope and accepts:
+
+| Query parameter | Meaning |
+| --- | --- |
+| `category` | Optional exact, case-sensitive category identifier. |
+| `geometry` | Optional URL-encoded Esri JSON envelope or polygon with `spatialReference.wkid` or `spatialReference.wkt`. Maximum 16,384 characters; hosting URL limits may be lower. |
+| `page` | One-based page number, default 1. |
+| `pageSize` | Page size from 1 to 200, default 20. |
+
+All filters are combined before pagination. Results are ordered by catalogue ID
+using ordinal string comparison. `totalCount` is the number of matching packages
+before pagination, not the number of coverage rows. A page beyond the last page
+returns `items: []` and the same total. Invalid geometry or paging values return
+400 validation problem details. No geometry filter means no geodatabase query.
+
+**Client change:** the formerly unbounded list now returns at most `pageSize`
+items, including requests without filters. Use `totalCount`/`totalPages` to page
+through the rest. Reset `page` to 1 when category or map extent changes.
+
+For an ArcGIS Maps SDK for JavaScript/Calcite client, use the MapView extent's
+Esri JSON directly; `URLSearchParams` handles query-string encoding:
+
+```javascript
+const query = new URLSearchParams({
+    geometry: JSON.stringify(view.extent.toJSON()),
+    page: "1",
+    pageSize: "50"
+});
+if (category) query.set("category", category);
+const response = await fetch(`/api/v1/packages?${query}`, { signal });
+if (!response.ok) throw new Error(`Package search failed (${response.status})`);
+const result = await response.json();
+// result.items, result.page, result.pageSize, result.totalCount, result.totalPages
+```
+
+Here `view` is an initialized MapView, `category` is the selected category or
+null, and `signal` is the current request's AbortSignal. Debounce map navigation
+and abort obsolete requests so earlier responses do not replace newer results.
+A typical unencoded `geometry` value is:
+
+```json
+{"xmin":12,"ymin":55,"xmax":13,"ymax":56,"spatialReference":{"wkid":4326}}
+```
+
+Polygon AOIs use `rings` (or `curveRings`) and the same spatial-reference object.
+The supplied rectangle/polygon is projected into the `surface` feature class's
+spatial reference when necessary. The repository runs `SpatialQueryFilter`
+with `Intersects` and `code = 'PackageCoverage'`, retrieving only GlobalID and
+`attributebindings`. It resolves package IDs through the singleton subscription
+projection. Shapes are neither fetched nor intersected in application memory.
+
+Geometry replacement retains historic coverage features. Spatial matches must
+therefore also equal the projected package's current `GeometryRef`; obsolete
+rows, orphan rows and duplicate coverage rows cannot inflate the page or count.
+The metadata count and page come from the same captured states, but ArcGIS and
+the subscription do not share a transaction. Results are eventually consistent;
+concurrent changes can shift results between separate page requests.
+
+For large/complex polygon AOIs, recommend a future `POST /api/v1/packages/search`
+with a JSON body containing `category`, `geometry` as a JSON object, `page` and
+`pageSize`, returning the same response and reusing this repository query. This
+avoids URL length limits and double-encoded JSON. This change implements GET
+only; it does not add POST search or alter package creation. For dateline-crossing
+AOIs, use a correctly normalized multipart polygon rather than an inverted
+envelope (`xmin >= xmax` is rejected).
+
+Verification on a Windows development instance with ArcGIS installed:
+
+- Request pages 1 and 2 with `pageSize=5`; confirm bounded items, ordinal ID
+  ordering, no overlap for unchanged data, and identical totals.
+- Combine an exact category with a known intersecting extent; verify the total
+  excludes both other categories and nonintersecting current package AOIs.
+- Query the same footprint in WKID 4326 and 3857; compare IDs and counts.
+- Move a package AOI using the existing geometry replacement endpoint, wait for
+  its subscription event, then query its old location. The historic row must
+  not match unless the new AOI also intersects that location.
+- Verify zero matches and an out-of-range page, including `page=2147483647`,
+  return empty items without overflow; an unknown category returns total zero.
+- Check invalid JSON, missing/unknown spatial reference, empty/degenerate AOI,
+  inverted bounds, `page=0`, and `pageSize=201` return 400.
+
 ## Pipeline listing
 
 `GET /api/v1/pipelines` returns all pipelines in identifier order using the same

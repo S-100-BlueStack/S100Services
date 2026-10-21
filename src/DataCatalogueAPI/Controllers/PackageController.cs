@@ -165,20 +165,30 @@ namespace DataCatalague.Api.Controllers
             }
         }
 
-        /// <summary>Lists all packages, optionally filtered by their category identifier.</summary>
-        /// <param name="category">An exact category identifier; omitted values return all categories.</param>
-        /// <param name="cancellationToken">Cancels package state reads.</param>
-        /// <returns>All matching packages in catalogue identifier order.</returns>
+        /// <summary>Lists a bounded page of packages, optionally filtered by category and AOI intersection.</summary>
+        /// <param name="category">An exact category identifier; omitted values include all categories.</param>
+        /// <param name="geometry">Optional Esri JSON envelope or polygon with an explicit spatialReference (wkid or wkt).</param>
+        /// <param name="page">One-based page number, default 1.</param>
+        /// <param name="pageSize">Number of packages per page, from 1 to 200; default 20.</param>
+        /// <param name="cancellationToken">Cancels the spatial query and metadata listing.</param>
+        /// <returns>Matching packages in ordinal catalogue identifier order and the total count before pagination.</returns>
         [HttpGet]
         [ProducesResponseType<PagedResponse<PackageResponse>>(StatusCodes.Status200OK)]
-        public async Task<ActionResult<PagedResponse<PackageResponse>>> GetPackages(CancellationToken cancellationToken, [FromQuery] string? category = null) {
-            var packages = await this._packageRepository.GetPackagesAsync(category, cancellationToken);
-            return this.Ok(new PagedResponse<PackageResponse> {
-                Items = [.. packages.Select(Map)],
-                Page = 1,
-                PageSize = Math.Max(DefaultPageSize, packages.Count),
-                TotalCount = packages.Count,
-            });
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<PagedResponse<PackageResponse>>> GetPackages(CancellationToken cancellationToken, [FromQuery] string? category = null, [FromQuery, StringLength(16384)] string? geometry = null, [FromQuery, Range(1, int.MaxValue)] int page = 1, [FromQuery, Range(1, PackageRepository.MaximumPageSize)] int pageSize = DefaultPageSize) {
+            try {
+                var result = await this._packageRepository.GetPackagesAsync(category, cancellationToken, geometry, page, pageSize);
+                return this.Ok(new PagedResponse<PackageResponse> {
+                    Items = [.. result.Items.Select(Map)],
+                    Page = page,
+                    PageSize = pageSize,
+                    TotalCount = result.TotalCount,
+                });
+            }
+            catch (InvalidDataException exception) {
+                this.ModelState.AddModelError(nameof(geometry), exception.Message);
+                return this.ValidationProblem(this.ModelState);
+            }
         }
 
         [HttpGet("{id}", Name = "GetPackage.V1")]
