@@ -1,4 +1,6 @@
-﻿using ArcGIS.Core.Data;
+﻿using S100FC;
+using S100FC.S840.FeatureTypes;
+using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
 using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
@@ -124,12 +126,9 @@ namespace DataCatalague.Api.Repositories
                 };
 
                 using var buffer = fc.CreateRowBuffer();
-                buffer["ps"] = "";
-                buffer["code"] = "PackageCoverage";
-                buffer["attributebindings"] = JsonSerializer.Serialize(new {
-                    packageId,
-                    absoluteUri,
-                }, jsonSerializerOptions);
+                buffer["ps"] = "S-840";
+                buffer["code"] = nameof(PackageCoverage);
+                buffer["attributebindings"] = new PackageCoverage { packageId = packageId, absoluteUri = absoluteUri }.Flatten();
                 buffer["shape"] = geometry;
 
                 var row = fc.CreateRow(buffer);
@@ -146,11 +145,9 @@ namespace DataCatalague.Api.Repositories
                 };
 
                 using var buffer = fc.CreateRowBuffer();
-                buffer["ps"] = "";
-                buffer["code"] = "SeverityCoverage";
-                buffer["attributebindings"] = JsonSerializer.Serialize(new {
-                    severity,
-                }, jsonSerializerOptions);
+                buffer["ps"] = "S-840";
+                buffer["code"] = nameof(SeverityCoverage);
+                buffer["attributebindings"] = new SeverityCoverage { severity = severity }.Flatten();
                 buffer["shape"] = geometry;
 
                 var row = fc.CreateRow(buffer);
@@ -169,12 +166,9 @@ namespace DataCatalague.Api.Repositories
                 };
 
                 using var buffer = fc.CreateRowBuffer();
-                buffer["ps"] = "";
-                buffer["code"] = "WorkspaceCoverage";
-                buffer["attributebindings"] = JsonSerializer.Serialize(new {
-                    pipelineId,
-                    displayName,
-                }, jsonSerializerOptions);
+                buffer["ps"] = "S-840";
+                buffer["code"] = nameof(WorkspaceCoverage);
+                buffer["attributebindings"] = new WorkspaceCoverage { pipelineId = pipelineId, displayName = displayName }.Flatten();
                 buffer["shape"] = geometry;
 
                 var row = fc.CreateRow(buffer);

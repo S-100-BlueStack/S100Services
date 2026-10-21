@@ -1,4 +1,6 @@
-﻿using ArcGIS.Core.Data;
+﻿using S100FC;
+using S100FC.S840.FeatureTypes;
+using ArcGIS.Core.Data;
 using ArcGIS.Core.Data.Exceptions;
 using ArcGIS.Core.Geometry;
 using DataCatalague.Api.Configuration;
@@ -146,7 +148,7 @@ namespace DataCatalague.Api.Repositories
             var filter = new SpatialQueryFilter {
                 FilterGeometry = geometry,
                 SpatialRelationship = SpatialRelationship.Intersects,
-                WhereClause = "code = 'PackageCoverage'",
+                WhereClause = $"code = '{nameof(PackageCoverage)}'",
                 SubFields = $"{definition.GetGlobalIDField()},attributebindings",
             };
             var matches = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
@@ -159,21 +161,7 @@ namespace DataCatalague.Api.Repositories
                 // Query only IDs/bindings. The geodatabase applies the spatial index and
                 // intersection; fetching shapes here would duplicate that work in memory.
                 var globalId = row.GetGlobalID();
-                var bindings = row["attributebindings"] as string;
-                string? packageId;
-                try {
-                    using var document = JsonDocument.Parse(bindings ?? "null");
-                    var root = document.RootElement;
-                    packageId = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("packageId", out var id) && id.ValueKind == JsonValueKind.String
-                        ? id.GetString() : null;
-                }
-                catch (System.Text.Json.JsonException exception) {
-                    // Stored-data corruption is a server error, not a bad client AOI.
-                    throw new InvalidOperationException($"Package coverage '{globalId:B}' has invalid attribute bindings.", exception);
-                }
-                if (string.IsNullOrWhiteSpace(packageId)) {
-                    throw new InvalidOperationException($"Package coverage '{globalId:B}' has no packageId in its attribute bindings.");
-                }
+                var packageId = ReadCoveragePackageId(row["attributebindings"] as string, globalId);
                 if (!matches.TryGetValue(packageId, out var references)) {
                     references = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     matches.Add(packageId, references);
@@ -181,6 +169,44 @@ namespace DataCatalague.Api.Repositories
                 references.Add($"{featureClassName}::{globalId:B}");
             }
             return matches;
+        }
+
+        private static string ReadCoveragePackageId(string? bindings, Guid globalId) {
+            if (string.IsNullOrWhiteSpace(bindings)) {
+                throw new InvalidOperationException($"Package coverage '{globalId:B}' has no attribute bindings.");
+            }
+
+            Exception? flattenError = null;
+            try {
+                var coverage = AttributeFlattenExtensions.Unflatten<PackageCoverage>(bindings, typeof(PackageCoverage));
+                if (!string.IsNullOrWhiteSpace(coverage.packageId)) {
+                    return coverage.packageId;
+                }
+            }
+            catch (Exception exception) when (exception is JsonException or InvalidOperationException or ArgumentException or FormatException or NotSupportedException or System.Reflection.TargetInvocationException) {
+                flattenError = exception;
+            }
+
+            // Rows created before S-840 flattening may also contain an "attr" array.
+            // The legacy typed reader ignores that array without relying on dynamic JSON.
+            try {
+                var legacy = JsonSerializer.Deserialize<LegacyPackageCoverage>(bindings, jsonSerializerOptions);
+                if (!string.IsNullOrWhiteSpace(legacy?.packageId)) {
+                    return legacy.packageId;
+                }
+            }
+            catch (JsonException exception) {
+                flattenError ??= exception;
+            }
+
+            throw new InvalidOperationException($"Package coverage '{globalId:B}' has invalid or missing packageId attribute bindings.", flattenError);
+        }
+
+        private sealed class LegacyPackageCoverage
+        {
+            public LegacyPackageCoverage() { }
+
+            public string? packageId { get; set; }
         }
 
         private static Geometry ParseQueryGeometry(string json) {
@@ -294,12 +320,9 @@ namespace DataCatalague.Api.Repositories
                 };
 
                 using var buffer = fc.CreateRowBuffer();
-                buffer["ps"] = "";
-                buffer["code"] = "PackageCoverage";
-                buffer["attributebindings"] = JsonSerializer.Serialize(new {
-                    packageId,
-                    absoluteUri,
-                }, jsonSerializerOptions);
+                buffer["ps"] = "S-840";
+                buffer["code"] = nameof(PackageCoverage);
+                buffer["attributebindings"] = new PackageCoverage { packageId = packageId, absoluteUri = absoluteUri }.Flatten();
                 buffer["shape"] = geometry;
 
                 var row = fc.CreateRow(buffer);
@@ -324,7 +347,7 @@ namespace DataCatalague.Api.Repositories
             var pointRefs = new List<string>();
             string? curveRef = null, surfaceRef = null;
             connector.ApplyEdits(() => {
-                aoiRef = Insert(aoi, "surface", "PackageCoverage", true);
+                aoiRef = Insert(aoi, "surface", nameof(PackageCoverage), true);
                 if (points is not null && !points.IsEmpty) {
                     var table = points.PointCount == 1 ? "point" : "pointset";
                     using var pointClass = connector.OpenDataset<FeatureClass>(this._featureClassDefinitions[table].GetName());
@@ -334,19 +357,19 @@ namespace DataCatalague.Api.Repositories
                             // PointSet is a domain name; this template stores its
                             // members as individual Point rows, not a Multipoint row.
                             foreach (var point in points.Points) {
-                                pointRefs.Add(Insert(point, table, "PackageDetailedGeometry", false));
+                                pointRefs.Add(Insert(point, table, nameof(PackageDetailedGeometry), false));
                             }
                             break;
                         case GeometryType.Multipoint:
-                            pointRefs.Add(Insert(points, table, "PackageDetailedGeometry", false));
+                            pointRefs.Add(Insert(points, table, nameof(PackageDetailedGeometry), false));
                             break;
                         default:
                             throw new InvalidOperationException($"Point detail class '{pointClass.GetName()}' has unsupported shape type '{pointDefinition.GetShapeType()}'.");
                     }
                     this._logger.LogInformation("Stored point details. PackageId: {PackageId}, SourcePointCount: {SourcePointCount}, StoredFeatureCount: {StoredFeatureCount}, Table: {Table}.", packageId, points.PointCount, pointRefs.Count, pointClass.GetName());
                 }
-                if (curves is not null) { curveRef = Insert(curves, "curve", "PackageDetailedGeometry", false); }
-                if (surfaces is not null) { surfaceRef = Insert(surfaces, "surface", "PackageDetailedGeometry", false); }
+                if (curves is not null) { curveRef = Insert(curves, "curve", nameof(PackageDetailedGeometry), false); }
+                if (surfaces is not null) { surfaceRef = Insert(surfaces, "surface", nameof(PackageDetailedGeometry), false); }
                 cancellationToken.ThrowIfCancellationRequested();
             });
             return (aoiRef, new DetailedGeometry(pointRefs.Count == 1 ? pointRefs[0] : null, curveRef, surfaceRef) { PointRefs = pointRefs.ToArray() });
@@ -379,9 +402,11 @@ namespace DataCatalague.Api.Repositories
                 }
                 var compatible = MatchDimensions(projected, hasZ, hasM);
                 using var buffer = fc.CreateRowBuffer();
-                buffer["ps"] = "";
+                buffer["ps"] = "S-840";
                 buffer["code"] = code;
-                buffer["attributebindings"] = JsonSerializer.Serialize(new { packageId, absoluteUri }, jsonSerializerOptions);
+                buffer["attributebindings"] = code == nameof(PackageCoverage)
+                    ? new PackageCoverage { packageId = packageId, absoluteUri = absoluteUri }.Flatten()
+                    : new PackageDetailedGeometry { packageId = packageId, absoluteUri = absoluteUri }.Flatten();
                 try {
                     buffer[definition.GetShapeField()] = compatible;
                     using var row = fc.CreateRow(buffer);
@@ -428,11 +453,9 @@ namespace DataCatalague.Api.Repositories
                 };
 
                 using var buffer = fc.CreateRowBuffer();
-                buffer["ps"] = "";
-                buffer["code"] = "SeverityCoverage";
-                buffer["attributebindings"] = JsonSerializer.Serialize(new {
-                    severity,
-                }, jsonSerializerOptions);
+                buffer["ps"] = "S-840";
+                buffer["code"] = nameof(SeverityCoverage);
+                buffer["attributebindings"] = new SeverityCoverage { severity = severity }.Flatten();
                 buffer["shape"] = geometry;
 
                 var row = fc.CreateRow(buffer);

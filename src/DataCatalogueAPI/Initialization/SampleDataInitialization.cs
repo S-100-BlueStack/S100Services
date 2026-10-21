@@ -102,8 +102,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
             logger.LogInformation("Created general submission sample {FileName}.", Path.GetFileName(file));
         }
 
-        // Arbitrary fixture assignments only. Production callers choose bindings using professional judgment.
-        // Sorted source files and a fixed pattern keep the demo repeatable without inspecting package content.
+        // Arbitrary fixture assignments only. Keeps the demo repeatable without inspecting package content.
         int?[] assignments = [0, null, 1, 1, null, 0, null, 1];
         var bindingCount = 0;
         for (var index = 0; index < packageSamples.Count; index++) {
