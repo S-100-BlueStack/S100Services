@@ -1,5 +1,4 @@
 ﻿using DataCatalague.Api.Domain;
-using System.Text.Json;
 
 namespace DataCatalague.Api.Models.V1
 {
@@ -24,7 +23,11 @@ namespace DataCatalague.Api.Models.V1
 
         public PackageMetaData? MetaData { get; init; }
 
-        public JsonElement? CategoryData { get; init; }
+        /// <summary>Source description entries with optional part index/language and unchanged HTML.</summary>
+        public PackageDescription[]? Descriptions { get; init; }
+
+        /// <summary>Related chart numbers; null when no chart information is supplied.</summary>
+        public PackageChart[]? Charts { get; init; }
 
         public DisplayScale? DisplayScale { get; init; }
 

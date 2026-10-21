@@ -40,6 +40,7 @@ public sealed class GenericSubmission(ArcGisDispatcher dispatcher, ILogger<Gener
             }
             var title = Text(manifest, "title");
             var source = Text(manifest, "source");
+            var description = Text(manifest, "description");
             var geometry = await dispatcher.ExecuteAsync(() => {
                 try { return ReadGeometry(directory, cancellationToken); }
                 catch (Exception exception) when (exception is ArcGIS.Core.Data.Exceptions.GeodatabaseException or ArcGIS.Core.Geometry.Exceptions.GeometryObjectException or ArgumentException) {
@@ -51,8 +52,9 @@ public sealed class GenericSubmission(ArcGisDispatcher dispatcher, ILogger<Gener
                 AbsoluteUri = new Uri(Path.GetFullPath(sourceFile)).AbsoluteUri,
                 EsriJSON = geometry.Aoi,
                 DetailedGeometry = geometry,
-                MetaData = new PackageMetaData(null, CategoryType, null, title, source, null, DateTimeOffset.UtcNow),
-                CategoryData = JsonSerializer.SerializeToElement(manifest),
+                MetaData = new PackageMetaData(null, CategoryType, title, source, null, DateTimeOffset.UtcNow),
+                Descriptions = description is null ? null : [new PackageDescription(null, description)],
+                Charts = null,
             };
         }
         catch (System.Text.Json.JsonException exception) {

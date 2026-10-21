@@ -34,6 +34,7 @@ public static class ApplicationServicesConfiguration
 
         services.AddHealthChecks();
         services.AddTransient<DataCatalague.Api.Services.PackageGeometryService>();
+        services.AddSingleton<DataCatalague.Api.Services.PackageIdentityService>();
         services.AddTransient<IPackageType, NoticeToMarinersPackageType>();
         services.AddTransient<IPackageType, GenericSubmission>();
         services.AddTransient<PackageTypeFactory>();

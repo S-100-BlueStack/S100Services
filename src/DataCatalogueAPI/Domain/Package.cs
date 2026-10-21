@@ -1,5 +1,4 @@
 ﻿using Eventuous;
-using System.Text.Json;
 using static DataCatalague.Api.Domain.Events.PackagesEvents;
 
 
@@ -17,7 +16,18 @@ namespace DataCatalague.Api.Domain
         public IReadOnlyList<string> PointRefs { get; init; } = PointRef is null ? [] : [PointRef];
     }
 
-    public record PackageMetaData(string? ShortId, string? Type, long? Number, string? Title, string? Source, string? RefId, DateTimeOffset? CreatedUTC);
+    /// <summary>A package description mapped from source text, with its original HTML unchanged.</summary>
+    /// <param name="PartIndex">The source notice part's indexNo, or null for sources without parts.</param>
+    /// <param name="Language">The source language code, or null when unspecified.</param>
+    /// <param name="Description">The source description, including its HTML markup.</param>
+    public record PackageDescription(string? Language, string Description);
+
+    /// <summary>A related chart, preserving the association between national and international numbers.</summary>
+    /// <param name="ChartNumber">The source chart number as text, including any leading zeroes.</param>
+    /// <param name="InternationalNumber">The international chart number, if supplied.</param>
+    public record PackageChart(string? ChartNumber, long? InternationalNumber);
+
+    public record PackageMetaData(string? ShortId, string? Type, string? Title, string? Source, string? RefId, DateTimeOffset? CreatedUTC);
 }
 
 namespace DataCatalague.Api.Domain
@@ -32,9 +42,9 @@ namespace DataCatalague.Api.Domain
                     string GeometryRef,
                     ulong Severity,
                     PackageMetaData? MetaData,
-                    DisplayScale? DisplayScale, DetailedGeometry? DetailedGeometry = null, JsonElement? CategoryData = null) {
+                    DisplayScale? DisplayScale, DetailedGeometry? DetailedGeometry = null, PackageDescription[]? Descriptions = null, PackageChart[]? Charts = null) {
             this.EnsureDoesntExist();
-            this.Apply(new V1.PackageCreated(PackageId, Category, FileName, AbsoluteUri, GeometryRef, MetaData, DisplayScale, DateTime.UtcNow, CategoryData));
+            this.Apply(new V1.PackageCreated(PackageId, Category, FileName, AbsoluteUri, GeometryRef, MetaData, DisplayScale, DateTime.UtcNow, Descriptions, Charts));
             this.Apply(new V1.SeverityUpdated(Severity, DateTime.UtcNow));
             if (DetailedGeometry is not null) {
                 this.Apply(new V1.DetailedGeometryAdded(DetailedGeometry.PointRef, DetailedGeometry.CurveRef, DetailedGeometry.SurfaceRef, DateTime.UtcNow, DetailedGeometry.PointRefs.ToArray()));
@@ -83,8 +93,11 @@ namespace DataCatalague.Api.Domain
 
         public PackageMetaData? MetaData { get; set; } = null;
 
-        /// <summary>Opaque category-defined JSON, replayed without coupling the aggregate to any package type.</summary>
-        public JsonElement? CategoryData { get; init; }
+        /// <summary>Source descriptions, preserving each part/language entry and its original HTML.</summary>
+        public PackageDescription[]? Descriptions { get; init; }
+
+        /// <summary>Related charts, or null when the source has no chart references.</summary>
+        public PackageChart[]? Charts { get; init; }
 
         public DisplayScale? DisplayScale { get; init; } = null;
 
@@ -105,7 +118,8 @@ namespace DataCatalague.Api.Domain
                 AbsoluteUri = new(e.AbsoluteUri),
                 GeometryRef = e.GeometryRef,
                 MetaData = e.MetaData,
-                CategoryData = e.CategoryData,
+                Descriptions = e.Descriptions,
+                Charts = e.Charts,
                 DisplayScale = e.DisplayScale,
                 LastUpdatedUtc = e.UTC,
             };
@@ -117,7 +131,7 @@ namespace DataCatalague.Api.Domain.Commands
 
     public static class PackagesCommands
     {
-        public record CreatePackage(string PackageId, string Category, string FileName, string AbsoluteUri, string GeometryRef, ulong Severity, PackageMetaData? MetaData, DisplayScale? DisplayScale, DetailedGeometry? DetailedGeometry = null, JsonElement? CategoryData = null);
+        public record CreatePackage(string PackageId, string Category, string FileName, string AbsoluteUri, string GeometryRef, ulong Severity, PackageMetaData? MetaData, DisplayScale? DisplayScale, DetailedGeometry? DetailedGeometry = null, PackageDescription[]? Descriptions = null, PackageChart[]? Charts = null);
 
         public record AddDetailedGeometry(string PackageId, string? PointRef, string? CurveRef, string? SurfaceRef, IReadOnlyList<string>? PointRefs = null);
 
@@ -144,7 +158,7 @@ namespace DataCatalague.Api.Domain.Events
                     PackageMetaData? MetaData,
                     DisplayScale? DisplayScale,
                     DateTimeOffset UTC,
-                    JsonElement? CategoryData = null
+                    PackageDescription[]? Descriptions = null, PackageChart[]? Charts = null
                 );
 
             [EventType("V1.DetailedGeometryAdded")]

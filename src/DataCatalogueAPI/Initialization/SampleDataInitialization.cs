@@ -25,8 +25,8 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
                 Development sample specification for published navigation notices.
 
                 - Source: Niord notice JSON from `Samples/NoticesToMariners`.
-                - Package identifier: the notice's `shortId`, including the year.
-                - Source metadata and category-specific notice data are preserved on the package.
+                - Package identifier: a generated 18-character Nanoid; the published notice ID is kept in `metaData.shortId`.
+                - Source metadata and part description HTML and related chart numbers are preserved on the package.
                 - The AOI is the rectangular envelope of the detailed geometry.
                 - Detailed geometry may contain points, curves and surfaces.
                 """),
@@ -36,11 +36,11 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
                 Development sample specification for general submissions.
 
                 - Source: ZIP archives from `Samples/GeneralSubmission`.
-                - Package identifiers are allocated in `GS-NNN-YY` format.
+                - Package identifiers are generated Nanoids; `metaData.shortId` is allocated in `GS-NNN-YY` format.
                 - Each sample contains `submission.json`, `contract.txt` and a complete AOI shapefile (`aoi.shp`, `aoi.shx`, `aoi.dbf`, `aoi.prj`).
                 - The sample initializer reads the title and source from `submission.json`; geometry comes only from the shapefile.
                 - The full shapefile polygon is saved as detailed geometry; its envelope becomes the AOI.
-                - Manifest metadata is preserved as category-specific data without embedded coordinates.
+                - The manifest description is stored as a package description; chart references remain null.
                 """)
         }) {
             var created = await dispatcher.CreateCategory(new CreateCategoryRequest {
@@ -66,9 +66,9 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
 
         foreach (var file in files) {
             var request = await packageTypes.CreateRequestAsync("NoticeToMariners", file, cancellationToken).ConfigureAwait(false);
-            logger.LogInformation("Creating notice sample {FileName} as package {PackageId}.", Path.GetFileName(file), request.Id);
+            logger.LogInformation("Creating notice sample {FileName} as package {PackageId}.", Path.GetFileName(file), request.MetaData?.ShortId);
             var created = await packages.CreatePackage(request, cancellationToken).ConfigureAwait(false);
-            RequireSuccess(created, $"create notice package '{request.Id}'");
+            RequireSuccess(created, $"create notice package '{request.MetaData?.ShortId}'");
         }
 
 
