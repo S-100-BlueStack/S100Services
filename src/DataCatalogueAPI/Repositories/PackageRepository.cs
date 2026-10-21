@@ -31,6 +31,10 @@ namespace DataCatalague.Api.Repositories
 
         private readonly ConcurrentDictionary<string, PackageState> _packages = new(StringComparer.Ordinal);
 
+        // A package may belong to multiple pipelines. Keep individual pairs so replaying a
+        // binding event is idempotent and the index can support unbinding in the future.
+        private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _pipelineBindings = new(StringComparer.Ordinal);
+
         private readonly IOptions<PackagesOptions> _options;
 
         private readonly ILogger<PackageRepository> _logger;
@@ -84,10 +88,11 @@ namespace DataCatalague.Api.Repositories
         /// <param name="geometry">Optional Esri JSON envelope or polygon with an explicit spatial reference.</param>
         /// <param name="page">One-based page number.</param>
         /// <param name="pageSize">Page size between 1 and <see cref="MaximumPageSize"/>.</param>
+        /// <param name="hasPipeline">True for packages bound to at least one pipeline; false for unbound packages; null for both.</param>
         /// <returns>A page in ordinal catalogue identifier order and its total matching count.</returns>
         /// <exception cref="ArgumentOutOfRangeException">A paging argument is outside the supported range.</exception>
         /// <exception cref="InvalidDataException">The supplied query geometry is invalid or cannot be projected.</exception>
-        public async Task<(IReadOnlyList<PackageState> Items, int TotalCount)> GetPackagesAsync(string? category, CancellationToken cancellationToken, string? geometry = null, int page = 1, int pageSize = 20) {
+        public async Task<(IReadOnlyList<PackageState> Items, int TotalCount)> GetPackagesAsync(string? category, CancellationToken cancellationToken, string? geometry = null, int page = 1, int pageSize = 20, bool? hasPipeline = null) {
             ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
             ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
             ArgumentOutOfRangeException.ThrowIfGreaterThan(pageSize, MaximumPageSize);
@@ -114,7 +119,8 @@ namespace DataCatalague.Api.Repositories
             cancellationToken.ThrowIfCancellationRequested();
             // Count and page use the same captured states; no event-store reads or geometry hydration.
             var matching = candidates
-                .Where(item => category is null || string.Equals(item.Value.Category?.Value, category, StringComparison.Ordinal))
+                .Where(item => (category is null || string.Equals(item.Value.Category?.Value, category, StringComparison.Ordinal))
+                    && (hasPipeline is null || this._pipelineBindings.ContainsKey(item.Key) == hasPipeline.Value))
                 .OrderBy(item => item.Key, StringComparer.Ordinal)
                 .ToArray();
             var offset = ((long)page - 1) * pageSize;
@@ -480,6 +486,7 @@ namespace DataCatalague.Api.Repositories
                 PackagesEvents.V1.SeverityUpdated evt => this.Handle_PackageUpdated(context.Stream.GetId(), evt),
                 PackagesEvents.V1.DetailedGeometryAdded evt => this.Handle_PackageUpdated(context.Stream.GetId(), evt),
                 PackagesEvents.V1.GeometryReplaced evt => this.Handle_PackageUpdated(context.Stream.GetId(), evt),
+                DispatcherEvents.V1.Binded evt => this.Handle_PackageBound(evt),
                 _ => EventHandlingStatus.Ignored,
             };
             return ValueTask.FromResult(status);
@@ -487,6 +494,12 @@ namespace DataCatalague.Api.Repositories
 
         private EventHandlingStatus Handle_PackageCreated(PackagesEvents.V1.PackageCreated evt) {
             this._packages.TryAdd(evt.PackageId, new PackageState().When(evt));
+            return EventHandlingStatus.Handled;
+        }
+
+        private EventHandlingStatus Handle_PackageBound(DispatcherEvents.V1.Binded evt) {
+            var pipelines = this._pipelineBindings.GetOrAdd(evt.PackageId, _ => new ConcurrentDictionary<string, byte>(StringComparer.Ordinal));
+            pipelines.TryAdd(evt.PipelineId, 0);
             return EventHandlingStatus.Handled;
         }
 
