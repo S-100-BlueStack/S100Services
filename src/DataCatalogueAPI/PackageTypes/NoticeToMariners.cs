@@ -150,26 +150,3 @@ public sealed record NoticeToMariners(string Id, PackageMetaData MetaData, Packa
         }
     }
 }
-/// <summary>Adapts the existing notice parser to the common source-file creation interface.</summary>
-public sealed class NoticeToMarinersPackageType : IPackageType
-{
-    /// <inheritdoc />
-    public string CategoryType => "NoticeToMariners";
-
-    /// <inheritdoc />
-    public async Task<DataCatalague.Api.Models.V1.CreatePackageRequest> CreateRequestAsync(string sourceFile, CancellationToken cancellationToken) {
-        var notice = NoticeToMariners.Parse(await File.ReadAllTextAsync(sourceFile, cancellationToken).ConfigureAwait(false));
-        if (string.IsNullOrWhiteSpace(notice.MetaData.ShortId)) {
-            throw new InvalidDataException($"Notice '{Path.GetFileName(sourceFile)}' has no shortId.");
-        }
-        return new() {
-            Category = CategoryType,
-            AbsoluteUri = new Uri(Path.GetFullPath(sourceFile)).AbsoluteUri,
-            EsriJSON = notice.Geometry.Aoi,
-            DetailedGeometry = notice.Geometry,
-            MetaData = notice.MetaData,
-            Descriptions = notice.Descriptions,
-            Charts = notice.Charts,
-        };
-    }
-}

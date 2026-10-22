@@ -147,9 +147,10 @@ events have been processed, including startup's ENC and Paper Chart pipelines.
 `Program.Main` resolves `SampleDataInitialization` once in a startup DI scope
 and calls `InitializeAsync` after building the app and before `RunAsync`.
 Its constructor receives the DI-registered `DispatcherController`,
-`PackageController`, `PipelineController`, `PackageTypeFactory` and logger. Registered `IPackageType`
-readers prepare the shared request, and all packages go through
-`PackageController.CreatePackage`. Startup creates the `NoticeToMariners` and
+`PackageController`, `PipelineController`, the initialization-only `SamplePackageReader`
+and logger. The sample reader creates API request models from the local fixture files;
+all packages still go through `PackageController.CreatePackage`. Production
+package types are not responsible for constructing requests to their own API. Startup creates the `NoticeToMariners` and
 `GeneralSubmission` categories and imports the supplied notice JSON and submission
 ZIP samples.
 

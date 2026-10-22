@@ -2,23 +2,47 @@ using ArcGIS.Core.Data;
 using ArcGIS.Core.Geometry;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Models.V1;
+using DataCatalague.Api.PackageTypes;
 using DataCatalague.Api.Repositories;
 using System.IO.Compression;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace DataCatalague.Api.PackageTypes;
+namespace DataCatalague.Api.Initialization;
 
-/// <summary>Reads GeneralSubmission ZIP metadata and full polygon geometry from its shapefile.</summary>
-public sealed class GenericSubmission(ArcGisDispatcher dispatcher, ILogger<GenericSubmission> logger) : IPackageType
+/// <summary>Builds requests from development fixtures; never participates in normal API request handling.</summary>
+/// <param name="dispatcher">Runs the ArcGIS shapefile reader on the registered dispatcher.</param>
+/// <param name="logger">Reports cleanup errors for temporary extracted archives.</param>
+public sealed class SamplePackageReader(ArcGisDispatcher dispatcher, ILogger<SamplePackageReader> logger)
 {
     private const long MaximumExpandedBytes = 256L * 1024 * 1024;
 
-    /// <inheritdoc />
-    public string CategoryType => "GeneralSubmission";
+    /// <summary>Converts a notice sample to the request accepted by the existing package controller.</summary>
+    /// <param name="sourceFile">Path to a notice fixture file.</param>
+    /// <param name="cancellationToken">Cancels file loading.</param>
+    /// <returns>The shared package creation request.</returns>
+    public async Task<CreatePackageRequest> ReadNoticeAsync(string sourceFile, CancellationToken cancellationToken) {
+        var fullPath = RequireSourceFile(sourceFile);
+        var notice = NoticeToMariners.Parse(await File.ReadAllTextAsync(fullPath, cancellationToken).ConfigureAwait(false));
+        if (string.IsNullOrWhiteSpace(notice.MetaData.ShortId)) {
+            throw new InvalidDataException($"Notice '{Path.GetFileName(fullPath)}' has no shortId.");
+        }
+        return new CreatePackageRequest {
+            Category = "NoticeToMariners",
+            AbsoluteUri = new Uri(fullPath).AbsoluteUri,
+            EsriJSON = notice.Geometry.Aoi,
+            DetailedGeometry = notice.Geometry,
+            MetaData = notice.MetaData,
+            Descriptions = notice.Descriptions,
+            Charts = notice.Charts,
+        };
+    }
 
-    /// <inheritdoc />
-    public async Task<CreatePackageRequest> CreateRequestAsync(string sourceFile, CancellationToken cancellationToken) {
+    /// <summary>Converts a GeneralSubmission sample ZIP to the request accepted by the package controller.</summary>
+    /// <param name="sourceFile">Path to a submission ZIP fixture.</param>
+    /// <param name="cancellationToken">Cancels extraction and geometry reading.</param>
+    /// <returns>The shared package creation request.</returns>
+    public async Task<CreatePackageRequest> ReadGeneralSubmissionAsync(string sourceFile, CancellationToken cancellationToken) {
+        sourceFile = RequireSourceFile(sourceFile);
         var directory = Path.Combine(Path.GetTempPath(), $"DataCatalogue-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         try {
@@ -48,11 +72,11 @@ public sealed class GenericSubmission(ArcGisDispatcher dispatcher, ILogger<Gener
                 }
             }).ConfigureAwait(false);
             return new CreatePackageRequest {
-                Category = CategoryType,
+                Category = "GeneralSubmission",
                 AbsoluteUri = new Uri(Path.GetFullPath(sourceFile)).AbsoluteUri,
                 EsriJSON = geometry.Aoi,
                 DetailedGeometry = geometry,
-                MetaData = new PackageMetaData(null, CategoryType, title, source, null, DateTimeOffset.UtcNow),
+                MetaData = new PackageMetaData(null, "GeneralSubmission", title, source, null, DateTimeOffset.UtcNow),
                 Descriptions = description is null ? null : [new PackageDescription(null, description)],
                 Charts = null,
             };
@@ -66,6 +90,12 @@ public sealed class GenericSubmission(ArcGisDispatcher dispatcher, ILogger<Gener
                 logger.LogWarning(exception, "Could not remove temporary submission directory {Directory}.", directory);
             }
         }
+    }
+
+    private static string RequireSourceFile(string sourceFile) {
+        var fullPath = Path.GetFullPath(sourceFile);
+        if (!File.Exists(fullPath)) { throw new InvalidDataException($"Sample file '{fullPath}' does not exist."); }
+        return fullPath;
     }
 
     private static string? Text(JsonObject manifest, string property) {

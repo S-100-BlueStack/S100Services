@@ -1,6 +1,5 @@
 using DataCatalague.Api.Controllers;
 using DataCatalague.Api.Domain;
-using DataCatalague.Api.PackageTypes;
 using DataCatalague.Api.Models.V1;
 using Microsoft.AspNetCore.Mvc;
 using PipelineController = DataCatalague.Api.Controllers.V1.DataCatalague.Api.Controllers.PipelineController;
@@ -11,9 +10,9 @@ namespace DataCatalague.Api.Initialization;
 /// <param name="dispatcher">The dispatcher controller resolved from the host container.</param>
 /// <param name="packages">The package controller resolved from the same container.</param>
 /// <param name="pipelines">The pipeline controller resolved from the same container.</param>
-/// <param name="packageTypes">The registered category-specific source readers.</param>
+/// <param name="sampleReader">Reads development fixtures and prepares package controller requests.</param>
 /// <param name="logger">Receives sample initialization progress.</param>
-public sealed class SampleDataInitialization(DispatcherController dispatcher, PackageController packages, PipelineController pipelines, PackageTypeFactory packageTypes, ILogger<SampleDataInitialization> logger)
+public sealed class SampleDataInitialization(DispatcherController dispatcher, PackageController packages, PipelineController pipelines, SamplePackageReader sampleReader, ILogger<SampleDataInitialization> logger)
 {
     /// <summary>Creates sample pipelines, categories, packages and explicit bindings in the fresh development stores.</summary>
     /// <param name="cancellationToken">Cancels sample reading and controller operations.</param>
@@ -79,7 +78,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
         if (files.Length == 0) { throw new InvalidDataException($"No notice samples found in '{directory}'."); }
 
         foreach (var file in files) {
-            var request = await packageTypes.CreateRequestAsync("NoticeToMariners", file, cancellationToken).ConfigureAwait(false);
+            var request = await sampleReader.ReadNoticeAsync(file, cancellationToken).ConfigureAwait(false);
             logger.LogInformation("Creating notice sample {FileName} as package {PackageId}.", Path.GetFileName(file), request.MetaData?.ShortId);
             var created = await packages.CreatePackage(request, cancellationToken).ConfigureAwait(false);
             packageSamples.Add(RequireSuccess(created, $"create notice package '{request.MetaData?.ShortId}'"));
@@ -88,7 +87,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
 
 
 
-        // Both source formats use registered readers and the same creation flow.
+        // Both fixture formats use the same controller creation flow.
         var submissionDirectory = Path.Combine(AppContext.BaseDirectory, "Samples", "GeneralSubmission");
         var submissionFiles = Directory.GetFiles(submissionDirectory, "*.zip").Order(StringComparer.Ordinal).ToArray();
         if (submissionFiles.Length != 2) {
@@ -96,7 +95,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
         }
 
         foreach (var file in submissionFiles) {
-            var request = await packageTypes.CreateRequestAsync("GeneralSubmission", file, cancellationToken).ConfigureAwait(false);
+            var request = await sampleReader.ReadGeneralSubmissionAsync(file, cancellationToken).ConfigureAwait(false);
             var created = await packages.CreatePackage(request, cancellationToken).ConfigureAwait(false);
             packageSamples.Add(RequireSuccess(created, $"create general submission '{Path.GetFileName(file)}'"));
             logger.LogInformation("Created general submission sample {FileName}.", Path.GetFileName(file));

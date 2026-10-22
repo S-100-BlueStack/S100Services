@@ -59,6 +59,7 @@ public static class Program
             builder.Services.AddSingleton<IPipelineRepository>(sp => sp.GetRequiredService<InMemoryPipelineRepository>());
             builder.Services.AddSingleton<ArcGisDispatcher>();
 
+            builder.Services.AddTransient<SamplePackageReader>();
             builder.Services.AddTransient<SampleDataInitialization>();
 
             //builder.Services.AddEventuousSqlServer(
