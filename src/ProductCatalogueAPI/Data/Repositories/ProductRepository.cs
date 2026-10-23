@@ -343,6 +343,96 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
     }
 
     /// <inheritdoc/>
+    public async Task<bool> TryFailInterruptedPackageExportAsync(Guid expectedPackageId, Guid expectedTrackId,
+        string datasetName, ProductSpecification specification, ProductState expectedState,
+        DateTime expectedUpdatedAtUtc, int candidateEdition, int candidateUpdate,
+        DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        if (expectedPackageId == Guid.Empty || expectedTrackId == Guid.Empty || string.IsNullOrWhiteSpace(datasetName))
+            throw new ArgumentException("An exact ENC package, Product track and dataset are required.");
+        if (specification is not (ProductSpecification.S101 or ProductSpecification.S57) ||
+            expectedState is not (ProductState.Exporting or ProductState.Validating) ||
+            candidateEdition < 0 || candidateUpdate < 0 ||
+            expectedUpdatedAtUtc == default || occurredAtUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("Interrupted export recovery requires an exact in-progress candidate and UTC timestamps.");
+
+        using var connection = _connectionFactory.Create();
+        connection.Open();
+        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+        // The scan and both Product locks must be held by the caller. SQL also
+        // verifies snapshot ownership, state, candidate version and timestamp.
+        // Bind datetime2(7) explicitly; a SqlDateTime conversion would round
+        // the expected timestamp and produce a false compare-and-set conflict.
+        var parameters = new DynamicParameters(new {
+            TrackId = expectedTrackId,
+            PackageId = expectedPackageId,
+            DatasetName = datasetName.Trim(),
+            Specification = specification.ToString(),
+            ExpectedState = expectedState,
+            CandidateEdition = candidateEdition,
+            CandidateUpdate = candidateUpdate,
+            Error = ProductState.Error,
+            ErrorCode = "ENC_EXPORT_INTERRUPTED",
+            Message = "The candidate build was interrupted. Discard it before another package is created.",
+            HistoryId = Guid.NewGuid()
+        });
+        parameters.Add("ExpectedUpdatedAtUtc", expectedUpdatedAtUtc, DbType.DateTime2);
+        parameters.Add("OccurredAtUtc", occurredAtUtc, DbType.DateTime2);
+        var recovered = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
+            DECLARE @Affected int = 0;
+            DECLARE @PackageOwned bit = 0;
+            -- Follow package-discard lock ordering: package first, then Product track.
+            SELECT @PackageOwned = 1
+            FROM dbo.EncPackage WITH (UPDLOCK, HOLDLOCK)
+            WHERE package_id = @PackageId
+              AND ((@Specification = 'S101' AND source_dataset_name = @DatasetName AND s101_discarded = 0)
+                OR (@Specification = 'S57' AND s57_dataset_name = @DatasetName AND s57_discarded = 0));
+            IF @PackageOwned = 1
+            BEGIN
+                UPDATE t
+                   SET state = @Error, updated_at_utc = @OccurredAtUtc
+                FROM dbo.ProductExportTrack AS t WITH (UPDLOCK, HOLDLOCK)
+                INNER JOIN dbo.Product AS p ON p.product_id = t.product_id
+                WHERE t.product_export_track_id = @TrackId
+                  AND p.dataset_name = @DatasetName
+                  AND t.product_specification = @Specification
+                  AND t.state = @ExpectedState
+                  AND t.updated_at_utc = @ExpectedUpdatedAtUtc
+                  AND t.candidate_edition = @CandidateEdition
+                  AND t.candidate_update = @CandidateUpdate
+                  AND NOT EXISTS (
+                      SELECT 1 FROM dbo.ProductExportTrackFreezeHold WITH (UPDLOCK, HOLDLOCK)
+                      WHERE product_export_track_id = t.product_export_track_id
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM dbo.ProductIcEncDelivery AS d WITH (UPDLOCK, HOLDLOCK)
+                      INNER JOIN dbo.ProductRevision AS r ON r.product_revision_id = d.product_revision_id
+                      WHERE d.product_export_track_id = t.product_export_track_id
+                        AND r.edition_number = t.candidate_edition
+                        AND r.update_number = t.candidate_update
+                  );
+                SET @Affected = @@ROWCOUNT;
+            END;
+            IF @Affected = 1
+            BEGIN
+                UPDATE dbo.EncPackage
+                SET error_message = COALESCE(error_message, @Message)
+                WHERE package_id = @PackageId;
+                IF @@ROWCOUNT <> 1
+                    THROW 51001, 'The ENC package changed during interrupted export recovery.', 1;
+                INSERT INTO dbo.ProductStateHistory
+                    (product_state_history_id, product_export_track_id, state, edition_number, update_number,
+                     owner, occurred_at_utc, error_code, error_message)
+                VALUES
+                    (@HistoryId, @TrackId, @Error, @CandidateEdition, @CandidateUpdate,
+                     'system', @OccurredAtUtc, @ErrorCode, @Message);
+            END;
+            SELECT CAST(@Affected AS bit);
+            """, parameters, transaction, cancellationToken: cancellationToken));
+        transaction.Commit();
+        return recovered;
+    }
+
+    /// <inheritdoc/>
     public async Task<Guid> CompleteExportWithHistoryAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
         connection.Open();
@@ -793,6 +883,33 @@ public sealed class InMemoryProductRepository : IProductRepository, IProductWork
 
     /// <inheritdoc/>
     public Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default) { lock (_gate) { var track = FindTrack(trackId); track.State = state; track.UpdatedAtUtc = occurredAtUtc; track.ErrorCode = errorCode; track.ErrorMessage = errorMessage; } return Task.CompletedTask; }
+
+    /// <inheritdoc/>
+    public Task<bool> TryFailInterruptedPackageExportAsync(Guid expectedPackageId, Guid expectedTrackId,
+        string datasetName, ProductSpecification specification, ProductState expectedState,
+        DateTime expectedUpdatedAtUtc, int candidateEdition, int candidateUpdate,
+        DateTime occurredAtUtc, CancellationToken cancellationToken = default) {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate) {
+            if (expectedPackageId == Guid.Empty || expectedTrackId == Guid.Empty ||
+                specification is not (ProductSpecification.S101 or ProductSpecification.S57) ||
+                expectedState is not (ProductState.Exporting or ProductState.Validating) || occurredAtUtc.Kind != DateTimeKind.Utc)
+                throw new ArgumentException("Interrupted export recovery requires an exact package and in-progress track.");
+            var track = _tracks.Values.FirstOrDefault(current => current.Id == expectedTrackId);
+            if (track is null || !string.Equals(track.DatasetName, datasetName, StringComparison.OrdinalIgnoreCase) ||
+                track.ProductSpecification != specification || track.State != expectedState ||
+                track.UpdatedAtUtc != expectedUpdatedAtUtc || track.CandidateEdition != candidateEdition ||
+                track.CandidateUpdate != candidateUpdate || track.IsManuallyFrozen)
+                return Task.FromResult(false);
+            // In-memory track storage has no ENC package table. The caller checks
+            // the package identity; SQL enforces that guard in the same transaction.
+            track.State = ProductState.Error;
+            track.UpdatedAtUtc = occurredAtUtc;
+            track.ErrorCode = "ENC_EXPORT_INTERRUPTED";
+            track.ErrorMessage = "The candidate build was interrupted. Discard it before another package is created.";
+            return Task.FromResult(true);
+        }
+    }
 
     /// <inheritdoc/>
     public Task<Guid> CompleteExportWithHistoryAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) {

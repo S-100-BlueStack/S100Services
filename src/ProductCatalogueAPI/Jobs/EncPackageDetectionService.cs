@@ -52,6 +52,26 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 name => _products.GetMappedElectronicProducts(name, ProductSpecification.S57.ToString())
                     .Select(product => product.datasetName).OfType<string>().ToArray(), StringComparer.OrdinalIgnoreCase);
             var mappedNames = replay.Keys.Concat(mappedS57.Values.SelectMany(names => names)).ToArray();
+            // Recover only after acquiring the same locks as a live package
+            // export. Replay must be checked before its blocked-state filter,
+            // otherwise a stranded Validating member can never be reconsidered.
+            foreach (var candidate in activeReplay.Values) {
+                cancellationToken.ThrowIfCancellationRequested();
+                await using var s101Lock = await locks.TryAcquireAsync(
+                    ProductTrackLockKey.For(candidate.SourceDatasetName, ProductSpecification.S101), cancellationToken);
+                if (s101Lock is null) {
+                    logger.LogInformation("Interrupted ENC recovery deferred while the S-101 Product lock is busy. SourceDatasetName: {SourceDatasetName}.", candidate.SourceDatasetName);
+                    continue;
+                }
+                await using var s57Lock = await locks.TryAcquireAsync(
+                    ProductTrackLockKey.For(candidate.S57DatasetName, ProductSpecification.S57), cancellationToken);
+                if (s57Lock is null) {
+                    logger.LogInformation("Interrupted ENC recovery deferred while the S-57 Product lock is busy. SourceDatasetName: {SourceDatasetName}.", candidate.SourceDatasetName);
+                    continue;
+                }
+                await EncPackageInterruptedExportRecovery.TryRecoverAsync(candidate,
+                    workflowRepository, packages, clock, logger, cancellationToken);
+            }
             var replayTracks = await workflowRepository.GetTracksByNamesAsync(mappedNames, cancellationToken);
             var eligibleReplay = replay.Where(entry =>
                 !replayTracks.Any(track => (string.Equals(track.DatasetName, entry.Key, StringComparison.OrdinalIgnoreCase) ||
@@ -114,6 +134,10 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             var packageScanFromUtc = replay.GetValueOrDefault(sourceName, sinceUtc);
             EncPackage? previous = null;
             if (active.TryGetValue(sourceName, out var existing)) {
+                // An earlier Worker crash may have left a package member in
+                // Exporting/Validating. At this point both Product locks are held.
+                await EncPackageInterruptedExportRecovery.TryRecoverAsync(existing,
+                    workflowRepository, packages, clock, logger, cancellationToken);
                 var packageArchiveEditUtc = EncChangeSummary.GetLatestArchiveEditUtc(existing.SummaryYaml);
                 if (!HasNewEdits(changes, packageArchiveEditUtc)) {
                     // A replayed archive row from the existing snapshot is not a reason to retry a failed export.
@@ -197,6 +221,12 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             var summary = EncChangeSummary.Serialize(sourceName, ProductSpecification.S101, EncChangeSummary.GetCopenhagenDate(scanStartedUtc), packageScanFromUtc, scanStartedUtc, summaryChanges);
             var serializationTimer = EncDetectionPerformance.IsEnabled ? Stopwatch.StartNew() : null;
             var yaml = snapshot.Dataset.Serialize();
+            if (snapshot.SuppressedMetadataSurfaces.Count > 0) {
+                yaml = EncMetadataSurfaceYamlCleanup.RemoveSuppressedSurfaces(yaml,
+                    snapshot.SuppressedMetadataSurfaces);
+                logger.LogInformation("ENC suppressed metadata topology surfaces removed. SourceDatasetName: {SourceDatasetName}. SurfaceCount: {SurfaceCount}.",
+                    sourceName, snapshot.SuppressedMetadataSurfaces.Distinct(StringComparer.Ordinal).Count());
+            }
             if (serializationTimer is not null)
                 logger.LogInformation("ENC detection profile. SourceDatasetName: {SourceDatasetName}. Phase: SerializeYaml. DurationMs: {DurationMs}. YamlCharacterCount: {YamlCharacterCount}. IncludedChangedFeatureCount: {IncludedChangedFeatureCount}.",
                     sourceName, serializationTimer.Elapsed.TotalMilliseconds, yaml?.Length ?? 0, included.Count);
