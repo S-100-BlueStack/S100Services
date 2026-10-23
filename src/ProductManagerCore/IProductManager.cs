@@ -10,7 +10,12 @@ namespace S100FC.ProductCatalogue
     );
 
     /// <summary>Pairs the shared YAML snapshot with changed source features actually selected for its topology.</summary>
-    public sealed record VerifiedExportSnapshot(YAML.Dataset Dataset, IReadOnlyCollection<string> IncludedChangedFeatureIds);
+    public sealed record VerifiedExportSnapshot(YAML.Dataset Dataset, IReadOnlyCollection<string> IncludedChangedFeatureIds)
+    {
+        // Exact redundant metadata surfaces omitted from the feature collection.
+        // Remains empty for managers which do not implement metadata normalization.
+        public IReadOnlyList<string> SuppressedMetadataSurfaces { get; init; } = [];
+    }
 
     /// <summary>Contains the accepted versions and the immutable source snapshot to publish together in S-128.</summary>
     public sealed record EncPackagePublication(Guid PackageId, string S57DatasetName, int S57Edition, int S57Update, string S101DatasetName, int S101Edition, int S101Update, DateTime DetectedAtUtc, string DatasetYaml, byte[] CompilerIndex, byte[] CatalogueSignature);

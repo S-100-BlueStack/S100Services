@@ -30,6 +30,17 @@ public interface IProductWorkflowRepository
     /// <summary>Changes a track state and appends immutable history without altering published S-128 version values.</summary>
     Task SetStateAsync(Guid trackId, ProductState state, string? owner, DateTime occurredAtUtc, string? errorCode = null, string? errorMessage = null, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Atomically marks the exact interrupted, still-owned ENC candidate Error while preserving
+    /// its version, history, the active package and replay bounds. Returns false on any mismatch.
+    /// Call only while holding the ENC scan lock and both mapped Product locks.
+    /// </summary>
+    Task<bool> TryFailInterruptedPackageExportAsync(Guid expectedPackageId, Guid expectedTrackId,
+        string datasetName, ProductSpecification specification, ProductState expectedState,
+        DateTime expectedUpdatedAtUtc, int candidateEdition, int candidateUpdate,
+        DateTime occurredAtUtc, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Atomic interrupted ENC export recovery is unavailable for this workflow repository.");
+
     /// <summary>Commits ReadyForDistribution and returns that exact immutable history row identity.</summary>
     Task<Guid> CompleteExportWithHistoryAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default)
         => throw new NotSupportedException("This workflow repository cannot capture export completion history.");

@@ -393,6 +393,7 @@ namespace S100FC.ProductCatalogue
 
             // applyEdits must remain false: SQL owns unverified candidate versions until IC-ENC acceptance.
             var included = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var suppressedSurfaces = new List<string>();
             var dataset = await this.CreateDatasetAsync(
                 result.ElectronicProduct,
                 result.Shape,
@@ -400,11 +401,14 @@ namespace S100FC.ProductCatalogue
                 applyEdits: false,
                 cancellationToken: cancellationToken,
                 requiredFeatureIds: requiredFeatureIds,
-                includedChangedFeatureIds: included
+                includedChangedFeatureIds: included,
+                suppressedMetadataSurfaces: suppressedSurfaces
             );
             ExportSnapshotVersioning.ApplyCompilerCompatibleVersion(dataset, edition);
             cancellationToken.ThrowIfCancellationRequested();
-            return new VerifiedExportSnapshot(dataset, included.ToArray());
+            return new VerifiedExportSnapshot(dataset, included.ToArray()) {
+                SuppressedMetadataSurfaces = suppressedSurfaces.ToArray()
+            };
         }
 
         async Task<bool> IElectronicProductManager.IsDirtyAsync(string name) {
@@ -1209,7 +1213,7 @@ namespace S100FC.ProductCatalogue
             }, "ResolveExportSourceProduct", name, cancellationToken);
         }
 
-        private async Task<YAML.Dataset> CreateDatasetAsync(ElectronicProduct electronicProduct, ArcGIS.Core.Geometry.Polygon shape, ExportTypes exportType, bool applyEdits = true, CancellationToken cancellationToken = default, IReadOnlyCollection<string>? requiredFeatureIds = null, ISet<string>? includedChangedFeatureIds = null) {
+        private async Task<YAML.Dataset> CreateDatasetAsync(ElectronicProduct electronicProduct, ArcGIS.Core.Geometry.Polygon shape, ExportTypes exportType, bool applyEdits = true, CancellationToken cancellationToken = default, IReadOnlyCollection<string>? requiredFeatureIds = null, ISet<string>? includedChangedFeatureIds = null, ICollection<string>? suppressedMetadataSurfaces = null) {
             var logNewDataset = exportType == ExportTypes.NewDataset;
             var creationTimer = Stopwatch.StartNew();
             var creationSucceeded = false;
@@ -1243,7 +1247,10 @@ namespace S100FC.ProductCatalogue
             };
 
             var supportFiles = new Dictionary<string, string>();
-            var geometries = new List<(ArcGIS.Core.Geometry.Geometry geometry, string name)>();
+            var geometries = new List<(ArcGIS.Core.Geometry.Geometry geometry, string name, YAML.Feature feature)>();
+            var pendingMetadataFeatures = new List<YAML.Feature>();
+            var changedMetadataFeatures = new HashSet<YAML.Feature>(ReferenceEqualityComparer.Instance);
+            var metadataSourceAttributes = new Dictionary<YAML.Feature, string>(ReferenceEqualityComparer.Instance);
             var spatialAssociations = new Dictionary<string, S100FC.YAML.Association>();
             var informationTypes = new List<YAML.Information>();
             var informationsTypesAdded = new HashSet<string>();
@@ -1277,6 +1284,8 @@ namespace S100FC.ProductCatalogue
                 // TODO: Fix S101_QueryDataCoverage. Returns empty array and causes BuildTopology to fail.
                 profiler?.Next("DataCoverage");
                 var filters = s101Geodatabase.S101_QueryDataCoverage(shape, nominalscale).Select(result => result.Filter).ToArray();
+                if (featureTracker is not null)
+                    EncTopologyQueryFilters.PrepareForVerifiedSnapshot(filters);
                 profiler?.Next("BuildTopology", filters.Length);
                 var result = connection.BuildTopology(filters, loggerFactory: loggerFactory)!;
 
@@ -1494,6 +1503,9 @@ namespace S100FC.ProductCatalogue
                                         Masks = featureMapping.Masks,
                                         Attributes = instance?.attributeBindings.Length > 0 ? instance : null,
                                     };
+                                    if (prim == Primitive.Surface &&
+                                        (code == "DataCoverage" || code == "SoundingDatum" || code == "VerticalDatumOfData"))
+                                        metadataSourceAttributes.Add(feature, flatten ?? string.Empty);
 
                                     // Information Associations
                                     if (!current.IsNull("informationbindings")) {
@@ -1508,8 +1520,13 @@ namespace S100FC.ProductCatalogue
                                                     if (!isValid)
                                                         continue;
 
+                                                    // The association code identifies the catalogue relationship, not its target information type.
+                                                    var associationCode = binding.association?.S100FC_code;
+                                                    if (string.IsNullOrWhiteSpace(associationCode))
+                                                        throw new InvalidDataException($"S-101 information binding for '{code}' to '{binding.informationType}' has no association code.");
+
                                                     var asso = new YAML.Association {
-                                                        Name = binding.informationType!, // binding.GetType().GenericTypeArguments[0].Name,
+                                                        Name = associationCode,
                                                         Role = binding.role,
                                                         To = Guid.Parse(binding.informationId!).ToStableUInt64().ToString()
                                                     };
@@ -1580,6 +1597,10 @@ namespace S100FC.ProductCatalogue
                                         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
                                             throw;
                                         }
+                                        catch (InvalidDataException) {
+                                            // A missing association contract must stop the export rather than silently drop the binding.
+                                            throw;
+                                        }
                                         catch (Exception ex) {
                                             Log.Warning(ex, "Error deserializing informationbindings for feature {name}: {message}", name, ex.Message);
                                         }
@@ -1605,8 +1626,13 @@ namespace S100FC.ProductCatalogue
                                                     if (roleType == "association")
                                                         continue;
 
+                                                    // A feature binding names its target type separately from the S-101 association code.
+                                                    var associationCode = binding.association?.S100FC_code;
+                                                    if (string.IsNullOrWhiteSpace(associationCode))
+                                                        throw new InvalidDataException($"S-101 feature binding for '{code}' to '{binding.featureType}' has no association code.");
+
                                                     var asso = new YAML.Association {
-                                                        Name = binding.featureType!, // binding.GetType().GenericTypeArguments[0].Name,
+                                                        Name = associationCode,
                                                         Role = binding.role,
                                                         To = TopologyFeatureMapping.CreateFoid(binding.featureId!)
                                                     };
@@ -1625,12 +1651,22 @@ namespace S100FC.ProductCatalogue
                                         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
                                             throw;
                                         }
+                                        catch (InvalidDataException) {
+                                            // An invalid feature relationship must fail the export instead of being silently omitted.
+                                            throw;
+                                        }
                                         catch (Exception ex) {
                                             Log.Warning(ex, "Error deserializing featurebindings for feature {name}: {message}", name, ex.Message);
                                         }
                                     }
 
-                                    dataset?.AddFeature(feature!);
+                                    // Topology surfaces are available only after AddTopology. Defer
+                                    // metadata insertion so redundant features are never committed.
+                                    if (prim == Primitive.Surface &&
+                                        (code == "DataCoverage" || code == "SoundingDatum" || code == "VerticalDatumOfData"))
+                                        pendingMetadataFeatures.Add(feature);
+                                    else
+                                        dataset?.AddFeature(feature);
                                     if (profiler is not null)
                                         tableEmittedFeatures++;
 
@@ -1639,10 +1675,14 @@ namespace S100FC.ProductCatalogue
                                         _ => current.GetShape()
                                     };
 
-                                    geometries.Add(new(geometrytype, geometry!));
+                                    geometries.Add(new(geometrytype, geometry!, feature!));
                                     // Record source membership only after this generated YAML feature and its geometry were added.
-                                    if (requiredSourceFeatureId is not null)
+                                    if (requiredSourceFeatureId is not null) {
                                         featureTracker!.RecordEmitted(requiredSourceFeatureId);
+                                        if (prim == Primitive.Surface &&
+                                            (code == "DataCoverage" || code == "SoundingDatum" || code == "VerticalDatumOfData"))
+                                            changedMetadataFeatures.Add(feature);
+                                    }
 
                                 }
                                 catch (Exception ex) {
@@ -1923,10 +1963,12 @@ namespace S100FC.ProductCatalogue
 
                 profiler?.Next("GeometryAssembly", selectedFeatureRows, emittedYamlFeatures);
                 //  Geometries
-                foreach (var (geometry, name) in geometries.OrderBy(e => e.geometry.GeometryType)) {
+                foreach (var (geometry, name, feature) in geometries.OrderBy(e => e.geometry.GeometryType)) {
                     cancellationToken.ThrowIfCancellationRequested();
                     if (geometry.GeometryType == GeometryType.Polygon) continue;    // Skip polygons after topology
                     dataset?.AddGeometry(geometry, name!);
+                    if (dataset is not null)
+                        EncPointGeometryReferences.Rebind(dataset, geometry, feature);
                     Log.Verbose("Adding {geometryType} with ID: {name}", geometry.GeometryType, name);
                 }
 
@@ -1943,6 +1985,20 @@ namespace S100FC.ProductCatalogue
                 }
                 profiler?.Next("TopologyAndAssociations", requiredFeatureIds?.Count ?? 0, includedChangedFeatureIds?.Count ?? 0);
                 dataset!.AddTopology(topology);
+                var coverageResult = EncMetadataCoverageNormalizer.Normalize(dataset,
+                    pendingMetadataFeatures, metadataSourceAttributes, changedMetadataFeatures);
+                if (suppressedMetadataSurfaces is not null) {
+                    foreach (var surfaceName in coverageResult.SuppressedSurfaceNames)
+                        suppressedMetadataSurfaces.Add(surfaceName);
+                }
+                if (coverageResult.SkippedPartialOverlap)
+                    Log.Warning("ENC metadata normalization skipped for unsupported partial overlap; all metadata preserved for compiler and SevenCs validation. DatasetName: {DatasetName}. Reason: {Reason}.",
+                        electronicProduct.datasetName, coverageResult.SkipReason);
+                else if (coverageResult.TotalRemoved > 0)
+                    Log.Information("ENC metadata coverage normalized. DatasetName: {DatasetName}. DataCoverageRemoved: {DataCoverageRemoved}. SoundingDatumRemoved: {SoundingDatumRemoved}. VerticalDatumOfDataRemoved: {VerticalDatumOfDataRemoved}.",
+                        electronicProduct.datasetName, coverageResult.RemovedDataCoverage,
+                        coverageResult.RemovedSoundingDatum, coverageResult.RemovedVerticalDatumOfData);
+                EncPointGeometryReferences.RequireResolvedPointReferences(dataset);
 
                 // Add Spatial Association Informationbindings. Must be handled after curves are added to dataset.
                 foreach (var sa in spatialAssociations) {

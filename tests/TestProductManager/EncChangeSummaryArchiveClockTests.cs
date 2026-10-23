@@ -18,7 +18,11 @@ public sealed class EncChangeSummaryArchiveClockTests
 
         var recordedArchiveUtc = EncChangeSummary.GetLatestArchiveEditUtc(summary);
         Assert.Equal(archiveUtc, recordedArchiveUtc);
-        Assert.Contains($"featureId: {featureId}", summary);
+        // YAML quoting and GUID braces do not change the feature identity being verified.
+        var featureIdLine = Assert.Single(summary.Split('\n'), line =>
+            line.TrimStart(' ', '\t', '-').StartsWith("featureId:", StringComparison.Ordinal));
+        var serializedFeatureId = featureIdLine[(featureIdLine.IndexOf(':') + 1)..].Trim().Trim('"', '\'');
+        Assert.Equal(featureId, Guid.Parse(serializedFeatureId));
         //Assert.False(EncPackageDetectionService.HasNewEdits(new Dictionary<string, ArchiveRow> {
         //    ["feature-1"] = new() { EditDate = archiveUtc }
         //}, recordedArchiveUtc));
