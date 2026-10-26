@@ -1,4 +1,3 @@
-import { isStatusFrozen } from "../state/featureState.js";
 import { resolveProductContext } from "../../products/domain/productContext.js";
 import { createPopupActionGroups } from "./popupActionConfig.js";
 import { createActionButton, updateActionButton, disposeActionButton } from "./popupActionDom.js";
@@ -30,7 +29,7 @@ export function createPopupActionBar({
   container.className = "popup-action-bar";
   container.setAttribute("aria-label", "Popup actions");
   reconcileActionRows(container, actionGroups, { force: true });
-  container.classList.toggle("popup-action-bar--package", context?.workUnit?.kind === "package");
+  container.classList.add("popup-action-bar--unified");
 
   return container;
 }
@@ -68,7 +67,7 @@ export function updatePopupActionBar(
   }
 
   const changed = reconcileActionRows(container, actionGroups, { force });
-  container.classList.toggle("popup-action-bar--package", context?.workUnit?.kind === "package");
+  container.classList.add("popup-action-bar--unified");
 
   return {
     supported: true,
@@ -86,7 +85,6 @@ function getActionGroups({ context, graphic, attributes, refreshAndRender, packa
     attributes: resolvedAttributes,
     graphic,
     productContext: context,
-    frozen: isStatusFrozen(resolvedAttributes?.status),
     refreshAndRender,
     packageActions,
   });
@@ -106,10 +104,7 @@ function reconcileActionRows(container, actionGroups, { force }) {
       changed = true;
     }
 
-    const reconcile = actions.some((action) => action.id.startsWith("package-"))
-      ? reconcilePackageActionButtons
-      : reconcileActionButtons;
-    if (reconcile(row, actions, { force })) {
+    if (reconcileWorkflowActionButtons(row, actions, { force })) {
       changed = true;
     }
   }
@@ -118,36 +113,6 @@ function reconcileActionRows(container, actionGroups, { force }) {
     closeOpenDropdownIn(rows[rowIndex]);
     disposeActionsIn(rows[rowIndex]);
     rows[rowIndex].remove();
-    changed = true;
-  }
-
-  return changed;
-}
-
-function reconcileActionButtons(row, actions, { force }) {
-  let changed = false;
-  const currentActions = Array.from(row.children);
-
-  for (let actionIndex = 0; actionIndex < actions.length; actionIndex += 1) {
-    const actionConfig = actions[actionIndex];
-    let action = currentActions[actionIndex];
-
-    if (!action) {
-      action = createActionButton(actionConfig);
-      row.appendChild(action);
-      changed = true;
-      continue;
-    }
-
-    if (updateActionButton(action, actionConfig, { force })) {
-      changed = true;
-    }
-  }
-
-  for (let actionIndex = actions.length; actionIndex < currentActions.length; actionIndex += 1) {
-    closeOpenDropdownForAction(currentActions[actionIndex]);
-    disposeActionButton(currentActions[actionIndex]);
-    currentActions[actionIndex].remove();
     changed = true;
   }
 
@@ -179,7 +144,7 @@ function closeOpenDropdownForAction(action) {
   }
 }
 
-function reconcilePackageActionButtons(row, actions, { force }) {
+function reconcileWorkflowActionButtons(row, actions, { force }) {
   let changed = false;
   const existing = new Map(
     Array.from(row.children).map((action) => [action.dataset.popupActionId, action])

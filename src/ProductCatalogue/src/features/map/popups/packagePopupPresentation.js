@@ -1,3 +1,4 @@
+import { createPopupWorkflowActions } from "./popupWorkflowActions.js";
 import { resolveProductContext } from "../../products/domain/productContext.js";
 import { normalizeElectronicProductStatus } from "../../dataSources/domain/electronicProductStatus.js";
 
@@ -18,70 +19,19 @@ export function createPackagePopupPresentation({
 
   const projection = validateWorkflowPresentation(workflowPresentation, productContext, attributes);
   const paused = projection?.paused;
-  const pauseOperation = paused === true ? "resume" : "pause";
-  const eligible = projection?.eligibleMembers;
-  const primaryOperation = projection?.primaryAction === "accept" ? "accept" : "send";
-  const primaryLabel =
-    primaryOperation === "accept"
-      ? "Accept"
-      : eligible?.length
-        ? `Send (${eligible.length})`
-        : "Send";
   const workflowStatus = normalizeElectronicProductStatus(
     attributes.workUnitStatus?.workflowStatus
   );
   const workflowLabel = workflowStatus === undefined ? null : workflowStatusLabels[workflowStatus];
 
-  const action = (id, operation, label, icon, helpText) => ({
-    id,
-    operation,
-    label,
-    icon,
-    helpText,
-    ariaLabel: label,
-    controlKind: "unavailable-package",
-    textEnabled: false,
-    disabled: true,
-    disabledReason: `Unable to ${operation} this package right now.`,
-    loading: false,
-    availability: {
-      frontendSupported: true,
-      backendAuthorized:
-        typeof projection?.actionEligibility?.[operation] === "boolean"
-          ? projection.actionEligibility[operation]
-          : null,
-      // A verified projection is not permission to install a dispatcher.
-      dispatchImplemented: false,
-    },
-    className: "popup-action-bar__action--package",
-  });
-
   return {
-    actions: [
-      action(
-        "package-pause-resume",
-        pauseOperation,
-        paused === true ? "Resume" : "Pause",
-        paused === true ? "play" : "pause",
-        paused === true ? "Resume delivery for this package." : "Pause delivery for this package."
-      ),
-      action(
-        "package-discard-export",
-        "discard",
-        "Discard",
-        "x-circle",
-        "Discard the S-101 and S-57 package. This cannot be undone."
-      ),
-      action(
-        "package-send-accept",
-        primaryOperation,
-        primaryLabel,
-        primaryOperation === "accept" ? "check" : "send",
-        primaryOperation === "accept"
-          ? "Accept the package results."
-          : "Send the package to IC-ENC."
-      ),
-    ],
+    actions: createPopupWorkflowActions({
+      paused: paused === true,
+      primaryAction: projection?.primaryAction,
+      eligibleMembers: projection?.eligibleMembers,
+      actionEligibility: projection?.actionEligibility,
+      subject: "package",
+    }),
     explanation: projection ? null : PACKAGE_ACTION_UNAVAILABLE,
     summary: {
       workflowText:

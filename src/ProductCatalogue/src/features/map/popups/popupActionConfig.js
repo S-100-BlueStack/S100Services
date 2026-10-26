@@ -2,380 +2,98 @@ import {
   createPackagePopupPresentation,
   isCurrentPackagePopupContext,
 } from "./packagePopupPresentation.js";
-import { getSendToIcEncCapability } from "../../data/stores/capabilityStore.js";
-import {
-  createProductActionAvailability,
-  createProductExportAvailability,
-} from "../../products/domain/productActionAvailability.js";
+import { createPopupWorkflowActions } from "./popupWorkflowActions.js";
 import {
   PRODUCT_OPERATION_CAPABILITY,
   productContextSupportsCapability,
   resolveProductContext,
 } from "../../products/domain/productContext.js";
-import {
-  getExternalProductExportState,
-  hasRunningProductExportOperation,
-  mergeProductExportStates,
-} from "../../products/domain/productExternalExportState.js";
-import {
-  PRODUCT_OPERATION_TYPE,
-  getProductOperationState,
-} from "../../products/state/productOperationState.js";
-import { getPopupExportActionState, isAnyPopupExportActionRunning } from "./popupExportState.js";
-import { createPopupExportActions } from "./popupExportConfig.js";
-import { isSupportedExportAction } from "./popupExportContract.js";
-import {
-  openAnalyzePage,
-  openReviewPage,
-  openProductHistory,
-  sendImmediately,
-  triggerExport,
-  triggerFreeze,
-  triggerRollback,
-} from "./popupProductActions.js";
+import { openAnalyzePage, openReviewPage, openProductHistory } from "./popupProductActions.js";
 
+/** All Products expose the same popup controls; only verified owners may dispatch. */
 export function createPopupActionGroups({
   attributes,
   graphic,
   productContext,
-  frozen,
-  refreshAndRender,
   packageActions,
 } = {}) {
   const context = productContext ?? resolveProductContext({ graphic, attributes });
-  if (!context) {
-    return [];
+  if (!context) return [];
+
+  const selectedGraphic = graphic ?? context.graphic;
+  const resolvedAttributes = attributes ?? selectedGraphic?.attributes ?? {};
+  const isPackage = context.workUnit?.kind === "package";
+  const actionState = isPackage ? packageActions?.projection() : null;
+  const packagePresentation = isPackage
+    ? createPackagePopupPresentation({
+        productContext: context,
+        graphic: selectedGraphic,
+        attributes: resolvedAttributes,
+        workflowPresentation: actionState,
+      })
+    : null;
+
+  // A structurally invalid package is not allowed to fall back to standalone actions.
+  if (isPackage && !packagePresentation) return [];
+
+  const actions = packagePresentation?.actions ?? createPopupWorkflowActions();
+  const selectedSource = selectedGraphic?.layer?.appSourceDefinition;
+  const isCurrent = () => {
+    if (!selectedGraphic) return true;
+    if (selectedGraphic.layer?.appSourceDefinition !== selectedSource) return false;
+    if (isPackage) {
+      return isCurrentPackagePopupContext(context, selectedGraphic.attributes, selectedGraphic);
+    }
+    if (selectedGraphic.visible === false || selectedGraphic.layer?.visible === false) return false;
+    const latest = resolveProductContext({ graphic: selectedGraphic });
+    return latest?.identityKey === context.identityKey;
+  };
+
+  for (const action of actions) {
+    action.isCurrent = isCurrent;
+    const enabled =
+      isPackage &&
+      action.availability.backendAuthorized === true &&
+      typeof packageActions?.invoke === "function";
+    if (isPackage && actionState && !enabled) {
+      action.disabledReason = getUnavailableActionReason(action.operation, actionState);
+    }
+    if (enabled && isCurrent()) {
+      action.controlKind = "live-package";
+      action.disabled = false;
+      action.disabledReason = null;
+      action.availability = { ...action.availability, dispatchImplemented: true };
+      action.onClick = () => packageActions.invoke(action.operation);
+    }
   }
 
-  const resolvedAttributes = attributes ?? context.graphic?.attributes ?? {};
-  // Package presentation must never reach Product availability or mutation dispatchers.
-  if (context.workUnit?.kind === "package") {
-    const selectedGraphic = graphic ?? context.graphic;
-    const presentation = createPackagePopupPresentation({
-      productContext: context,
-      graphic: selectedGraphic,
-      attributes: resolvedAttributes,
-      workflowPresentation: packageActions?.projection(),
-    });
-    if (!presentation) return [];
-    const [pause, discard, primary] = presentation.actions;
-    const source = selectedGraphic.layer.appSourceDefinition;
-    const isCurrent = () =>
-      selectedGraphic.layer?.appSourceDefinition === source &&
-      isCurrentPackagePopupContext(context, selectedGraphic.attributes, selectedGraphic);
-    const actionState = packageActions?.projection();
-    for (const action of presentation.actions) {
-      action.isCurrent = isCurrent;
-      const enabled = actionState?.actionEligibility?.[action.operation] === true;
-      if (actionState && !enabled) {
-        action.disabledReason = getPackageActionHelp(action.operation, actionState);
-      }
-      if (enabled) {
-        action.controlKind = "live-package";
-        action.disabled = false;
-        action.disabledReason = null;
-        action.availability = { ...action.availability, dispatchImplemented: true };
-        action.onClick = () => packageActions.invoke(action.operation);
-      }
-    }
-    const tools = createToolsAction({ context, attributes: resolvedAttributes, graphic });
-    if (tools) {
-      tools.isCurrent = isCurrent;
-      tools.items = tools.items.map((item) => ({
-        ...item,
-        onClick: (options) => {
-          if (options?.anchorElement?.isConnected && tools.isCurrent()) item.onClick(options);
-        },
-      }));
-    }
-    return [compactActions([pause, discard, primary, tools])];
+  const tools = createToolsAction({ context, attributes: resolvedAttributes, graphic });
+  if (tools) {
+    tools.isCurrent = isCurrent;
+    tools.items = tools.items.map((item) => ({
+      ...item,
+      onClick: (options) => {
+        if (options?.anchorElement?.isConnected && isCurrent()) item.onClick(options);
+      },
+    }));
   }
-
-  const datasetName = context.datasetName;
-  const productOperationState = getProductOperationState(datasetName);
-  const productHasRunningNonExportMutation =
-    hasRunningNonExportProductOperation(productOperationState);
-  const availability = createProductActionAvailability({
-    attributes: resolvedAttributes,
-    productContext: context,
-    frozen,
-    exportHasRunningAction:
-      isAnyPopupExportActionRunning(context) ||
-      hasRunningProductExportOperation(productOperationState),
-    productHasRunningMutation: productHasRunningNonExportMutation,
-    productOperationDisabledReason: productOperationState.disabledReason,
-    sendToIcEncCapability: getSendToIcEncCapability(),
-  });
-
-  return [
-    compactActions([
-      createFreezeAction({
-        context,
-        attributes: resolvedAttributes,
-        frozen,
-        availability,
-        productOperationState,
-        refreshAndRender,
-      }),
-      createSendAction({
-        context,
-        attributes: resolvedAttributes,
-        availability,
-        productOperationState,
-        refreshAndRender,
-      }),
-    ]),
-    compactActions([
-      createExportAction({
-        context,
-        attributes: resolvedAttributes,
-        frozen,
-        availability,
-        productOperationState,
-        refreshAndRender,
-      }),
-      createRollbackAction({
-        context,
-        attributes: resolvedAttributes,
-        availability,
-        productOperationState,
-        refreshAndRender,
-      }),
-      createToolsAction({ context, attributes: resolvedAttributes, graphic }),
-    ]),
-  ].filter((actions) => actions.length > 0);
+  return [[...actions, ...(tools ? [tools] : [])]];
 }
 
-function getPackageActionHelp(operation, state) {
-  const action = operation === "discard" ? "discard" : operation;
+function getUnavailableActionReason(operation, state) {
   if (!state.liveVerified) {
-    if (state.restrictionCode === "PACKAGE_NOT_FOUND") {
-      return `No S-101 and S-57 package is available to ${action}.`;
-    }
-    return `Unable to ${action} this package right now.`;
+    return state.restrictionCode === "PACKAGE_NOT_FOUND"
+      ? `No S-101 and S-57 package is available to ${operation}.`
+      : `Unable to ${operation} this package right now.`;
   }
   if (state.primaryAction === "accept" && operation !== "accept") {
     return "Accept the results before continuing.";
   }
   if (["MEMBER_TRACK_MISSING", "MEMBERS_NOT_READY"].includes(state.restrictionCode)) {
-    return `This package is not ready to ${action}.`;
+    return `This package is not ready to ${operation}.`;
   }
   if (operation === "send" && state.paused) return "Resume the package before sending.";
-  return `Unable to ${action} this package right now.`;
-}
-
-function createFreezeAction({
-  context,
-  attributes,
-  frozen,
-  availability,
-  productOperationState,
-  refreshAndRender,
-}) {
-  const actionAvailability = frozen ? availability.unfreeze : availability.freeze;
-  if (!actionAvailability.visible) {
-    return null;
-  }
-
-  const operationType = frozen ? PRODUCT_OPERATION_TYPE.UNFREEZE : PRODUCT_OPERATION_TYPE.FREEZE;
-  const operationIsRunning = isOperationTypeRunning(productOperationState, operationType);
-
-  return {
-    id: frozen ? "unfreeze-feature" : "freeze-feature",
-    label: getFreezeActionLabel({ frozen, operationIsRunning }),
-    icon: frozen ? "brightness" : "snow",
-    loading: operationIsRunning,
-    disabled: actionAvailability.disabled,
-    disabledReason: actionAvailability.disabledReason,
-    className: "popup-action-bar__action--freeze",
-    onClick: async ({ anchorElement }) => {
-      await triggerFreeze(context.datasetName ?? attributes?.datasetName, !frozen, anchorElement, {
-        afterResult: refreshAndRender,
-      });
-    },
-  };
-}
-
-function createSendAction({
-  context,
-  attributes,
-  availability,
-  productOperationState,
-  refreshAndRender,
-}) {
-  if (!availability.sendImmediately.visible) {
-    return null;
-  }
-
-  const operationIsRunning = isOperationTypeRunning(
-    productOperationState,
-    PRODUCT_OPERATION_TYPE.SEND
-  );
-
-  return {
-    id: "send-immediately",
-    label: availability.sendImmediately.label ?? "Send to IC-ENC",
-    icon: "send",
-    loading: operationIsRunning,
-    disabled: availability.sendImmediately.disabled,
-    disabledReason: availability.sendImmediately.disabledReason,
-    className: "popup-action-bar__action--send",
-    onClick: async ({ anchorElement }) => {
-      await sendImmediately(context.datasetName ?? attributes?.datasetName, anchorElement, {
-        afterResult: refreshAndRender,
-      });
-    },
-  };
-}
-
-function createExportAction({
-  context,
-  attributes,
-  frozen,
-  availability,
-  productOperationState,
-  refreshAndRender,
-}) {
-  if (!availability.exportRoot.visible) {
-    return null;
-  }
-
-  const items = createPopupExportActions(context).map((exportAction) =>
-    createExportLeafAction({
-      context,
-      exportAction,
-      attributes,
-      frozen,
-      productOperationState,
-      refreshAndRender,
-    })
-  );
-
-  if (items.length === 0) {
-    return null;
-  }
-
-  return {
-    id: "export",
-    label: availability.exportRoot.label ?? "Export...",
-    helpText: context.exportConfiguration?.helpText ?? null,
-    icon: "plus-square",
-    loading: availability.exportRoot.loading,
-    disabled: availability.exportRoot.disabled,
-    disabledReason: availability.exportRoot.disabledReason,
-    className: "popup-action-bar__action--dropdown",
-    items,
-  };
-}
-
-function createExportLeafAction({
-  context,
-  exportAction,
-  attributes,
-  frozen,
-  productOperationState,
-  refreshAndRender,
-}) {
-  const datasetName = context.datasetName;
-  const stateScope = exportAction.backendTarget ?? context.sourceId;
-  const localExportState = getPopupExportActionState({
-    productContext: context,
-    datasetName,
-    scope: stateScope,
-    exportType: exportAction.operationKind,
-    presentationLabel: exportAction.presentationLabel,
-  });
-  const externalExportState = exportAction.backendTarget
-    ? getExternalProductExportState({
-        productOperationState,
-        target: exportAction.backendTarget,
-        exportType: exportAction.operationKind,
-      })
-    : null;
-  const exportState = mergeProductExportStates(localExportState, externalExportState);
-  const implemented = isSupportedExportAction({
-    ...exportAction,
-    productContext: context,
-  });
-  const availability = createProductExportAvailability({
-    attributes,
-    productContext: context,
-    capabilityName: exportAction.capability,
-    availabilityReason: exportAction.availabilityReason,
-    frozen,
-    implemented,
-    exportState,
-    productHasRunningMutation: hasRunningNonExportProductOperation(productOperationState),
-    productOperationDisabledReason: productOperationState.disabledReason,
-  });
-
-  const action = {
-    id: exportAction.id,
-    label:
-      availability.loading && exportAction.presentationLabel
-        ? `Exporting ${exportAction.presentationLabel}`
-        : (availability.label ?? exportAction.label),
-    helpText: exportAction.helpText,
-    icon: exportAction.icon,
-    loading: availability.loading,
-    disabled: availability.disabled,
-    disabledReason: availability.disabledReason,
-  };
-
-  if (!implemented) {
-    return action;
-  }
-
-  return {
-    ...action,
-    onClick: async ({ anchorElement }) => {
-      await triggerExport({
-        productContext: context,
-        datasetName,
-        actionId: exportAction.id,
-        target: exportAction.backendTarget,
-        exportType: exportAction.operationKind,
-        presentationLabel: exportAction.presentationLabel,
-        implemented: exportAction.implemented,
-        request: exportAction.handler,
-        anchorElement,
-        confirm: exportAction.createConfirm?.(datasetName),
-        afterResult: refreshAndRender,
-      });
-    },
-  };
-}
-
-function createRollbackAction({
-  context,
-  attributes,
-  availability,
-  productOperationState,
-  refreshAndRender,
-}) {
-  if (!availability.rollback.visible) {
-    return null;
-  }
-
-  const operationIsRunning = isOperationTypeRunning(
-    productOperationState,
-    PRODUCT_OPERATION_TYPE.ROLLBACK
-  );
-
-  return {
-    id: "rollback",
-    label: operationIsRunning ? "Canceling export..." : "Cancel Export",
-    icon: "x-circle",
-    loading: operationIsRunning,
-    disabled: availability.rollback.disabled,
-    disabledReason: availability.rollback.disabledReason,
-    className: "popup-action-bar__action--rollback",
-    onClick: async ({ anchorElement }) => {
-      await triggerRollback(context.datasetName ?? attributes?.datasetName, anchorElement, {
-        afterResult: refreshAndRender,
-      });
-    },
-  };
+  return `Unable to ${operation} this package right now.`;
 }
 
 function createToolsAction({ context, attributes, graphic }) {
@@ -386,15 +104,11 @@ function createToolsAction({ context, attributes, graphic }) {
       id: "analyze",
       label: "Analyze",
       icon: "magnifying-glass",
-      onClick: () => {
-        openAnalyzePage(context.datasetName ?? attributes?.datasetName);
-      },
+      onClick: () => openAnalyzePage(context.datasetName ?? attributes?.datasetName),
     });
   }
-
   if (
     !isAnalyzeRoute() &&
-    context.workUnit?.kind === "package" &&
     productContextSupportsCapability(context, PRODUCT_OPERATION_CAPABILITY.REVIEW)
   ) {
     items.push({
@@ -404,7 +118,6 @@ function createToolsAction({ context, attributes, graphic }) {
       onClick: () => openReviewPage(context.datasetName ?? attributes?.datasetName),
     });
   }
-
   if (
     !isAnalyzeRoute() &&
     productContextSupportsCapability(context, PRODUCT_OPERATION_CAPABILITY.HISTORY)
@@ -413,57 +126,24 @@ function createToolsAction({ context, attributes, graphic }) {
       id: "history",
       label: "History",
       icon: "clock",
-      onClick: () => {
+      onClick: () =>
         openProductHistory(context.datasetName ?? attributes?.datasetName, {
           productContext: context,
           graphic: graphic ?? context.graphic,
-        });
-      },
+        }),
     });
   }
-
-  if (items.length === 0) {
-    return null;
-  }
-
   return {
     id: "tools",
     label: "Tools",
     ariaLabel: "Tools",
     icon: "wrench",
     textEnabled: false,
+    disabled: items.length === 0,
+    disabledReason: items.length ? null : "No tools are available for this product.",
     className: "popup-action-bar__action--dropdown",
     items,
   };
-}
-
-function compactActions(actions) {
-  return actions.filter(Boolean);
-}
-
-function getFreezeActionLabel({ frozen, operationIsRunning }) {
-  if (!operationIsRunning) {
-    return frozen ? "Unfreeze" : "Freeze";
-  }
-
-  return frozen ? "Unfreezing..." : "Freezing...";
-}
-
-function isOperationTypeRunning(productOperationState, operationType) {
-  return Boolean(
-    productOperationState?.operations?.some((operation) => operation.type === operationType) ??
-    productOperationState?.operation?.type === operationType
-  );
-}
-
-function hasRunningNonExportProductOperation(productOperationState) {
-  return Boolean(
-    productOperationState?.operations?.some((operation) => {
-      return operation.type !== PRODUCT_OPERATION_TYPE.EXPORT;
-    }) ??
-    (productOperationState?.running &&
-      productOperationState.operation?.type !== PRODUCT_OPERATION_TYPE.EXPORT)
-  );
 }
 
 function isAnalyzeRoute() {

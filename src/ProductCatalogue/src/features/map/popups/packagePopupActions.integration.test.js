@@ -834,14 +834,14 @@ test("package help is pointer-transparent and Escape removes its transient liste
 test("package sizing uses compact square surfaces and a non-wrapping row with local narrow-width overflow", async () => {
   const { readFile } = await import("node:fs/promises");
   const css = await readFile(new URL("../../../styles/popup.css", import.meta.url), "utf8");
-  const row = css.match(/\.popup-action-bar--package \.popup-action-bar__row\s*\{([^}]+)\}/)?.[1];
+  const row = css.match(/\.popup-action-bar--unified \.popup-action-bar__row\s*\{([^}]+)\}/)?.[1];
   assert.ok(row);
   assert.match(row, /flex-wrap:\s*nowrap/);
   assert.match(row, /overflow-x:\s*auto/);
   assert.doesNotMatch(row, /flex-wrap:\s*wrap\s*;/);
   assert.match(row, /min-height:\s*40px\s*;/);
   const surface = css.match(
-    /\.popup-action-bar--package \.popup-action-bar__action--package\s*\{([^}]+)\}/
+    /\.popup-action-bar--unified \.popup-action-bar__action--workflow\s*\{([^}]+)\}/
   )?.[1];
   assert.ok(surface);
   assert.match(surface, /flex:\s*0 0 40px\s*;/);

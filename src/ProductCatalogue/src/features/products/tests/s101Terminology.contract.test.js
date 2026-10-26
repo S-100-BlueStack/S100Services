@@ -67,16 +67,22 @@ test("S-101 presentation stays separate from the normalized product-resolved exp
     exportConfig,
     /presentationLabel: createPresentationLabel\(displayLabel, operationKind\)/
   );
-  assert.match(actionConfig, /helpText: context\.exportConfiguration\?\.helpText \?\? null/);
-  assert.match(actionConfig, /presentationLabel: exportAction\.presentationLabel/);
+  // S-101 export normalization remains tested above; FI-029 no longer renders legacy export actions.
+  assert.match(
+    actionConfig,
+    /const actions = packagePresentation\?\.actions \?\? createPopupWorkflowActions\(\)/
+  );
+  assert.match(actionConfig, /action\.availability\.backendAuthorized === true/);
+  assert.match(actionConfig, /typeof packageActions\?\.invoke === "function"/);
   assert.match(
     actionConfig,
     /id: "tools",[\s\S]*?ariaLabel: "Tools",[\s\S]*?icon: "wrench",[\s\S]*?textEnabled: false/
   );
-  assert.match(
+  assert.doesNotMatch(
     actionConfig,
-    /compactActions\(\[[\s\S]*?createFreezeAction\([\s\S]*?createSendAction\([\s\S]*?\]\),\s*compactActions\(\[[\s\S]*?createExportAction\([\s\S]*?createRollbackAction\([\s\S]*?createToolsAction\(/
+    /createFreezeAction|createSendAction|createExportAction|createRollbackAction/
   );
+  assert.match(actionConfig, /return \[\[\.\.\.actions, \.\.\.\(tools \? \[tools\] : \[\]\)\]\];/);
   assert.doesNotMatch(actionConfig, /sourceId\s*===\s*["'](?:paper-charts|s102)["']/);
   assert.match(actionDom, /state\.help\.update\(tooltipText\)/);
   assert.match(actionDom, /const textEnabled = actionConfig\.textEnabled !== false/);

@@ -166,6 +166,15 @@ FI-028 was functionally accepted and committed on 2026-09-16 at `fce91ee3ee54361
 
 ## FI-029 - popup action-density review
 
+### Updated implementation direction (2026-10-19)
+
+All source-aware Product popups should present the same F7A workflow controls in one
+compact icon-only row. The only intended data-presentation difference is the Product
+metadata/work-unit composition. This supersedes the earlier proposal to choose labels
+on a per-action basis. Backend operations must still require their own verified source-
+aware authorization; unsupported operations remain disabled, never silently translated
+into Freeze, Export or Cancel Export. FI-029 v1 is a candidate awaiting manual validation.
+
 ### Goal
 
 Determine which popup actions still benefit from persistent text labels after users become familiar with the application.

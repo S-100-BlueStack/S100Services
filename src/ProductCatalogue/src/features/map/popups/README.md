@@ -91,13 +91,13 @@ See [the current F7A v3 report](../../../../docs/package-popup-actions-F7A-v3-co
 [the historical F7A v2 report](../../../../docs/package-popup-actions-F7A-v2-correction-report.md)
 and [the historical F7A v1 report](../../../../docs/package-popup-actions-F7A-implementation-report.md).
 
-Simple electronic/compatibility Products expose capability-gated actions:
-
-- `Freeze` / `Unfreeze`;
-- `Send to IC-ENC`;
-- `Cancel Export`;
-- `Analyze` and `History` through `Tools`;
-- `Export...`.
+FI-029 supersedes the old simple-Product action list: all resolved Products expose the
+same F7A-style Pause/Resume, Discard, Send/Accept and Tools row. For simple and mock
+Products the current source contracts do not provide the verified action snapshot
+required to enable mutation controls; those controls remain visible and disabled.
+The existing Freeze/Send/Export/Cancel Export backend contracts remain intact but are
+not used as substitutes for this workflow. Tools exposes source-supported destinations,
+including Review when the Product context permits it.
 
 Synthetic Paper Charts and S-102 definitions are retained only for explicit source-boundary tests.
 They are no longer runtime-selectable or workspace-available. Their existing fail-closed ProductContext
@@ -668,3 +668,7 @@ If a package disappears between reads, the action endpoint returns an explicit
 backend authorization remains required
 for every real mutation. The existing popup generation, focus, tooltip and
 navigation semantics are unchanged.
+
+## Unified popup action presentation (FI-029)
+
+All resolved Product contexts use the same four-slot F7A-style action bar and stable keyed controls. `popupWorkflowActions.js` owns the shared action descriptors. `popupActionConfig.js` attaches live dispatch only through a verified source-owned session; unsupported controls remain focusable with explanation and cannot dispatch. The established `packageActionSession.js` still requires authoritative package identity and must not be invoked for standalone or mock sources. Backend Freeze/Export/Cancel Export modules remain in the codebase but no longer define a separate popup action row. Tools navigations remain capability-aware.

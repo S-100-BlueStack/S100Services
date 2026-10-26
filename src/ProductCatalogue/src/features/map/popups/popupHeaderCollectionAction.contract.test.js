@@ -54,8 +54,14 @@ test("popup action bar fails closed through central Product context and action r
   assert.match(actionBar, /const context = productContext \?\? resolveProductContext\(/);
   assert.match(actionBar, /if \(!context\) \{\s*return \[\];\s*\}/);
   assert.match(actionBar, /createPopupActionGroups\(\{[\s\S]*?productContext: context,/);
-  assert.match(actionConfig, /createProductActionAvailability\(/);
+  assert.match(actionConfig, /createPopupWorkflowActions\(\)/);
+  assert.match(actionConfig, /action\.availability\.backendAuthorized === true/);
+  assert.match(actionConfig, /typeof packageActions\?\.invoke === "function"/);
   assert.match(actionConfig, /PRODUCT_OPERATION_CAPABILITY/);
+  assert.doesNotMatch(
+    actionConfig,
+    /createProductActionAvailability|triggerFreeze|triggerRollback/
+  );
   assert.doesNotMatch(
     actionBar,
     /attributesSupportLayerCapability|supportsPopupActions|supportsProductActions/

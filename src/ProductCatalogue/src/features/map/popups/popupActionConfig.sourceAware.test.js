@@ -15,7 +15,6 @@ import {
   registerAnalyzeGraphicProductContexts,
 } from "../../analyze/map/analyzeGraphicProductContext.js";
 import { createPopupActionGroups } from "./popupActionConfig.js";
-import { beginPopupExportAction, endPopupExportAction } from "./popupExportState.js";
 
 function createCompatibilitySelection(datasetName = "AOI-ACTION-001") {
   const graphic = {
@@ -137,168 +136,73 @@ function createAnalyzeSourceContext(sourceId, productKey, datasetName) {
   });
 }
 
-const flattenActions = (groups) => groups.flatMap((group) => group);
+const ACTION_IDS = [
+  "package-pause-resume",
+  "package-discard-export",
+  "package-send-accept",
+  "tools",
+];
 
-test("compatibility AOI keeps Freeze/Send in the first row and Export/Cancel Export/Tools in the second", () => {
-  const groups = createPopupActionGroups({ ...createCompatibilitySelection(), frozen: false });
-  const actions = flattenActions(groups);
-  const exportAction = actions.find((action) => action.id === "export");
-  const tools = actions.find((action) => action.id === "tools");
-  const cancelExportAction = actions.find((action) => action.id === "rollback");
-
+function assertSharedActions(selection) {
+  const groups = createPopupActionGroups(selection);
+  assert.equal(groups.length, 1);
+  const actions = groups[0];
   assert.deepEqual(
-    groups.map((group) => group.map((action) => action.id)),
-    [
-      ["freeze-feature", "send-immediately"],
-      ["export", "rollback", "tools"],
-    ]
+    actions.map((action) => action.id),
+    ACTION_IDS
   );
-  assert.ok(cancelExportAction);
-  assert.equal(cancelExportAction.label, "Cancel Export");
-  assert.equal(cancelExportAction.icon, "x-circle");
-  assert.equal(exportAction.label, "Export...");
-  assert.equal(exportAction.helpText, "Create S-101 export candidate.");
   assert.deepEqual(
-    exportAction.items.map((item) => item.label),
-    ["Edition", "Update"]
+    actions.slice(0, 3).map((action) => action.label),
+    ["Pause", "Discard", "Send"]
   );
-  assert.equal(exportAction.items[0].helpText, "Create S-101 Edition export candidate.");
-  assert.equal(tools.label, "Tools");
-  assert.equal(tools.ariaLabel, "Tools");
-  assert.equal(tools.icon, "wrench");
-  assert.equal(tools.textEnabled, false);
   assert.deepEqual(
-    tools.items.map((item) => item.id),
-    ["analyze", "history"]
+    actions.slice(0, 3).map((action) => action.icon),
+    ["pause", "x-circle", "send"]
   );
-});
-
-test("frozen compatibility AOI keeps Unfreeze/Send separate from Export/Cancel Export/Tools", () => {
-  const groups = createPopupActionGroups({ ...createCompatibilitySelection(), frozen: true });
-
-  assert.deepEqual(
-    groups.map((group) => group.map((action) => action.id)),
-    [
-      ["unfreeze-feature", "send-immediately"],
-      ["export", "rollback", "tools"],
-    ]
-  );
-});
-
-test("compatibility local Edition loading uses S-101 presentation with the S101 scope", () => {
-  if (!globalThis.document) {
-    globalThis.document = new EventTarget();
+  for (const action of actions.slice(0, 3)) {
+    assert.equal(action.disabled, true);
+    assert.equal(action.textEnabled, false);
+    assert.equal(action.onClick, undefined);
+    assert.equal(action.controlKind, "unavailable-package");
+    assert.equal(action.availability.backendAuthorized, null);
+    assert.equal(action.availability.dispatchImplemented, false);
+    assert.ok(action.disabledReason);
   }
+  assert.equal(actions[3].icon, "wrench");
+  return actions;
+}
 
-  const selection = createCompatibilitySelection("AOI-RUNNING-001");
-  const started = beginPopupExportAction({
-    productContext: selection.productContext,
-    datasetName: selection.productContext.datasetName,
-    scope: "S101",
-    exportType: "Edition",
-    presentationLabel: "S-101 Edition",
-  });
+test("compatibility Products use the shared workflow row, not legacy Product mutations", () => {
+  const selection = createCompatibilitySelection();
+  const actions = assertSharedActions({ ...selection, frozen: false });
+  assert.deepEqual(
+    actions[3].items.map((item) => item.id),
+    ["analyze", "review", "history"]
+  );
+  assert.deepEqual(
+    createPopupActionGroups({ ...selection, frozen: true })[0].map((action) => action.id),
+    ACTION_IDS
+  );
+});
 
-  try {
-    const groups = createPopupActionGroups({ ...selection, frozen: false });
-    const actions = flattenActions(groups);
-    const exportAction = actions.find((action) => action.id === "export");
-    const edition = exportAction.items.find((item) => item.id === "export-edition");
-
-    assert.equal(started.started, true);
-    assert.equal(exportAction.label, "Exporting...");
+test("source-aware Paper Charts and S-102 use the identical row without backend dispatch", () => {
+  for (const sourceId of ["paper-charts", "s102"]) {
+    const actions = assertSharedActions(createMockSelection(sourceId));
     assert.deepEqual(
-      groups.map((group) => group.map((action) => action.id)),
-      [
-        ["freeze-feature", "send-immediately"],
-        ["export", "rollback", "tools"],
-      ]
+      actions[3].items.map((item) => item.id),
+      ["analyze", "review", "history"]
     );
-    assert.equal(edition.label, "Exporting S-101 Edition");
-    assert.match(edition.disabledReason, /S-101 Edition/);
-    assert.doesNotMatch(edition.disabledReason, /S100/);
-  } finally {
-    endPopupExportAction(started.key);
+    assert.equal(actions[1].onClick, undefined);
   }
 });
 
-test("Paper Charts keeps source-specific Export parent help and safe placeholder leaves", () => {
-  const groups = createPopupActionGroups(createMockSelection("paper-charts"));
-  const actions = flattenActions(groups);
-  const exportAction = actions.find((action) => action.id === "export");
-  const tools = actions.find((action) => action.id === "tools");
-  assert.deepEqual(
-    groups.map((group) => group.map((action) => action.id)),
-    [["export", "tools"]]
-  );
-  assert.equal(
-    actions.some((action) => action.id === "freeze-feature"),
-    false
-  );
-  assert.equal(
-    actions.some((action) => action.id === "send-immediately"),
-    false
-  );
-  assert.equal(
-    actions.some((action) => action.id === "rollback"),
-    false
-  );
-  assert.equal(exportAction.helpText, "Paper Charts export is not available yet.");
-  assert.equal(
-    exportAction.items.every((item) => item.disabled && item.onClick === undefined),
-    true
-  );
-  assert.match(exportAction.items[0].disabledReason, /Paper Charts export is not available yet/);
-  assert.match(exportAction.items[1].disabledReason, /Paper Charts export is not available yet/);
-  assert.equal(tools.icon, "wrench");
-  assert.equal(tools.ariaLabel, "Tools");
-  assert.equal(tools.textEnabled, false);
-  assert.deepEqual(
-    tools.items.map((item) => item.id),
-    ["analyze", "history"]
-  );
-});
-
-test("S-102 keeps source-specific Export parent help and safe placeholder leaves", () => {
-  const groups = createPopupActionGroups(createMockSelection("s102"));
-  const actions = flattenActions(groups);
-  const exportAction = actions.find((action) => action.id === "export");
-  const tools = actions.find((action) => action.id === "tools");
-  assert.deepEqual(
-    groups.map((group) => group.map((action) => action.id)),
-    [["export", "tools"]]
-  );
-  assert.equal(exportAction.helpText, "S-102 export is not available yet.");
-  assert.match(exportAction.items[0].disabledReason, /S-102 export is not available yet/);
-  assert.match(exportAction.items[1].disabledReason, /S-102 export is not available yet/);
-  assert.equal(tools.icon, "wrench");
-  assert.equal(tools.ariaLabel, "Tools");
-  assert.equal(tools.textEnabled, false);
-  assert.deepEqual(
-    tools.items.map((item) => item.id),
-    ["analyze", "history"]
-  );
-});
-
-test("switching selected Product rebuilds action configuration without stale mutation actions", () => {
-  const compatibility = flattenActions(
-    createPopupActionGroups({ ...createCompatibilitySelection("AOI-1"), frozen: false })
-  );
-  const paper = flattenActions(
-    createPopupActionGroups(createMockSelection("paper-charts", "PAPER-1"))
-  );
-  assert.equal(
-    compatibility.some((action) => action.id === "freeze-feature"),
-    true
-  );
-  assert.equal(
-    paper.some((action) => action.id === "freeze-feature"),
-    false
-  );
-  assert.equal(
-    paper.some((action) => action.id === "tools"),
-    true
-  );
+test("changing Products never retains another source's action eligibility", () => {
+  const compatibility = assertSharedActions(createCompatibilitySelection("AOI-1"));
+  const paper = assertSharedActions(createMockSelection("paper-charts", "PAPER-1"));
+  assert.equal(compatibility[0].availability.dispatchImplemented, false);
+  assert.equal(paper[0].availability.dispatchImplemented, false);
+  paper[0].isCurrent = () => false;
+  assert.equal(paper[0].disabled, true);
 });
 
 test("unknown Product context fails closed with no actions", () => {
@@ -311,44 +215,49 @@ test("unknown Product context fails closed with no actions", () => {
   );
 });
 
-test("registered Analyze compatibility Graphic retains compatibility action groups", () => {
+test("registered Analyze compatibility Graphic also uses shared workflow controls", () => {
   const context = createCompatibilityWorkspaceProductContext("101DK0041154E");
-  const actions = flattenActions(
-    createPopupActionGroups({
-      ...createAnalyzeSelection(context),
-      frozen: false,
-    })
-  );
-
-  assert.ok(actions.some((action) => action.id === "freeze-feature"));
-  assert.ok(actions.some((action) => action.id === "send-immediately"));
-  assert.ok(actions.some((action) => action.id === "export"));
-  assert.ok(actions.some((action) => action.id === "rollback"));
-  assert.ok(actions.some((action) => action.id === "tools"));
+  const actions = assertSharedActions({ ...createAnalyzeSelection(context), frozen: false });
+  assert.ok(actions[3].items.some((item) => item.id === "analyze"));
 });
 
-test("registered and cloned Analyze mock Graphics retain safe action groups", () => {
+test("registered and cloned Analyze source Graphics share controls without mutations", () => {
   for (const [sourceId, productKey, datasetName] of [
     ["paper-charts", "P003", "PAPER-MOCK-P003"],
     ["s102", "S102-ACTION-003", "102DK0041155E"],
   ]) {
     const context = createAnalyzeSourceContext(sourceId, productKey, datasetName);
-    const groups = createPopupActionGroups(createAnalyzeSelection(context, { clone: true }));
-    const actions = flattenActions(groups);
-
-    assert.deepEqual(
-      groups.map((group) => group.map((action) => action.id)),
-      [["export", "tools"]]
-    );
-    const exportAction = actions.find((action) => action.id === "export");
-    const tools = actions.find((action) => action.id === "tools");
-    assert.equal(
-      exportAction.items.every((item) => item.disabled),
-      true
-    );
-    assert.equal(
-      tools.items.some((item) => item.id === "analyze"),
-      true
-    );
+    const actions = assertSharedActions(createAnalyzeSelection(context, { clone: true }));
+    assert.ok(actions[3].items.some((item) => item.id === "analyze"));
   }
+});
+
+test("source replacement invalidates old popup workflow and Tools controls", () => {
+  const selection = createMockSelection("s102");
+  const actions = assertSharedActions(selection);
+  assert.equal(actions[0].isCurrent(), true);
+  const source = selection.graphic.layer.appSourceDefinition;
+  selection.graphic.layer.appSourceDefinition = { ...source };
+  assert.equal(actions[0].isCurrent(), false);
+  assert.equal(actions[3].isCurrent(), false);
+});
+
+test("a fabricated package action session cannot authorize an ordinary Product", () => {
+  const selection = createMockSelection("paper-charts");
+  const actions = assertSharedActions({
+    ...selection,
+    packageActions: {
+      projection: () => ({
+        verified: true,
+        actionEligibility: { pause: true, discard: true, send: true },
+      }),
+      invoke() {
+        throw new Error("Unexpected package mutation");
+      },
+    },
+  });
+  assert.equal(
+    actions.slice(0, 3).every((action) => action.onClick === undefined),
+    true
+  );
 });
