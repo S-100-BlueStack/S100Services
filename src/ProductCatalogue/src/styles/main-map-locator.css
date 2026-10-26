@@ -42,6 +42,8 @@
   --calcite-action-background-color-hover: var(--pc-surface-alt);
 
   border-radius: 0;
+  --calcite-action-text-color: var(--pc-text);
+  --calcite-action-text-color-press: var(--pc-text);
 }
 
 #header .main-map-locator__button:hover {
