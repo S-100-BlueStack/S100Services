@@ -13,6 +13,12 @@ visible; the Locator action expands the adjacent Locator search field on demand.
 and Review do not mount the Main-map search controls. At narrower widths the Main-map navbar wraps
 so the search and existing controls remain reachable.
 
+FI-027 navbar search was accepted at `a0fde73c58a554c58028c2220399e3ae1691121b`.
+The Locator light-mode hover contrast correction followed at
+`c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`; application-owned Locator
+foreground/pressed colors must remain legible in both themes. Verify hover, keyboard
+focus and the open Search state when changing shared Calcite navbar styling.
+
 The layout boundary owns the decorative Locator slot transition. Closing immediately targets the collapsed layout, keeps the empty application-owned
 Locator slot present while `flex-basis` collapses, and finalizes the layout state on `transitionend`.
 Reopening during that transition cancels the old completion through a generation/state guard. Reduced

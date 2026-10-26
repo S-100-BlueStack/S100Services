@@ -1,5 +1,12 @@
 # Main-map geographic Locator
 
+FI-027 places the Locator action immediately beside the always-visible Product search
+in the Main-map navbar, without combining their search or selection lifecycles.
+The light-mode hover contrast correction was accepted at
+`c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`. Locator icon contrast must remain
+legible in idle, hover, focus and expanded states in both light and dark mode; use
+public Calcite/application tokens rather than private component selectors.
+
 FI-012 adds a geographic Locator beside the existing Main-map Product search. The two workflows are
 intentionally separate:
 

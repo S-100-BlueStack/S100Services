@@ -1,4 +1,14 @@
-# Main-map ENC package actions for the October 2026 demonstration
+# Historical October 2026 ENC package demo-action configuration
+
+**Verification required before reuse.** This note records a prior development-only
+Send/Accept simulation proposal and real package Pause/Discard prerequisites. It is
+not an accepted deployment runbook for the current FI-029 demo baseline. Do not
+set `VITE_PACKAGE_DEMO_ENABLED` or invoke destructive actions based solely on this
+note; recheck the current `packageActionSession.js` implementation, effective
+backend/Worker configuration and authorized disposable test data. Production
+Send/Accept must remain disabled unless an authoritative backend contract is
+separately accepted. The current [demo checklist](demo-readiness-plan.md)
+intentionally makes no claim that external delivery is implemented.
 
 ## Modes
 

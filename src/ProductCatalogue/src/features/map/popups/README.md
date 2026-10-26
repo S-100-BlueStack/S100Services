@@ -1,29 +1,37 @@
 # Popup actions
 
-Package foundation baseline: `355c0596cea30df059ee729835f3fc3565ff1ea0`.
-See the [package foundation](../../../../docs/enc-package-frontend-foundation.md) for current scope.
-See the [normalized contract review](../../../../docs/normalized-workflow-frontend-adaptation.md).
+The current shared popup-action presentation is FI-029, committed at
+`dbc1466400d18b92d5589d8d7392bd27ae6be86c`. Historical package foundation
+and normalized workflow notes describe earlier integration stages; where those notes
+conflict with FI-029, this README and the current source-owned contracts take priority.
+See [demo readiness](../../../../docs/demo-readiness-plan.md) for verification limits.
 
 Popup actions are implemented as a custom DOM action bar instead of Esri `view.popup.actions`.
 FI-011C keeps the established action lifecycle while resolving every selected Product through a
 source-aware Product context before rendering or dispatching an action.
 
-The action UI provides:
+The visible action bar provides one four-slot row for every resolved Product:
+Pause/Resume, Discard, Send/Accept and Tools. Source-owned verified action state
+controls authorization; unsupported mutations are shown disabled with explanatory
+application-owned help. Source-aware Product context is revalidated before any
+supported dispatch. Tools exposes only supported destinations.
 
-- capability-specific action visibility;
-- a flat `Export...` menu with `Edition` and `Update` leaves;
-- leaf-level export loading state for implemented operations;
-- visible disabled placeholders with action-specific availability reasons;
-- shared action availability rules and backend-authoritative Product-operation blocking.
+The older Freeze/Send/Export/Cancel Export descriptors, state machines and API
+contracts remain in the codebase for compatibility, but are **not** a second visible
+popup action row. Their existence does not authorize these workflow actions.
 
 ## File responsibilities
 
 - `features/products/domain/productContext.js` resolves a Graphic into the central source-aware
   Product context and owns the explicit compatibility-AOI adapter.
-- `popupActionConfig.js` creates action descriptors from Product context, Product state, active jobs,
-  and export state.
-- `features/products/domain/productActionAvailability.js` is the domain-level source of truth for
-  action visibility and availability.
+- `popupWorkflowActions.js` defines the shared four-slot workflow action descriptors and
+  availability semantics.
+- `popupActionConfig.js` resolves the current Product context and applies verified source-owned
+  workflow availability/dispatch; unsupported actions remain disabled.
+- `packageActionSession.js` owns verified ENC-package action reads and dispatch, with current
+  package identity and session/generation checks. It is not a standalone Product fallback.
+- `features/products/domain/productActionAvailability.js` remains the legacy domain capability
+  boundary for the retained non-workflow operation contracts; it is not an authorization bypass.
 - `popupProductActions.js` owns confirmation, API calls, notices, operation lifecycle, and post-action
   refresh for implemented capability-gated operations.
 - `popupExportState.js` tracks popup-local export leaf state by deterministic Product identity.
@@ -75,21 +83,19 @@ The S57 AOI contract remains available for deferred workspace compatibility.
 
 ## Current action status
 
-At the F7A baseline (`bd4145e55e614eceae03d9fd732ae15b48c9a09a`), F6A-F6D
-package-aware Analyze, Review and floating History are accepted. Tools retains all three
-navigation entries, alongside the existing popup-header Product Collection action.
+The accepted F7A presentation is retained by FI-029: 40px, square, icon-only controls,
+public Calcite icon scale `m`, a single non-wrapping row, application-owned hover/focus
+help and no competing native `title` tooltip. Send and Accept share one stable slot,
+never appearing simultaneously. Product Collection remains in the popup header.
 
-F7A v3 uses one compact icon-only row: Pause/Resume, Discard, Send/Accept and
-Tools. Send and Accept share one logical control and never appear simultaneously.
-The default placeholder is unavailable Send. Hover/focus help explains that workflow
-action state is not connected. These package descriptors have no mutation callbacks. Legacy Product
-Freeze, Send, Export and Cancel Export capabilities remain off for packages.
-Package icons use public Calcite scale `m` in square 40px hit/focus surfaces. The
-application-owned tooltip is the sole visible package help; reconciliation removes
-obsolete native `title` attributes even when presentation metadata is unchanged.
-See [the current F7A v3 report](../../../../docs/package-popup-actions-F7A-v3-correction-report.md),
-[the historical F7A v2 report](../../../../docs/package-popup-actions-F7A-v2-correction-report.md)
-and [the historical F7A v1 report](../../../../docs/package-popup-actions-F7A-implementation-report.md).
+For an ENC package, live Pause/Resume and Discard are available **only** when the
+current backend package action snapshot and session authorize them. Send/Accept
+remain disabled in ordinary/production operation; a separately configured, explicitly
+local development simulation may present them but makes no backend mutation.
+For a standalone or synthetic Product without a verified workflow action contract,
+the mutation controls remain disabled. Analyze, Review and floating History navigation
+is capability-gated under Tools. No package-specific session may be used as a fallback
+for an unrelated source.
 
 FI-029 supersedes the old simple-Product action list: all resolved Products expose the
 same F7A-style Pause/Resume, Discard, Send/Accept and Tools row. For simple and mock
@@ -114,18 +120,13 @@ Unknown Product context or unknown capability fails closed and renders no backen
 Product-search selection uses the same resolution and availability path and cannot bypass these
 checks.
 
-## Simplified Export menu
+## Retained legacy Export contract (not displayed by FI-029)
 
-The visible popup structure is:
-
-```text
-Export...
-  Edition
-  Update
-```
-
-There are no visible `All`, `S57`, `S100`, `S101`, `Paper Charts`, or `S-102` menu groups. Backend
-wire targets remain independent from labels and operation kinds.
+Before FI-029, the separate popup action menu displayed `Export...` with `Edition`
+and `Update` leaves. That menu is **not** part of the accepted four-slot popup UI.
+The following direct API routes and internal dispatch contracts remain documented
+for maintenance/regression purposes only; they must not be re-enabled in the popup,
+used to implement Pause/Discard/Send, or treated as supported for an unrelated source.
 
 ### Electronic Products
 
@@ -540,7 +541,7 @@ new backend contract is introduced: without an open popup, status converges
 through normal auto/manual source refresh. The existing package-Discard action
 uses its own full refresh signal rather than also requesting a targeted reload.
 
-## F7A v3 package presentation boundary
+## Historical F7A v3 presentation boundary (superseded by FI-029 dispatch)
 
 `packagePopupPresentation.js` is a popup-owned pure projection of a resolved
 registry work unit, not Review state. It validates the current Graphic/source and
@@ -600,13 +601,18 @@ one non-wrapping row, with local horizontal scrolling only at exceptionally narr
 
 ## October 2026 demo: live Pause/Resume and Discard, simulated Send/Accept
 
-See `src/ProductCatalogue/docs/package-demo-live-actions.md` and
-`src/ProductCatalogueAPI/docs/enc-package-demo-live-actions.md` for current
-setup, fail-closed behavior and acceptance checks. This replaces only F7A's
+The historical [demo action note](../../../../docs/package-demo-live-actions.md) records
+an opt-in development simulation; it is **not** current deployment or demo setup
+approval. Reverify the flag, source session and backend/Worker behavior before using
+any mutation or simulation in a demonstration. Also verify the backend-owned contract
+in the matching API baseline rather than assuming this frontend snapshot is sufficient.
+
+This replaces only F7A's
 **unavailable dispatch** boundary; icon row sizing, focus/Escape/help,
 source-aware package identity, member data and Tools remain unchanged.
 
-`packageActionSession.js` is the popup-owned action and request lifecycle.
+`packageActionSession.js` is the package-popup-owned action and request lifecycle;
+FI-029 does not grant this session authority over standalone Products.
 Pause/Resume and Discard require an authoritative backend package ID;
 Send/Accept, when explicitly opted in through `VITE_PACKAGE_DEMO_ENABLED=true`
 under `npm run dev`, only show a toast and toggle that same popup's primary

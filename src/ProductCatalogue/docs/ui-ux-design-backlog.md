@@ -142,7 +142,7 @@ V1 places an always-visible Product search field and a click-to-expand Locator a
 
 The two workflows retain separate domain/service ownership. Product search selects/navigates to Product AOIs and popup state; Locator navigates geographically without Product selection or a retained marker/popup. Existing Locator session retirement, keyboard/Escape/focus, tooltip, source-aware Product identity, and onboarding targets remain intact. Opening either search closes any active Filters/Data sources popover without stealing focus or clearing Product state.
 
-A later alternative with two icon-only search triggers may be tested after browser acceptance of this first layout. See `fi-027-navbar-search.md` for focused manual verification.
+The accepted Main-map navbar retains always-visible Product search and an adjacent expandable Locator. An alternative layout is deferred to a future experimental branch. See `../src/features/map/search/README.md` and `../src/features/map/locator/README.md`; current demo checks live in `demo-readiness-plan.md`.
 
 ## FI-028 - Scale hiding as an opt-in preference
 

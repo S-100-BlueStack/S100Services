@@ -1,4 +1,11 @@
-# ENC-package frontend foundation
+# ENC-package frontend foundation (historical implementation record)
+
+This document describes the initial F1/F2/F4 package foundation and its then-current
+deferrals. It does not supersede the accepted F6A–F6D package workspace navigation,
+FI-029 shared action presentation or the later verified package-action session.
+For current behavior, consult `../src/features/dataSources/README.md`,
+`../src/features/products/README.md`, `../src/features/map/popups/README.md`
+and `demo-readiness-plan.md`. Historical candidates remain in Git history.
 
 ## Baseline and scope
 

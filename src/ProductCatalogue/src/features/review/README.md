@@ -250,9 +250,9 @@ existing coalesced monitor check rather than creating separate package refreshes
 run under one record operation and publish the full member payload atomically. Removing/re-adding,
 disable, full refresh, route replacement and destroy invalidate stale package member results.
 
-Registry-owned package navigation now enables Analyze and Review; floating History remains disabled.
-The Main-map package Tools menu includes Review and Product Collection retains its existing storage
-shape and per-destination permission checks. Ordinary popup menus are unchanged. No package mutation,
-export, lifecycle, scheduling or new backend contract is enabled.
-
-See [the F6C implementation and verification report](../../../docs/package-review-F6C-implementation-report.md).
+Registry-owned package navigation enables Analyze, Review and the separate floating History
+workflow (F6D). The Main-map Tools menu and Product Collection preserve capability-gated
+navigation; Collection retains its current shape and Analyze/Review-only destinations.
+Review does not own popup mutations, export or scheduling. The older F6C v1/v2 delivery
+reports are retained in Git history, while the current member presentation, identity,
+request lifecycle and focus/scroll contracts are maintained in this README.

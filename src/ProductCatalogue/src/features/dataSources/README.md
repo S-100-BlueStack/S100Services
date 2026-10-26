@@ -6,18 +6,19 @@ records the normalized backend evidence and remaining limitations.
 
 ## Sources
 
-| Source               | Production transport                       | Capability boundary                                                                                                                                     |
-| -------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ENC-package (`s101`) | `GET electronicproducts/aoi?layer=ENC`     | One Main-map work unit; read, search and Collection. Package-originated Analyze/Review/History navigation, manual mutations and Export are unavailable. |
-| S-57 (`s57`)         | `GET electronicproducts/{datasetName}/aoi` | Workspace compatibility only; not selectable or selection-persistable on Main map.                                                                      |
-| Paper Charts         | No runtime transport                       | Synthetic registry fixture retained only for explicit tests.                                                                                            |
-| S-102                | No runtime transport                       | Synthetic registry fixture retained only for explicit tests.                                                                                            |
+| Source               | Production transport                       | Capability boundary                                                                             |
+| -------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| ENC-package (`s101`) | `GET electronicproducts/aoi?layer=ENC`     | One Main-map work unit with capability-gated workspace navigation and package workflow actions. |
+| S-57 (`s57`)         | `GET electronicproducts/{datasetName}/aoi` | Workspace compatibility only; not selectable or selection-persistable on Main map.              |
+| Paper Charts         | No runtime transport                       | Synthetic registry fixture retained only for explicit tests.                                    |
+| S-102                | No runtime transport                       | Synthetic registry fixture retained only for explicit tests.                                    |
 
 The [package foundation](../../../docs/enc-package-frontend-foundation.md) retains the technical
 `s101` provider, S-101 dataset key, geometry and DisplayScale. Its declarative `workUnit` describes
 the primary member and ordered metadata columns. No second Graphic or Collection store is created.
-The package source has no live mutation capabilities or manual export leaves. Its `workUnit`
-navigation capabilities restrict Main-map Product contexts until destinations become package-aware;
+The package source has no popup Export leaves. A separate, verified package action session
+owns live Pause/Resume and Discard when the backend authorizes them. Its `workUnit`
+navigation capabilities allow package-aware Analyze, Review and floating History;
 source-level capabilities for direct product-based workspace resolution are retained. Other simple sources
 retain their existing contracts. Analyze, Review and Dashboard remain product-based surfaces.
 

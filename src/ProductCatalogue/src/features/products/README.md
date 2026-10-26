@@ -1,16 +1,19 @@
 # Products
 
 Shared Product helpers serve Main map, Analyze, Review and Dashboard.
-The [normalized workflow contract review](../../../docs/normalized-workflow-frontend-adaptation.md)
-is the current integration reference against `345b79eef2a9225473d57db80243e731739cbc3a`.
+The [normalized workflow review](../../../docs/normalized-workflow-frontend-adaptation.md)
+is historical integration evidence. Current source-aware work-unit ownership is
+summarized here and in the owning Analyze, Review, History and popup README files.
 
 ## Catalog and identity
 
 The shared Product picker uses the lightweight `GET electronicproducts` name list only for dataset-name
 selection. `workspaceProductService` resolves an opened Analyze/Review Product with the targeted
 `GET electronicproducts/{datasetName}/aoi` contract, whose response supplies authoritative
-`ProductSpecification` and source-owned geometry. Main-map S57/S101 layers continue to use their
-specification-scoped bulk AOI endpoints.
+`ProductSpecification` and source-owned geometry. Main-map package AOI loading
+uses `GET electronicproducts/aoi?layer=ENC` for one representative package Graphic;
+S-57 is resolved through targeted workspace reads and does not use a separate
+selectable Main-map bulk source.
 
 Each resolved Product retains sourceId, productKey, datasetName and registry capabilities/content
 configuration. The frontend never derives source from dataset-name patterns. Globally unique datasetName
@@ -28,7 +31,9 @@ are not overlaid onto direct workspace capabilities; the Main-map overlay remain
 `createWorkspaceWorkUnitService({ registry, productService, fetchProduct }).resolveWorkUnit(name, options)`
 is the separate opt-in canonical work-unit boundary. When injecting dependencies, the exact Product
 service must use the same registry. Resolution options are forwarded to the exact API.
-Analyze composition now uses this boundary (F6B). Review and floating History remain exact callers.
+Analyze (F6B), Review (F6C) and floating History (F6D) use the canonical work-unit
+boundary when loading a package; the exact Product resolver retains its independent
+single-Product semantics.
 
 The package owner declares ordered members with explicit `sourceId` references. The secondary
 source also declares `workspace.workUnitSourceId`, so removing the owner cannot silently turn a
@@ -58,15 +63,22 @@ request. There is no polling, persistent package cache, refresh listener or addi
 The caller remains responsible for suppressing superseded requests. Independent backend reads are
 not a transactional snapshot; future workspace lifecycle slices must own freshness/publication.
 
-Package Analyze UI (F6B) is implemented. Main-map/Collection Analyze navigation is enabled;
-Review UI (F6C) and floating History UI (F6D) and their package navigation remain deferred.
-Analyze canonicalizes mapped secondary names to the primary dataset using the existing `Datasets=`
-grammar. Collection presentation remains one package entry. No package mutation is introduced.
-Resolved packages also expose ordered `memberProducts` and request-scoped `productDetails` so Analyze
-can reuse validated exact contexts and detail reads without changing `resolveProduct()` semantics.
-Pause, Resume, Discard, Send, Accept and scheduling remain deferred/fail closed.
-The controlled [F6 discovery](../../../docs/PC-package-workspaces-F6-discovery-df7d088e.md)
-is preserved verbatim as supplemental design input.
+Analyze (F6B), Review (F6C) and floating History (F6D) present a package as one
+canonical S-101 work unit with ordered exact S-101/S-57 member contexts. Mapped
+secondary names canonicalize to the primary dataset in existing `Datasets=` routes;
+Collection retains one package item and existing Analyze/Review permission checks.
+Analyze may reuse resolved ordered `memberProducts` and request-scoped `productDetails`
+without changing `resolveProduct()` semantics. A bad owner reference, conflicting
+member name/specification or noncurrent registry/session must fail closed, not fall
+back to a simple Product.
+
+Package Tools can navigate to Analyze, Review and History. Workflow mutations are
+**not** granted by work-unit resolution: current Pause/Resume/Discard availability
+requires an independent, authoritative package action session; Send/Accept has no
+production dispatch. Ordinary Product mutations remain disabled in FI-029 without
+an explicit source-owned backend contract. Preserve this distinction when adding
+future sources or demonstrating workflow actions. Historical F6 discovery and
+candidate reports remain recoverable through Git history.
 
 ## Jobs and mutations
 
@@ -98,7 +110,9 @@ polls retain finite request timeouts and bounded backoff while keeping an unknow
 the UI.
 
 Known workflow states constrain export; backend mapping/version/candidate checks remain authoritative.
-Send is a capability-gated simulation from Exported, never real delivery.
+The legacy Send simulation is not an FI-029 popup workflow dispatcher. Any separate
+local demo-only Send/Accept flow requires an explicit development opt-in and must not
+be interpreted as real IC-ENC delivery or backend-authoritative state.
 S57 Freeze/Unfreeze is unavailable because the current upload routes write S-101 explicitly.
 Paper Charts/S102 cannot dispatch electronic mutations or read electronic History/artifacts.
 
