@@ -154,6 +154,10 @@ export async function initAnalyzePage({ datasetNames }) {
     cancelPendingPackageReplacements();
     activeWorkspaceLoadRequestId = requestId;
     const validatedDatasetItems = validateAnalyzeDatasetItems(nextDatasetItems);
+    // Publish selection at input time; resolution and content requests remain
+    // generation-owned and may only replace this provisional list if current.
+    datasetItems = validatedDatasetItems.items;
+    renderSidebar({ loading: getEnabledAnalyzeDatasetNames(datasetItems).length > 0 });
     const resolutions = await resolveAnalyzeWorkUnits(
       getEnabledAnalyzeDatasetNames(validatedDatasetItems.items)
     );

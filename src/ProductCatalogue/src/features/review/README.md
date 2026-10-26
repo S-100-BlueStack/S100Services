@@ -256,3 +256,7 @@ navigation; Collection retains its current shape and Analyze/Review-only destina
 Review does not own popup mutations, export or scheduling. The older F6C v1/v2 delivery
 reports are retained in Git history, while the current member presentation, identity,
 request lifecycle and focus/scroll contracts are maintained in this README.
+
+## FI-043 selection visibility
+
+The Review sidebar displays accepted local Product selections immediately while the existing Product session resolves canonical work units and loads content. Pending rows are provisional UI composition, not synthetic successful backend payloads. Previous canonical content overrides and workspace-wide content intent must survive alias resolution, intermediate interactions, superseded requests and Refresh. The picker remains keyboard-usable after a selection-triggered render.

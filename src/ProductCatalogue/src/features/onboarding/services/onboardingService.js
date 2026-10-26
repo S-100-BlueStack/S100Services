@@ -1,6 +1,10 @@
 import {
   resolveOnboardingTarget,
   isVisibleOnboardingElement,
+  getOnboardingStepRequirement,
+  isProductPopupOpen,
+  resolveOnboardingHighlights,
+  resolveOnboardingPopupTarget,
 } from "../domain/onboardingInteraction.js";
 import { getOnboardingSteps, getOnboardingWelcomeContent } from "../config/onboardingSteps.js";
 import { readOnboardingState, writeOnboardingState } from "../state/onboardingStorage.js";
@@ -33,6 +37,9 @@ function createOnboardingService({ routeName }) {
   let refreshInterval = null;
   let refreshFrame = null;
   let activeReveal = null;
+  let mapView = null;
+  let getPopupCollectionButton = null;
+  let pendingAdvanceIndex = -1;
 
   function restoreFocus() {
     const target = isVisibleOnboardingElement(previousFocus)
@@ -52,6 +59,7 @@ function createOnboardingService({ routeName }) {
     tour?.remove();
     tour = null;
     currentStepIndex = -1;
+    pendingAdvanceIndex = -1;
     if (refreshInterval !== null) window.clearInterval(refreshInterval);
     if (refreshFrame !== null) window.cancelAnimationFrame(refreshFrame);
     refreshInterval = null;
@@ -110,20 +118,51 @@ function createOnboardingService({ routeName }) {
     );
   }
 
+  function findStepTarget(step, { reveal = false } = {}) {
+    if (step.popupAnchor && isProductPopupOpen(mapView)) {
+      const collectionButton = getPopupCollectionButton?.();
+      return (
+        resolveOnboardingPopupTarget(step, mapView, { collectionButton }) ??
+        resolveOnboardingPopupTarget({ popupAnchor: "popup" }, mapView) ??
+        resolveOnboardingTarget(step, { reveal })
+      );
+    }
+    return resolveOnboardingTarget(step, { reveal });
+  }
+
+  function findPositionTarget(step, target) {
+    // The card stays beside the popup or panel, while highlights can follow
+    // small, independently rendered controls inside the same surface.
+    if (step.popupAnchor && step.popupAnchor !== "popup") {
+      return resolveOnboardingPopupTarget({ popupAnchor: "popup" }, mapView) ?? target;
+    }
+    if (step.placement !== "left" || !step.reveal?.openSelector) return target;
+    const panel = document.querySelector(step.reveal.openSelector);
+    return isVisibleOnboardingElement(panel) ? panel : target;
+  }
+
   function showStep(index, direction = 1, { focusNext = true } = {}) {
     if (destroyed || !tour) return;
     // Resolve against the current application DOM; optional controls can disappear
     // during refresh or responsive layout changes without blocking the tour.
     for (let next = index; next >= 0 && next < steps.length; next += direction) {
       prepareStepReveal(steps[next]);
-      const target = resolveOnboardingTarget(steps[next], { reveal: true });
+      const step = steps[next];
+      const target = findStepTarget(step, { reveal: true });
       if (!target) continue;
       currentStepIndex = next;
+      const requirement = getOnboardingStepRequirement(step, { mapView });
+      // Advance only after a user satisfies a requirement that was initially
+      // missing. Already-populated routes remain readable and Back stays usable.
+      pendingAdvanceIndex = step.advanceOnReady && !requirement.ready ? next : -1;
       tour.render({
-        step: steps[next],
+        step,
         index: next,
         count: steps.length,
-        targets: [target],
+        targets: resolveOnboardingHighlights(step, target),
+        positionTargets: [findPositionTarget(step, target)],
+        nextDisabled: !requirement.ready,
+        requirementMessage: requirement.message,
         focusNext,
       });
       return;
@@ -134,14 +173,48 @@ function createOnboardingService({ routeName }) {
   function refreshTargets() {
     if (destroyed || !tour || currentStepIndex < 0) return;
     const step = steps[currentStepIndex];
-    const target = resolveOnboardingTarget(step);
+    // Product-dependent steps must not silently advance when their Product is
+    // removed or the popup closes. Return to the step where it can be selected.
+    if (
+      routeName === "main" &&
+      currentStepIndex > steps.findIndex((value) => value.id === "main-map") &&
+      step.requires === "main-product-popup" &&
+      !isProductPopupOpen(mapView)
+    ) {
+      showStep(
+        steps.findIndex((value) => value.id === "main-map"),
+        1,
+        { focusNext: false }
+      );
+      return;
+    }
+    if (
+      (routeName === "analyze" || routeName === "review") &&
+      currentStepIndex > 1 &&
+      !getOnboardingStepRequirement(steps[1], { mapView }).ready
+    ) {
+      showStep(1, 1, { focusNext: false });
+      return;
+    }
+    const target = findStepTarget(step);
     if (!target) {
       showStep(currentStepIndex + 1, 1, {
         focusNext: tour.containsFocus() || !document.activeElement?.isConnected,
       });
       return;
     }
-    tour.reposition([target], step);
+    const requirement = getOnboardingStepRequirement(step, { mapView });
+    if (pendingAdvanceIndex === currentStepIndex && requirement.ready) {
+      pendingAdvanceIndex = -1;
+      showStep(currentStepIndex + 1, 1, {
+        focusNext: tour.containsFocus() || !document.activeElement?.isConnected,
+      });
+      return;
+    }
+    tour.updateNext({ nextDisabled: !requirement.ready, requirementMessage: requirement.message });
+    tour.reposition(resolveOnboardingHighlights(step, target), step, [
+      findPositionTarget(step, target),
+    ]);
   }
 
   function scheduleTargetRefresh() {
@@ -166,7 +239,14 @@ function createOnboardingService({ routeName }) {
     };
     tour = createTourPopover({
       onBack: whenCurrent(() => showStep(currentStepIndex - 1, -1)),
-      onNext: whenCurrent(() => showStep(currentStepIndex + 1)),
+      onNext: whenCurrent(() => {
+        // Recheck at activation time because the popup can close between refresh ticks.
+        if (!getOnboardingStepRequirement(steps[currentStepIndex], { mapView }).ready) {
+          refreshTargets();
+          return;
+        }
+        showStep(currentStepIndex + 1);
+      }),
       onRequestClose: whenCurrent(() => closeActiveUi()),
     });
     showStep(0);
@@ -209,6 +289,8 @@ function createOnboardingService({ routeName }) {
   function destroy() {
     if (destroyed) return;
     destroyed = true;
+    mapView = null;
+    getPopupCollectionButton = null;
     closeActiveUi({ returnFocus: false });
     document.removeEventListener("keydown", handleKeydown);
     window.removeEventListener("resize", scheduleTargetRefresh);
@@ -224,6 +306,16 @@ function createOnboardingService({ routeName }) {
   window.addEventListener("scroll", scheduleTargetRefresh, true);
   window.addEventListener("pagehide", destroy);
   window.addEventListener("popstate", destroy);
-  const service = { setRouteReady, startCurrentRoute, destroy };
+  const service = {
+    setRouteReady,
+    startCurrentRoute,
+    setMapView(view, { resolvePopupCollectionButton = null } = {}) {
+      mapView = view;
+      getPopupCollectionButton =
+        typeof resolvePopupCollectionButton === "function" ? resolvePopupCollectionButton : null;
+      scheduleTargetRefresh();
+    },
+    destroy,
+  };
   return service;
 }

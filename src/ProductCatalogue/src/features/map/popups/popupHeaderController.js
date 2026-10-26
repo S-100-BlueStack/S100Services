@@ -14,6 +14,14 @@ import {
 } from "./popupHeaderCollectionAction.js";
 let currentFeatureId = null;
 let headerMode = "default";
+const collectionButtons = new WeakMap();
+
+export function getProductCollectionHeaderButton(view) {
+  const popup = view?.popup;
+  if (!popup?.visible) return null;
+  const entry = collectionButtons.get(popup);
+  return entry?.feature === popup.selectedFeature && entry.button.isConnected ? entry.button : null;
+}
 
 export function applyHeaderColor(view) {
   if (isOverlapPickerPopup(view)) {
@@ -36,6 +44,7 @@ export function applyHeaderColor(view) {
   waitForFeatureHeader(view, featureId);
 }
 export function resetHeaderColor(view) {
+  if (view?.popup) collectionButtons.delete(view.popup);
   headerMode = "default";
   currentFeatureId = null;
   waitForDefaultHeader(view);
@@ -286,6 +295,7 @@ function ensureCollectionButton(header, feature, view) {
       btn.dataset.datasetName = datasetName;
       btn.dataset.productIdentity = identityKey;
       syncCollectionButtonState(btn);
+      collectionButtons.set(view.popup, { feature, button: btn });
     },
   });
 }

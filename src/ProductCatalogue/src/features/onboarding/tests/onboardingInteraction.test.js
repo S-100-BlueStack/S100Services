@@ -138,7 +138,7 @@ beforeEach(() => {
     }),
     localStorage: {
       getItem: (key) =>
-        JSON.stringify({ version: key.includes("main") ? 3 : 2, dismissedWelcome: true }),
+        JSON.stringify({ version: key.includes("main") ? 5 : 3, dismissedWelcome: true }),
       setItem() {},
     },
     setInterval: (callback) => {
@@ -162,6 +162,9 @@ beforeEach(() => {
   preferencesPanel = addTarget("#preferences-panel");
   preferencesPanel.hidden = true;
   addTarget(".pc-preferences-panel__group", preferencesPanel);
+  addTarget(".pc-preferences-panel__setting--theme", preferencesPanel);
+  addTarget(".pc-preferences-panel__setting--scale", preferencesPanel);
+  addTarget(".pc-preferences-panel__introduction-action", preferencesPanel);
   bindToggle(preferences, preferencesPanel);
   preferences.focus();
 });
@@ -198,8 +201,9 @@ function installMainMapRevealTargets() {
   bindToggle(filterButton, filterPanel);
   return { dataSourcesButton, dataSourcesPanel, filterButton, filterPanel };
 }
-function start(route = "main") {
+function start(route = "main", { mapView, resolvePopupCollectionButton } = {}) {
   const service = initOnboarding({ routeName: route });
+  if (mapView) service.setMapView(mapView, { resolvePopupCollectionButton });
   service.setRouteReady();
   service.startCurrentRoute();
   return service;
@@ -248,7 +252,24 @@ for (const route of ["main", "dashboard", "analyze", "review"]) {
         continue;
       addTarget(selector);
     }
-    start(route);
+    if (route === "analyze") {
+      addTarget(".analyze-dataset-list__item");
+      addTarget(".analyze-product-card");
+    }
+    if (route === "review") {
+      addTarget(".pc-review-product-list__item");
+      addTarget(".pc-review-column");
+    }
+    const popupContent = addTarget(".popup-container");
+    addTarget(".popup-action-bar", popupContent);
+    const mapView = {
+      popup: {
+        visible: true,
+        selectedFeature: { attributes: { datasetName: "Example Product" } },
+        content: popupContent,
+      },
+    };
+    start(route, { mapView: route === "main" ? mapView : null });
     const steps = getOnboardingSteps(route);
     for (const step of steps) {
       assert.equal(popover().dataset.stepId, step.id);
@@ -560,4 +581,208 @@ test("targets obscured by the application header are unavailable", () => {
   header.bounds = { left: 0, right: 1000, top: 0, bottom: 150 };
   addTarget("#filter-button");
   assert.equal(resolveOnboardingTarget({ selectors: ["#filter-button"] }), null);
+});
+
+test("Main-map guidance waits for a selected Product and returns to the map if its popup closes", () => {
+  installMainMapRevealTargets();
+  for (const selector of [
+    ".header-center",
+    "[data-onboarding-target='product-search']",
+    "#main-map-locator-button",
+    "#viewDiv",
+  ])
+    addTarget(selector);
+  const popupContent = addTarget(".popup-container");
+  popupContent.bounds = { left: 600, top: 200, right: 950, bottom: 570, width: 350, height: 370 };
+  const actions = addTarget(".popup-action-bar", popupContent);
+  actions.bounds = { left: 630, top: 300, right: 910, bottom: 340, width: 280, height: 40 };
+  const collectionButton = addTarget(".popup-product-collection-btn", popupContent);
+  collectionButton.bounds = { left: 860, top: 208, right: 900, bottom: 248, width: 40, height: 40 };
+  const view = {
+    popup: {
+      visible: false,
+      selectedFeature: null,
+      content: popupContent,
+      container: popupContent,
+    },
+  };
+  start("main", { mapView: view, resolvePopupCollectionButton: () => collectionButton });
+  for (let i = 0; i < 5; i++) activate("next");
+  assert.equal(popover().dataset.stepId, "main-map");
+  assert.equal(popover().querySelector("[data-action='next']").disabled, true);
+  assert.match(
+    popover().querySelector(".pc-onboarding-popover__requirement").textContent,
+    /Open a Product/
+  );
+  assert.equal(popover().style.left, "12px"); // Keep the map open for selection.
+
+  const mapTarget = document.querySelector("#viewDiv");
+  mapTarget.focus();
+  view.popup.selectedFeature = { attributes: { datasetName: "Example Product" } };
+  view.popup.visible = true;
+  flushRefresh();
+  assert.equal(popover().dataset.stepId, "main-shortcuts");
+  assert.equal(document.activeElement, mapTarget);
+  assert.equal(popover().style.left, "388px"); // Beside the popup, not at map top-right.
+  activate("back");
+  assert.equal(popover().dataset.stepId, "main-map");
+  flushRefresh();
+  assert.equal(popover().dataset.stepId, "main-map"); // Back must remain usable.
+  activate("next");
+  assert.equal(popover().dataset.stepId, "main-shortcuts");
+  activate("next");
+  assert.equal(popover().dataset.stepId, "main-popup-actions");
+  assert.equal(document.querySelector(".pc-onboarding-highlight-layer").children.length, 1);
+  // Highlight actions precisely while keeping guidance outside the whole popup.
+  assert.equal(actions.isConnected, true);
+  assert.equal(popover().style.left, "388px");
+  activate("next");
+  assert.equal(popover().dataset.stepId, "main-product-collection");
+  const highlights = document.querySelector(".pc-onboarding-highlight-layer").children;
+  assert.equal(highlights.length, 1);
+  assert.equal(highlights[0].style.top, "204px");
+  assert.equal(highlights[0].style.left, "856px");
+  assert.equal(highlights[0].style.width, "48px");
+  assert.equal(popover().style.left, "388px");
+  // ArcGIS can move the popup after the tour starts. Follow its current bounds.
+  popupContent.bounds = { left: 540, top: 240, right: 890, bottom: 610, width: 350, height: 370 };
+  collectionButton.bounds = { left: 800, top: 248, right: 840, bottom: 288, width: 40, height: 40 };
+  flushRefresh();
+  assert.equal(popover().style.left, "328px");
+  const movedHighlights = document.querySelector(".pc-onboarding-highlight-layer").children;
+  assert.equal(movedHighlights[0].style.top, "244px");
+  view.popup.visible = false;
+  // A closing popup revokes Next synchronously, even before the next timer tick.
+  activate("next");
+  assert.equal(popover().dataset.stepId, "main-map");
+  flushRefresh();
+  assert.equal(popover().dataset.stepId, "main-map");
+  assert.equal(popover().querySelector("[data-action='next']").disabled, true);
+});
+
+for (const route of ["analyze", "review"]) {
+  test(`${route} introduction requires a selected Product and loaded content`, () => {
+    addTarget(".header-center");
+    const picker = addTarget(
+      route === "analyze" ? ".analyze-dataset-form" : ".pc-review-product-form"
+    );
+    addTarget(route === "analyze" ? ".analyze-dataset-list" : ".pc-review-workspace-content");
+    addTarget(route === "analyze" ? ".analyze-products" : ".pc-review-product-list");
+    if (route === "review") {
+      addTarget(".pc-review-product-list__refresh-button");
+      addTarget(".pc-review-board");
+    }
+    if (route === "analyze") addTarget(".analyze-workspace-refresh");
+    start(route);
+    activate("next");
+    assert.equal(popover().dataset.stepId, `${route}-product-picker`);
+    assert.equal(popover().querySelector("[data-action='next']").disabled, true);
+    assert.equal(picker.isConnected, true);
+    picker.focus();
+    addTarget(
+      route === "analyze" ? ".analyze-dataset-list__item" : ".pc-review-product-list__item"
+    );
+    flushRefresh();
+    assert.equal(
+      popover().dataset.stepId,
+      route === "analyze" ? "analyze-product-list" : "review-workspace-content"
+    );
+    assert.equal(document.activeElement, picker); // The user's selection must not lose focus.
+    if (route === "analyze") {
+      assert.equal(popover().querySelector("[data-action='next']").disabled, true);
+      addTarget(".analyze-product-card");
+      flushRefresh();
+      assert.equal(popover().querySelector("[data-action='next']").disabled, false);
+    } else {
+      activate("next");
+      assert.equal(popover().dataset.stepId, "review-product-list");
+      activate("next");
+      assert.equal(popover().dataset.stepId, "review-refresh");
+      assert.equal(popover().querySelector("[data-action='next']").disabled, true);
+      addTarget(".pc-review-column");
+      flushRefresh();
+      assert.equal(popover().querySelector("[data-action='next']").disabled, false);
+    }
+  });
+}
+
+test("Main-map collection guidance never outlines the entire popup when its button is unavailable", () => {
+  installMainMapRevealTargets();
+  for (const selector of [
+    ".header-center",
+    "[data-onboarding-target='product-search']",
+    "#main-map-locator-button",
+    "#viewDiv",
+  ])
+    addTarget(selector);
+  const content = addTarget(".popup-container");
+  addTarget(".popup-action-bar", content);
+  const view = {
+    popup: {
+      visible: true,
+      selectedFeature: { attributes: { datasetName: "A" } },
+      content,
+      container: content,
+    },
+  };
+  start("main", { mapView: view });
+  for (let i = 0; i < 8; i++) activate("next");
+  assert.equal(popover().dataset.stepId, "main-product-collection");
+  assert.equal(document.querySelector(".pc-onboarding-highlight-layer").children.length, 0);
+  const collectionButton = addTarget(".popup-product-collection-btn", content);
+  getOnboardingService().setMapView(view, { resolvePopupCollectionButton: () => collectionButton });
+  flushRefresh();
+  assert.equal(document.querySelector(".pc-onboarding-highlight-layer").children.length, 1);
+  collectionButton.remove();
+  flushRefresh();
+  assert.equal(document.querySelector(".pc-onboarding-highlight-layer").children.length, 0);
+});
+
+test("Preferences guidance positions outside the panel while highlighting individual settings", () => {
+  preferencesPanel.bounds = {
+    left: 700,
+    top: 130,
+    right: 980,
+    bottom: 700,
+    width: 280,
+    height: 570,
+  };
+  const theme = preferencesPanel.querySelector(".pc-preferences-panel__setting--theme");
+  const scale = preferencesPanel.querySelector(".pc-preferences-panel__setting--scale");
+  theme.bounds = { left: 720, top: 180, right: 960, bottom: 220, width: 240, height: 40 };
+  scale.bounds = { left: 720, top: 240, right: 960, bottom: 280, width: 240, height: 40 };
+  start("main");
+  assert.equal(popover().dataset.stepId, "main-preferences");
+  assert.equal(popover().style.left, "488px");
+  const highlights = document.querySelector(".pc-onboarding-highlight-layer").children;
+  assert.equal(highlights.length, 2);
+  assert.equal(highlights[0].style.top, "176px");
+  assert.equal(highlights[1].style.top, "236px");
+});
+
+test("Main-map preselected Products do not skip guidance on refresh", () => {
+  installMainMapRevealTargets();
+  for (const selector of [
+    ".header-center",
+    "[data-onboarding-target='product-search']",
+    "#main-map-locator-button",
+    "#viewDiv",
+  ])
+    addTarget(selector);
+  const content = addTarget(".popup-container");
+  const view = {
+    popup: {
+      visible: true,
+      selectedFeature: { attributes: { datasetName: "A" } },
+      content,
+      container: content,
+    },
+  };
+  start("main", { mapView: view });
+  for (let i = 0; i < 5; i++) activate("next");
+  assert.equal(popover().dataset.stepId, "main-map");
+  flushRefresh();
+  assert.equal(popover().dataset.stepId, "main-map");
+  activate("next");
+  assert.equal(popover().dataset.stepId, "main-shortcuts");
 });

@@ -20,6 +20,7 @@ import {
 import { createAttributeFilterService } from "../features/map/filters/attributeFilterService.js";
 import { initAttributeFilterPanel } from "../features/map/filters/attributeFilterPanel.js";
 import { closePopupActionDropdown } from "../features/map/popups/popupActionDropdown.js";
+import { getProductCollectionHeaderButton } from "../features/map/popups/popupHeaderController.js";
 import { registerPopupSourceStatusRefreshHandler } from "../features/map/popups/popupRefreshBridge.js";
 import { createSourceStatusRefreshCoordinator } from "../features/dataSources/services/sourceStatusRefreshCoordinator.js";
 import { initProductCollectionTray } from "../features/productCollection/ui/productCollectionTray.js";
@@ -224,6 +225,7 @@ export function initMap() {
   return {
     map,
     view,
+    getPopupCollectionButton: () => getProductCollectionHeaderButton(view),
     hoverManager,
     refreshService,
     compatibilityRefreshService,

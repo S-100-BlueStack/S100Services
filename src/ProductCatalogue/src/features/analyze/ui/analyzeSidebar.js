@@ -19,6 +19,9 @@ export function renderAnalyzeSidebar({
   const panel = getOrCreateAnalyzePanel();
   const calcitePanel = panel.querySelector("calcite-panel");
   const content = panel.querySelector(".analyze-sidebar__content");
+  const pickerHadFocus =
+    content.contains(document.activeElement) &&
+    Boolean(document.activeElement.closest?.(".pc-product-picker"));
   const normalizedDatasetItems = normalizeAnalyzeDatasetItems(datasetItems ?? datasetNames);
   const enabledDatasetNames =
     datasetNames === undefined
@@ -32,6 +35,11 @@ export function renderAnalyzeSidebar({
       ? createLoadingState(enabledDatasetNames)
       : createProductsContent(products, normalizedDatasetItems)
   );
+  // The picker dispatches selection before its click/submit handler returns.
+  // Restore focus to its replacement, not to the detached input or option.
+  if (pickerHadFocus) {
+    content.querySelector(".pc-product-picker__input")?.focus({ preventScroll: true });
+  }
 }
 
 function getOrCreateAnalyzePanel() {

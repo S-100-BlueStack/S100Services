@@ -10,13 +10,13 @@ This checklist supplements the [historical release review](frontend-release-read
 
 ## Baseline and evidence
 
-| Check                     | Acceptance evidence                                                               | Status at document creation                                                                                        |
-| ------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Repository baseline       | Git SHA and clean/understood working tree; documentation matches current branch   | Supplied baseline `c4b0f7e1`; current future working tree not independently inspected                              |
-| Local frontend gate       | `cd src/ProductCatalogue; npm run format; npm run check`                          | Required before demo freeze; this documentation pass did not run it                                                |
-| Real browser + deployment | Real UI behavior and server integration in the intended demonstration environment | New end-to-end pass pending                                                                                        |
-| FI-027 and FI-029         | Latest committed changes, no regressions in supported paths                       | FI-027 hover fix committed; owner reported ENC-package popup looked correct, but cross-source workflows unverified |
-| FI-043                    | Main map, Dashboard, Analyze, Review route onboarding with fresh/replayed state   | Post-navbar/post-popup consolidated test pending                                                                   |
+| Check                     | Acceptance evidence                                                               | Status at document creation                                                                                                                                               |
+| ------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repository baseline       | Git SHA and clean/understood working tree; documentation matches current branch   | Supplied baseline `c4b0f7e1`; current future working tree not independently inspected                                                                                     |
+| Local frontend gate       | `cd src/ProductCatalogue; npm run format; npm run check`                          | Required before demo freeze; this documentation pass did not run it                                                                                                       |
+| Real browser + deployment | Real UI behavior and server integration in the intended demonstration environment | New end-to-end pass pending                                                                                                                                               |
+| FI-027 and FI-029         | Latest committed changes, no regressions in supported paths                       | FI-027 hover fix committed; owner reported ENC-package popup looked correct, but cross-source workflows unverified                                                        |
+| FI-043                    | Main map, Dashboard, Analyze, Review route onboarding with fresh/replayed state   | User test on `a31f57a0` (2026-10-26): F43-01–04 Failed, F43-05–09 Passed. Focused correction pending local acceptance; see [FI-043 verification](fi-043-verification.md). |
 
 ## Manual demo regression matrix
 

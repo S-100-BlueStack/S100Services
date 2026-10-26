@@ -421,3 +421,36 @@ test("late package alias proof cannot replace a newer page route or reset worksp
   assert.equal(h.state.productItems[0].contentTypes.history, false);
   h.page.destroy();
 });
+
+test("Review shows the selected Product and loading state before resolution completes", async () => {
+  const gate = deferred();
+  const h = await harness({
+    resolveWorkUnit: async (name) => {
+      if (name === "B") await gate.promise;
+      return {
+        status: "resolved",
+        requestedDatasetName: name,
+        product: result(name).productContext,
+      };
+    },
+  });
+  const add = h.send("product-add", { datasetName: "B" });
+  assert.deepEqual(
+    h.state.productItems.map((item) => item.datasetName),
+    ["A", "B"]
+  );
+  assert.equal(h.state.loading, true);
+  assert.deepEqual(
+    h.state.products.map((product) => product.datasetName),
+    ["A", "B"]
+  );
+  assert.equal(h.state.products[1].loadState, "loading");
+  gate.resolve();
+  await add;
+  assert.equal(h.state.loading, false);
+  assert.deepEqual(
+    h.state.products.map((product) => product.loadState),
+    ["loaded", "loaded"]
+  );
+  h.page.destroy();
+});

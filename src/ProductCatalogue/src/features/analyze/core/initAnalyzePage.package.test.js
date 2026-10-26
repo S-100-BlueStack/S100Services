@@ -782,3 +782,21 @@ test("targeted package refresh publishes scoped member reports through the accep
   assert.equal(h.view.popup.visible, true);
   assert.equal(h.state.unregistered.includes(ordinary.layer), false);
 });
+
+test("new Analyze selection appears in the sidebar before Product resolution or History completes", async (t) => {
+  const h = await harness(t, []);
+  const add = h.event("pc-analyze-dataset-add", { datasetName: ordinaryName });
+  const pending = h.state.snapshots.at(-1);
+  assert.deepEqual(
+    pending.datasetItems.map((item) => item.name),
+    [ordinaryName]
+  );
+  assert.equal(pending.loading, true);
+  assert.equal(h.page.products.length, 0);
+  await add;
+  assert.equal(h.state.snapshots.at(-1).loading, false);
+  assert.deepEqual(
+    h.page.products.map((product) => product.datasetName),
+    [ordinaryName]
+  );
+});

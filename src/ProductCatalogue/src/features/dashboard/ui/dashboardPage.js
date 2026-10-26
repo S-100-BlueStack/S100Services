@@ -1262,6 +1262,7 @@ function createActivityTable(activities, timeZone, { sortBy, sortDirection }) {
     th.scope = "col";
     const sortKey = label.toLowerCase();
     if (label === "Links") {
+      th.className = "pc-dashboard-activity-table__links-heading";
       th.textContent = label;
     } else {
       const active = sortKey === sortBy;

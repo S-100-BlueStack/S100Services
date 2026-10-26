@@ -36,6 +36,7 @@ import { captureReviewWorkspaceContentInteraction } from "../ui/reviewWorkspaceC
 export async function initReviewPage({ datasetNames } = {}) {
   const initialProductItems = createReviewProductItems(datasetNames);
   let productItems = [];
+  let pendingProductItems = null;
   let compositionResolutions = [];
   let workspaceContentIntent = createReviewWorkspaceContentIntent();
   let currentProducts = [];
@@ -57,13 +58,25 @@ export async function initReviewPage({ datasetNames } = {}) {
     productListInteraction = null,
     workspaceContentInteraction = null,
   } = {}) => {
+    const visibleItems = pendingProductItems ?? productItems;
     renderReviewPage({
-      productItems,
-      products: currentProducts,
+      productItems: visibleItems,
+      // Keep new selections visibly pending without publishing synthetic backend data.
+      products: visibleItems
+        .filter((item) => item.enabled)
+        .map((item) => {
+          const wasPreviouslyComposed = productItems.some((previous) => previous.id === item.id);
+          const retainedProduct = wasPreviouslyComposed
+            ? currentProducts.find(
+                (product) => normalizeDatasetKey(product.datasetName) === item.id
+              )
+            : null;
+          return retainedProduct ?? { datasetName: item.datasetName, loadState: "loading" };
+        }),
       loading: isLoadingReviewProducts,
       productCatalog: {
         ...productCatalog,
-        excludedProductNames: getSelectedReviewProductNames(productItems),
+        excludedProductNames: getSelectedReviewProductNames(visibleItems),
       },
       productListInteraction,
       workspaceContentInteraction,
@@ -112,7 +125,10 @@ export async function initReviewPage({ datasetNames } = {}) {
             item.id
         );
         const aliases = new Set(resolution ? getReviewResolutionAliases(resolution) : [item.id]);
-        const previous = resetIntent ? null : previousItems.find((value) => aliases.has(value.id));
+        const previous = resetIntent
+          ? null
+          : (previousItems.find((value) => aliases.has(value.id)) ??
+            pendingProductItems?.find((value) => aliases.has(value.id)));
         // Content edits performed while canonicalization awaited remain authoritative.
         return {
           ...item,
@@ -122,6 +138,7 @@ export async function initReviewPage({ datasetNames } = {}) {
             (inheritIntent ? { ...workspaceContentIntent } : item.contentTypes),
         };
       });
+      pendingProductItems = null;
       compositionResolutions = resolutions;
       const names = getEnabledReviewDatasetNames(productItems);
       setReviewRouteUrl(names, { replace: !updateUrl });
@@ -161,6 +178,20 @@ export async function initReviewPage({ datasetNames } = {}) {
     if (disposed) return;
     const validatedProductItems = validateReviewProductItems(nextProductItems);
     notifyRejectedCatalogProducts(validatedProductItems);
+    // Show the requested composition before source-aware resolution or API reads.
+    // The session still owns canonical IDs, failures, and stale completion guards.
+    const productListInteraction = captureReviewProductListInteraction();
+    const workspaceContentInteraction = captureReviewWorkspaceContentInteraction();
+    pendingProductItems = validatedProductItems.items.map((item) => ({
+      ...item,
+      // The session stores canonical composition, while the page owns local content edits.
+      contentTypes: resetIntent
+        ? item.contentTypes
+        : (productItems.find((previous) => previous.id === item.id)?.contentTypes ??
+          item.contentTypes),
+    }));
+    isLoadingReviewProducts = getEnabledReviewDatasetNames(pendingProductItems).length > 0;
+    renderCurrentReviewPage({ productListInteraction, workspaceContentInteraction });
     const fullLoad = full || !hasLoadedComposition;
     hasLoadedComposition = true;
     await productSession.reconcile(validatedProductItems.items, {
@@ -262,6 +293,14 @@ export async function initReviewPage({ datasetNames } = {}) {
       contentType,
       event.detail?.enabled
     );
+    if (pendingProductItems) {
+      pendingProductItems = toggleReviewProductContentType(
+        pendingProductItems,
+        itemId,
+        contentType,
+        event.detail?.enabled
+      );
+    }
     renderCurrentReviewPage({ productListInteraction });
   };
 
@@ -283,6 +322,13 @@ export async function initReviewPage({ datasetNames } = {}) {
       contentType,
       event.detail?.enabled
     );
+    if (pendingProductItems) {
+      pendingProductItems = toggleAllReviewProductContentTypes(
+        pendingProductItems,
+        contentType,
+        event.detail?.enabled
+      );
+    }
     renderCurrentReviewPage({ workspaceContentInteraction });
   };
 

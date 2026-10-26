@@ -417,7 +417,7 @@ function renderDisplayScaleSetting(mapPreferences) {
   const scaleHidingEnabled = !mapPreferences.isDisplayScaleHidingDisabled();
 
   return `
-    <section class="pc-preferences-panel__setting">
+    <section class="pc-preferences-panel__setting pc-preferences-panel__setting--scale">
       <div class="pc-preferences-panel__copy">
         <h4 id="preferences-scale-hiding-label">Scale hiding</h4>
         <p id="preferences-scale-hiding-description">

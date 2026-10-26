@@ -56,7 +56,7 @@ const expected = {
 };
 
 for (const [route, suffixes] of Object.entries(expected)) {
-  test(`${route} has deterministic, non-blocking route-specific coverage`, () => {
+  test(`${route} has deterministic route-specific coverage and controls`, () => {
     const steps = getOnboardingSteps(route);
     assert.deepEqual(
       steps.map((step) => step.id),
@@ -88,9 +88,9 @@ for (const [route, suffixes] of Object.entries(expected)) {
 }
 
 test("preserves route completion versions and rejects unknown route steps", () => {
-  assert.equal(getOnboardingFlowVersion("main"), 4);
+  assert.equal(getOnboardingFlowVersion("main"), 5);
   for (const route of ["dashboard", "analyze", "review"])
-    assert.equal(getOnboardingFlowVersion(route), 2);
+    assert.equal(getOnboardingFlowVersion(route), 3);
   assert.deepEqual(getOnboardingSteps("unknown"), []);
   const ids = Object.values(ONBOARDING_STEPS)
     .flat()
@@ -102,7 +102,7 @@ test("separates Product search and Locator and teaches the accepted direct-selec
   const steps = getOnboardingSteps("main");
   assert.match(
     steps.find((step) => step.id === "main-product-search").description,
-    /stays visible in the main-map navbar.*loaded active Products/
+    /Find product in the navbar.*active map sources.*popup/
   );
   assert.match(
     steps.find((step) => step.id === "main-locator").description,
@@ -114,10 +114,9 @@ test("separates Product search and Locator and teaches the accepted direct-selec
     /Click normally.*overlap picker/
   );
   const shortcut = steps.find((step) => step.id === "main-shortcuts").description;
-  assert.match(shortcut, /Ctrl-click on Windows\/Linux.*Cmd-click on macOS/);
-  assert.match(shortcut, /current transient highlighted Product/);
-  assert.match(shortcut, /map focus, Ctrl\+Enter \/ Cmd\+Enter/);
-  assert.match(shortcut, /compact map hint/);
+  assert.match(shortcut, /Ctrl-click \(Cmd-click on macOS\).*highlighted Product/);
+  assert.match(shortcut, /map focus, Ctrl\+Enter \(Cmd\+Enter on macOS\)/);
+  assert.doesNotMatch(shortcut, /Linux|compact map hint/);
   assert.doesNotMatch(shortcut, /Collection/);
   assert.match(steps[0].description, /new tab/);
 
@@ -147,7 +146,10 @@ test("conditional workspace guidance uses route-stable empty-state anchors", () 
   const review = getOnboardingSteps("review");
 
   const dashboardLinks = dashboard.find((step) => step.id === "dashboard-activity-links");
-  assert.deepEqual(dashboardLinks.selectors, [".pc-dashboard-activity-table"]);
+  assert.deepEqual(dashboardLinks.selectors, [
+    ".pc-dashboard-activity-links",
+    ".pc-dashboard-activity-table__links-heading",
+  ]);
   assert.match(dashboardLinks.description, /When activity rows are available/);
 
   const analyzeCards = analyze.find((step) => step.id === "analyze-product-cards");
@@ -160,13 +162,10 @@ test("conditional workspace guidance uses route-stable empty-state anchors", () 
 
   const reviewBoard = review.find((step) => step.id === "review-comparison-board");
   assert.deepEqual(reviewBoard.selectors, [".pc-review-board"]);
-  assert.match(reviewBoard.description, /when available/);
+  assert.match(reviewBoard.description, /Explore each Product's selected content/);
 
-  for (const step of [dashboardLinks, analyzeCards, reviewProducts, reviewBoard]) {
-    assert.doesNotMatch(
-      step.selectors.join(" "),
-      /__item|pc-review-column|analyze-product-card|activity-links/
-    );
+  for (const step of [analyzeCards, reviewProducts, reviewBoard]) {
+    assert.doesNotMatch(step.selectors.join(" "), /__item|pc-review-column|analyze-product-card/);
   }
 });
 
@@ -179,8 +178,12 @@ test("Preferences guidance opens the real shared panel and targets runtime then 
 
     assert.deepEqual(runtime.reveal, reveal);
     assert.deepEqual(saved.reveal, reveal);
-    assert.deepEqual(runtime.selectors, ["#preferences-panel"]);
+    assert.deepEqual(runtime.selectors, [".pc-preferences-panel__setting--theme"]);
     assert.deepEqual(saved.selectors, [".pc-preferences-panel__group"]);
+    assert.ok(saved.highlightSelectors.includes(".pc-preferences-panel__introduction-action"));
+    if (route === "main") {
+      assert.ok(runtime.highlightSelectors.includes(".pc-preferences-panel__setting--scale"));
+    }
     assert.equal(runtime.placement, "left");
     assert.equal(saved.placement, "left");
   }
@@ -209,6 +212,7 @@ test("all configured targets exist in authoritative application-owned renderers"
   for (const step of Object.values(ONBOARDING_STEPS).flat()) {
     const selectors = [
       ...step.selectors,
+      ...(step.highlightSelectors ?? []),
       ...(step.reveal ? [step.reveal.triggerSelector, step.reveal.openSelector] : []),
     ];
     for (const selector of selectors) {
@@ -224,7 +228,7 @@ test("onboarding import graph cannot initialize main-map or workspace services",
     if (visited.has(url.href)) return;
     visited.add(url.href);
     const source = await readFile(url, "utf8");
-    assert.doesNotMatch(source, /@arcgis|@esri|MapView|fetch\(|apiGet|scaleVisibility/);
+    assert.doesNotMatch(source, /@arcgis|@esri|fetch\(|apiGet|scaleVisibility/);
     for (const [, specifier] of source.matchAll(/from\s+["']([^"']+)["']/g)) {
       assert.ok(specifier.startsWith("."));
       const dependency = new URL(specifier, url);

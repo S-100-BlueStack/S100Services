@@ -48,7 +48,8 @@
 
 .pc-onboarding-welcome p,
 .pc-onboarding-stop p,
-.pc-onboarding-popover__description {
+.pc-onboarding-popover__description,
+.pc-onboarding-popover__requirement {
   margin: 8px 0 0;
   color: var(--pc-text-muted);
   font-size: 13px;
@@ -68,6 +69,15 @@
 .pc-onboarding-stop__actions {
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.pc-onboarding-popover__requirement {
+  color: var(--pc-text);
+  font-weight: 600;
+}
+
+.pc-onboarding-popover__requirement[hidden] {
+  display: none;
 }
 
 .pc-onboarding-popover__spacer {

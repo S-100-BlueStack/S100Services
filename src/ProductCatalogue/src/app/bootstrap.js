@@ -56,6 +56,9 @@ async function bootstrapMainRoute() {
       import("./loadInitialData.js"),
     ]);
     const app = initMap();
+    ui.onboarding.setMapView(app.view, {
+      resolvePopupCollectionButton: app.getPopupCollectionButton,
+    });
     initRefreshControls(app);
     initializeTheme(app.view);
 

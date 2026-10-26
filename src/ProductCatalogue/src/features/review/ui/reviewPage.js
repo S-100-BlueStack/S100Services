@@ -19,6 +19,8 @@ export function renderReviewPage({
   const page = getOrCreateReviewPage();
   const previousBoard = page.querySelector(".pc-review-board");
   const activeElement = document.activeElement;
+  const pickerHadFocus =
+    page.contains(activeElement) && Boolean(activeElement.closest?.(".pc-product-picker"));
   const previousScrollLeft =
     previousBoard?.querySelector(".pc-review-board__columns")?.scrollLeft ?? 0;
   const normalizedProductItems = normalizeReviewProductItems(productItems);
@@ -43,6 +45,11 @@ export function renderReviewPage({
   if (columns) columns.scrollLeft = previousScrollLeft;
   // A retained column keeps its actual controls; restore only a surviving node.
   if (activeElement && page.contains(activeElement)) activeElement.focus?.({ preventScroll: true });
+  // Selection rerenders the sidebar before the picker handler has completed.
+  // Keep keyboard entry on the newly rendered input instead of the removed form.
+  if (pickerHadFocus) {
+    page.querySelector(".pc-product-picker__input")?.focus({ preventScroll: true });
+  }
   restoreReviewProductListInteraction(productListInteraction, { page });
   restoreReviewWorkspaceContentInteraction(workspaceContentInteraction, { page });
 }

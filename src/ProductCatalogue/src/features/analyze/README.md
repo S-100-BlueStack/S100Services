@@ -266,3 +266,7 @@ Review (F6C), floating package History (F6D) and package lifecycle actions remai
 These changes do not change Review/History source or backend contracts.
 Independent backend reads are not a server transaction; the frontend guards identities, complete
 publication and superseded generations, without claiming a transactional backend snapshot.
+
+## FI-043 selection visibility
+
+Adding, removing or enabling a Product updates the Analyze Product composition list before asynchronous source-aware resolution and content loading complete. The existing load generation remains the only authority for canonical identities, geometry and backend results. Content has an independent loading state and cannot be represented as loaded prematurely. The Product picker retains usable focus after a selection-triggered sidebar render.

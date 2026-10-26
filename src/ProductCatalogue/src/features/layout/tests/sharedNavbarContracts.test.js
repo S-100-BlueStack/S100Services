@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { getOnboardingSteps } from "../../onboarding/config/onboardingSteps.js";
 
 const projectRoot = new URL("../../../..", import.meta.url);
 
@@ -91,19 +92,28 @@ test("Preferences owns one immediate Theme switch through the existing theme ser
 });
 
 test("Preferences retains introduction, reset and route-safe map preference boundaries", async () => {
-  const [preferences, onboarding] = await Promise.all([
-    readProjectFile("src/features/preferences/ui/preferencesPanel.js"),
-    readProjectFile("src/features/onboarding/config/onboardingSteps.js"),
-  ]);
+  const preferences = await readProjectFile("src/features/preferences/ui/preferencesPanel.js");
+  const steps = getOnboardingSteps("main");
+  const settings = steps.find((step) => step.id === "main-preferences");
+  const saved = steps.find((step) => step.id === "main-saved-preferences");
 
   assert.match(preferences, /data-preference-action="start-introduction"/);
   assert.match(preferences, /data-preference-action="reset-all"/);
   assert.match(preferences, /!item\.requiresMapContext \|\| context\.mapPreferences/);
   assert.match(preferences, /resetDisplayScaleHidingPreference\(\)/);
-  assert.match(onboarding, /selectors: \["#preferences-panel"\]/);
-  assert.match(onboarding, /triggerSelector: "#preferences-button"/);
-  assert.match(onboarding, /selectors: \["\.pc-preferences-panel__group"\]/);
-  assert.doesNotMatch(onboarding, /#theme-toggle/);
+
+  // The guide highlights individual settings while the shared panel remains the reveal boundary.
+  const reveal = { triggerSelector: "#preferences-button", openSelector: "#preferences-panel" };
+  assert.deepEqual(settings?.reveal, reveal);
+  assert.deepEqual(saved?.reveal, reveal);
+  assert.deepEqual(settings?.selectors, [".pc-preferences-panel__setting--theme"]);
+  assert.deepEqual(settings?.highlightSelectors, [
+    ".pc-preferences-panel__setting--theme",
+    ".pc-preferences-panel__setting--scale",
+  ]);
+  assert.deepEqual(saved?.selectors, [".pc-preferences-panel__group"]);
+  assert.ok(saved?.highlightSelectors?.includes(".pc-preferences-panel__introduction-action"));
+  assert.doesNotMatch(settings.selectors.join(" "), /#theme-toggle/);
 });
 
 test("Scale hiding moves out of the navbar while Notifications retain their public control", async () => {
