@@ -672,3 +672,7 @@ navigation semantics are unchanged.
 ## Unified popup action presentation (FI-029)
 
 All resolved Product contexts use the same four-slot F7A-style action bar and stable keyed controls. `popupWorkflowActions.js` owns the shared action descriptors. `popupActionConfig.js` attaches live dispatch only through a verified source-owned session; unsupported controls remain focusable with explanation and cannot dispatch. The established `packageActionSession.js` still requires authoritative package identity and must not be invoked for standalone or mock sources. Backend Freeze/Export/Cancel Export modules remain in the codebase but no longer define a separate popup action row. Tools navigations remain capability-aware.
+
+### FI-029 UI acceptance record (2026-10-26)
+
+The shared four-slot action presentation was committed at `dbc1466400d18b92d5589d8d7392bd27ae6be86c`. The owner manually reviewed the existing ENC-package UI and reported no apparent popup regression. This is presentation/regression acceptance only: there were no standalone/non-package Products available for an end-to-end mutation test. Keep non-package Pause/Resume, Discard and Send/Accept disabled until the actual source-owned backend eligibility and dispatch contract is verified. Do not route the Product through a different source's package session or the previous Freeze/Export/Cancel Export workflow. See `../../../../docs/demo-readiness-plan.md` for current regression scope.

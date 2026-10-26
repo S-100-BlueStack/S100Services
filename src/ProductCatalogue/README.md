@@ -33,6 +33,19 @@ The main map route owns product correction management, popup actions, map filter
 
 The Analyze route owns analysis/report display for selected products. The Review route owns side-by-side product review for multiple selected products.
 
+## Development contract and demo preparation (2026-10-26)
+
+The authoritative baseline for the current documentation pass is `c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`. For future implementation tasks, use **the explicit baseline commit supplied by that task**, not this historical documentation baseline or the current branch by default.
+
+- [AI-assisted development rules](AGENTS.md) establish baseline verification, safe replacement files and truthful check reporting.
+- [Architecture invariants](docs/INVARIANTS.md) and [module ownership map](docs/MODULE_MAP.md) are navigation and preservation references; the current committed source and feature READMEs remain authoritative for behavior.
+- [Demo-readiness plan](docs/demo-readiness-plan.md) separates automated checks, browser regression testing and backend limitations.
+- [Frontend tracker](docs/frontend-hardening-tracker.md), [UI/UX backlog](docs/ui-ux-design-backlog.md) and [dated release review](docs/frontend-release-readiness-review.md) distinguish current planning from historical acceptance.
+
+Recent accepted frontend UI changes: FI-027 navbar Product search/Locator (`a0fde73c58a554c58028c2220399e3ae1691121b`), FI-029 unified popup presentation (`dbc1466400d18b92d5589d8d7392bd27ae6be86c`), and FI-027 Locator hover contrast correction (`c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c`). The user reports no apparent regressions in the ENC-package popup after FI-029, but non-package Pause/Resume, Discard and Send/Accept dispatch is not verified or enabled without a supported backend contract. Full demo verification and consolidated FI-043 Introduction review are still pending.
+
+SDK upgrades, map labels/linked annotations, Sonda, Vitest, FeatureEffect and framework experiments are deliberately deferred until a separately approved experiment branch exists; this documentation update does not change dependencies or runtime behavior.
+
 ## Terminology
 
 Use `Product` and `Products` in user-facing UI text. Do not use `Dataset`, `Datasets`, `dataset`, or similar dataset-oriented labels in visible UI unless the backend/domain concept specifically requires a technical distinction.
@@ -635,10 +648,13 @@ Recent frontend work has focused on:
 - FI-011C source-aware Product context, popup actions, and flat Export menu
 - FI-011D source-aware Product Collection, workspace resolution, and truthful History/report availability
 
-The normalized workflow adaptation is implemented without committing. Dependency-free tests run in
-Work; the Windows `npm run format` / `npm run check` and manual acceptance plan remain required.
-BE-108A Batch 1 is preserved. Batch 2 producers/recovery, real distribution, production mock-source
-replacements, Dashboard report associations and global timeline remain separate backend work.
+The normalized workflow adaptation was accepted in the earlier integration at
+`aaf635571503c780517cfc3a76a4fa5e4894f447` and remains documented in
+`docs/normalized-workflow-frontend-adaptation.md`. Later UI changes are recorded above and in
+the frontend tracker; the current demo baseline still requires its own browser/deployment smoke.
+BE-108A Batch 1 is preserved in the historical adaptation record. Batch 2 producers/recovery,
+real distribution, production mock-source replacements, Dashboard report associations and
+global timeline remain separate backend work.
 
 ## Shared Preferences
 
