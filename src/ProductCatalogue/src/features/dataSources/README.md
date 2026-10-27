@@ -66,6 +66,13 @@ replaced sessions never reopen later. Scale visibility bindings follow the curre
 source changes rebind scale visibility without republishing compatibility-derived filter/search state;
 compatibility publication remains owned by compatibility load/refresh boundaries.
 
+Targeted Product status drift reads coalesce and throttle by normalized source/Product identity,
+not just by source. Separate Products can refresh concurrently against one committed source operation;
+each accepted change advances the visible generation without invalidating another pending Product.
+Full source reload, disable, reset and destroy still supersede pending targeted reads through their
+source-operation context. Only the current Graphic with matching authoritative identity is updated;
+failed/missing/ambiguous Products are not replaced with another source's data.
+
 Failed active refresh retains the previous representation, filters and search index. Failed initial
 activation leaves no partial representation. Candidate layers are discarded on failure or supersession.
 Source removal closes owned popup/hover state, clears that source's filter/search state and removes

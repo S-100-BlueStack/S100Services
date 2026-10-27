@@ -856,3 +856,111 @@ test("consecutive targeted status transitions retain source ownership without a 
     h.controller.destroy();
   }
 });
+
+for (const completionOrder of [
+  ["A", "B"],
+  ["B", "A"],
+]) {
+  test(`concurrent targeted statuses preserve both Products and source generation (${completionOrder.join(" then ")})`, async () => {
+    const sourceId = "s101";
+    const reads = new Map([
+      ["A", deferred()],
+      ["B", deferred()],
+    ]);
+    const h = createHarness({
+      registry: createDataSourceRegistry({ configuredSourceIds: [sourceId] }),
+      loadTargetedStatus: (_source, datasetName) => reads.get(datasetName).promise,
+      normalizeTargetedStatus: (value) => value,
+    });
+    try {
+      await h.controller.activateSource(sourceId);
+      const initialGeneration = h.controller.getState(sourceId).generation;
+      const a = h.controller.refreshProductStatus(sourceId, "A");
+      const b = h.controller.refreshProductStatus(sourceId, "B");
+      for (const name of completionOrder) {
+        reads.get(name).resolve({ status: name });
+        // Wait for the status owner to publish before the next completion.
+        await (name === "A" ? a : b);
+      }
+      assert.deepEqual(await Promise.all([a, b]), [
+        { sourceId, success: true, changed: true },
+        { sourceId, success: true, changed: true },
+      ]);
+      assert.deepEqual(
+        h.mapAdapter.targetedPublications.map(({ datasetName }) => datasetName),
+        completionOrder
+      );
+      assert.equal(h.controller.getState(sourceId).generation, initialGeneration + 2);
+      assert.equal(
+        h.lifecycleEvents.filter((event) => event.detail.reason === "targeted-product-status")
+          .length,
+        2
+      );
+    } finally {
+      h.controller.destroy();
+    }
+  });
+}
+
+for (const operation of ["disable", "reset", "replace", "destroy"]) {
+  test(`concurrent Product status requests cannot publish after ${operation}`, async () => {
+    const sourceId = "s101";
+    const reads = new Map([
+      ["A", deferred()],
+      ["B", deferred()],
+    ]);
+    const h = createHarness({
+      registry: createDataSourceRegistry({ configuredSourceIds: [sourceId] }),
+      loadTargetedStatus: (_source, datasetName) => reads.get(datasetName).promise,
+      normalizeTargetedStatus: (value) => value,
+    });
+    try {
+      await h.controller.activateSource(sourceId);
+      const a = h.controller.refreshProductStatus(sourceId, "A");
+      const b = h.controller.refreshProductStatus(sourceId, "B");
+      if (operation === "disable") await h.controller.deactivateSource(sourceId);
+      if (operation === "reset") await h.controller.resetToDefaults();
+      if (operation === "replace") await h.controller.activateSource(sourceId);
+      if (operation === "destroy") h.controller.destroy();
+      reads.get("B").resolve({ status: 2 });
+      reads.get("A").resolve({ status: 1 });
+      assert.equal((await a).stale, true);
+      assert.equal((await b).stale, true);
+      assert.equal(h.mapAdapter.targetedPublications.length, 0);
+    } finally {
+      h.controller.destroy();
+    }
+  });
+}
+
+test("targeted failures after another Product publishes remain failures, not stale results", async () => {
+  const sourceId = "s101";
+  const aRead = deferred();
+  const bRead = deferred();
+  const h = createHarness({
+    registry: createDataSourceRegistry({ configuredSourceIds: [sourceId] }),
+    loadTargetedStatus: (_source, name) => (name === "A" ? aRead.promise : bRead.promise),
+    normalizeTargetedStatus: (value) => value,
+  });
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  try {
+    await h.controller.activateSource(sourceId);
+    const a = h.controller.refreshProductStatus(sourceId, "A");
+    const b = h.controller.refreshProductStatus(sourceId, "B");
+    bRead.resolve({ status: 2 });
+    assert.equal((await b).success, true);
+    aRead.reject(new Error("Status unavailable"));
+    const result = await a;
+    assert.equal(result.success, false);
+    assert.equal(result.stale, undefined);
+    assert.match(result.error.message, /Status unavailable/);
+    assert.deepEqual(
+      h.mapAdapter.targetedPublications.map((p) => p.datasetName),
+      ["B"]
+    );
+  } finally {
+    console.warn = originalWarn;
+    h.controller.destroy();
+  }
+});

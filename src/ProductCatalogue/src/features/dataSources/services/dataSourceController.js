@@ -307,10 +307,21 @@ export function createDataSourceController({
       return { success: false, skipped: true, reason: "inactive-or-loading" };
     }
     const generation = state.generation;
-    const isCurrent = () =>
-      isCurrentOperation(sourceId, generation, true) &&
-      !sourceStates.get(sourceId)?.loading &&
-      !context.abortController.signal.aborted;
+    // A targeted status publication advances the visible source generation but
+    // does not replace its loaded representation. Concurrent Products must keep
+    // the same source-operation ownership until a full reload/disable/reset
+    // replaces this context and aborts its outstanding reads.
+    const isCurrent = () => {
+      const currentState = sourceStates.get(sourceId);
+      return Boolean(
+        !destroyed &&
+        operationContexts.get(sourceId) === context &&
+        currentState?.enabled &&
+        currentState.requestedEnabled &&
+        !currentState.loading &&
+        !context.abortController.signal.aborted
+      );
+    };
     try {
       const response = await loadTargetedStatus(source, name, {
         signal: context.abortController.signal,
@@ -328,7 +339,9 @@ export function createDataSourceController({
         return { sourceId, success: false, skipped: true, reason: publication.reason };
       }
       if (publication.changed) {
-        const publishedGeneration = generation + 1;
+        // Each accepted Product publication advances the current generation,
+        // including when another Product completed first under this context.
+        const publishedGeneration = sourceStates.get(sourceId).generation + 1;
         updateState(sourceId, { generation: publishedGeneration });
         onLayersChanged({ sourceId, type: "refreshed" });
         lifecycle?.emit?.("refreshed", {
