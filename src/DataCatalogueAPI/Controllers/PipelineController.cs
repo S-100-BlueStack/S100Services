@@ -21,15 +21,7 @@ namespace DataCatalague.Api.Controllers.V1
         [ApiVersion(ApiVersions.V1Text)]
         [Route("api/v{version:apiVersion}/pipelines")]
         [Produces("application/json")]
-        public sealed class PipelineController(
-                IEventStore eventstore,
-                ICommandService<PipelineState> servicePipeline,
-                DispatchRepository dispatchRepository,
-                IPipelineRepository pipelineRepository,
-                WorkspaceService workspaceService,
-                IOptions<DispatcherOptions> options,
-                ArcGisDispatcher dispatcher,
-                ILogger<PipelineController> logger) : ControllerBase
+        public sealed class PipelineController(IEventStore eventstore, ICommandService<PipelineState> servicePipeline, DispatchRepository dispatchRepository, IPipelineRepository pipelineRepository, WorkspaceService workspaceService, IOptions<DispatcherOptions> options, ArcGisDispatcher dispatcher, ILogger<PipelineController> logger) : ControllerBase
         {
             private const int DefaultPageSize = 20;
 
@@ -65,22 +57,23 @@ namespace DataCatalague.Api.Controllers.V1
             [HttpPost]
             [Consumes("application/json")]
             [ProducesResponseType<PipelineResponse>(StatusCodes.Status201Created)]
-            [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+            [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+            [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+            [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
             public async Task<ActionResult<PipelineResponse>> Create([FromBody] CreatePipelineRequest request, CancellationToken cancellationToken) {
-                ArgumentNullException.ThrowIfNull(request);
-                ArgumentNullException.ThrowIfNullOrWhiteSpace(request.DisplayName);
-                ArgumentNullException.ThrowIfNullOrWhiteSpace(request.Description);
-
-                var displayName = request.DisplayName?.Trim();
-                ArgumentNullException.ThrowIfNullOrWhiteSpace(displayName);
-
-                var description = request.Description?.Trim();
-                ArgumentNullException.ThrowIfNullOrWhiteSpace(description);
+                if (request is null || string.IsNullOrWhiteSpace(request.DisplayName) || string.IsNullOrWhiteSpace(request.Description)) {
+                    return this.Problem(title: "Pipeline display name and description are required.", statusCode: StatusCodes.Status400BadRequest);
+                }
+                var displayName = request.DisplayName.Trim();
+                var description = request.Description.Trim();
 
                 var cmd = await this._servicePipeline.Handle(new PipelineCommands.Create(CreateStreamId(), displayName, description), cancellationToken);
 
-                if (!cmd.Success)
-                    return this.BadRequest();
+                if (cmd.Exception is WrongVersion) { return this.Problem(title: "Pipeline changed; retry the request.", statusCode: StatusCodes.Status409Conflict); }
+                if (!cmd.Success) {
+                    this._logger.LogError(cmd.Exception, "Could not save pipeline changes.");
+                    return this.Problem(title: "Could not save pipeline changes.", statusCode: StatusCodes.Status500InternalServerError);
+                }
 
                 var result = cmd.Get()!;
 
@@ -88,7 +81,7 @@ namespace DataCatalague.Api.Controllers.V1
 
                 var route = this.CreatedAtRoute(
                     "GetPipeline.V1",
-                    new { id = result.State.Id, version = ApiVersions.V1Text },
+                    new { id = result.State.Id!.Value, version = ApiVersions.V1Text },
                     Map(result.State));
 
                 return route;
@@ -116,34 +109,61 @@ namespace DataCatalague.Api.Controllers.V1
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-            public Task<ActionResult<PipelineResponse>> AddWorkspace(string id, [FromBody] AddWorkspaceRequest request, CancellationToken cancellationToken) => ExecuteWorkspaceAsync(async () => {
-                this._logger.LogInformation("Creating workspace. PipelineId: {PipelineId}, Name: {DisplayName}, User: {User}.", id, request?.DisplayName, this.User?.Identity?.Name);
-                var state = await workspaceService.CreateAsync(id, request!, cancellationToken);
-                return Map(state);
-            }, createdPipelineId: id);
+            public async Task<ActionResult<PipelineResponse>> AddWorkspace(string id, [FromBody] AddWorkspaceRequest request, CancellationToken cancellationToken) {
+                try {
+                    this._logger.LogInformation("Creating workspace. PipelineId: {PipelineId}, Name: {DisplayName}, User: {User}.", id, request?.DisplayName, this.User?.Identity?.Name);
+                    var state = await workspaceService.CreateAsync(id, request!, cancellationToken);
+                    var created = state.Workspaces.Single(w => string.Equals(w.DisplayName, request!.DisplayName.Trim(), StringComparison.OrdinalIgnoreCase));
+                    return this.CreatedAtRoute("GetWorkspace.V1", new { id, workspace = created.Id, version = ApiVersions.V1Text }, Map(state));
+                }
+                catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
+                catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
+                catch (WorkspaceConflictException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status409Conflict); }
+            }
 
             /// <summary>Lists workspaces and their current owners.</summary>
             [HttpGet("{id}/workspaces")]
             [ProducesResponseType<IReadOnlyList<WorkspaceResponse>>(StatusCodes.Status200OK)]
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-            public Task<ActionResult<IReadOnlyList<WorkspaceResponse>>> GetWorkspaces(string id, CancellationToken cancellationToken) => ExecuteWorkspaceAsync<IReadOnlyList<WorkspaceResponse>>(async () => {
-                var pipeline = await workspaceService.GetPipelineAsync(id, cancellationToken);
-                return pipeline.Workspaces.Select(WorkspaceResponse.FromState).ToArray();
-            });
+            public async Task<ActionResult<IReadOnlyList<WorkspaceResponse>>> GetWorkspaces(string id, CancellationToken cancellationToken) {
+                try {
+                    var pipeline = await workspaceService.GetPipelineAsync(id, cancellationToken);
+                    return this.Ok(pipeline.Workspaces.Select(WorkspaceResponse.FromState).ToArray());
+                }
+                catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
+                catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
+                catch (WorkspaceConflictException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status409Conflict); }
+            }
 
             /// <summary>Gets a workspace and its Esri JSON polygon.</summary>
             [HttpGet("{id}/workspaces/{workspace}", Name = "GetWorkspace.V1")]
             [ProducesResponseType<WorkspaceDetailResponse>(StatusCodes.Status200OK)]
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-            public Task<ActionResult<WorkspaceDetailResponse>> GetWorkspace(string id, string workspace, CancellationToken cancellationToken) => ExecuteWorkspaceAsync(() => workspaceService.GetWorkspaceAsync(id, workspace, cancellationToken));
+            public async Task<ActionResult<WorkspaceDetailResponse>> GetWorkspace(string id, string workspace, CancellationToken cancellationToken) {
+                try {
+                    var result = await workspaceService.GetWorkspaceAsync(id, workspace, cancellationToken);
+                    return this.Ok(result);
+                }
+                catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
+                catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
+                catch (WorkspaceConflictException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status409Conflict); }
+            }
 
             /// <summary>Lists bound packages whose rectangular AOIs intersect this workspace.</summary>
             [HttpGet("{id}/workspaces/{workspace}/packages")]
             [ProducesResponseType<PagedResponse<WorkspacePackageResponse>>(StatusCodes.Status200OK)]
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-            public Task<ActionResult<PagedResponse<WorkspacePackageResponse>>> GetWorkspacePackages(string id, string workspace, CancellationToken cancellationToken, [FromQuery, Range(1, int.MaxValue)] int page = 1, [FromQuery, Range(1, PackageRepository.MaximumPageSize)] int pageSize = DefaultPageSize) => ExecuteWorkspaceAsync(() => workspaceService.GetPackagesAsync(id, workspace, page, pageSize, cancellationToken));
+            public async Task<ActionResult<PagedResponse<WorkspacePackageResponse>>> GetWorkspacePackages(string id, string workspace, CancellationToken cancellationToken, [FromQuery, Range(1, int.MaxValue)] int page = 1, [FromQuery, Range(1, PackageRepository.MaximumPageSize)] int pageSize = DefaultPageSize) {
+                try {
+                    var result = await workspaceService.GetPackagesAsync(id, workspace, page, pageSize, cancellationToken);
+                    return this.Ok(result);
+                }
+                catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
+                catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
+                catch (WorkspaceConflictException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status409Conflict); }
+            }
 
             /// <summary>Claims the workspace for the signed-in user, replacing any current owner.</summary>
             /// <param name="id">Pipeline ID from GET /pipelines.</param>
@@ -155,18 +175,7 @@ namespace DataCatalague.Api.Controllers.V1
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-            public Task<ActionResult<PipelineResponse>> LockWorkspace(string id, string workspace, CancellationToken cancellationToken) => SetWorkspaceLock(id, workspace, true, cancellationToken);
-
-            /// <summary>Clears the workspace owner, regardless of who currently owns it.</summary>
-            [HttpDelete("{id}/workspaces/{workspace}/lock")]
-            [ProducesResponseType<PipelineResponse>(StatusCodes.Status200OK)]
-            [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-            [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-            [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-            [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-            public Task<ActionResult<PipelineResponse>> UnlockWorkspace(string id, string workspace, CancellationToken cancellationToken) => SetWorkspaceLock(id, workspace, false, cancellationToken);
-
-            private async Task<ActionResult<PipelineResponse>> SetWorkspaceLock(string id, string workspace, bool locked, CancellationToken cancellationToken) {
+            public async Task<ActionResult<PipelineResponse>> LockWorkspace(string id, string workspace, CancellationToken cancellationToken) {
                 var identity = this.User?.Identity;
                 var username = identity?.Name;
                 if (identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(username)) {
@@ -176,9 +185,9 @@ namespace DataCatalague.Api.Controllers.V1
                 if (string.IsNullOrWhiteSpace(username)) {
                     return this.Problem(title: "A valid username is required.", statusCode: StatusCodes.Status401Unauthorized);
                 }
-                this._logger.LogInformation("Updating workspace ownership. PipelineId: {PipelineId}, WorkspaceId: {WorkspaceId}, User: {User}, Assigned: {Assigned}.", id, workspace, username, locked);
+                this._logger.LogInformation("Updating workspace ownership. PipelineId: {PipelineId}, WorkspaceId: {WorkspaceId}, User: {User}, Assigned: {Assigned}.", id, workspace, username, true);
                 try {
-                    var state = await workspaceService.SetLockAsync(id, workspace, username, locked, cancellationToken);
+                    var state = await workspaceService.SetLockAsync(id, workspace, username, true, cancellationToken);
                     if (state is null) {
                         return this.Problem(title: "Workspace not found in this pipeline.", detail: $"Workspace '{workspace}' is not part of pipeline '{id}'. Use a workspace ID from that pipeline's workspaces array.", statusCode: StatusCodes.Status404NotFound);
                     }
@@ -189,16 +198,35 @@ namespace DataCatalague.Api.Controllers.V1
                 catch (WorkspaceConflictException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status409Conflict); }
             }
 
-            private async Task<ActionResult<T>> ExecuteWorkspaceAsync<T>(Func<Task<T>> action, string? createdPipelineId = null) {
+            /// <summary>Clears the workspace owner, regardless of who currently owns it.</summary>
+            [HttpDelete("{id}/workspaces/{workspace}/lock")]
+            [ProducesResponseType<PipelineResponse>(StatusCodes.Status200OK)]
+            [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+            [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+            [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+            [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+            public async Task<ActionResult<PipelineResponse>> UnlockWorkspace(string id, string workspace, CancellationToken cancellationToken) {
+                var identity = this.User?.Identity;
+                var username = identity?.Name;
+                if (identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(username)) {
+                    return this.Problem(title: "A signed-in user is required.", statusCode: StatusCodes.Status401Unauthorized);
+                }
+                username = Extensions.NormalizeUserName(username);
+                if (string.IsNullOrWhiteSpace(username)) {
+                    return this.Problem(title: "A valid username is required.", statusCode: StatusCodes.Status401Unauthorized);
+                }
+                this._logger.LogInformation("Updating workspace ownership. PipelineId: {PipelineId}, WorkspaceId: {WorkspaceId}, User: {User}, Assigned: {Assigned}.", id, workspace, username, false);
                 try {
-                    var result = await action();
-                    return createdPipelineId is null ? this.Ok(result) : this.CreatedAtRoute("GetPipeline.V1", new { id = createdPipelineId, version = ApiVersions.V1Text }, result);
+                    var state = await workspaceService.SetLockAsync(id, workspace, username, false, cancellationToken);
+                    if (state is null) {
+                        return this.Problem(title: "Workspace not found in this pipeline.", detail: $"Workspace '{workspace}' is not part of pipeline '{id}'. Use a workspace ID from that pipeline's workspaces array.", statusCode: StatusCodes.Status404NotFound);
+                    }
+                    return this.Ok(Map(state));
                 }
                 catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
                 catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
                 catch (WorkspaceConflictException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status409Conflict); }
             }
-
 
             private static PipelineResponse Map(Domain.PipelineState state) => new() {
                 Id = state.Id,

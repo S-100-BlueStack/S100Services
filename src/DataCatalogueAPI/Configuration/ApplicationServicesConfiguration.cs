@@ -33,6 +33,8 @@ public static class ApplicationServicesConfiguration
 
         services.AddHealthChecks();
         services.AddTransient<DataCatalague.Api.Services.PackageGeometryService>();
+        services.AddTransient<DataCatalague.Api.Services.PackageCreationService>();
+        services.AddTransient<DataCatalague.Api.Services.DispatcherResourceService>();
         services.AddSingleton<DataCatalague.Api.Services.PackageIdentityService>();
         services.AddTransient<DataCatalague.Api.Services.WorkspaceService>();
         services.AddSingleton<PipelineAssignmentIndex>();

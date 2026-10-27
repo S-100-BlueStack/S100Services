@@ -1,4 +1,3 @@
-using ArcGIS.Core.Geometry;
 using Asp.Versioning;
 using DataCatalague.Api.Configuration;
 using DataCatalague.Api.Domain;
@@ -21,35 +20,19 @@ namespace DataCatalague.Api.Controllers
     [ApiVersion(ApiVersions.V1Text)]
     [Route("api/v{version:apiVersion}/packages")]
     [Produces("application/json")]
-    public sealed class PackageController(
-        IEventStore eventstore,
-        ICommandService<PackageState> packageService,
-        PackageRepository packageRepository,
-        PackageGeometryService geometryService,
-        PackageIdentityService identities,
-        IOptions<PackagesOptions> options,
-        ArcGisDispatcher dispatcher,
-        ILogger<PackageController> logger) : ControllerBase
+    public sealed class PackageController(IEventStore eventstore, PackageRepository packageRepository, PackageGeometryService geometryService, PackageCreationService creationService, DispatcherResourceService resources, IOptions<PackagesOptions> options, ILogger<PackageController> logger) : ControllerBase
     {
         private const int DefaultPageSize = 20;
 
         private readonly PackageGeometryService _geometryService = geometryService;
 
-        // The in-memory store and geometry repository cannot share a transaction.
-        // Serialize creates while reserving readable IDs and persisting geometry.
-        private static readonly SemaphoreSlim CreationGate = new(1, 1);
-
         readonly StreamNameMap _streamNameMap = new();
 
         private readonly IEventStore _eventStore = eventstore;
 
-        private readonly ICommandService<PackageState> _servicePackage = packageService;
-
         private readonly PackageRepository _packageRepository = packageRepository;
 
         private readonly IOptions<PackagesOptions> _options = options;
-
-        private readonly ArcGisDispatcher _dispatcher = dispatcher;
 
         private readonly ILogger<PackageController> _logger = logger;
 
@@ -60,8 +43,9 @@ namespace DataCatalague.Api.Controllers
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<PackageResponse>> CreatePackage([FromBody] CreatePackageRequest request, CancellationToken cancellationToken) {
-            ArgumentNullException.ThrowIfNull(request);
+            if (request is null) { return this.Problem(title: "Invalid package request.", statusCode: StatusCodes.Status400BadRequest); }
 
             // Sample initialization invokes this action directly, bypassing MVC model validation.
             var validationErrors = new List<ValidationResult>();
@@ -73,97 +57,18 @@ namespace DataCatalague.Api.Controllers
                 });
             }
 
-            await CreationGate.WaitAsync(cancellationToken);
-            (string Id, string ShortId)? identity = null;
-            var geometryCommitted = false;
             try {
-                var categoryId = new CategoryId(request.Category);
-                var categoryStream = this._streamNameMap.GetStreamName(categoryId);
-
-                if (!await this._eventStore.StreamExists(categoryStream, cancellationToken)) {
-                    return this.BadRequest(new ProblemDetails {
-                        Title = "Category does not exist.",
-                        Detail = $"No category exists with identifier '{request.Category}'."
-                    });
-                }
-
-                var category = await this._eventStore.LoadState<CategoryState, CategoryId>(this._streamNameMap, categoryId, true, cancellationToken);
-
-                if (category.State.IsTerminated) {
-                    return this.BadRequest(new ProblemDetails {
-                        Title = "Category is terminated.",
-                        Detail = $"Category '{request.Category}' no longer accepts packages."
-                    });
-                }
-
-                if (string.IsNullOrEmpty(category.State.Prefix)) {
-                    return this.BadRequest(new ProblemDetails { Title = "Category has no identifier prefix." });
-                }
-                var sourceShortId = request.MetaData?.ShortId;
-                if (sourceShortId is not null && !System.Text.RegularExpressions.Regex.IsMatch(sourceShortId, $@"\A{System.Text.RegularExpressions.Regex.Escape(category.State.Prefix)}-[0-9]{{3,}}-[0-9]{{2}}\z")) {
-                    return this.BadRequest(new ProblemDetails { Title = "Metadata shortId must match PREFIX-NNN-YY (with at least three sequence digits)." });
-                }
-                identity = identities.Reserve(category.State.Prefix, sourceShortId, DateTimeOffset.UtcNow);
-                if (identity is null) {
-                    return this.Conflict(new ProblemDetails { Title = "Package short ID already exists.", Detail = $"Short ID '{sourceShortId}' is already reserved." });
-                }
-                var streamId = identity.Value.Id;
-                var metadata = request.MetaData is { } supplied
-                    ? supplied with { ShortId = identity.Value.ShortId }
-                    : new PackageMetaData(identity.Value.ShortId, request.Category, null, null, null, DateTimeOffset.UtcNow);
-
-                var references = await this._dispatcher.ExecuteAsync(() => {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (request.DetailedGeometry is { } geometry) {
-                        var aoi = PolygonBuilderEx.FromJson(geometry.Aoi);
-                        var points = geometry.Points is null ? null : MultipointBuilderEx.FromJson(geometry.Points);
-                        var curves = geometry.Curves is null ? null : PolylineBuilderEx.FromJson(geometry.Curves);
-                        var surfaces = geometry.Surfaces is null ? null : PolygonBuilderEx.FromJson(geometry.Surfaces);
-
-                        if ((points is null && curves is null && surfaces is null)
-                            || points?.IsEmpty == true
-                            || curves?.IsEmpty == true
-                            || surfaces?.IsEmpty == true) {
-                            throw new InvalidDataException("Detailed geometry must contain at least one group, and supplied groups must not be empty.");
-                        }
-
-                        return this._packageRepository.AddPackageGeometries(aoi, points, curves, surfaces, streamId, request.AbsoluteUri, cancellationToken);
-                    }
-
-                    var polygon = this._packageRepository.FromEsriJson(request.EsriJSON);
-                    return (Aoi: this._packageRepository.AddPackageAOI(polygon, streamId, request.AbsoluteUri), Details: (DetailedGeometry?)null);
-                });
-
-                geometryCommitted = true;
-                var filename = IO.Path.GetFileName(request.AbsoluteUri);
-
-                // Once geometry commits, finish recording its references even if the caller disconnects.
-                var cmd = await this._servicePackage.Handle(new PackagesCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, references.Aoi, request.Severity, metadata, request.DisplayScale, references.Details, request.Descriptions, request.Charts), CancellationToken.None);
-
-                if (!cmd.Success) {
-                    this._logger.LogError("Package command failed after geometry persistence. PackageId: {PackageId}, ShortId: {ShortId}, Aoi: {Aoi}, Details: {@Details}.", streamId, metadata.ShortId, references.Aoi, references.Details);
-                    return this.BadRequest();
-                }
-
-                var result = cmd.Get()!;
-
-                this._logger.LogInformation("Created package {PackageId}. ShortId: {ShortId}, Category: {Category}, User: {User}.", result.State.Id, metadata.ShortId, request.Category, this.User?.Identity?.Name);
-
-                return this.CreatedAtRoute(
-                    "GetPackage.V1",
-                    new { id = result.State.Id, version = ApiVersions.V1Text },
-                    Map(result.State));
+                var state = await creationService.CreateAsync(request, cancellationToken);
+                this._logger.LogInformation("Created package {PackageId}. ShortId: {ShortId}, Category: {Category}, User: {User}.", state.Id, state.MetaData?.ShortId, request.Category, this.User?.Identity?.Name);
+                return this.CreatedAtRoute("GetPackage.V1", new { id = state.Id!.Value, version = ApiVersions.V1Text }, Map(state));
             }
-            catch (InvalidDataException exception) {
-                return this.BadRequest(new ProblemDetails {
-                    Title = "Invalid package geometry.",
-                    Detail = exception.Message
-                });
-            }
-            finally {
-                if (!geometryCommitted && identity is { } reserved) { identities.Release(reserved.ShortId); }
-                CreationGate.Release();
+            catch (PackageCreationException exception) {
+                var status = exception.Error switch {
+                    PackageCreationError.Validation => StatusCodes.Status400BadRequest,
+                    PackageCreationError.Conflict => StatusCodes.Status409Conflict,
+                    _ => StatusCodes.Status500InternalServerError,
+                };
+                return this.Problem(title: exception.Message, detail: exception.Detail, statusCode: status);
             }
         }
 
@@ -196,16 +101,18 @@ namespace DataCatalague.Api.Controllers
         }
 
         [HttpGet("{id}", Name = "GetPackage.V1")]
-        [Consumes("application/json")]
         [ProducesResponseType<PackageResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<PackageResponse>> GetPackage(string id, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNullOrEmpty(id);
 
+            if (!await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new PackageId(id)), cancellationToken)) {
+                return this.Problem(title: "Package not found.", detail: $"No package exists with identifier {id}.", statusCode: StatusCodes.Status404NotFound);
+            }
             try {
                 var stream = await this._eventStore.LoadState<PackageState, PackageId>(this._streamNameMap, new(id), true, cancellationToken);
-                return Map(stream.State);
+                return this.Ok(Map(stream.State));
             }
             catch (StreamNotFound) {
                 this._logger.LogInformation("Package {id} was not found.", id);
@@ -240,7 +147,7 @@ namespace DataCatalague.Api.Controllers
                 if (state is null) {
                     return this.Problem(title: "Package not found.", detail: $"No package exists with identifier {id}.", statusCode: StatusCodes.Status404NotFound);
                 }
-                return Map(state);
+                return this.Ok(Map(state));
             }
             catch (InvalidDataException exception) {
                 this.ModelState.AddModelError(nameof(request), exception.Message);
@@ -250,10 +157,10 @@ namespace DataCatalague.Api.Controllers
 
         [HttpPost("repository")]
         [Consumes("multipart/form-data")]
-        [ProducesResponseType<FileResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<FileResponse>(StatusCodes.Status201Created)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-        public async Task<ActionResult<PackageResponse>> UploadFile([FromForm] UploadFileRequest request, CancellationToken cancellationToken) {
-            if (request.File.Length == 0) {
+        public async Task<ActionResult<FileResponse>> UploadFile([FromForm] UploadFileRequest request, CancellationToken cancellationToken) {
+            if (request?.File is null || request.File.Length == 0) {
                 return this.Problem(
                     title: "Invalid package",
                     detail: "The uploaded ZIP file is empty.",
@@ -269,16 +176,9 @@ namespace DataCatalague.Api.Controllers
 
             await using IO.Stream stream = request.File.OpenReadStream();
 
-            var fileRef = await this._dispatcher.ExecuteAsync(() => {
-                return this._packageRepository.AddAttachment(stream, request.File.FileName, DateTime.UtcNow);
-            });
+            var fileRef = await resources.StoreFileAsync(stream, request.File.FileName, cancellationToken);
 
-            //var cmd = await this._servicePackage.Handle(new StreamCommands.AddPackage(fileid, uuid, request.File.FileName, request.File.Length), cancellationToken);
-
-            //if (!cmd.Success)
-            //    return this.BadRequest();
-
-            return this.Ok(new FileResponse {
+            return this.StatusCode(StatusCodes.Status201Created, new FileResponse {
                 AbsoluteUri = $"database://{fileRef}",
             });
         }

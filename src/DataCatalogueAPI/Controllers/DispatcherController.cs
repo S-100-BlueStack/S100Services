@@ -39,15 +39,7 @@ namespace DataCatalague.Api.Controllers
     [ApiVersion(ApiVersions.V1Text)]
     [Route("api/v{version:apiVersion}/dispatcher")]
     [Produces("application/json")]
-    public sealed class DispatcherController(
-        IEventStore eventstore,
-        ICommandService<CategoryState> categoryService,
-        DispatchRepository dispatchRepository,
-        WorkspaceService workspaceService,
-        PipelineAssignmentService assignments,
-        IOptions<DispatcherOptions> options,
-        ArcGisDispatcher dispatcher,
-        ILogger<DispatcherController> logger) : ControllerBase
+    public sealed class DispatcherController(IEventStore eventstore, ICommandService<CategoryState> categoryService, DispatchRepository dispatchRepository, WorkspaceService workspaceService, PipelineAssignmentService assignments, DispatcherResourceService resources, IOptions<DispatcherOptions> options, ILogger<DispatcherController> logger) : ControllerBase
     {
         private const int DefaultPageSize = 20;
 
@@ -61,12 +53,9 @@ namespace DataCatalague.Api.Controllers
 
         private readonly IOptions<DispatcherOptions> _options = options;
 
-        private readonly ArcGisDispatcher _dispatcher = dispatcher;
-
         private readonly ILogger<DispatcherController> _logger = logger;
 
         [HttpGet("categories")]
-        [Consumes("application/json")]
         [ProducesResponseType<PagedResponse<CategoryResponse>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<PagedResponse<CategoryResponse>>> GetCategories(CancellationToken cancellationToken) {
@@ -85,10 +74,11 @@ namespace DataCatalague.Api.Controllers
         [ProducesResponseType<CategoryResponse>(StatusCodes.Status201Created)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<CategoryResponse>> CreateCategory([FromBody] CreateCategoryRequest request, CancellationToken cancellationToken) {
-            ArgumentNullException.ThrowIfNull(request);
-            ArgumentNullException.ThrowIfNullOrWhiteSpace(request.DisplayName?.Trim());
-            ArgumentNullException.ThrowIfNullOrWhiteSpace(request.Description?.Trim());
+            if (request is null || string.IsNullOrWhiteSpace(request.DisplayName) || string.IsNullOrWhiteSpace(request.Description)) {
+                return this.Problem(title: "Category display name and description are required.", statusCode: StatusCodes.Status400BadRequest);
+            }
 
             var displayName = request.DisplayName?.Trim()!;
             var description = request.Description?.Trim();
@@ -108,8 +98,11 @@ namespace DataCatalague.Api.Controllers
             }
             var cmd = await this._serviceCategory.Handle(new DispatcherCommands.CreateCategory(categoryId, displayName, description, request.Prefix), cancellationToken);
 
-            if (!cmd.Success)
-                return this.BadRequest();
+            if (cmd.Exception is WrongVersion) { return this.Problem(title: "Category changed; retry the request.", statusCode: StatusCodes.Status409Conflict); }
+            if (!cmd.Success) {
+                this._logger.LogError(cmd.Exception, "Could not save category changes.");
+                return this.Problem(title: "Could not save category changes.", statusCode: StatusCodes.Status500InternalServerError);
+            }
 
             var result = cmd.Get()!;
 
@@ -117,21 +110,23 @@ namespace DataCatalague.Api.Controllers
 
             return this.CreatedAtRoute(
                 "GetCategory.V1",
-                new { id = result.State.Id, version = ApiVersions.V1Text },
+                new { id = result.State.Id!.Value, version = ApiVersions.V1Text },
                 Map(result.State));
         }
 
         [HttpGet("categories/{id}", Name = "GetCategory.V1")]
-        [Consumes("application/json")]
         [ProducesResponseType<CategoryResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<CategoryResponse>> GetCategory(string id, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNullOrEmpty(id);
 
+            if (!await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new CategoryId(id)), cancellationToken)) {
+                return this.Problem(title: "Category not found.", detail: $"No category exists with identifier {id}.", statusCode: StatusCodes.Status404NotFound);
+            }
             try {
                 var stream = await this._eventStore.LoadState<CategoryState, CategoryId>(this._streamNameMap, new(id), true, cancellationToken);
-                return Map(stream.State);
+                return this.Ok(Map(stream.State));
             }
             catch (StreamNotFound) {
                 this._logger.LogInformation("Category {id} was not found.", id);
@@ -145,53 +140,61 @@ namespace DataCatalague.Api.Controllers
 
         [HttpPut("categories/{id}/specification")]
         [Consumes("application/json")]
-        [ProducesResponseType<CategoryResponse>(StatusCodes.Status202Accepted)]
-        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType<CategoryResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<CategoryResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<CategoryResponse>> UpdateCategorySpecification(string id, [FromBody] UpdateCategorySpecificationRequest request, CancellationToken cancellationToken) {
             ArgumentNullException.ThrowIfNullOrEmpty(id);
 
-            ArgumentNullException.ThrowIfNullOrEmpty(request.Version);
-            ArgumentNullException.ThrowIfNullOrEmpty(request.Markdown);
+            if (request is null || !Version.TryParse(request.Version, out var version) || string.IsNullOrWhiteSpace(request.Markdown)) {
+                return this.Problem(title: "Supply a valid specification version and Markdown.", statusCode: StatusCodes.Status400BadRequest);
+            }
+            if (!await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new CategoryId(id)), cancellationToken)) {
+                return this.Problem(title: "Category not found.", statusCode: StatusCodes.Status404NotFound);
+            }
+            var current = (await this._eventStore.LoadState<CategoryState, CategoryId>(this._streamNameMap, new(id), true, cancellationToken)).State;
+            if (current.Version == version && current.Markdown == request.Markdown) { return this.Ok(Map(current)); }
 
             var cmd = await this._serviceCategory.Handle(new DispatcherCommands.UpdateSpecificationCategory(id, request.Version, request.Markdown), cancellationToken);
 
-            if (!cmd.Success)
-                return this.BadRequest();
+            if (cmd.Exception is WrongVersion) { return this.Problem(title: "Category changed; retry the request.", statusCode: StatusCodes.Status409Conflict); }
+            if (!cmd.Success) {
+                this._logger.LogError(cmd.Exception, "Could not save category changes.");
+                return this.Problem(title: "Could not save category changes.", statusCode: StatusCodes.Status500InternalServerError);
+            }
 
             var result = cmd.Get()!;
 
 
             this._logger.LogInformation("UpdateCategorySpecification {version}.", result.State.Version);
 
-            return this.AcceptedAtRoute(
-                "GetCategory.V1",
-                new { id = result.State.Id, version = ApiVersions.V1Text },
-                Map(result.State));
+            if (current.Markdown is null) {
+                return this.CreatedAtAction(nameof(UpdateCategorySpecification), new { id, version = ApiVersions.V1Text }, Map(result.State));
+            }
+            return this.Ok(Map(result.State));
         }
 
 
 
         [HttpPost("severity")]
         [Consumes("application/json")]
-        [ProducesResponseType<SeverityResponse>(StatusCodes.Status200OK)]
-        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType<SeverityResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<SeverityResponse>> AddSeverity([FromBody] AddSeverityAreaRequest request, CancellationToken cancellationToken) {
-            ArgumentNullException.ThrowIfNull(request);
-            ArgumentNullException.ThrowIfNullOrEmpty(request.EsriJSON);
+            if (request is null || string.IsNullOrWhiteSpace(request.EsriJSON)) {
+                return this.Problem(title: "An Esri JSON polygon is required.", statusCode: StatusCodes.Status400BadRequest);
+            }
 
-            var geometryRef = await this._dispatcher.ExecuteAsync(() => {
-                var polygon = this._dispatchRepository.FromEsriJson(request.EsriJSON);
-
-                return this._dispatchRepository.AddSeverityAOI(polygon, request.Severity);
-            });
-
-            this._logger.LogInformation("Created severity area {id}.", geometryRef);
-
-            return new SeverityResponse {
-                GeometryRef = geometryRef,
-            };
+            try {
+                var geometryRef = await resources.CreateSeverityAsync(request.EsriJSON, request.Severity, cancellationToken);
+                this._logger.LogInformation("Created severity area {id}.", geometryRef);
+                return this.StatusCode(StatusCodes.Status201Created, new SeverityResponse { GeometryRef = geometryRef });
+            }
+            catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
         }
 
 
@@ -247,7 +250,7 @@ namespace DataCatalague.Api.Controllers
                 var state = await assignments.GetAsync(id, cancellationToken);
                 if (!state.IsActive) { return this.Problem(title: "Binding not found.", statusCode: StatusCodes.Status404NotFound); }
                 var intersections = await workspaceService.GetIntersectionsAsync(state.PackageId!.Value, state.PipelineId!.Value, cancellationToken);
-                return Map(state, intersections);
+                return this.Ok(Map(state, intersections));
             }
             catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
         }
