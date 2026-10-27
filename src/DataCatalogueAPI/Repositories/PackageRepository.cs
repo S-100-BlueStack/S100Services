@@ -31,9 +31,7 @@ namespace DataCatalague.Api.Repositories
 
         private readonly ConcurrentDictionary<string, PackageState> _packages = new(StringComparer.Ordinal);
 
-        // A package may belong to multiple pipelines. Keep individual pairs so replaying a
-        // binding event is idempotent and the index can support unbinding in the future.
-        private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _pipelineBindings = new(StringComparer.Ordinal);
+        private readonly PipelineAssignmentIndex _assignments;
 
         private readonly IOptions<PackagesOptions> _options;
 
@@ -44,7 +42,8 @@ namespace DataCatalague.Api.Repositories
         private readonly IReadOnlyDictionary<string, FeatureClassDefinition> _featureClassDefinitions;
         private readonly IReadOnlyDictionary<string, TableDefinition> _standaloneTableDefinitions;
 
-        public PackageRepository(ArcGisDispatcher arcDispatcher, IOptions<PackagesOptions> options, ILogger<PackageRepository> logger) {
+        public PackageRepository(ArcGisDispatcher arcDispatcher, IOptions<PackagesOptions> options, ILogger<PackageRepository> logger, PipelineAssignmentIndex assignments) {
+            this._assignments = assignments;
             this._arcDispatcher = arcDispatcher ?? throw new ArgumentNullException(nameof(arcDispatcher));
             this._options = options ?? throw new ArgumentNullException(nameof(options));
             this._logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -89,10 +88,11 @@ namespace DataCatalague.Api.Repositories
         /// <param name="page">One-based page number.</param>
         /// <param name="pageSize">Page size between 1 and <see cref="MaximumPageSize"/>.</param>
         /// <param name="hasPipeline">True for packages bound to at least one pipeline; false for unbound packages; null for both.</param>
+        /// <param name="pipelineId">Optional exact pipeline assignment.</param>
         /// <returns>A page in ordinal catalogue identifier order and its total matching count.</returns>
         /// <exception cref="ArgumentOutOfRangeException">A paging argument is outside the supported range.</exception>
         /// <exception cref="InvalidDataException">The supplied query geometry is invalid or cannot be projected.</exception>
-        public async Task<(IReadOnlyList<PackageState> Items, int TotalCount)> GetPackagesAsync(string? category, CancellationToken cancellationToken, string? geometry = null, int page = 1, int pageSize = 20, bool? hasPipeline = null) {
+        public async Task<(IReadOnlyList<PackageState> Items, int TotalCount)> GetPackagesAsync(string? category, CancellationToken cancellationToken, string? geometry = null, int page = 1, int pageSize = 20, bool? hasPipeline = null, string? pipelineId = null) {
             ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
             ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
             ArgumentOutOfRangeException.ThrowIfGreaterThan(pageSize, MaximumPageSize);
@@ -120,7 +120,8 @@ namespace DataCatalague.Api.Repositories
             // Count and page use the same captured states; no event-store reads or geometry hydration.
             var matching = candidates
                 .Where(item => (category is null || string.Equals(item.Value.Category?.Value, category, StringComparison.Ordinal))
-                    && (hasPipeline is null || this._pipelineBindings.ContainsKey(item.Key) == hasPipeline.Value))
+                    && (hasPipeline is null || this._assignments.HasAssignments(item.Key) == hasPipeline.Value)
+                    && (pipelineId is null || this._assignments.Contains(item.Key, pipelineId)))
                 .OrderBy(item => item.Key, StringComparer.Ordinal)
                 .ToArray();
             var offset = ((long)page - 1) * pageSize;
@@ -486,7 +487,8 @@ namespace DataCatalague.Api.Repositories
                 PackagesEvents.V1.SeverityUpdated evt => this.Handle_PackageUpdated(context.Stream.GetId(), evt),
                 PackagesEvents.V1.DetailedGeometryAdded evt => this.Handle_PackageUpdated(context.Stream.GetId(), evt),
                 PackagesEvents.V1.GeometryReplaced evt => this.Handle_PackageUpdated(context.Stream.GetId(), evt),
-                DispatcherEvents.V1.Binded evt => this.Handle_PackageBound(evt),
+                DispatcherEvents.V1.Binded evt => this.HandleAssignment(evt.PackageId, evt.PipelineId, true, context.GlobalPosition),
+                DispatcherEvents.V1.Unbound evt => this.HandleAssignment(evt.PackageId, evt.PipelineId, false, context.GlobalPosition),
                 _ => EventHandlingStatus.Ignored,
             };
             return ValueTask.FromResult(status);
@@ -497,9 +499,8 @@ namespace DataCatalague.Api.Repositories
             return EventHandlingStatus.Handled;
         }
 
-        private EventHandlingStatus Handle_PackageBound(DispatcherEvents.V1.Binded evt) {
-            var pipelines = this._pipelineBindings.GetOrAdd(evt.PackageId, _ => new ConcurrentDictionary<string, byte>(StringComparer.Ordinal));
-            pipelines.TryAdd(evt.PipelineId, 0);
+        private EventHandlingStatus HandleAssignment(string packageId, string pipelineId, bool active, ulong position) {
+            this._assignments.Update(packageId, pipelineId, active, position);
             return EventHandlingStatus.Handled;
         }
 

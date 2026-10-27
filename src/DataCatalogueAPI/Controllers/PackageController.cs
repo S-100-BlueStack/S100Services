@@ -167,20 +167,21 @@ namespace DataCatalague.Api.Controllers
             }
         }
 
-        /// <summary>Lists a bounded page of packages, optionally filtered by category and AOI intersection.</summary>
+        /// <summary>Lists a bounded page of packages, optionally filtered by category, AOI and pipeline assignment.</summary>
         /// <param name="category">An exact category identifier; omitted values include all categories.</param>
         /// <param name="geometry">Optional Esri JSON envelope or polygon with an explicit spatialReference (wkid or wkt).</param>
         /// <param name="page">One-based page number, default 1.</param>
         /// <param name="pageSize">Number of packages per page, from 1 to 200; default 20.</param>
+        /// <param name="pipelineId">Optional exact pipeline ID; combined with the other filters.</param>
         /// <param name="hasPipeline">Optional: true for assigned packages, false for unassigned, or omitted for both.</param>
         /// <param name="cancellationToken">Cancels the spatial query and metadata listing.</param>
         /// <returns>Matching packages in ordinal catalogue identifier order and the total count before pagination.</returns>
         [HttpGet]
         [ProducesResponseType<PagedResponse<PackageResponse>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
-        public async Task<ActionResult<PagedResponse<PackageResponse>>> GetPackages(CancellationToken cancellationToken, [FromQuery] string? category = null, [FromQuery, StringLength(16384)] string? geometry = null, [FromQuery, Range(1, int.MaxValue)] int page = 1, [FromQuery, Range(1, PackageRepository.MaximumPageSize)] int pageSize = DefaultPageSize, [FromQuery] bool? hasPipeline = null) {
+        public async Task<ActionResult<PagedResponse<PackageResponse>>> GetPackages(CancellationToken cancellationToken, [FromQuery] string? category = null, [FromQuery, StringLength(16384)] string? geometry = null, [FromQuery, Range(1, int.MaxValue)] int page = 1, [FromQuery, Range(1, PackageRepository.MaximumPageSize)] int pageSize = DefaultPageSize, [FromQuery] bool? hasPipeline = null, [FromQuery] string? pipelineId = null) {
             try {
-                var result = await this._packageRepository.GetPackagesAsync(category, cancellationToken, geometry, page, pageSize, hasPipeline);
+                var result = await this._packageRepository.GetPackagesAsync(category, cancellationToken, geometry, page, pageSize, hasPipeline, pipelineId);
                 return this.Ok(new PagedResponse<PackageResponse> {
                     Items = [.. result.Items.Select(Map)],
                     Page = page,

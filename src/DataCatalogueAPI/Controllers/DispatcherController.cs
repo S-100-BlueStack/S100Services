@@ -42,9 +42,9 @@ namespace DataCatalague.Api.Controllers
     public sealed class DispatcherController(
         IEventStore eventstore,
         ICommandService<CategoryState> categoryService,
-        ICommandService<BindingState> bindingService,
         DispatchRepository dispatchRepository,
         WorkspaceService workspaceService,
+        PipelineAssignmentService assignments,
         IOptions<DispatcherOptions> options,
         ArcGisDispatcher dispatcher,
         ILogger<DispatcherController> logger) : ControllerBase
@@ -56,8 +56,6 @@ namespace DataCatalague.Api.Controllers
         private readonly IEventStore _eventStore = eventstore;
 
         private readonly ICommandService<CategoryState> _serviceCategory = categoryService;
-
-        private readonly ICommandService<BindingState> _serviceBinding = bindingService;
 
         private readonly DispatchRepository _dispatchRepository = dispatchRepository;
 
@@ -197,67 +195,79 @@ namespace DataCatalague.Api.Controllers
         }
 
 
+        /// <summary>Assigns a package to a pipeline, including a previously removed assignment.</summary>
         [HttpPost("bindings")]
         [Consumes("application/json")]
         [ProducesResponseType<BindingResponse>(StatusCodes.Status201Created)]
-        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
         public async Task<ActionResult<BindingResponse>> CreateBinding([FromBody] BindRequest request, CancellationToken cancellationToken) {
-            ArgumentNullException.ThrowIfNull(request);
-            if (string.IsNullOrWhiteSpace(request.PackageId) || string.IsNullOrWhiteSpace(request.PipelineId)) {
-                return this.BadRequest(new ProblemDetails { Title = "Package and pipeline identifiers are required." });
+            if (request is null || string.IsNullOrWhiteSpace(request.PackageId) || string.IsNullOrWhiteSpace(request.PipelineId)) {
+                return this.Problem(title: "Package and pipeline identifiers are required.", statusCode: StatusCodes.Status400BadRequest);
             }
-
-            // Command services use typed stream names; raw IDs address different streams.
-            if (!await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new PackageId(request.PackageId)), cancellationToken)) {
-                return this.NotFound(new ProblemDetails { Title = "Package not found.", Detail = $"No package exists with identifier {request.PackageId}." });
+            try {
+                // Resolve AOI matches before committing the assignment.
+                var intersections = await workspaceService.GetIntersectionsAsync(request.PackageId, request.PipelineId, cancellationToken);
+                var state = await assignments.AssignAsync(request.PackageId, request.PipelineId, cancellationToken);
+                this._logger.LogInformation("Assigned package {PackageId} to pipeline {PipelineId}. User: {User}.", request.PackageId, request.PipelineId, this.User?.Identity?.Name);
+                return this.CreatedAtRoute("GetBinding.V1", new { id = state.Id!.Value, version = ApiVersions.V1Text }, Map(state, intersections));
             }
-            if (!await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new PipelineId(request.PipelineId)), cancellationToken)) {
-                return this.NotFound(new ProblemDetails { Title = "Pipeline not found.", Detail = $"No pipeline exists with identifier {request.PipelineId}." });
-            }
-
-            // One stream per pair prevents duplicate links while allowing a package in multiple pipelines.
-            var bindingId = $"{request.PackageId}::{request.PipelineId}";
-            var streamName = this._streamNameMap.GetStreamName(new BindingId(bindingId));
-            if (await this._eventStore.StreamExists(streamName, cancellationToken)) {
-                return this.Conflict(new ProblemDetails { Title = "Package is already bound to this pipeline." });
-            }
-
-            // Resolve AOI matches before committing so a geometry-query failure cannot
-            // turn a successful binding write into an HTTP failure.
-            var intersections = await workspaceService.GetIntersectionsAsync(request.PackageId, request.PipelineId, cancellationToken);
-            this._logger.LogInformation("Creating package binding. PackageId: {PackageId}, PipelineId: {PipelineId}, WorkspaceMatches: {WorkspaceMatches}, User: {User}.", request.PackageId, request.PipelineId, intersections.Count, this.User?.Identity?.Name);
-            var cmd = await this._serviceBinding.Handle(new DispatcherCommands.Bind(bindingId, request.PackageId, request.PipelineId), cancellationToken);
-            if (!cmd.Success) {
-                // A concurrent caller may have created the same pair after the existence check.
-                if (await this._eventStore.StreamExists(streamName, cancellationToken)) {
-                    return this.Conflict(new ProblemDetails { Title = "Package is already bound to this pipeline." });
-                }
-                this._logger.LogError("Could not bind package {PackageId} to pipeline {PipelineId}.", request.PackageId, request.PipelineId);
-                return this.Problem(title: "Could not create binding.", statusCode: StatusCodes.Status500InternalServerError);
-            }
-
-            var result = cmd.Get()!;
-            this._logger.LogInformation("Bound package {PackageId} to pipeline {PipelineId}. BindingId: {BindingId}.", request.PackageId, request.PipelineId, result.State.Id);
-            return this.CreatedAtRoute("GetBinding.V1", new { id = result.State.Id, version = ApiVersions.V1Text }, Map(result.State, intersections));
+            catch (InvalidDataException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status400BadRequest); }
+            catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
+            catch (PipelineAssignmentConflictException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status409Conflict); }
         }
 
+        /// <summary>Lists a package's active pipeline assignments and intersecting workspaces.</summary>
+        /// <param name="packageId">The package whose selected pipelines are returned.</param>
+        /// <param name="cancellationToken">Cancels the listing.</param>
+        [HttpGet("bindings")]
+        [ProducesResponseType<IReadOnlyList<BindingResponse>>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<IReadOnlyList<BindingResponse>>> GetBindings([FromQuery, System.ComponentModel.DataAnnotations.Required] string packageId, CancellationToken cancellationToken) {
+            if (string.IsNullOrWhiteSpace(packageId)) { return this.Problem(title: "Package identifier is required.", statusCode: StatusCodes.Status400BadRequest); }
+            try {
+                var result = new List<BindingResponse>();
+                foreach (var state in await assignments.ListAsync(packageId, cancellationToken)) {
+                    var intersections = await workspaceService.GetIntersectionsAsync(packageId, state.PipelineId!.Value, cancellationToken);
+                    result.Add(Map(state, intersections));
+                }
+                return this.Ok(result);
+            }
+            catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
+        }
+
+        /// <summary>Gets an active package–pipeline assignment.</summary>
         [HttpGet("bindings/{id}", Name = "GetBinding.V1")]
         [ProducesResponseType<BindingResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<BindingResponse>> GetBinding(string id, CancellationToken cancellationToken) {
-            ArgumentNullException.ThrowIfNullOrEmpty(id);
-            if (!await this._eventStore.StreamExists(this._streamNameMap.GetStreamName(new BindingId(id)), cancellationToken)) {
-                return this.NotFound(new ProblemDetails { Title = "Binding not found.", Detail = $"No binding exists with identifier {id}." });
+            try {
+                var state = await assignments.GetAsync(id, cancellationToken);
+                if (!state.IsActive) { return this.Problem(title: "Binding not found.", statusCode: StatusCodes.Status404NotFound); }
+                var intersections = await workspaceService.GetIntersectionsAsync(state.PackageId!.Value, state.PipelineId!.Value, cancellationToken);
+                return Map(state, intersections);
             }
-
-            var stream = await this._eventStore.LoadState<BindingState, BindingId>(this._streamNameMap, new(id), true, cancellationToken);
-            var intersections = await workspaceService.GetIntersectionsAsync(stream.State.PackageId!.Value, stream.State.PipelineId!.Value, cancellationToken);
-            return Map(stream.State, intersections);
+            catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
         }
 
-
+        /// <summary>Removes a pipeline assignment; preserves the package and assignment history.</summary>
+        /// <param name="id">Binding ID from the assignment listing or creation response.</param>
+        /// <param name="cancellationToken">Cancels the removal.</param>
+        [HttpDelete("bindings/{id}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> DeleteBinding(string id, CancellationToken cancellationToken) {
+            try {
+                await assignments.RemoveAsync(id, cancellationToken);
+                this._logger.LogInformation("Removed pipeline assignment {BindingId}. User: {User}.", id, this.User?.Identity?.Name);
+                return this.NoContent();
+            }
+            catch (KeyNotFoundException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status404NotFound); }
+            catch (PipelineAssignmentConflictException exception) { return this.Problem(title: exception.Message, statusCode: StatusCodes.Status409Conflict); }
+        }
 
         private static CategoryResponse Map(Domain.CategoryState state) => new() {
             Id = state.Id,

@@ -12,7 +12,7 @@ public partial class PackageRepository
         var candidates = new List<PackageState>();
         foreach (var match in matches) {
             cancellationToken.ThrowIfCancellationRequested();
-            if (this._pipelineBindings.TryGetValue(match.Key, out var bindings) && bindings.ContainsKey(pipelineId)
+            if (this._assignments.Contains(match.Key, pipelineId)
                 && this._packages.TryGetValue(match.Key, out var package) && package.GeometryRef is { } reference && match.Value.Contains(reference)) {
                 candidates.Add(package);
             }

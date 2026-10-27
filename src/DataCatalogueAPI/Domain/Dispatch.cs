@@ -78,11 +78,27 @@ namespace DataCatalague.Api.Domain
             this.EnsureDoesntExist();
             this.Apply(new V1.Binded(BindingId, PackageId, PipelineId, DateTime.UtcNow));
         }
+
+        public Task Restore() {
+            this.EnsureExists();
+            if (this.State.IsActive) { throw new InvalidOperationException("Package is already assigned to this pipeline."); }
+            this.Apply(new V1.Binded(this.State.Id!.Value, this.State.PackageId!.Value, this.State.PipelineId!.Value, DateTimeOffset.UtcNow));
+            return Task.CompletedTask;
+        }
+
+        public Task Remove() {
+            this.EnsureExists();
+            if (this.State.IsActive) {
+                this.Apply(new V1.Unbound(this.State.Id!.Value, this.State.PackageId!.Value, this.State.PipelineId!.Value, DateTimeOffset.UtcNow));
+            }
+            return Task.CompletedTask;
+        }
     }
 
     public record BindingId(string Value) : Id(Value);
 
     public record BindingState : State<BindingState> {
+        public bool IsActive { get; init; }
         public BindingId? Id { get; set; }
 
         public PackageId? PackageId { get; set; }
@@ -93,10 +109,12 @@ namespace DataCatalague.Api.Domain
 
         public BindingState() {
             this.On<V1.Binded>(Binded);
+            this.On<V1.Unbound>((state, e) => state with { IsActive = false, LastUpdatedUtc = e.UTC });
         }
 
         static BindingState Binded(BindingState state, V1.Binded e)
             => state with {
+                IsActive = true,
                 Id = new(e.BindingId),
                 PackageId = new(e.PackageId),
                 PipelineId = new(e.PipelineId),
@@ -115,6 +133,10 @@ namespace DataCatalague.Api.Domain.Commands
         public record UpdateSpecificationCategory(string CategoryId, string Version, string Markdown);
 
         public record Bind(string BindingId, string PackageId, string PipelineId);
+
+        public record RestoreBinding(string BindingId);
+
+        public record Unbind(string BindingId);
     }
 }
 
@@ -140,6 +162,9 @@ namespace DataCatalague.Api.Domain.Events
                     DateTimeOffset UTC
                 );
 
+
+            [EventType("V1.Unbound")]
+            public record Unbound(string BindingId, string PackageId, string PipelineId, DateTimeOffset UTC);
 
             [EventType("V1.Binded")]
             public record Binded(

@@ -32,6 +32,14 @@ namespace DataCatalague.Api.Services
                 .ActAsync(
                     (binding, cmd, _) => binding.Create(cmd.BindingId, cmd.PackageId, cmd.PipelineId)
                 );
+            this.On<DispatcherCommands.RestoreBinding>()
+                .InState(ExpectedState.Existing)
+                .GetId(cmd => new(cmd.BindingId))
+                .ActAsync((binding, cmd, _) => binding.Restore());
+            this.On<DispatcherCommands.Unbind>()
+                .InState(ExpectedState.Existing)
+                .GetId(cmd => new(cmd.BindingId))
+                .ActAsync((binding, cmd, _) => binding.Remove());
 
         }
     }

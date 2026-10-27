@@ -35,6 +35,9 @@ public static class ApplicationServicesConfiguration
         services.AddTransient<DataCatalague.Api.Services.PackageGeometryService>();
         services.AddSingleton<DataCatalague.Api.Services.PackageIdentityService>();
         services.AddTransient<DataCatalague.Api.Services.WorkspaceService>();
+        services.AddSingleton<PipelineAssignmentIndex>();
+        services.AddTransient<DataCatalague.Api.Services.PipelineAssignmentService>();
+        services.AddTransient<DataCatalague.Api.Services.WorkspaceQueryService>();
 
         //services.AddSingleton<IDataRepository, InMemoryProductRepository>();
         // The shared in-memory event store is registered in Program.cs.

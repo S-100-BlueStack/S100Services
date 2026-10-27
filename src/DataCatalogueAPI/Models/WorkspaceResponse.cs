@@ -13,3 +13,6 @@ public sealed record WorkspacePackageResponse(string PackageId, string? ShortId)
 
 /// <summary>A workspace and its complete coverage polygon.</summary>
 public sealed record WorkspaceDetailResponse(WorkspaceResponse Workspace, string EsriJSON);
+
+/// <summary>A workspace with the pipeline identifiers needed to open its package list.</summary>
+public sealed record WorkspaceListResponse(string PipelineId, string PipelineDisplayName, WorkspaceResponse Workspace);
