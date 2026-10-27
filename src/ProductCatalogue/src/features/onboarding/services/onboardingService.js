@@ -286,6 +286,16 @@ function createOnboardingService({ routeName }) {
     closeActiveUi();
   }
 
+  function handlePopState() {
+    // History changes inside a workspace do not tear down the page or the
+    // Preferences callback. Retire only the active onboarding session.
+    if (destroyed || (!tour && !welcomeDialog)) return;
+    // Browser history may leave focus in a live application input. Do not
+    // steal it; restore the trigger only if onboarding owned/removed focus.
+    closeActiveUi({ returnFocus: false });
+    if (!isVisibleOnboardingElement(document.activeElement)) restoreFocus();
+  }
+
   function destroy() {
     if (destroyed) return;
     destroyed = true;
@@ -296,7 +306,7 @@ function createOnboardingService({ routeName }) {
     window.removeEventListener("resize", scheduleTargetRefresh);
     window.removeEventListener("scroll", scheduleTargetRefresh, true);
     window.removeEventListener("pagehide", destroy);
-    window.removeEventListener("popstate", destroy);
+    window.removeEventListener("popstate", handlePopState);
     if (activeService === service) activeService = null;
   }
 
@@ -305,7 +315,7 @@ function createOnboardingService({ routeName }) {
   window.addEventListener("resize", scheduleTargetRefresh);
   window.addEventListener("scroll", scheduleTargetRefresh, true);
   window.addEventListener("pagehide", destroy);
-  window.addEventListener("popstate", destroy);
+  window.addEventListener("popstate", handlePopState);
   const service = {
     setRouteReady,
     startCurrentRoute,

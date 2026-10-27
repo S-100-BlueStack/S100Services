@@ -500,24 +500,147 @@ test("reopening supersedes detached buttons and scheduled callbacks without dupl
   assert.equal(document.activeElement, preferences);
 });
 
-for (const eventName of ["pagehide", "popstate"]) {
-  test(`${eventName} destroys the owner and rejects stale route-ready/start callbacks`, () => {
-    const service = start();
-    const old = popover();
-    window.dispatchEvent(new Event("resize"));
-    const stale = [...frames.values()][0];
-    window.dispatchEvent(new Event(eventName));
-    stale();
-    activate("next", old);
+test("pagehide destroys the owner and rejects stale route-ready/start callbacks", () => {
+  const service = start();
+  const old = popover();
+  window.dispatchEvent(new Event("resize"));
+  const stale = [...frames.values()][0];
+  window.dispatchEvent(new Event("pagehide"));
+  stale();
+  activate("next", old);
+  service.setRouteReady();
+  assert.equal(service.startCurrentRoute(), false);
+  assert.equal(popover(), null);
+  assert.equal(getOnboardingService(), null);
+  assert.equal(frames.size, 0);
+  assert.equal(intervals.size, 0);
+  assert.equal(key("Escape").defaultPrevented, false);
+});
+
+for (const route of ["main", "dashboard", "analyze", "review"]) {
+  test(`${route} replays the original Preferences callback after repeated Back/Forward`, () => {
+    const service = initOnboarding({ routeName: route });
     service.setRouteReady();
-    assert.equal(service.startCurrentRoute(), false);
+    // This is the callback captured once by initUI and kept by Preferences.
+    const onStartIntroduction = () => service.startCurrentRoute({ manual: true });
+
+    window.dispatchEvent(new Event("popstate"));
+    window.dispatchEvent(new Event("popstate"));
+    assert.equal(getOnboardingService(), service);
     assert.equal(popover(), null);
-    assert.equal(getOnboardingService(), null);
-    assert.equal(frames.size, 0);
+    assert.equal(onStartIntroduction(), true);
+    assert.equal(popover().dataset.stepId, `${route}-preferences`);
+    assert.equal(document.activeElement.dataset.action, "next");
+
+    window.dispatchEvent(new Event("popstate"));
+    assert.equal(popover(), null);
+    assert.equal(document.activeElement, preferences);
     assert.equal(intervals.size, 0);
-    assert.equal(key("Escape").defaultPrevented, false);
+    assert.equal(document.querySelector(".pc-onboarding-highlight-layer"), null);
+    assert.equal(onStartIntroduction(), true);
+    assert.equal(document.querySelectorAll(".pc-onboarding-popover").length, 1);
+    assert.equal(popover().dataset.stepId, `${route}-preferences`);
+
+    key("Escape");
+    assert.equal(document.activeElement, preferences);
+    assert.equal(onStartIntroduction(), true);
+    assert.equal(popover().dataset.stepId, `${route}-preferences`);
   });
 }
+
+test("history navigation retires an active tour, reveal, timers and detached callbacks", () => {
+  const service = start("dashboard");
+  const old = popover();
+  const staleInterval = [...intervals.values()][0];
+  window.dispatchEvent(new Event("resize"));
+  const staleFrame = [...frames.values()][0];
+  assert.equal(preferencesPanel.hidden, false);
+
+  window.dispatchEvent(new Event("popstate"));
+  assert.equal(getOnboardingService(), service);
+  assert.equal(popover(), null);
+  assert.equal(document.querySelector(".pc-onboarding-highlight-layer"), null);
+  assert.equal(preferencesPanel.hidden, true);
+  assert.equal(document.activeElement, preferences);
+  assert.equal(intervals.size, 0);
+  assert.equal(frames.size, 0);
+  assert.equal(key("Escape").defaultPrevented, false);
+
+  staleInterval();
+  staleFrame();
+  activate("next", old);
+  window.dispatchEvent(new Event("popstate"));
+  assert.equal(popover(), null);
+  assert.equal(preferencesPanel.hidden, true);
+  assert.equal(document.activeElement, preferences);
+  assert.equal(service.startCurrentRoute(), true);
+  assert.equal(popover().dataset.stepId, "dashboard-preferences");
+  assert.equal(intervals.size, 1);
+});
+
+test("popstate preserves focus in a live application input outside the tour", () => {
+  const input = addTarget("#range-input");
+  start("dashboard");
+  input.focus();
+  window.dispatchEvent(new Event("popstate"));
+  assert.equal(document.activeElement, input);
+  assert.equal(popover(), null);
+  assert.equal(preferencesPanel.hidden, true);
+});
+
+test("popstate restores focus when a revealed control becomes hidden", () => {
+  const input = addTarget("#revealed-control", preferencesPanel);
+  start("dashboard");
+  assert.equal(preferencesPanel.hidden, false);
+  input.focus();
+  window.dispatchEvent(new Event("popstate"));
+  assert.equal(preferencesPanel.hidden, true);
+  assert.equal(document.activeElement, preferences);
+  assert.equal(popover(), null);
+});
+
+test("history navigation preserves a panel that onboarding did not open", () => {
+  preferencesPanel.hidden = false;
+  const service = start("dashboard");
+  assert.equal(preferences.clickCount ?? 0, 0);
+  window.dispatchEvent(new Event("popstate"));
+  assert.equal(preferencesPanel.hidden, false);
+  assert.equal(popover(), null);
+  assert.equal(service.startCurrentRoute(), true);
+});
+
+test("history navigation dismisses the first-use welcome without auto-restarting", () => {
+  window.localStorage.getItem = () => null;
+  const service = initOnboarding({ routeName: "dashboard" });
+  service.setRouteReady();
+  const old = document.querySelector(".pc-onboarding-welcome__dialog");
+  assert.ok(old);
+  window.dispatchEvent(new Event("popstate"));
+  assert.equal(document.querySelector(".pc-onboarding-welcome"), null);
+  assert.equal(document.activeElement, preferences);
+  service.setRouteReady();
+  window.dispatchEvent(new Event("popstate"));
+  assert.equal(document.querySelector(".pc-onboarding-welcome"), null);
+  activate("start", old);
+  assert.equal(popover(), null);
+  assert.equal(service.startCurrentRoute(), true);
+  assert.equal(popover().dataset.stepId, "dashboard-preferences");
+});
+
+test("explicit destroy after popstate remains idempotent and removes listeners", () => {
+  const service = start("review");
+  window.dispatchEvent(new Event("popstate"));
+  service.destroy();
+  service.destroy();
+  window.dispatchEvent(new Event("popstate"));
+  window.dispatchEvent(new Event("pagehide"));
+  service.setRouteReady();
+  assert.equal(service.startCurrentRoute(), false);
+  assert.equal(popover(), null);
+  assert.equal(getOnboardingService(), null);
+  assert.equal(intervals.size, 0);
+  assert.equal(frames.size, 0);
+});
 
 test("initializing a new route destroys the prior tour", () => {
   const old = start();

@@ -53,3 +53,28 @@ The developer's subsequent browser pass on FI-043 v2 reported these remaining fa
 **v3 corrective behavior:** A previously missing required Product automatically advances Main map Step 6 and the Analyze/Review Product-picker step once the Product is available. A Product already present before entering a step does not automatically skip guidance, and using Back remains possible. Main map Step 6 waits at the left edge of the map; once a Product opens, Step 7 and the subsequent popup guidance are positioned beside the current popup. Product Collection highlights the real header action passed by the map popup owner; it never substitutes a full-popup highlight if the control is unavailable. Preferences guidance positions relative to the outer panel while highlighting only the designated internal settings. No backend action contract is changed.
 
 **Required v3 browser checks:** Open a Product from an initially empty Main-map Step 6 and confirm automatic transition to Step 7 beside the popup; inspect the exact Product Collection icon highlight in Step 9, close/reopen the popup and use Back. On Step 10, confirm the guide does not hide either Theme or Scale hiding. On initially empty Analyze and Review routes, add one Product during Step 2 and confirm the guide advances without pressing Next, while picker focus and immediate list updates remain correct. Check Escape/replay, both themes and the actual demo screen resolution.
+
+## DSA-04 follow-up — same-document Back/Forward (candidate)
+
+Follow-up baseline: `20cb5c608dc03a2e5bdcf2137bd568509812b572`.
+This is a focused lifecycle correction after the accepted FI-043 onboarding work,
+not a change to the established step copy, target positioning or prerequisites.
+
+- `popstate` retires the active introduction or first-use welcome, removes its
+  highlights and timers, and closes panels opened by onboarding. The current
+  route's onboarding service remains reusable by the existing Preferences
+  `Start introduction` callback. No welcome is automatically restarted.
+- Actual page teardown (`pagehide`) and explicit `destroy()` still remove the
+  service's listeners and prevent later start/route-ready callbacks.
+- Keyboard focus returns to the original visible trigger if the introduction
+  removed/hidden the active control. An application control that retained focus
+  through Back/Forward keeps its focus rather than having it stolen.
+
+Manual regression: In Dashboard, Analyze and Review, start Introduction, use
+Back/Forward (both with a running tour and with no tour), then use Preferences
+`Start introduction` repeatedly. Confirm panel cleanup, Escape, focus, and
+absence of stale highlights or automatic welcome replay. Also confirm Main map
+replay and that full page teardown does not leave a working old callback.
+
+Status: correction candidate; local `npm run check` and demo-browser acceptance
+are pending. Historical FI-043 acceptance is unchanged.
