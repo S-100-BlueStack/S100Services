@@ -139,6 +139,7 @@ export function initMap() {
     unavailableReason: locatorConfiguration.unavailableReason,
     onOpen: () => {
       navbarPopoverCoordinator.closeAll({ restoreFocus: false });
+      productSearch.cancelPendingSelection();
       productSearch.close();
     },
     onOpenStateChange: mainMapSearchControls.setLocatorOpen,
@@ -150,7 +151,10 @@ export function initMap() {
     productSearch,
     locator,
   });
-  const cleanupOverlapPicker = bindOverlapPicker(view, { hoverManager });
+  const cleanupOverlapPicker = bindOverlapPicker(view, {
+    hoverManager,
+    onInteractionStart: productSearch.cancelPendingSelection,
+  });
   const compatibilityRefreshService = createRefreshService({
     map,
     view,

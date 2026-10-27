@@ -1,5 +1,8 @@
 import { apiGet } from "../../../shared/api/apiClient.js";
-import { normalizeDashboardPayload } from "../domain/dashboardActivity.js";
+import {
+  assertDashboardResponsePayload,
+  normalizeDashboardPayload,
+} from "../domain/dashboardActivity.js";
 import { appendDashboardQueryParameters } from "../domain/dashboardQuery.js";
 
 const DASHBOARD_ACTIVITY_ENDPOINT = "electronicproducts/dashboard";
@@ -15,6 +18,7 @@ export async function fetchDashboardActivity(range, queryState, { signal } = {})
     }
   );
 
+  assertDashboardResponsePayload(payload);
   return normalizeDashboardPayload(payload, range);
 }
 

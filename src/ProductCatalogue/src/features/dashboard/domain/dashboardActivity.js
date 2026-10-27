@@ -7,6 +7,32 @@ const FAILED_STATUSES = new Set(["failed", "error", "rejected"]);
 const IMPORTANT_SEVERITIES = new Set(["important", "critical", "warning"]);
 const IMPORTANT_TYPES = new Set(["export", "validation", "status", "send", "rollback"]);
 
+export function assertDashboardResponsePayload(payload) {
+  if (!isPlainObject(payload)) {
+    throw new Error("Dashboard response is invalid: expected a data object.");
+  }
+
+  const hasEnvelope = Object.hasOwn(payload, "data") || Object.hasOwn(payload, "Data");
+  const data = hasEnvelope ? (payload.data ?? payload.Data) : payload;
+  if (!isPlainObject(data)) {
+    throw new Error("Dashboard response is invalid: expected a data object.");
+  }
+
+  for (const candidate of [payload, data]) {
+    for (const key of ["success", "Success"]) {
+      if (Object.hasOwn(candidate, key) && candidate[key] !== true) {
+        throw new Error("Dashboard request was not successful.");
+      }
+    }
+  }
+
+  // An explicit empty Activities array is valid. An absent or malformed field
+  // is not, because treating it as [] would publish a false successful load.
+  if (!Array.isArray(data.activities ?? data.Activities)) {
+    throw new Error("Dashboard response is invalid: Activities must be an array.");
+  }
+}
+
 export function normalizeDashboardPayload(
   payload,
   range,

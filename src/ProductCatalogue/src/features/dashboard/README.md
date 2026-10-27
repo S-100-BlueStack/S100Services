@@ -140,6 +140,14 @@ Expected payload shape:
 }
 ```
 
+The Dashboard endpoint must return an object containing `Activities` (or `activities`) as an
+array. `[]` is a valid empty result; an absent or malformed array, an invalid response body,
+unexpected HTML, or an explicit unsuccessful response envelope is a load failure, not a
+successful empty Dashboard. The adapter checks this contract before normalization. The shared
+API client still permits bodyless HTTP 204 responses on endpoints that support them; Dashboard
+requires a payload. A failed Dashboard read preserves the last accepted rows, paging and
+last-successful-load timestamp and displays the existing error state.
+
 ## Activity classification
 
 Dashboard activity classification is owned by the backend endpoint. The backend owns Dashboard classification, filtering, sorting and paging. The frontend normalizes and renders the supplied activity order without duplicating source-state mapping rules.

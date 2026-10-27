@@ -33,6 +33,12 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
   let isOpen = false;
   let selectedResultId = null;
   let destroyed = false;
+  let selectionGeneration = 0;
+  const cancelPendingSelection = () => {
+    selectionGeneration += 1;
+  };
+  const isCurrentSelection = (generation, resultId) =>
+    !destroyed && generation === selectionGeneration && selectedResultId === resultId;
   function renderResults() {
     results.replaceChildren();
     const matches = productSearchIndex.search(input.value, {
@@ -77,6 +83,8 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
     return true;
   }
   async function focusProduct(resultId) {
+    if (destroyed) return;
+    const generation = ++selectionGeneration;
     const result = productSearchIndex.resolve(resultId);
     if (!result) {
       selectedResultId = null;
@@ -104,8 +112,11 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
       return;
     }
 
-    await navigateToGraphic(view, graphic, { duration: 450 });
+    if (!(await navigateToGraphic(view, graphic, { duration: 450 }))) return;
+    if (!isCurrentSelection(generation, result.id)) return;
     await waitForAnimationFrame();
+    if (!isCurrentSelection(generation, result.id)) return;
+
     const currentResult = productSearchIndex.resolve(result.id);
     if (!currentResult?.graphic) {
       selectedResultId = null;
@@ -116,12 +127,15 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
       return;
     }
     if (currentResult.graphic !== graphic) {
-      // Refresh can replace the ArcGIS Graphic while navigation is running. Resolve
-      // again so the popup and selected-Graphic flow use the committed representation.
+      // A committed refresh can replace the Graphic without changing Product identity.
+      // Navigate once to that replacement, but never publish a superseded selection.
       graphic = currentResult.graphic;
-      await navigateToGraphic(view, graphic, { duration: 0 });
+      if (!(await navigateToGraphic(view, graphic, { duration: 0 }))) return;
+      if (!isCurrentSelection(generation, result.id)) return;
     }
 
+    const finalResult = productSearchIndex.resolve(result.id);
+    if (!isCurrentSelection(generation, result.id) || finalResult?.graphic !== graphic) return;
     const location = createProductPopupLocation(graphic);
     openProductPopup(view, graphic, location);
   }
@@ -163,6 +177,8 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
   }
   function handleSubmit(event) {
     event.preventDefault();
+    cancelPendingSelection();
+    selectedResultId = null;
     const query = input.value.trim();
     if (!query) {
       input.focus();
@@ -192,8 +208,19 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
     void focusProduct(exactMatches[0].id);
   }
 
-  input.addEventListener("focus", openResults);
-  input.addEventListener("input", openResults);
+  function handleInput() {
+    cancelPendingSelection();
+    selectedResultId = null;
+    openResults();
+  }
+
+  function handleInputFocus() {
+    cancelPendingSelection();
+    openResults();
+  }
+
+  input.addEventListener("focus", handleInputFocus);
+  input.addEventListener("input", handleInput);
   input.addEventListener("keydown", handleInputKeydown);
   results.addEventListener("keydown", handleResultsKeydown);
   form.addEventListener("submit", handleSubmit);
@@ -207,6 +234,7 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
   const unsubscribe = productSearchIndex.subscribe(() => {
     if (destroyed) return;
     if (selectedResultId && !productSearchIndex.resolve(selectedResultId)) {
+      cancelPendingSelection();
       selectedResultId = null;
       input.value = "";
     }
@@ -214,16 +242,20 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
   });
   return {
     close: closeResults,
+    cancelPendingSelection,
     clearSelection() {
+      cancelPendingSelection();
       selectedResultId = null;
       input.value = "";
       closeResults();
     },
     destroy() {
+      if (destroyed) return;
       destroyed = true;
+      cancelPendingSelection();
       unsubscribe();
-      input.removeEventListener("focus", openResults);
-      input.removeEventListener("input", openResults);
+      input.removeEventListener("focus", handleInputFocus);
+      input.removeEventListener("input", handleInput);
       input.removeEventListener("keydown", handleInputKeydown);
       results.removeEventListener("keydown", handleResultsKeydown);
       form.removeEventListener("submit", handleSubmit);
@@ -234,14 +266,16 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
 }
 async function navigateToGraphic(view, graphic, { duration } = {}) {
   const target = createProductGraphicViewTarget(graphic);
-  if (!target) {
-    return;
-  }
+  if (!target) return true;
 
   try {
     await view.goTo(target, { duration });
+    return true;
   } catch (error) {
-    console.warn("[Product search] Failed to navigate to product", error);
+    if (error?.name !== "AbortError") {
+      console.warn("[Product search] Failed to navigate to product", error);
+    }
+    return false;
   }
 }
 function openProductPopup(view, graphic, location) {
@@ -294,6 +328,7 @@ function getResultOptions(container) {
 function createNoopSearch() {
   return {
     close: () => false,
+    cancelPendingSelection() {},
     clearSelection() {},
     destroy() {},
   };

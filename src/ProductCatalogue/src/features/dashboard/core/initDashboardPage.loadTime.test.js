@@ -131,3 +131,32 @@ test("accepted loads publish time while failed and stale requests retain the lat
 
   controller.destroy();
 });
+
+test("an invalid Dashboard response retains last accepted rows, paging and load timestamp", async () => {
+  const h = await createHarness();
+  h.requests[0].resolve({
+    ...payload("first"),
+    paging: { nextCursor: "page-two", hasMore: true, total: 2, returned: 1, pageSize: 50 },
+  });
+  const controller = await h.initialization;
+  const moveToSecondPage = h.document.emit("pc-dashboard-page-change", { direction: "next" });
+  h.requests.at(-1).resolve(payload("second"));
+  await moveToSecondPage;
+  assert.equal(h.latest().pageNumber, 2);
+  assert.equal(h.latest().canGoPrevious, true);
+
+  const previousTimestamp = h.latest().lastSuccessfulLoadAt.toISOString();
+  h.setTime("2026-09-17T11:25:00.000Z");
+  const refresh = controller.refresh();
+  h.requests
+    .at(-1)
+    .reject(new Error("Dashboard response is invalid: Activities must be an array."));
+  await refresh;
+
+  assert.equal(h.latest().dashboard.activities[0].id, "second");
+  assert.equal(h.latest().pageNumber, 2);
+  assert.equal(h.latest().canGoPrevious, true);
+  assert.equal(h.latest().lastSuccessfulLoadAt.toISOString(), previousTimestamp);
+  assert.match(h.latest().error, /Dashboard response is invalid/);
+  controller.destroy();
+});

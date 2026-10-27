@@ -101,6 +101,14 @@ no Product Collection action or Product actions.
 Search never activates a disabled source. If a suggestion becomes stale before selection, the UI
 clears the stale result and reports that it is no longer available without throwing.
 
+Search navigation uses a per-selection generation. After navigation, animation-frame waiting,
+and any committed Graphic replacement navigation, the controller revalidates the latest selection
+and currently resolved source-aware Graphic before opening the popup. Newer Product choices,
+query edits, explicit selection clearing, index removal, map click/direct keyboard selection,
+Locator opening and search teardown retire pending navigation. Merely closing suggestions keeps
+the existing query and does not cancel a previously accepted Product choice. Aborted or failed
+navigation never opens a late popup; a valid same-identity Graphic replacement can still open.
+
 ## Future extension
 
 A later backend/database search provider may implement the same source-aware result identity and

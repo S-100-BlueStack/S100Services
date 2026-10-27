@@ -13,7 +13,7 @@ import { bindDirectSelectionShortcutHint } from "./directSelectionShortcutHint.j
 
 let activeClickCleanup = null;
 
-export function bindOverlapPicker(view, { hoverManager } = {}) {
+export function bindOverlapPicker(view, { hoverManager, onInteractionStart } = {}) {
   activeClickCleanup?.();
   activeClickCleanup = null;
 
@@ -23,6 +23,7 @@ export function bindOverlapPicker(view, { hoverManager } = {}) {
   const interactionSession = createProductClickSession();
 
   const clickHandle = view.on("click", (event) => {
+    onInteractionStart?.();
     const isCurrent = interactionSession.begin();
     void handleProductClick({
       event,
@@ -39,7 +40,10 @@ export function bindOverlapPicker(view, { hoverManager } = {}) {
 
   const cleanupKeyboardActivation = bindProductKeyboardActivation({
     view,
-    beginInteraction: () => interactionSession.begin(),
+    beginInteraction: () => {
+      onInteractionStart?.();
+      return interactionSession.begin();
+    },
     getInteractiveLayers,
     getHighlightedIdentity: () => hoverManager?.getHighlightedGraphicIdentity?.() ?? null,
     openGraphic: (options) => openGraphicPopup(view, options),
