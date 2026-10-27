@@ -67,6 +67,7 @@
 
 		<!-- Built-in OpenAPI document generation. -->
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="10.0.13" />
 
 		<!--
       Pinned deliberately. The .NET 10 OpenAPI generator is built against the

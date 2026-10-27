@@ -23,6 +23,8 @@ namespace DataCatalague.Api.Repositories
             var status = context.Message switch {
                 PipelineEvents.V1.PipelineCreated evt => this.HandleCreated(evt),
                 PipelineEvents.V1.WorkspaceAdded evt => this.HandleUpdated(context.Stream.GetId(), evt),
+                PipelineEvents.V1.WorkspaceLocked evt => this.HandleUpdated(context.Stream.GetId(), evt),
+                PipelineEvents.V1.WorkspaceUnlocked evt => this.HandleUpdated(context.Stream.GetId(), evt),
                 _ => EventHandlingStatus.Ignored,
             };
             return ValueTask.FromResult(status);

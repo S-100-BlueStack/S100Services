@@ -26,6 +26,20 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
             var created = await pipelines.Create(new CreatePipelineRequest { DisplayName = sample.Name, Description = sample.Description }, cancellationToken).ConfigureAwait(false);
             var pipeline = RequireSuccess(created, $"create pipeline '{sample.Name}'");
             pipelineSamples.Add(pipeline);
+            // Both pipelines have independent work areas. Packages may overlap several
+            // areas, and assigning another pipeline never changes their source geometry.
+            foreach (var area in new[] {
+                (Name: "Western Denmark", West: 7.5, East: 11.0),
+                (Name: "Eastern Denmark", West: 11.0, East: 16.0),
+            }) {
+                var json = System.Text.Json.JsonSerializer.Serialize(new {
+                    rings = new[] { new[] { new[] { area.West, 54.0 }, new[] { area.West, 58.5 }, new[] { area.East, 58.5 }, new[] { area.East, 54.0 }, new[] { area.West, 54.0 } } },
+                    spatialReference = new { wkid = 4326 },
+                });
+                RequireSuccess(await pipelines.AddWorkspace(pipeline.Id, new AddWorkspaceRequest {
+                    DisplayName = area.Name, DisplayScale = new DisplayScale(), EsriJSON = json,
+                }, cancellationToken).ConfigureAwait(false), $"create workspace '{area.Name}' in '{pipeline.DisplayName}'");
+            }
             logger.LogInformation("Created sample pipeline {DisplayName}. PipelineId: {PipelineId}.", pipeline.DisplayName, pipeline.Id);
         }
         var packageSamples = new List<PackageResponse>();

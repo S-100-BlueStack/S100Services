@@ -8,6 +8,9 @@
 
         public required string? Description { get; init; }
 
+        /// <summary>Workspaces and their current responsibility locks.</summary>
+        public IReadOnlyList<WorkspaceResponse> Workspaces { get; init; } = [];
+
         public required DateTimeOffset LastUpdatedUtc { get; init; }
     }
 }

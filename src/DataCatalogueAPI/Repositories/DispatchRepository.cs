@@ -15,7 +15,7 @@ using IO = System.IO;
 
 namespace DataCatalague.Api.Repositories
 {
-    public class DispatchRepository : IEventHandler
+    public partial class DispatchRepository : IEventHandler
     {
         internal static readonly JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions {
             WriteIndented = false,
@@ -151,28 +151,6 @@ namespace DataCatalague.Api.Repositories
                 buffer["shape"] = geometry;
 
                 var row = fc.CreateRow(buffer);
-                return $"{fc.GetName().Split('.')[^1]}::{row.GetGlobalID():B}";
-            }
-        }
-
-        public string AddWorkspaceAOI(Geometry geometry, string pipelineId, string displayName) {
-            using (var connector = this.createGeodatabase()) {
-                using var fc = geometry.GeometryType switch {
-                    GeometryType.Point => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["point"].GetName()),
-                    GeometryType.Multipoint => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["pointset"].GetName()),
-                    GeometryType.Polyline => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["curve"].GetName()),
-                    GeometryType.Polygon => connector.OpenDataset<FeatureClass>(this._featureClassDefinitions["surface"].GetName()),
-                    _ => throw new NotImplementedException(),
-                };
-
-                using var buffer = fc.CreateRowBuffer();
-                buffer["ps"] = "S-840";
-                buffer["code"] = nameof(WorkspaceCoverage);
-                buffer["attributebindings"] = new WorkspaceCoverage { pipelineId = pipelineId, displayName = displayName }.Flatten();
-                buffer["shape"] = geometry;
-
-                var row = fc.CreateRow(buffer);
-
                 return $"{fc.GetName().Split('.')[^1]}::{row.GetGlobalID():B}";
             }
         }

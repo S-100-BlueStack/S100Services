@@ -8,9 +8,11 @@ using DataCatalague.Api.Models.V1;
 using DataCatalague.Api.Repositories;
 using Eventuous;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using NanoidDotNet;
 using IO = System.IO;
+using DataCatalague.Api.Services;
 
 /*
     Dispatcher
@@ -32,6 +34,7 @@ using IO = System.IO;
 
 namespace DataCatalague.Api.Controllers
 {
+    [Authorize(Policy = "datacatalogue:access")]
     [ApiController]
     [ApiVersion(ApiVersions.V1Text)]
     [Route("api/v{version:apiVersion}/dispatcher")]
@@ -41,6 +44,7 @@ namespace DataCatalague.Api.Controllers
         ICommandService<CategoryState> categoryService,
         ICommandService<BindingState> bindingService,
         DispatchRepository dispatchRepository,
+        WorkspaceService workspaceService,
         IOptions<DispatcherOptions> options,
         ArcGisDispatcher dispatcher,
         ILogger<DispatcherController> logger) : ControllerBase
@@ -220,6 +224,10 @@ namespace DataCatalague.Api.Controllers
                 return this.Conflict(new ProblemDetails { Title = "Package is already bound to this pipeline." });
             }
 
+            // Resolve AOI matches before committing so a geometry-query failure cannot
+            // turn a successful binding write into an HTTP failure.
+            var intersections = await workspaceService.GetIntersectionsAsync(request.PackageId, request.PipelineId, cancellationToken);
+            this._logger.LogInformation("Creating package binding. PackageId: {PackageId}, PipelineId: {PipelineId}, WorkspaceMatches: {WorkspaceMatches}, User: {User}.", request.PackageId, request.PipelineId, intersections.Count, this.User?.Identity?.Name);
             var cmd = await this._serviceBinding.Handle(new DispatcherCommands.Bind(bindingId, request.PackageId, request.PipelineId), cancellationToken);
             if (!cmd.Success) {
                 // A concurrent caller may have created the same pair after the existence check.
@@ -232,7 +240,7 @@ namespace DataCatalague.Api.Controllers
 
             var result = cmd.Get()!;
             this._logger.LogInformation("Bound package {PackageId} to pipeline {PipelineId}. BindingId: {BindingId}.", request.PackageId, request.PipelineId, result.State.Id);
-            return this.CreatedAtRoute("GetBinding.V1", new { id = result.State.Id, version = ApiVersions.V1Text }, Map(result.State));
+            return this.CreatedAtRoute("GetBinding.V1", new { id = result.State.Id, version = ApiVersions.V1Text }, Map(result.State, intersections));
         }
 
         [HttpGet("bindings/{id}", Name = "GetBinding.V1")]
@@ -245,7 +253,8 @@ namespace DataCatalague.Api.Controllers
             }
 
             var stream = await this._eventStore.LoadState<BindingState, BindingId>(this._streamNameMap, new(id), true, cancellationToken);
-            return Map(stream.State);
+            var intersections = await workspaceService.GetIntersectionsAsync(stream.State.PackageId!.Value, stream.State.PipelineId!.Value, cancellationToken);
+            return Map(stream.State, intersections);
         }
 
 
@@ -260,7 +269,8 @@ namespace DataCatalague.Api.Controllers
             LastUpdatedUtc = state.LastUpdatedUtc,
         };
 
-        private static BindingResponse Map(Domain.BindingState state) => new() {
+        private static BindingResponse Map(Domain.BindingState state, IReadOnlyList<WorkspaceResponse> intersections) => new() {
+            Workspaces = intersections,
             Id = state.Id,
             PackageId = state.PackageId,
             PipelineId = state.PipelineId,

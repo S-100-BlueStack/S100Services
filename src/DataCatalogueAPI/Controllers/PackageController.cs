@@ -8,6 +8,7 @@ using DataCatalague.Api.Models.V1;
 using DataCatalague.Api.Repositories;
 using Eventuous;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using DataCatalague.Api.Services;
 using IO = System.IO;
@@ -15,6 +16,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace DataCatalague.Api.Controllers
 {
+    [Authorize(Policy = "datacatalogue:access")]
     [ApiController]
     [ApiVersion(ApiVersions.V1Text)]
     [Route("api/v{version:apiVersion}/packages")]

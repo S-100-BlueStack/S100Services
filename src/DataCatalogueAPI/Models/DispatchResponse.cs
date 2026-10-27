@@ -25,6 +25,9 @@ namespace DataCatalague.Api.Models.V1
     }
 
     public sealed class BindingResponse {
+        /// <summary>Workspaces intersecting the package rectangular AOI within this binding's pipeline.</summary>
+        public IReadOnlyList<WorkspaceResponse> Workspaces { get; init; } = [];
+
         public required string Id { get; init; }
 
         public required string PackageId { get; init; }

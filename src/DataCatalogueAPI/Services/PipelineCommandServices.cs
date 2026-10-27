@@ -13,6 +13,16 @@ namespace DataCatalague.Api.Services
                     (pipeline, cmd, _) => pipeline.Create(cmd.PipelineId, cmd.DisplayName, cmd.Description)
                 );
 
+            this.On<PipelineCommands.LockWorkspace>()
+                .InState(ExpectedState.Existing)
+                .GetId(cmd => new(cmd.PipelineId))
+                .ActAsync((pipeline, cmd, _) => pipeline.LockWorkspace(cmd.WorkspaceId, cmd.Username));
+
+            this.On<PipelineCommands.UnlockWorkspace>()
+                .InState(ExpectedState.Existing)
+                .GetId(cmd => new(cmd.PipelineId))
+                .ActAsync((pipeline, cmd, _) => pipeline.UnlockWorkspace(cmd.WorkspaceId, cmd.Username));
+
             this.On<PipelineCommands.CreateWorkspace>()
                 .InState(ExpectedState.Existing)
                 .GetId(cmd => new(cmd.PipelineId))

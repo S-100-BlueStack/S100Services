@@ -56,6 +56,9 @@ public static class RequestPipelineConfiguration
         });
 
         app.UseHttpsRedirection();
+        app.UseRouting();
+        app.UseAuthentication();
+        app.UseAuthorization();
 
         // Serves /openapi/v1.json and /openapi/v2.json.
         // Swap in "/openapi/{documentName}.yaml" if you prefer YAML, or map both.

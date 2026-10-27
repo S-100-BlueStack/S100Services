@@ -16,7 +16,7 @@ using IO = System.IO;
 
 namespace DataCatalague.Api.Repositories
 {
-    public class PackageRepository : IEventHandler
+    public partial class PackageRepository : IEventHandler
     {
         internal static readonly JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions {
             WriteIndented = false,
@@ -425,7 +425,7 @@ namespace DataCatalague.Api.Repositories
             }
         }
 
-        private static Geometry MatchDimensions(Geometry geometry, bool hasZ, bool hasM) {
+        internal static Geometry MatchDimensions(Geometry geometry, bool hasZ, bool hasM) {
             GeometryBuilderEx builder = geometry switch {
                 MapPoint point => new MapPointBuilderEx(point),
                 Multipoint points => new MultipointBuilderEx(points),
