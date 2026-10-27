@@ -1482,8 +1482,18 @@ function ensureDashboardHistoryKeyboardHandlers() {
 }
 
 function ensureDashboardHistoryLookupsLoaded() {
-  dashboardHistoryLookupLoadPromise ??= loadStatuses();
-  return dashboardHistoryLookupLoadPromise;
+  if (dashboardHistoryLookupLoadPromise) {
+    return dashboardHistoryLookupLoadPromise;
+  }
+
+  const request = loadStatuses();
+  dashboardHistoryLookupLoadPromise = request;
+  void request.catch(() => {
+    if (dashboardHistoryLookupLoadPromise === request) {
+      dashboardHistoryLookupLoadPromise = null;
+    }
+  });
+  return request;
 }
 
 function createDashboardHistoryState() {
@@ -1536,6 +1546,10 @@ async function openDashboardHistory(activityOrDatasetName) {
 
   try {
     await ensureDashboardHistoryLookupsLoaded();
+    if (dashboardHistoryState.requestId !== requestId) {
+      return;
+    }
+
     const history = await fetchProductHistory(normalizedDatasetName);
 
     if (dashboardHistoryState.requestId !== requestId) {
