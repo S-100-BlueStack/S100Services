@@ -113,6 +113,19 @@ missing specification, identity mismatch or unavailable configured source fails 
 toggles remain independent from workspace resolution. Review reuses the same targeted resolver and
 lightweight picker model.
 
+## DSA-08 direct-route startup and picker ownership
+
+An explicit Analyze/Review route composition starts its targeted, source-aware Product resolution
+without waiting for the lightweight `GET electronicproducts` picker catalogue. The picker owns
+its independent loading/error state; a late response only updates the picker and does not
+reselect Products, replace canonical package identities or hide an active workspace load.
+
+Route replacements and existing Product refreshes use the targeted resolver as the authority.
+New picker additions must wait while the catalogue is loading; after it loads, the existing
+catalogue validation still applies. If the catalogue fails, typed-name fallback continues to
+use the source-aware resolver and may show a real resolution failure, never a synthetic success.
+Catalog completion after page teardown is ignored. No global request timeout is introduced.
+
 ## Internal validation reports
 
 Internal validation reports are normalized into the UI-facing `internalValidationReports` product field.

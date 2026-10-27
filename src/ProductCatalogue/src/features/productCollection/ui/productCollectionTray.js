@@ -135,12 +135,12 @@ function restoreCollectionFocus(tray, snapshot, previousFocus, getFallbackFocusT
 function isAvailableFocusTarget(target) {
   return Boolean(
     target?.isConnected &&
-      typeof target.focus === "function" &&
-      !target.hidden &&
-      !target.disabled &&
-      target.getAttribute?.("aria-disabled") !== "true" &&
-      !target.closest?.("[hidden]") &&
-      (!target.getClientRects || target.getClientRects().length > 0)
+    typeof target.focus === "function" &&
+    !target.hidden &&
+    !target.disabled &&
+    target.getAttribute?.("aria-disabled") !== "true" &&
+    !target.closest?.("[hidden]") &&
+    (!target.getClientRects || target.getClientRects().length > 0)
   );
 }
 

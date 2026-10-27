@@ -113,7 +113,14 @@ export async function initAnalyzePage({ datasetNames }) {
     return replacement;
   };
   const cleanupPopupHoverSync = registerPopupHoverSync(view, hoverManager);
-  const renderSidebar = ({ loading = false } = {}) => {
+  const renderSidebar = ({ loading = false, preserveProductFocus = false } = {}) => {
+    const panel = preserveProductFocus ? document.getElementById("analyze-sidebar-panel") : null;
+    const activeElement = document.activeElement;
+    const focusedDatasetControl = panel
+      ?.querySelector(".analyze-dataset-list")
+      ?.contains(activeElement)
+      ? activeElement?.getAttribute?.("aria-label")
+      : null;
     renderAnalyzeSidebar({
       datasetItems,
       datasetNames: getEnabledAnalyzeDatasetNames(datasetItems),
@@ -121,11 +128,21 @@ export async function initAnalyzePage({ datasetNames }) {
       loading,
       productCatalog,
     });
+    if (focusedDatasetControl) {
+      const replacement = [
+        ...(panel?.querySelectorAll(
+          ".analyze-dataset-list input[aria-label], .analyze-dataset-list button[aria-label]"
+        ) ?? []),
+      ].find((control) => control.getAttribute("aria-label") === focusedDatasetControl);
+      replacement?.focus({ preventScroll: true });
+    }
   };
   const loadProductCatalogForPicker = async () => {
     const requestId = ++productCatalogRequestId;
     productCatalog = createProductCatalogState({ loading: true });
-    renderSidebar({ loading: enabledDatasetNames.length > 0 && currentProducts.length === 0 });
+    renderSidebar({
+      loading: activeWorkspaceLoadRequestId !== null && currentProducts.length === 0,
+    });
 
     try {
       const products = await fetchProductCatalog();
@@ -144,16 +161,22 @@ export async function initAnalyzePage({ datasetNames }) {
       });
     }
 
-    renderSidebar({ loading: false });
+    // Picker completion must not hide data or steal focus from a Product control.
+    renderSidebar({
+      loading: activeWorkspaceLoadRequestId !== null && currentProducts.length === 0,
+      preserveProductFocus: true,
+    });
   };
   const loadAnalyzeDatasetItems = async (
     nextDatasetItems,
-    { updateUrl = true, showLoader = true } = {}
+    { updateUrl = true, showLoader = true, skipCatalogValidation = false } = {}
   ) => {
     const requestId = ++loadRequestId;
     cancelPendingPackageReplacements();
     activeWorkspaceLoadRequestId = requestId;
-    const validatedDatasetItems = validateAnalyzeDatasetItems(nextDatasetItems);
+    const validatedDatasetItems = skipCatalogValidation
+      ? { items: normalizeAnalyzeDatasetItems(nextDatasetItems), unknown: [], alreadySelected: [] }
+      : validateAnalyzeDatasetItems(nextDatasetItems);
     // Publish selection at input time; resolution and content requests remain
     // generation-owned and may only replace this provisional list if current.
     datasetItems = validatedDatasetItems.items;
@@ -324,7 +347,11 @@ export async function initAnalyzePage({ datasetNames }) {
     }
   };
   const loadAnalyzeDatasetNames = async (nextDatasetNames, options = {}) => {
-    await loadAnalyzeDatasetItems(createAnalyzeDatasetItems(nextDatasetNames), options);
+    await loadAnalyzeDatasetItems(createAnalyzeDatasetItems(nextDatasetNames), {
+      ...options,
+      // URL composition is resolved against authoritative source identity, not a picker list.
+      skipCatalogValidation: true,
+    });
   };
 
   const refreshAnalyzeProducts = async (datasetNamesToRefresh) => {
@@ -434,6 +461,10 @@ export async function initAnalyzePage({ datasetNames }) {
     if (nextDatasetNames.length === 0) {
       return;
     }
+    if (productCatalog.loading) {
+      noticeWarning("Product catalog loading", "Wait for the catalog before adding products.");
+      return;
+    }
     const validation = validateCatalogProductNames(nextDatasetNames, {
       excludedProductNames: datasetItems.map((item) => item.name),
     });
@@ -484,7 +515,12 @@ export async function initAnalyzePage({ datasetNames }) {
   };
 
   const handleAnalyzeDatasetSubmit = async (event) => {
-    await loadAnalyzeDatasetNames(event.detail?.datasetNames ?? [], {
+    if (productCatalog.loading) {
+      noticeWarning("Product catalog loading", "Wait for the catalog before adding products.");
+      return;
+    }
+    // Submit is a picker-owned replacement, unlike an explicit URL composition.
+    await loadAnalyzeDatasetItems(createAnalyzeDatasetItems(event.detail?.datasetNames ?? []), {
       updateUrl: true,
     });
   };
@@ -533,8 +569,12 @@ export async function initAnalyzePage({ datasetNames }) {
     loading: false,
     productCatalog,
   });
-  await loadProductCatalogForPicker();
-  await loadAnalyzeDatasetItems(datasetItems, { updateUrl: false });
+  // Picker and route data have independent owners; a pending catalogue cannot block the route.
+  void loadProductCatalogForPicker();
+  await loadAnalyzeDatasetItems(datasetItems, {
+    updateUrl: false,
+    skipCatalogValidation: true,
+  });
   freshnessMonitor.start();
   const handlePopState = async () => {
     const route = getCurrentRoute();
@@ -599,7 +639,12 @@ export async function initAnalyzePage({ datasetNames }) {
       productCatalog.products,
       normalizedItems.map((item) => item.name)
     );
-    const validKeys = new Set(validation.valid.map((name) => name.toUpperCase()));
+    const validKeys = new Set([
+      ...validation.valid.map((name) => name.toUpperCase()),
+      // A route Product already accepted by source-aware resolution is not invalidated
+      // by a later, potentially partial picker catalogue.
+      ...datasetItems.map((item) => item.name.toUpperCase()),
+    ]);
 
     return {
       ...validation,
@@ -608,6 +653,9 @@ export async function initAnalyzePage({ datasetNames }) {
   }
 
   function validateCatalogProductNames(productNames, { excludedProductNames = [] } = {}) {
+    if (productCatalog.loading) {
+      return { valid: [], unknown: [], alreadySelected: [] };
+    }
     if (!canValidateCatalog(productCatalog)) {
       return {
         valid: normalizeDatasetNames(productNames),

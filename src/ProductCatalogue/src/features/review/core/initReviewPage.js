@@ -106,7 +106,10 @@ export async function initReviewPage({ datasetNames } = {}) {
       });
     }
 
-    renderCurrentReviewPage();
+    renderCurrentReviewPage({
+      productListInteraction: captureReviewProductListInteraction(),
+      workspaceContentInteraction: captureReviewWorkspaceContentInteraction(),
+    });
   };
 
   const productSession = createReviewProductSession({
@@ -176,7 +179,9 @@ export async function initReviewPage({ datasetNames } = {}) {
     { updateUrl = true, full = false, inheritIntent = false, resetIntent = false } = {}
   ) => {
     if (disposed) return;
-    const validatedProductItems = validateReviewProductItems(nextProductItems);
+    const validatedProductItems = validateReviewProductItems(nextProductItems, {
+      skipCatalogValidation: !updateUrl || resetIntent,
+    });
     notifyRejectedCatalogProducts(validatedProductItems);
     // Show the requested composition before source-aware resolution or API reads.
     // The session still owns canonical IDs, failures, and stale completion guards.
@@ -206,6 +211,10 @@ export async function initReviewPage({ datasetNames } = {}) {
     const normalizedDatasetNames = normalizeDatasetNames(datasetNamesToAdd);
 
     if (normalizedDatasetNames.length === 0) {
+      return;
+    }
+    if (productCatalog.loading) {
+      noticeError("Product catalog loading", "Wait for the catalog before adding products.");
       return;
     }
 
@@ -378,7 +387,8 @@ export async function initReviewPage({ datasetNames } = {}) {
   hideLoader();
 
   renderCurrentReviewPage();
-  await loadProductCatalogForPicker();
+  // A direct URL Product is resolved independently of the picker catalogue request.
+  void loadProductCatalogForPicker();
   if (!hasLoadedComposition) {
     await loadReviewProductItems(initialProductItems, { updateUrl: false, full: true });
   }
@@ -408,10 +418,10 @@ export async function initReviewPage({ datasetNames } = {}) {
     },
   };
 
-  function validateReviewProductItems(nextProductItems) {
+  function validateReviewProductItems(nextProductItems, { skipCatalogValidation = false } = {}) {
     const normalizedItems = normalizeReviewProductItems(nextProductItems);
 
-    if (!canValidateCatalog(productCatalog)) {
+    if (skipCatalogValidation || !canValidateCatalog(productCatalog)) {
       return {
         items: normalizedItems,
         valid: normalizedItems.map((item) => item.datasetName),
@@ -449,6 +459,9 @@ export async function initReviewPage({ datasetNames } = {}) {
   }
 
   function validateCatalogProductNames(productNames, { excludedProductNames = [] } = {}) {
+    if (productCatalog.loading) {
+      return { valid: [], unknown: [], alreadySelected: [] };
+    }
     if (!canValidateCatalog(productCatalog)) {
       return {
         valid: normalizeDatasetNames(productNames),

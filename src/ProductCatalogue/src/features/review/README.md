@@ -45,6 +45,19 @@ Workspace resolution is not tied to Main-map enabled-source localStorage and doe
 dataset-name conventions. Backend identity conflicts, malformed targeted responses and unavailable
 deployment-configured sources fail closed rather than falling through another source.
 
+## DSA-08 direct-route startup and picker ownership
+
+An explicit Analyze/Review route composition starts its targeted, source-aware Product resolution
+without waiting for the lightweight `GET electronicproducts` picker catalogue. The picker owns
+its independent loading/error state; a late response only updates the picker and does not
+reselect Products, replace canonical package identities or hide an active workspace load.
+
+Route replacements and existing Product refreshes use the targeted resolver as the authority.
+New picker additions must wait while the catalogue is loading; after it loads, the existing
+catalogue validation still applies. If the catalogue fails, typed-name fallback continues to
+use the source-aware resolver and may show a real resolution failure, never a synthetic success.
+Catalog completion after page teardown is ignored. No global request timeout is introduced.
+
 ## FI-036 compact sidebar presentation
 
 The route already identifies Product Review, so the sidebar omits the repeated visible workspace
