@@ -115,7 +115,12 @@ export function initMap() {
     registry: dataSourceRuntime.registry,
     dataSourceController: dataSourceRuntime.controller,
   });
-  const productCollectionTray = initProductCollectionTray();
+  const productCollectionTray = initProductCollectionTray({
+    getFallbackFocusTargets: () => [
+      getProductCollectionHeaderButton(view),
+      view.container,
+    ],
+  });
   const mainMapSearchControls = initMainMapSearchControls();
   const productSearch = initMainMapProductSearch({
     view,

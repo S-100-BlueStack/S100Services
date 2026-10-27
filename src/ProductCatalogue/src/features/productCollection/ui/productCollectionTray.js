@@ -10,7 +10,10 @@ import {
   subscribeProductCollection,
 } from "../state/productCollectionStore.js";
 
-export function initProductCollectionTray({ root = document.body } = {}) {
+export function initProductCollectionTray({
+  root = document.body,
+  getFallbackFocusTargets = () => [],
+} = {}) {
   const tray = document.createElement("section");
   tray.className = "pc-product-collection-tray";
   tray.hidden = true;
@@ -20,10 +23,10 @@ export function initProductCollectionTray({ root = document.body } = {}) {
   root.appendChild(tray);
 
   const unsubscribeCollection = subscribeProductCollection((snapshot) => {
-    renderProductCollectionTray(tray, snapshot);
+    renderProductCollectionTray(tray, snapshot, getFallbackFocusTargets);
   });
 
-  renderProductCollectionTray(tray, getProductCollectionSnapshot());
+  renderProductCollectionTray(tray, getProductCollectionSnapshot(), getFallbackFocusTargets);
 
   return {
     element: tray,
@@ -34,18 +37,111 @@ export function initProductCollectionTray({ root = document.body } = {}) {
   };
 }
 
-function renderProductCollectionTray(tray, snapshot) {
+function renderProductCollectionTray(tray, snapshot, getFallbackFocusTargets) {
+  const previousFocus = captureCollectionFocus(tray);
   tray.replaceChildren();
 
   if (snapshot.count === 0) {
     tray.hidden = true;
+  } else {
+    tray.hidden = false;
+    tray.appendChild(createHeader(snapshot));
+    tray.appendChild(createProductList(snapshot.items));
+    tray.appendChild(createActions(snapshot.items));
+  }
+
+  if (previousFocus && canRestoreCollectionFocus(previousFocus.element)) {
+    restoreCollectionFocus(tray, snapshot, previousFocus, getFallbackFocusTargets);
+  }
+}
+
+function captureCollectionFocus(tray) {
+  const element = document.activeElement;
+  if (!element || !tray.contains?.(element)) return null;
+
+  if (element.dataset.collectionRemoveId) {
+    return {
+      element,
+      kind: "remove",
+      id: element.dataset.collectionRemoveId,
+      index: Number(element.dataset.collectionRemoveIndex),
+    };
+  }
+  if (element.dataset.collectionAction) {
+    return { element, kind: "action", destination: element.dataset.collectionAction };
+  }
+  if (element.dataset.collectionClear !== undefined) {
+    return { element, kind: "clear" };
+  }
+  return null;
+}
+
+function canRestoreCollectionFocus(previousElement) {
+  // A synchronous blur handler can move focus to another live control. Never
+  // override that decision or steal focus from an unrelated surface.
+  const activeElement = document.activeElement;
+  return (
+    activeElement === previousElement ||
+    activeElement === document.body ||
+    !activeElement?.isConnected
+  );
+}
+
+function restoreCollectionFocus(tray, snapshot, previousFocus, getFallbackFocusTargets) {
+  const removeButtons = Array.from(
+    tray.querySelectorAll(".pc-product-collection-tray__remove-button")
+  );
+  const actionButtons = Array.from(tray.querySelectorAll(".pc-product-collection-tray__action"));
+  const clearButton = tray.querySelector(".pc-product-collection-tray__clear-button");
+
+  let target = null;
+  if (previousFocus.kind === "remove") {
+    target = removeButtons.find((button) => button.dataset.collectionRemoveId === previousFocus.id);
+    if (!target && removeButtons.length) {
+      target = removeButtons[Math.min(previousFocus.index, removeButtons.length - 1)];
+    }
+  } else if (previousFocus.kind === "action") {
+    target = actionButtons.find(
+      (button) => button.dataset.collectionAction === previousFocus.destination && !button.disabled
+    );
+  } else if (previousFocus.kind === "clear") {
+    target = clearButton;
+  }
+
+  if (!target && snapshot.count > 0) {
+    target = clearButton ?? removeButtons[0] ?? actionButtons.find((button) => !button.disabled);
+  }
+
+  if (snapshot.count === 0) {
+    const fallbackTargets = getFallbackFocusTargets();
+    const candidates = Array.isArray(fallbackTargets) ? fallbackTargets : [fallbackTargets];
+    for (const [index, candidate] of candidates.entries()) {
+      if (!isAvailableFocusTarget(candidate)) continue;
+      // The map is the final fallback; a -1 tab stop gives it programmatic
+      // focus without inserting an extra step into normal keyboard traversal.
+      if (index === candidates.length - 1 && candidate.tabIndex < 0) {
+        if (!candidate.hasAttribute("tabindex")) candidate.setAttribute("tabindex", "-1");
+        candidate.dataset.collectionFocusFallback = "";
+      }
+      candidate.focus({ preventScroll: true });
+      if (document.activeElement === candidate) break;
+    }
     return;
   }
 
-  tray.hidden = false;
-  tray.appendChild(createHeader(snapshot));
-  tray.appendChild(createProductList(snapshot.items));
-  tray.appendChild(createActions(snapshot.items));
+  if (isAvailableFocusTarget(target)) target.focus({ preventScroll: true });
+}
+
+function isAvailableFocusTarget(target) {
+  return Boolean(
+    target?.isConnected &&
+      typeof target.focus === "function" &&
+      !target.hidden &&
+      !target.disabled &&
+      target.getAttribute?.("aria-disabled") !== "true" &&
+      !target.closest?.("[hidden]") &&
+      (!target.getClientRects || target.getClientRects().length > 0)
+  );
 }
 
 function createHeader(snapshot) {
@@ -68,6 +164,7 @@ function createHeader(snapshot) {
   clearButton.type = "button";
   clearButton.className = "pc-product-collection-tray__clear-button";
   clearButton.title = "Clear collection";
+  clearButton.dataset.collectionClear = "";
   clearButton.setAttribute("aria-label", "Clear collection");
   clearButton.addEventListener("click", () => {
     clearProductCollection();
@@ -83,14 +180,14 @@ function createProductList(items) {
   list.className = "pc-product-collection-tray__list";
   list.setAttribute("role", "list");
 
-  for (const item of items) {
-    list.appendChild(createProductItem(item));
+  for (const [index, item] of items.entries()) {
+    list.appendChild(createProductItem(item, index));
   }
 
   return list;
 }
 
-function createProductItem(item) {
+function createProductItem(item, index) {
   const row = document.createElement("div");
   row.className = "pc-product-collection-tray__item";
   row.setAttribute("role", "listitem");
@@ -104,6 +201,8 @@ function createProductItem(item) {
   removeButton.type = "button";
   removeButton.className = "pc-product-collection-tray__remove-button";
   removeButton.title = `Remove ${item.datasetName}`;
+  removeButton.dataset.collectionRemoveId = item.id;
+  removeButton.dataset.collectionRemoveIndex = String(index);
   removeButton.setAttribute("aria-label", `Remove ${item.datasetName}`);
   removeButton.addEventListener("click", () => {
     removeProductCollectionProduct(item.id);
@@ -126,6 +225,7 @@ function createActions(items) {
     footer.appendChild(
       createActionButton({
         label,
+        destination,
         title: availability.reason ?? title,
         disabled: !availability.allowed,
         onClick: () => openProductCollection(destination),
@@ -136,11 +236,12 @@ function createActions(items) {
   return footer;
 }
 
-function createActionButton({ label, title, disabled, onClick }) {
+function createActionButton({ label, destination, title, disabled, onClick }) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "pc-product-collection-tray__action";
   button.textContent = label;
+  button.dataset.collectionAction = destination;
   button.title = title;
   button.disabled = disabled;
   button.setAttribute("aria-label", title);
