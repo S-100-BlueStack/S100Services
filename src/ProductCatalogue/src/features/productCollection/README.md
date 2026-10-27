@@ -33,9 +33,11 @@ filter changes do not remove Collection state. Workspace windows are independent
 Main-map Collection actions require every current item to explicitly permit the destination before
 resolving a canonical Analyze/Review URL. Unsupported actions remain visible and disabled with truthful
 help text. A mixed collection is blocked as a whole; no supported subset is silently launched.
-Dispatch re-reads current state, protecting against stale enabled callbacks. Package navigation is
-disabled until the destination can represent all package tracks. This policy consumes permissions,
-not source names, labels or member identities. Direct product-based workspace routes are unchanged.
+Dispatch re-reads current state, protecting against stale enabled callbacks. Package work units can
+navigate to Analyze/Review when the registry and authoritative Product context grant those
+capabilities (including the accepted package-aware workspaces). Unsupported or mixed collections
+remain blocked; this policy consumes permissions, not source names, labels or an inferred member
+identity. Direct product-based workspace routes are unchanged.
 
 For supported collections, the
 shared workspace navigation policy uses the actual `window.open` result: an accepted open leaves the

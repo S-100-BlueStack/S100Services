@@ -1,6 +1,6 @@
 # FI-043 onboarding correction and workspace selection visibility
 
-Status: **candidate; local demo-browser verification pending**.
+Current status: **FI-043 accepted** at `9280c650a0cf28f59af27b0720d986fba22ed2c9` (developer-reported, 2026-10-26). The v1–v3 notes below document the historical correction/verification process. Full-system demo smoke remains a separate gate.
 
 Authoritative source commit: `a31f57a0c3c04e29da3a5627df70fd9c04993902`.
 
@@ -39,7 +39,7 @@ This focused correction follows the developer's 2026-10-26 manual tests. It does
 6. Check light/dark, rapid Product switching, failed API response, popup closing/reopening, and route changes during an introduction. Confirm existing Escape/focus and panel-state behavior.
 7. Run `cd src/ProductCatalogue`, `npm run format`, `npm run check` locally; record the exact results. Do not execute destructive Product mutations as part of the UI tour.
 
-Do not mark this candidate accepted until the user has verified the local runtime and reported any failures. The existing limitation of disabled non-package mutations remains unchanged.
+Historical v1 instruction (superseded by FI-043 v3 acceptance): local runtime verification was required before accepting the candidate. The existing limitation of disabled non-package mutations remains unchanged.
 
 ## Follow-up manual regression and focused v3 correction
 
@@ -54,7 +54,7 @@ The developer's subsequent browser pass on FI-043 v2 reported these remaining fa
 
 **Required v3 browser checks:** Open a Product from an initially empty Main-map Step 6 and confirm automatic transition to Step 7 beside the popup; inspect the exact Product Collection icon highlight in Step 9, close/reopen the popup and use Back. On Step 10, confirm the guide does not hide either Theme or Scale hiding. On initially empty Analyze and Review routes, add one Product during Step 2 and confirm the guide advances without pressing Next, while picker focus and immediate list updates remain correct. Check Escape/replay, both themes and the actual demo screen resolution.
 
-## DSA-04 follow-up — same-document Back/Forward (candidate)
+## DSA-04 follow-up — same-document Back/Forward (accepted)
 
 Follow-up baseline: `20cb5c608dc03a2e5bdcf2137bd568509812b572`.
 This is a focused lifecycle correction after the accepted FI-043 onboarding work,
@@ -76,5 +76,4 @@ Back/Forward (both with a running tour and with no tour), then use Preferences
 absence of stale highlights or automatic welcome replay. Also confirm Main map
 replay and that full page teardown does not leave a working old callback.
 
-Status: correction candidate; local `npm run check` and demo-browser acceptance
-are pending. Historical FI-043 acceptance is unchanged.
+Status: **accepted and committed** at `69b0d3295ca7cfb96b5a5fb312b7ecbcd45ff703` (developer-reported). The developer verified Dashboard Back/Forward with Introduction inactive and active, including replay from Preferences. Browser Back/Forward intentionally closes an active tour without automatically resuming its previous step. The developer reports running frontend tests, formatting, lint and build before commits. Full demo/browser/deployment regression remains outstanding; historical FI-043 acceptance is unchanged.

@@ -1,6 +1,6 @@
 # FI-043 — Consolidated Introduction / onboarding refresh
 
-Status: **Implemented; manual verification pending**.
+Current status: **FI-043 accepted at `9280c650`**, with DSA-04 Back/Forward lifecycle correction accepted at `69b0d329` (developer-reported). The original candidate findings and test results below are historical; full-system demo regression remains pending.
 
 ## Authoritative input
 
@@ -109,8 +109,10 @@ Start introduction is the explicit bottom re-entry action. The tour opens the ex
 - Close/Finish returns focus to the visible origin, otherwise to the Preferences public focus
   contract. Re-entry preserves the original origin rather than a detached tour button. Background
   target replacement does not steal focus from a still-connected application control.
-- Re-initialization, pagehide and popstate destroy old UI, timers and listeners. Destroyed services
-  reject delayed route-ready/start callbacks. Route teardown does not focus an outgoing page.
+- Re-initialization and `pagehide` destroy the service, UI, timers and listeners; destroyed services
+  reject delayed route-ready/start callbacks. Same-document `popstate` retires only the active tour
+  session and its UI/timers/panels, leaving the service available for Preferences replay (DSA-04).
+  Route teardown does not focus an outgoing page.
 - Cards use existing theme tokens and viewport-constrained scrolling. Target scrolling is instant;
   the existing reduced-motion rules remain. Narrow viewports, zoom and native component focus
   still require the manual checks below.
@@ -212,7 +214,8 @@ npm run check
 Native Calcite focus, ArcGIS placement, responsive clipping and browser Back/Forward restoration
 have not been manually exercised here. DOM tests model public application contracts and do not
 replace browser verification. The baseline CRLF-sensitive Dashboard test and unavailable build
-checks are explicit limits; FI-043 is not marked manually accepted.
+checks were the original candidate-stage limits. FI-043 was subsequently developer-accepted at
+`9280c650`; this original test record is retained for provenance.
 
 ## Candidate file inventory
 

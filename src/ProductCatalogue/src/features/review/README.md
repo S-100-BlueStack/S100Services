@@ -158,7 +158,7 @@ synchronization, and temporary legacy-path compatibility. Content toggles remain
 
 ## FI-039 incremental reconciliation
 
-Status: **Implemented; manual verification pending**.
+Status: **Accepted** at `1a77af904ec1a41726bcec357b72610c74e793ca` (FI-039 manual acceptance).
 
 `core/reviewProductSession.js` now owns the single authoritative Review data generation. The page
 coordinator supplies the latest Product items and receives render snapshots; it has no separate full
@@ -208,8 +208,7 @@ the actual coordinator with explicit browser/API test boundaries. See
 
 ## F6C package-aware Review
 
-Status: **F6C v1 functionality manually accepted; v2 visual correction pending browser acceptance and local full check**.
-Authoritative merge baseline: `462776d5aef68cf71cb784506c580b82c97f1dcc`.
+Status: **F6C v2 accepted** at `906a7e2dd4527408dcb6617b644fc49edbc326c5` (developer-reported). The earlier `462776d5aef68cf71cb784506c580b82c97f1dcc` commit is the historical F6C implementation baseline, not the current repository baseline.
 
 `reviewProductSession.js` remains the sole content/publication owner. Its composition version guards
 async canonicalization inside that same session; no page generation counter, member session or

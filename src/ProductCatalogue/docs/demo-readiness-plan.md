@@ -2,7 +2,8 @@
 
 Status: **verification planned; not yet accepted as demo-ready**.
 
-Planning baseline: `c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c` (2026-10-26).
+Original planning baseline: `c4b0f7e1108b40b2cb4f4b40f0ac95e2280d906c` (2026-10-26).
+Recorded frontend baseline for this documentation reconciliation: `2d8c1637425e971572bd09d98de9e29e45745de4` (2026-10-27, developer-reported accepted commit).
 
 Scope: **stabilize existing behavior only**. No SDK upgrade, new map visualization, alternate test framework or broad refactor in the demo stabilization branch.
 
@@ -10,13 +11,17 @@ This checklist supplements the [historical release review](frontend-release-read
 
 ## Baseline and evidence
 
-| Check                     | Acceptance evidence                                                               | Status at document creation                                                                                                                                               |
-| ------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repository baseline       | Git SHA and clean/understood working tree; documentation matches current branch   | Supplied baseline `c4b0f7e1`; current future working tree not independently inspected                                                                                     |
-| Local frontend gate       | `cd src/ProductCatalogue; npm run format; npm run check`                          | Required before demo freeze; this documentation pass did not run it                                                                                                       |
-| Real browser + deployment | Real UI behavior and server integration in the intended demonstration environment | New end-to-end pass pending                                                                                                                                               |
-| FI-027 and FI-029         | Latest committed changes, no regressions in supported paths                       | FI-027 hover fix committed; owner reported ENC-package popup looked correct, but cross-source workflows unverified                                                        |
-| FI-043                    | Main map, Dashboard, Analyze, Review route onboarding with fresh/replayed state   | User test on `a31f57a0` (2026-10-26): F43-01–04 Failed, F43-05–09 Passed. Focused correction pending local acceptance; see [FI-043 verification](fi-043-verification.md). |
+| Check                     | Acceptance evidence                                                               | Status at document creation                                                                                                                                                        |
+| ------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repository baseline       | Git SHA and clean/understood working tree; documentation matches current branch   | Frontend acceptance reported through `2d8c1637`; working tree and deployed build were not independently inspected for this documentation pass                                      |
+| Local frontend gate       | `cd src/ProductCatalogue; npm run format; npm run check`                          | Developer reports running frontend tests, format, lint and build before each accepted frontend commit; this documentation pass did not rerun them                                  |
+| Real browser + deployment | Real UI behavior and server integration in the intended demonstration environment | New end-to-end pass pending                                                                                                                                                        |
+| FI-027 and FI-029         | Latest committed changes, no regressions in supported paths                       | FI-027 hover fix committed; owner reported ENC-package popup looked correct, but cross-source workflows unverified                                                                 |
+| FI-043                    | Main map, Dashboard, Analyze, Review route onboarding with fresh/replayed state   | Historical `a31f57a0` failures corrected; developer accepted FI-043 at `9280c650` and DSA-04 Back/Forward replay at `69b0d329`. See [FI-043 verification](fi-043-verification.md). |
+
+### Accepted stability corrections (not a full demo smoke)
+
+Developer-reported accepted commits: FI-043 `9280c650`; DSA-01/02 `914c57a9` (API-body failures and Product search races); DSA-03 `20cb5c60` (targeted status refresh); DSA-04 `69b0d329` (onboarding after Back/Forward); DSA-05/06 `12a6e084` (Dashboard History retry and debounce); DSA-07 v2 `bfcb5ecc` (Collection focus); DSA-08 `2d8c1637` (direct Analyze/Review route startup). These are implementation/acceptance records, **not** a complete browser or deployment smoke pass. DSA-09/10 test/documentation cleanup is separate from runtime acceptance.
 
 ## Manual demo regression matrix
 
