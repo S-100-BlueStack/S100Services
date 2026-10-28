@@ -15,13 +15,15 @@ using IO = System.IO;
 
 namespace DataCatalague.Api.Repositories
 {
-    public partial class DispatchRepository : IEventHandler
+    public partial class DispatchRepository : IEventHandler, IAsyncDisposable
     {
         internal static readonly JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions {
             WriteIndented = false,
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             PropertyNameCaseInsensitive = true,
         };
+
+        private readonly ArcGisDispatcher _arcDispatcher;
 
         private readonly IOptions<DispatcherOptions> _luggageOptions;
 
@@ -33,6 +35,7 @@ namespace DataCatalague.Api.Repositories
         private readonly IReadOnlyDictionary<string, TableDefinition> _standaloneTableDefinitions;
 
         public DispatchRepository(ArcGisDispatcher arcDispatcher, IOptions<DispatcherOptions> options, ILogger<DispatchRepository> logger) {
+            this._arcDispatcher = arcDispatcher;
             this._luggageOptions = options ?? throw new ArgumentNullException(nameof(options));
             this._logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -98,7 +101,7 @@ namespace DataCatalague.Api.Repositories
                         }
                     };
 
-                    var memoryStream = new MemoryStream();
+                    using var memoryStream = new MemoryStream();
                     stream.CopyTo(memoryStream);
                     memoryStream.Position = 0;
 
@@ -108,7 +111,7 @@ namespace DataCatalague.Api.Repositories
                     rowBuffer["data_size"] = memoryStream.Length;
                     rowBuffer["data"] = memoryStream;
 
-                    var row = attachment.CreateRow(rowBuffer);
+                    using var row = attachment.CreateRow(rowBuffer);
 
                     return Guid.Parse($"{row.GetGlobalID():B}");
                 }
@@ -131,7 +134,7 @@ namespace DataCatalague.Api.Repositories
                 buffer["attributebindings"] = new PackageCoverage { packageId = packageId, absoluteUri = absoluteUri }.Flatten();
                 buffer["shape"] = geometry;
 
-                var row = fc.CreateRow(buffer);
+                using var row = fc.CreateRow(buffer);
 
                 return $"{fc.GetName().Split('.')[^1]}::{row.GetGlobalID():B}";
             }
@@ -150,7 +153,7 @@ namespace DataCatalague.Api.Repositories
                 buffer["attributebindings"] = new SeverityCoverage { severity = severity }.Flatten();
                 buffer["shape"] = geometry;
 
-                var row = fc.CreateRow(buffer);
+                using var row = fc.CreateRow(buffer);
                 return $"{fc.GetName().Split('.')[^1]}::{row.GetGlobalID():B}";
             }
         }
@@ -205,6 +208,13 @@ namespace DataCatalague.Api.Repositories
             state = state.When(evt);          
 
             return EventHandlingStatus.Handled;
+        }
+        public async ValueTask DisposeAsync() {
+            await this._arcDispatcher.ExecuteAsync(() => {
+                foreach (var definition in this._featureClassDefinitions.Values) { definition.Dispose(); }
+                foreach (var definition in this._standaloneTableDefinitions.Values) { definition.Dispose(); }
+                return true;
+            });
         }
     }
 }

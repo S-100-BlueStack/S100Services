@@ -71,13 +71,14 @@ public sealed class SamplePackageReader(ArcGisDispatcher dispatcher, ILogger<Sam
                     throw new InvalidDataException("Could not read polygon geometry from the submission shapefile.", exception);
                 }
             }).ConfigureAwait(false);
+            var submission = new GeneralSubmission(new PackageMetaData(null, "GeneralSubmission", title, source, null, DateTimeOffset.UtcNow), geometry, description is null ? null : [new PackageDescription(null, description)]);
             return new CreatePackageRequest {
                 Category = "GeneralSubmission",
                 AbsoluteUri = new Uri(Path.GetFullPath(sourceFile)).AbsoluteUri,
-                EsriJSON = geometry.Aoi,
-                DetailedGeometry = geometry,
-                MetaData = new PackageMetaData(null, "GeneralSubmission", title, source, null, DateTimeOffset.UtcNow),
-                Descriptions = description is null ? null : [new PackageDescription(null, description)],
+                EsriJSON = submission.Geometry.Aoi,
+                DetailedGeometry = submission.Geometry,
+                MetaData = submission.MetaData,
+                Descriptions = submission.Descriptions,
                 Charts = null,
             };
         }

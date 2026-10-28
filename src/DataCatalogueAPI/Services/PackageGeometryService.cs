@@ -35,6 +35,11 @@ public sealed class PackageGeometryService(IEventStore eventStore, StreamNameMap
             if (!await eventStore.StreamExists(streamNameMap.GetStreamName(new PackageId(id)), cancellationToken)) { return null; }
             var stream = await eventStore.LoadState<PackageState, PackageId>(streamNameMap, new(id), true, cancellationToken);
 
+            // Persist the fingerprint in the event stream, rather than a request-scoped
+            // cache, so a retry returns the committed references before allocating rows.
+            var requestHash = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { request.Aoi, request.Points, request.Curves, request.Surfaces })));
+            if (stream.State.GeometryRequestHash == requestHash) { return stream.State; }
+
             var absoluteUri = stream.State.AbsoluteUri?.AbsoluteUri ?? throw new InvalidOperationException($"Package '{id}' has no source URI.");
             var references = await dispatcher.ExecuteAsync(() => {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -45,7 +50,7 @@ public sealed class PackageGeometryService(IEventStore eventStore, StreamNameMap
             try {
                 // These stores cannot share a transaction. Once ArcGIS commits, finish
                 // recording the references even if the HTTP client has disconnected.
-                var result = await commands.Handle(new PackagesCommands.ReplaceGeometry(id, references.Aoi, references.Details), CancellationToken.None);
+                var result = await commands.Handle(new PackagesCommands.ReplaceGeometry(id, references.Aoi, references.Details, requestHash), CancellationToken.None);
                 if (!result.Success) {
                     throw new InvalidOperationException($"Could not record geometry replacement for package '{id}'.");
                 }

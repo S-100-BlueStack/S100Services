@@ -6,4 +6,7 @@
     <Platform Project="x64" />
     <Build Solution="Release|*" Project="false" />
   </Project>
+  <Project Path="tests/DataCatalogueAPI.Tests/DataCatalogueAPI.Tests.csproj">
+    <Platform Project="x64" />
+  </Project>
 </Solution>

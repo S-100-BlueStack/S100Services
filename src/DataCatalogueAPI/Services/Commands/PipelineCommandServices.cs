@@ -1,7 +1,7 @@
-﻿using DataCatalague.Api.Domain;
+using DataCatalague.Api.Domain;
 using Eventuous;
 
-namespace DataCatalague.Api.Services
+namespace DataCatalague.Api.Services.Commands
 {
     public class PipelineCommandService : CommandService<Pipeline, PipelineState, PipelineId>
     {

@@ -14,9 +14,9 @@ namespace DataCatalague.Api.Initialization;
 /// <param name="logger">Receives sample initialization progress.</param>
 public sealed class SampleDataInitialization(DispatcherController dispatcher, PackageController packages, PipelineController pipelines, SamplePackageReader sampleReader, ILogger<SampleDataInitialization> logger)
 {
-    /// <summary>Creates sample pipelines, categories, packages and explicit bindings in the fresh development stores.</summary>
+    /// <summary>Creates sample pipelines, categories, packages in the fresh development stores.</summary>
     /// <param name="cancellationToken">Cancels sample reading and controller operations.</param>
-    /// <returns>A task that completes when sample creation and binding readback have succeeded.</returns>
+    /// <returns>A task that completes when sample creation have succeeded.</returns>
     public async Task InitializeAsync(CancellationToken cancellationToken) {
         var pipelineSamples = new List<PipelineResponse>();
         foreach (var sample in new[] {
@@ -26,6 +26,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
             var created = await pipelines.Create(new CreatePipelineRequest { DisplayName = sample.Name, Description = sample.Description }, cancellationToken).ConfigureAwait(false);
             var pipeline = RequireSuccess(created, $"create pipeline '{sample.Name}'");
             pipelineSamples.Add(pipeline);
+
             // Both pipelines have independent work areas. Packages may overlap several
             // areas, and assigning another pipeline never changes their source geometry.
             foreach (var area in new[] {
@@ -37,9 +38,12 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
                     spatialReference = new { wkid = 4326 },
                 });
                 RequireSuccess(await pipelines.AddWorkspace(pipeline.Id, new AddWorkspaceRequest {
-                    DisplayName = area.Name, DisplayScale = new DisplayScale(), EsriJSON = json,
+                    DisplayName = area.Name,
+                    DisplayScale = new DisplayScale(),
+                    EsriJSON = json,
                 }, cancellationToken).ConfigureAwait(false), $"create workspace '{area.Name}' in '{pipeline.DisplayName}'");
             }
+
             logger.LogInformation("Created sample pipeline {DisplayName}. PipelineId: {PipelineId}.", pipeline.DisplayName, pipeline.Id);
         }
         var packageSamples = new List<PackageResponse>();
@@ -115,23 +119,7 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
             logger.LogInformation("Created general submission sample {FileName}.", Path.GetFileName(file));
         }
 
-        // Arbitrary fixture assignments only. Keeps the demo repeatable without inspecting package content.
-        int?[] assignments = [0, null, 1, 1, null, 0, null, 1];
-        var bindingCount = 0;
-        for (var index = 0; index < packageSamples.Count; index++) {
-            if (assignments[index % assignments.Length] is not { } pipelineIndex) { continue; }
-            var package = packageSamples[index];
-            var pipeline = pipelineSamples[pipelineIndex];
-            var created = await dispatcher.CreateBinding(new BindRequest { PackageId = package.Id, PipelineId = pipeline.Id }, cancellationToken).ConfigureAwait(false);
-            var binding = RequireSuccess(created, $"bind package '{package.Id}' to pipeline '{pipeline.DisplayName}'");
-            var persisted = RequireSuccess(await dispatcher.GetBinding(binding.Id, cancellationToken).ConfigureAwait(false), $"read binding '{binding.Id}'");
-            if (persisted.Id != binding.Id || persisted.PackageId != package.Id || persisted.PipelineId != pipeline.Id) {
-                throw new InvalidOperationException($"Binding '{binding.Id}' did not retain the requested package and pipeline.");
-            }
-            bindingCount++;
-        }
-
-        logger.LogInformation("Sample initialization completed. CreatedPipelines: {CreatedPipelines}, CreatedPackages: {CreatedPackages}, CreatedBindings: {CreatedBindings}, UnboundPackages: {UnboundPackages}.", pipelineSamples.Count, packageSamples.Count, bindingCount, packageSamples.Count - bindingCount);
+        logger.LogInformation("Sample initialization completed. CreatedPipelines: {CreatedPipelines}, CreatedPackages: {CreatedPackages}.", pipelineSamples.Count, packageSamples.Count);
     }
 
     private static T RequireSuccess<T>(ActionResult<T> response, string operation) {

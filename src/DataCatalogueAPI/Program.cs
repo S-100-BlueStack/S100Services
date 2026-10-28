@@ -1,13 +1,8 @@
 ﻿using DataCatalague.Api.Configuration;
-using DataCatalague.Api.Domain;
 using DataCatalague.Api.Initialization;
-using DataCatalague.Api.Repositories;
-using DataCatalague.Api.Services;
-using Eventuous;
-using ICSharpCode.SharpZipLib.Zip;
 using Serilog;
+using ICSharpCode.SharpZipLib.Zip;
 using System.Text.Json;
-using IO = System.IO;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 using System.Security.Claims;
 
@@ -35,70 +30,21 @@ public static class Program
 
             builder.AddSerilogLogging();
 
-            //ArcGIS.Core.Hosting.Host.Initialize();
-
-            foreach (var f in System.IO.Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory, $"*s100ed17*.geodatabase*")) {                
-                System.IO.File.Delete(System.IO.Path.GetFullPath(f));
+            foreach (var file in Directory.GetFiles(AppContext.BaseDirectory, "*s100ed17*.geodatabase*")) {
+                File.Delete(Path.GetFullPath(file));
             }
-
             FastZip fastZip = new();
-            fastZip.ExtractZip(IO.Path.GetFullPath(IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"s100ed17.zip")), IO.Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory), null);
+            fastZip.ExtractZip(Path.Combine(AppContext.BaseDirectory, "s100ed17.zip"), AppContext.BaseDirectory, null);
 
             builder.Services
                 .AddDispatcherConfiguration(builder.Configuration)
                 .AddPackageConfiguration(builder.Configuration);
 
-            IEventSerializer eventSerializer = new DefaultEventSerializer(
-                new JsonSerializerOptions(JsonSerializerDefaults.Web));
-
-            EventSerializer.SetDefault(eventSerializer);
-
-            builder.Services.AddSingleton(eventSerializer);
-            builder.Services.AddSingleton<StreamNameMap>();
-            builder.Services.AddSingleton<DispatchRepository>();
-            builder.Services.AddSingleton<PackageRepository>();
-            builder.Services.AddSingleton<InMemoryPipelineRepository>();
-            builder.Services.AddSingleton<IPipelineRepository>(sp => sp.GetRequiredService<InMemoryPipelineRepository>());
-            builder.Services.AddSingleton<ArcGisDispatcher>();
-
-            builder.Services.AddTransient<SamplePackageReader>();
-            builder.Services.AddTransient<SampleDataInitialization>();
-
-            //builder.Services.AddEventuousSqlServer(
-            //    "",
-            //    "eventuous",
-            //    initializeDatabase: true);
-
-            //builder.Services.AddEventStore<SqlServerStore>();
-
-            builder.Services.AddCommandService<CategoryCommandService, CategoryState>();
-            builder.Services.AddCommandService<BindingCommandService, BindingState>();
-            builder.Services.AddCommandService<PackageCommandService, PackageState>();
-            builder.Services.AddCommandService<PipelineCommandService, PipelineState>();
-
+            builder.Services.AddCatalogueRuntimeServices();
             builder.Services.AddApplicationServices();
             builder.Services.AddApiVersioningSupport();
             builder.Services.AddVersionedOpenApiDocuments();
             builder.Services.AddSecureTransport();
-
-            builder.Services.AddSingleton<InMemoryEventStore>();
-
-            builder.Services.AddSingleton<IEventStore>(
-                serviceProvider =>
-                    serviceProvider.GetRequiredService<InMemoryEventStore>());
-
-            builder.Services.AddCheckpointStore<InMemoryCheckpointStore>();
-
-            builder.Services.AddSubscription<
-                InMemoryAllStreamSubscription,
-                InMemoryAllStreamSubscriptionOptions>(
-                "dispatcher-subscription",
-                // The type overload creates a subscription-keyed instance. Resolve the
-                // singletons used by controllers so they read the populated caches.
-                x => x.AddEventHandler(sp => sp.GetRequiredService<DispatchRepository>(), ownsHandler: false)
-                    .AddEventHandler(sp => sp.GetRequiredService<PackageRepository>(), ownsHandler: false)
-                    .AddEventHandler(sp => sp.GetRequiredService<InMemoryPipelineRepository>(), ownsHandler: false));
-
 
             //  Windows SSO
             builder.Services.AddHttpContextAccessor();

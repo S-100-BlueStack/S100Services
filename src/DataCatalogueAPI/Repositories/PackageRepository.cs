@@ -16,7 +16,7 @@ using IO = System.IO;
 
 namespace DataCatalague.Api.Repositories
 {
-    public partial class PackageRepository : IEventHandler
+    public partial class PackageRepository : IEventHandler, IAsyncDisposable
     {
         internal static readonly JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions {
             WriteIndented = false,
@@ -299,7 +299,7 @@ namespace DataCatalague.Api.Repositories
                         }
                     };
 
-                    var memoryStream = new MemoryStream();
+                    using var memoryStream = new MemoryStream();
                     stream.CopyTo(memoryStream);
                     memoryStream.Position = 0;
 
@@ -309,7 +309,7 @@ namespace DataCatalague.Api.Repositories
                     rowBuffer["data_size"] = memoryStream.Length;
                     rowBuffer["data"] = memoryStream;
 
-                    var row = attachment.CreateRow(rowBuffer);
+                    using var row = attachment.CreateRow(rowBuffer);
 
                     return Guid.Parse($"{row.GetGlobalID():B}");
                 }
@@ -332,7 +332,7 @@ namespace DataCatalague.Api.Repositories
                 buffer["attributebindings"] = new PackageCoverage { packageId = packageId, absoluteUri = absoluteUri }.Flatten();
                 buffer["shape"] = geometry;
 
-                var row = fc.CreateRow(buffer);
+                using var row = fc.CreateRow(buffer);
 
                 return $"{fc.GetName().Split('.')[^1]}::{row.GetGlobalID():B}";
             }
@@ -465,7 +465,7 @@ namespace DataCatalague.Api.Repositories
                 buffer["attributebindings"] = new SeverityCoverage { severity = severity }.Flatten();
                 buffer["shape"] = geometry;
 
-                var row = fc.CreateRow(buffer);
+                using var row = fc.CreateRow(buffer);
                 return $"{fc.GetName().Split('.')[^1]}::{row.GetGlobalID():B}";
             }
         }
@@ -514,6 +514,13 @@ namespace DataCatalague.Api.Repositories
 
             this._logger.LogError("Cannot project package event before package creation. PackageId: {PackageId}, EventType: {EventType}.", packageId, evt.GetType().Name);
             return EventHandlingStatus.Failure;
+        }
+        public async ValueTask DisposeAsync() {
+            await this._arcDispatcher.ExecuteAsync(() => {
+                foreach (var definition in this._featureClassDefinitions.Values) { definition.Dispose(); }
+                foreach (var definition in this._standaloneTableDefinitions.Values) { definition.Dispose(); }
+                return true;
+            });
         }
     }
 }

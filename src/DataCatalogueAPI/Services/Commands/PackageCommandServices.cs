@@ -1,8 +1,8 @@
-﻿using DataCatalague.Api.Domain;
+using DataCatalague.Api.Domain;
 using DataCatalague.Api.Domain.Commands;
 using Eventuous;
 
-namespace DataCatalague.Api.Services
+namespace DataCatalague.Api.Services.Commands
 {
     public class PackageCommandService : CommandService<Package, PackageState, PackageId>
     {
@@ -24,7 +24,7 @@ namespace DataCatalague.Api.Services
             this.On<PackagesCommands.ReplaceGeometry>()
                 .InState(ExpectedState.Existing)
                 .GetId(cmd => new(cmd.PackageId))
-                .ActAsync((package, cmd, _) => package.ReplaceGeometry(cmd.Aoi, cmd.Details));
+                .ActAsync((package, cmd, _) => package.ReplaceGeometry(cmd.Aoi, cmd.Details, cmd.RequestHash));
 
             this.On<PackagesCommands.UpdateSeverity>()
                 .InState(ExpectedState.Existing)

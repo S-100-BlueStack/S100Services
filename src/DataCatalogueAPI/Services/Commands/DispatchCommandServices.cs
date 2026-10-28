@@ -1,8 +1,8 @@
-﻿using DataCatalague.Api.Domain;
+using DataCatalague.Api.Domain;
 using DataCatalague.Api.Domain.Commands;
 using Eventuous;
 
-namespace DataCatalague.Api.Services
+namespace DataCatalague.Api.Services.Commands
 {
     public class CategoryCommandService : CommandService<Domain.Category, CategoryState, CategoryId>
     {

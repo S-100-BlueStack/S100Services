@@ -41,8 +41,8 @@
 		<Compile Remove="IDataRepository.cs" />
 		<Compile Remove="InMemoryProductRepository.cs" />
 		<Compile Remove="IProductRepository.cs" />
-		<Compile Remove="Models\CreateProductRequest.cs" />
-		<Compile Remove="Models\ProductResponse.cs" />
+		<Compile Remove="Models\Requests\CreateProductRequest.cs" />
+		<Compile Remove="Models\Responses\ProductResponse.cs" />
 	</ItemGroup>
 
 	<ItemGroup>
