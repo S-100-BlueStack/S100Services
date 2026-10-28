@@ -66,7 +66,10 @@ for (const count of [0, 1, 5, 6, 20]) {
     const body = byClass(card, "pc-review-content-card__body")[0];
     const bounded = count > 5;
 
-    assert.equal(byClass(card, "pc-review-content-card--validation-bounded").length, Number(bounded));
+    assert.equal(
+      byClass(card, "pc-review-content-card--validation-bounded").length,
+      Number(bounded)
+    );
     assert.equal(byClass(body, "pc-review-content-card__body--scrollable").length, Number(bounded));
     assert.equal(byClass(body, "pc-scrollbar").length, Number(bounded));
     assert.equal(body.attributes.role, bounded ? "region" : undefined);
@@ -102,13 +105,25 @@ test("Review failed validation leaves the normal error card and no scroll region
 });
 
 test("Review labels successive validation scroll regions without hover help", () => {
-  const first = createValidationCard(createProduct(6), REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS);
-  const second = createValidationCard(createProduct(6), REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS);
+  const first = createValidationCard(
+    createProduct(6),
+    REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS
+  );
+  const second = createValidationCard(
+    createProduct(6),
+    REVIEW_CONTENT_TYPES.INTERNAL_VALIDATION_REPORTS
+  );
   const firstBody = byClass(first, "pc-review-content-card__body")[0];
   const secondBody = byClass(second, "pc-review-content-card__body")[0];
 
-  assert.notEqual(firstBody.attributes["aria-labelledby"], secondBody.attributes["aria-labelledby"]);
+  assert.notEqual(
+    firstBody.attributes["aria-labelledby"],
+    secondBody.attributes["aria-labelledby"]
+  );
   assert.equal(firstBody.attributes["aria-label"], undefined);
   assert.equal(secondBody.attributes["aria-label"], undefined);
-  assert.equal(byClass(first, "pc-review-content-card__title")[0].textContent, "Internal validation");
+  assert.equal(
+    byClass(first, "pc-review-content-card__title")[0].textContent,
+    "Internal validation"
+  );
 });

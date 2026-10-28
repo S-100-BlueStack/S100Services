@@ -63,10 +63,7 @@ for (const count of [1, 2, 5, 6, 20]) {
     assert.equal(list.tabIndex, bounded ? 0 : undefined);
     assert.equal(list.attributes.role, bounded ? "region" : undefined);
     assert.equal(list.attributes["aria-label"], undefined);
-    assert.equal(
-      list.attributes["aria-labelledby"],
-      bounded ? card.children[0].id : undefined
-    );
+    assert.equal(list.attributes["aria-labelledby"], bounded ? card.children[0].id : undefined);
     assert.ok(!bounded || Boolean(card.children[0].id));
     assert.ok(reportCards.every((report) => report.open === true));
     assert.deepEqual(
@@ -115,10 +112,15 @@ test("Analyze retains expanded inline report content and distinct accessible scr
   const firstList = byClass(first, "analyze-internal-validation__content")[0];
   const secondList = byClass(second, "analyze-internal-validation__content")[0];
 
-  assert.ok(byClass(firstList, "analyze-internal-validation__report").every((report) => report.open));
+  assert.ok(
+    byClass(firstList, "analyze-internal-validation__report").every((report) => report.open)
+  );
   assert.equal(byClass(firstList, "analyze-internal-validation__report-content").length, 2);
   assert.ok(descendants(firstList).some((element) => element.tagName === "pre"));
-  assert.notEqual(firstList.attributes["aria-labelledby"], secondList.attributes["aria-labelledby"]);
+  assert.notEqual(
+    firstList.attributes["aria-labelledby"],
+    secondList.attributes["aria-labelledby"]
+  );
   assert.equal(firstList.attributes["aria-label"], undefined);
   assert.equal(secondList.attributes["aria-label"], undefined);
 });
