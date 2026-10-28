@@ -422,10 +422,34 @@ function renderPackageHistory(panel, history) {
     const heading = document.createElement("h3");
     heading.id = `product-history-member-${index}`;
     heading.className = "pc-product-history-member__heading";
-    heading.textContent = `${member.label} · ${member.datasetName}`;
     section.setAttribute("aria-labelledby", heading.id);
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "pc-product-history-member__toggle";
+    toggle.setAttribute("aria-expanded", "true");
+
+    const label = document.createElement("span");
+    label.className = "pc-product-history-member__label";
+    label.textContent = `${member.label} · ${member.datasetName}`;
+
+    const chevron = document.createElement("calcite-icon");
+    chevron.icon = "chevron-up";
+    chevron.scale = "s";
+    chevron.setAttribute("aria-hidden", "true");
+    toggle.append(label, chevron);
+    heading.appendChild(toggle);
+
     const content = document.createElement("div");
+    content.id = `product-history-member-content-${index}`;
     content.className = "pc-product-history-member__content";
+    toggle.setAttribute("aria-controls", content.id);
+    toggle.addEventListener("click", () => {
+      const expanded = toggle.getAttribute("aria-expanded") !== "true";
+      toggle.setAttribute("aria-expanded", String(expanded));
+      content.hidden = !expanded;
+      chevron.icon = expanded ? "chevron-up" : "chevron-down";
+    });
     const memberPanel = { title: document.createElement("span"), content };
     if (member.error) renderError(memberPanel, member.datasetName, new Error(member.error));
     else {

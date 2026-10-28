@@ -186,7 +186,7 @@ test("one canonical panel, exact ordered sections and independently collapsed re
   assert.deepEqual(
     walk(h.root)
       .filter((e) => e.className === "pc-product-history-member__heading")
-      .map((e) => e.textContent),
+      .map((e) => text(e).trim()),
     [`S-101 · ${h.names.s101}`, `S-57 · ${h.names.s57}`]
   );
   const details = walk(h.root).filter(
@@ -200,6 +200,147 @@ test("one canonical panel, exact ordered sections and independently collapsed re
   assert.equal(details[0].hidden, false);
   assert.equal(details[1].hidden, true);
 });
+test("package members toggle independently without removing or reordering their events", async (t) => {
+  const reads = [];
+  const h = await harness(t, {
+    fetchHistory: async (name) => {
+      reads.push(name);
+      return emptyHistory(name, {
+        events: [
+          {
+            id: `${name}-new`,
+            title: `${name} latest`,
+            timestamp: "2026-10-09T08:00:00Z",
+            details: [{ label: "Edition", value: "2" }],
+          },
+          {
+            id: `${name}-old`,
+            title: `${name} older`,
+            timestamp: "2026-10-08T08:00:00Z",
+            details: [],
+          },
+        ],
+      });
+    },
+  });
+  await h.panel.openHistory(h.names.s101);
+
+  const sections = walk(h.root).filter(
+    (element) => element.className === "pc-product-history-member"
+  );
+  assert.equal(sections.length, 2);
+  const toggles = sections.map((section) => find(section, "pc-product-history-member__toggle"));
+  const contents = sections.map((section) => find(section, "pc-product-history-member__content"));
+  assert.deepEqual(reads, [h.names.s101, h.names.s57]);
+  assert.deepEqual(
+    toggles.map((button) => text(button).trim()),
+    [`S-101 · ${h.names.s101}`, `S-57 · ${h.names.s57}`]
+  );
+  toggles.forEach((button, index) => {
+    assert.equal(button.tagName, "button");
+    assert.equal(button.type, "button");
+    assert.equal(button.getAttribute("aria-expanded"), "true");
+    assert.equal(button.getAttribute("aria-controls"), contents[index].id);
+    assert.equal(contents[index].hidden, false);
+    assert.equal(sections[index].getAttribute("aria-labelledby"), sections[index].children[0].id);
+  });
+  const originalItems = contents.map((content) =>
+    walk(content).filter((element) =>
+      element.className?.startsWith("pc-product-history-list__item ")
+    )
+  );
+  assert.deepEqual(
+    originalItems.map((items) => items.length),
+    [2, 2]
+  );
+  assert.match(text(originalItems[0][0]), /latest/);
+  assert.match(text(originalItems[0][1]), /older/);
+
+  toggles[0].dispatchEvent(new Event("click"));
+  assert.equal(toggles[0].getAttribute("aria-expanded"), "false");
+  assert.equal(contents[0].hidden, true);
+  assert.equal(toggles[0].children[1].icon, "chevron-down");
+  assert.equal(contents[1].hidden, false);
+  assert.deepEqual(reads, [h.names.s101, h.names.s57]);
+
+  toggles[1].dispatchEvent(new Event("click"));
+  assert.equal(contents[0].hidden, true);
+  assert.equal(contents[1].hidden, true);
+  toggles[0].dispatchEvent(new Event("click"));
+  assert.equal(contents[0].hidden, false);
+  assert.equal(contents[1].hidden, true);
+  assert.equal(toggles[0].children[1].icon, "chevron-up");
+  assert.deepEqual(
+    contents.map((content) =>
+      walk(content).filter((element) =>
+        element.className?.startsWith("pc-product-history-list__item ")
+      )
+    ),
+    originalItems
+  );
+});
+
+test("member toggles retain event detail state and the pinned snapshot", async (t) => {
+  const h = await harness(t, {
+    fetchHistory: async (name) =>
+      emptyHistory(name, {
+        events: [
+          {
+            id: name,
+            title: name,
+            timestamp: "2026-10-08T08:00:00Z",
+            details: [{ label: "Edition", value: "2" }],
+          },
+        ],
+      }),
+  });
+  await h.panel.openHistory(h.names.s101);
+  const section = find(h.root, "pc-product-history-member");
+  const toggle = find(section, "pc-product-history-member__toggle");
+  const content = find(section, "pc-product-history-member__content");
+  const eventButton = find(section, "pc-product-history-list__summary");
+  const details = find(section, "pc-product-history-list__details-panel");
+  eventButton.dispatchEvent(new Event("click"));
+  assert.equal(details.hidden, false);
+  toggle.dispatchEvent(new Event("click"));
+  assert.equal(content.hidden, true);
+  assert.equal(details.hidden, false);
+  pin(h);
+  h.view.popup.visible = false;
+  h.view.popup.selectedFeature = null;
+  h.state.enabled = false;
+  h.tick();
+  assert.equal(h.root.hidden, false);
+  assert.equal(content.hidden, true);
+  toggle.dispatchEvent(new Event("click"));
+  assert.equal(content.hidden, false);
+  assert.equal(details.hidden, false);
+  assert.equal(h.notices.length, 0);
+});
+
+test("a new History request resets only the newly rendered member disclosures", async (t) => {
+  const h = await harness(t);
+  await h.panel.openHistory(h.names.s101);
+  const first = find(h.root, "pc-product-history-member__toggle");
+  first.dispatchEvent(new Event("click"));
+  assert.equal(first.getAttribute("aria-expanded"), "false");
+  await h.panel.openHistory(h.names.s101);
+  const second = find(h.root, "pc-product-history-member__toggle");
+  assert.notEqual(second, first);
+  assert.equal(second.getAttribute("aria-expanded"), "true");
+  assert.equal(find(h.root, "pc-product-history-member__content").hidden, false);
+  assert.equal(h.root.hidden, false);
+});
+
+test("member presentation has visible keyboard focus and truly hidden collapsed content", async () => {
+  const css = await readFile(
+    new URL("../../../styles/product-history.css", import.meta.url),
+    "utf8"
+  );
+  assert.match(css, /\.pc-product-history-member__toggle:focus-visible\s*\{[^}]*outline:/);
+  assert.match(css, /\.pc-product-history-member__content\[hidden\]\s*\{\s*display:\s*none;/);
+});
+
 test("actual Tools action captures context and sends one explicit read per member", async (t) => {
   const h = await harness(t);
   createPopupActionGroups({ graphic: h.graphic, productContext: h.context })

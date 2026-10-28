@@ -73,6 +73,17 @@ The shared product history renderer is used by both:
 - the main map floating Product History panel
 - the Dashboard route-local Product History panel
 
+In the floating Main map History panel, each resolved package member has its own
+collapsible section header (for example, S-101 and S-57). Sections start expanded
+to preserve the existing History overview. Selecting a header collapses only that
+member's summary, notices and events, making later members easier to reach.
+The same header can be selected again to expand its content. Headers are native
+buttons with expanded state and controlled content exposed to assistive technology.
+Collapse state belongs to the currently rendered panel snapshot; a new History
+request starts with expanded member sections. Pin/Unpin preserves the visible
+snapshot and its current collapse state. Standalone Product History and Dashboard
+History retain their existing presentation.
+
 History event rows are collapsed by default.
 
 Collapsed rows show only:

@@ -417,18 +417,56 @@ button.pc-product-history-list__summary:focus-visible {
 
 .pc-product-history-member__heading {
   margin: 0 0 8px;
-  padding: 6px 8px;
   color: var(--pc-text);
   background: var(--pc-surface-alt);
   border: 1px solid var(--pc-border);
   font-size: 12px;
   font-weight: 700;
   line-height: 1.4;
+}
+
+.pc-product-history-member__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pc-product-history-member__toggle:hover,
+.pc-product-history-member__toggle:focus-visible {
+  background: color-mix(in srgb, var(--calcite-color-brand, #0079c1) 8%, transparent);
+}
+
+.pc-product-history-member__toggle:focus-visible {
+  outline: 2px solid var(--calcite-color-brand, #0079c1);
+  outline-offset: -2px;
+}
+
+.pc-product-history-member__label {
+  min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.pc-product-history-member__toggle calcite-icon {
+  flex: 0 0 auto;
+  color: var(--pc-text-muted);
 }
 
 .pc-product-history-member__content {
   min-width: 0;
+}
+
+.pc-product-history-member__content[hidden] {
+  display: none;
 }
 
 .pc-product-history-panel__header > :first-child {
