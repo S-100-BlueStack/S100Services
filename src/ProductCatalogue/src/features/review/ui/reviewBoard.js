@@ -1,5 +1,6 @@
 import { getStatusName } from "../../data/stores/statusStore.js";
 import "@esri/calcite-components/components/calcite-icon";
+import "@esri/calcite-components/components/calcite-link";
 import {
   createProductHistoryBanner,
   createProductHistoryStateMessage,
@@ -16,6 +17,8 @@ import {
   getReviewIcEncPresentation,
   getReviewValidationPresentation,
 } from "./reviewContentPresentation.js";
+let nextValidationScrollLabelId = 0;
+
 export function createReviewBoard({
   productItems,
   enabledDatasetNames,
@@ -221,6 +224,14 @@ function createReviewContentCard(product, contentType) {
       card.body.appendChild(createContentStateMessage(presentation.message));
       return card.root;
     }
+    if (artifacts.length > 5) {
+      card.root.classList.add("pc-review-content-card--validation-bounded");
+      card.body.classList.add("pc-review-content-card__body--scrollable", "pc-scrollbar");
+      card.body.setAttribute("role", "region");
+      card.titleElement.id = `pc-review-validation-scroll-label-${++nextValidationScrollLabelId}`;
+      card.body.setAttribute("aria-labelledby", card.titleElement.id);
+      card.body.tabIndex = 0;
+    }
     for (const artifact of artifacts) {
       card.body.appendChild(createValidationArtifactRow(artifact));
     }
@@ -309,6 +320,7 @@ function createContentCardShell({ product, contentType, title, status }) {
   return {
     root: card,
     header,
+    titleElement,
     body,
   };
 }
@@ -323,7 +335,7 @@ function createContentStateMessage(message) {
 function createValidationArtifactRow(artifact) {
   const row = document.createElement("p");
   row.className = "pc-review-content-card__artifact";
-  const link = document.createElement("a");
+  const link = document.createElement("calcite-link");
   link.href = artifact.url;
   link.textContent = `${artifact.productSpecificationLabel}: ${artifact.fileName}`;
   link.download = artifact.fileName || "";

@@ -324,6 +324,7 @@ body.pc-review-route #last-updated {
 
 .pc-review-board {
   --pc-review-history-card-max-height: clamp(240px, 50dvh, 500px);
+  --pc-review-validation-card-max-height: clamp(220px, 48dvh, 420px);
 
   min-width: 0;
   min-height: 0;
@@ -412,6 +413,11 @@ body.pc-review-route #last-updated {
   max-height: var(--pc-review-history-card-max-height);
 }
 
+.pc-review-content-card--validation-bounded {
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: var(--pc-review-validation-card-max-height);
+}
+
 .pc-review-content-card__header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -483,8 +489,8 @@ body.pc-review-route #last-updated {
   border-top: 1px solid color-mix(in srgb, var(--pc-border) 72%, transparent);
 }
 
-.pc-review-content-card__artifact a {
-  color: var(--calcite-color-brand, #0079c1);
+.pc-review-content-card__artifact calcite-link {
+  --calcite-link-text-color: var(--calcite-color-brand, #0079c1);
   overflow-wrap: anywhere;
 }
 

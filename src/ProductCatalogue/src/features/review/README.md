@@ -128,15 +128,19 @@ scroll offset and return focus to the initiating workspace control without delay
 ## FI-037 content layout and states
 
 History cards use their natural content height up to a viewport-aware `clamp(240px, 50dvh, 500px)`
-maximum. History keeps the only intentional content-card scroller after that bound; short histories no
-longer reserve a fixed-height region. IC-ENC and Internal validation bodies render at natural height,
-and the Product-column content container owns vertical overflow for those cards.
+maximum. Short histories no longer reserve a fixed-height region. Internal validation cards with more
+than five available artifacts now have their own viewport-aware maximum height and a keyboard-focusable
+inner scrollbar; shorter lists and unavailable/failed/empty states keep their natural height. IC-ENC
+cards remain at natural height. The Product-column content container continues to own vertical overflow
+for other content.
 
 Each content-card header remains the state discriminator: `Unavailable`, `Failed`, an empty count, or
 an available content count. The body adds one concise message for states without content instead of a
 second heading/message pair. IC-ENC remains unavailable without inventing a report contract. Validation
 request failures retain their safe error text, and available diagnostic artifacts retain their download
 links. These presentation rules do not add a loader or refresh lifecycle.
+
+Long Internal validation lists retain accessible region names by referencing their visible card headings rather than producing hover tooltips. Available artifact downloads use `calcite-link` with the existing URLs and filename hints. History scrolling is unchanged.
 
 Future report cards should use the same pattern.
 

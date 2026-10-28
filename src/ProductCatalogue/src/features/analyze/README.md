@@ -130,7 +130,7 @@ Catalog completion after page teardown is ignored. No global request timeout is 
 
 Internal validation reports are normalized into the UI-facing `internalValidationReports` product field.
 
-The UI supports multiple open validation reports at the same time by rendering one nested details element per report. This keeps the current sidebar workflow simple while leaving room for a later side-by-side or dedicated comparison view if the report size requires it.
+The UI renders each Internal validation report expanded by default, including when multiple reports are available. With more than one report, the list uses a slightly taller, viewport-aware maximum height (approximately two expanded reports) and an independently keyboard-scrollable region. Users can still collapse individual reports, but never need to expand them just to see the content. The scroll region is named by the visible section heading without generating a hover tooltip. Download URLs use the public Calcite `calcite-link` component with the existing filename hint; no reports are omitted.
 
 The current frontend-ready report shape is:
 

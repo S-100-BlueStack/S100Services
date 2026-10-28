@@ -60,6 +60,7 @@ for (const emptyLegacy of [false, true]) {
     });
     const moduleUrl = new URL("./analyzeSidebar.js", import.meta.url);
     const source = (await readFile(moduleUrl, "utf8"))
+      .replace(/^import "@esri\/calcite-components\/components\/calcite-link";\r?\n/m, "")
       .replace(
         /import \{\s*createProductHistoryEventList,[\s\S]*?from "[^"]*productHistoryRenderers.js";/,
         'const createProductHistoryEventList = () => document.createElement("div"); const createProductHistorySummary = () => document.createElement("div"); const createProductHistoryStateMessage = () => document.createElement("div");'
@@ -79,7 +80,7 @@ for (const emptyLegacy of [false, true]) {
     );
     assert.equal(sections.length, 2);
     for (const [index, section] of sections.entries()) {
-      const links = section.collect((node) => node.tagName === "a");
+      const links = section.collect((node) => node.tagName === "calcite-link");
       assert.deepEqual(
         links.map((link) => link.href),
         product.members[index].internalValidationReports.map((report) => report.url)

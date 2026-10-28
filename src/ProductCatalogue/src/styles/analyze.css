@@ -450,6 +450,14 @@ body.pc-analyze-route {
   gap: 10px;
 }
 
+.analyze-internal-validation__content--scrollable {
+  max-height: clamp(25rem, 62dvh, 34rem);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-inline-end: 3px;
+}
+
 .analyze-internal-validation__state {
   display: grid;
   gap: 4px;
@@ -521,6 +529,11 @@ body.pc-analyze-route {
   gap: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--pc-border);
+}
+
+.analyze-internal-validation__report-content calcite-link {
+  --calcite-link-text-color: var(--calcite-color-brand, #0079c1);
+  justify-self: start;
 }
 
 .analyze-internal-validation__metadata {
