@@ -1,4 +1,5 @@
 using Hangfire;
+using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Mvc; // Required for ApiVersion
 using Microsoft.Extensions.Hosting;
 using ProductCatalogueAPI.Filters;
@@ -9,6 +10,8 @@ using S100FC.S128;
 using Serilog;
 using Serilog.Events;
 using System.Reflection;
+using System.Security.Claims;
+using System.Text.Json;
 
 namespace ProductCatalogueAPI
 {
@@ -144,7 +147,7 @@ namespace ProductCatalogueAPI
             //    foreach (var policy in groupPolicies) {
             //        options.AddPolicy(policy.Key, p => {
             //            switch (policy.Key) {
-            //                case "productmanager:distribute":
+            //                case "productmanager:distribute": 
             //                    p.RequireClaim(ClaimTypes.PrimarySid, policy.Value);
             //                    break;
             //                case "productmanager:access":

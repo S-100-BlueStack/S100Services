@@ -110,10 +110,11 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
             }
 
             await _workflowRepository.SetStateAsync(track.Id, ProductState.Validating, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken: cancellationToken);
-            if (productSpecification == ProductSpecification.S101) {
+            if (productSpecification is ProductSpecification.S101 or ProductSpecification.S57) {
                 try {
                     var validationResult = await _sevenCsService.ValidateDatasetAsync(
                         targetDatasetName,
+                        productSpecification,
                         edition,
                         update,
                         _electronicProductManager.OutputFolder,

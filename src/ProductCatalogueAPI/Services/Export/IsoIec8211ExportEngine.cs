@@ -140,8 +140,8 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
 
         // The compiler takes the mapped S-57 YAML path and the output directory.
         await RunProcessAsync(S57CompilerPath, $"\"{s57Yaml}\" \"{outputDirectory}\"", outputDirectory, request.DatasetName, cancellationToken);
-        if (!Directory.EnumerateFiles(outputDirectory, "*.000", SearchOption.AllDirectories).Any(path => new FileInfo(path).Length > 0))
-            throw new InvalidOperationException($"The S-57 compiler did not create a non-empty dataset for '{request.DatasetName}'.");
+        // Use the same cell identity and layout check as SevenCs validation.
+        _ = ExportOutputPath.GetS57DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update);
         var exchangeSet = await CreateZipAsync(outputDirectory, cancellationToken);
         return new ExportEngineResult(outputDirectory, [
             new ExportEngineArtifact(ProductArtifactKind.ExchangeSet, $"{request.DatasetName}-{request.Edition}-{request.Update:000}.zip", "application/zip", exchangeSet)

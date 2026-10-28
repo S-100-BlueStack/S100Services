@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using ProductCatalogueAPI.Data.Models;
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Text;
@@ -30,22 +31,30 @@ namespace ProductCatalogueAPI.Services.SevenCs
 
         /// <summary>Uploads and validates one generated S-101 candidate.</summary>
         /// <remarks>Waits without a validation deadline until analysis completes, fails, or the caller cancels.</remarks>
-        public async Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) {
-            // Build path
-            var datasetPath = ExportOutputPath.GetS101DatasetFilesDirectory(outputPath, datasetName, edition, update);
+        public Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) =>
+            ValidateDatasetAsync(datasetName, ProductSpecification.S101, edition, update, outputPath, cancellationToken);
 
+        /// <inheritdoc/>
+        public async Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, ProductSpecification productSpecification, int edition, int update, string outputPath, CancellationToken cancellationToken = default) {
             cancellationToken.ThrowIfCancellationRequested();
+            var datasetPath = productSpecification switch {
+                ProductSpecification.S101 => ExportOutputPath.GetS101DatasetFilesDirectory(outputPath, datasetName, edition, update),
+                ProductSpecification.S57 => ExportOutputPath.GetS57DatasetFilesDirectory(outputPath, datasetName, edition, update),
+                _ => throw new NotSupportedException($"SevenCs validation is not supported for {productSpecification}.")
+            };
 
             _logger.LogInformation("SevenCs dataset validation begun. path: {path}", datasetPath);
 
             var uuid = Guid.NewGuid();
 
-            // Figure out DSNM
-            var dsnm = Directory.GetFiles(datasetPath, "*.000").Select(f => Path.GetFileNameWithoutExtension(f)).SingleOrDefault();
+            // Only this target cell belongs to the candidate; similarly prefixed cells are unrelated.
+            var baseFile = Directory.EnumerateFiles(datasetPath, "*.000")
+                .SingleOrDefault(file => string.Equals(Path.GetFileNameWithoutExtension(file), datasetName, StringComparison.OrdinalIgnoreCase));
+            if (baseFile is null || new FileInfo(baseFile).Length == 0)
+                throw new InvalidOperationException($"Could not find a non-empty base dataset for '{datasetName}'.");
+            var dsnm = Path.GetFileNameWithoutExtension(baseFile);
 
             _logger.LogInformation(".000 file detected. DSNM: {dsnm}", dsnm);
-            if (string.IsNullOrEmpty(dsnm))
-                throw new NullReferenceException($"Could not find .000 file in path: {datasetPath}");
 
             var directoryName = $"{dsnm}-{uuid}";
             var lastFile = "";
@@ -65,18 +74,16 @@ namespace ProductCatalogueAPI.Services.SevenCs
                 .Where(file => {
                     var fileName = Path.GetFileName(file);
                     var extension = Path.GetExtension(fileName);
-                    return fileName.StartsWith(dsnm, StringComparison.CurrentCultureIgnoreCase) && pattern.IsMatch(extension);
+                    return string.Equals(Path.GetFileNameWithoutExtension(fileName), dsnm, StringComparison.OrdinalIgnoreCase) && pattern.IsMatch(extension);
                 })
                 .OrderBy(file => {
                     var ext = Path.GetExtension(file).TrimStart('.'); // Remove the dot
                     return int.TryParse(ext, out int num) ? num : int.MaxValue;
-                });
+                }).ToArray();
 
             // Upload each file in the correct order
             foreach (var file in orderedFiles) {
                 var fileName = Path.GetFileName(file);
-
-                var fileNameNoExtension = fileName.Split(".").FirstOrDefault()!;
 
                 var requestObj = new RequestObj() {
                     DatasetName = fileName,
@@ -86,9 +93,7 @@ namespace ProductCatalogueAPI.Services.SevenCs
                 // Upload file
                 var uploaded = await UploadFile(requestObj, datasetPath, cancellationToken);
 
-                if (uploaded)
-                    uploadedFiles.Add(requestObj);
-                else {
+                if (!uploaded) {
                     // Wait one second and retry once more
                     await Task.Delay(1000, cancellationToken);
 
@@ -98,8 +103,10 @@ namespace ProductCatalogueAPI.Services.SevenCs
                         throw new Exception($"Could not upload file: {fileName}. Folderpath: {datasetPath}. FilesToUpload: {orderedFiles.Count()}");
                 }
 
-                // Retrieve the newest update for retrieving the summary
-                lastFile = dsnm + Path.GetExtension(file);
+                // A successful retry must also be included in the analysis request.
+                uploadedFiles.Add(requestObj);
+                // Retrieve the newest update for retrieving the summary.
+                lastFile = fileName;
             }
 
             if (uploadedFiles.Count == 0)

@@ -55,46 +55,105 @@ public sealed class ExportOperationServiceTests
         Assert.Equal("summary-yaml", Assert.Single(repository.Revisions).ChangeSummaryYaml);
     }
 
-    [Fact]
-    public async Task CriticalValidationFindingsPersistSummaryAndDiagnostics() {
+    [Theory]
+    [InlineData("101DK001")]
+    [InlineData("DK3BIDQE")]
+    public async Task CriticalValidationFindingsPersistDiagnosticsBeforeFailingTheCandidate(string datasetName) {
         var repository = new RecordingWorkflowRepository();
-        var diagnostic = new SevenCsDiagnosticArtifact("101DK001.vld", "text/plain", "validation details"u8.ToArray());
+        var diagnostic = new SevenCsDiagnosticArtifact($"{datasetName}.vld", "text/plain", "validation details"u8.ToArray());
         var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse { Errors = 3, Critical = 2 }, [diagnostic]);
 
-        var exception = await Assert.ThrowsAsync<ExportValidationException>(() => service.ExecuteExportAsync("101DK001", ExportRevisionType.Update, null));
+        var exception = await Assert.ThrowsAsync<ExportValidationException>(() => service.ExecuteExportAsync(datasetName, ExportRevisionType.Update, null));
 
         Assert.Equal(ProductState.Error, repository.Track.State);
+        Assert.Equal(0, repository.CompletionCalls);
         Assert.Equal("SEVENCS_VALIDATION_FAILED", repository.LastErrorCode);
         Assert.Contains("3 errors and 2 critical findings", exception.PublicMessage);
         Assert.Equal(exception.PublicMessage, repository.LastErrorMessage);
         Assert.DoesNotContain(repository.Artifacts, artifact => artifact.Kind == ProductArtifactKind.ValidationReport);
-        Assert.Contains(repository.Artifacts, artifact => artifact.Kind == ProductArtifactKind.ValidationDiagnostic && artifact.FileName == "101DK001.vld");
+        Assert.Contains(repository.Artifacts, artifact => artifact.Kind == ProductArtifactKind.ValidationDiagnostic && artifact.FileName == $"{datasetName}.vld");
     }
 
-    [Fact]
-    public async Task NonCriticalFindingsAllowExportToBeReadyForDistribution() {
+    [Theory]
+    [InlineData("101DK001")]
+    [InlineData("DK3BIDQE")]
+    public async Task NonCriticalFindingsAllowExportToBeReadyForDistribution(string datasetName) {
         var repository = new RecordingWorkflowRepository();
-        var diagnostic = new SevenCsDiagnosticArtifact("101DK001.vld", "text/plain", "validation details"u8.ToArray());
+        var diagnostic = new SevenCsDiagnosticArtifact($"{datasetName}.vld", "text/plain", "validation details"u8.ToArray());
         var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse { Errors = 3, ShallowIsolatedDangersUpdatedBathy = true }, [diagnostic]);
 
-        await service.ExecuteExportAsync("101DK001", ExportRevisionType.Update, null);
+        await service.ExecuteExportAsync(datasetName, ExportRevisionType.Update, null);
 
         Assert.Equal(ProductState.ReadyForDistribution, repository.Track.State);
         Assert.Null(repository.LastErrorMessage);
-        Assert.Contains(repository.Artifacts, artifact => artifact.Kind == ProductArtifactKind.ValidationDiagnostic && artifact.FileName == "101DK001.vld");
+        Assert.Contains(repository.Artifacts, artifact => artifact.Kind == ProductArtifactKind.ValidationDiagnostic && artifact.FileName == $"{datasetName}.vld");
     }
 
-    [Fact]
-    public async Task SevenCsTimeoutFailsTheS101CandidateInsteadOfMarkingItReady() {
+    [Theory]
+    [InlineData("101DK001")]
+    [InlineData("DK3BIDQE")]
+    public async Task SevenCsTimeoutFailsTheCandidateInsteadOfMarkingItReady(string datasetName) {
         var repository = new RecordingWorkflowRepository();
         var timeout = new HttpRequestException("SevenCs timed out", new SocketException((int)SocketError.TimedOut));
         var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse(), validationFailure: timeout);
 
-        var error = await Assert.ThrowsAsync<ExportValidationException>(() => service.ExecutePackageExportAsync("101DK001", ExportRevisionType.NewEdition, "shared-yaml", "summary-yaml"));
+        var error = await Assert.ThrowsAsync<ExportValidationException>(() => service.ExecutePackageExportAsync(datasetName, ExportRevisionType.NewEdition, "shared-yaml", "summary-yaml"));
 
         Assert.Equal("SEVENCS_VALIDATION_UNAVAILABLE", error.Code);
         Assert.Equal(ProductState.Error, repository.Track.State);
+        Assert.Equal(0, repository.CompletionCalls);
         Assert.Equal(error.PublicMessage, repository.LastErrorMessage);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task S57ValidationUsesTargetCandidateAndPersistsBothDiagnosticsOnItsRevision(bool packageExport) {
+        var repository = new RecordingWorkflowRepository();
+        var products = new RecordingElectronicProductManager();
+        var diagnostics = new[] {
+            new SevenCsDiagnosticArtifact("DK3BIDQE.vld", "text/plain", "S57 findings"u8.ToArray()),
+            new SevenCsDiagnosticArtifact("DK3BIDQE-validation-shapes.zip", "application/zip", new byte[] { 1, 2, 3 })
+        };
+        var validator = new FakeSevenCsService(new SummaryResponse(), diagnostics, null);
+        var service = CreateService(products, repository, new RecordingExportEngine(), new SummaryResponse(), sevenCs: validator);
+        using var cancellation = new CancellationTokenSource();
+
+        if (packageExport)
+            await service.ExecutePackageExportAsync("DK3BIDQE", ExportRevisionType.NewEdition, "shared-yaml", "summary-yaml", cancellation.Token);
+        else
+            await service.ExecuteExportAsync("DK3BIDQE", ExportRevisionType.NewEdition, "developer", cancellationToken: cancellation.Token);
+
+        Assert.Equal(("DK3BIDQE", ProductSpecification.S57, 5, 0, "output", cancellation.Token), validator.LastRequest!.Value);
+        Assert.Equal(ProductState.ReadyForDistribution, repository.Track.State);
+        Assert.Equal(0, products.AttachmentCalls);
+        Assert.Equal(packageExport ? 0 : 1, repository.CompletionCalls);
+        var artifacts = repository.Artifacts.Where(artifact => artifact.Kind == ProductArtifactKind.ValidationDiagnostic).ToArray();
+        Assert.Equal(2, artifacts.Length);
+        Assert.All(artifacts, artifact => {
+            Assert.Equal(repository.Track.Id, artifact.TrackId);
+            Assert.Equal(repository.RevisionId, artifact.RevisionId);
+            var diagnostic = Assert.Single(diagnostics, item => item.FileName == artifact.FileName);
+            Assert.Equal(diagnostic.MediaType, artifact.MediaType);
+            Assert.Equal(diagnostic.Content, artifact.Content);
+        });
+    }
+
+    [Fact]
+    public async Task S57ValidationCancellationLeavesAnErrorWithoutWrappingItAsServiceUnavailable() {
+        var repository = new RecordingWorkflowRepository();
+        using var cancellation = new CancellationTokenSource();
+        var validator = new FakeSevenCsService(new SummaryResponse(), [], null) {
+            BeforeValidation = () => cancellation.Cancel()
+        };
+        var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse(), sevenCs: validator);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.ExecutePackageExportAsync("DK3BIDQE", ExportRevisionType.NewEdition, "shared-yaml", "summary-yaml", cancellation.Token));
+
+        Assert.Equal(ProductState.Error, repository.Track.State);
+        Assert.Equal(ExportJobContract.OperationCancelledCode, repository.LastErrorCode);
+        Assert.Equal(0, repository.CompletionCalls);
     }
 
     [Fact]
@@ -359,8 +418,8 @@ public sealed class ExportOperationServiceTests
         Assert.Equal(0, engine.ExportCalls);
     }
 
-    private static TestExportOperationService CreateService(RecordingElectronicProductManager products, RecordingWorkflowRepository repository, RecordingExportEngine engine, SummaryResponse validation, IReadOnlyList<SevenCsDiagnosticArtifact>? diagnostics = null, Exception? validationFailure = null, IEncPackageRepository? packages = null) => new(
-        new FakeProductManager(products), new ExportEngineRegistry([engine]), repository, new FakeSevenCsService(validation, diagnostics ?? [], validationFailure),
+    private static TestExportOperationService CreateService(RecordingElectronicProductManager products, RecordingWorkflowRepository repository, RecordingExportEngine engine, SummaryResponse validation, IReadOnlyList<SevenCsDiagnosticArtifact>? diagnostics = null, Exception? validationFailure = null, IEncPackageRepository? packages = null, FakeSevenCsService? sevenCs = null) => new(
+        new FakeProductManager(products), new ExportEngineRegistry([engine]), repository, sevenCs ?? new FakeSevenCsService(validation, diagnostics ?? [], validationFailure),
         new FixedTimeProvider(DateTimeOffset.Parse("2026-08-10T20:00:00Z")), "dataset-yaml", packages);
 
     private sealed class TestExportOperationService(IProductManager productManager, IExportEngineRegistry engines, IProductWorkflowRepository repository, ISevenCsService sevenCs, TimeProvider timeProvider, string yaml, IEncPackageRepository? packages)
@@ -460,6 +519,7 @@ public sealed class ExportOperationServiceTests
         public int? CandidateEdition { get; init; }
         public int? CandidateUpdate { get; init; }
         public ProductExportTrackRecord Track { get; private set; } = null!;
+        public Guid RevisionId { get; } = Guid.NewGuid();
         public List<ProductRevisionWrite> Revisions { get; } = [];
         public List<ProductArtifactWrite> Artifacts { get; } = [];
         public string? LastErrorCode { get; private set; }
@@ -478,7 +538,7 @@ public sealed class ExportOperationServiceTests
         public Task<bool> SetManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { var changed = !Track.IsManuallyFrozen; Track.IsManuallyFrozen = true; return Task.FromResult(changed); }
         public Task<bool> ClearManualFreezeAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { var changed = Track.IsManuallyFrozen; Track.IsManuallyFrozen = false; return Task.FromResult(changed); }
         public Task DiscardCandidateAsync(Guid trackId, string? owner, DateTime occurredAtUtc, CancellationToken cancellationToken = default) { Track.State = Track.CandidatePreviousState ?? ProductState.Idle; Track.CandidateEdition = null; Track.CandidateUpdate = null; Track.CandidatePreviousState = null; return Task.CompletedTask; }
-        public Task<Guid> AddRevisionAsync(ProductRevisionWrite revision, CancellationToken cancellationToken = default) { Revisions.Add(revision); return Task.FromResult(Guid.NewGuid()); }
+        public Task<Guid> AddRevisionAsync(ProductRevisionWrite revision, CancellationToken cancellationToken = default) { Revisions.Add(revision); return Task.FromResult(RevisionId); }
         public Task AddArtifactAsync(ProductArtifactWrite artifact, CancellationToken cancellationToken = default) { Artifacts.Add(artifact); return Task.CompletedTask; }
         public Task<IReadOnlyList<ProductExportTrackRecord>> GetTracksAsync(string datasetName, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ProductExportTrackRecord>>([]);
         public Task<Guid?> GetLatestRevisionIdAsync(Guid trackId, CancellationToken cancellationToken = default) => Task.FromResult<Guid?>(null);
@@ -491,9 +551,18 @@ public sealed class ExportOperationServiceTests
 
     private sealed class FakeSevenCsService(SummaryResponse response, IReadOnlyList<SevenCsDiagnosticArtifact> diagnostics, Exception? failure) : ISevenCsService
     {
-        public Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) => failure is null
-            ? Task.FromResult(new SevenCsValidationResult(response, diagnostics))
-            : Task.FromException<SevenCsValidationResult>(failure);
+        public (string DatasetName, ProductSpecification Specification, int Edition, int Update, string OutputPath, CancellationToken Token)? LastRequest { get; private set; }
+        public Action? BeforeValidation { get; init; }
+        public Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) =>
+            ValidateDatasetAsync(datasetName, ProductSpecification.S101, edition, update, outputPath, cancellationToken);
+        public Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, ProductSpecification productSpecification, int edition, int update, string outputPath, CancellationToken cancellationToken = default) {
+            LastRequest = (datasetName, productSpecification, edition, update, outputPath, cancellationToken);
+            BeforeValidation?.Invoke();
+            cancellationToken.ThrowIfCancellationRequested();
+            return failure is null
+                ? Task.FromResult(new SevenCsValidationResult(response, diagnostics))
+                : Task.FromException<SevenCsValidationResult>(failure);
+        }
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider

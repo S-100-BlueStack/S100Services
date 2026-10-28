@@ -67,6 +67,28 @@ public static class ExportOutputPath
     public static string GetS101DatasetFilesDirectory(string outputRoot, string datasetName, int edition, int update) {
         return Path.Combine(GetS101ExchangeSetDirectory(outputRoot, datasetName, edition, update), "S-101", "DATASET_FILES");
     }
+
+    /// <summary>Finds the requested S-57 cell beneath its isolated compiler output directory.</summary>
+    /// <param name="outputRoot">The configured export root.</param>
+    /// <param name="datasetName">The S-57 target cell name resolved through ProductMapping.</param>
+    /// <param name="edition">The candidate edition number.</param>
+    /// <param name="update">The candidate update number identifying its isolated output.</param>
+    /// <returns>The directory containing the unique, non-empty base cell and any adjacent updates.</returns>
+    /// <exception cref="InvalidOperationException">The requested base cell is missing, empty or ambiguous.</exception>
+    /// <remarks>Supports flat and nested exchange-set layouts without selecting another cell or an older candidate.</remarks>
+    public static string GetS57DatasetFilesDirectory(string outputRoot, string datasetName, int edition, int update) {
+        var candidateDirectory = GetCandidateDirectory(outputRoot, datasetName, ProductSpecification.S57, edition, update);
+        var baseFiles = Directory.Exists(candidateDirectory)
+            ? Directory.EnumerateFiles(candidateDirectory, "*.000", SearchOption.AllDirectories)
+                .Where(path => string.Equals(Path.GetFileNameWithoutExtension(path), datasetName, StringComparison.OrdinalIgnoreCase))
+                .Take(2).ToArray()
+            : Array.Empty<string>();
+        if (baseFiles.Length != 1 || new FileInfo(baseFiles[0]).Length == 0)
+            throw new InvalidOperationException($"The S-57 compiler output must contain one non-empty base dataset for '{datasetName}'.");
+
+        return Path.GetDirectoryName(baseFiles[0])!;
+    }
+
     private static void Validate(string outputRoot, string datasetName, int edition, int update) {
         if (string.IsNullOrWhiteSpace(outputRoot))
             throw new ArgumentException("An export output root is required.", nameof(outputRoot));
