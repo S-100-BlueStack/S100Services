@@ -24,8 +24,7 @@ using static ProductCatalogueAPI.Models.ResponseTypes;
 
 namespace ProductCatalogueAPI.Controllers
 {
-    [AllowAnonymous]
-    //[Authorize("productmanager:access")]
+    [Authorize("productmanager:access")]
     [ApiController]
     [Route("[controller]")]
     public class ElectronicProductsController(ILogger<ElectronicProductsController> logger, IMemoryCache cache, IProductManager productManager, IProductRepository repository, IProductWorkflowRepository workflowRepository, IProductHistoryEventService historyEventService = null!, IProductWorkspaceFreshnessRepository workspaceFreshnessRepository = null!, IEncPackageRepository? packageRepository = null) : ControllerBase

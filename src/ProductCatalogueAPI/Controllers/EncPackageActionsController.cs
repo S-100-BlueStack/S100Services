@@ -9,11 +9,12 @@ using ProductCatalogueAPI.Services.Operations;
 namespace ProductCatalogueAPI.Controllers;
 
 /// <summary>Development-only live package Pause/Resume/Discard. Never exposes Send/Accept.</summary>
-[AllowAnonymous]
+[Authorize]
 [ApiController]
 [Route("electronicproducts/packages")]
 public sealed class EncPackageActionsController(IEncPackageActionService actions) : ControllerBase
 {
+    [Authorize("productmanager:access")]
     [HttpGet("{sourceName}/actions")]
     public async Task<IActionResult> GetActions(string sourceName, CancellationToken cancellationToken) {
         if (!actions.Enabled) return StatusCode(503, new { code = "PACKAGE_ACTIONS_DISABLED", message = "ENC package actions are disabled." });
@@ -24,10 +25,12 @@ public sealed class EncPackageActionsController(IEncPackageActionService actions
         return snapshot is null ? Ok(new { actionsAvailable = false }) : Ok(snapshot);
     }
 
+    [Authorize("productmanager:manage")]
     [HttpPost("{sourceName}/pause")]
     public Task<IActionResult> Pause(string sourceName, [FromBody] EncPackagePauseRequest request, CancellationToken cancellationToken) =>
         SetPause(sourceName, request, true, cancellationToken);
 
+    [Authorize("productmanager:manage")]
     [HttpPost("{sourceName}/resume")]
     public Task<IActionResult> Resume(string sourceName, [FromBody] EncPackagePauseRequest request, CancellationToken cancellationToken) =>
         SetPause(sourceName, request, false, cancellationToken);
@@ -48,6 +51,7 @@ public sealed class EncPackageActionsController(IEncPackageActionService actions
         };
     }
 
+    [Authorize("productmanager:manage")]
     [HttpPost("{sourceName}/discard")]
     public async Task<IActionResult> Discard(string sourceName, [FromBody] EncPackageDiscardRequest request, CancellationToken cancellationToken) {
         if (!actions.Enabled) return StatusCode(503, new { code = "PACKAGE_ACTIONS_DISABLED", message = "ENC package actions are disabled." });
@@ -59,6 +63,7 @@ public sealed class EncPackageActionsController(IEncPackageActionService actions
             : Accepted(new { jobId, packageId = request.PackageId });
     }
 
+    [Authorize("productmanager:access")]
     [HttpGet("discard-jobs/{jobId}")]
     public IActionResult GetDiscardJob(string jobId) {
         if (!actions.Enabled) return StatusCode(503, new { code = "PACKAGE_ACTIONS_DISABLED", message = "ENC package actions are disabled." });

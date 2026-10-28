@@ -14,7 +14,7 @@ namespace ProductCatalogueAPI.Controllers;
 /// <summary>
 /// Starts SQL-authoritative candidate export workflows. These endpoints do not publish data to S-128.
 /// </summary>
-[AllowAnonymous]
+[Authorize("productmanager:manage")]
 [ApiController]
 [Route("[controller]")]
 public sealed class ExportController(ILogger<ExportController> logger, IProductManager productManager, IExportJobService exportJobService, TimeProvider timeProvider) : ControllerBase

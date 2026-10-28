@@ -20,8 +20,7 @@ namespace ProductCatalogueAPI.Controllers
     /// <summary>Manual fallback for a verified IC-ENC notice when automated email processing cannot complete.</summary>
     public sealed record ManualIcEncAcknowledgementRequest(string DatasetName, string ProductSpecification, int Edition, int Update, string Decision, string NoticeReference, string? Reason = null, Guid? DeliveryId = null);
 
-    // [Authorize("productmanager:distribute")]
-    [AllowAnonymous]
+    [Authorize("productmanager:distribute")]
     [ApiController]
     [Route("[controller]")]
     public class UploadController(

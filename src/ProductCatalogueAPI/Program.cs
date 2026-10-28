@@ -125,43 +125,8 @@ namespace ProductCatalogueAPI
                     });
             });
 #endif
-            #region Authorization. Disabled for now..
-
-            ////  Windows SSO
-            //builder.Services.AddHttpContextAccessor();
-            //builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
-
-            //var path = builder.Configuration["Policies"];
-            //if (string.IsNullOrEmpty(path))
-            //    Log.Error("No path configured for authorization groups file! Please set 'Policies' in appsettings.json to point to a valid JSON file containing group policies.");
-
-            //var json = File.ReadAllText(path!);
-            //var groupPolicies = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string[]>>(json, new JsonSerializerOptions {
-            //    ReadCommentHandling = JsonCommentHandling.Skip,
-            //    AllowTrailingCommas = true
-            //}) ?? [];
-
-            //builder.Services.AddAuthorization(options => {
-
-            //    options.FallbackPolicy = options.DefaultPolicy;
-            //    foreach (var policy in groupPolicies) {
-            //        options.AddPolicy(policy.Key, p => {
-            //            switch (policy.Key) {
-            //                case "productmanager:distribute": 
-            //                    p.RequireClaim(ClaimTypes.PrimarySid, policy.Value);
-            //                    break;
-            //                case "productmanager:access":
-            //                case "productmanager:manage":
-            //                    p.RequireClaim("http://schemas.microsoft.com/ws/2008/06/identity/claims/groupsid", policy.Value);
-            //                    break;
-            //                default:
-            //                    throw new Exception($"Unknown authorization policy: {policy.Key}");
-            //            }
-            //        });
-            //    }
-            //});
-            //Log.Information("Authorization policies configured");
-            #endregion
+            // API authentication is separate from the background Worker's service identity.
+            ConfigureWindowsSso(builder.Services, builder.Configuration);
             builder.Services.AddApiVersioning(options => {
                 options.AssumeDefaultVersionWhenUnspecified = true;
                 options.DefaultApiVersion = new ApiVersion(1, 0);
@@ -210,18 +175,12 @@ namespace ProductCatalogueAPI
                 app.Services.GetRequiredService<ILogger<DetectProductChangesJob>>()
             );
 
-            app.UseHangfireDashboard("/dashboard", new DashboardOptions {
-                //   Authorization = new[] { new MyAuthorizationFilter() }             // TODO: Auth
-            });
-
             // The enabled DPC schedule builds ENC packages; legacy summary processing stays unscheduled.
 
             app.UseExceptionHandler();
             // Configure the HTTP request pipeline.
-            app.UseSwagger();
-            app.UseSwaggerUI(e => e.RoutePrefix = "swagger");
-
             app.UseHttpsRedirection();
+            app.UseRouting();
 #if DEBUG
             app.UseCors("AllowFrontend");
 #endif
@@ -229,6 +188,11 @@ namespace ProductCatalogueAPI
             app.UseAuthentication();
             app.UseAuthorization();
 
+            // Middleware endpoints must run after SSO; Swagger uses the access fallback.
+            app.UseSwagger();
+            app.UseSwaggerUI(e => e.RoutePrefix = "swagger");
+            // Retain Hangfire's existing local-request restriction as well as requiring manage.
+            app.MapHangfireDashboard("/dashboard").RequireAuthorization("productmanager:manage");
             app.MapControllers();
             app.Use(async (context, next) => {
                 if (context.Request.Path == "/") {
@@ -247,14 +211,14 @@ namespace ProductCatalogueAPI
                 })
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound)
-                .AllowAnonymous();
+                .RequireAuthorization("productmanager:access");
 
                 app.MapGet("/mock/s102", () => {
                     return GetMockGeoJson("s102.geojson");
                 })
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound)
-                .AllowAnonymous();
+                .RequireAuthorization("productmanager:access");
             }
             //if (app.Environment.IsDevelopment() && 1 == 2) {
             //    using var scope = app.Services.CreateScope();
@@ -269,6 +233,50 @@ namespace ProductCatalogueAPI
             //}
 
             app.Run();
+        }
+
+        /// <summary>Restores Negotiate SSO and the configured SID-based API policies.</summary>
+        /// <param name="services">The API host's services; the background Worker does not register HTTP authentication.</param>
+        /// <param name="configuration">Contains the existing Policies path to the external SID policy JSON file.</param>
+        /// <exception cref="InvalidOperationException">The policy path or any required policy is missing, empty or unknown.</exception>
+        /// <exception cref="IOException">The configured policy file cannot be read.</exception>
+        /// <exception cref="JsonException">The configured policy file is not a valid policy dictionary.</exception>
+        internal static void ConfigureWindowsSso(IServiceCollection services, IConfiguration configuration) {
+            var path = configuration["Policies"];
+            if (string.IsNullOrWhiteSpace(path))
+                throw new InvalidOperationException("Configure 'Policies' with the path to the Windows SID authorization policy JSON file.");
+
+            var json = File.ReadAllText(path);
+            var groupPolicies = JsonSerializer.Deserialize<Dictionary<string, string[]>>(json, new JsonSerializerOptions {
+                ReadCommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            }) ?? throw new InvalidOperationException("The Windows SID authorization policy file must contain a policy dictionary.");
+            string[] requiredPolicies = ["productmanager:access", "productmanager:manage", "productmanager:distribute"];
+            foreach (var policyName in requiredPolicies) {
+                if (!groupPolicies.TryGetValue(policyName, out var sids) || sids is null || sids.Length == 0 || sids.Any(string.IsNullOrWhiteSpace))
+                    throw new InvalidOperationException($"Authorization policy '{policyName}' must contain at least one non-empty SID.");
+            }
+            foreach (var policyName in groupPolicies.Keys) {
+                if (!requiredPolicies.Contains(policyName, StringComparer.Ordinal))
+                    throw new InvalidOperationException($"Unknown authorization policy: {policyName}");
+            }
+
+            services.AddHttpContextAccessor();
+            services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
+            services.AddAuthorization(options => {
+                foreach (var policy in groupPolicies) {
+                    options.AddPolicy(policy.Key, p => {
+                        p.RequireAuthenticatedUser();
+                        var claimType = policy.Key == "productmanager:distribute"
+                            ? ClaimTypes.PrimarySid
+                            : ClaimTypes.GroupSid;
+                        p.RequireClaim(claimType, policy.Value);
+                    });
+                }
+                // Unannotated routes still require the baseline application access policy.
+                options.FallbackPolicy = options.GetPolicy("productmanager:access");
+            });
+            Log.Information("Windows SSO authorization policies configured");
         }
 
         private static async Task RunWorkerAsync(
