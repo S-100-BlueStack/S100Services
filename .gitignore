@@ -468,3 +468,5 @@ src/ProductManagerAPI/config/hangfire.connection
 /src/ProductManagerAPI/config/SQLServer-ncps-sql101041-s100ed15_productcatalogue(s100_dbo).sde
 /src/ProductManagerAPI/config/ed12/SQLServer-ncps-sql101041-s100ed12_columbia_L3(s100_dbo).sde
 /src/DataCatalogue/.vite/deps
+/src/ProductCatalogue/public/branding/Favicon.png
+/src/ProductCatalogue/public/branding/Logo.png
