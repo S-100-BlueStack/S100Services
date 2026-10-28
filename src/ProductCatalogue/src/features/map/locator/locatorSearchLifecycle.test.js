@@ -266,3 +266,43 @@ test("focus boundary keeps shadow-DOM focus inside and identifies external focus
     false
   );
 });
+
+test("a completed older navigation cannot clear newer Locator typing", async () => {
+  const search = createSearchDouble("Køge");
+  const scheduled = [];
+  let finishNavigation;
+  const session = createLocatorSearchSession(search, {
+    isCurrent: () => true,
+    scheduleAfterNavigation: (callback) => scheduled.push(callback),
+  });
+  const navigation = search.goToOverride(
+    {
+      goTo: () =>
+        new Promise((resolve) => {
+          finishNavigation = resolve;
+        }),
+    },
+    { target: "Køge" }
+  );
+  search.searchTerm = "Aalborg";
+  finishNavigation();
+  await navigation;
+  scheduled[0]();
+  assert.equal(search.searchTerm, "Aalborg");
+  assert.equal(search.clearCalls, 0);
+  assert.equal(session.isActive(), true);
+});
+
+test("typing after navigation resolves but before deferred cleanup is preserved", async () => {
+  const search = createSearchDouble("Køge");
+  const scheduled = [];
+  createLocatorSearchSession(search, {
+    isCurrent: () => true,
+    scheduleAfterNavigation: (callback) => scheduled.push(callback),
+  });
+  await search.goToOverride({ goTo: async () => {} }, { target: "Køge" });
+  search.searchTerm = "Aalborg";
+  scheduled[0]();
+  assert.equal(search.clearCalls, 0);
+  assert.equal(search.searchTerm, "Aalborg");
+});

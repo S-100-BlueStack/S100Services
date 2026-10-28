@@ -123,6 +123,8 @@ export function initMap() {
     view,
     productSearchIndex,
     host: mainMapSearchControls.productSearchHost,
+    isGraphicAllowed,
+    subscribeFilterChanges: filterService.subscribe,
   });
   const closeNavbarPopoversOnProductFocus = () =>
     navbarPopoverCoordinator.closeAll({ restoreFocus: false });

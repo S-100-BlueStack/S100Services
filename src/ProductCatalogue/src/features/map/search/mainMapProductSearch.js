@@ -6,7 +6,13 @@ import {
 
 const PRODUCT_SEARCH_RESULT_LIMIT = 10;
 
-export function initMainMapProductSearch({ view, productSearchIndex, host } = {}) {
+export function initMainMapProductSearch({
+  view,
+  productSearchIndex,
+  host,
+  isGraphicAllowed,
+  subscribeFilterChanges,
+} = {}) {
   if (!(host instanceof HTMLElement) || !productSearchIndex) return createNoopSearch();
   const form = document.createElement("form");
   form.className = "main-map-product-search__form";
@@ -23,8 +29,16 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
   const results = document.createElement("div");
   results.className = "main-map-product-search__results";
   results.hidden = true;
-  results.setAttribute("role", "listbox");
-  results.setAttribute("aria-label", "Matching products");
+  const optionsList = document.createElement("div");
+  optionsList.className = "main-map-product-search__list";
+  optionsList.setAttribute("role", "listbox");
+  optionsList.setAttribute("aria-label", "Matching products");
+  const filteredSummary = document.createElement("div");
+  filteredSummary.className = "main-map-product-search__filtered-summary";
+  filteredSummary.setAttribute("role", "status");
+  filteredSummary.title = "Products hidden by current map filters";
+  filteredSummary.hidden = true;
+  results.append(optionsList, filteredSummary);
 
   form.append(input, results);
   host.replaceChildren(form);
@@ -32,6 +46,7 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
 
   let isOpen = false;
   let selectedResultId = null;
+  let selectedResultLabel = null;
   let destroyed = false;
   let selectionGeneration = 0;
   const cancelPendingSelection = () => {
@@ -39,25 +54,38 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
   };
   const isCurrentSelection = (generation, resultId) =>
     !destroyed && generation === selectionGeneration && selectedResultId === resultId;
+  const isResultVisible = (result) =>
+    Boolean(result?.graphic) &&
+    (typeof isGraphicAllowed !== "function" ||
+      isGraphicAllowed(result.graphic, result.graphic.layer));
   function renderResults() {
-    results.replaceChildren();
+    optionsList.replaceChildren();
+    // Filter before applying the visible-result limit so hidden Products cannot
+    // consume every suggestion slot.
     const matches = productSearchIndex.search(input.value, {
-      limit: PRODUCT_SEARCH_RESULT_LIMIT,
+      limit: Number.MAX_SAFE_INTEGER,
     });
+    const visibleMatches = matches.filter(isResultVisible);
+    const filteredCount = matches.length - visibleMatches.length;
+    filteredSummary.hidden = filteredCount === 0;
+    filteredSummary.textContent = filteredCount ? `${filteredCount} filtered out` : "";
 
-    if (matches.length === 0) {
-      results.appendChild(
+    if (visibleMatches.length === 0) {
+      optionsList.appendChild(
         createStateMessage(
-          productSearchIndex.getEntries().length === 0
-            ? "No active products are loaded."
-            : "No matching products."
+          matches.length > 0
+            ? "No visible matching products."
+            : productSearchIndex.getEntries().length === 0
+              ? "No active products are loaded."
+              : "No matching products."
         )
       );
       return;
     }
-    const duplicateLabels = getDuplicateLabels(matches);
-    for (const match of matches) {
-      results.appendChild(
+    const suggestions = visibleMatches.slice(0, PRODUCT_SEARCH_RESULT_LIMIT);
+    const duplicateLabels = getDuplicateLabels(suggestions);
+    for (const match of suggestions) {
+      optionsList.appendChild(
         createProductOption(
           match,
           () => {
@@ -97,7 +125,18 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
       return;
     }
 
+    if (!isResultVisible(result)) {
+      noticeWarning(
+        "Product hidden by filters",
+        "Adjust the map filters to make this product visible before opening its popup."
+      );
+      input.focus();
+      openResults();
+      return;
+    }
+
     selectedResultId = result.id;
+    selectedResultLabel = result.label;
     input.value = result.label;
     closeResults();
     input.blur();
@@ -113,7 +152,7 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
     }
 
     if (!(await navigateToGraphic(view, graphic, { duration: 450 }))) return;
-    if (!isCurrentSelection(generation, result.id)) return;
+    if (!isCurrentSelection(generation, result.id) || !isResultVisible(result)) return;
     await waitForAnimationFrame();
     if (!isCurrentSelection(generation, result.id)) return;
 
@@ -126,6 +165,7 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
       );
       return;
     }
+    if (!isResultVisible(currentResult)) return;
     if (currentResult.graphic !== graphic) {
       // A committed refresh can replace the Graphic without changing Product identity.
       // Navigate once to that replacement, but never publish a superseded selection.
@@ -135,7 +175,12 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
     }
 
     const finalResult = productSearchIndex.resolve(result.id);
-    if (!isCurrentSelection(generation, result.id) || finalResult?.graphic !== graphic) return;
+    if (
+      !isCurrentSelection(generation, result.id) ||
+      finalResult?.graphic !== graphic ||
+      !isResultVisible(finalResult)
+    )
+      return;
     const location = createProductPopupLocation(graphic);
     openProductPopup(view, graphic, location);
   }
@@ -151,7 +196,7 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
     }
 
     if (event.key === "ArrowDown" && !results.hidden) {
-      results.querySelector(".main-map-product-search__option")?.focus();
+      getResultOptions(results)[0]?.focus();
       event.preventDefault();
     }
   }
@@ -190,6 +235,16 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
       .filter(
         (entry) => entry.label.localeCompare(query, undefined, { sensitivity: "base" }) === 0
       );
+    const visibleMatches = exactMatches.filter(isResultVisible);
+    if (exactMatches.length > 0 && visibleMatches.length === 0) {
+      noticeWarning(
+        "Product hidden by filters",
+        "Adjust the map filters to make this product visible before opening its popup."
+      );
+      input.focus();
+      openResults();
+      return;
+    }
     if (exactMatches.length === 0) {
       noticeError("Product not found", `${query} was not found in the active loaded data sources.`);
       input.focus();
@@ -205,12 +260,13 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
       openResults();
       return;
     }
-    void focusProduct(exactMatches[0].id);
+    void focusProduct(visibleMatches[0].id);
   }
 
   function handleInput() {
     cancelPendingSelection();
     selectedResultId = null;
+    selectedResultLabel = null;
     openResults();
   }
 
@@ -231,12 +287,19 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
       if (!form.contains(document.activeElement)) closeResults();
     }, 0);
   }
+  const unsubscribeFilterChanges = subscribeFilterChanges?.(() => {
+    if (destroyed) return;
+    cancelPendingSelection();
+    if (isOpen) renderResults();
+  });
   const unsubscribe = productSearchIndex.subscribe(() => {
     if (destroyed) return;
     if (selectedResultId && !productSearchIndex.resolve(selectedResultId)) {
       cancelPendingSelection();
       selectedResultId = null;
-      input.value = "";
+      // Do not erase typing that happened after the previous Product selection.
+      if (input.value === selectedResultLabel) input.value = "";
+      selectedResultLabel = null;
     }
     if (isOpen) renderResults();
   });
@@ -254,6 +317,7 @@ export function initMainMapProductSearch({ view, productSearchIndex, host } = {}
       destroyed = true;
       cancelPendingSelection();
       unsubscribe();
+      unsubscribeFilterChanges?.();
       input.removeEventListener("focus", handleInputFocus);
       input.removeEventListener("input", handleInput);
       input.removeEventListener("keydown", handleInputKeydown);
@@ -322,7 +386,9 @@ function createStateMessage(message) {
 }
 
 function getResultOptions(container) {
-  return [...container.querySelectorAll(".main-map-product-search__option")];
+  return [...container.querySelectorAll(".main-map-product-search__option")].filter(
+    (option) => !option.disabled
+  );
 }
 
 function createNoopSearch() {

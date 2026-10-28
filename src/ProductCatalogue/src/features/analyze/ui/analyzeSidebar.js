@@ -22,6 +22,9 @@ export function renderAnalyzeSidebar({
   const pickerHadFocus =
     content.contains(document.activeElement) &&
     Boolean(document.activeElement.closest?.(".pc-product-picker"));
+  const activePicker = pickerHadFocus ? document.activeElement.closest(".pc-product-picker") : null;
+  const pickerDraft = activePicker?.querySelector(".pc-product-picker__input")?.value ?? "";
+  const pickerInputFocused = document.activeElement?.matches?.(".pc-product-picker__input");
   const normalizedDatasetItems = normalizeAnalyzeDatasetItems(datasetItems ?? datasetNames);
   const enabledDatasetNames =
     datasetNames === undefined
@@ -38,7 +41,11 @@ export function renderAnalyzeSidebar({
   // The picker dispatches selection before its click/submit handler returns.
   // Restore focus to its replacement, not to the detached input or option.
   if (pickerHadFocus) {
-    content.querySelector(".pc-product-picker__input")?.focus({ preventScroll: true });
+    const replacement = content.querySelector(".pc-product-picker__input");
+    if (replacement) {
+      replacement.value = pickerDraft;
+      if (pickerInputFocused) replacement.focus({ preventScroll: true });
+    }
   }
 }
 

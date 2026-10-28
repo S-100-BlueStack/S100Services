@@ -92,6 +92,18 @@ successful committed provider entries. A failed first activation publishes no en
 
 ## Selection flow
 
+REG-01 filter visibility: the source-aware index still covers committed Products from
+active providers, even when a map attribute filter hides their representative Graphic.
+Filtered matching Products are omitted from the selectable suggestions. The dropdown
+shows a subtle count of `N filtered out` below the visible results; the count includes
+all matching hidden Products, not only the first ten results. The visible-result limit
+is applied after filtering, and an entirely hidden match set displays a clear empty
+state. A typed exact name that is filtered out receives a warning to adjust the map
+filters rather than opening an empty popup. Filter changes update open suggestions
+and the count without clearing the input; selection also revalidates visibility after
+asynchronous map navigation and immediately before popup publication. This is map-filter gating, not source activation or backend
+mutation permission. Display-scale visibility continues to be owned by the map.
+
 Selecting a result resolves the exact current entry, navigates to its Graphic, updates the existing
 selected-Graphic state, and opens the normal Product popup.
 

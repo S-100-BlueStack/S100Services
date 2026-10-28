@@ -89,7 +89,7 @@ async function flush() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-async function createHarness() {
+async function createHarness({ isGraphicAllowed = null } = {}) {
   const previous = {
     HTMLElement: globalThis.HTMLElement,
     document: globalThis.document,
@@ -157,7 +157,17 @@ async function createHarness() {
     },
   };
   const host = new FakeElement("div");
-  const controller = initMainMapProductSearch({ host, view, productSearchIndex: index });
+  const filterListeners = new Set();
+  const controller = initMainMapProductSearch({
+    host,
+    view,
+    productSearchIndex: index,
+    isGraphicAllowed,
+    subscribeFilterChanges(listener) {
+      filterListeners.add(listener);
+      return () => filterListeners.delete(listener);
+    },
+  });
   const form = host.children[0];
   const [input, results] = form.children;
 
@@ -169,6 +179,9 @@ async function createHarness() {
     controller,
     index,
     entries,
+    changeFilters() {
+      for (const listener of filterListeners) listener();
+    },
     frames,
     navigations,
     popups,
@@ -353,6 +366,153 @@ test("closing suggestions alone preserves a current accepted Product selection",
       h.popups.map((entry) => entry.id),
       ["A"]
     );
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("filtered Products are omitted from suggestions and counted in a separate footer", async () => {
+  const h = await createHarness({ isGraphicAllowed: (entry) => entry.id !== "A" });
+  try {
+    h.input.value = "Product";
+    h.input.focus();
+    assert.deepEqual(
+      h.results
+        .querySelectorAll(".main-map-product-search__option")
+        .map((item) => item.dataset.searchResultId),
+      ["B"]
+    );
+    const footer = h.results.querySelector(".main-map-product-search__filtered-summary");
+    assert.equal(footer.textContent, "1 filtered out");
+    assert.equal(footer.hidden, false);
+    assert.equal(h.input.value, "Product");
+    assert.equal(h.navigations.length, 0);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("an all-filtered query shows a clear empty state and count without selectable results", async () => {
+  const h = await createHarness({ isGraphicAllowed: (entry) => entry.id !== "A" });
+  try {
+    h.input.value = "Product A";
+    h.input.focus();
+    assert.equal(h.results.querySelectorAll(".main-map-product-search__option").length, 0);
+    assert.equal(
+      h.results.querySelector(".main-map-product-search__state").textContent,
+      "No visible matching products."
+    );
+    assert.equal(
+      h.results.querySelector(".main-map-product-search__filtered-summary").textContent,
+      "1 filtered out"
+    );
+    assert.equal(h.results.querySelector(".main-map-product-search__list").role, "listbox");
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("visible-result limit is applied after filtering and footer counts every hidden match", async () => {
+  const h = await createHarness({ isGraphicAllowed: (entry) => !entry.id.startsWith("H") });
+  try {
+    for (let i = 0; i < 12; i += 1) {
+      const id = `H${String(i).padStart(2, "0")}`;
+      h.entries.set(id, {
+        id,
+        label: `Product 0${String(i).padStart(2, "0")}`,
+        graphic: graphic(id),
+      });
+    }
+    for (let i = 0; i < 12; i += 1) {
+      const id = `V${String(i).padStart(2, "0")}`;
+      h.entries.set(id, {
+        id,
+        label: `Product Z${String(i).padStart(2, "0")}`,
+        graphic: graphic(id),
+      });
+    }
+    h.input.value = "Product";
+    h.input.focus();
+    const options = h.results.querySelectorAll(".main-map-product-search__option");
+    assert.equal(options.length, 10);
+    assert.equal(
+      options.every((option) => !option.dataset.searchResultId.startsWith("H")),
+      true
+    );
+    assert.equal(
+      h.results.querySelector(".main-map-product-search__filtered-summary").textContent,
+      "12 filtered out"
+    );
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("filter change updates suggestions without clearing newer input", async () => {
+  const blocked = new Set(["A"]);
+  const h = await createHarness({ isGraphicAllowed: (entry) => !blocked.has(entry.id) });
+  try {
+    h.input.value = "Product A";
+    h.input.focus();
+    assert.equal(h.results.querySelectorAll(".main-map-product-search__option").length, 0);
+    assert.equal(
+      h.results.querySelector(".main-map-product-search__filtered-summary").textContent,
+      "1 filtered out"
+    );
+    blocked.delete("A");
+    h.changeFilters();
+    assert.equal(
+      h.results.querySelector(".main-map-product-search__option").dataset.searchResultId,
+      "A"
+    );
+    assert.equal(
+      h.results.querySelector(".main-map-product-search__filtered-summary").hidden,
+      true
+    );
+    assert.equal(h.input.value, "Product A");
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("a Product filtered during navigation cannot open a late popup", async () => {
+  const blocked = new Set();
+  const h = await createHarness({ isGraphicAllowed: (entry) => !blocked.has(entry.id) });
+  try {
+    h.select("A");
+    blocked.add("A");
+    h.changeFilters();
+    await h.completeNavigation(0);
+    assert.equal(h.popups.length, 0);
+    assert.equal(h.input.value, "Product A");
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("a Product filtered between navigation completion and popup publication is rejected", async () => {
+  const blocked = new Set();
+  const h = await createHarness({ isGraphicAllowed: (entry) => !blocked.has(entry.id) });
+  try {
+    h.select("A");
+    await h.completeNavigation(0);
+    blocked.add("A");
+    await h.nextFrame();
+    assert.equal(h.popups.length, 0);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("typing an exact filtered Product name cannot submit an empty popup", async () => {
+  const h = await createHarness({ isGraphicAllowed: (entry) => entry.id !== "A" });
+  try {
+    h.input.value = "Product A";
+    h.form.emit("submit");
+    assert.equal(h.navigations.length, 0);
+    assert.equal(h.popups.length, 0);
+    assert.equal(h.input.value, "Product A");
+    assert.equal(h.input["aria-expanded"], "true");
   } finally {
     h.cleanup();
   }

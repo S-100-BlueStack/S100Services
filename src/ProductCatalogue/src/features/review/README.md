@@ -78,6 +78,13 @@ independent content failures.
 
 ## FI-041 Product-list interaction preservation
 
+REG-03 picker input preservation: when the sidebar is synchronously reconstructed while
+its Product picker input is active, Review retains the in-progress text, caret range
+and keyboard focus on the replacement input without scrolling. A suggestion selection
+continues to transfer focus but does not revive an obsolete query. Focus outside the
+picker is never redirected to it. Analyze's already accepted picker behavior remains
+unchanged.
+
 Per-Product History, IC-ENC, and Validation toggles still update the authoritative Review state and
 rerender the board and sidebar. Before that specific synchronous render, Review captures the Product
 list's `scrollTop` plus the focused Product/content-type identity. The accepted replacement DOM restores
