@@ -1,0 +1,125 @@
+{
+  "id": "0a86fca2-80c3-42c9-9ebf-1e8cad881d36",
+  "created": "2025-05-26T07:42:14.000+00:00",
+  "updated": "2026-10-13T08:54:57.000+00:00",
+  "messageSeries": {
+    "seriesId": "dma-nm"
+  },
+  "number": 419,
+  "shortId": "NM-419-25",
+  "mainType": "NM",
+  "type": "TEMPORARY_NOTICE",
+  "status": "PUBLISHED",
+  "areas": [
+    {
+      "id": 529,
+      "active": true,
+      "parent": {
+        "id": 453,
+        "mrn": "urn:mrn:iho:country:dk",
+        "active": true,
+        "descs": [
+          {
+            "lang": "da",
+            "name": "Danmark"
+          },
+          {
+            "lang": "en",
+            "name": "Denmark"
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "name": "Kattegat"
+        },
+        {
+          "lang": "en",
+          "name": "Kattegat"
+        }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "chartNumber": "122",
+      "active": true,
+      "scale": 75000
+    },
+    {
+      "chartNumber": "102",
+      "internationalNumber": 1302,
+      "active": true,
+      "scale": 200000
+    }
+  ],
+  "publishDateFrom": "2025-05-26T08:59:44.000+00:00",
+  "followUpDate": "2026-11-22T23:00:00.000+00:00",
+  "originalInformation": true,
+  "parts": [
+    {
+      "indexNo": 0,
+      "type": "DETAILS",
+      "eventDates": [
+        {
+          "allDay": false,
+          "fromDate": "2025-05-26T08:59:44.000+00:00"
+        }
+      ],
+      "geometry": {
+        "type": "FeatureCollection",
+        "id": "cd140703-2009-4316-bf24-93d805dad859",
+        "features": [
+          {
+            "type": "Feature",
+            "id": "a6bdca4b-3180-4160-a444-2c1c34b9fbef",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  10.462566666666667,
+                  56.61849999999998
+                ],
+                [
+                  10.500949999999998,
+                  56.617116666666675
+                ]
+              ]
+            },
+            "properties": {
+              "startCoordIndex": 1
+            }
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "subject": "Mindre dybde",
+          "details": "<p><strong>Indtil videre</strong><span>, er der observeret vanddybder ned til 6 m mellem position 1) og 2).</span></p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">56&deg; 37,110'N - 010&deg; 27,754'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">56&deg; 37,027'N - 010&deg; 30,057'E</td>\n</tr>\n</tbody>\n</table>\n<p><span></span></p>"
+        },
+        {
+          "lang": "en",
+          "subject": "Reduced depth.",
+          "details": "<p><strong>Until further notice,</strong> depths down to 6m have been&nbsp;observed between position 1) and 2).</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">56&deg; 37.110'N - 010&deg; 27.754'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">56&deg; 37.027'N - 010&deg; 30.057'E</td>\n</tr>\n</tbody>\n</table>"
+        }
+      ],
+      "hideSubject": true
+    }
+  ],
+  "descs": [
+    {
+      "lang": "da",
+      "title": "Danmark. Kattegat. Boels Plade S. Mindre dybde.",
+      "vicinity": "Boels Plade S",
+      "source": "BRS 26. maj 2025"
+    },
+    {
+      "lang": "en",
+      "title": "Denmark. Kattegat. Boels Plade S. Reduced depth.",
+      "vicinity": "Boels Plade S",
+      "source": "DEMA 26 May 2025"
+    }
+  ]
+}

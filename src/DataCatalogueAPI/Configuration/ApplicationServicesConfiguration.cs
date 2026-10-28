@@ -1,5 +1,6 @@
+using DataCatalague.Api.Repositories;
+using Eventuous;
 using System.Text.Json.Serialization;
-using DataCatalague.Api.Services;
 
 namespace DataCatalague.Api.Configuration;
 
@@ -16,14 +17,13 @@ public static class ApplicationServicesConfiguration
     /// <exception cref="ArgumentNullException">
     /// Thrown when <paramref name="services"/> is <see langword="null"/>.
     /// </exception>
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
-    {
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services) {
         ArgumentNullException.ThrowIfNull(services);
 
         services
             .AddControllers()
-            .AddJsonOptions(options =>
-            {
+            .AddControllersAsServices()
+            .AddJsonOptions(options => {
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             });
 
@@ -32,9 +32,17 @@ public static class ApplicationServicesConfiguration
         services.AddProblemDetails();
 
         services.AddHealthChecks();
+        services.AddTransient<DataCatalague.Api.Services.PackageGeometryService>();
+        services.AddTransient<DataCatalague.Api.Services.PackageCreationService>();
+        services.AddTransient<DataCatalague.Api.Services.DispatcherResourceService>();
+        services.AddSingleton<DataCatalague.Api.Services.PackageIdentityService>();
+        services.AddTransient<DataCatalague.Api.Services.WorkspaceService>();
+        services.AddSingleton<PipelineAssignmentIndex>();
+        services.AddTransient<DataCatalague.Api.Services.PipelineAssignmentService>();
+        services.AddTransient<DataCatalague.Api.Services.WorkspaceQueryService>();
 
         //services.AddSingleton<IDataRepository, InMemoryProductRepository>();
-        //services.AddSingleton<IWorkspaceRepository, InMemoryProductRepository>();
+        // The shared in-memory event store is registered in Program.cs.
 
         //services.AddSingleton<IProductRepository, InMemoryProductRepository>();
 

@@ -1,0 +1,1026 @@
+# Frontend hardening tracker
+
+## Current normalized workflow adaptation
+
+Implementation baseline: `345b79eef2a9225473d57db80243e731739cbc3a`.
+Accepted integration commit: `aaf635571503c780517cfc3a76a4fa5e4894f447`.
+Status: Done; committed and locally/deployment smoke-verified on 2026-09-15.
+
+[Current contract matrix, implementation and verification plan](normalized-workflow-frontend-adaptation.md)
+are authoritative for the normalized runtime. The prior tables and acceptance notes below are
+historical records; their combined-AOI, S100 request-target and rollback-route descriptions no
+longer describe the active frontend.
+
+| Item                               | Current outcome                                                                                                                                                                                      |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FI-011 production transport        | Implemented for independently scoped S57 and S101 AOIs, registry/workspace consumers and stable identity.                                                                                            |
+| FH-037 / FH-046 Export             | Direct Edition, Update and CancelExport jobs; no target override or obsolete route suffix.                                                                                                           |
+| FH-048 refresh                     | Compatible source Graphics and popup/menu DOM retained; stale selection/metadata blocked.                                                                                                            |
+| FI-003 / FI-002 diagnostics        | Analyze and Review read public validation artifact history; IC-ENC reports unavailable.                                                                                                              |
+| FI-016                             | Normalized state IDs/colors/gates integrated; final AOI error-only classification/preset still deferred.                                                                                             |
+| BE-108A Batch 1                    | Preserved unchanged; no Batch 2 producers or recovery.                                                                                                                                               |
+| FI-009/010/012/013/014/015/017/019 | Existing accepted behavior preserved through the normalized-workflow integration; task-specific historical acceptance remains authoritative.                                                         |
+| FI-024 targeted workspace AOI      | Done. Analyze/Review resolve only the requested Product through the targeted AOI route; local/deployment smoke confirmed no workspace bulk-AOI dependency.                                           |
+| FI-025 ArcGIS execution isolation  | Done. API `Interactive` ArcGIS ownership and the serialized `Background` Hangfire worker are process-isolated and deployment-smoke verified.                                                         |
+| Normalized smoke hardening         | Source-local loading feedback, early persisted theme application, selected-source Cancel Export gating and coalesced same-Product active-job verification are committed in the accepted integration. |
+
+## Historical tracker records
+
+This document tracks frontend-only cleanup, hardening, and architecture improvements for Product Catalogue. The goal is to improve maintainability, reliability, and structure without changing the user-facing feature set unless an item explicitly tracks a feature foundation.
+
+Current reviewed repository baseline: `82f69c1d082773c110b48404d716d99cdc32de02`.
+BE-108A documentation baseline: `8caf5f771f1a6721398007589afbe875d553615d`.
+
+## Backend worker-readiness note
+
+BE-106 remains a historical readiness review, but its proposed JobPlatform dependency no longer gates Product Catalogue export execution. FI-025 now keeps ProductCatalogueAPI as the public API/enqueue/status owner while a dedicated `ProductCatalogueWorker` process from the same release owns Hangfire execution and the `Background` ArcGIS lane. This is a Product Catalogue process split, not a JobPlatform migration.
+
+## Status values
+
+| Status             | Meaning                                                       |
+| ------------------ | ------------------------------------------------------------- |
+| Todo               | Identified, not started                                       |
+| In progress        | Currently being worked on                                     |
+| Done               | Implemented and committed                                     |
+| Implemented (MVP)  | Implemented as a usable first version with known future scope |
+| Deferred           | Deliberately postponed                                        |
+| Blocked by backend | Requires backend/API support that does not exist yet          |
+| Rejected           | Reviewed and intentionally not changed                        |
+
+## Items
+
+| ID     | Priority | Area               | Item                                                                                           | Status   | Commit                                                                                                                                                                    | Notes                                                                                                                                                                                                                                                                                                                         |
+| ------ | -------- | ------------------ | ---------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FH-001 | P0       | Tooling            | Add a real lint/check baseline in addition to Prettier formatting                              | Done     | 966d7aaf508a9e809155847bf4f3ca218db03821                                                                                                                                  | Added ESLint script and check script.                                                                                                                                                                                                                                                                                         |
+| FH-002 | P0       | Tooling            | Verify ESLint config format and package scripts                                                | Done     | 966d7aaf508a9e809155847bf4f3ca218db03821                                                                                                                                  | Replaced invalid JSON config with ESLint flat config.                                                                                                                                                                                                                                                                         |
+| FH-003 | P0       | API                | Review hardcoded localhost/dev API configuration                                               | Done     |                                                                                                                                                                           | Production should continue using same-root `/api`. Dev may keep localhost or use Vite proxy.                                                                                                                                                                                                                                  |
+| FH-004 | P0       | API                | Remove, rename, or isolate old mock/random API code if still present                           | Done     | 966d7aaf508a9e809155847bf4f3ca218db03821                                                                                                                                  | Verified current product API behavior.                                                                                                                                                                                                                                                                                        |
+| FH-005 | P0       | Refresh            | Move refresh lifecycle state into the refresh service instance                                 | Done     | f2280260c3f2ffab023a08ebe6de655ffa19191a                                                                                                                                  | Refresh runtime state is scoped to the service instance.                                                                                                                                                                                                                                                                      |
+| FH-006 | P1       | CSS                | Split global stylesheet by feature/area                                                        | Done     | c4595599c92869f54896e4ea0b8b4f2923096179 / 8be8f1277d997149e7f0912a32723da29031ce1e                                                                                       | Split stylesheets under `src/styles`, with `src/styles/index.css` as entrypoint.                                                                                                                                                                                                                                              |
+| FH-007 | P1       | API                | Add frontend request timeout/abort hardening where possible                                    | Done     | c13dbac7c0e44c608bd43ffd21acf0c90a3fb708                                                                                                                                  | Added optional timeout/abort handling in the API client.                                                                                                                                                                                                                                                                      |
+| FH-008 | P1       | API                | Standardize frontend API result/error handling                                                 | Done     | 32819a4bee5b53240f75abf70d3912e0d8edaeda                                                                                                                                  | Centralized API error formatting in `apiResult.js`.                                                                                                                                                                                                                                                                           |
+| FH-009 | P1       | Actions            | Add or improve tests around product action availability                                        | Done     | 5ca8c6ebe7ead9171bbbc40793546d37c16c2f67                                                                                                                                  | Added unit tests for product action and export availability states.                                                                                                                                                                                                                                                           |
+| FH-010 | P1       | Export             | Review local export operation state and stale UI risks                                         | Done     | 8fb2cfa678ffe236472e1b6c09aca42ffc317023                                                                                                                                  | Local export operations are started/ended through the existing try/finally flow.                                                                                                                                                                                                                                              |
+| FH-011 | P1       | Notices            | Add notice deduplication/rate limiting if repeated errors can spam users                       | Done     | 051c419db775579ad8c9c8f82f5f834ecb46252c                                                                                                                                  | Added opt-in notice deduplication.                                                                                                                                                                                                                                                                                            |
+| FH-012 | P1       | Popup UI           | Review keyboard/focus/ARIA hardening for custom popup actions                                  | Done     | b3551baf864b7c677fc85756e70363073a1686c2 / 195021ad12b806f08cc26a9e6af02e945be1cbda / 554cb7389079b5943c651d73ff1e9ab79a468247 / 652a922088b895eafcdb1e0a4d200e0c3f2144c5 | Unified popup focus and dropdown Escape behavior.                                                                                                                                                                                                                                                                             |
+| FH-013 | P1       | Structure          | Review map feature folder boundaries and imports                                               | Done     | 086944d75b2601b1ba381b01fbeefc37d418bbe6 / 347572001cb3c5dc572470d9a15b94dc8396fb1d                                                                                       | Removed data/map config cycle and documented feature boundaries.                                                                                                                                                                                                                                                              |
+| FH-014 | P1       | Structure          | Split product history/timeline naming if needed                                                | Done     |                                                                                                                                                                           | Kept `features/timeline` as shared product history/map timeline feature area.                                                                                                                                                                                                                                                 |
+| FH-015 | P2       | Config             | Add or update `.env.example` and document dev/prod API base behavior                           | Done     | 966d7aaf508a9e809155847bf4f3ca218db03821                                                                                                                                  | Added env example and preserved dev/prod API behavior.                                                                                                                                                                                                                                                                        |
+| FH-016 | P2       | Bootstrap          | Review Calcite readiness/bootstrap timing                                                      | Done     | 4c2ccbcfa71436d8554fb6512fcb20b658134427                                                                                                                                  | Added shared Calcite component readiness helper.                                                                                                                                                                                                                                                                              |
+| FH-017 | P2       | HTML/CSS           | Move inline shell/confirm-popover styling into CSS                                             | Done     | 17eb5a8924112c29a19aaa95042029a39d57e244                                                                                                                                  | Removed inline confirm styling and added dialog semantics.                                                                                                                                                                                                                                                                    |
+| FH-018 | P1       | Refresh            | Review duplicate refresh error notices between selected product refresh and full map refresh   | Done     | ed42779ae40fb1c419c15380fd3e22a31baac0fb                                                                                                                                  | Initial popup freshness refresh is silent on failure.                                                                                                                                                                                                                                                                         |
+| FH-019 | P2       | Export UI          | Show a loading spinner on the parent `Export...` popup action while an export is running       | Done     | 8fb2cfa678ffe236472e1b6c09aca42ffc317023                                                                                                                                  | Parent export action shows loading while remaining openable. Loading text remains the functional indicator for RDP/VDI sessions where spinner animation may not render.                                                                                                                                                       |
+| FH-020 | P3       | Browser QA         | Re-test popup/export rendering artifacts after Chrome/Edge restart                             | Done     | 652a922088b895eafcdb1e0a4d200e0c3f2144c5                                                                                                                                  | No remaining rendering artifacts observed.                                                                                                                                                                                                                                                                                    |
+| FH-021 | P0       | Startup            | Restore startup loader sequencing after Calcite readiness changes                              | Done     | 164dae842773c9c4fd606ee2f6a7f776f5ea206e                                                                                                                                  | Reordered startup so UI/map initialize before loader.                                                                                                                                                                                                                                                                         |
+| FH-022 | P0       | Data               | Support updated AOI API response shape                                                         | Done     | 164dae842773c9c4fd606ee2f6a7f776f5ea206e                                                                                                                                  | Updated Esri JSON transformer for PascalCase AOI records.                                                                                                                                                                                                                                                                     |
+| FH-023 | P2       | Map state          | Persist last map viewpoint                                                                     | Done     | 7d7bcac37b2dd06cff32eccd82a82c0e4c8943d3                                                                                                                                  | Saved and restored main map center, scale and rotation.                                                                                                                                                                                                                                                                       |
+| FH-024 | P2       | Loader             | Harden loader/progress session state cleanup                                                   | Done     | 584e012f790bc08203f4ac677ba95043140222b3                                                                                                                                  | Prevented stale loader frames from affecting later sessions.                                                                                                                                                                                                                                                                  |
+| FH-025 | P2       | Popup refresh      | Close or invalidate pending confirm popovers when manual refresh rebuilds selected popup state | Done     | 1e0a922c050b557f63e816e0feae645c87b71f67                                                                                                                                  | Pending confirm popovers are cancelled when refresh starts.                                                                                                                                                                                                                                                                   |
+| FH-026 | P2       | Preferences        | Add UI for resetting or managing persisted frontend state                                      | Done     | 8e60a66aec95921a6f88836aa93e0963bdd81ef7                                                                                                                                  | Added a Preferences panel for resetting saved frontend state.                                                                                                                                                                                                                                                                 |
+| FH-027 | P1       | Analyze            | Support updated Analyze backend response shape                                                 | Done     |                                                                                                                                                                           | Analyze normalization reads top-level product data from `response.Data`.                                                                                                                                                                                                                                                      |
+| FH-028 | P1       | Product history    | Use backend product history endpoint                                                           | Done     | 78cd3f2df8d9ea437d689e3e7760c62e45a40a32                                                                                                                                  | Replaced frontend demo product history with `/electronicproducts/{datasetName}/history`.                                                                                                                                                                                                                                      |
+| FH-029 | P2       | Product history    | Clean up product history panel UI                                                              | Done     | ef7ee25d742068364d109334b17b560050ba6e15                                                                                                                                  | Removed non-essential metadata from the history summary and subtitles.                                                                                                                                                                                                                                                        |
+| FH-030 | P1       | Analyze            | Show product history in Analyze sidebar                                                        | Done     | ad50c2ad3be05952f1955aa29cff8c3f29c0e79c                                                                                                                                  | Analyze product cards reuse the shared Product History renderer.                                                                                                                                                                                                                                                              |
+| FH-031 | P2       | Analyze            | Review Preferences availability on Analyze route                                               | Rejected |                                                                                                                                                                           | Full Preferences remain disabled on Analyze because most preferences are main-map scoped.                                                                                                                                                                                                                                     |
+| FH-032 | P1       | Product data       | Normalize product export metadata                                                              | Done     | 9ede3a5c94fbce900f0d5ae05d20e826b07faba3                                                                                                                                  | Added shared normalization for product `Exports` metadata.                                                                                                                                                                                                                                                                    |
+| FH-033 | P1       | Popup UI           | Render export metadata comparison in product popup                                             | Done     | 9ede3a5c94fbce900f0d5ae05d20e826b07faba3                                                                                                                                  | Popup compares Product-standard metadata with export metadata columns; FI-013 now presents the compatibility standard as `S-101` while legacy `S100` remains internal where required.                                                                                                                                         |
+| FH-034 | P2       | Terminology        | Standardize user-facing naming around Product/Products                                         | Done     | 805a853259b6594fe16384ae37b2e828d6de4c76                                                                                                                                  | Completed a UI-only terminology audit across the main user-facing surfaces. Visible copy uses `Product`/`Products`, technical identifiers such as `datasetName` remain unchanged, and a regression test protects the terminology boundary.                                                                                    |
+| FH-035 | P1       | Main map filters   | Restrict main map filters to Display scale, Status and Usage band                              | Done     | 708865afd5e21cc5893f3fade960d63407ec5710                                                                                                                                  | Status options come from the full status/product state endpoint, including count `0` options.                                                                                                                                                                                                                                 |
+| FH-036 | P1       | Popup / attributes | Stabilize first-load attribute display                                                         | Done     | 708865afd5e21cc5893f3fade960d63407ec5710                                                                                                                                  | Product popup details no longer fall back to all raw attributes when field/capability metadata is not ready.                                                                                                                                                                                                                  |
+| FH-037 | P1       | Popup actions      | Enable S100 Edition export and Rollback                                                        | Done     | a3ab23ee615d59b25cccdda4197b226e7efc09ad                                                                                                                                  | Enabled the legacy `S100` Edition target and Rollback operation; FI-013/FI-014 later changed presentation to `S-101` / `Cancel Export` without changing the backend/wire identity.                                                                                                                                            |
+| FH-038 | P1       | Release readiness  | Harden Product picker and initial loader UX                                                    | Done     | db6e4a37203a5ae847189d6197ed49d09879e9c4                                                                                                                                  | Header remains usable during initial main-map load; Analyze/Review reject unknown products when catalog validation is available; Product picker hides already-added products and no longer toggles from its label.                                                                                                            |
+| FH-039 | P1       | Keyboard           | Harden route and panel Escape behavior                                                         | Done     | 300f68cd9d463ef023b432b4097c08abb9e8b2bd                                                                                                                                  | Escape closes the top-most relevant UI layer, including notification panel, filter/preferences panels, main popup, main Product History panel, Analyze popup and popup action dropdowns. Dashboard time inputs no longer trap Tab navigation.                                                                                 |
+| FH-040 | P2       | Product history    | Collapse Product History entries by default                                                    | Done     | 8e72ca28f23dc9317ce58b2930807ed989c4d6ef                                                                                                                                  | Shared Product History renderer now collapses event metadata by default on the main map and Dashboard panels. Collapsed rows show title, timestamp and short description; users expand individual rows to see details.                                                                                                        |
+| FH-041 | P2       | Product history    | Improve Product History version-change summaries                                               | Done     | 900299f523e97c021a6736c78de6a46bff54cac4                                                                                                                                  | History summaries now describe edition/update changes even when status remains unchanged. Backend should still prevent invalid negative version values.                                                                                                                                                                       |
+| FH-042 | P2       | Main map           | Add Product search overlay                                                                     | Done     | 046ea8495f48ffbc2f76c1aa5e0da33fb5317466                                                                                                                                  | Main map has a catalog-backed Product search overlay that opens the selected product popup.                                                                                                                                                                                                                                   |
+| FH-043 | P1       | User guidance      | Add hover help/tooltips to clickable controls                                                  | Done     | 982d9be01f1ace939fe479494c8e05b5c347107e                                                                                                                                  | Added global hover help that applies concise native tooltips to route navigation, main map controls, Product search, filters, popup actions, Dashboard controls, Product picker actions, Product Collection actions and common icon-only controls. Also covered Dashboard activity links and Analyze Open all / Collapse all. |
+| FH-044 | P1       | User guidance      | Add introduction flow for first-time users                                                     | Done     | 0c677549963bb7ce4206fed379dd30dc8c2cc783                                                                                                                                  | Completed compact first-time and replayable onboarding with independent route preferences. Main map, Dashboard, Analyze and Review flows are manually verified, including Theme, Preferences and the interactive Product popup/Product Collection sequence.                                                                   |
+| FH-045 | P1       | Release readiness  | Run comprehensive smoke test across routes and critical workflows                              | Done     |                                                                                                                                                                           | Completed against `805a853259b6594fe16384ae37b2e828d6de4c76` with clean and persisted browser state. Main map, Dashboard, Analyze, Review, onboarding, preferences, keyboard behavior and critical Product workflows passed without new frontend findings.                                                                    |
+| FH-046 | P0       | Async operations   | Activate async Export/Rollback job tracking                                                    | Done     | 279fe6a761229fd99af437d0f8401508985afafc                                                                                                                                  | Uses async start endpoints, persisted job IDs, reload recovery, bounded status polling, terminal notices and route refresh.                                                                                                                                                                                                   |
+| FH-047 | P0       | Operation state    | Add backend-authoritative active job visibility                                                | Done     | 279fe6a761229fd99af437d0f8401508985afafc                                                                                                                                  | Popup-open reconciliation and fail-closed mutation preflight use `GET /jobs/active`; shared visibility works across tabs, profiles, users and computers. Concurrent same-Product verification is coalesced so popup watchers cannot supersede an action preflight.                                                            |
+| FH-048 | P1       | Popup refresh      | Preserve popup, actions and dropdowns during compatible refresh                                | Done     | 69752605d935212e89ca7ad4286ca3e46ecb4abe                                                                                                                                  | Reconciles layers/graphics and popup details in place, retains Calcite action DOM and open dropdown state, and falls back to full rebuild for incompatible structural changes.                                                                                                                                                |
+| FH-049 | P1       | Dashboard          | Move Dashboard filtering and activity paging to the backend                                    | Done     | 7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd                                                                                                                                  | Added additive server filters, 50-row cursor pages, complete-result summaries, stale-result suppression, last-successful-result retention and compact Previous/Next controls. Manual Dashboard pagination verification passed at `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.                                                  |
+
+## Deferred / backend-dependent notes
+
+| ID     | Area     | Item                                                   | Status                                      | Notes                                                                                                                                                                                                                                                                                                                                                                   |
+| ------ | -------- | ------------------------------------------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BE-001 | Export   | Cross-browser/cross-user export-in-progress visibility | Done                                        | Backend-authoritative active-job discovery is integrated into popup state and mutation preflight. Same-Product concurrent verification shares one in-flight request, preventing watcher/preflight races while retaining fail-closed malformed/identity handling.                                                                                                        |
+| BE-002 | Export   | Async export job with job-status endpoint              | Done                                        | New Edition and Rollback use async start endpoints, persisted polling and terminal refresh.                                                                                                                                                                                                                                                                             |
+| BE-003 | Timeline | Global map timeline data contract                      | Blocked by backend                          | Product-level history endpoint exists. Global map timeline remains deferred until API/database contract is known.                                                                                                                                                                                                                                                       |
+| BE-004 | API      | Safe timeout policy for long-running operations        | Done                                        | Job-start requests avoid unsafe client timeout; repeatable status requests use finite timeout and bounded retry.                                                                                                                                                                                                                                                        |
+| BE-005 | Reports  | Real Dashboard IC-ENC/internal validation report links | Blocked by backend                          | Requires report IDs/storage contracts before Dashboard report actions can be enabled.                                                                                                                                                                                                                                                                                   |
+| BE-006 | Jobs     | Atomic Product operation claim before enqueue          | Planned                                     | Required to eliminate the remaining near-simultaneous enqueue race and support a distributed external worker cleanly.                                                                                                                                                                                                                                                   |
+| BE-007 | Jobs     | External shared Hangfire worker migration              | Done                                        | Accepted implementation uses a dedicated Product Catalogue worker process rather than JobPlatform: API and worker are mutually exclusive roles with separate ArcGIS/ProductManager lanes and one background Hangfire worker. Windows Service startup as LocalSystem, ArcGIS CoreHost initialization and end-to-end export/isolation smoke passed on the dev deployment. |
+| BE-008 | Timeline | Product History audit event hardening                  | Batch 1 port verified; manual smoke pending | Foundation is ported to `2ec17a5c47aa353256d0a3445620bebe83e6eecf`: additive audit persistence/API, normalized `ProductStateHistory` IDs, shared normalization and deterministic suppression. No producers; Batch 2 not started.                                                                                                                                        |
+
+## Future implementation ideas
+
+| ID     | Area                             | Idea                                                                      | Status                                   | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------ | -------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FI-001 | Dashboard                        | Add operational activity dashboard                                        | Done                                     | Added `/dashboard` with Danish operational time, compact range builder, summaries, activity list, actionable status/operation rows, Dashboard History, Review/Analyze links, server-side search/filtering, cursor pagination, stale-request cancellation and last-successful-result retention. Real report links remain blocked by backend report IDs/storage contracts.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| FI-002 | Product review / Product history | Add Product Review workspace for multiple histories and report content    | Implemented (MVP)                        | Added a dedicated Product Review workspace that opens in a separate tab/window and allows users to compare multiple products.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| FI-003 | Analyze                          | Show internal validation reports in Analyze                               | Done/Semi-done (Missing endpoint)        | Add internal validation reports to the Analyze page near the IC-ENC XML/report area.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| FI-004 | Analyze                          | Improve Analyze product name management                                   | Done                                     | Replaced manual URL/query separator management with a structured product list UI.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| FI-005 | Analyze                          | Add product collection tray for Analyze from map                          | Done                                     | Added a main-map workflow for collecting products before opening Analyze or Review.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| FI-006 | Analyze / Review                 | Add shared product catalog picker for direct Analyze/Review access        | Done                                     | Uses the lightweight `GET /electronicproducts` endpoint to power a shared searchable Product picker reused by Analyze and Review.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| FI-007 | Main map                         | Add main page Product search                                              | Done                                     | Added a compact Product search overlay that suggests catalog products and opens the selected Product popup on the main map.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| FI-008 | Introduction flow                | Add compact first-time and replayable route guidance                      | Done                                     | Completed and manually verified at `0c677549963bb7ce4206fed379dd30dc8c2cc783`. Each route has independent first-time state and replay from Preferences. Main map includes Product search, filters, interactive popup/Product Collection guidance, workspace navigation, Theme and Preferences. Dashboard, Analyze and Review use compact route-specific flows with Product prerequisites where needed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| FI-009 | Dashboard                        | Add user-selectable Dashboard page size                                   | Done                                     | Added compact `25 / 50 / 100 / 200` page-size selection with default `50`, browser-local persistence, Preferences reset integration, page-1 restart, and cursor-generation invalidation. Committed at `e4caa4d29c46083605beac10400876af6bf38d1c`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| FI-010 | Dashboard                        | Add sortable Dashboard activity columns                                   | Implemented; local verification pending  | Implemented against `d68e18e7fc91512c91af57299ccdbc1b94ee7077`: server-side Time/Product/Activity/Status sorting, stable tie-breaks, versioned sort-aware cursors with legacy time/desc compatibility, session-local native header controls, focus restoration, page reset and failed-sort rollback. Frontend preserves backend order. No commit or manual acceptance claimed. See the Dashboard feature README for verification and acceptance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| FI-011 | Main map / Data sources          | Add independent Product-standard data sources and source-aware workflows  | In progress (FI-011A/B/C/D implemented)  | FI-011A/FI-011B are committed through baseline `60e4854389ab16d3bd280f653998ea10eaa0b6ab`. FI-011C adds central Product context and the flat Edition/Update Export menu. FI-011D adds source-aware Product Collection, workspace catalog/resolution, Analyze, Review, and truthful unavailable History/report surfaces. Separate S-57/S-101 transport, FI-016 authoritative status/error defaults, and final onboarding/regression work remain.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| FI-012 | Main map / Location search       | Add Denmark and Greenland map locator                                     | Done                                     | Added a compact ArcGIS Search-based Locator beside Product search. One logical `Places` source uses ArcGIS World Geocoder with `sourceCountry=DNK,GRL` and Address/Postal/Populated Place categories, navigates without marker/popup, preserves Product state, supports first-suggestion Enter for addresses, and keeps the source boundary extensible for future API-backed search sources. Committed at `a3a53e4aa55850091281f8e47825755798066cf9`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| FI-013 | Product terminology              | Rename Product Catalogue S100 terminology to S-101                        | Done                                     | Product-specific presentation now uses `S-101` while legitimate generic `S-100` and legacy `S100` wire/API values remain intact. Export help/notices and persisted job presentation are corrected; the flat Edition/Update menu remains source-aware. Committed at `1c6040a60d97429c2232b9b68f0b849a4591df4b`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| FI-014 | Popup actions                    | Rename Rollback to Cancel Export and replace its icon                     | Done                                     | User-facing Product action is `Cancel Export` with Calcite `x-circle`, `Canceling export...` running presentation, and `[Cancel] [Confirm]` confirmation controls. Legacy rollback endpoint/action/job identifiers remain internal. Committed at `70b0775936505dca8c1abb221f4a08953411efc1`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| FI-015 | Product Collection               | Use graph-bar for Add to collection                                       | Done                                     | Popup `Add to collection` uses Calcite `graph-bar`; selected/Remove state continues to use `check`. Tooltip, accessibility, toggle behavior, onboarding targeting and source-aware Collection semantics are unchanged. Committed at `636c1b7727d373c780afab60849eca3dc3c1b825`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| FI-016 | Main map / Symbology             | Define a new Product AOI status palette                                   | Blocked by backend                       | Wait for the authoritative backend status definition and error classification. Then define centralized, accessible light/dark symbology with stable status semantics across independently rendered sources.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| FI-017 | Branding / Deployment            | Make application branding environment-configurable                        | Done                                     | Logo and favicon are deployment-configurable through non-secret Vite build inputs with neutral bundled fallbacks. Custom branding loads from its configured runtime URL, and replacing the file behind an unchanged URL requires no frontend rebuild or redeploy. Committed at `8e375296a286e3228fa8a6f7111769715038b320`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| FI-018 | Open source readiness            | Remove organization-specific deployment assumptions                       | Future review                            | Audit branding, configuration, URLs, authentication assumptions, documentation, sample data, secrets, licenses, and deployment defaults so a third party can deploy the application without editing GST-specific source code.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| FI-019 | Analyze / Review routing         | Replace path-concatenated Product URLs with canonical query routes        | Ready / canonical contract fixed         | Use `/Analyze?Datasets=ProductA,ProductB` and `/Review?Datasets=ProductA,ProductB`. Dataset names are globally unique across current and future sources, while internal runtime state remains source-aware.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| FI-020 | Popup / Related Products         | Navigate backend-linked Products across data sources                      | Blocked by backend relationship contract | Render only explicit backend/database-provided Product relationships. No source pair or relationship may be inferred; authoritative target identity, relation type, and display text must support any current or future source.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| FI-021 | Main map / Overlap selection     | Add modifier-click direct selection for the highlighted Product candidate | Done                                     | Manually accepted and committed at `32efa496f978e20baee834f0becdb95bdadadd98`. Normal click retains the overlap picker; Ctrl/Cmd-click directly opens only the currently highlighted valid Product after current-layer, Graphic-membership and click-generation revalidation. Shift-click and Product Collection remain unchanged. Keyboard-equivalent activation and visible shortcut discoverability are implemented and manually accepted separately by FI-040. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| FI-022 | Analyze / Review                 | Keep open workspace Product content fresh after backend changes           | Done                                     | Accepted at `c2bb13c0bce07907f16f35221025e89a7b211c06`. Analyze/Review use lightweight workspace revisions for automatic targeted freshness, visibility/job-completion checks, and manual recovery Refresh while preserving source-aware resolution, generation guards, Review selections, FI-024 targeted AOI resolution, and FI-025 ArcGIS isolation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| FI-023 | Popup actions                    | Consume authoritative candidate/mutation capability snapshot              | Blocked by backend                       | The backend does not currently expose candidate presence as a complete mutation-capability contract. The current frontend therefore fails closed and enables Cancel Export only when the selected source track is in a known candidate-bearing state. Replace status inference with explicit backend capability/candidate presence when that contract exists; do not infer across S-57/S-101 tracks.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| FI-024 | Analyze / Review performance     | Resolve workspace Product source without loading complete AOI catalogs    | Done                                     | Analyze/Review use `GET /electronicproducts` only for lightweight dataset-name picker choices, then resolve each selected Product through `GET /electronicproducts/{datasetName}/aoi`. The targeted response carries authoritative `ProductSpecification`; identity conflicts fail closed. Local/deployment smoke verified the workspace path without S-57/S-101 bulk AOI loading, dataset-name heuristics or bulk fallback.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| FI-025 | Backend integration              | Isolate long-running export ArcGIS work from interactive API reads        | Done                                     | Accepted at `aaf635571503c780517cfc3a76a4fa5e4894f447`. API `Interactive` ArcGIS ownership is process-isolated from one serialized Hangfire `Background` worker. Dev-server smoke verified normal export plus responsiveness during a long export for AOI, Analyze/Review, another Product operation enqueue and other pages.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| FI-026 | Shared navigation / Preferences  | Consolidate active-route state and shared navbar controls                 | Done                                     | Manually accepted and committed at `6bc8d1181beabda254ba19dd483d29ec41cadf41`. Shared navbar routing persists the active underline with `aria-current="page"`; Main-map controls use the FI-026 order; last successful refresh is compact with full timestamp help; visible Help and standalone Theme actions are removed; Light/Dark selection uses the existing service inside shared Preferences. FI-028 still owns Scale hiding migration and behavior. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| FI-027 | Main map search                  | Move Product search and geographic Locator into a navbar search area      | Design discovery first                   | Keep Product search and Locator as separate workflows even if they share navbar presentation. Resolve responsive/search-mode UX before implementation. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| FI-028 | Main map / Preferences           | Move Scale hiding into Preferences and make it opt-in                     | Done                                     | Manually accepted and committed at `fce91ee3ee54361f3a0fe79e3dd95c8c1905a718`. Scale hiding is removed from the navbar and is now an immediate Main-map Preferences setting. Missing or malformed saved state defaults to OFF, valid explicit prior choices retain the existing storage key/format, reset returns to OFF, and Display scale filtering/source refresh no longer mutate the setting. FI-026 shared navigation and Theme behavior remain unchanged; FI-043 still owns the comprehensive onboarding refresh. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| FI-029 | Popup actions                    | Audit text-heavy popup actions for a compact icon-first presentation      | Design analysis first                    | Evaluate recognition, ambiguity, risk, confirmation, tooltip/accessibility, keyboard use, and popup width before deciding which labels can be removed. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| FI-030 | Loading                          | Smooth loader completion and discover a truthful progress/chunk contract  | Frontend polish + backend discovery      | Show completion at 100% briefly without inventing precise progress. Discover any backend/data chunk contract separately and preserve FI-025 isolation. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| FI-031 | Main map / Data sources          | Prevent startup/reload with zero enabled Product sources                  | Done                                     | Manually accepted and committed at `c1ed794374e56383a7362f3eadb2d16b07dfdb17`. Controller initialization distinguishes first visits from valid restored selections. A restored selection resolving to zero enables exactly one currently eligible selection-persistable source through registry default/definition ordering and the established activation/persistence lifecycle; session-only synthetic fixtures remain valid first-visit defaults but are not restored-state fallbacks. Stale or unavailable saved IDs cannot block eligible recovery, while startup truthfully remains at zero when no eligible source exists. In-session all-off remains valid, and generation/revision guards plus requested-selection persistence prevent older startup work from overwriting newer user state. No source IDs or names are hard-coded. FI-026/FI-028 behavior is unchanged. See `ui-ux-design-backlog.md`.                                                                                                                                                                               |
+| FI-032 | Main map navigation              | Open workspaces in new tabs and correct false popup-blocked notices       | Done                                     | Manually accepted and committed at `11491d15272b165b63da58dece83cb0c0776077b`. Main-map Dashboard/Analyze/Review launches use one route-aware new-tab policy while workspace-to-workspace navigation remains same-tab. Base-aware semantic navbar links retain ordinary anchor/modifier behavior; Product Collection and popup Analyze actions resolve canonical workspace URLs synchronously, preserve Main-map/Collection state, and treat only a null or thrown browser-open attempt as blocked. Successful opens sever opener access and do not emit the previous false blocked warning. Canonical Analyze/Review composition, base-path handling, FI-026/FI-028/FI-031 behavior, keyboard semantics, active-route state, and accessibility remain unchanged. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                               |
+| FI-033 | Dashboard                        | Compact page chrome and the range/refresh toolbar                         | Done                                     | Manually accepted and committed at `01f22a605e8e4d29a8da187306af1dc04b8540ef`. Removed redundant visible Dashboard chrome and compacted the range controls into the existing header. Refresh is a compact native button containing the public Calcite refresh icon, with a symmetric 30x30 hit area, accessible name, hover help and preserved keyboard/focus behavior; the adjacent `HH:MM` timestamp advances only on an accepted successful Dashboard load and retains the previous successful value after failed, aborted or stale requests. Visible range presets and the permanent To Clear action are removed while legacy/default range semantics and open-ended To remain supported through the contextual date-picker clear action and Delete/Backspace. From/To contrast is improved. Explicit Apply remains for FI-034; FI-009 page size, FI-010 sorting, BE-107 filters/paging, Dashboard History, route semantics, FI-032 navigation and light/dark behavior remain unchanged. See `ui-ux-design-backlog.md`.                                                                    |
+| FI-034 | Dashboard                        | Auto-apply valid filter changes                                           | Done                                     | Manually accepted and committed at `6a29ee5abee23b5ce741a69732d9f67ad805b95d`. Apply is removed. Valid committed range changes auto-apply through the existing Dashboard request lifecycle while incomplete/invalid drafts neither request nor update the route. Native time controls remain authoritative: only complete valid `HH:MM` values can commit; an incomplete value such as `15:--` stays draft-only and is not auto-completed to `15:00`. Keyboard time editing can continue across the range controls without intermediate rerenders, pointer-driven picker changes wait for the browser focus transition, and leaving the range group commits a valid draft once. Optional To clearing applies the open-ended range. Discrete filters remain immediate, search remains debounced, paging/cursors reset, sort/page size persist, manual Refresh uses applied state, and last-successful results plus FI-033 `HH:MM` survive failure/stale completion. Dashboard History and FI-032 navigation are unchanged. Saved filter presets remain deferred. See `ui-ux-design-backlog.md`. |
+| FI-035 | Analyze                          | Compact the sidebar and align scrollbar/list presentation                 | Done                                     | Manually accepted and committed at `ec11aa1fdbd732eca651cdc2a265657405ec80f0`. Removed redundant visible Analyze/Product-picker copy while preserving accessible names and contextual failure/validation messaging, reduced sidebar/manager spacing and Product-list height, renamed `Product list` to `Products`, and established the neutral shared `pc-scrollbar` contract across the existing Review scroll surfaces plus Analyze. FI-022 freshness, FI-024 targeted resolution, source-aware identity, manual Refresh, canonical routing, independent failures, keyboard/focus behavior and responsive light/dark presentation remain unchanged. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                                                                                                           |
+| FI-036 | Review                           | Compact sidebar controls and move Refresh above Products                  | Done                                     | Manually accepted and committed at `9c07f8a7fb93cd80bbbab59a3d47719e3667863c`. Removed redundant visible Review/sidebar Product-picker copy while retaining accessible/contextual messaging, changed Review search results to an explicit anchored overlay, and placed the single icon-only manual Refresh action in the `Products` header immediately before the counter. FI-022 freshness/manual Refresh semantics, FI-024 targeted resolution, source-aware identity, Product composition, content toggles, routing, independent failures and the accepted shared `pc-scrollbar` contract remain unchanged. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| FI-037 | Review                           | Reduce Product-content density and nested report scrolling                | Done                                     | Manually accepted and committed at `ee37173e31525d990412b3dff7205ec5af4371e8`. History now sizes naturally up to a viewport-aware `clamp(240px, 50dvh, 500px)` cap and remains the only intentional content-card scroller. IC-ENC and Validation bodies render at natural height so the Product column owns overflow; long links/errors wrap safely. Concise body copy plus `Unavailable`, `Failed`, empty-count and content-count headers preserve truthful state distinctions, while validation artifact downloads remain unchanged. FI-022/FI-024 and accepted FI-036/FI-041 interaction contracts remain unchanged. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| FI-038 | Review                           | Default all content types on and add bulk content toggles                 | Done                                     | Manually accepted and committed at `54a3f89e83ad18c18875921f562f81c58b9d3d8d`. History, IC-ENC and Validation default ON for new Review Product state. Compact workspace controls provide per-content-type enable/disable-all with native checked/unchecked/indeterminate aggregate state. Session-local workspace intent is independent per content type, is changed only by explicit bulk actions, is inherited by subsequently added Products, and is not rewritten by per-Product overrides. Ordinary manual/FI-022 refresh preserves Product selections and workspace intent; Product enabled state remains independent. FI-039 implementation is tracked separately below. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                                                                                |
+| FI-039 | Review performance               | Incremental Review Product loading and reconciliation                     | Done                                     | Manually accepted and committed at `1a77af904ec1a41726bcec357b72610c74e793ca`. `createReviewProductSession` is the sole Review Product payload-generation owner: additions load only genuinely new Products, removals/visibility changes retain surviving payloads without refetch, manual Refresh remains full, and FI-022 reloads only changed eligible Products. Source-aware identity, independent failures, FI-038 selections/workspace intent and FI-041 call-local interaction state are preserved. Targeted freshness acknowledgement fails closed when requested Products become ineligible, and a composition-observation epoch prevents stale FI-022 observations from crossing remove/re-add membership boundaries. See `fi-039-incremental-review.md`.                                                                                                                                                                                                                                                                                                                            |
+| FI-040 | Main map / Accessibility         | Add modifier-selection keyboard equivalent and discoverability            | Done                                     | Manually accepted and implemented at `33f0089810b1ba8c8a053727e8828f5b519e66c9`. Map-focused Ctrl/Cmd+Enter activates only the current transient highlighted Product after current layer/Graphic revalidation through the shared FI-021 direct-selection/popup path. A compact contextual hint exposes both Ctrl/Cmd-click and Ctrl/Cmd+Enter. Normal overlap selection, Product Collection, source-aware identity and stale-state safeguards remain unchanged. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| FI-041 | Review / Product list            | Preserve Product-list scroll position when content toggles change         | Done                                     | Manually accepted and committed at `9c07f8a7fb93cd80bbbab59a3d47719e3667863c`. History, IC-ENC and Validation toggles capture the current Product-list `scrollTop` plus stable Product/content-type focus identity immediately before the existing synchronous authoritative rerender, then restore the replacement list and toggle with `preventScroll`. The snapshot is call-local and is not reused by composition changes, Refresh, FI-022 freshness, route replacement or teardown. Product ordering, selection, source identity, independent failures and keyboard behavior remain unchanged. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| FI-042 | Main map / Filters               | Align Filter panel scrollbar styling                                      | Done                                     | Manually accepted and committed at `e235a15b6d86dc3c5313a4a151fa8c5146612a3a`. Reuses the accepted FI-035 neutral shared `pc-scrollbar` contract on the Filter panel outer scroller and all generated checkbox option lists, including Status. No scrollbar CSS is duplicated and existing overflow ownership, sizing, source-aware filter state, counts, persistence, wheel/keyboard behavior, light/dark presentation and public Calcite boundaries remain unchanged. See `ui-ux-design-backlog.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| FI-043 | Introduction / Onboarding        | Refresh onboarding after the UI/UX redesign                               | Implemented; manual verification pending | Consolidated route-aware Introduction against baseline d77ef7f6: separate Product search/Locator, current FI-040 shortcuts, FI-044 Preferences, Dashboard ranges/sorting/paging, Analyze and Review content controls. One lifecycle owner, application-owned targets, missing-target skip and focus/Escape/teardown coverage. Data sources, Filters and Preferences are revealed through their existing triggers only for relevant steps; onboarding navigation is isolated from application outside-click dismissal, tour-owned panel state is restored on exit, and data-dependent Dashboard/Analyze/Review guidance uses stable empty-state surfaces so configured step numbers do not jump. See `fi-043-onboarding-refresh.md`.                                                                                                                                                                                                                                                                                                                                                            |
+| FI-044 | Shared Preferences / UX          | Clarify Preferences information architecture and saved-state controls     | Done                                     | Manually accepted at `79616f8af0cda91db8e4b1fa90c0248aef4fef41` and preserved in merged baseline `82f69c1d082773c110b48404d716d99cdc32de02`. Theme is a standard `Theme` runtime switch with Light/sun and Dark/moon endpoint icons; Main-map-only Scale hiding follows when available, Saved preferences remain separate, and Start introduction is a bottom secondary button. Auto-save is the sole saved-state control and Reset remains independent. Filters Reset restores declarative first-visit defaults, including the conservative Idle exclusion, instead of invoking Filter-panel Clear all. Navbar route state remains exclusive to `aria-current="page"`; pointer hover and keyboard `:focus-visible` use underline feedback without full-link highlight/outline. Main-map capability injection and non-main route isolation are preserved. See `fi-044-verification.md`.                                                                                                                                                                                                        |
+
+## Planned order
+
+1. Keep the tested async operation and popup-preserving refresh baseline stable.
+2. Treat BE-106 as historical readiness input. FI-025 supersedes its JobPlatform gate with the accepted dedicated `ProductCatalogueWorker` process while keeping API enqueue/status ownership in ProductCatalogueAPI.
+3. Keep atomic Product-operation ownership deferred until its persistence owner, recovery contract and distributed-worker boundary are approved.
+4. BE-107 Dashboard filtering and pagination is complete and manually verified at `7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd`.
+5. BE-108A Batch 1 is ported to workflow-redesign baseline `2ec17a5c47aa353256d0a3445620bebe83e6eecf`; frontend/backend/database-owner verification passed on 2026-09-11. Re-run post-port manual Product History smoke before final acceptance.
+6. Keep Batch 2 producer/recovery work separate; it must target the normalized Product workflow repository and must not restore `JobTable` or the old `AppendAsync -> Task<Guid>` assumption.
+7. Keep report-link UI and deferred producers blocked until backend report IDs, storage, and producer contracts exist.
+8. Continue targeted regression smoke tests after frontend or backend contract changes.
+9. Keep FI-011A as the committed generic source foundation at `8f678480c08e17d7911d6019a44542c6a52ef09f`; do not introduce a permanent combined ENC source or infer an S-57/S-101 split from the compatibility AOI payload.
+10. Keep FI-011B as the committed source-aware Filters, loaded-feature Product search, navbar-popover coordination, and generation-safe derived-state cleanup baseline.
+11. Keep FI-011C as the committed central Product-context, capability-specific popup-action, and flat source-aware Edition/Update Export baseline at `391074743efc909ec97168e2be2820484edb8455`.
+12. Keep FI-011D as the committed source-aware Product Collection, workspace catalog/resolution, Analyze, Review, and truthful History/report baseline at `737677d7ecd0857312224fde3e5f9a76a0cb7148`; do not enable mock-source backend actions.
+13. Keep authoritative production S-57/S-101 transport blocked until the backend supplies separate read contracts and source discrimination.
+14. FI-012, FI-009, FI-013, FI-014, FI-015, FI-017, FI-021, FI-022, FI-026, FI-028, FI-031, FI-032, FI-033 and FI-034 are complete; the latest accepted frontend baseline is `6a29ee5abee23b5ce741a69732d9f67ad805b95d`.
+15. Complete FI-016 only after the backend status list identifies authoritative error states and display semantics, then activate the final FI-011 error-only first-visit filter preset.
+16. Treat FI-018 as a later cross-repository release-readiness review after configurable branding and deployment settings are established.
+17. Preserve FI-022's accepted automatic workspace-freshness boundary at `c2bb13c0bce07907f16f35221025e89a7b211c06`: lightweight revision checks may trigger targeted content refresh, while manual Refresh remains a recovery/full-refresh path and heavy AOI/Analyze/History payloads are not blindly polled.
+18. Keep FI-023 fail closed until the backend exposes authoritative candidate/mutation capabilities; selected-source track state is only a conservative interim gate.
+19. Keep FI-024's accepted targeted-resolution boundary: Analyze/Review must not regress to S57/S101 bulk AOI calls, dataset-name heuristics or cross-source fallback.
+20. Keep FI-025's accepted process-isolation boundary: one API `Interactive` lane and one serialized worker `Background` lane. Do not mask ArcGIS starvation regressions with frontend polling, retry or timeout changes.
+21. Use `ui-ux-design-backlog.md` as the detailed design source for FI-021 and FI-026 through FI-044.
+22. FI-021 remains manually accepted at `32efa496f978e20baee834f0becdb95bdadadd98`; FI-040 keyboard-equivalent activation and shortcut discoverability are complete and manually accepted at `33f0089810b1ba8c8a053727e8828f5b519e66c9`.
+23. FI-026 shared navigation/Preferences consolidation is manually accepted at `6bc8d1181beabda254ba19dd483d29ec41cadf41`; keep its shared route, theme, Preferences and compact timestamp contracts as the prerequisite for later navbar work.
+24. FI-028 Scale hiding preference behavior is manually accepted at `fce91ee3ee54361f3a0fe79e3dd95c8c1905a718`; preserve its OFF-by-default, explicit-persistence, route-safe and filter-independent state contracts.
+25. FI-031 non-empty source startup remains accepted at `c1ed794374e56383a7362f3eadb2d16b07dfdb17`, FI-032 Main-map workspace navigation remains accepted at `11491d15272b165b63da58dece83cb0c0776077b`, FI-033 Dashboard visual compaction remains accepted at `01f22a605e8e4d29a8da187306af1dc04b8540ef`, and FI-034 Dashboard automatic filtering is manually accepted at `6a29ee5abee23b5ce741a69732d9f67ad805b95d`. FI-027 navbar search still requires its separate short design pass.
+26. FI-034 automatic range application is complete at `6a29ee5abee23b5ce741a69732d9f67ad805b95d`. Keep its draft/applied boundary, native complete-`HH:MM` commit requirement, focus-safe application, and accepted FI-033 compact toolbar stable while later UI tasks proceed.
+27. FI-035 Analyze compaction is complete and manually accepted at `ec11aa1fdbd732eca651cdc2a265657405ec80f0`. Preserve its compact accessible Analyze layout, FI-022 freshness/FI-024 targeted-resolution boundaries and neutral shared `pc-scrollbar` contract; FI-042 should reuse that contract rather than introduce Filter-specific scrollbar styling.
+28. FI-042 Filter-panel scrollbar consistency is complete and manually accepted at `e235a15b6d86dc3c5313a4a151fa8c5146612a3a`. Preserve the shared `pc-scrollbar` contract and existing Filter overflow/state boundaries while continuing with Review work.
+29. FI-038 remains accepted at `54a3f89e83ad18c18875921f562f81c58b9d3d8d`, and FI-039 incremental Review reconciliation is complete and manually accepted at `1a77af904ec1a41726bcec357b72610c74e793ca`. Preserve its single-session payload ownership, changed-only FI-022 refresh, composition-observation ownership and FI-038/FI-041 state contracts in subsequent Review work.
+30. Complete FI-029's popup action-density analysis before any broad icon-only popup migration.
+31. FI-030 frontend completion polish may proceed independently; assign backend progress/chunk work only after discovery identifies a truthful contract.
+32. FI-044 Preferences information architecture is complete and manually accepted at `79616f8af0cda91db8e4b1fa90c0248aef4fef41`; preserve its Theme/Scale-hiding ownership, Auto-save/Reset semantics, route isolation, default filter reset and navbar feedback contracts.
+33. After the active UI/UX redesign work is accepted, complete FI-043 as one consolidated onboarding audit. It must teach the final accepted interactions without taking ownership from FI-040 or resetting unrelated route onboarding state unnecessarily.
+
+## FI-009 Dashboard page size preference
+
+Status: Done  
+Implementation commit: `e4caa4d29c46083605beac10400876af6bf38d1c`
+
+FI-009 extends the existing BE-107 cursor-paging contract without changing the backend API. The Dashboard offers compact page-size choices:
+
+```text
+25
+50
+100
+200
+```
+
+`50` remains the default. The selected numeric value is stored as browser-local Dashboard state under `pc.dashboard.pageSize.v1`; it is not part of the Dashboard route URL.
+
+Changing page size preserves the current range, search and filters, invalidates the existing cursor chain, returns to page 1 and issues a fresh request. Existing request-id/abort stale-response protection remains authoritative. If the new request fails, the last successful result may remain visible, but cursors from the previous page-size generation cannot be reused.
+
+The existing Preferences reset removes the stored page-size preference and returns the live Dashboard to `50` when a change is required. Invalid, unsupported or malformed persisted values fail safely to `50`.
+
+Manual acceptance verified persistence, reset behavior, Previous/Next paging, range/search/filter preservation, light/dark mode and existing Dashboard History/Analyze/Review navigation. The full frontend check passed locally before commit.
+
+## FI-011 independent Product-standard data sources and source-aware workflows
+
+Status: In progress - FI-011A, FI-011B, FI-011C, and FI-011D committed; production S-57/S-101 transport and final status/guidance/regression work remain  
+FI-011D implementation commit: `737677d7ecd0857312224fde3e5f9a76a0cb7148`
+
+### Current implementation state
+
+FI-011A provides the generic, generation-safe source runtime and has been manually accepted. The
+permanent registry contains `S-57`, `S-101`, `Paper Charts`, and `S-102`. S-57 and S-101 remain
+runtime-unavailable because authoritative independent backend read contracts do not exist. The
+combined AOI flow remains a temporary compatibility adapter and is not a registry source, toggle, or
+storage value.
+
+FI-011B integrates the current source model with:
+
+- a generic shared navbar-popover coordinator for Data sources, Filters, and future participants;
+- independent source filter providers, facets, selected state, and counts;
+- a source-aware Product-search index over currently loaded frontend Graphics;
+- committed lifecycle publication and generation guards for derived filter/search state;
+- deactivation cleanup for source filter sections, search entries, popup, selection, and hover state.
+
+FI-011C extends that baseline with:
+
+- central Product-context resolution from Graphic and layer metadata;
+- an explicit non-persisted compatibility-AOI adapter;
+- capability-specific popup action visibility and fail-closed dispatch;
+- a flat `Export... > Edition / Update` menu generated from declarative source configuration;
+- the legacy `S100` Edition wire target retained internally for compatibility AOI while Product-specific UI presentation uses `S-101`;
+- disabled Edition/Update placeholders for Paper Charts and S-102;
+- Product Collection header gating through the central `productCollection` Product-context capability,
+  independent from `supportsPopupActions`;
+- source-aware popup-local Export identity and deactivation cleanup.
+
+FI-011D adds source-aware Product Collection, shared workspace catalog/resolution, Analyze, Review, and truthful History/report/validation availability for runtime-available mock sources. FI-011 remains incomplete because separate production S-57/S-101 transport, authoritative final status/error defaults, related Products, and final onboarding/regression work remain deferred.
+
+### Logical source taxonomy
+
+The final logical Product sources are independent:
+
+```text
+S-57
+S-101
+Paper Charts
+S-102
+```
+
+S-122 is a future source and is not part of the current implementation. Do not expose or persist a
+combined public ENC source. Do not duplicate the compatibility AOI payload or infer source standard
+from geometry, names, status, or current operation fields.
+
+The current source availability is:
+
+| Source       | Runtime availability | Notes                                             |
+| ------------ | -------------------- | ------------------------------------------------- |
+| S-57         | Unavailable          | Separate backend read contract required           |
+| S-101        | Unavailable          | Separate backend read contract required           |
+| Paper Charts | Development only     | Visualization/filter/search/workspace mock source |
+| S-102        | Development only     | Visualization/filter/search/workspace mock source |
+
+### Registry, identity, and capability boundary
+
+The registry is the declarative integration point for source availability, loader, normalizer,
+source-owned layers, stable identity, refresh strategy, filtering metadata, search fields, and
+capabilities. Feature code must not branch on Paper Charts or S-102 IDs to implement filtering or
+search.
+
+Runtime identity remains equivalent to:
+
+```text
+{ sourceId, productKey }
+```
+
+Missing or duplicate stable source identity rejects the full source payload before layer commit. A
+stale operation cannot publish newer map, filter, search, persistence, loading, or error state.
+
+Paper Charts and S-102 remain Development-only visualization/workspace sources. FI-011B enables their declared filters and loaded-feature Product search. FI-011C adds source-aware popup actions with disabled Edition/Update Export placeholders. FI-011D enables Product Collection, Analyze, Review, and visible History/IC-ENC/Internal validation surfaces while keeping backend mutations, real Export execution, backend History, and report/validation data unavailable. Search selection reuses the same Product-context and capability path and cannot bypass gating.
+
+### Shared navbar-popover coordination
+
+Data sources and Filters register with one generic coordinator. Only one registered overlapping
+navbar popover may be open. Opening one closes the active participant without direct feature-module
+imports.
+
+The coordinator preserves:
+
+- trigger toggle behavior;
+- outside-click closure;
+- Escape closure;
+- keyboard navigation and ARIA state;
+- focus restoration to the correct trigger;
+- light/dark styling owned by existing panels;
+- one global document click listener and one global keydown listener for the coordinator lifetime.
+
+Non-navbar surfaces are not registered and keep their existing close priority.
+
+### Source-aware filters and initial defaults
+
+The shared filter panel renders independent sections only for active providers. State, facets,
+selected values, counts, and Graphic matching are isolated by provider. Source replacement rebuilds
+only that source's facets; source removal clears only that source's runtime filter state.
+
+Current declared filter dimensions are limited to actual normalized data:
+
+| Provider      | Status | Display scale | Usage band |
+| ------------- | ------ | ------------- | ---------- |
+| Compatibility | Yes    | Yes           | Yes        |
+| Paper Charts  | Yes    | Yes           | Yes        |
+| S-102         | Yes    | No            | No         |
+
+Missing optional attributes omit only that facet and do not fail filtering. Layer/source metadata,
+not titles or DOM state, determines participation.
+
+Filter persistence is a separate versioned user-state contract from data-source activation. The
+source-aware filter snapshot uses version 2 and migrates the established version 1 compatibility
+state. Existing valid user state is never overwritten by first-visit defaults.
+
+The final error-only first-visit preset is not enabled in FI-011B. There is no authoritative central
+classification of Product error statuses. FI-011B preserves the current compatibility default and
+adds an explicit configuration point. FI-016 must define the authoritative error classification
+before the final preset is activated.
+
+### Loaded-feature Product search
+
+Product search aggregates only currently committed Graphics from active providers. Compatibility AOI,
+Paper Charts, and S-102 can participate when loaded and active. Disabled or failed-first-activation
+sources publish no entries.
+
+Each search entry retains provider, source, layer, stable Product key, generation, and exact Graphic.
+Provider replacement is atomic, source removal deletes all source entries, and generation tombstones
+prevent a stale refresh from restoring removed or older suggestions. Duplicate labels remain
+source-aware and cannot resolve to the wrong Graphic.
+
+Selection navigates to the current Graphic, updates the established selected-Graphic flow, and opens
+the existing popup. Search does not activate disabled sources. Locator/FI-012 remains a separate
+geographic workflow, and FI-011B does not add backend or connected-data search.
+
+### Source lifecycle and cleanup
+
+Activation and successful refresh publish filter/search state only after the guarded map commit.
+Deactivation invalidates pending work before cleanup and removes source layers, derived filters, and
+search entries while clearing popup, selected Graphic, and hover state owned by that source. Other
+sources remain unchanged.
+
+A failed refresh of an active source retains the last successful representation and derived state. A
+failed first activation leaves no partial layers, facets, or suggestions. Reactivation fetches fresh
+data and uses the configured default filter state.
+
+### Existing workflow compatibility
+
+The temporary AOI adapter must preserve existing compatibility behavior for popup selection and
+restoration, hover, refresh, Product Collection, Analyze, Review, Product History, exports, Freeze,
+Unfreeze, Send to IC-ENC, the user-facing Cancel Export action over the legacy Rollback operation contract, notices, and loader progress.
+
+Compatibility filter/search integration uses logical layer metadata without creating permanent
+source preferences. Runtime source refresh and compatibility refresh remain independent.
+
+### Development mocks
+
+Paper Charts and S-102 continue to use Development-only fixtures:
+
+```text
+GET /mock/paper-charts -> mock/paper-charts.geojson
+GET /mock/s102         -> mock/s102.geojson
+```
+
+They are not production contracts and must not define future backend fields or capabilities.
+
+### Remaining FI-011 packages
+
+1. **FI-011A - Configurable source foundation:** implemented and manually accepted at the committed
+   baseline.
+2. **FI-011B - Source-aware Filters, Search and Navbar Coordination:** implemented in the committed
+   baseline; does not complete FI-011.
+3. **FI-011C - Source-aware Popup Actions and Export Menu:** implemented in the committed baseline
+   `391074743efc909ec97168e2be2820484edb8455`; central Product context, capability-specific actions,
+   flat Edition/Update menu, and disabled mock-source placeholders.
+4. **FI-011D - Source-aware workspace and history propagation:** implemented and committed at
+   `737677d7ecd0857312224fde3e5f9a76a0cb7148`; Product Collection, shared workspace catalog/resolution,
+   Analyze, Review, and truthful History/report unavailable states are source-aware without cross-source
+   compatibility calls.
+5. **Production transport package:** authoritative separate S-57/S-101 reads when the backend
+   contract exists; no fake client split.
+6. **Final status/guidance/regression package:** error-only default after FI-016, onboarding,
+   accessibility, and full end-to-end migration regression.
+
+### Acceptance criteria
+
+FI-011 is complete only when:
+
+1. S-57, S-101, Paper Charts, and S-102 are independent logical sources with no public combined ENC
+   source.
+2. The backend supplies authoritative S-57/S-101 source identity and separate read behavior.
+3. First visit enables all available sources and uses an authoritative error-only filter preset.
+4. Existing source and filter user state is restored without silently enabling later sources.
+5. Every available source supports independent generation-safe activate, refresh, disable, and
+   reactivate behavior.
+6. Filters and counts remain source-isolated, and Product search includes active sources only.
+7. Popup, hover, Product Collection, Analyze, Review, History, routes, and operation state preserve
+   source-aware identity where supported.
+8. Unsupported source workflows fail closed without cross-source API calls.
+9. Related Products and source-specific actions use backend-provided, data-driven contracts.
+10. Light/dark, keyboard, focus, notices, RDP/VDI, local/global reset, refresh, and existing
+    compatibility AOI workflows pass final regression testing.
+11. `cd src/ProductCatalogue && npm run check` passes in the repository environment.
+
+### Out of scope until separately approved
+
+- production Paper Charts, S-102, or S-122 endpoint contracts;
+- heuristic S-57/S-101 splitting of the combined AOI response;
+- real backend History, IC-ENC reports, Internal validation data, mutations, or real Export execution for Paper Charts/S-102 until authoritative backend contracts exist;
+- source-specific Product actions without backend contracts;
+- connected-data or backend Product search;
+- Locator/FI-012;
+- the final status palette and error-only preset before FI-016;
+- global timeline work;
+- modifier-click Product Collection shortcuts from FI-021;
+- open-source readiness review from FI-018.
+
+## FI-012 Denmark and Greenland map locator
+
+Status: Done  
+Implementation commit: `a3a53e4aa55850091281f8e47825755798066cf9`  
+Authoritative implementation baseline: `737677d7ecd0857312224fde3e5f9a76a0cb7148`
+
+### Goal and final behavior
+
+FI-012 adds a compact geographic Locator to the Main map so users can navigate quickly to addresses, cities, postal locations, and populated places in Denmark or Greenland while working with Product corrections.
+
+Locator is navigation assistance only and remains independent from Product search, Product selection, popup state, filters, Product Collection, source enablement, and Product operation state.
+
+The accepted Main-map layout is:
+
+```text
+closed:
+[ Product search ][ Locator button ]
+
+open:
+[ Product search ][ Locator search ][ Locator button ]
+```
+
+The shared `mainMapSearchControls` boundary owns only common positioning/layout. Product search keeps its existing Product index, Graphic resolution, selection, navigation, and popup behavior; Locator keeps geographic search and navigation.
+
+### ArcGIS implementation
+
+FI-012 uses the ArcGIS Maps SDK Search web component (`arcgis-search`) from `@arcgis/map-components@5.0.15` with the existing `MapView`. It does not use the deprecated `@arcgis/core/widgets/Search` widget and does not migrate the map to `arcgis-map`.
+
+The organization-approved ArcGIS World Geocoding Service is configured through the non-secret `VITE_ARCGIS_LOCATOR_URL` boundary:
+
+```text
+https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer
+```
+
+The accepted first version uses the service without a Product Catalogue API key, OAuth flow, hardcoded token, or Windows-credential forwarding. Missing/invalid configuration fails closed and does not enable unrestricted ArcGIS default sources.
+
+### Search-source architecture
+
+The initial user-facing Locator contains one logical source:
+
+```text
+Places
+`- ArcGIS World Geocoder
+   |- sourceCountry=DNK,GRL
+   |- category=Address,Postal,Populated Place
+   `- configured fallback zoom scale
+```
+
+Denmark and Greenland are search scope, not separate user-visible sources. This removes the `Search in...` selector and country grouping from the first version while still excluding the Faroe Islands and worldwide fallback.
+
+`Places` is implemented as a custom ArcGIS `SearchSource` using public `getSuggestions` / `getResults` contracts and ArcGIS request infrastructure. The same country/category scope is applied to suggestion and candidate resolution.
+
+The registry/factory boundary remains extensible for later custom API-backed Product Catalogue or domain search sources without rewriting the Locator UI controller. Existing client-side Product `GraphicsLayer`s are not treated as a future `LayerSearchSource` contract.
+
+### Enter and suggestion behavior
+
+The accepted behavior is:
+
+- explicit suggestion selection resolves that exact World Geocoder suggestion and its real `magicKey`;
+- Enter without an explicit selection resolves the first actual keyed World Geocoder suggestion for the current term;
+- fast Enter can obtain the scoped suggestion before candidate resolution;
+- city and address searches navigate to the first valid result;
+- stale suggestion generations cannot replace a newer query's provider state.
+
+After successful Locator navigation:
+
+```text
+map navigates
+-> Locator search term/results clear
+-> Locator remains open
+-> new map viewpoint remains
+```
+
+This clear-after-success behavior prevents completed search results from remaining visually sticky when the user begins a new query.
+
+### Result and lifecycle behavior
+
+Selecting a result:
+
+- navigates the existing `MapView` using the ArcGIS result target/extent with configured fallback scale where needed;
+- renders no Locator marker/result graphic;
+- opens no Locator popup;
+- does not route through Product selection/popup logic;
+- does not modify Product identity, Product popup state, hover, Product Collection, filters, enabled sources, or operation state.
+
+Close/teardown is hardened independently from the visual animation:
+
+```text
+close
+-> retire active Search session immediately
+-> block stale navigation through session-scoped goToOverride
+-> clear Search state
+-> reset provider transient state
+-> remove/destroy Search component
+```
+
+The neutral application-owned Locator slot then performs the visual close transition. Open and close use matching horizontal expansion/collapse, with `prefers-reduced-motion` support and generation-safe rapid-toggle handling. Late requests from a closed Search session cannot navigate the map.
+
+### UI, guidance, and accessibility
+
+The Locator uses the supported Calcite `locator` icon because a `binoculars` icon is not available in the installed Calcite icon set. The final button is compact, angular, centered, and styled through supported Calcite Action component tokens for light/dark mode.
+
+`aria-label` remains `Locator`, while hover help explains:
+
+```text
+Search for an address or place in Denmark or Greenland and move the map there.
+```
+
+Escape, outside interaction, focus boundaries, teardown, and Product-search coordination use the existing Main-map interaction architecture. Main-map onboarding was versioned independently; Dashboard, Analyze, and Review onboarding state was not reset.
+
+### Manual acceptance
+
+Manually accepted against commit `a3a53e4aa55850091281f8e47825755798066cf9`.
+
+Verified behavior includes:
+
+1. Locator control is positioned beside Product search and expands/collapses smoothly in the shared Main-map search layout.
+2. The Calcite `locator` icon is visible, centered, and correctly styled in light and dark mode.
+3. The `Search in...` source selector and Denmark/Greenland result grouping are absent.
+4. Denmark and Greenland are searched through one logical `Places` source with no Faroe Islands/worldwide fallback.
+5. City searches and address searches support Enter navigation, including first-suggestion address resolution.
+6. Successful navigation clears Locator input/results while leaving Locator open and preserving the new viewpoint.
+7. Repeated searches do not retain stale/sticky results.
+8. No result marker or Locator popup is shown.
+9. Product search continues to work independently before and after Locator use.
+10. Locator use does not mutate Product popup/selection, hover, filters, Product Collection, data-source state, or operation state.
+11. Close/reopen clears Search state; slow/stale closed searches cannot navigate later.
+12. Keyboard/focus/Escape behavior and rapid open/close/open lifecycle are protected by the final implementation.
+13. `cd src/ProductCatalogue && npm run check` passed in the local repository environment during acceptance.
+
+### Out of scope for the first implementation
+
+- search in Product Catalogue database attributes;
+- search in connected/related records;
+- client-side GraphicsLayer `LayerSearchSource` integration;
+- reverse geocoding from map clicks;
+- result markers or locator popups;
+- general businesses and points of interest;
+- Faroe Islands or worldwide results;
+- changes to Product search behavior beyond the neutral shared layout/coordination boundary.
+
+## FI-013 S-101 terminology correction
+
+Status: Done  
+Implementation commit: `1c6040a60d97429c2232b9b68f0b849a4591df4b`
+
+Product-specific live presentation now uses `S-101` across popup metadata, Export help, operation presentation, notices, tests and active documentation. Legitimate generic `S-100` references remain unchanged.
+
+The legacy backend/wire identity remains explicit and unchanged where required:
+
+```text
+EXPORT_TARGET.S100 = "S100"
+backendTarget = S100
+exportTarget=S100
+PRODUCT_EXPORT_STANDARD.S100
+```
+
+The flat source-aware Export menu remains:
+
+```text
+Export...
+  Edition
+  Update
+```
+
+No S-101 source-group submenu was introduced. Compatibility/S-101 presentation carries its own display/help metadata instead of deriving UI copy from the `S100` wire value. Persisted/backend-authoritative Edition jobs are normalized to user-facing `S-101` presentation while retaining legacy operation identity.
+
+Paper Charts and S-102 keep source-specific unavailable Export help and fail-closed leaves. As part of the final popup presentation correction, the Tools root action is icon-only with wrench icon, accessible name `Tools`, and existing menu keyboard behavior. It remains in the Export/Cancel Export row and is right-aligned with application-owned flex layout so the empty gap is non-clickable and the popup does not overflow.
+
+Manual acceptance verified S-101 popup metadata/help/notices, `exportTarget=S100`, Paper Charts/S-102 help, popup layout, Tools Enter/Space/arrow/Escape behavior, light/dark mode and FI-014/FI-015 regressions. The full frontend check passed locally before commit.
+
+## FI-014 Cancel Export action terminology and icon
+
+Status: Done  
+Implementation commit: `70b0775936505dca8c1abb221f4a08953411efc1`
+
+The user-facing Product action formerly presented as `Rollback` is now `Cancel Export` and uses Calcite `x-circle`. The running presentation is `Canceling export...`, and confirmation uses action-specific title/body context with buttons:
+
+```text
+[Cancel] [Confirm]
+```
+
+Frontend-owned success/warning/error presentation, disabled reasons, hover help, onboarding and accessibility copy use Cancel Export terminology. Persisted/remote legacy Rollback jobs are normalized to the new presentation after restore.
+
+Backend and internal contracts remain unchanged where they are actual operation identity, including the rollback endpoint, internal action ID, operation enums/types, error codes and persisted wire values. Unrelated transactional/history rollback terminology is not renamed.
+
+Manual acceptance verified the icon, light/dark mode, confirmation behavior, async backend dispatch, notices, running state and preserved unsupported-source gating.
+
+## FI-015 Product Collection popup icon
+
+Status: Done  
+Implementation commit: `636c1b7727d373c780afab60849eca3dc3c1b825`
+
+The popup Product Collection action uses Calcite `graph-bar` for `Add to collection`. When the Product is selected in the Collection, the existing `check` icon remains in use for the selected/Remove state.
+
+Tooltip/help text, accessible naming, keyboard behavior, active/toggle state, Product Collection identity, capability gating, onboarding targeting and popup refresh behavior are unchanged.
+
+Manual acceptance verified add/remove toggling, light/dark mode, compact popup rendering and existing Collection behavior.
+
+## FI-016 Product AOI status palette
+
+Status: Blocked by backend status definitions
+
+Create a centralized replacement palette only after the backend provides the authoritative Product status list, stable status values, and the subset classified as errors.
+
+The palette must:
+
+- preserve the same status meaning across sources unless a source has an approved override;
+- remain distinguishable in light and dark mode;
+- avoid relying on color alone where selected, hovered, disabled, or overlapping Products require another cue;
+- support the first-visit error-only filter preset from FI-011;
+- define fallback rendering for unknown future statuses;
+- include visual regression/manual checks for overlapping S-57 and S-101 AOIs.
+
+## FI-017 environment-configurable branding
+
+Status: Done  
+Implementation commit: `8e375296a286e3228fa8a6f7111769715038b320`
+
+FI-017 removes the GST-specific bundled visual identity from the application shell and introduces one central branding configuration boundary for the navbar logo and browser favicon. The repository default is neutral and remains deployable without organization-specific assets.
+
+### Configuration boundary
+
+The non-secret Vite build inputs are:
+
+```text
+VITE_APP_LOGO_URL
+VITE_APP_LOGO_ALT
+VITE_APP_FAVICON_URL
+```
+
+Configuration is resolved centrally rather than through feature-local `import.meta.env` reads. Branding values are build-time Vite inputs, while configured image URLs remain browser-loaded runtime resources. A deployment can therefore replace the file behind an unchanged configured URL without rebuilding or redeploying the frontend, subject to normal browser/server cache policy. Changing the configured URL itself still requires a new frontend build and deployment.
+
+Supported configured URL forms are:
+
+- app-relative paths such as `branding/logo.svg` or `./branding/logo.svg`, resolved through the Vite application base;
+- origin-root-relative paths such as `/branding/Logo.png`, preserved without application-base prefixing;
+- absolute HTTP(S) URLs, preserved as configured.
+
+Unsupported explicit schemes fail closed to the bundled neutral fallback. Branding does not perform a preflight `fetch` or `HEAD` request and does not block application startup while a custom asset loads.
+
+### Fallback and accessibility behavior
+
+The repository includes a neutral Product Catalogue SVG fallback and no longer depends on the previous GST logo asset. The navbar keeps bounded logo dimensions so malformed or unusually sized custom artwork cannot expand the application header.
+
+Navbar branding behavior is:
+
+```text
+usable custom logo
+-> configured URL + configured alt text when present
+
+missing/invalid configuration
+-> bundled Product Catalogue fallback + Product Catalogue alt text
+
+custom image load failure
+-> one-way switch to bundled fallback + Product Catalogue alt text
+```
+
+The fallback transition is guarded against error loops and does not throw, show a notice, or block startup. Blank custom alternative text falls back to `Product Catalogue`.
+
+Favicon branding uses the same URL-resolution contract and neutral fallback principle. Branding bootstrap is independent from the main application bootstrap; `main.js` remains a normal static module entry rather than being dynamically imported solely for favicon initialization.
+
+### Deployment boundary and manual acceptance
+
+The production deployment was configured with same-origin `/branding/...` URLs backed by externally managed static files. The application source and committed environment defaults remain organization-neutral; deployment-specific values are supplied through an ignored local production environment file.
+
+Manual acceptance on the dev IIS deployment verified:
+
+1. the production frontend build completed successfully with deployment branding configuration;
+2. the configured navbar logo loaded from the deployment URL;
+3. normal Product Catalogue startup and API use remained functional after deployment;
+4. replacing the logo file behind the same configured URL required no frontend rebuild, API publish, IIS restart, or application restart;
+5. a browser refresh loaded the replacement logo as intended.
+
+The favicon is covered by the implemented configuration/fallback contract, but a separate browser-cache acceptance result was not recorded during this verification pass. Favicon cache policy remains a deployment/browser concern rather than a frontend cache-busting mechanism.
+
+FI-017 is an input to FI-018 but does not itself complete the broader open-source readiness audit.
+
+## FI-018 open-source and third-party deployment readiness
+
+Status: Future review
+
+Perform a cross-repository review so Product Catalogue can be downloaded and deployed by another organization without editing GST-specific code.
+
+Audit at least:
+
+- logos, titles, organization names, links, email addresses, and contact/help content;
+- API, portal, locator, basemap, report, and documentation URLs;
+- authentication/authorization and Windows/ArcGIS assumptions;
+- environment variables, sample configuration, secrets, and safe defaults;
+- mock/sample data ownership and sanitization;
+- licenses, notices, third-party dependencies, fonts, icons, and assets;
+- build, deployment, reverse-proxy, base-path, and CSP documentation;
+- organization-specific status, workflow, file path, and network assumptions;
+- telemetry/logging/privacy expectations;
+- contributor documentation and reproducible verification commands.
+
+The default experience must be neutral rather than GST-branded, while deployments may opt into their own branding/configuration without forks.
+
+## FI-019 canonical Analyze and Review query routes
+
+Status: Ready / canonical URL contract fixed
+
+Replace path-concatenated routes such as:
+
+```text
+/Analyze/ProductA&ProductB
+/Review/ProductA&ProductB
+```
+
+with the canonical query routes:
+
+```text
+/Analyze?Datasets=ProductA,ProductB
+/Review?Datasets=ProductA,ProductB
+```
+
+Dataset names are authoritatively guaranteed to be globally unique across S-57, S-101, Paper
+Charts, S-102, and future data sources. Source ID is therefore not part of the public route payload.
+Internal collections, loaded Graphics, and other runtime state remain source-aware.
+
+Requirements:
+
+- construct and parse routes with `URL` and `URLSearchParams`, not manual separator
+  concatenation;
+- URL-encode every dataset name;
+- use stable ordering and deduplicate dataset names before serializing;
+- support direct load, reload, bookmarking, copied links, and separate-window opening;
+- accept the legacy path form temporarily when practical and canonicalize it with
+  `history.replaceState`;
+- invalid or unavailable entries produce a clear partial state rather than breaking the page;
+- Product picker additions and removals update the canonical URL consistently;
+- keep source-aware runtime identity even though the canonical URL only needs globally unique
+  dataset names.
+
+## FI-020 backend-linked related Products
+
+Status: Blocked by backend relationship contract
+
+Add a generic popup surface for explicit Product relationships supplied by the backend/database.
+No source pair is privileged or hardcoded. The contract must be able to link any Product from any
+current or future source to any other Product.
+
+The authoritative relationship payload must provide:
+
+- stable target Product identity;
+- target source identity when required by runtime loading and navigation;
+- relation type;
+- display text.
+
+Do not infer relationships from Product names, geometry, overlap, export mappings, data type, array
+position, or assumed S-57/S-101 correspondence.
+
+Open decision before implementation: when the target source is disabled, either require explicit
+user activation or activate/load it as part of link navigation. Whichever behavior is selected must
+be consistent, keyboard accessible, loading-safe, and preserve the current popup if target loading
+fails.
+
+## FI-021 modifier-click direct Product selection
+
+Status: Done  
+Implementation commit: `32efa496f978e20baee834f0becdb95bdadadd98`  
+Design source: [UI/UX design backlog](ui-ux-design-backlog.md)
+
+The current design-review requirement is to reduce overlap-picker friction when multiple Product sources occupy the same or nearly identical AOI. This supersedes the earlier FI-021 preferred experiment in which Ctrl/Cmd-click toggled Product Collection membership.
+
+Implemented interaction contract:
+
+- normal click keeps the existing overlap picker and Product popup workflow;
+- Ctrl-click on Windows/Linux and Cmd-click on macOS snapshots the current transient hover identity before the asynchronous click hit test;
+- direct selection occurs only when that stable, source-aware identity is present among the current click's visible candidates from active overlap-enabled layers;
+- after the asynchronous hit test, candidates are revalidated against the current interactive layers and retained-layer Graphic membership;
+- a newer click or interaction teardown invalidates any older in-flight click before it can publish popup state;
+- missing, stale, hidden, disabled, or otherwise invalid highlighted identity falls back to the exact normal-click behavior;
+- direct selection must flow through the existing source-aware Product context and popup path;
+- no source name or assumed S-57/S-101 priority may decide the target;
+- Shift-click remains unchanged;
+- Product Collection behavior remains unchanged.
+
+`hoverManager` remains the owner of transient and popup-locked highlights. Only the transient hover identity is exposed to FI-021; popup-locked selection is not eligible. Hover hit tests use a generation guard so late pointer results cannot restore obsolete transient state after pointer movement, layer cleanup, popup locking, pointer leave, or teardown.
+
+FI-021 itself remains the accepted pointer-only contract. FI-040 separately implements and has manually accepted the original keyboard-equivalent activation and visible discoverability requirements while preserving normal overlap-picker access at `33f0089810b1ba8c8a053727e8828f5b519e66c9`.
+
+The former modifier-click Product Collection toggle remains deferred and unassigned unless a later UX review restores it as a separate requirement.
+
+### Manual acceptance
+
+Manually accepted on 2026-09-16 at `32efa496f978e20baee834f0becdb95bdadadd98`. The accepted browser behavior includes normal overlap-picker access, direct Ctrl/Cmd selection of either highlighted overlapping Product, source/filter/refresh stale-state rejection, rapid successive click protection, and unchanged Shift-click, Product Collection, Product search, Locator, popup keyboard/Escape and light/dark behavior.
+
+Modifier timing remains event-bound rather than sticky: changing Ctrl/Cmd state around the mouse interaction can legitimately change whether the shortcut or normal picker path is observed. FI-021 does not add a timing grace window. Existing map navigation is also preserved: rapid Ctrl + double-left-click may invoke the map's existing zoom gesture instead of Product selection. FI-021 intentionally does not suppress or replace that navigation gesture.
+
+## FI-040 modifier-selection keyboard equivalent and discoverability
+
+Status: Done  
+Implementation commit: `33f0089810b1ba8c8a053727e8828f5b519e66c9`  
+Implementation baseline: `62163fb10c83767816b51aa19d82b0bee7ead7ae`
+
+FI-040 preserves FI-021 and adds a bounded keyboard accelerator on the public MapView keyboard
+interaction surface:
+
+- Ctrl+Enter on Windows/Linux and Cmd+Enter on macOS activates only the current transient highlighted
+  Product; Shift-modified and repeated keydown events do not activate the shortcut;
+- keyboard modifier state is read from the actual ArcGIS key event's native KeyboardEvent, with no
+  document-level shortcut listener or sticky modifier state;
+- the transient identity is revalidated against current overlap-enabled layers, current public
+  Graphic membership, application `featureKey` ownership, Graphic/layer visibility and the shared
+  interaction generation before popup publication;
+- pointer and keyboard direct activation use the same stable-identity resolver and the same existing
+  `openGraphicPopup` publication callback, so Product context, popup selection and focus behavior are
+  not duplicated;
+- source/layer/Graphic removal, hidden state, teardown or superseding interaction fails closed. A
+  current replacement Graphic with the same stable Product identity may be resolved, while the stale
+  Graphic object itself is never published;
+- popup-locked highlight remains ineligible because `hoverManager` exposes only transient identity.
+
+Discoverability is a compact bottom-left MapView UI note shown only while a transient highlighted
+Product exists:
+
+```text
+Ctrl/Cmd-click or Ctrl/Cmd+Enter to open highlighted Product
+```
+
+The application-owned cue uses public MapView UI placement, native `title`, `role=note`, an
+accessible label, existing theme tokens and no private ArcGIS/Calcite DOM. It is hidden when the
+transient candidate clears and removed with the overlap-interaction lifecycle. No `aria-keyshortcuts`
+is attached to the hint because it is not the focus/keyboard owner.
+
+Normal click remains the complete zero/one/multiple-candidate workflow, including the existing
+overlap picker. Ctrl/Cmd-click, Shift-click, Product Collection, Product search, Locator, popup
+Escape/focus ownership and source-aware selection semantics are unchanged.
+
+### Manual acceptance
+
+FI-040 was manually accepted on 2026-09-18 and implemented at `33f0089810b1ba8c8a053727e8828f5b519e66c9`. Browser verification confirmed map-focused Ctrl/Cmd+Enter direct selection of the transient highlighted Product, fail-closed behavior after highlight/source cleanup, unchanged normal overlap-picker and FI-021 Ctrl/Cmd-click behavior, key-repeat protection, contextual shortcut-hint lifecycle, and acceptable light/dark/responsive presentation. The current documentation source is the later repository baseline `8acfec141ff508fde5484119af7a3f01ab084bd7`, which also preserves colleague merge and API documentation changes.
+
+## Commit log
+
+| Date       | Commit                                   | Items                                          | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------- | ---------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-09-21 | 79616f8af0cda91db8e4b1fa90c0248aef4fef41 | FI-044                                         | Consolidated shared Preferences around runtime settings, Auto-save persistence and independent Reset actions; retained shared Theme ownership and Main-map-only Scale hiding through route-safe capability injection; restored Filters Reset to declarative defaults including Idle exclusion; refined Theme/Introduction presentation and navbar hover/current-route feedback. Manually accepted in the browser. The later merge commit `82f69c1d082773c110b48404d716d99cdc32de02` is the authoritative post-FI-044 repository baseline and preserves colleague changes. Local frontend check passed and formatting was run before commit.      |
+| 2026-09-18 | 33f0089810b1ba8c8a053727e8828f5b519e66c9 | FI-040                                         | Added the accepted Ctrl/Cmd+Enter keyboard equivalent for transient highlighted Product direct selection through the shared FI-021 validation/popup path, plus a compact contextual shortcut hint. Public MapView keyboard events, source-aware current-state revalidation, shared interaction generations and normal overlap-picker/Product Collection behavior are preserved. Manually accepted in the browser; later merge/API documentation commits are preserved by the current baseline `8acfec141ff508fde5484119af7a3f01ab084bd7`.                                                                                                        |
+| 2026-09-18 | 1a77af904ec1a41726bcec357b72610c74e793ca | FI-039                                         | Introduced one authoritative Review Product session that incrementally reconciles composition, retaining surviving payloads and in-flight ownership while loading only new/changed Products. Manual Refresh remains full and FI-022 remains changed-only. Atomic targeted-refresh eligibility plus freshness composition epochs prevent stale acknowledgement across disable, remove/re-add and superseded composition boundaries. The accepted commit also contains colleague merge changes; this merged commit is the authoritative post-FI-039 baseline. Manually accepted; local frontend check passed and formatting was run before commit. |
+| 2026-09-18 | 54a3f89e83ad18c18875921f562f81c58b9d3d8d | FI-038                                         | Enabled History, IC-ENC and Validation by default for new Review Product state and added compact workspace-level bulk controls with native mixed state. Explicit bulk actions own session-local per-content workspace intent for future Products; per-Product overrides do not rewrite that intent. Refresh/reconciliation preserves selections and intent, Product enabled state remains independent, and FI-039 loading behavior was deliberately left unchanged. Manually accepted in the browser; local frontend check passed and formatting was run before commit.                                                                          |
+| 2026-09-18 | ee37173e31525d990412b3dff7205ec5af4371e8 | FI-037                                         | Made Review History height content-sensitive with a bounded scrollbar only for long timelines, removed unnecessary nested scrolling from IC-ENC/Validation so Product columns own overflow, and simplified empty-state presentation while retaining distinct unavailable, failed, empty and available-content semantics plus validation download links. FI-022/FI-024 and FI-036/FI-041 behavior remained unchanged. Manually accepted in the browser; local frontend check passed and formatting was run before commit.                                                                                                                         |
+| 2026-09-17 | 9c07f8a7fb93cd80bbbab59a3d47719e3667863c | FI-036 / FI-041                                | Compacted the Review sidebar, converted Review Product search results to an anchored overlay, moved the single manual Refresh action into the Products header as an icon-only control, and preserved Product-list scroll/focus across History, IC-ENC and Validation toggle rerenders with a synchronous call-local snapshot/restore boundary. FI-022/FI-024 source/lifecycle behavior remained unchanged. Manually accepted in the browser; local frontend check passed and formatting was run before commit.                                                                                                                                   |
+| 2026-09-17 | e235a15b6d86dc3c5313a4a151fa8c5146612a3a | FI-042                                         | Applied the accepted shared `pc-scrollbar` treatment to the Main-map Filter panel outer scroller and generated filter option lists, including Status, without changing overflow ownership, filter state, persistence, source-aware behavior or Calcite internals. Manually accepted in the browser; local frontend check passed and formatting was run before commit.                                                                                                                                                                                                                                                                            |
+| 2026-09-17 | ec11aa1fdbd732eca651cdc2a265657405ec80f0 | FI-035                                         | Compacted the Analyze sidebar, removed redundant visible panel/Product-picker copy while preserving accessibility and contextual messaging, reduced Product-list/sidebar density, and introduced the neutral shared `pc-scrollbar` styling contract reused by existing Review scroll surfaces. FI-022/FI-024 behavior and Analyze routing/loading semantics were preserved. Manually accepted in the browser; local frontend check passed and formatting was run before commit.                                                                                                                                                                  |
+| 2026-09-17 | 6a29ee5abee23b5ce741a69732d9f67ad805b95d | FI-034                                         | Removed Dashboard Apply and added automatic valid-range application with explicit draft/applied separation, focus-safe native date/time editing, open-ended To clearing, duplicate-load suppression, preserved search/filter/paging/sort/page-size/request lifecycle, and accepted complete-`HH:MM` native time semantics. Manually accepted in the browser; local frontend check passed and formatting was run before commit.                                                                                                                                                                                                                   |
+| 2026-09-17 | 01f22a605e8e4d29a8da187306af1dc04b8540ef | FI-033                                         | Compacted Dashboard chrome and range controls, added last-successful `HH:MM` load presentation, removed visible range presets and the permanent To Clear action while preserving open-ended To, and finalized Refresh as a centered icon-only native button using the public Calcite refresh icon. Manually accepted in the browser; local frontend check passed and formatting was run before commit.                                                                                                                                                                                                                                           |
+| 2026-09-17 | 11491d15272b165b63da58dece83cb0c0776077b | FI-032                                         | Added route-aware Main-map new-tab workspace navigation while keeping workspace-to-workspace navigation same-tab, unified Product Collection/popup launches through the shared policy, and corrected popup-blocked reporting to use the actual browser-open result. Manually accepted in the browser; local frontend check passed and formatting was run before commit.                                                                                                                                                                                                                                                                          |
+| 2026-09-17 | c1ed794374e56383a7362f3eadb2d16b07dfdb17 | FI-031                                         | Added startup-only recovery from an explicitly empty restored Product-source selection, choosing exactly one eligible selection-persistable registry fallback while preserving first-visit defaults, in-session all-off state, session-only fixture boundaries, stale-operation safety, and concurrent requested-selection persistence. Manually accepted in the browser before commit.                                                                                                                                                                                                                                                          |
+| 2026-09-16 | fce91ee3ee54361f3a0fe79e3dd95c8c1905a718 | FI-028                                         | Moved Scale hiding from the Main-map navbar into Preferences, changed absent/invalid persisted state to opt-in OFF, preserved explicit legacy values, separated runtime value from persistence enablement, removed Display scale filter auto-mutation, and retained FI-026 shared Preferences/Theme behavior. Manually accepted before commit.                                                                                                                                                                                                                                                                                                   |
+| 2026-09-16 | 6bc8d1181beabda254ba19dd483d29ec41cadf41 | FI-026                                         | Consolidated shared active-route navigation, Main-map navbar ordering, compact last-refresh presentation and Light/Dark selection in Preferences; visible Help/Theme navbar actions were removed while onboarding replay remained available. Manually accepted across Main map, Dashboard, Analyze and Review.                                                                                                                                                                                                                                                                                                                                   |
+| 2026-09-16 | 32efa496f978e20baee834f0becdb95bdadadd98 | FI-021                                         | Added source-aware Ctrl/Cmd modifier-click direct selection for the currently highlighted overlapping Product with post-hitTest current-state revalidation, stale hover/click guards, teardown safety and normal-click fallback; manually accepted on the Main map.                                                                                                                                                                                                                                                                                                                                                                              |
+| 2026-09-16 | c2bb13c0bce07907f16f35221025e89a7b211c06 | FI-022                                         | Added automatic Analyze/Review workspace freshness with lightweight revision checks, targeted refresh, manual recovery Refresh, and the finalized compact Analyze Refresh control.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 2026-09-15 | aaf635571503c780517cfc3a76a4fa5e4894f447 | Normalized workflow / FI-024 / FI-025 / BE-007 | Committed the normalized frontend workflow adaptation, targeted Product AOI resolution, active-job race correction and dedicated API/worker ArcGIS execution isolation. Local tests and dev-server export/isolation smoke passed.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 2026-09-15 | 8a8b77e32502b140890954d1be5143da7b90af01 | AOI refresh performance                        | Cached global electronic Product AOI geometry per Product specification while continuing to refresh workflow/status state; the targeted single-Product AOI route remains direct and uncached.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 2026-09-08 | 8e375296a286e3228fa8a6f7111769715038b320 | FI-017                                         | Added environment-configurable logo and favicon branding with neutral bundled fallbacks, removed the GST-specific bundled logo, and manually verified same-URL runtime logo replacement on the dev IIS deployment.                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 2026-09-08 | 1c6040a60d97429c2232b9b68f0b849a4591df4b | FI-013                                         | Corrected Product-specific S-101 presentation while preserving `S100` wire identity; finalized source-specific Export help and compact right-aligned icon-only Tools popup presentation.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 2026-09-07 | e4caa4d29c46083605beac10400876af6bf38d1c | FI-009                                         | Added user-selectable Dashboard page size (`25 / 50 / 100 / 200`), browser-local persistence, reset integration and page-size-safe cursor invalidation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 2026-09-07 | 70b0775936505dca8c1abb221f4a08953411efc1 | FI-014                                         | Renamed the user-facing Rollback action to Cancel Export, added `x-circle`, updated notices/help, and kept legacy rollback backend/wire identity internal.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 2026-09-07 | 636c1b7727d373c780afab60849eca3dc3c1b825 | FI-015                                         | Changed the popup Add to collection icon to Calcite `graph-bar` while preserving selected `check` state and existing Product Collection behavior.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 2026-09-04 | a3a53e4aa55850091281f8e47825755798066cf9 | FI-012                                         | Added and manually accepted the Denmark/Greenland Main-map Locator using ArcGIS Search, one scoped `Places` source, address Enter handling, Product-state isolation, and symmetric inline open/close behavior.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 2026-07-28 | 7eb0fe25e2a8d44b9e4da29cba280c8091a6f8cd | FH-049 / BE-107                                | Added Dashboard server-side filtering and cursor pagination; manual pagination verification passed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 2026-07-27 | 279fe6a761229fd99af437d0f8401508985afafc | FH-046 / FH-047                                | Activated async Export/Rollback and backend-authoritative active-job visibility across browser profiles, users and computers.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 2026-07-27 | 69752605d935212e89ca7ad4286ca3e46ecb4abe | FH-048                                         | Preserved popup, action icons and open dropdowns during compatible map and terminal-job refreshes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 2026-07-08 | 1656616b214cfdb914a23567d2840de5cc981c06 | FI-001                                         | Completed Dashboard phase 1 with endpoint integration, range presets, summary cards, activity list, status/operation summaries, Review/Analyze links, client-side search and filters.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 2026-07-09 | e2fd13620edd9c1b8af8a6883c6d8348a211e701 | FI-001                                         | Reworked Dashboard range selection into a stable range builder with compact Dashboard-owned date picker and open-ended `To` support.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 2026-07-09 | 5053d2d5eb1b1d599830e37daeb71b6d7ccddc20 | FI-001                                         | Made Dashboard status and operation summary rows actionable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 2026-07-09 | 8a36ccc7df7887595ea345ef7a6708f56228494f | FI-001                                         | Added Dashboard History panel, Escape close handling, and product state lookup loading.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 2026-07-09 | bba860546a834a2156dc8cc1b286661bc52ecb41 | FI-001                                         | Polished Dashboard History panel with selected activity context and active row highlighting.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 2026-07-09 | 698ba074f2c262f7629babdee9f33b033a5de6be | FI-001                                         | Improved Dashboard backend activity classification.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 2026-07-09 | 80170fe5163fe217db8c6308808e457164517390 | FI-006                                         | Added and styled shared Product catalog picker for Analyze and Review.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 2026-07-09 | 708865afd5e21cc5893f3fade960d63407ec5710 | FH-035 / FH-036                                | Hardened main map filters and first-load popup attribute rendering.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 2026-07-09 | a3ab23ee615d59b25cccdda4197b226e7efc09ad | FH-037                                         | Enabled S100 Edition export and Rollback.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 2026-07-09 | db6e4a37203a5ae847189d6197ed49d09879e9c4 | FH-038                                         | Hardened initial loader/header behavior and Product picker validation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 2026-07-09 | 300f68cd9d463ef023b432b4097c08abb9e8b2bd | FH-039                                         | Hardened Escape handling and Dashboard time input tab behavior.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 2026-07-09 | 8e72ca28f23dc9317ce58b2930807ed989c4d6ef | FH-040                                         | Collapsed Product History rows by default and updated release-readiness docs.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 2026-07-09 | 900299f523e97c021a6736c78de6a46bff54cac4 | FH-041                                         | Improved Product History summaries for edition/update changes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 2026-07-09 | 046ea8495f48ffbc2f76c1aa5e0da33fb5317466 | FI-007                                         | Added and polished main map Product search overlay.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 2026-07-10 | 982d9be01f1ace939fe479494c8e05b5c347107e | FH-043                                         | Added and completed global hover help/tooltips for clickable controls and icon-only actions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 2026-07-15 | 1540d005af6ae5a2ef5f1bf24f2ee70e9ecf7a47 | FI-008                                         | Completed and manually verified the interactive main-map onboarding sequence through Product Collection.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 2026-07-16 | 58e721ee7f517f7db945bdfc5fd417abde12c530 | FI-008                                         | Completed and manually verified independent first-time route onboarding, Analyze Product prerequisite guidance and two-Product Review comparison guidance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 2026-07-16 | 2b5f5f414c97a105ff09411c2711c67f680afce8 | FI-008                                         | Added and manually verified the final Theme and interactive Preferences steps on the main map.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 2026-07-16 | 0c677549963bb7ce4206fed379dd30dc8c2cc783 | FI-008 / FH-044                                | Aligned main-map Steps 3-5 beside Product search and completed the verified introduction-flow phase 1 baseline.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 2026-07-16 | 805a853259b6594fe16384ae37b2e828d6de4c76 | FH-034                                         | Completed the Product terminology audit and added regression coverage for user-facing Product/Products copy.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+
+### FH-045 comprehensive frontend smoke test
+
+Status: Done
+
+- Completed on 2026-07-16 against `805a853259b6594fe16384ae37b2e828d6de4c76`.
+- Covered direct route load and reload, Main map, popup actions, Product search, filters, refresh, Product Collection, Preferences, Theme, Dashboard, Analyze, Review, onboarding, keyboard/Escape priority, notices, error handling, persisted browser state and RDP/VDI behavior.
+- Included both clean browser state and saved preference state.
+- No new frontend defects, regressions or release blockers were found.
+- The automated test suite passed with 99 tests before the manual smoke pass.
+- Keep the checklist in `frontend-release-readiness-review.md` as the regression baseline for future frontend changes and backend contract integrations.
+
+### FH-034 user-facing Product terminology audit
+
+Status: Done
+
+- Keep `Product` and `Products` as the shared user-facing terms on Main map, Dashboard, Analyze, Review, Product History, Product Collection, Preferences and onboarding surfaces.
+- Keep backend-aligned technical identifiers such as `datasetName`, `datasetNames`, route parameters and API response fields unchanged.
+- Treat the terminology boundary as a UI concern rather than a backend/domain rename.
+- Run `userFacingTerminology.test.js` as part of `npm test` so representative user-facing source files cannot reintroduce visible `Dataset` or `Datasets` labels without an intentional review.
+- Continue the same terminology rule when adding new controls, notices, tooltips and onboarding copy.
+
+### FI-008 onboarding interactive main-map sequence (verified at 0c677549)
+
+Status: Done
+
+- Keep introduction steps non-modal while welcome and stop-confirmation dialogs retain modal dimming.
+- Require a visible Product popup before Step 3 can continue.
+- Automatically advance from Step 3 to Step 4 when a Product popup is opened during the step.
+- Keep Back usable when a popup was already open before returning to Step 3.
+- Return to Step 3 when the Product popup closes during Step 4, with a short grace period for popup re-rendering.
+- Require a visible Product Collection tray before Step 5 can continue.
+- Highlight the popup Product Collection action while waiting, then switch the highlight and guidance to the tray after a Product is collected.
+- Return to Step 3 if both the popup and Product Collection tray disappear during Step 5.
+- Keep Steps 3, 4 and 5 at one stable position beside Product search.
+- Preserve replay from Preferences, versioned localStorage, light/dark support and static RDP/VDI-safe states.
+
+### FI-008 route-specific onboarding expansion (verified at 58e721ee)
+
+Status: Done
+
+- Auto-offer the first-time introduction independently on Main map, Dashboard, Analyze and Review.
+- Store dismissal and completion in separate versioned localStorage keys per route while preserving the completed legacy Main map state.
+- Keep every route replayable from Preferences without automatically navigating between pages.
+- Keep the five-step Dashboard flow unchanged after its first manual verification pass.
+- Place Analyze guidance beside the left sidebar instead of at the far-right edge.
+- Require one loaded Analyze Product before advancing to Product list, card controls and Product information.
+- Use customer-facing Analyze copy without software implementation terms.
+- Require two loaded Review Products before advancing to side-by-side comparison.
+- Highlight the first two Review Product columns instead of the entire Review workspace.
+- Return to the Product picker if required Analyze or Review Products are removed during the introduction.
+
+### FI-008 main-map onboarding completion (verified at 0c677549)
+
+Status: Done
+
+- Add a Theme step after workspace navigation and keep the theme toggle usable during the introduction.
+- End the main-map flow with an interactive Preferences step.
+- Require the user to open Preferences before `Finish` becomes available.
+- Move the highlight and guidance from the Preferences button to the open panel.
+- Explain that map and display preferences can be saved in the browser and that the current route introduction can be restarted from the panel.
+- Keep Dashboard, Analyze and Review onboarding unchanged.
+- Keep Steps 3-5 aligned beside Product search while their highlights follow popup and Product Collection controls.
+- Confirm the complete flow in light and dark mode and preserve static text/state for RDP/VDI use.
+
+## FI-044 shared Preferences information architecture
+
+Status: **Implemented; manual verification pending**.
+Implementation baseline: `a45317fd4968e0aef543014049d312060763d52d`.
+
+Preferences now presents these compact concepts in this order:
+
+1. **Runtime settings**: Theme is a standard switch on every shared route, labelled `Theme` and flanked by Light/sun and Dark/moon endpoint icons; Main-map Scale hiding follows only when its explicit capability is supplied.
+2. **Saved preferences**: Auto-save and explicitly named Reset actions. Main map shows Map view, Filters, Scale hiding and Theme; workspace routes show Theme, with Dashboard page-size Reset on Dashboard.
+3. **Introduction utility**: the existing replay action is separated from setting controls at the bottom of the panel as a real secondary button and keeps hover help without permanent explanatory copy.
+
+`themeService.js` remains the only Theme owner, including persistence, immediate appearance and attribution updates. `initMap.js` supplies `createMainMapPreferences` to the shared panel. Shared Preferences imports no Main-map modules. Main-map startup and initial-data modules are dynamically imported only inside the existing Main-map bootstrap branch; non-main routes do not initialize Scale hiding state, filter services or a hidden Main-map controller for Preferences. Analyze keeps its own existing map lifecycle and Theme view binding.
+
+Preferences creates no second setting store or new storage format. Missing and malformed Scale hiding remain OFF. Non-main routes deliberately omit Main-map saved rows as well as the runtime Scale hiding control.
+
+Auto-save is the only saved-state control. OFF removes only that owner's stored record while preserving runtime and unrelated records. ON preserves each owner's existing save behavior. No explicit clear action or detailed saved-value status is shown.
+
+Reset is independent and never toggles Auto-save: Theme resets to Light and saves Light when enabled; Scale hiding resets to OFF and removes its value; Map view restores its default viewpoint. Filters Reset restores each current provider's declarative first-visit defaults, including the conservative Idle exclusion, and clears old/pending snapshot intent so later providers also receive their configured defaults. This remains distinct from the Filter panel's explicit `Clear all` action. Dashboard page-size Reset removes its record and restores 50. Reset available preferences retains the baseline scope, including Main-map source-selection defaults and Dashboard page size. No global clear was added.
+
+Ordinary Theme, Auto-save and Reset actions update controls in place. Theme is a standard switch with visible Light/Dark icon endpoints and stays focused while Light/Dark changes through the existing Theme owner. Start introduction is a separate bottom secondary button rather than part of the settings hierarchy. Context-driven rendering restores application-owned focus identity. Opening, Escape, trigger close and click-away retain the v1 lifecycle. Scale hiding and Saved preferences help remain.
+
+The FI-026 navbar regression was caused by plain focus being visually conflated with current-route state. Route ownership remains exclusive to `aria-current="page"`; pointer hover and keyboard `:focus-visible` use underline feedback without a full-link background/outline, while plain pointer focus adds no underline. Route state still removes the old `aria-current` immediately without blurring focus.
+
+FI-026, FI-028, FI-031 and FI-040 contracts and acceptance history remain preserved. FI-043 is implemented; manual verification pending. See `fi-043-onboarding-refresh.md` for the consolidated audit and current lifecycle.
+
+See [FI-044 verification and manual checklist](fi-044-verification.md).
+
+## FI-043 consolidated Introduction refresh
+
+Status: **Implemented; manual verification pending**.
+Baseline: `d77ef7f656eece09c9d70a0f1903e9e406e7911d`.
+
+See [the per-step audit, route sequences, lifecycle and manual checklist](fi-043-onboarding-refresh.md).
+All acceptance records through FI-044 are preserved; this candidate is not manually accepted.

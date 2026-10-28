@@ -1,20 +1,32 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
-using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
-using ProductManagerAPI.Controllers;
-using ProductManagerAPI.OpenApi;
-using ProductManagerAPI.Services.Export;
+using ProductCatalogueAPI.Controllers;
+using ProductCatalogueAPI.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
+using System.Reflection;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class ExportTargetOperationFilterTests
     {
         [Theory]
+        [InlineData(nameof(ExportController.NewEdition), "{name}/newedition")]
+        [InlineData(nameof(ExportController.NewUpdate), "{name}/newupdate")]
+        [InlineData(nameof(ExportController.Discard), "{name}/discard")]
+        public void QueuedExportRoutesUseTheirProductSpecificNames(string methodName, string expectedRoute) {
+            var method = typeof(ExportController).GetMethod(methodName)
+                ?? throw new InvalidOperationException($"Method {methodName} was not found.");
+
+            var route = method.GetCustomAttributes<HttpPostAttribute>().Single().Template;
+            Assert.Equal(expectedRoute, route);
+        }
+
+        [Theory]
         [InlineData(nameof(ExportController.NewEdition))]
         [InlineData(nameof(ExportController.NewUpdate))]
-        [InlineData(nameof(ExportController.NewEditionJob))]
-        public void SwaggerShowsOnlyCanonicalReadableTargetValues(string methodName) {
+        [InlineData(nameof(ExportController.Discard))]
+        public void QueuedExportRoutesDoNotAdvertiseAnExportTarget(string methodName) {
             var method = typeof(ExportController).GetMethod(methodName)
                 ?? throw new InvalidOperationException($"Method {methodName} was not found.");
 
@@ -28,19 +40,7 @@ namespace TestProductManagerAPI
 
             new ExportTargetOperationFilter().Apply(operation, context);
 
-            var parameter = Assert.Single(operation.Parameters);
-            Assert.Equal(ExportTargetContract.QueryParameterName, parameter.Name);
-            Assert.Equal(ParameterLocation.Query, parameter.In);
-            Assert.False(parameter.Required);
-            Assert.Equal("string", parameter.Schema.Type);
-            Assert.Equal(
-                new[] { "All", "S100", "S57" },
-                parameter.Schema.Enum.Cast<OpenApiString>().Select(value => value.Value)
-            );
-            Assert.Equal(
-                ExportTargetContract.DefaultTarget,
-                Assert.IsType<OpenApiString>(parameter.Schema.Default).Value
-            );
+            Assert.True(operation.Parameters is null || operation.Parameters.Count == 0);
         }
     }
 }

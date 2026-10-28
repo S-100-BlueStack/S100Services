@@ -1,0 +1,365 @@
+using Hangfire;
+using Hangfire.Server;
+using ProductCatalogueAPI.Data.Models;
+using ProductCatalogueAPI.Services.Export;
+using ProductCatalogueAPI.Services.Locking;
+using ProductCatalogueAPI.Services.Operations;
+using S100FC.ProductCatalogue;
+
+namespace ProductCatalogueAPI.Jobs
+{
+    public interface IExportJobExecutionContext
+    {
+        string JobId { get; }
+        T? GetJobParameter<T>(string name);
+        void SetJobParameter(string name, object? value);
+    }
+
+    public sealed class ExportOperationJob(
+        IProductManager productManager,
+        IDatasetLockService datasetLockService,
+        IExportOperationService exportOperationService,
+        ILogger<ExportOperationJob> logger
+    )
+    {
+        private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
+        private readonly IDatasetLockService _datasetLockService = datasetLockService;
+        private readonly IExportOperationService _exportOperationService = exportOperationService;
+        private readonly ILogger<ExportOperationJob> _logger = logger;
+
+        [AutomaticRetry(Attempts = 0)]
+        public Task RunAsync(
+            ExportOperationJobRequest request,
+            PerformContext performContext,
+            CancellationToken cancellationToken
+        ) {
+            ArgumentNullException.ThrowIfNull(performContext);
+            return ExecuteAsync(
+                request,
+                new HangfireExportJobExecutionContext(performContext),
+                cancellationToken
+            );
+        }
+
+        public async Task ExecuteAsync(
+            ExportOperationJobRequest request,
+            IExportJobExecutionContext context,
+            CancellationToken cancellationToken
+        ) {
+            ArgumentNullException.ThrowIfNull(request);
+            ArgumentNullException.ThrowIfNull(context);
+
+            using var logScope = _logger.BeginScope(new Dictionary<string, object?> {
+                ["JobId"] = context.JobId,
+                ["DatasetName"] = request.DatasetName,
+                ["OperationType"] = request.OperationType,
+                ["CorrelationId"] = request.CorrelationId,
+                ["ExecutionLane"] = "Background"
+            });
+
+            _logger.LogInformation(
+                "Product Manager job starting. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. ExpectedEdition: {ExpectedEdition}. ExpectedUpdate: {ExpectedUpdate}",
+                context.JobId,
+                request.DatasetName,
+                request.OperationType,
+                request.CorrelationId,
+                request.ExpectedEdition,
+                request.ExpectedUpdate
+            );
+
+            var productSpecification = ParseProductSpecification(request.ProductSpecification);
+
+            await using var datasetLock = await _datasetLockService.TryAcquireAsync(
+                ProductTrackLockKey.For(request.DatasetName, productSpecification),
+                cancellationToken
+            );
+
+            if (datasetLock == null) {
+                _logger.LogWarning(
+                    "Product Manager job could not acquire dataset lock. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}",
+                    context.JobId,
+                    request.DatasetName,
+                    request.OperationType,
+                    request.CorrelationId
+                );
+                throw CreateSafeFailure(
+                    context,
+                    ExportJobContract.DatasetBusyCode,
+                    ExportJobContract.DatasetBusyMessage
+                );
+            }
+
+            var executionStarted = context.GetJobParameter<bool?>(
+                ExportJobParameterNames.ExecutionStarted
+            ) == true;
+            if (executionStarted) {
+                _logger.LogError(
+                    "Product Manager job execution guard was already set. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}",
+                    context.JobId,
+                    request.DatasetName,
+                    request.OperationType,
+                    request.CorrelationId
+                );
+                throw CreateSafeFailure(
+                    context,
+                    ExportJobContract.ManualReviewRequiredCode,
+                    ExportJobContract.ManualReviewRequiredMessage
+                );
+            }
+
+            ElectronicProductVersion? currentVersion;
+            try {
+                currentVersion = await _electronicProductManager.ReadElectronicProductVersionAsync(
+                    request.DatasetName,
+                    productSpecification.ToString(),
+                    cancellationToken
+                );
+            }
+            catch (ProductDataIntegrityException ex) {
+                _logger.LogError(
+                    ex,
+                    "Ambiguous authoritative Product data found during job execution. JobId: {JobId}. DatasetName: {DatasetName}. ExactMatchCount: {ExactMatchCount}. CorrelationId: {CorrelationId}",
+                    context.JobId,
+                    request.DatasetName,
+                    ex.ExactMatchCount,
+                    request.CorrelationId
+                );
+                throw CreateSafeFailure(
+                    context,
+                    ExportJobContract.ProductDataIntegrityErrorCode,
+                    ExportJobContract.ProductDataIntegrityJobMessage
+                );
+            }
+
+            if (currentVersion == null) {
+                _logger.LogWarning(
+                    "Authoritative Product was not found during job execution. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}",
+                    context.JobId,
+                    request.DatasetName,
+                    request.OperationType,
+                    request.CorrelationId
+                );
+                throw CreateSafeFailure(
+                    context,
+                    ExportJobContract.ProductNotFoundCode,
+                    ExportJobContract.ProductNoLongerAvailableMessage
+                );
+            }
+
+            if (currentVersion.Edition != request.ExpectedEdition ||
+                currentVersion.Update != request.ExpectedUpdate) {
+                _logger.LogWarning(
+                    "Authoritative Product version changed before job execution. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. ExpectedEdition: {ExpectedEdition}. ExpectedUpdate: {ExpectedUpdate}. CurrentEdition: {CurrentEdition}. CurrentUpdate: {CurrentUpdate}",
+                    context.JobId,
+                    request.DatasetName,
+                    request.OperationType,
+                    request.CorrelationId,
+                    request.ExpectedEdition,
+                    request.ExpectedUpdate,
+                    currentVersion.Edition,
+                    currentVersion.Update
+                );
+                throw CreateSafeFailure(
+                    context,
+                    ExportJobContract.ProductVersionChangedCode,
+                    ExportJobContract.ProductVersionChangedMessage
+                );
+            }
+
+            if (currentVersion.Edition == 0 &&
+                (request.OperationType is ExportOperationType.ExportEdition or ExportOperationType.ExportUpdate)) {
+                throw CreateSafeFailure(
+                    context,
+                    ExportJobContract.NewDatasetRequiredCode,
+                    ExportJobContract.NewDatasetRequiredMessage
+                );
+            }
+
+            if (request.OperationType == ExportOperationType.NewDataset && currentVersion.Edition != 0) {
+                throw CreateSafeFailure(
+                    context,
+                    ExportJobContract.NewDatasetInvalidVersionCode,
+                    ExportJobContract.NewDatasetInvalidVersionMessage
+                );
+            }
+
+            try {
+                cancellationToken.ThrowIfCancellationRequested();
+                Action markExecutionStarted = () =>
+                    context.SetJobParameter(ExportJobParameterNames.ExecutionStarted, true);
+
+                var result = request.OperationType switch {
+                    ExportOperationType.NewDataset => await _exportOperationService.ExecuteExportAsync(
+                        request.DatasetName, ExportRevisionType.NewEdition,
+                        user: null, cancellationToken: cancellationToken, beforeMutation: markExecutionStarted),
+                    ExportOperationType.ExportEdition => await _exportOperationService.ExecuteExportAsync(
+                        request.DatasetName, ExportRevisionType.NewEdition,
+                        user: null, cancellationToken: cancellationToken, beforeMutation: markExecutionStarted),
+                    ExportOperationType.ExportUpdate => await _exportOperationService.ExecuteExportAsync(
+                        request.DatasetName, ExportRevisionType.Update,
+                        user: null, cancellationToken: cancellationToken, beforeMutation: markExecutionStarted),
+                    ExportOperationType.CancelExport or ExportOperationType.Discard => await _exportOperationService.ExecuteDiscardAsync(
+                        request.DatasetName, user: null,
+                        cancellationToken: cancellationToken, beforeMutation: markExecutionStarted),
+                    _ => throw new ArgumentOutOfRangeException(
+                        nameof(request.OperationType),
+                        request.OperationType,
+                        null
+                    )
+                };
+
+                context.SetJobParameter(ExportJobParameterNames.ResultCode, result.Code);
+                context.SetJobParameter(ExportJobParameterNames.ResultMessage, result.Message);
+
+                if (result.Warning != null) {
+                    context.SetJobParameter(
+                        ExportJobParameterNames.WarningCode,
+                        result.Warning.Code
+                    );
+                    context.SetJobParameter(
+                        ExportJobParameterNames.WarningMessage,
+                        result.Warning.Message
+                    );
+                }
+
+                _logger.LogInformation(
+                    "Product Manager job completed. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. ResultCode: {ResultCode}. WarningCode: {WarningCode}",
+                    context.JobId,
+                    request.DatasetName,
+                    request.OperationType,
+                    request.CorrelationId,
+                    result.Code,
+                    result.Warning?.Code
+                );
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                context.SetJobParameter(
+                    ExportJobParameterNames.ErrorCode,
+                    ExportJobContract.OperationCancelledCode
+                );
+                context.SetJobParameter(
+                    ExportJobParameterNames.ErrorMessage,
+                    ExportJobContract.OperationCancelledMessage
+                );
+
+                _logger.LogWarning(
+                    "Product Manager job cancellation was observed before successful completion. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}",
+                    context.JobId,
+                    request.DatasetName,
+                    request.OperationType,
+                    request.CorrelationId
+                );
+                throw;
+            }
+            catch (S100CompilerPrerequisiteException ex) {
+                context.SetJobParameter(
+                    ExportJobParameterNames.ErrorCode,
+                    ExportJobContract.CompilerUnavailableCode
+                );
+                context.SetJobParameter(
+                    ExportJobParameterNames.ErrorMessage,
+                    ExportJobContract.CompilerUnavailableMessage
+                );
+
+                _logger.LogWarning(
+                    ex,
+                    "Product Manager job could not start S-101 export because the configured compiler is unavailable. JobId: {JobId}. DatasetName: {DatasetName}. CorrelationId: {CorrelationId}",
+                    context.JobId,
+                    request.DatasetName,
+                    request.CorrelationId
+                );
+
+                throw new ExportOperationJobException(
+                    ExportJobContract.CompilerUnavailableCode,
+                    ExportJobContract.CompilerUnavailableMessage
+                );
+            }
+            catch (ExportOperationRejectedException ex) {
+                context.SetJobParameter(
+                    ExportJobParameterNames.ErrorCode,
+                    ExportJobContract.ProductOperationRejectedCode
+                );
+                context.SetJobParameter(
+                    ExportJobParameterNames.ErrorMessage,
+                    ex.Message
+                );
+
+                _logger.LogWarning(
+                    "Product Manager job was rejected by an operation precondition. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. Reason: {Reason}",
+                    context.JobId,
+                    request.DatasetName,
+                    request.OperationType,
+                    request.CorrelationId,
+                    ex.Message
+                );
+
+                throw new ExportOperationJobException(
+                    ExportJobContract.ProductOperationRejectedCode,
+                    ex.Message
+                );
+            }
+            catch (Exception ex) {
+                var (code, message) = request.OperationType switch {
+                    ExportOperationType.NewDataset or ExportOperationType.ExportEdition or ExportOperationType.ExportUpdate => (
+                        ExportJobContract.ExportFailedCode,
+                        ExportJobContract.ExportFailedMessage
+                    ),
+                    ExportOperationType.CancelExport or ExportOperationType.Discard => (
+                        ExportJobContract.DiscardFailedCode,
+                        ExportJobContract.DiscardFailedMessage
+                    ),
+                    _ => (
+                        ExportJobContract.JobFailedCode,
+                        ExportJobContract.JobFailedMessage
+                    )
+                };
+
+                context.SetJobParameter(ExportJobParameterNames.ErrorCode, code);
+                context.SetJobParameter(ExportJobParameterNames.ErrorMessage, message);
+
+                _logger.LogError(
+                    ex,
+                    "Product Manager job failed. JobId: {JobId}. DatasetName: {DatasetName}. OperationType: {OperationType}. CorrelationId: {CorrelationId}",
+                    context.JobId,
+                    request.DatasetName,
+                    request.OperationType,
+                    request.CorrelationId
+                );
+                throw;
+            }
+        }
+
+        private static ProductSpecification ParseProductSpecification(string? value) =>
+            ExportProductResolver.ParseProductSpecification(value, "queued job");
+
+        private static ExportOperationJobException CreateSafeFailure(
+            IExportJobExecutionContext context,
+            string code,
+            string message
+        ) {
+            context.SetJobParameter(ExportJobParameterNames.ErrorCode, code);
+            context.SetJobParameter(ExportJobParameterNames.ErrorMessage, message);
+            return new ExportOperationJobException(code, message);
+        }
+
+        private sealed class HangfireExportJobExecutionContext(PerformContext context)
+            : IExportJobExecutionContext
+        {
+            private readonly PerformContext _context = context;
+
+            public string JobId => _context.BackgroundJob.Id;
+
+            public T? GetJobParameter<T>(string name) =>
+                _context.GetJobParameter<T>(name);
+
+            public void SetJobParameter(string name, object? value) =>
+                _context.SetJobParameter(name, value!);
+        }
+    }
+
+    public sealed class ExportOperationJobException(string code, string message)
+        : Exception($"{code}: {message}")
+    {
+        public string Code { get; } = code;
+    }
+}

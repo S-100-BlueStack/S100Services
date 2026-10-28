@@ -3,7 +3,7 @@ using S100FC.ProductCatalogue;
 using S100FC.S128.FeatureTypes;
 using System.Reflection;
 
-namespace TestProductManagerAPI
+namespace TestProductCatalogueAPI
 {
     public class ElectronicProductVersionTests
     {

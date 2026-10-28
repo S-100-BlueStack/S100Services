@@ -1,0 +1,29 @@
+/* =========================================================
+   Shared application-owned scrollbars
+   Apply only to public Product Catalogue scroll containers.
+   ========================================================= */
+
+.pc-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--pc-text-muted) 38%, transparent) transparent;
+}
+
+.pc-scrollbar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.pc-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pc-scrollbar::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--pc-text-muted) 34%, transparent);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.pc-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--pc-text-muted) 52%, transparent);
+  background-clip: content-box;
+}

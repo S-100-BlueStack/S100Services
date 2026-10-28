@@ -1,0 +1,61 @@
+﻿/* =========================================================
+   Theme tokens
+   Use semantic variables so custom UI can follow light/dark
+   mode without hardcoded colors spread across the stylesheet.
+   ========================================================= */
+
+html.calcite-mode-light {
+  --pc-surface: var(--calcite-color-surface-1);
+  --pc-surface-alt: var(--calcite-color-surface-2);
+  --pc-border: var(--calcite-color-border-1);
+  --pc-text: var(--calcite-color-text-1);
+  --pc-text-muted: var(--calcite-color-text-3);
+
+  --pc-overlay: rgba(255, 255, 255, 0.86);
+  --pc-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+
+  --pc-popup-surface: var(--calcite-color-surface-1);
+  --pc-popup-surface-alt: var(--calcite-color-surface-2);
+  --pc-popup-border: var(--calcite-color-border-1);
+  --pc-popup-text: var(--calcite-color-text-1);
+  --pc-popup-text-muted: var(--calcite-color-text-3);
+
+  --pc-popup-header-bg: #005b8f;
+  --pc-popup-header-text: #ffffff;
+
+  --pc-button-secondary-bg: var(--calcite-color-foreground-1);
+  --pc-button-secondary-bg-hover: var(--calcite-color-foreground-2);
+  --pc-button-secondary-border: var(--calcite-color-border-1);
+  --pc-button-secondary-text: var(--calcite-color-text-1);
+
+  --pc-notice-error-bg: #fff5f5;
+  --pc-notice-warning-bg: #fffaf2;
+}
+
+html.calcite-mode-dark {
+  --pc-surface: var(--calcite-color-surface-1);
+  --pc-surface-alt: var(--calcite-color-surface-2);
+  --pc-border: var(--calcite-color-border-1);
+  --pc-text: var(--calcite-color-text-1);
+  --pc-text-muted: var(--calcite-color-text-3);
+
+  --pc-overlay: rgba(0, 0, 0, 0.62);
+  --pc-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+
+  --pc-popup-surface: var(--calcite-color-surface-1);
+  --pc-popup-surface-alt: var(--calcite-color-surface-2);
+  --pc-popup-border: var(--calcite-color-border-1);
+  --pc-popup-text: var(--calcite-color-text-1);
+  --pc-popup-text-muted: var(--calcite-color-text-3);
+
+  --pc-popup-header-bg: #0f6ea8;
+  --pc-popup-header-text: #ffffff;
+
+  --pc-button-secondary-bg: var(--calcite-color-foreground-1);
+  --pc-button-secondary-bg-hover: var(--calcite-color-foreground-2);
+  --pc-button-secondary-border: var(--calcite-color-border-1);
+  --pc-button-secondary-text: var(--calcite-color-text-1);
+
+  --pc-notice-error-bg: rgba(231, 76, 60, 0.12);
+  --pc-notice-warning-bg: rgba(243, 156, 18, 0.12);
+}

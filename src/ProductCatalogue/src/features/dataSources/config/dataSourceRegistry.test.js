@@ -1,0 +1,197 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  DATA_SOURCE_AVAILABILITY,
+  DATA_SOURCE_IDS,
+  createDataSourceRegistry,
+  getDefaultEnabledSourceIds,
+  getRuntimeSelectableDataSources,
+  isMockDataSourcesFlagEnabled,
+  isWorkspaceAvailableDataSource,
+} from "./dataSourceRegistry.js";
+
+test("registry preserves technical source IDs for package and workspace compatibility", () => {
+  const registry = createDataSourceRegistry({ isDevelopment: true });
+  assert.deepEqual(
+    registry.definitions.map((source) => source.id),
+    ["s57", "s101", "paper-charts", "s102"]
+  );
+  assert.equal(registry.byId.has("enc"), false);
+  assert.equal(registry.byId.has("enc-products"), false);
+});
+
+test("electronic workspace resolution is targeted and only ENC has a Main-map loader", () => {
+  const registry = createDataSourceRegistry();
+  assert.equal(registry.byId.get("s101").loader.path, "electronicproducts/aoi?layer=ENC");
+  assert.equal(registry.byId.get("s57").loader, null);
+  assert.equal(registry.byId.get("s57").persistence.persistSelection, false);
+  for (const sourceId of ["s57", "s101"]) {
+    const source = registry.byId.get(sourceId);
+    assert.equal(source.workspace.resolution, "targeted-product-aoi");
+    assert.equal(isWorkspaceAvailableDataSource(source), true);
+  }
+  assert.ok(
+    registry.definitions.every((source) => !source.loader?.path.includes("productSpecification="))
+  );
+});
+
+test("explicit synthetic fixture mode exposes Paper Charts and S-102 for tests", () => {
+  const registry = createDataSourceRegistry({ isDevelopment: true });
+  assert.deepEqual(
+    getRuntimeSelectableDataSources(registry).map((source) => source.id),
+    [DATA_SOURCE_IDS.S101, DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]
+  );
+  assert.deepEqual(getDefaultEnabledSourceIds(registry), [
+    DATA_SOURCE_IDS.S101,
+    DATA_SOURCE_IDS.PAPER_CHARTS,
+    DATA_SOURCE_IDS.S102,
+  ]);
+  for (const sourceId of [
+    DATA_SOURCE_IDS.S57,
+    DATA_SOURCE_IDS.S101,
+    DATA_SOURCE_IDS.PAPER_CHARTS,
+    DATA_SOURCE_IDS.S102,
+  ]) {
+    assert.equal(isWorkspaceAvailableDataSource(registry.byId.get(sourceId)), true);
+  }
+
+  assert.deepEqual(registry.byId.get(DATA_SOURCE_IDS.PAPER_CHARTS).normalizer.datasetNameStrategy, {
+    type: "synthetic-prefix",
+    prefix: "PAPER-MOCK",
+  });
+  assert.deepEqual(registry.byId.get(DATA_SOURCE_IDS.S102).normalizer.datasetNameStrategy, {
+    type: "replace-leading-product-code",
+    productCode: "102",
+    fallbackPrefix: "102-MOCK",
+  });
+});
+
+test("runtime-default registry exposes one representative ENC-package source", () => {
+  const registry = createDataSourceRegistry();
+  assert.deepEqual(
+    getRuntimeSelectableDataSources(registry).map((source) => source.id),
+    ["s101"]
+  );
+  assert.deepEqual(getDefaultEnabledSourceIds(registry), ["s101"]);
+  assert.equal(
+    isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.PAPER_CHARTS)),
+    false
+  );
+  assert.equal(isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.S102)), false);
+});
+
+test("only the package work-unit layer opts into member-aware symbolization", () => {
+  const registry = createDataSourceRegistry({ isDevelopment: true });
+  const packageLayer = registry.byId.get(DATA_SOURCE_IDS.S101).layerDefinitions[0];
+
+  assert.deepEqual(packageLayer.symbolization, {
+    type: "work-unit-member-status",
+  });
+
+  for (const sourceId of [
+    DATA_SOURCE_IDS.S57,
+    DATA_SOURCE_IDS.PAPER_CHARTS,
+    DATA_SOURCE_IDS.S102,
+  ]) {
+    assert.equal(
+      Object.hasOwn(registry.byId.get(sourceId).layerDefinitions[0], "symbolization"),
+      false,
+      sourceId
+    );
+  }
+});
+
+test("synthetic fixture sources require explicit registry construction", () => {
+  const registry = createDataSourceRegistry({
+    isDevelopment: false,
+    mockDataSourcesEnabled: true,
+  });
+
+  assert.deepEqual(
+    getRuntimeSelectableDataSources(registry).map((source) => source.id),
+    [DATA_SOURCE_IDS.S101, DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]
+  );
+  assert.equal(
+    isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.PAPER_CHARTS)),
+    true
+  );
+  assert.equal(isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.S102)), true);
+});
+
+test("legacy mock flag parser only accepts explicit true values", () => {
+  for (const value of [undefined, null, "", "false", "1", "yes", "invalid"]) {
+    assert.equal(isMockDataSourcesFlagEnabled(value), false, String(value));
+  }
+
+  assert.equal(isMockDataSourcesFlagEnabled("true"), true);
+  assert.equal(isMockDataSourcesFlagEnabled(" TRUE "), true);
+});
+
+test("configuration-disabled sources are not selectable or workspace-available", () => {
+  const registry = createDataSourceRegistry({
+    isDevelopment: true,
+    configuredSourceIds: [DATA_SOURCE_IDS.S102],
+  });
+  assert.deepEqual(
+    getRuntimeSelectableDataSources(registry).map((source) => source.id),
+    [DATA_SOURCE_IDS.S102]
+  );
+  assert.equal(
+    isWorkspaceAvailableDataSource(registry.byId.get(DATA_SOURCE_IDS.PAPER_CHARTS)),
+    false
+  );
+});
+
+test("synthetic fixture sources keep their test-only capability model", () => {
+  const registry = createDataSourceRegistry({ isDevelopment: true });
+  const enabledWorkspaceCapabilities = [
+    "productCollection",
+    "analyze",
+    "review",
+    "history",
+    "icEncReports",
+    "internalValidation",
+    "productSearch",
+    "popupExport",
+  ];
+  const disabledBackendCapabilities = [
+    "freeze",
+    "unfreeze",
+    "sendToIcEnc",
+    "cancelExport",
+    "exportEdition",
+    "exportUpdate",
+    "backendProductRefresh",
+  ];
+
+  for (const sourceId of [DATA_SOURCE_IDS.PAPER_CHARTS, DATA_SOURCE_IDS.S102]) {
+    const source = registry.byId.get(sourceId);
+    const layerCapabilities = source.layerDefinitions[0].capabilities;
+    for (const capability of enabledWorkspaceCapabilities) {
+      assert.equal(source.capabilities[capability], true, capability);
+    }
+    for (const capability of disabledBackendCapabilities) {
+      assert.equal(source.capabilities[capability], false, capability);
+    }
+    assert.equal(layerCapabilities.supportsPopupActions, true);
+    assert.equal(layerCapabilities.supportsProductActions, false);
+    assert.equal(layerCapabilities.supportsProductHistory, false);
+    for (const content of Object.values(source.contentConfiguration)) {
+      assert.equal(content.visible, true);
+      assert.equal(content.implemented, false);
+      assert.equal(content.loaderId, null);
+      assert.match(content.availabilityReason, new RegExp(source.label.replace("-", "-")));
+    }
+    assert.equal(
+      source.exportConfiguration.helpText,
+      `${source.label} export is not available yet.`
+    );
+    for (const leaf of source.exportConfiguration.leaves) {
+      assert.equal(leaf.implemented, false);
+      assert.equal(leaf.backendTarget, null);
+      assert.equal(leaf.handlerId, null);
+      assert.equal(leaf.availabilityReason, `${source.label} export is not available yet.`);
+    }
+  }
+});

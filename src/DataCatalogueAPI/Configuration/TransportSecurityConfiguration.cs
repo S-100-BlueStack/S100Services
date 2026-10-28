@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.HttpsPolicy;
-
 namespace DataCatalague.Api.Configuration;
 
 /// <summary>
@@ -15,12 +13,10 @@ public static class TransportSecurityConfiguration
     /// <exception cref="ArgumentNullException">
     /// Thrown when <paramref name="services"/> is <see langword="null"/>.
     /// </exception>
-    public static IServiceCollection AddSecureTransport(this IServiceCollection services)
-    {
+    public static IServiceCollection AddSecureTransport(this IServiceCollection services) {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddHttpsRedirection(options =>
-        {
+        services.AddHttpsRedirection(options => {
             // 308 preserves the HTTP method and body on redirect, which matters for
             // POST/PUT clients that would otherwise silently degrade to GET.
             options.RedirectStatusCode = StatusCodes.Status308PermanentRedirect;
@@ -31,8 +27,7 @@ public static class TransportSecurityConfiguration
             // options.HttpsPort = 443;
         });
 
-        services.AddHsts(options =>
-        {
+        services.AddHsts(options => {
             options.Preload = true;
             options.IncludeSubDomains = true;
             options.MaxAge = TimeSpan.FromDays(365);

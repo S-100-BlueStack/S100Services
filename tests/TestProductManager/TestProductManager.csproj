@@ -20,7 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ProductManagerCore\ProductManagerCore.csproj" />
-    <ProjectReference Include="..\..\src\ProductManagerAPI\ProductManagerAPI.csproj" />
+    <ProjectReference Include="..\..\src\ProductCatalogueAPI\ProductCatalogueAPI.csproj" />
   </ItemGroup>
 
   <ItemGroup>
