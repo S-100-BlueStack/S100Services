@@ -20,9 +20,9 @@ public static class ProductCandidateRecovery
             ? ProductState.Idle
             : previousState.Value;
 
-    /// <summary>Carry the original state through a failed pre-send candidate replacement.</summary>
+    /// <summary>Carry the original state through a queued package build or failed pre-send replacement.</summary>
     public static ProductState PreviousStateForReplacement(ProductState current, ProductState? previous) =>
-        current is ProductState.Error or ProductState.Rejected
+        current is ProductState.Error or ProductState.Rejected || current == ProductState.ChangesDetected && previous.HasValue
             ? RestoredState(previous)
             : current;
 }

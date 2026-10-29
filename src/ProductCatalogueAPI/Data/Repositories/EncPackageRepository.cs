@@ -92,7 +92,9 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
                 """, new { member.DatasetName, Specification = member.Specification.ToString() }, transaction, cancellationToken: cancellationToken));
             var neverStarted = preserveScanBound && track is not null &&
                 track.State is (ProductState.Idle or ProductState.ChangesDetected) &&
-                track.Edition is null && track.Update is null && track.PreviousState is null;
+                track.Edition is null && track.Update is null &&
+                (track.State == ProductState.ChangesDetected || track.PreviousState is null) &&
+                ProductCandidateRecovery.CanDiscard(ProductState.Error, track.PreviousState, null, null);
             if (track is null || track.IsFrozen ||
                 (member.Discarded ? track.Edition.HasValue || track.Update.HasValue || track.PreviousState.HasValue ||
                     track.State is not (ProductState.Idle or ProductState.ChangesDetected or ProductState.Error or ProductState.Rejected) :
@@ -199,7 +201,19 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
     }
 
     /// <inheritdoc/>
-    public async Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default) {
+    public Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default) => TryCreateCoreAsync(package, false, cancellationToken);
+
+    /// <inheritdoc/>
+    public Task<bool> TryCreatePendingAsync(EncPackage package, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(package);
+        if (package.Id == Guid.Empty || package.S101Discarded || package.S57Discarded ||
+            package.ScanFromUtc.Kind != DateTimeKind.Utc || package.DetectedAtUtc.Kind != DateTimeKind.Utc || package.ScanFromUtc > package.DetectedAtUtc)
+            throw new ArgumentException("A pending ENC package requires an exact identity, two members and a UTC source window.", nameof(package));
+        return TryCreateCoreAsync(package, true, cancellationToken);
+    }
+
+    /// <summary>Commits a new source snapshot together with both pending states and durable restart discovery.</summary>
+    private async Task<bool> TryCreateCoreAsync(EncPackage package, bool queueMembers, CancellationToken cancellationToken) {
         using var connection = _connectionFactory.Create();
         connection.Open();
         using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
@@ -208,10 +222,92 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
             SELECT @Id, @SourceDatasetName, @S57DatasetName, @ScanFromUtc, @DetectedAtUtc, @DatasetYaml, @SummaryYaml, @ErrorMessage
             WHERE NOT EXISTS (SELECT 1 FROM dbo.EncPackage WITH (UPDLOCK, HOLDLOCK) WHERE source_dataset_name = @SourceDatasetName);
             """, package, transaction, cancellationToken: cancellationToken));
-        if (affected == 1)
+        if (affected == 1 && queueMembers && !await QueueMissingMembersAsync(connection, transaction, package, package.DetectedAtUtc, cancellationToken, requireUnstarted: true))
+            return false;
+        if (affected == 1 && !queueMembers)
             await connection.ExecuteAsync(new CommandDefinition("DELETE FROM dbo.EncPackageReplay WHERE source_dataset_name = @SourceDatasetName AND scan_from_utc >= @ScanFromUtc;", new { package.SourceDatasetName, package.ScanFromUtc }, transaction, cancellationToken: cancellationToken));
         transaction.Commit();
         return affected == 1;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<string>> GetIncompleteSourceNamesAsync(CancellationToken cancellationToken = default) {
+        using var connection = _connectionFactory.Create();
+        var names = await connection.QueryAsync<string>(new CommandDefinition("""
+            SELECT ep.source_dataset_name FROM dbo.EncPackage ep
+            LEFT JOIN dbo.Product p101 ON p101.dataset_name = ep.source_dataset_name
+            LEFT JOIN dbo.ProductExportTrack t101 ON t101.product_id = p101.product_id AND t101.product_specification = 'S101'
+            LEFT JOIN dbo.Product p57 ON p57.dataset_name = ep.s57_dataset_name
+            LEFT JOIN dbo.ProductExportTrack t57 ON t57.product_id = p57.product_id AND t57.product_specification = 'S57'
+            WHERE (ep.s101_discarded = 0 AND (t101.product_export_track_id IS NULL OR t101.state IN (@Idle, @Pending, @Exporting, @Validating)))
+               OR (ep.s57_discarded = 0 AND (t57.product_export_track_id IS NULL OR t57.state IN (@Idle, @Pending, @Exporting, @Validating)));
+            """, new { Idle = ProductState.Idle, Pending = ProductState.ChangesDetected, Exporting = ProductState.Exporting, Validating = ProductState.Validating }, cancellationToken: cancellationToken));
+        return names.ToArray();
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> TryQueueMissingMembersAsync(Guid packageId, DateTime nowUtc, CancellationToken cancellationToken = default) {
+        if (packageId == Guid.Empty) throw new ArgumentException("An exact snapshot identifier is required.", nameof(packageId));
+        if (nowUtc.Kind != DateTimeKind.Utc) throw new ArgumentException("ENC queueing requires UTC time.", nameof(nowUtc));
+        using var connection = _connectionFactory.Create();
+        connection.Open();
+        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+        var package = await connection.QuerySingleOrDefaultAsync<EncPackage>(new CommandDefinition(
+            $"{SelectHeaderSql} WITH (UPDLOCK, HOLDLOCK) WHERE package_id = @PackageId;", new { PackageId = packageId }, transaction, cancellationToken: cancellationToken));
+        if (package is null || !await QueueMissingMembersAsync(connection, transaction, package, nowUtc, cancellationToken)) return false;
+        transaction.Commit();
+        return true;
+    }
+
+    /// <summary>Checks the entire pair before queueing an idle member; caller owns the package and both Product locks.</summary>
+    private static async Task<bool> QueueMissingMembersAsync(IDbConnection connection, IDbTransaction transaction, EncPackage package, DateTime nowUtc, CancellationToken cancellationToken, bool requireUnstarted = false) {
+        if (package.S101Discarded || package.S57Discarded) return false; // Explicit historical discards require operator reconciliation.
+        var rows = (await connection.QueryAsync<QueueTrack>(new CommandDefinition("""
+            SELECT t.product_export_track_id AS Id, t.state AS State, t.candidate_previous_state AS PreviousState,
+                   t.candidate_edition AS Edition, t.candidate_update AS [Update],
+                   t.published_edition AS PublishedEdition, t.published_update AS PublishedUpdate,
+                   CONVERT(bit, CASE WHEN EXISTS (SELECT 1 FROM dbo.ProductExportTrackFreezeHold h WITH (UPDLOCK, HOLDLOCK)
+                       WHERE h.product_export_track_id = t.product_export_track_id) THEN 1 ELSE 0 END) AS IsFrozen
+            FROM dbo.ProductExportTrack t WITH (UPDLOCK, HOLDLOCK) JOIN dbo.Product p ON p.product_id = t.product_id
+            WHERE (p.dataset_name = @S101 AND t.product_specification = 'S101')
+               OR (p.dataset_name = @S57 AND t.product_specification = 'S57')
+            ORDER BY CASE WHEN t.product_specification = 'S101' THEN 0 ELSE 1 END;
+            """, new { S101 = package.SourceDatasetName, S57 = package.S57DatasetName }, transaction, cancellationToken: cancellationToken))).ToArray();
+        if (rows.Length != 2) return false;
+        foreach (var track in rows) {
+            var unstarted = track.State is (ProductState.Idle or ProductState.ChangesDetected) && track.Edition is null && track.Update is null &&
+                (track.State == ProductState.ChangesDetected || track.PreviousState is null) &&
+                ProductCandidateRecovery.CanDiscard(ProductState.Error, track.PreviousState, null, null);
+            if (track.IsFrozen || requireUnstarted && !unstarted || (!unstarted && !ProductCandidateRecovery.CanDiscard(track.State, track.PreviousState, track.Edition, track.Update)) ||
+                await ProductCandidateDeliveryGuard.IsBlockedAsync(connection, transaction, track.Id, track.Edition, track.Update, track.State, cancellationToken))
+                return false;
+        }
+        foreach (var track in rows.Where(t => t.State is (ProductState.Idle or ProductState.ChangesDetected) && t.Edition is null && t.Update is null)) {
+            if (track.State == ProductState.ChangesDetected && track.PreviousState.HasValue) continue;
+            await connection.ExecuteAsync(new CommandDefinition("""
+                UPDATE dbo.ProductExportTrack SET state = @Pending,
+                    candidate_previous_state = COALESCE(candidate_previous_state, state), updated_at_utc = @NowUtc
+                WHERE product_export_track_id = @TrackId;
+                INSERT dbo.ProductStateHistory
+                    (product_state_history_id, product_export_track_id, state, edition_number, update_number, owner, occurred_at_utc)
+                VALUES (@HistoryId, @TrackId, @Pending, @Edition, @Update, 'ENC package queue', @NowUtc);
+                """, new { TrackId = track.Id, Pending = ProductState.ChangesDetected, NowUtc = nowUtc,
+                    HistoryId = Guid.NewGuid(), Edition = track.PublishedEdition, Update = track.PublishedUpdate }, transaction, cancellationToken: cancellationToken));
+        }
+        if (rows.Any(t => t.State is (ProductState.Idle or ProductState.ChangesDetected) && t.Edition is null && t.Update is null))
+            await UpsertReplayAsync(connection, transaction, package.SourceDatasetName, package.ScanFromUtc, cancellationToken);
+        return true;
+    }
+
+    private sealed class QueueTrack {
+        public Guid Id { get; set; }
+        public ProductState State { get; set; }
+        public ProductState? PreviousState { get; set; }
+        public int? Edition { get; set; }
+        public int? Update { get; set; }
+        public int PublishedEdition { get; set; }
+        public int PublishedUpdate { get; set; }
+        public bool IsFrozen { get; set; }
     }
 
     /// <inheritdoc/>

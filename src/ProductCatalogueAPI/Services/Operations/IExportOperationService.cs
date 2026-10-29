@@ -20,6 +20,6 @@ public interface IExportOperationService
     Task<bool> ExecutePackageRefreshDiscardAsync(Guid packageId, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("Atomic ENC package refresh is unavailable.");
 
-    /// <summary>Discards an unverified candidate without changing S-128; an automatic refresh can retain the scan bound.</summary>
+    /// <summary>Discards a standalone unverified candidate without changing S-128; active packages always require paired discard.</summary>
     Task<ExportOperationResult> ExecuteDiscardAsync(string datasetName, string? user, CancellationToken cancellationToken = default, Action? beforeMutation = null, bool preservePackageScanBound = false);
 }

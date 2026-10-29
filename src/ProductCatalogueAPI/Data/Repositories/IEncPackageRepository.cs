@@ -40,6 +40,24 @@ public interface IEncPackageRepository
         throw new NotSupportedException("This repository cannot safely retire an inspected ENC replay cursor.");
     /// <summary>Creates a package and clears its replay cursor atomically; returns false if one already exists.</summary>
     Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default);
+    /// <summary>Atomically persists the snapshot, queues both member tracks and retains replay before either encoder starts.</summary>
+    /// <param name="package">The shared immutable source snapshot; both mapped tracks must already exist and be eligible.</param>
+    /// <param name="cancellationToken">Cancels the whole reservation before commit.</param>
+    /// <returns>False if another active snapshot already owns this source.</returns>
+    Task<bool> TryCreatePendingAsync(EncPackage package, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Atomic paired ENC queueing is unavailable.");
+    /// <summary>Finds active packages with missing, idle, queued or interrupted members, even without source edits or replay.</summary>
+    /// <param name="cancellationToken">Cancels discovery without changing package state.</param>
+    /// <returns>Distinct source identities whose unfinished members require inspection.</returns>
+    Task<IReadOnlyList<string>> GetIncompleteSourceNamesAsync(CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Incomplete ENC discovery is unavailable.");
+    /// <summary>Queues only missing builds in an exact existing snapshot, protecting both member states and delivery evidence.</summary>
+    /// <param name="packageId">The snapshot inspected while both Product locks are held.</param>
+    /// <param name="nowUtc">The UTC history and recovery timestamp.</param>
+    /// <param name="cancellationToken">Cancels queueing before its atomic commit.</param>
+    /// <returns>False if either member is held, submitted, missing or otherwise ineligible.</returns>
+    Task<bool> TryQueueMissingMembersAsync(Guid packageId, DateTime nowUtc, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("ENC member queue recovery is unavailable.");
     /// <summary>Records a package failure without losing its source YAML or rollback boundary.</summary>
     Task SetErrorAsync(Guid packageId, string message, CancellationToken cancellationToken = default);
     /// <summary>Marks a candidate discarded; only an automatic package refresh replays its scan bound.</summary>

@@ -273,6 +273,8 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
         var affected = await connection.ExecuteAsync(new CommandDefinition("""
             UPDATE t
             SET candidate_previous_state = CASE
+                    WHEN state = @ChangesDetected AND candidate_previous_state IS NOT NULL THEN
+                        CASE WHEN candidate_previous_state IN (@Error, @Rejected) THEN @Idle ELSE candidate_previous_state END
                     WHEN state IN (@Error, @Rejected) THEN
                         CASE WHEN candidate_previous_state IS NULL OR candidate_previous_state IN (@Error, @Rejected)
                             THEN @Idle ELSE candidate_previous_state END
@@ -324,6 +326,7 @@ public sealed class ProductRepository(DbConnectionFactory connectionFactory) : I
                 Accepted = ProductState.AcceptedForDistribution,
                 Error = ProductState.Error,
                 Rejected = ProductState.Rejected,
+                ChangesDetected = ProductState.ChangesDetected,
                 Idle = ProductState.Idle
             }, cancellationToken: cancellationToken));
 

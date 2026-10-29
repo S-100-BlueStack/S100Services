@@ -207,13 +207,10 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
         if (packages is not null)
             active = (await packages.GetActiveAsync([sourceName], cancellationToken, includeSourceYaml: false)).GetValueOrDefault(sourceName);
 
-        // The public/manual route must never discard just one member of a live package.
-        // DPC's own pre-send replacement uses the explicit internal scan-bound option.
-        if (active is not null && !preservePackageScanBound)
+        // Legacy callers can still pass preservePackageScanBound, but an active package
+        // must always use the paired transaction. Per-member discard could expose Ready/Idle.
+        if (active is not null)
             throw new ExportOperationRejectedException("This Product belongs to an active ENC package. Discard the whole package.");
-        if (active is not null && productSpecification == ProductSpecification.S57 &&
-            !string.Equals(active.S57DatasetName, targetDatasetName, StringComparison.OrdinalIgnoreCase))
-            throw new ExportOperationRejectedException("The ENC package member mapping has changed. Discard was not started.");
 
         var track = await _workflowRepository.GetTrackAsync(targetDatasetName, productSpecification, cancellationToken)
             ?? throw new ExportOperationRejectedException($"No {productSpecification} export track exists for '{datasetName}'.");
@@ -230,11 +227,6 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
         // while holding the track row in its serializable transaction.
         beforeMutation?.Invoke();
         await _workflowRepository.DiscardCandidateAsync(track.Id, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
-        if (active is not null) {
-            // Once the track transaction commits, cancellation must not skip the
-            // matching package flag/removal in the detector-owned refresh flow.
-            await packages!.DiscardAsync(targetDatasetName, productSpecification, CancellationToken.None, preservePackageScanBound);
-        }
 
         // SQL owns the result. A failed filesystem cleanup must not misreport a committed
         // Discard as rolled back; the Worker holds the Product lock until this finishes.

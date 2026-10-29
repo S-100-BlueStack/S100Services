@@ -61,6 +61,11 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         var pending = new Dictionary<string, Dictionary<string, ArchiveRow>>(await ScanAsync(sinceUtc), StringComparer.OrdinalIgnoreCase);
         logger.LogInformation("ENC archive scan finished. DurationMs: {DurationMs}. ChangedAoiCount: {ChangedAoiCount}. UniqueChangedFeatureCount: {UniqueChangedFeatureCount}.",
             archiveScanTime.ElapsedMilliseconds, pending.Count, pending.Values.SelectMany(changes => changes.Keys).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        // An older package may have no replay marker and no new source edits. Its persisted
+        // snapshot still owns the unfinished member; discover it independently of the archive.
+        var incompleteNames = await packages.GetIncompleteSourceNamesAsync(cancellationToken);
+        foreach (var incomplete in (await packages.GetActiveAsync(incompleteNames, cancellationToken, includeSourceYaml: false)).Values)
+            await packages.MarkReplayAsync(incomplete.SourceDatasetName, incomplete.ScanFromUtc, cancellationToken);
         var replay = await packages.GetReplayBoundsAsync(cancellationToken);
         if (replay.Count > 0) {
             var activeReplay = await packages.GetActiveAsync(replay.Keys, cancellationToken);
@@ -158,7 +163,9 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                     throw new InvalidOperationException($"The mapped S-57 member of ENC package '{existing.Id}' changed. The watermark and candidates were preserved.");
                 await EncPackageInterruptedExportRecovery.TryRecoverAsync(existing,
                     workflowRepository, packages, clock, logger, cancellationToken);
-                if (!await CanRefreshAsync(existing, cancellationToken)) {
+                await EnsureMissingTracksAsync(existing, cancellationToken);
+                if (!await CanRefreshAsync(existing, cancellationToken) ||
+                    !await packages.TryQueueMissingMembersAsync(existing.Id, clock.GetUtcNow().UtcDateTime, cancellationToken)) {
                     await packages.MarkReplayAsync(sourceName, packageScanFromUtc, cancellationToken);
                     logger.LogInformation("ENC package refresh deferred while a product is held, building, or awaiting approval. SourceDatasetName: {SourceDatasetName}.", sourceName);
                     continue;
@@ -272,11 +279,12 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 continue;
 
             var package = new EncPackage { Id = Guid.NewGuid(), SourceDatasetName = sourceName, S57DatasetName = s57Name, ScanFromUtc = packageScanFromUtc, DetectedAtUtc = scanStartedUtc, DatasetYaml = yaml, SummaryYaml = summary };
-            if (!await packages.TryCreateAsync(package, cancellationToken))
+            if (!await packages.TryCreatePendingAsync(package, cancellationToken)) {
+                await packages.MarkReplayAsync(sourceName, packageScanFromUtc, cancellationToken);
                 continue;
+            }
 
-            // A restart must reconsider an incomplete build even if no later source edit occurs.
-            await packages.MarkReplayAsync(sourceName, packageScanFromUtc, cancellationToken);
+            // Both members are already queued in the same SQL commit as this snapshot and replay.
             // A failed candidate remains in the package for explicit operator acknowledgement.
             // Both encoders receive the exact same persisted YAML string.
             foreach (var (name, specification) in new[] { (sourceName, ProductSpecification.S101), (s57Name, ProductSpecification.S57) }) {
@@ -300,6 +308,16 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         foreach (var (sourceName, inspectedFromUtc) in retiredReplay)
             await packages.RetireReplayAsync(sourceName, inspectedFromUtc, cancellationToken);
         logger.LogInformation("ENC change scan completed. ChangedAoiCount: {ChangedAoiCount}. WatermarkUtc: {WatermarkUtc:O}.", pending.Count, scanStartedUtc);
+    }
+
+    /// <summary>Recreates only absent legacy member tracks using each published catalogue version before queue recovery.</summary>
+    private async Task EnsureMissingTracksAsync(EncPackage package, CancellationToken cancellationToken) {
+        foreach (var (name, spec) in new[] { (package.SourceDatasetName, ProductSpecification.S101), (package.S57DatasetName, ProductSpecification.S57) }) {
+            if (await workflowRepository.GetTrackAsync(name, spec, cancellationToken) is not null) continue;
+            var version = await _products.ReadElectronicProductVersionAsync(name, spec.ToString(), cancellationToken)
+                ?? throw new InvalidOperationException($"Missing ENC member '{name}' cannot be recovered because its S-128 product is absent.");
+            await workflowRepository.GetOrCreateTrackAsync(name, spec, ExportEngineKind.IsoIec8211, version.Edition ?? 0, version.Update ?? 0, cancellationToken);
+        }
     }
 
     private async Task<bool> CanRefreshAsync(EncPackage package, CancellationToken cancellationToken) {

@@ -17,6 +17,78 @@ namespace TestProductCatalogueAPI;
 public sealed class DpcSqlTransactionTests
 {
     [DpcSqlFact]
+    public async Task CreatingPendingPackageCommitsBothNonIdleMembersAndReplayBeforeAnyExport() {
+        await using var db = await DpcSqlDatabase.CreateAsync();
+        var s101 = await db.Workflows.GetOrCreateTrackAsync(DpcRunFixture.Source, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 0, 0);
+        var s57 = await db.Workflows.GetOrCreateTrackAsync(DpcRunFixture.S57, ProductSpecification.S57, ExportEngineKind.IsoIec8211, 4, 0);
+        var package = PendingPackage();
+        Assert.True(await db.Packages.TryCreatePendingAsync(package));
+        Assert.Equal(2, await db.QueryAsync<int>("SELECT COUNT(*) FROM dbo.ProductExportTrack WHERE state = 8 AND candidate_previous_state = 1;"));
+        Assert.Equal(package.ScanFromUtc, (await db.Packages.GetReplayBoundsAsync())[package.SourceDatasetName]);
+        Assert.Contains(package.SourceDatasetName, await db.Packages.GetIncompleteSourceNamesAsync());
+        await db.Workflows.BeginExportAsync(s101.Id, 1, 0, "fixture", DpcRunFixture.Utc(11));
+        await db.Workflows.SetStateAsync(s101.Id, ProductState.ReadyForDistribution, "fixture", DpcRunFixture.Utc(11));
+        Assert.Equal(ProductState.ChangesDetected, (await db.Workflows.GetTrackAsync(DpcRunFixture.S57, ProductSpecification.S57))!.State);
+        await db.Workflows.BeginExportAsync(s57.Id, 5, 0, "fixture", DpcRunFixture.Utc(11));
+        await db.Workflows.SetStateAsync(s57.Id, ProductState.ReadyForDistribution, "fixture", DpcRunFixture.Utc(11));
+        Assert.Equal(EncPackageDiscardStatus.Discarded, (await db.Packages.TryDiscardForRefreshAsync(package.Id, DpcRunFixture.Utc(12))).Status);
+        Assert.Equal(2, await db.QueryAsync<int>("SELECT COUNT(*) FROM dbo.ProductExportTrack WHERE state = 1 AND candidate_previous_state IS NULL;"));
+    }
+
+    [DpcSqlFact]
+    public async Task FailureQueuingTheSecondMemberRollsBackSnapshotBothStatesHistoryAndReplay() {
+        await using var db = await DpcSqlDatabase.CreateAsync();
+        await db.Workflows.GetOrCreateTrackAsync(DpcRunFixture.Source, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 0, 0);
+        await db.Workflows.GetOrCreateTrackAsync(DpcRunFixture.S57, ProductSpecification.S57, ExportEngineKind.IsoIec8211, 4, 0);
+        await db.ExecuteAsync("""
+            CREATE TRIGGER dbo.FailSecondQueue ON dbo.ProductExportTrack AFTER UPDATE AS
+            IF EXISTS (SELECT 1 FROM inserted WHERE product_specification = 'S57' AND state = 8)
+                THROW 51203, 'Injected paired queue failure', 1;
+            """);
+        await Assert.ThrowsAsync<SqlException>(() => db.Packages.TryCreatePendingAsync(PendingPackage()));
+        Assert.Equal(0, await db.QueryAsync<int>("SELECT COUNT(*) FROM dbo.EncPackage;"));
+        Assert.Equal(2, await db.QueryAsync<int>("SELECT COUNT(*) FROM dbo.ProductExportTrack WHERE state = 1 AND candidate_previous_state IS NULL;"));
+        Assert.Equal(0, await db.QueryAsync<int>("SELECT COUNT(*) FROM dbo.ProductStateHistory WHERE state = 8;"));
+        Assert.Empty(await db.Packages.GetReplayBoundsAsync());
+    }
+
+    [DpcSqlFact]
+    public async Task LegacyIdleMemberIsDiscoveredAndQueuedWithoutChangingTheReadyCounterpart() {
+        await using var db = await DpcSqlDatabase.CreateAsync();
+        var seed = await db.SeedAsync(deliver: false);
+        await db.ExecuteAsync("UPDATE dbo.ProductExportTrack SET state = 1, candidate_edition = NULL, candidate_update = NULL, candidate_previous_state = NULL WHERE product_export_track_id = @Id;",
+            new { Id = seed.S57Track });
+        Assert.Empty(await db.Packages.GetReplayBoundsAsync());
+        Assert.Contains(DpcRunFixture.Source, await db.Packages.GetIncompleteSourceNamesAsync());
+        Assert.True(await db.Packages.TryQueueMissingMembersAsync(seed.Package.Id, DpcRunFixture.Utc(12)));
+        var ready = await db.Workflows.GetTrackAsync(DpcRunFixture.Source, ProductSpecification.S101);
+        Assert.Equal(ProductState.ReadyForDistribution, ready!.State);
+        Assert.Equal(1, ready.CandidateEdition);
+        Assert.Equal(DpcRunFixture.Utc(10), ready.UpdatedAtUtc);
+        Assert.Equal(ProductState.ChangesDetected, (await db.Workflows.GetTrackAsync(DpcRunFixture.S57, ProductSpecification.S57))!.State);
+        Assert.Equal(2, await db.QueryAsync<int>("SELECT COUNT(*) FROM dbo.ProductRevision;"));
+        Assert.Equal(seed.Package.ScanFromUtc, (await db.Packages.GetReplayBoundsAsync())[DpcRunFixture.Source]);
+    }
+
+    [DpcSqlTheory]
+    [InlineData(ProductState.ReadyForDistribution, true)]
+    [InlineData(ProductState.InTransit, false)]
+    [InlineData(ProductState.AcceptedForDistribution, false)]
+    public async Task LegacyRepairNeverMutatesAHeldOrSubmittedPair(ProductState state, bool held) {
+        await using var db = await DpcSqlDatabase.CreateAsync();
+        var seed = await db.SeedAsync(deliver: false);
+        await db.ExecuteAsync("UPDATE dbo.ProductExportTrack SET state = 1, candidate_edition = NULL, candidate_update = NULL, candidate_previous_state = NULL WHERE product_export_track_id = @Id;", new { Id = seed.S57Track });
+        await db.Workflows.SetStateAsync(seed.S101Track, state, "fixture", DpcRunFixture.Utc(11));
+        if (held) await db.Workflows.SetManualFreezeAsync(seed.S57Track, "fixture", DpcRunFixture.Utc(11));
+        Assert.False(await db.Packages.TryQueueMissingMembersAsync(seed.Package.Id, DpcRunFixture.Utc(12)));
+        Assert.Equal(ProductState.Idle, (await db.Workflows.GetTrackAsync(DpcRunFixture.S57, ProductSpecification.S57))!.State);
+        Assert.Equal(state, (await db.Workflows.GetTrackAsync(DpcRunFixture.Source, ProductSpecification.S101))!.State);
+    }
+
+    private static EncPackage PendingPackage() => new() { Id = Guid.NewGuid(), SourceDatasetName = DpcRunFixture.Source,
+        S57DatasetName = DpcRunFixture.S57, ScanFromUtc = DpcRunFixture.Utc(8), DetectedAtUtc = DpcRunFixture.Utc(10), DatasetYaml = "fixture shared snapshot", SummaryYaml = "fixture summary" };
+
+    [DpcSqlFact]
     public async Task AcceptanceFinalizesIndependentVersionsOnlyAfterBothExactDeliveries() {
         await using var db = await DpcSqlDatabase.CreateAsync();
         var seed = await db.SeedAsync();

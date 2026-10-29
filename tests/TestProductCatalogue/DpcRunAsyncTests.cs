@@ -41,6 +41,43 @@ public sealed class DpcRunAsyncTests
         Assert.Empty(f.Packages.Replay);
     }
 
+    [Fact]
+    public async Task BothMembersArePendingBeforeTheFirstCompilerCanComplete() {
+        var f = await DpcRunFixture.CreateAsync();
+        var observed = new List<(ProductState S101, ProductState S57)>();
+        f.Engine.ObserveExport = async _ => observed.Add(((await f.TrackAsync(ProductSpecification.S101)).State, (await f.TrackAsync(ProductSpecification.S57)).State));
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.A, DpcRunFixture.Utc(9), 1);
+        await f.RunAsync();
+        Assert.Equal(new[] { (ProductState.Exporting, ProductState.ChangesDetected), (ProductState.ReadyForDistribution, ProductState.Exporting) }, observed);
+        Assert.Equal(ProductState.Idle, (await f.TrackAsync(ProductSpecification.S101)).CandidatePreviousState);
+        Assert.Equal(ProductState.Idle, (await f.TrackAsync(ProductSpecification.S57)).CandidatePreviousState);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LegacyReadyIdlePackageIsRecoveredWithoutReplayOrNewArchiveEdits(bool failMissingExport) {
+        var f = await DpcRunFixture.CreatedPackageAsync();
+        var package = f.Packages.Active[DpcRunFixture.Source];
+        var idle = await f.TrackAsync(ProductSpecification.S57);
+        idle.State = ProductState.Idle;
+        idle.CandidateEdition = null;
+        idle.CandidateUpdate = null;
+        idle.CandidatePreviousState = null;
+        f.Packages.Replay.Clear();
+        if (failMissingExport) f.Engine.FailDataset = DpcRunFixture.S57;
+        f.Clock.Now = DpcRunFixture.Utc(12);
+        await f.RunAsync();
+        Assert.Same(package, f.Packages.Active[DpcRunFixture.Source]);
+        Assert.Equal(1, f.SnapshotCalls);
+        Assert.Equal(3, f.Engine.Requests.Count);
+        Assert.Equal(package.DatasetYaml, f.Engine.Requests.Last().DatasetYaml);
+        Assert.Equal(DpcRunFixture.S57, f.Engine.Requests.Last().DatasetName);
+        Assert.Equal(ProductState.ReadyForDistribution, (await f.TrackAsync(ProductSpecification.S101)).State);
+        Assert.Equal(failMissingExport ? ProductState.Error : ProductState.ReadyForDistribution, idle.State);
+        Assert.Equal(0, f.Packages.PairedDiscards);
+    }
+
     [Theory]
     [InlineData(ProductState.ReadyForDistribution)]
     [InlineData(ProductState.Error)]
@@ -277,6 +314,7 @@ public sealed class DpcRunAsyncTests
         var package = Assert.Single(f.Packages.Active.Values);
         Assert.Equal(DpcRunFixture.Utc(8), await f.WatermarkAsync());
         Assert.Single(f.Packages.Replay);
+        Assert.Equal(ProductState.ChangesDetected, (await f.TrackAsync(ProductSpecification.S57)).State);
         f.Engine.DuringExport = null;
         f.Clock.Now = DpcRunFixture.Utc(12);
 
@@ -595,6 +633,37 @@ internal sealed class DpcMemoryPackages(InMemoryProductRepository workflows, Dpc
         return Task.CompletedTask;
     }
     public Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default) { cancellationToken.ThrowIfCancellationRequested(); var added = Active.TryAdd(package.SourceDatasetName, package); if (added && Replay.TryGetValue(package.SourceDatasetName, out var bound) && bound >= package.ScanFromUtc) Replay.Remove(package.SourceDatasetName); return Task.FromResult(added); }
+    public async Task<bool> TryCreatePendingAsync(EncPackage package, CancellationToken cancellationToken = default) {
+        foreach (var (name, spec) in new[] { (package.SourceDatasetName, ProductSpecification.S101), (package.S57DatasetName, ProductSpecification.S57) }) {
+            var track = await workflows.GetTrackAsync(name, spec, cancellationToken);
+            if (track is null || track.IsManuallyFrozen || track.State is not (ProductState.Idle or ProductState.ChangesDetected) || track.CandidateEdition.HasValue || track.CandidateUpdate.HasValue) return false;
+        }
+        if (!await TryCreateAsync(package, cancellationToken)) return false;
+        return await TryQueueMissingMembersAsync(package.Id, package.DetectedAtUtc, cancellationToken);
+    }
+    public async Task<IReadOnlyList<string>> GetIncompleteSourceNamesAsync(CancellationToken cancellationToken = default) {
+        var names = new List<string>();
+        foreach (var package in Active.Values) {
+            var s101 = await workflows.GetTrackAsync(package.SourceDatasetName, ProductSpecification.S101, cancellationToken);
+            var s57 = await workflows.GetTrackAsync(package.S57DatasetName, ProductSpecification.S57, cancellationToken);
+            if ((!package.S101Discarded && (s101 is null || s101.State is ProductState.Idle or ProductState.ChangesDetected or ProductState.Exporting or ProductState.Validating)) ||
+                (!package.S57Discarded && (s57 is null || s57.State is ProductState.Idle or ProductState.ChangesDetected or ProductState.Exporting or ProductState.Validating))) names.Add(package.SourceDatasetName);
+        }
+        return names;
+    }
+    public async Task<bool> TryQueueMissingMembersAsync(Guid packageId, DateTime nowUtc, CancellationToken cancellationToken = default) {
+        if (!await CanRefreshAsync(packageId, cancellationToken)) return false;
+        var package = (await GetByIdAsync(packageId, cancellationToken))!;
+        if (package.S57Discarded || package.S101Discarded) return false;
+        foreach (var (name, spec) in new[] { (package.SourceDatasetName, ProductSpecification.S101), (package.S57DatasetName, ProductSpecification.S57) }) {
+            var track = (await workflows.GetTrackAsync(name, spec, cancellationToken))!;
+            if (track.State is not (ProductState.Idle or ProductState.ChangesDetected) || track.CandidateEdition.HasValue) continue;
+            track.CandidatePreviousState ??= track.State;
+            await workflows.SetStateAsync(track.Id, ProductState.ChangesDetected, "system", nowUtc, cancellationToken: cancellationToken);
+            await MarkReplayAsync(package.SourceDatasetName, package.ScanFromUtc, cancellationToken);
+        }
+        return true;
+    }
     public Task SetErrorAsync(Guid packageId, string message, CancellationToken cancellationToken = default) { Active.Values.Single(p => p.Id == packageId).ErrorMessage = message; return Task.CompletedTask; }
     public Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default, bool preserveScanBound = false) => throw new InvalidOperationException("The detector must discard both members atomically.");
     public Task<EncPackageDiscardResult> TryDiscardPackageAsync(Guid expectedPackageId, string actor, DateTime nowUtc, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -615,6 +684,10 @@ internal sealed class DpcMemoryPackages(InMemoryProductRepository workflows, Dpc
             var track = (await workflows.GetTrackAsync(name, spec, cancellationToken))!;
             if (track.CandidateEdition.HasValue || track.State is ProductState.Error or ProductState.Rejected)
                 await workflows.DiscardCandidateAsync(track.Id, "system", clock.Now, cancellationToken);
+            else if (track.State == ProductState.ChangesDetected) {
+                track.State = ProductCandidateRecovery.RestoredState(track.CandidatePreviousState);
+                track.CandidatePreviousState = null;
+            }
             Delivery.Remove(name); // Test boundary models a new exact revision; SQL preserves the old evidence.
         }
         Active.Remove(package.SourceDatasetName);
@@ -634,13 +707,15 @@ internal sealed class DpcEngine(DpcMemoryPackages packages) : IExportEngine, ISe
     internal int ValidationErrors { get; set; }
     internal string? CriticalDataset { get; set; }
     public bool Supports(ProductSpecification productSpecification) => productSpecification is ProductSpecification.S101 or ProductSpecification.S57;
-    public Task<ExportEngineResult> ExportAsync(ExportEngineRequest request, CancellationToken cancellationToken = default) {
+    internal Func<ExportEngineRequest, Task>? ObserveExport { get; set; }
+    public async Task<ExportEngineResult> ExportAsync(ExportEngineRequest request, CancellationToken cancellationToken = default) {
         Assert.Contains(packages.Active.Values, package => package.DatasetYaml == request.DatasetYaml);
         Requests.Add(request);
         DuringExport?.Invoke(request);
+        if (ObserveExport is not null) await ObserveExport(request);
         cancellationToken.ThrowIfCancellationRequested();
         if (request.DatasetName == FailDataset) throw new InvalidOperationException("Compiler fixture failure");
-        return Task.FromResult(new ExportEngineResult("isolated-output", []));
+        return new ExportEngineResult("isolated-output", []);
     }
     public Task DeleteOutputAsync(ExportOutputIdentity output, CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) => ValidateDatasetAsync(datasetName, ProductSpecification.S101, edition, update, outputPath, cancellationToken);

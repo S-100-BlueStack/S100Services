@@ -367,14 +367,16 @@ public sealed class ExportOperationServiceTests
     }
 
     [Fact]
-    public async Task InternalRefreshPreservesScanBoundWhenDiscardingItsReadyCandidate() {
+    public async Task LegacyInternalFlagCannotDiscardOnlyOneMemberOfAnActivePackage() {
         var repository = new RecordingWorkflowRepository { CandidateEdition = 5, CandidateUpdate = 0, InitialState = ProductState.ReadyForDistribution };
         var packages = new RecordingPackageRepository();
         var service = CreateService(new RecordingElectronicProductManager(), repository, new RecordingExportEngine(), new SummaryResponse(), packages: packages);
 
-        await service.ExecuteDiscardAsync("101DK001", "system", preservePackageScanBound: true);
+        var track = await repository.GetTrackAsync("101DK001", ProductSpecification.S101);
+        await Assert.ThrowsAsync<ExportOperationRejectedException>(() => service.ExecuteDiscardAsync("101DK001", "system", preservePackageScanBound: true));
 
-        Assert.True(packages.PreserveScanBound);
+        Assert.False(packages.PreserveScanBound);
+        Assert.Equal(ProductState.ReadyForDistribution, repository.Track.State);
     }
 
     [Fact]
