@@ -1419,13 +1419,21 @@ namespace S100FC.ProductCatalogue
 
                 });
 
-
                 // TODO: Fix S101_QueryDataCoverage. Returns empty array and causes BuildTopology to fail.
                 profiler?.Next("DataCoverage");
+
+                if (shape is null || shape.IsEmpty)
+                    throw new InvalidOperationException($"Cannot query S-101 DataCoverage for '{electronicProduct.datasetName}': the AOI geometry is null or empty.");
+
+                var extent = shape?.Extent;
+                Log.Information("Calling S101_QueryDataCoverage with nominalScale: {NominalScale}, extent: {XMin},{YMin} to {XMax},{YMax}", nominalscale, extent?.XMin, extent?.YMin, extent?.XMax, extent?.YMax);
+
                 var filters = s101Geodatabase.S101_QueryDataCoverage(shape, nominalscale).Select(result => result.Filter).ToArray();
                 if (featureTracker is not null)
                     EncTopologyQueryFilters.PrepareForVerifiedSnapshot(filters);
                 profiler?.Next("BuildTopology", filters.Length);
+                Log.Information("Filters found from S101_QueryDataCoverage: {filtersCount} ", filters.Length);
+             
                 var result = connection.BuildTopology(filters, loggerFactory: loggerFactory)!;
 
                 var topology = result.matrix;
