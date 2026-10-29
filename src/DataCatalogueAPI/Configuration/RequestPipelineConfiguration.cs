@@ -57,6 +57,10 @@ public static class RequestPipelineConfiguration
 
         app.UseHttpsRedirection();
         app.UseRouting();
+        if (app.Environment.IsDevelopment()) {
+            // Process credentialed CORS preflights before the fallback authorization policy challenges anonymous OPTIONS requests.
+            app.UseCors("AllowFrontend");
+        }
         app.UseAuthentication();
         app.UseAuthorization();
 

@@ -46,6 +46,18 @@ public static class Program
             builder.Services.AddVersionedOpenApiDocuments();
             builder.Services.AddSecureTransport();
 
+            if (builder.Environment.IsDevelopment()) {
+                // Allow the local HTTPS frontend to authenticate directly with Negotiate without a development proxy.
+                builder.Services.AddCors(options => {
+                    options.AddPolicy("AllowFrontend", policy => {
+                        policy.WithOrigins(["http://localhost:5173", "https://localhost:5173", "https://localhost:5174"])
+                            .AllowAnyHeader()
+                            .AllowCredentials()
+                            .AllowAnyMethod();
+                    });
+                });
+            }
+
             //  Windows SSO
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
