@@ -9,6 +9,7 @@ using ProductCatalogueAPI.Services.Operations;
 using ProductCatalogueAPI.Services.SevenCs;
 using S100FC;
 using S100FC.ProductCatalogue;
+using S100FC.Topology;
 using S100FC.YAML;
 using System.Reflection;
 using YamlDataset = S100FC.YAML.Dataset;
@@ -18,6 +19,184 @@ namespace TestProductCatalogueAPI;
 /// <summary>Runs the real detector and export service with bounded archive versions and isolated persistence/encoder boundaries.</summary>
 public sealed class DpcRunAsyncTests
 {
+    private const string Associated = "{ab9b3e89-d57c-47c2-a105-68ebb574db10}";
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AssociatedRowEditCreatesPairedCandidatesFromTheVerifiedOwnersSnapshot(bool information) {
+        var f = await AssociatedFixtureAsync(information);
+        f.Archive.EditAssociated(Associated, DpcRunFixture.Utc(9), 1);
+
+        await f.RunAsync();
+
+        var package = Assert.Single(f.Packages.Active.Values);
+        Assert.Contains(Associated, package.SummaryYaml);
+        Assert.Contains(information ? "SpatialQuality" : "NauticalInformation", package.SummaryYaml);
+        Assert.Contains("attributes.value", package.SummaryYaml);
+        Assert.Equal(2, f.Engine.Requests.Count);
+        Assert.All(f.Engine.Requests, request => Assert.Equal(package.DatasetYaml, request.DatasetYaml));
+        Assert.Equal(0, f.PublicationCalls);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task AssociatedFullAndPartialRevertsReplaceOrRemoveBothMembers(bool information, bool partial) {
+        var f = await AssociatedFixtureAsync(information);
+        f.Archive.EditAssociated(Associated, DpcRunFixture.Utc(9), 1);
+        if (partial) f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.B, DpcRunFixture.Utc(9), 1);
+        await f.RunAsync();
+        var previous = f.Packages.Active[DpcRunFixture.Source];
+        f.Clock.Now = DpcRunFixture.Utc(12);
+        f.Archive.EditAssociated(Associated, DpcRunFixture.Utc(11), 0);
+
+        await f.RunAsync();
+
+        Assert.Equal(1, f.Packages.PairedDiscards);
+        if (partial) {
+            var replacement = f.Packages.Active[DpcRunFixture.Source];
+            Assert.NotEqual(previous.Id, replacement.Id);
+            Assert.Equal(previous.ScanFromUtc, replacement.ScanFromUtc);
+            Assert.Equal(DpcRunFixture.Utc(12), replacement.DetectedAtUtc);
+            Assert.DoesNotContain(Associated, replacement.SummaryYaml);
+            Assert.Contains(DpcRunFixture.B, replacement.SummaryYaml);
+            Assert.Contains(Associated + "=0", replacement.DatasetYaml);
+            Assert.Equal(4, f.Engine.Requests.Count);
+        }
+        else {
+            Assert.Empty(f.Packages.Active);
+            Assert.Equal(2, f.Engine.Requests.Count);
+        }
+        Assert.Empty(f.Packages.Replay);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AssociatedEditsRetainIndependentReplayBaselinesAndRespectHoldRelease(bool information) {
+        var f = await AssociatedFixtureAsync(information);
+        f.Archive.EditAssociated(Associated, DpcRunFixture.Utc(9), 1);
+        await f.RunAsync();
+        var previous = f.Packages.Active[DpcRunFixture.Source];
+        var track = await f.TrackAsync(ProductSpecification.S57);
+        track.IsManuallyFrozen = true;
+        f.Clock.Now = DpcRunFixture.Utc(12);
+        f.Archive.EditAssociated(Associated, DpcRunFixture.Utc(11), 2);
+        await f.RunAsync();
+        Assert.Same(previous, f.Packages.Active[DpcRunFixture.Source]);
+        Assert.Equal(DpcRunFixture.Utc(10), f.Packages.Replay[DpcRunFixture.Source]);
+
+        track.IsManuallyFrozen = false;
+        f.Clock.Now = DpcRunFixture.Utc(14);
+        await f.RunAsync();
+
+        var replacement = f.Packages.Active[DpcRunFixture.Source];
+        Assert.NotEqual(previous.Id, replacement.Id);
+        Assert.Equal(previous.ScanFromUtc, replacement.ScanFromUtc);
+        Assert.Contains(Associated + "=2", replacement.DatasetYaml);
+        Assert.Equal(4, f.Engine.Requests.Count);
+        Assert.Empty(f.Packages.Replay);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task UnboundOrUnselectedAssociatedRowsDoNotCreatePackages(bool information, bool outsideTopology) {
+        var f = await DpcRunFixture.CreateAsync();
+        f.Archive.AddAssociated(Associated, information ? ArchiveBindingKind.Information : ArchiveBindingKind.Feature, 0);
+        if (outsideTopology) f.Archive.Bind(DpcRunFixture.Source, DpcRunFixture.Outside, Associated);
+        f.Archive.EditAssociated(Associated, DpcRunFixture.Utc(9), 1);
+
+        await f.RunAsync();
+
+        Assert.Empty(f.Packages.Active);
+        Assert.Empty(f.Engine.Requests);
+        Assert.Equal(DpcRunFixture.Utc(10), await f.WatermarkAsync());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AssociatedDeletionUsesPersistedMembershipAndRetainsRemovalInLaterReplacements(bool information) {
+        var f = await AssociatedFixtureAsync(information);
+        f.Archive.EditAssociated(Associated, DpcRunFixture.Utc(9), 1);
+        await f.RunAsync();
+        f.Clock.Now = DpcRunFixture.Utc(12);
+        f.Archive.DeleteAssociated(Associated, DpcRunFixture.Utc(11));
+
+        await f.RunAsync();
+
+        var replacement = f.Packages.Active[DpcRunFixture.Source];
+        Assert.Contains(Associated, replacement.SummaryYaml);
+        Assert.Contains("deleted: true", replacement.SummaryYaml);
+        Assert.DoesNotContain(Associated + "=", replacement.DatasetYaml);
+        f.Clock.Now = DpcRunFixture.Utc(14);
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.B, DpcRunFixture.Utc(13), 2);
+        await f.RunAsync();
+        Assert.Contains(Associated, f.Packages.Active[DpcRunFixture.Source].SummaryYaml);
+        Assert.Equal(6, f.Engine.Requests.Count);
+    }
+
+    private static async Task<DpcRunFixture> AssociatedFixtureAsync(bool information) {
+        var f = await DpcRunFixture.CreateAsync();
+        f.Archive.AddAssociated(Associated, information ? ArchiveBindingKind.Information : ArchiveBindingKind.Feature, 0);
+        f.Archive.Bind(DpcRunFixture.Source, DpcRunFixture.A, Associated);
+        return f;
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AssociatedNetZeroAtEightStillChangesAgainstTheSecondSourcesTenOClockReplay(bool information) {
+        var f = await AssociatedFixtureAsync(information);
+        const string second = "101DK002";
+        f.Archive.AddSource(second, 1000);
+        f.Archive.ShareFeatures(DpcRunFixture.Source, second);
+        f.Archive.EditAssociated(Associated, DpcRunFixture.Utc(9), 1);
+        f.Archive.EditAssociated(Associated, DpcRunFixture.Utc(13), 0);
+        f.Packages.Replay[DpcRunFixture.Source] = DpcRunFixture.Utc(8);
+        f.Packages.Replay[second] = DpcRunFixture.Utc(10);
+        f.Clock.Now = DpcRunFixture.Utc(14);
+
+        await f.RunAsync();
+
+        var package = Assert.Single(f.Packages.Active.Values);
+        Assert.Equal(second, package.SourceDatasetName);
+        Assert.Equal(DpcRunFixture.Utc(10), package.ScanFromUtc);
+        Assert.Contains(Associated, package.SummaryYaml);
+        Assert.Empty(f.Packages.Replay);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AssociatedSnapshotSurvivesCancellationAndRestartsTheWaitingMember(bool information) {
+        var f = await AssociatedFixtureAsync(information);
+        f.Archive.EditAssociated(Associated, DpcRunFixture.Utc(9), 1);
+        using var cancellation = new CancellationTokenSource();
+        f.Engine.DuringExport = _ => cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => f.RunAsync(cancellation.Token));
+        var package = Assert.Single(f.Packages.Active.Values);
+        Assert.Equal(DpcRunFixture.Utc(8), await f.WatermarkAsync());
+        Assert.Single(f.Packages.Replay);
+        Assert.Equal(ProductState.ChangesDetected, (await f.TrackAsync(ProductSpecification.S57)).State);
+        f.Engine.DuringExport = null;
+        f.Clock.Now = DpcRunFixture.Utc(12);
+
+        await f.RunAsync();
+
+        Assert.Same(package, f.Packages.Active[DpcRunFixture.Source]);
+        Assert.Equal(1, f.SnapshotCalls);
+        Assert.All(f.Engine.Requests, request => Assert.Equal(package.DatasetYaml, request.DatasetYaml));
+        Assert.Equal(ProductState.ReadyForDistribution, (await f.TrackAsync(ProductSpecification.S57)).State);
+        Assert.Empty(f.Packages.Replay);
+    }
+
     [Fact]
     public async Task CreationPersistsOneSnapshotBeforeBothIndependentExportsWithoutPublishingS128() {
         var f = await DpcRunFixture.CreateAsync();
@@ -354,6 +533,8 @@ public sealed class DpcRunAsyncTests
     [Theory]
     [InlineData("point")]
     [InlineData("curve")]
+    [InlineData("featuretype")]
+    [InlineData("informationtype")]
     public async Task DisabledRequiredArchivePreservesWatermarkCandidatesAndReplay(string disabledClass) {
         var f = await DpcRunFixture.CreatedPackageAsync();
         var package = f.Packages.Active[DpcRunFixture.Source];
@@ -569,7 +750,9 @@ internal sealed class DpcLocks : IDatasetLockService
 internal sealed class DpcArchiveFixture
 {
     private sealed record Version(ArchiveRow Row, ArchiveInterval Interval, bool Emitted);
+    private sealed record AssociatedVersion(ArchiveRow Row, ArchiveInterval Interval);
     private readonly Dictionary<string, Dictionary<string, List<Version>>> _features = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<ArchiveBindingTarget, List<AssociatedVersion>> _associated = [];
     private readonly Dictionary<string, long> _scales = new(StringComparer.OrdinalIgnoreCase);
     internal List<(DateTime From, DateTime Through)> Scans { get; } = [];
     internal string? DisabledClass { get; set; }
@@ -581,11 +764,46 @@ internal sealed class DpcArchiveFixture
         var versions = _features[source][id];
         var last = versions[^1];
         versions[^1] = last with { Interval = last.Interval with { ToUtc = at } };
-        versions.Add(new(Row(value, scale ?? last.Row.NominalScale!.Value), new(at, null), last.Emitted));
+        var row = Row(value, scale ?? last.Row.NominalScale!.Value);
+        row.InformationBindings = last.Row.InformationBindings;
+        row.FeatureBindings = last.Row.FeatureBindings;
+        versions.Add(new(row, new(at, null), last.Emitted));
     }
     private static ArchiveRow Row(int value, long scale) => new() { Code = "DepthContour", AttributeBindings = $"{{\"valueOfDepthContour\":{value}}}", NominalScale = scale };
     private Version? At(string source, string id, DateTime at) => _features[source][id].SingleOrDefault(v => v.Interval.Contains(at));
-    internal bool IsEmitted(string source, string id, DateTime at) => _features[source].ContainsKey(id) && At(source, id, at) is { Emitted: true } version && version.Row.NominalScale == _scales[source];
+    internal void AddAssociated(string id, ArchiveBindingKind kind, int value) =>
+        _associated[new(kind, Guid.Parse(id))] = [new(AssociatedRow(kind, value), new(DpcRunFixture.Utc(6), null))];
+    internal void EditAssociated(string id, DateTime at, int value) {
+        var target = _associated.Keys.Single(target => target.Id == Guid.Parse(id));
+        var versions = _associated[target];
+        versions[^1] = versions[^1] with { Interval = versions[^1].Interval with { ToUtc = at } };
+        versions.Add(new(AssociatedRow(target.Kind, value), new(at, null)));
+    }
+    internal void DeleteAssociated(string id, DateTime at) {
+        var versions = _associated.Single(pair => pair.Key.Id == Guid.Parse(id)).Value;
+        versions[^1] = versions[^1] with { Interval = versions[^1].Interval with { ToUtc = at } };
+    }
+    internal void Bind(string source, string ownerId, string targetId) {
+        var target = _associated.Keys.Single(target => target.Id == Guid.Parse(targetId));
+        var row = _features[source][ownerId][0].Row;
+        if (target.Kind == ArchiveBindingKind.Information) row.InformationBindings = ArchiveBindingIndexTests.Json(target);
+        else row.FeatureBindings = ArchiveBindingIndexTests.Json(target);
+    }
+    private static ArchiveRow AssociatedRow(ArchiveBindingKind kind, int value) => new() {
+        Code = kind == ArchiveBindingKind.Information ? "SpatialQuality" : "NauticalInformation", AttributeBindings = $"{{\"value\":{value}}}"
+    };
+    internal bool IsEmitted(string source, string id, DateTime at) {
+        if (_features[source].ContainsKey(id))
+            return At(source, id, at) is { Emitted: true } version && version.Row.NominalScale == _scales[source];
+        var target = _associated.Keys.SingleOrDefault(target => target.Id == Guid.Parse(id));
+        if (!_associated.TryGetValue(target, out var versions) || !versions.Any(version => version.Interval.Contains(at)))
+            return false;
+        var index = new ArchiveBindingIndex([target], new(at, at));
+        foreach (var owner in _features[source].Values.SelectMany(versions => versions).Where(version => version.Emitted))
+            index.AddOwner(owner.Interval, owner.Row.InformationBindings, owner.Row.FeatureBindings,
+                () => owner.Row.NominalScale == _scales[source] ? [source] : []);
+        return index.IsCurrent(source, target);
+    }
     internal Dictionary<string, Dictionary<string, ArchiveRow>> Scan(DateTime from, DateTime through) {
         Scans.Add((from, through));
         foreach (var name in ArchiveScanRequirements.Classes) ArchiveScanRequirements.Verify("fixture.sde", name, name != DisabledClass);
@@ -602,6 +820,24 @@ internal sealed class DpcArchiveFixture
                 rows[id] = row;
             }
         }
+        var changedTargets = _associated.Where(pair => pair.Value.Any(version => version.Interval.LatestEvent(window).HasValue)).ToDictionary(pair => pair.Key, pair => pair.Value);
+        if (changedTargets.Count > 0) {
+            var index = new ArchiveBindingIndex(changedTargets.Keys, window);
+            foreach (var (source, features) in _features) {
+                foreach (var owner in features.Values.SelectMany(versions => versions))
+                    index.AddOwner(owner.Interval, owner.Row.InformationBindings, owner.Row.FeatureBindings,
+                        () => owner.Row.NominalScale == _scales[source] ? [source] : []);
+            }
+            foreach (var (source, targets) in index.Affected) {
+                if (!result.TryGetValue(source, out var rows)) result[source] = rows = new(StringComparer.OrdinalIgnoreCase);
+                foreach (var target in targets) {
+                    var endpoints = window.Compose(changedTargets[target], version => version.Interval);
+                    var row = ArchiveChangeComposer.Compose(endpoints.Before?.Row, endpoints.After?.Row, endpoints.Latest.Row, endpoints.LatestEditUtc, false);
+                    row.CurrentInProduct = index.IsCurrent(source, target) && !row.Deleted;
+                    rows[target.SourceId] = row;
+                }
+            }
+        }
         return result;
     }
     internal YamlDataset Snapshot(string source, DateTime at, int edition) {
@@ -609,6 +845,14 @@ internal sealed class DpcArchiveFixture
             Comment = string.Join(";", new[] { (DpcRunFixture.A, "A"), (DpcRunFixture.B, "B") }.Where(p => _features[source].ContainsKey(p.Item1)).Select(p => p.Item2 + "=" + System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(At(source, p.Item1, at)!.Row.AttributeBindings!)!["valueOfDepthContour"])) };
         foreach (var id in _features[source].Keys.Where(id => IsEmitted(source, id, at)))
             dataset.AddFeature(new Feature { Name = "DepthContour", Prim = Primitive.Point, Foid = TopologyFeatureMapping.CreateFoid(id), Geometry = "P" + Guid.Parse(id).ToStableUInt64() });
+        foreach (var (target, versions) in _associated.Where(pair => IsEmitted(source, pair.Key.SourceId, at))) {
+            var row = versions.Single(version => version.Interval.Contains(at)).Row;
+            dataset.Comment += ";" + target.SourceId + "=" + System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(row.AttributeBindings!)!["value"];
+            if (target.Kind == ArchiveBindingKind.Information)
+                dataset.AddInformation(new Information { Name = row.Code, ID = target.Id.ToStableUInt64().ToString() });
+            else
+                dataset.AddFeature(new Feature { Name = row.Code, Prim = Primitive.NoGeometry, Foid = TopologyFeatureMapping.CreateFoid(target.SourceId) });
+        }
         return dataset;
     }
 }
@@ -719,5 +963,5 @@ internal sealed class DpcEngine(DpcMemoryPackages packages) : IExportEngine, ISe
     }
     public Task DeleteOutputAsync(ExportOutputIdentity output, CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, int edition, int update, string outputPath, CancellationToken cancellationToken = default) => ValidateDatasetAsync(datasetName, ProductSpecification.S101, edition, update, outputPath, cancellationToken);
-    public Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, ProductSpecification productSpecification, int edition, int update, string outputPath, CancellationToken cancellationToken = default) => Task.FromResult(new SevenCsValidationResult(new SevenCsService.SummaryResponse { Critical = datasetName == CriticalDataset ? 2 : 0, Errors = ValidationErrors }, [new("test.vld", "text/plain", "fixture diagnostics"u8.ToArray())]));
+    public Task<SevenCsValidationResult> ValidateDatasetAsync(string datasetName, ProductSpecification productSpecification, int edition, int update, string outputPath, CancellationToken cancellationToken = default) => Task.FromResult(new SevenCsValidationResult(new SummaryResponse { Critical = datasetName == CriticalDataset ? 2 : 0, Errors = ValidationErrors }, [new("test.vld", "text/plain", "fixture diagnostics"u8.ToArray())]));
 }

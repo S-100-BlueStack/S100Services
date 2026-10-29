@@ -579,9 +579,13 @@ namespace S100FC.ProductCatalogue
 
                     // Validate every required class before coverage caching or reading any archive rows.
                     var connectionLabel = Path.GetFileName(uri.IsAbsoluteUri ? uri.LocalPath : uri.OriginalString);
-                    foreach (var className in ArchiveScanRequirements.Classes) {
+                    foreach (var className in ArchiveScanRequirements.SpatialClasses) {
                         using var requiredClass = connection.OpenDataset<FeatureClass>(QualifyTableName(className));
                         ArchiveScanRequirements.Verify(connectionLabel, className, requiredClass.IsArchiveEnabled());
+                    }
+                    foreach (var className in ArchiveScanRequirements.NonSpatialClasses) {
+                        using var requiredTable = connection.OpenDataset<Table>(QualifyTableName(className));
+                        ArchiveScanRequirements.Verify(connectionLabel, className, requiredTable.IsArchiveEnabled());
                     }
 
                     var cacheKey = uri.OriginalString;
@@ -739,7 +743,7 @@ namespace S100FC.ProductCatalogue
             Log.Information("DPC archive query boundary. SinceUtc: {SinceUtc:O}. ThroughUtc: {ThroughUtc:O}. StorageZone: {StorageZone}. UnspecifiedValueZone: {UnspecifiedValueZone}. QuerySinceStorage: {QuerySinceStorage:O}. SqlSinceLiteral: {SqlSinceLiteral}.",
                 window.SinceUtc, window.ThroughUtc, archiveClock.StorageTimeZone.Id, archiveClock.UnspecifiedValueTimeZone.Id, querySince, formattedSince);
 
-            string[] tableNames = ["point", "pointset", "curve", "surface"];
+            var tableNames = ArchiveScanRequirements.SpatialClasses;
             var unclassifiedArchiveRows = 0;
             var loggedArchiveClock = false;
             var versionsById = new Dictionary<string, List<ArchiveVersion>>(StringComparer.OrdinalIgnoreCase);
@@ -867,6 +871,33 @@ namespace S100FC.ProductCatalogue
                         baseTableName, connectionName, archiveRowsRead, uniqueChangedFeatureIds.Count, affectedProducts.Count, archiveTableTimer.Elapsed.TotalMilliseconds);
             }
 
+            // A non-spatial edit has no scale or shape of its own. Resolve its incoming
+            // spatial owners at these exact boundaries, including unchanged and deleted owners.
+            var associatedChanges = ReadAssociatedArchiveChanges(connection, connectionName, window,
+                ArchiveClock.CreateEventPredicate(formattedSince, formattedMaxDate));
+            if (associatedChanges.Count > 0) {
+                var bindings = BuildArchiveBindingIndex(connection, connectionName, window, productList, associatedChanges.Keys);
+                foreach (var (productName, targets) in bindings.Affected) {
+                    if (!affectedIdsByProduct.TryGetValue(productName, out var affectedIds))
+                        affectedIdsByProduct[productName] = affectedIds = new(StringComparer.OrdinalIgnoreCase);
+                    foreach (var target in targets) {
+                        var id = target.SourceId;
+                        if (versionsById.ContainsKey(id))
+                            throw new InvalidOperationException($"Duplicate spatial/non-spatial source GUID '{id}' in connection '{connectionName}'. DPC preserved its watermark.");
+                        affectedIds.Add(id);
+                        if (bindings.IsCurrent(productName, target)) {
+                            if (!currentIdsByProduct.TryGetValue(productName, out var currentIds))
+                                currentIdsByProduct[productName] = currentIds = new(StringComparer.OrdinalIgnoreCase);
+                            currentIds.Add(id);
+                        }
+                    }
+                }
+                foreach (var (target, versions) in associatedChanges) {
+                    if (!versionsById.TryAdd(target.SourceId, versions))
+                        throw new InvalidOperationException($"Duplicate source GUID '{target.SourceId}' in connection '{connectionName}'. DPC preserved its watermark.");
+                }
+            }
+
             foreach (var (productName, affectedIds) in affectedIdsByProduct) {
                 if (!result.TryGetValue(productName, out var productChanges)) {
                     productChanges = new Dictionary<string, ArchiveRow>(StringComparer.OrdinalIgnoreCase);
@@ -883,7 +914,7 @@ namespace S100FC.ProductCatalogue
                 throw new ArchiveChangeClassificationException(connectionName, unclassifiedArchiveRows);
         }
 
-        private sealed record ArchiveVersion(ArchiveRow Row, ArchiveInterval Interval, ArcGIS.Core.Geometry.Geometry Shape);
+        private sealed record ArchiveVersion(ArchiveRow Row, ArchiveInterval Interval, ArcGIS.Core.Geometry.Geometry? Shape);
 
         /// <summary>Compares the states at the fixed scan boundaries, even when a version closed during this scan.</summary>
         private static ArchiveRow ComposeArchiveChange(IReadOnlyCollection<ArchiveVersion> versions, ArchiveScanWindow window) {
@@ -891,7 +922,125 @@ namespace S100FC.ProductCatalogue
             var before = endpoints.Before;
             var after = endpoints.After;
             return ArchiveChangeComposer.Compose(before?.Row, after?.Row, endpoints.Latest.Row, endpoints.LatestEditUtc,
-                before is not null && after is not null && !GeometryEngine.Instance.Equals(before.Shape, after.Shape));
+                before?.Shape is not null && after?.Shape is not null && !GeometryEngine.Instance.Equals(before.Shape, after.Shape));
+        }
+
+        /// <summary>Reads the same bounded event history for non-spatial rows without requiring nominalscale, geometry, or optional binding columns.</summary>
+        private Dictionary<ArchiveBindingTarget, List<ArchiveVersion>> ReadAssociatedArchiveChanges(Geodatabase connection, string connectionName, ArchiveScanWindow window, string eventPredicate) {
+            var result = new Dictionary<ArchiveBindingTarget, List<ArchiveVersion>>();
+            foreach (var className in ArchiveScanRequirements.NonSpatialClasses) {
+                using var table = connection.OpenDataset<Table>(QualifyTableName(className));
+                using var archive = table.GetArchiveTable();
+                // Like the actual exporter, read non-spatial targets independently of
+                // optional ps values. Incoming S-101 owners establish product membership.
+                using var cursor = archive.Search(new QueryFilter {
+                    WhereClause = eventPredicate
+                }, true);
+                var kind = className == "informationtype" ? ArchiveBindingKind.Information : ArchiveBindingKind.Feature;
+                while (cursor.MoveNext()) {
+                    var row = cursor.Current;
+                    var interval = ReadAssociatedInterval(row, connectionName, className);
+                    DpcArchiveClock.Value.VerifyQueryCandidate(interval, window);
+                    if (interval.LatestEvent(window) is not { } changedAt)
+                        continue;
+                    ArchiveBindingTarget target;
+                    try {
+                        target = new(kind, Guid.Parse(ReadFeatureId(row)));
+                    }
+                    catch (InvalidOperationException exception) {
+                        throw new InvalidOperationException($"DPC archive row has no usable GUID: connection '{connectionName}', class '{className}'. The watermark and candidates were preserved.", exception);
+                    }
+                    if (!result.TryGetValue(target, out var versions))
+                        result[target] = versions = [];
+                    versions.Add(new(new ArchiveRow {
+                        Code = ReadOptionalString(row, "code") ?? string.Empty,
+                        AttributeBindings = ReadOptionalString(row, "attributebindings"),
+                        InformationBindings = ReadOptionalString(row, "informationbindings"),
+                        FeatureBindings = ReadOptionalString(row, "featurebindings"),
+                        EditDate = changedAt
+                    }, interval, null));
+                }
+                Log.Information("DPC associated archive scanned. Connection: {Connection}. Table: {Table}. ChangedTargets: {ChangedTargets}.",
+                    connectionName, className, result.Keys.Count(target => target.Kind == kind));
+            }
+            return result;
+        }
+
+        /// <summary>Scans small binding columns once per class, then batch-fetches only referenced owner versions for the existing spatial matcher.</summary>
+        private ArchiveBindingIndex BuildArchiveBindingIndex(Geodatabase connection, string connectionName, ArchiveScanWindow window,
+            IReadOnlyList<DpcProductCoverage> products, IEnumerable<ArchiveBindingTarget> targets) {
+            var index = new ArchiveBindingIndex(targets, window);
+            var clock = DpcArchiveClock.Value;
+            var syntax = connection.GetSQLSyntax();
+            var sinceFloor = clock.ToQueryLowerBound(window);
+            var throughFloor = clock.ToQueryLowerBound(new(window.ThroughUtc, window.ThroughUtc));
+            var endpointPredicate = ArchiveClock.CreateEndpointPredicate(
+                syntax.Format(sinceFloor, SQLDateTimeType.Timestamp), syntax.Format(sinceFloor.AddSeconds(1), SQLDateTimeType.Timestamp),
+                syntax.Format(throughFloor, SQLDateTimeType.Timestamp), syntax.Format(throughFloor.AddSeconds(1), SQLDateTimeType.Timestamp));
+            foreach (var className in ArchiveScanRequirements.SpatialClasses) {
+                using var featureClass = connection.OpenDataset<FeatureClass>(QualifyTableName(className));
+                using var archive = featureClass.GetArchiveTable();
+                using var definition = archive.GetDefinition();
+                var oidField = definition.GetObjectIDField();
+                var owners = new Dictionary<long, (ArchiveInterval Interval, IReadOnlyCollection<ArchiveBindingTarget> Targets)>();
+                var rowsRead = 0;
+                using (var cursor = archive.Search(new QueryFilter {
+                    WhereClause = $"UPPER(ps) = 'S-101' AND {endpointPredicate}",
+                    SubFields = $"{oidField},GDB_FROM_DATE,GDB_TO_DATE,informationbindings,featurebindings"
+                }, true)) {
+                    while (cursor.MoveNext()) {
+                        var row = cursor.Current;
+                        rowsRead++;
+                        var interval = ReadAssociatedInterval(row, connectionName, className);
+                        IReadOnlyCollection<ArchiveBindingTarget> referenced;
+                        try {
+                            referenced = index.FindTargets(interval, ReadOptionalString(row, "informationbindings"), ReadOptionalString(row, "featurebindings"));
+                        }
+                        catch (InvalidOperationException exception) {
+                            throw new InvalidOperationException($"DPC cannot read incoming bindings: connection '{connectionName}', class '{className}', archive owner {row.GetObjectID()}. The watermark and candidates were preserved.", exception);
+                        }
+                        if (referenced.Count > 0)
+                            owners.Add(row.GetObjectID(), (interval, referenced));
+                    }
+                }
+                foreach (var batch in owners.Keys.Chunk(256)) {
+                    using var cursor = archive.Search(new QueryFilter {
+                        WhereClause = $"{oidField} IN ({string.Join(',', batch)})"
+                    }, true);
+                    var found = new HashSet<long>();
+                    while (cursor.MoveNext()) {
+                        var row = cursor.Current;
+                        found.Add(row.GetObjectID());
+                        var owner = owners[row.GetObjectID()];
+                        var id = ReadFeatureId(row);
+                        index.AddOwner(owner.Interval, owner.Targets, () => {
+                            if (row is not ArcGIS.Core.Data.Feature feature || feature.GetShape() is not { IsEmpty: false } shape)
+                                throw new InvalidOperationException($"DPC incoming binding owner '{id}' has no geometry: connection '{connectionName}', class '{className}'. The watermark and candidates were preserved.");
+                            var code = ReadOptionalString(row, "code");
+                            var isCoverage = className == "surface" && string.Equals(code, "DataCoverage", StringComparison.OrdinalIgnoreCase);
+                            var scale = isCoverage ? ReadCoverageScale(row) : ReadNominalScale(row, id);
+                            return FindAffectedProductsAtScale(shape, scale, products, isCoverage ? shape : null, id, code, className);
+                        });
+                    }
+                    if (found.Count != batch.Length)
+                        throw new InvalidOperationException($"DPC could not re-read all incoming binding owners: connection '{connectionName}', class '{className}'. The watermark and candidates were preserved.");
+                }
+                Log.Information("DPC incoming bindings resolved. Connection: {Connection}. Table: {Table}. BindingRowsRead: {RowsRead}. MatchingOwnerVersions: {MatchingOwners}. AffectedProducts: {AffectedProducts}.",
+                    connectionName, className, rowsRead, owners.Count, index.Affected.Count);
+            }
+            return index;
+        }
+
+        private static string? ReadOptionalString(Row row, string field) =>
+            row.FindField(field) < 0 || row.IsNull(field) ? null : Convert.ToString(row[field], CultureInfo.InvariantCulture);
+
+        private static ArchiveInterval ReadAssociatedInterval(Row row, string connectionName, string className) {
+            try {
+                return DpcArchiveClock.Value.ReadInterval(row["GDB_FROM_DATE"], row["GDB_TO_DATE"], DateTime.UtcNow);
+            }
+            catch (InvalidOperationException exception) {
+                throw new InvalidOperationException($"Invalid incoming-binding archive interval: connection '{connectionName}', class '{className}'. DPC preserved its watermark and candidates.", exception);
+            }
         }
 
         /// <summary>Preserves the existing timestamp reader contract using the configured SDK value clock.</summary>
@@ -1456,6 +1605,7 @@ namespace S100FC.ProductCatalogue
                             foreach (var featureMapping in featureMappings) {
                                 cancellationToken.ThrowIfCancellationRequested();
                                 var geometry = featureMapping.Geometry;
+                                var requiredAssociatedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                                 var code = Convert.ToString(current["code"]);
 
@@ -1521,9 +1671,12 @@ namespace S100FC.ProductCatalogue
                                                         To = Guid.Parse(binding.informationId!).ToStableUInt64().ToString()
                                                     };
 
-                                                    var wasAdded = informationsTypesAdded.Add(binding.informationId!);
+                                                    var associatedId = Guid.Parse(binding.informationId!).ToString("B");
+                                                    var requiredAssociation = featureTracker?.RecordSelected(associatedId) == true;
+                                                    var wasAdded = !informationsTypesAdded.Contains(associatedId);
                                                     if (wasAdded) {
                                                         dataset!.AddInformation(informationTypes.Single(e => e.ID == asso.To));
+                                                        informationsTypesAdded.Add(associatedId);
 
 
                                                         using var attachmentTable = connection.OpenDataset<Table>(this.QualifyTableName("attachment"));
@@ -1581,6 +1734,8 @@ namespace S100FC.ProductCatalogue
                                                         spatialAssociations.TryAdd(geometry, asso);
                                                     else
                                                         feature?.AddAssociation(asso);
+                                                    if (requiredAssociation)
+                                                        requiredAssociatedIds.Add(associatedId);
                                                 }
                                             }
                                         }
@@ -1630,9 +1785,24 @@ namespace S100FC.ProductCatalogue
                                                     feature?.AddFeatureAssociation(asso);
 
                                                     var noGeometry = featureTypes.SingleOrDefault(e => e.Foid == asso.To);
-                                                    if (noGeometry != null && !featureTypesAdded.Contains(binding.featureId)) {
-                                                        featureTypesAdded.Add(binding.featureId);
-                                                        dataset?.AddFeature(noGeometry);
+                                                    var associatedId = Guid.Parse(binding.featureId!).ToString("B");
+                                                    if (noGeometry is null && requiredFeatureIds?.Contains(associatedId, StringComparer.OrdinalIgnoreCase) == true) {
+                                                        // A spatial feature association may legitimately point outside this
+                                                        // topology selection. Fail only if an actual non-spatial source row
+                                                        // exists but was lost while loading/converting FeatureType.
+                                                        using var sourceTypes = connection.OpenDataset<Table>(QualifyTableName("featuretype"));
+                                                        using var sourceType = sourceTypes.Search(new QueryFilter { WhereClause = $"GLOBALID = '{associatedId}'" }, true);
+                                                        if (sourceType.MoveNext())
+                                                            throw new InvalidDataException($"Selected non-spatial S-101 feature '{associatedId}' was omitted during YAML conversion; DPC preserved its watermark.");
+                                                    }
+                                                    if (noGeometry != null) {
+                                                        var requiredAssociation = featureTracker?.RecordSelected(associatedId) == true;
+                                                        if (!featureTypesAdded.Contains(associatedId)) {
+                                                            dataset!.AddFeature(noGeometry);
+                                                            featureTypesAdded.Add(associatedId);
+                                                        }
+                                                        if (requiredAssociation)
+                                                            requiredAssociatedIds.Add(associatedId);
                                                     }
                                                 }
                                             }
@@ -1666,6 +1836,10 @@ namespace S100FC.ProductCatalogue
                                     };
 
                                     geometries.Add(new(geometrytype, geometry!, feature!));
+                                    // Associated rows count only after both their record and a selected
+                                    // owner were emitted. Failed conversion must not become inclusion evidence.
+                                    foreach (var associatedId in requiredAssociatedIds)
+                                        featureTracker!.RecordEmitted(associatedId);
                                     // Record source membership only after this generated YAML feature and its geometry were added.
                                     if (requiredSourceFeatureId is not null) {
                                         featureTracker!.RecordEmitted(requiredSourceFeatureId);

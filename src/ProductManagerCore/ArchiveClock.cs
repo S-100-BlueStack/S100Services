@@ -38,6 +38,10 @@ internal sealed class ArchiveClock(TimeZoneInfo storageTimeZone, TimeZoneInfo un
     internal static string CreateEventPredicate(string sinceLiteral, string openEndLiteral) =>
         $"(GDB_FROM_DATE > {sinceLiteral} OR (GDB_TO_DATE > {sinceLiteral} AND GDB_TO_DATE < {openEndLiteral}))";
 
+    /// <summary>Over-selects the two endpoint snapshots conservatively; callers test exact normalized UTC lifetimes before reading bindings.</summary>
+    internal static string CreateEndpointPredicate(string sinceFloor, string sinceCeiling, string throughFloor, string throughCeiling) =>
+        $"((GDB_FROM_DATE <= {sinceCeiling} AND GDB_TO_DATE > {sinceFloor}) OR (GDB_FROM_DATE <= {throughCeiling} AND GDB_TO_DATE > {throughFloor}))";
+
     /// <summary>Detects a disagreement between SQL selection and normalized values beyond permitted fractional rounding.</summary>
     internal void VerifyQueryCandidate(ArchiveInterval interval, ArchiveScanWindow window) {
         var latest = interval.ToUtc.HasValue && interval.ToUtc.Value > interval.FromUtc ? interval.ToUtc.Value : interval.FromUtc;
