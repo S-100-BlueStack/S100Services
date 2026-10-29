@@ -98,7 +98,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 !replayTracks.Any(track => (string.Equals(track.DatasetName, entry.Key, StringComparison.OrdinalIgnoreCase) ||
                     mappedS57[entry.Key].Contains(track.DatasetName, StringComparer.OrdinalIgnoreCase)) &&
                     (IsRefreshBlocked(track) || !activeReplay.ContainsKey(entry.Key) &&
-                        (track.State is ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected))))
+                        IsUnownedFinalTrack(track))))
                 .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
             foreach (var group in eligibleReplay.GroupBy(entry => entry.Value)) {
                 // Composition is relative to an endpoint state, not just a timestamp filter.
@@ -140,6 +140,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             await ScanAsync(existing.DetectedAtUtc);
         }
         var retiredReplay = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+        var failedSourceCount = 0;
         foreach (var (sourceName, changes) in pending) {
             cancellationToken.ThrowIfCancellationRequested();
             await using var packageLock = await locks.TryAcquireAsync(ProductTrackLockKey.For(sourceName, ProductSpecification.S101), cancellationToken);
@@ -217,9 +218,34 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             var snapshotTimer = Stopwatch.StartNew();
             var snapshotSucceeded = false;
             VerifiedExportSnapshot snapshot;
+            string yaml;
             try {
                 snapshot = await _products.CreateVerifiedExportSnapshotAsync(sourceName, ExportTypes.NewEdition, edition, 0, requiredFeatures, cancellationToken);
+
+                var serializationTimer = EncDetectionPerformance.IsEnabled ? Stopwatch.StartNew() : null;
+                yaml = snapshot.Dataset.Serialize();
+                if (snapshot.SuppressedMetadataSurfaces.Count > 0) {
+                    yaml = EncMetadataSurfaceYamlCleanup.RemoveSuppressedSurfaces(yaml,
+                        snapshot.SuppressedMetadataSurfaces);
+                    logger.LogInformation("ENC suppressed metadata topology surfaces removed. SourceDatasetName: {SourceDatasetName}. SurfaceCount: {SurfaceCount}.",
+                        sourceName, snapshot.SuppressedMetadataSurfaces.Distinct(StringComparer.Ordinal).Count());
+                }
+                if (serializationTimer is not null)
+                    logger.LogInformation("ENC detection profile. SourceDatasetName: {SourceDatasetName}. Phase: SerializeYaml. DurationMs: {DurationMs}. YamlCharacterCount: {YamlCharacterCount}. IncludedChangedFeatureCount: {IncludedChangedFeatureCount}.",
+                        sourceName, serializationTimer.Elapsed.TotalMilliseconds, yaml?.Length ?? 0, snapshot.IncludedChangedFeatureIds.Count);
+                if (string.IsNullOrWhiteSpace(yaml))
+                    throw new InvalidOperationException($"ENC source snapshot for '{sourceName}' was empty.");
                 snapshotSucceeded = true;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                throw;
+            }
+            catch (Exception exception) {
+                // This failure belongs to one source, not to the complete archive inspection.
+                // Persist replay before the global cursor advances, and never discard its old pair.
+                await RecordSourceSnapshotFailureAsync(sourceName, previous, packageScanFromUtc, s101, s57, exception, cancellationToken);
+                failedSourceCount++;
+                continue;
             }
             finally {
                 logger.LogInformation("ENC source dataset creation finished. SourceDatasetName: {SourceDatasetName}. Success: {Success}. DurationMs: {DurationMs}.",
@@ -261,22 +287,16 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 continue;
             }
             var summary = EncChangeSummary.Serialize(sourceName, ProductSpecification.S101, EncChangeSummary.GetCopenhagenDate(scanStartedUtc), packageScanFromUtc, scanStartedUtc, summaryChanges);
-            var serializationTimer = EncDetectionPerformance.IsEnabled ? Stopwatch.StartNew() : null;
-            var yaml = snapshot.Dataset.Serialize();
-            if (snapshot.SuppressedMetadataSurfaces.Count > 0) {
-                yaml = EncMetadataSurfaceYamlCleanup.RemoveSuppressedSurfaces(yaml,
-                    snapshot.SuppressedMetadataSurfaces);
-                logger.LogInformation("ENC suppressed metadata topology surfaces removed. SourceDatasetName: {SourceDatasetName}. SurfaceCount: {SurfaceCount}.",
-                    sourceName, snapshot.SuppressedMetadataSurfaces.Distinct(StringComparer.Ordinal).Count());
-            }
-            if (serializationTimer is not null)
-                logger.LogInformation("ENC detection profile. SourceDatasetName: {SourceDatasetName}. Phase: SerializeYaml. DurationMs: {DurationMs}. YamlCharacterCount: {YamlCharacterCount}. IncludedChangedFeatureCount: {IncludedChangedFeatureCount}.",
-                    sourceName, serializationTimer.Elapsed.TotalMilliseconds, yaml?.Length ?? 0, included.Count);
-            if (string.IsNullOrWhiteSpace(yaml))
-                throw new InvalidOperationException($"ENC source snapshot for '{sourceName}' was empty.");
 
             if (previous is not null && !await DiscardForRefreshAsync(previous, cancellationToken))
                 continue;
+
+            if (previous is null) {
+                // Only this owned, pre-candidate failure is safe to acknowledge automatically.
+                // The immutable failure history remains; ordinary manual errors stay protected.
+                foreach (var track in new[] { s101, s57 }.Where(IsSourceSnapshotFailure))
+                    await workflowRepository.DiscardCandidateAsync(track.Id, "system", clock.GetUtcNow().UtcDateTime, cancellationToken);
+            }
 
             var package = new EncPackage { Id = Guid.NewGuid(), SourceDatasetName = sourceName, S57DatasetName = s57Name, ScanFromUtc = packageScanFromUtc, DetectedAtUtc = scanStartedUtc, DatasetYaml = yaml, SummaryYaml = summary };
             if (!await packages.TryCreatePendingAsync(package, cancellationToken)) {
@@ -307,7 +327,24 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         // the watermark commit, retained replay safely repeats the already-complete inspection.
         foreach (var (sourceName, inspectedFromUtc) in retiredReplay)
             await packages.RetireReplayAsync(sourceName, inspectedFromUtc, cancellationToken);
-        logger.LogInformation("ENC change scan completed. ChangedAoiCount: {ChangedAoiCount}. WatermarkUtc: {WatermarkUtc:O}.", pending.Count, scanStartedUtc);
+        logger.LogInformation("ENC change scan completed. ChangedAoiCount: {ChangedAoiCount}. WatermarkUtc: {WatermarkUtc:O}. FailedSourceCount: {FailedSourceCount}.", pending.Count, scanStartedUtc, failedSourceCount);
+    }
+
+    /// <summary>Retains source work durably while recording the failed shared build on both product histories.</summary>
+    private async Task RecordSourceSnapshotFailureAsync(string sourceName, EncPackage? previous, DateTime scanFromUtc, ProductExportTrackRecord s101, ProductExportTrackRecord s57, Exception exception, CancellationToken cancellationToken) {
+        var replayFromUtc = previous?.ScanFromUtc ?? scanFromUtc;
+        await packages.MarkReplayAsync(sourceName, replayFromUtc, cancellationToken);
+        var message = $"Shared ENC source snapshot failed: {exception.Message}";
+        if (message.Length > 1024) message = message[..1024];
+        if (previous is not null)
+            await packages.SetErrorAsync(previous.Id, message, cancellationToken);
+        foreach (var track in new[] { s101, s57 }) {
+            // Existing candidate identities/artifacts remain valid evidence of the previous
+            // snapshot. History records the replacement failure without relabelling that build.
+            var state = previous is null ? ProductState.Error : track.State;
+            await workflowRepository.SetStateAsync(track.Id, state, "system", clock.GetUtcNow().UtcDateTime, "ENC_SOURCE_SNAPSHOT_FAILED", message, cancellationToken);
+        }
+        logger.LogError(exception, "ENC source snapshot failed; replay retained and remaining products will continue. SourceDatasetName: {SourceDatasetName}. ExistingPackageId: {PackageId}. ReplayFromUtc: {ReplayFromUtc:O}.", sourceName, previous?.Id, replayFromUtc);
     }
 
     /// <summary>Recreates only absent legacy member tracks using each published catalogue version before queue recovery.</summary>
@@ -340,8 +377,14 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
     /// <summary>A standalone final Product candidate cannot be adopted by a newly detected package.</summary>
     internal static bool HasUnownedFinalCandidate(EncPackage? activePackage, ProductExportTrackRecord s101, ProductExportTrackRecord s57) =>
         activePackage is null &&
-        (s101.State is ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected ||
-         s57.State is ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected);
+        (IsUnownedFinalTrack(s101) || IsUnownedFinalTrack(s57));
+
+    private static bool IsUnownedFinalTrack(ProductExportTrackRecord track) =>
+        (track.State is ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected) && !IsSourceSnapshotFailure(track);
+
+    private static bool IsSourceSnapshotFailure(ProductExportTrackRecord track) =>
+        track.State == ProductState.Error && track.CandidateEdition is null && track.CandidateUpdate is null &&
+        track.ErrorCode == "ENC_SOURCE_SNAPSHOT_FAILED";
 
     /// <summary>Checks and discards both members in one SQL transaction, preserving replay if either member is protected.</summary>
     private async Task<bool> DiscardForRefreshAsync(EncPackage package, CancellationToken cancellationToken) {
