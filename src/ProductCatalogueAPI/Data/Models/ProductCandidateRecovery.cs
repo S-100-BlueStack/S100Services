@@ -3,11 +3,11 @@ namespace ProductCatalogueAPI.Data.Models;
 /// <summary>Shared pre-send guards for one independently owned Product candidate.</summary>
 public static class ProductCandidateRecovery
 {
-    /// <summary>Only final, unsent candidates can be acknowledged or discarded.</summary>
+    /// <summary>Final candidates may be discarded only after the repository also verifies their exact delivery outcome.</summary>
     public static bool CanDiscard(ProductState state, ProductState? previousState, int? edition, int? update) =>
         edition.HasValue == update.HasValue &&
-        state is (ProductState.ReadyForDistribution or ProductState.Error) &&
-        (edition.HasValue || state == ProductState.Error) &&
+        state is (ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected) &&
+        (edition.HasValue || state is ProductState.Error or ProductState.Rejected) &&
         previousState is not (ProductState.Frozen or ProductState.Exporting or ProductState.Validating or
             ProductState.InTransit or ProductState.ReadyForDistribution or ProductState.AcceptedForDistribution or ProductState.Published);
 

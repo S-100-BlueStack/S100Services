@@ -96,11 +96,10 @@ public static class EncPackageActionEligibility
     private static bool IsAlreadyDiscarded(ProductExportTrackRecord track) =>
         !track.IsManuallyFrozen && !track.CandidateEdition.HasValue && !track.CandidateUpdate.HasValue &&
         !track.CandidatePreviousState.HasValue &&
-        track.State is not (ProductState.InTransit or ProductState.AcceptedForDistribution or
-            ProductState.Exporting or ProductState.Validating or ProductState.Frozen);
+        track.State is (ProductState.Idle or ProductState.ChangesDetected or ProductState.Error or ProductState.Rejected);
 
     private static bool IsPreSendFinal(ProductExportTrackRecord track) =>
-        !track.IsManuallyFrozen && track.State is (ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected);
+        !track.IsManuallyFrozen && ProductCandidateRecovery.CanDiscard(track.State, track.CandidatePreviousState, track.CandidateEdition, track.CandidateUpdate);
 
     private static bool HasCandidate(ProductExportTrackRecord track) =>
         track.CandidateEdition.HasValue && track.CandidateUpdate.HasValue ||

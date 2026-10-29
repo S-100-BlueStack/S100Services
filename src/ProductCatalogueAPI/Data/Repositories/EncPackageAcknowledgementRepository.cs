@@ -104,12 +104,10 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
                 throw new InvalidOperationException("The IC-ENC delivery changed during acknowledgement.");
             changed = await connection.ExecuteAsync(new CommandDefinition("""
                 UPDATE dbo.ProductExportTrack
-                SET state = @State, updated_at_utc = @NowUtc, error_code = @ErrorCode, error_message = @ErrorMessage
+                SET state = @State, updated_at_utc = @NowUtc
                 WHERE product_export_track_id = @TrackId AND state = @InTransit;
                 """, new { delivery.TrackId, NowUtc = nowUtc, State = expectedState,
-                    InTransit = ProductState.InTransit,
-                    ErrorCode = acknowledgement.Decision == IcEncDecision.Rejected ? "IC_ENC_REJECTED" : null,
-                    ErrorMessage = rejectionMessage
+                    InTransit = ProductState.InTransit
                 }, transaction, cancellationToken: cancellationToken));
             if (changed != 1)
                 throw new InvalidOperationException("The IC-ENC product changed during acknowledgement.");
@@ -132,16 +130,20 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
                             JOIN dbo.Product p ON p.dataset_name = ep.s57_dataset_name
                             JOIN dbo.ProductExportTrack t ON t.product_id = p.product_id AND t.product_specification = 'S57'
                             JOIN dbo.ProductIcEncDelivery d ON d.product_export_track_id = t.product_export_track_id AND d.status = 'Accepted'
-                            JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id
+                            JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id AND r.product_export_track_id = t.product_export_track_id
                             WHERE ep.package_id = @PackageId AND t.state = @Accepted AND ep.s57_discarded = 0
-                              AND t.candidate_edition = r.edition_number AND t.candidate_update = r.update_number)
+                              AND t.candidate_edition = r.edition_number AND t.candidate_update = r.update_number
+                              AND NOT EXISTS (SELECT 1 FROM dbo.ProductRevision newer WHERE newer.product_export_track_id = t.product_export_track_id
+                                  AND (newer.created_at_utc > r.created_at_utc OR (newer.created_at_utc = r.created_at_utc AND newer.product_revision_id > r.product_revision_id))))
                     AND EXISTS (SELECT 1 FROM dbo.EncPackage ep
                             JOIN dbo.Product p ON p.dataset_name = ep.source_dataset_name
                             JOIN dbo.ProductExportTrack t ON t.product_id = p.product_id AND t.product_specification = 'S101'
                             JOIN dbo.ProductIcEncDelivery d ON d.product_export_track_id = t.product_export_track_id AND d.status = 'Accepted'
-                            JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id
+                            JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id AND r.product_export_track_id = t.product_export_track_id
                             WHERE ep.package_id = @PackageId AND t.state = @Accepted AND ep.s101_discarded = 0
-                              AND t.candidate_edition = r.edition_number AND t.candidate_update = r.update_number)
+                              AND t.candidate_edition = r.edition_number AND t.candidate_update = r.update_number
+                              AND NOT EXISTS (SELECT 1 FROM dbo.ProductRevision newer WHERE newer.product_export_track_id = t.product_export_track_id
+                                  AND (newer.created_at_utc > r.created_at_utc OR (newer.created_at_utc = r.created_at_utc AND newer.product_revision_id > r.product_revision_id))))
                     THEN 1 ELSE 0 END);
                 """, new { delivery.PackageId, Accepted = ProductState.AcceptedForDistribution }, transaction, cancellationToken: cancellationToken));
         }
@@ -156,14 +158,18 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
             WHERE p.s57_discarded = 0 AND p.s101_discarded = 0
               AND EXISTS (SELECT 1 FROM dbo.ProductExportTrack t JOIN dbo.Product prod ON prod.product_id = t.product_id
                           JOIN dbo.ProductIcEncDelivery d ON d.product_export_track_id = t.product_export_track_id AND d.status = 'Accepted'
-                          JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id
+                          JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id AND r.product_export_track_id = t.product_export_track_id
                           WHERE prod.dataset_name = p.s57_dataset_name AND t.product_specification = 'S57' AND t.state = @Accepted
-                            AND r.edition_number = t.candidate_edition AND r.update_number = t.candidate_update)
+                            AND r.edition_number = t.candidate_edition AND r.update_number = t.candidate_update
+                            AND NOT EXISTS (SELECT 1 FROM dbo.ProductRevision newer WHERE newer.product_export_track_id = t.product_export_track_id
+                                AND (newer.created_at_utc > r.created_at_utc OR (newer.created_at_utc = r.created_at_utc AND newer.product_revision_id > r.product_revision_id))))
               AND EXISTS (SELECT 1 FROM dbo.ProductExportTrack t JOIN dbo.Product prod ON prod.product_id = t.product_id
                           JOIN dbo.ProductIcEncDelivery d ON d.product_export_track_id = t.product_export_track_id AND d.status = 'Accepted'
-                          JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id
+                          JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id AND r.product_export_track_id = t.product_export_track_id
                           WHERE prod.dataset_name = p.source_dataset_name AND t.product_specification = 'S101' AND t.state = @Accepted
-                            AND r.edition_number = t.candidate_edition AND r.update_number = t.candidate_update);
+                            AND r.edition_number = t.candidate_edition AND r.update_number = t.candidate_update
+                            AND NOT EXISTS (SELECT 1 FROM dbo.ProductRevision newer WHERE newer.product_export_track_id = t.product_export_track_id
+                                AND (newer.created_at_utc > r.created_at_utc OR (newer.created_at_utc = r.created_at_utc AND newer.product_revision_id > r.product_revision_id))));
             """, new { Accepted = ProductState.AcceptedForDistribution }, cancellationToken: cancellationToken));
         return ids.ToArray();
     }
@@ -230,13 +236,17 @@ public sealed class EncPackageAcknowledgementRepository(DbConnectionFactory conn
             var changed = await connection.ExecuteAsync(new CommandDefinition("""
                 UPDATE t SET state = @Idle, published_edition = @Edition, published_update = @Update,
                     candidate_edition = NULL, candidate_update = NULL, candidate_previous_state = NULL,
-                    error_code = NULL, error_message = NULL, updated_at_utc = @NowUtc
+                    updated_at_utc = @NowUtc
                 FROM dbo.ProductExportTrack t JOIN dbo.Product p ON p.product_id = t.product_id
                 WHERE p.dataset_name = @DatasetName AND t.product_specification = @Specification
                   AND t.state = @Accepted AND t.candidate_edition = @Edition AND t.candidate_update = @Update
-                  AND EXISTS (SELECT 1 FROM dbo.ProductIcEncDelivery d JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id
+                  AND EXISTS (SELECT 1 FROM dbo.ProductIcEncDelivery d JOIN dbo.ProductRevision r ON r.product_revision_id = d.product_revision_id AND r.product_export_track_id = t.product_export_track_id
                               WHERE d.product_export_track_id = t.product_export_track_id AND d.status = 'Accepted'
-                                AND r.edition_number = @Edition AND r.update_number = @Update);
+                                AND r.edition_number = @Edition AND r.update_number = @Update
+                                AND NOT EXISTS (SELECT 1 FROM dbo.ProductRevision newer WITH (UPDLOCK, HOLDLOCK)
+                                    WHERE newer.product_export_track_id = t.product_export_track_id
+                                      AND (newer.created_at_utc > r.created_at_utc OR
+                                           (newer.created_at_utc = r.created_at_utc AND newer.product_revision_id > r.product_revision_id))));
                 """, new { product.DatasetName, product.Specification, product.Edition, product.Update,
                     Idle = ProductState.Idle, Accepted = ProductState.AcceptedForDistribution, NowUtc = nowUtc }, transaction, cancellationToken: cancellationToken));
             if (changed != 1)

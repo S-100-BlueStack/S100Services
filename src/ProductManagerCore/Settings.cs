@@ -50,6 +50,10 @@ namespace S100FC.ProductCatalogue
         public string? BeforeFeatureBindings { get; set; }
         public string? BeforeInformationBindings { get; set; }
         public bool GeometryChanged { get; set; }
+        /// <summary>Gets or sets the scale selecting the current feature into a product.</summary>
+        public long? NominalScale { get; set; }
+        /// <summary>Gets or sets the selection scale at the exclusive archive lower bound.</summary>
+        public long? BeforeNominalScale { get; set; }
         public bool CurrentInProduct { get; set; }
         public bool Deleted { get; set; } = false;
         public DateTime? EditDate {  get; set; }

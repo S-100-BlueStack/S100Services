@@ -22,6 +22,8 @@ internal static class EncChangeSummary
             paths.Add("$code");
         if (row.GeometryChanged)
             paths.Add("$geometry");
+        if (row.BeforeNominalScale != row.NominalScale)
+            paths.Add("$nominalscale");
         if (row.BeforeCode is null && paths.Count == 0)
             paths.Add("$feature");
         return paths.OrderBy(path => path, StringComparer.Ordinal).ToArray();

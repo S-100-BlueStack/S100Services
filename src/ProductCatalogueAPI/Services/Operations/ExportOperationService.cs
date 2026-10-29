@@ -28,6 +28,26 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
     /// <inheritdoc/>
     public Task<ExportOperationResult> ExecutePackageExportAsync(string datasetName, ExportRevisionType revisionType, string datasetYaml, string changeSummaryYaml, CancellationToken cancellationToken = default) => ExecuteExportCoreAsync(datasetName, revisionType, "system", changeSummaryYaml, cancellationToken, null, datasetYaml);
 
+    /// <inheritdoc/>
+    public async Task<bool> ExecutePackageRefreshDiscardAsync(Guid packageId, CancellationToken cancellationToken = default) {
+        if (packages is null)
+            throw new InvalidOperationException("ENC package persistence is unavailable.");
+        var result = await packages.TryDiscardForRefreshAsync(packageId, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+        if (result.Status != EncPackageDiscardStatus.Discarded)
+            return false;
+        foreach (var output in result.Outputs) {
+            try {
+                await _exportEngines.GetRequiredEngine(output.Specification).DeleteOutputAsync(
+                    new ExportOutputIdentity(output.DatasetName, output.Specification, output.Edition, output.Update, _electronicProductManager.OutputFolder), cancellationToken);
+            }
+            catch (Exception exception) {
+                // SQL committed both member discards and replay; output cleanup must not undo that durable result.
+                _logger.LogWarning(exception, "ENC refresh discarded candidates in SQL but output cleanup requires review. DatasetName: {DatasetName}. Specification: {Specification}.", output.DatasetName, output.Specification);
+            }
+        }
+        return true;
+    }
+
     private async Task<ExportOperationResult> ExecuteExportCoreAsync(string datasetName, ExportRevisionType revisionType, string? user, string? changeSummaryYaml, CancellationToken cancellationToken, Action? beforeMutation, string? datasetYamlOverride) {
         cancellationToken.ThrowIfCancellationRequested();
         var product = ResolveRequiredExportProduct(datasetName);
@@ -197,7 +217,7 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
 
         var track = await _workflowRepository.GetTrackAsync(targetDatasetName, productSpecification, cancellationToken)
             ?? throw new ExportOperationRejectedException($"No {productSpecification} export track exists for '{datasetName}'.");
-        if (!ProductCandidateRecovery.CanDiscard(track.State, track.CandidatePreviousState, track.CandidateEdition, track.CandidateUpdate))
+        if (track.IsManuallyFrozen || !ProductCandidateRecovery.CanDiscard(track.State, track.CandidatePreviousState, track.CandidateEdition, track.CandidateUpdate))
             throw new ExportOperationRejectedException("There is no eligible unsent Product candidate to discard.");
 
         // Keep the candidate output identity before Discard clears the SQL-owned fields.

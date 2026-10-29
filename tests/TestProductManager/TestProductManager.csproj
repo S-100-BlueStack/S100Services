@@ -33,6 +33,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestProductCatalogue\DpcRunAsyncTests.cs" Link="DpcRegression\DpcRunAsyncTests.cs" />
+    <Compile Include="..\TestProductCatalogue\DpcSqlTransactionTests.cs" Link="DpcRegression\DpcSqlTransactionTests.cs" />
+    <None Include="..\..\src\ProductCatalogueAPI\Data\Migrations\*.sql" Link="DpcMigrations\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 

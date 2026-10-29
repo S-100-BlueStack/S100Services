@@ -577,6 +577,13 @@ namespace S100FC.ProductCatalogue
                     if (productsForConnection.Count == 0)
                         continue;
 
+                    // Validate every required class before coverage caching or reading any archive rows.
+                    var connectionLabel = Path.GetFileName(uri.IsAbsoluteUri ? uri.LocalPath : uri.OriginalString);
+                    foreach (var className in ArchiveScanRequirements.Classes) {
+                        using var requiredClass = connection.OpenDataset<FeatureClass>(QualifyTableName(className));
+                        ArchiveScanRequirements.Verify(connectionLabel, className, requiredClass.IsArchiveEnabled());
+                    }
+
                     var cacheKey = uri.OriginalString;
                     var coverageTimer = EncDetectionPerformance.IsEnabled ? Stopwatch.StartNew() : null;
                     var rebuiltCoverage = false;
@@ -590,7 +597,7 @@ namespace S100FC.ProductCatalogue
                         Log.Information("ENC detection profile. Phase: CoverageCache. Connection: {Connection}. Rebuilt: {Rebuilt}. AoiCount: {AoiCount}. DataCoverageCount: {DataCoverageCount}. DurationMs: {DurationMs}.",
                             connectionSettings.ProductSpecification, rebuiltCoverage, cache.Products.Count, cache.DataCoverageCount, coverageTimer.Elapsed.TotalMilliseconds);
 
-                    ScanConnectionForPendingEdits(connection, connectionSettings.ProductSpecification, cache.Products, window, result);
+                    ScanConnectionForPendingEdits(connection, connectionLabel, cache.Products, window, result);
                 }
             });
 
@@ -745,14 +752,7 @@ namespace S100FC.ProductCatalogue
                 using var fc = connection.OpenDataset<FeatureClass>(
                     this.QualifyTableName(baseTableName));
 
-                if (!fc.IsArchiveEnabled()) {
-                    Log.Warning(
-                        "Archiving is not enabled on {tableName} for connection {connectionName}.",
-                        baseTableName,
-                        connectionName);
-
-                    continue;
-                }
+                ArchiveScanRequirements.Verify(connectionName, baseTableName, fc.IsArchiveEnabled());
 
                 using var archiveTable = fc.GetArchiveTable();
 
@@ -816,12 +816,15 @@ namespace S100FC.ProductCatalogue
                     uniqueChangedFeatureIds.Add(id);
                     if (!latestEditByFeature.TryGetValue(id, out var latestEdit) || changedAt.Value > latestEdit)
                         latestEditByFeature[id] = changedAt.Value;
+                    var nominalScale = baseTableName == "surface" && string.Equals(row["Code"]?.ToString(), "DataCoverage", StringComparison.OrdinalIgnoreCase)
+                        ? ReadCoverageScale(row) : ReadNominalScale(row, id);
                     var archiveRow = new ArchiveRow {
                         Code = row["Code"]?.ToString() ?? string.Empty,
                         AttributeBindings = row["attributebindings"]?.ToString(),
                         InformationBindings = row["informationbindings"]?.ToString(),
                         FeatureBindings = row["featurebindings"]?.ToString(),
-                        EditDate = changedAt
+                        EditDate = changedAt,
+                        NominalScale = nominalScale
                     };
                     if (!versionsById.TryGetValue(id, out var versions)) {
                         versions = new List<ArchiveVersion>();
@@ -830,7 +833,6 @@ namespace S100FC.ProductCatalogue
                     versions.Add(new ArchiveVersion(archiveRow, interval, changedShape.Clone()));
 
                     var isDataCoverage = baseTableName == "surface" && string.Equals(archiveRow.Code, "DataCoverage", StringComparison.OrdinalIgnoreCase);
-                    var nominalScale = isDataCoverage ? ReadCoverageScale(row) : ReadNominalScale(row, id);
                     foreach (var productName in FindAffectedProductsAtScale(changedShape, nominalScale, productList, isDataCoverage ? changedShape : null, id, archiveRow.Code, baseTableName)) {
                         affectedProducts.Add(productName);
 
@@ -888,20 +890,8 @@ namespace S100FC.ProductCatalogue
             var endpoints = window.Compose(versions, version => version.Interval);
             var before = endpoints.Before;
             var after = endpoints.After;
-            var row = after?.Row ?? endpoints.Latest.Row;
-            return new ArchiveRow {
-                Code = row.Code,
-                AttributeBindings = after?.Row.AttributeBindings,
-                FeatureBindings = after?.Row.FeatureBindings,
-                InformationBindings = after?.Row.InformationBindings,
-                BeforeCode = before?.Row.Code,
-                BeforeAttributeBindings = before?.Row.AttributeBindings,
-                BeforeFeatureBindings = before?.Row.FeatureBindings,
-                BeforeInformationBindings = before?.Row.InformationBindings,
-                GeometryChanged = before is not null && after is not null && !GeometryEngine.Instance.Equals(before.Shape, after.Shape),
-                Deleted = after is null,
-                EditDate = endpoints.LatestEditUtc
-            };
+            return ArchiveChangeComposer.Compose(before?.Row, after?.Row, endpoints.Latest.Row, endpoints.LatestEditUtc,
+                before is not null && after is not null && !GeometryEngine.Instance.Equals(before.Shape, after.Shape));
         }
 
         /// <summary>Preserves the existing timestamp reader contract using the configured SDK value clock.</summary>

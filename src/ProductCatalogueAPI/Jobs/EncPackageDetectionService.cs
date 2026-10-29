@@ -41,8 +41,24 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             : EncChangeSummary.GetCopenhagenDayStartUtc(scanStartedUtc);
         logger.LogInformation("ENC archive scan started. SinceUtc: {SinceUtc:O}. StartedUtc: {StartedUtc:O}.", sinceUtc, scanStartedUtc);
 
+        var completeScans = new Dictionary<DateTime, Dictionary<string, Dictionary<string, ArchiveRow>>>();
+        async Task<Dictionary<string, Dictionary<string, ArchiveRow>>> ScanAsync(DateTime lowerBound) {
+            if (!completeScans.TryGetValue(lowerBound, out var result)) {
+                result = await _products.GetPendingEditsAsync(lowerBound, scanStartedUtc);
+                cancellationToken.ThrowIfCancellationRequested();
+                foreach (var (source, rows) in result) {
+                    foreach (var (featureId, row) in rows) {
+                        if (row.EditDate is null || row.EditDate.Value.Kind != DateTimeKind.Utc || row.EditDate > clock.GetUtcNow().UtcDateTime.AddMinutes(5))
+                            throw new InvalidOperationException($"Invalid ENC archive timestamp for '{source}', feature '{featureId}'. The watermark and candidates were preserved.");
+                    }
+                }
+                completeScans.Add(lowerBound, result);
+            }
+            return result;
+        }
+
         var archiveScanTime = Stopwatch.StartNew();
-        var pending = await _products.GetPendingEditsAsync(sinceUtc, scanStartedUtc);
+        var pending = new Dictionary<string, Dictionary<string, ArchiveRow>>(await ScanAsync(sinceUtc), StringComparer.OrdinalIgnoreCase);
         logger.LogInformation("ENC archive scan finished. DurationMs: {DurationMs}. ChangedAoiCount: {ChangedAoiCount}. UniqueChangedFeatureCount: {UniqueChangedFeatureCount}.",
             archiveScanTime.ElapsedMilliseconds, pending.Count, pending.Values.SelectMany(changes => changes.Keys).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         var replay = await packages.GetReplayBoundsAsync(cancellationToken);
@@ -79,14 +95,13 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                     (IsRefreshBlocked(track) || !activeReplay.ContainsKey(entry.Key) &&
                         (track.State is ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected))))
                 .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
-            if (eligibleReplay.Count > 0) {
-                // A blocked AOI retains its cursor without repeatedly forcing a historic archive scan.
-                logger.LogInformation("ENC replay archive scan started. SinceUtc: {SinceUtc:O}. EligibleAoiCount: {EligibleAoiCount}.", eligibleReplay.Values.Min(), eligibleReplay.Count);
-                var replayed = await _products.GetPendingEditsAsync(eligibleReplay.Values.Min(), scanStartedUtc);
-                foreach (var (sourceName, changes) in replayed) {
-                    if (eligibleReplay.TryGetValue(sourceName, out var lowerBound) && lowerBound <= sinceUtc && changes.Count > 0)
-                        pending[sourceName] = changes;
-                }
+            foreach (var group in eligibleReplay.GroupBy(entry => entry.Value)) {
+                // Composition is relative to an endpoint state, not just a timestamp filter.
+                // A source at 10:00 cannot reuse an 08:00 comparison, even if the net result is empty.
+                logger.LogInformation("ENC replay archive scan started. SinceUtc: {SinceUtc:O}. EligibleAoiCount: {EligibleAoiCount}.", group.Key, group.Count());
+                var replayed = await ScanAsync(group.Key);
+                foreach (var entry in group)
+                    pending[entry.Key] = replayed.GetValueOrDefault(entry.Key) ?? new(StringComparer.OrdinalIgnoreCase);
             }
         }
 
@@ -113,11 +128,15 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             throw new InvalidOperationException($"S-101 archive edit at {latestArchiveEditUtc:O} is more than five minutes ahead of the worker clock at {workerUtc:O}. Check the archive timestamp zone and clock synchronization; DPC preserved its watermark and candidates.");
 
         var active = await packages.GetActiveAsync(pending.Keys, cancellationToken);
-        var completeScans = new Dictionary<DateTime, Dictionary<string, Dictionary<string, ArchiveRow>>>();
+        // Finish every required archive inspection before destructive candidate work. A later
+        // replay/history scan failure must not leave earlier sources partly replaced.
+        foreach (var existing in active.Values) {
+            await ScanAsync(existing.ScanFromUtc);
+            await ScanAsync(existing.DetectedAtUtc);
+        }
+        var retiredReplay = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
         foreach (var (sourceName, changes) in pending) {
             cancellationToken.ThrowIfCancellationRequested();
-            if (changes.Count == 0)
-                continue;
             await using var packageLock = await locks.TryAcquireAsync(ProductTrackLockKey.For(sourceName, ProductSpecification.S101), cancellationToken);
             if (packageLock is null)
                 throw new InvalidOperationException($"ENC package lock for '{sourceName}' is busy. The scan watermark was preserved.");
@@ -131,33 +150,28 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 throw new InvalidOperationException($"Mapped S-57 export lock for '{s57Name}' is busy. The scan watermark was preserved.");
 
             var packageChanges = changes;
+            var snapshotChanges = changes;
             var packageScanFromUtc = replay.GetValueOrDefault(sourceName, sinceUtc);
             EncPackage? previous = null;
             if (active.TryGetValue(sourceName, out var existing)) {
-                // An earlier Worker crash may have left a package member in
-                // Exporting/Validating. At this point both Product locks are held.
+                if (!string.Equals(existing.S57DatasetName, s57Name, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException($"The mapped S-57 member of ENC package '{existing.Id}' changed. The watermark and candidates were preserved.");
                 await EncPackageInterruptedExportRecovery.TryRecoverAsync(existing,
                     workflowRepository, packages, clock, logger, cancellationToken);
-                var packageArchiveEditUtc = EncChangeSummary.GetLatestArchiveEditUtc(existing.SummaryYaml);
-                if (!HasNewEdits(changes, packageArchiveEditUtc)) {
-                    // A replayed archive row from the existing snapshot is not a reason to retry a failed export.
-                    if (await CanRefreshAsync(existing, cancellationToken))
-                        await RecoverIncompletePackageAsync(existing, cancellationToken);
-                    continue;
-                }
                 if (!await CanRefreshAsync(existing, cancellationToken)) {
                     await packages.MarkReplayAsync(sourceName, packageScanFromUtc, cancellationToken);
                     logger.LogInformation("ENC package refresh deferred while a product is held, building, or awaiting approval. SourceDatasetName: {SourceDatasetName}.", sourceName);
                     continue;
                 }
-
-                if (!completeScans.TryGetValue(existing.ScanFromUtc, out var completeChanges)) {
-                    logger.LogInformation("ENC package history scan started. SourceDatasetName: {SourceDatasetName}. SinceUtc: {SinceUtc:O}.", sourceName, existing.ScanFromUtc);
-                    completeChanges = await _products.GetPendingEditsAsync(existing.ScanFromUtc, scanStartedUtc);
-                    completeScans.Add(existing.ScanFromUtc, completeChanges);
-                }
-                if (!completeChanges.TryGetValue(sourceName, out packageChanges) || packageChanges.Count == 0)
+                // The snapshot timestamp identifies the source state already encoded. The
+                // surviving cumulative summary can have older timestamps after a partial revert.
+                snapshotChanges = (await ScanAsync(existing.DetectedAtUtc)).GetValueOrDefault(sourceName) ?? new(StringComparer.OrdinalIgnoreCase);
+                if (!snapshotChanges.Values.Any(change => EncChangeSummary.GetObservedAttributePaths(change).Count > 0)) {
+                    await RecoverIncompletePackageAsync(existing, cancellationToken);
+                    retiredReplay[sourceName] = packageScanFromUtc;
                     continue;
+                }
+                packageChanges = (await ScanAsync(existing.ScanFromUtc)).GetValueOrDefault(sourceName) ?? new(StringComparer.OrdinalIgnoreCase);
                 packageScanFromUtc = existing.ScanFromUtc;
                 previous = existing;
             }
@@ -182,19 +196,15 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
 
             var summaryChanges = packageChanges.SelectMany(pair => EncChangeSummary.GetObservedAttributePaths(pair.Value)
                 .Select(path => new ProductChange(pair.Key, pair.Value.Code, path, pair.Value.EditDate ?? scanStartedUtc, pair.Value.Deleted))).ToArray();
-            if (summaryChanges.Length == 0) {
-                if (previous is not null) {
-                    // An edit that reverts the package's source must also remove its stale candidates.
-                    await DiscardForRefreshAsync(previous, s57, ProductSpecification.S57, cancellationToken);
-                    await DiscardForRefreshAsync(previous, s101, ProductSpecification.S101, cancellationToken);
-                }
-                await packages.ClearReplayAsync(sourceName, cancellationToken);
+            if (summaryChanges.Length == 0 && previous is null) {
+                retiredReplay[sourceName] = packageScanFromUtc;
                 logger.LogInformation("ENC archive rows had no net feature difference. SourceDatasetName: {SourceDatasetName}.", sourceName);
                 continue;
             }
             var edition = checked(s101.PublishedEdition + 1);
-            var requiredFeatures = packageChanges.Where(pair => pair.Value.CurrentInProduct && !pair.Value.Deleted)
-                .Select(pair => pair.Key).ToArray();
+            var requiredFeatures = packageChanges.Concat(snapshotChanges)
+                .Where(pair => pair.Value.CurrentInProduct && !pair.Value.Deleted)
+                .Select(pair => pair.Key).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             logger.LogInformation("ENC source dataset creation started. SourceDatasetName: {SourceDatasetName}. ExportType: {ExportType}. Edition: {Edition}. Update: {Update}. RequiredChangedFeatureCount: {RequiredChangedFeatureCount}.",
                 sourceName, ExportTypes.NewEdition, edition, 0, requiredFeatures.Length);
             var snapshotTimer = Stopwatch.StartNew();
@@ -209,13 +219,38 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                     sourceName, snapshotSucceeded, snapshotTimer.ElapsedMilliseconds);
             }
             var included = snapshot.IncludedChangedFeatureIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-            summaryChanges = summaryChanges.Where(change => !packageChanges[change.FeatureId].CurrentInProduct ||
-                packageChanges[change.FeatureId].Deleted || included.Contains(change.FeatureId)).ToArray();
-            if (summaryChanges.Length == 0 || previous is not null &&
-                summaryChanges.All(change => change.DetectedAtUtc <= EncChangeSummary.GetLatestArchiveEditUtc(previous.SummaryYaml))) {
-                // Broad AOI intersections are not proof that a current feature belongs in the exported topology.
-                logger.LogInformation("ENC archive changes did not alter the export selection. SourceDatasetName: {SourceDatasetName}. ExcludedChangedFeatureCount: {ExcludedChangedFeatureCount}.", sourceName, requiredFeatures.Length - included.Count);
-                await packages.ClearReplayAsync(sourceName, cancellationToken);
+            var priorMembers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var possibleRemovals = packageChanges.Concat(snapshotChanges)
+                .Where(pair => (!pair.Value.CurrentInProduct || pair.Value.Deleted || !included.Contains(pair.Key)) && EncChangeSummary.GetObservedAttributePaths(pair.Value).Count > 0)
+                .Select(pair => pair.Key).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            if (possibleRemovals.Length > 0) {
+                if (previous is not null) {
+                    priorMembers.UnionWith(EncSnapshotMembership.FindSourceMembers(previous.DatasetYaml, possibleRemovals));
+                    // Cumulative removals are already absent from the preceding candidate's YAML.
+                    priorMembers.UnionWith(EncSnapshotMembership.ReadSummaryFeatureIds(previous.SummaryYaml));
+                }
+                else if (s101.PublishedEdition > 0) {
+                    var published = await _products.GetLatestDatasetYAML(sourceName, s101.PublishedEdition);
+                    priorMembers.UnionWith(EncSnapshotMembership.FindSourceMembers(published.yaml, possibleRemovals));
+                }
+            }
+            bool IsRelevant(KeyValuePair<string, ArchiveRow> change) =>
+                EncChangeSummary.GetObservedAttributePaths(change.Value).Count > 0 &&
+                (change.Value.CurrentInProduct && !change.Value.Deleted && included.Contains(change.Key) || priorMembers.Contains(change.Key));
+
+            if (previous is not null && !snapshotChanges.Any(IsRelevant)) {
+                logger.LogInformation("ENC archive changes did not alter the verified export selection. SourceDatasetName: {SourceDatasetName}.", sourceName);
+                await RecoverIncompletePackageAsync(previous, cancellationToken);
+                retiredReplay[sourceName] = replay.GetValueOrDefault(sourceName, sinceUtc);
+                continue;
+            }
+            var relevantIds = packageChanges.Where(IsRelevant).Select(pair => pair.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            summaryChanges = summaryChanges.Where(change => relevantIds.Contains(change.FeatureId)).ToArray();
+            if (summaryChanges.Length == 0) {
+                if (previous is not null && !await DiscardForRefreshAsync(previous, cancellationToken))
+                    continue;
+                retiredReplay[sourceName] = packageScanFromUtc;
+                logger.LogInformation("ENC source returned to its cumulative baseline. SourceDatasetName: {SourceDatasetName}.", sourceName);
                 continue;
             }
             var summary = EncChangeSummary.Serialize(sourceName, ProductSpecification.S101, EncChangeSummary.GetCopenhagenDate(scanStartedUtc), packageScanFromUtc, scanStartedUtc, summaryChanges);
@@ -233,22 +268,15 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             if (string.IsNullOrWhiteSpace(yaml))
                 throw new InvalidOperationException($"ENC source snapshot for '{sourceName}' was empty.");
 
-            if (previous is not null) {
-                logger.LogInformation("Refreshing ENC package after a later archive edit. SourceDatasetName: {SourceDatasetName}. PreviousArchiveEditUtc: {PreviousArchiveEditUtc:O}. LatestArchiveEditUtc: {LatestArchiveEditUtc:O}. PackageCreatedUtc: {PackageCreatedUtc:O}.", sourceName, EncChangeSummary.GetLatestArchiveEditUtc(previous.SummaryYaml), changes.Values.Max(change => change.EditDate), previous.DetectedAtUtc);
-                try {
-                    await DiscardForRefreshAsync(previous, s57, ProductSpecification.S57, cancellationToken);
-                    await DiscardForRefreshAsync(previous, s101, ProductSpecification.S101, cancellationToken);
-                }
-                catch {
-                    await packages.SetErrorAsync(previous.Id, "The package could not be refreshed. Review and discard its remaining candidate.", CancellationToken.None);
-                    throw;
-                }
-            }
+            if (previous is not null && !await DiscardForRefreshAsync(previous, cancellationToken))
+                continue;
 
             var package = new EncPackage { Id = Guid.NewGuid(), SourceDatasetName = sourceName, S57DatasetName = s57Name, ScanFromUtc = packageScanFromUtc, DetectedAtUtc = scanStartedUtc, DatasetYaml = yaml, SummaryYaml = summary };
             if (!await packages.TryCreateAsync(package, cancellationToken))
                 continue;
 
+            // A restart must reconsider an incomplete build even if no later source edit occurs.
+            await packages.MarkReplayAsync(sourceName, packageScanFromUtc, cancellationToken);
             // A failed candidate remains in the package for explicit operator acknowledgement.
             // Both encoders receive the exact same persisted YAML string.
             foreach (var (name, specification) in new[] { (sourceName, ProductSpecification.S101), (s57Name, ProductSpecification.S57) }) {
@@ -262,16 +290,22 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                     await RecordCandidateFailureAsync(package, name, specification, exception);
                 }
             }
+            retiredReplay[sourceName] = packageScanFromUtc;
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         await productRepository.SetSuccessfulRunUtcAsync(nameof(DetectProductChangesJob), scanStartedUtc);
+        // A failed invocation must retain inspected empty cursors too. If cleanup fails after
+        // the watermark commit, retained replay safely repeats the already-complete inspection.
+        foreach (var (sourceName, inspectedFromUtc) in retiredReplay)
+            await packages.RetireReplayAsync(sourceName, inspectedFromUtc, cancellationToken);
         logger.LogInformation("ENC change scan completed. ChangedAoiCount: {ChangedAoiCount}. WatermarkUtc: {WatermarkUtc:O}.", pending.Count, scanStartedUtc);
     }
 
     private async Task<bool> CanRefreshAsync(EncPackage package, CancellationToken cancellationToken) {
         var s57 = await workflowRepository.GetTrackAsync(package.S57DatasetName, ProductSpecification.S57, cancellationToken);
         var s101 = await workflowRepository.GetTrackAsync(package.SourceDatasetName, ProductSpecification.S101, cancellationToken);
-        return !IsRefreshBlocked(s57) && !IsRefreshBlocked(s101);
+        return !IsRefreshBlocked(s57) && !IsRefreshBlocked(s101) && await packages.CanRefreshAsync(package.Id, cancellationToken);
     }
 
     /// <summary>Requires a later archive edit before replacing a package; the global scan cursor is not evidence of a new edit.</summary>
@@ -291,20 +325,17 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         (s101.State is ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected ||
          s57.State is ProductState.ReadyForDistribution or ProductState.Error or ProductState.Rejected);
 
-    private async Task DiscardForRefreshAsync(EncPackage package, ProductExportTrackRecord track, ProductSpecification specification, CancellationToken cancellationToken) {
-        if (specification == ProductSpecification.S57 ? package.S57Discarded : package.S101Discarded)
-            return;
-
-        if (track.CandidateEdition.HasValue || track.State is ProductState.Error or ProductState.Rejected)
-            await exports.ExecuteDiscardAsync(track.DatasetName, "system", cancellationToken, preservePackageScanBound: true);
-        else
-            // An encoder can fail before it records a candidate; the package still owns that side.
-            await packages.DiscardAsync(track.DatasetName, specification, cancellationToken, preserveScanBound: true);
+    /// <summary>Checks and discards both members in one SQL transaction, preserving replay if either member is protected.</summary>
+    private async Task<bool> DiscardForRefreshAsync(EncPackage package, CancellationToken cancellationToken) {
+        if (await exports.ExecutePackageRefreshDiscardAsync(package.Id, cancellationToken))
+            return true;
+        await packages.MarkReplayAsync(package.SourceDatasetName, package.ScanFromUtc, cancellationToken);
+        logger.LogInformation("ENC replacement deferred because a member or its exact delivery is protected. PackageId: {PackageId}. SourceDatasetName: {SourceDatasetName}.", package.Id, package.SourceDatasetName);
+        return false;
     }
 
     private async Task RecoverIncompletePackageAsync(EncPackage package, CancellationToken cancellationToken) {
-        if (package.ErrorMessage is not null)
-            return;
+        // An existing failure does not prevent the never-started counterpart from using the persisted snapshot.
         foreach (var (name, specification) in new[] { (package.SourceDatasetName, ProductSpecification.S101), (package.S57DatasetName, ProductSpecification.S57) }) {
             if (specification == ProductSpecification.S101 && package.S101Discarded || specification == ProductSpecification.S57 && package.S57Discarded)
                 continue;
