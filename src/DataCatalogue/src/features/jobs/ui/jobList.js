@@ -1,3 +1,4 @@
+import { severityLabel } from "../../../shared/domain/severity.js";
 import {
   filterJobs,
   getActiveJobFilterSummary,
@@ -28,6 +29,7 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
   const rootElement = document.createElement("div");
   rootElement.className = "job-list";
 
+  let alive = true;
   let currentState = store.getSnapshot();
   let jobFilters = jobFilterStore?.getSnapshot?.().filters ?? null;
   let aoiFilter = null;
@@ -43,6 +45,7 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
       showErrorNoticeOnFailure: false,
     });
 
+    if (!alive || result.stale) return result;
     if (!result.ok) {
       showErrorNotice({
         title: source === "manual" ? "Refresh failed" : "Jobs could not be loaded",
@@ -55,7 +58,7 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
     if (showSuccessNoticeOnSuccess) {
       showSuccessNotice({
         title: "Jobs refreshed",
-        message: "The mock Jobs list has been refreshed.",
+        message: "The current Jobs list has been refreshed.",
       });
     }
 
@@ -138,6 +141,7 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
   };
 
   const render = () => {
+    if (!alive) return false;
     rootElement.classList.toggle("job-list--details", viewMode === JOB_LIST_VIEW_MODE.DETAILS);
 
     renderJobList({
@@ -266,6 +270,7 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
       render();
     },
     destroy() {
+      alive = false;
       unsubscribeJobs();
       unsubscribeFilters();
       rootElement.replaceChildren();
@@ -278,7 +283,7 @@ async function loadJobs(store, visibleDoneJobIds, { showErrorNoticeOnFailure = t
 
   const result = await store.loadJobs();
 
-  if (!result.ok && showErrorNoticeOnFailure) {
+  if (!result.stale && !result.ok && showErrorNoticeOnFailure) {
     showErrorNotice({
       title: "Jobs could not be loaded",
       message: result.error.message,
@@ -537,6 +542,7 @@ function createJobDetailsHeader({
   actionsElement.className = "job-details__header-actions";
 
   const focusMapButton = createToolbarButton("Focus map");
+  focusMapButton.disabled = job.source === "live" && !job.geometry;
   focusMapButton.title = "Filter the map to this Job and highlight related AOIs";
   focusMapButton.addEventListener("click", () => {
     requestJobMapFocus?.(job);
@@ -583,12 +589,34 @@ function createJobDetailsFactSection(job) {
 
   factGridElement.append(
     createJobDetailFact("Job ID", job.id),
+    ...(job.source === "live"
+      ? [
+          createJobDetailFact("Package ID", job.packageId),
+          createJobDetailFact("Short ID", job.shortId ?? "Not provided"),
+          createJobDetailFact("Pipeline", job.pipelineName),
+          createJobDetailFact("Workspace", job.workspaceName),
+        ]
+      : []),
     createJobDetailFact("Created", formatDate(job.createdAt)),
-    createJobDetailFact("Deadline", formatDate(job.deadline)),
-    createJobDetailFact("Status", getJobStatusLabel(job.status)),
-    createJobDetailFact("Priority", getJobPriorityLabel(job.priority)),
-    createJobDetailFact("Geometry", getJobGeometryTypeLabel(job)),
-    createJobDetailFact("Affected AOIs", String(job.relatedAoiIds.length))
+    createJobDetailFact(
+      "Deadline",
+      job.source === "live" ? "Unavailable in v1 API" : formatDate(job.deadline)
+    ),
+    createJobDetailFact(
+      job.source === "live" ? "Mock status" : "Status",
+      getJobStatusLabel(job.status)
+    ),
+    createJobDetailFact(
+      job.source === "live" ? "Severity" : "Priority",
+      job.source === "live" ? severityLabel(job.severity) : getJobPriorityLabel(job.priority)
+    ),
+    createJobDetailFact(
+      "Geometry",
+      job.source === "live" ? "AOI mapping unavailable" : getJobGeometryTypeLabel(job)
+    ),
+    ...(job.source === "live"
+      ? []
+      : [createJobDetailFact("Affected AOIs", String(job.relatedAoiIds.length))])
   );
 
   sectionElement.append(factGridElement);
@@ -607,7 +635,10 @@ function createJobDetailsStatusSection({
 
   const hintElement = document.createElement("p");
   hintElement.className = "job-details__hint";
-  hintElement.textContent = "Status changes are saved through the current Jobs service.";
+  hintElement.textContent =
+    job.source === "live"
+      ? "Mock status for this Package, Pipeline and Workspace only. Stored in memory; never saved to the API."
+      : "Status changes are saved through the current Jobs service.";
 
   sectionElement.append(
     hintElement,
@@ -1084,7 +1115,8 @@ function createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDet
 function createBadgeColumn(job) {
   const badgeColumnElement = document.createElement("div");
   badgeColumnElement.className = "job-card__badge-column";
-  badgeColumnElement.append(createPriorityBadge(job), createAffectedAoiBadge(job));
+  badgeColumnElement.append(createPriorityBadge(job));
+  if (job.source !== "live") badgeColumnElement.append(createAffectedAoiBadge(job));
 
   return badgeColumnElement;
 }
@@ -1092,6 +1124,12 @@ function createBadgeColumn(job) {
 function createDateChips(job) {
   const containerElement = document.createElement("div");
   containerElement.className = "job-card__date-chips";
+  if (job.source === "live") {
+    containerElement.append(
+      createDateChip({ icon: "calendar", label: "Created", value: formatDate(job.createdAt) })
+    );
+    return containerElement;
+  }
   containerElement.append(
     createDateChip({
       icon: "calendar",
@@ -1130,8 +1168,9 @@ function createDateChip({ icon, label, value }) {
 
 function createPriorityBadge(job) {
   const priorityElement = document.createElement("span");
-  priorityElement.className = `job-card__priority job-card__priority--${job.priority}`;
-  priorityElement.textContent = getPriorityBadgeLabel(job.priority);
+  priorityElement.className = `job-card__priority job-card__priority--${job.source === "live" ? "severity" : job.priority}`;
+  priorityElement.textContent =
+    job.source === "live" ? severityLabel(job.severity) : getPriorityBadgeLabel(job.priority);
 
   return priorityElement;
 }
@@ -1259,8 +1298,9 @@ function createStatusButton({
     const result = await store.updateJobStatus(job.id, statusOption.value);
 
     pendingMutationJobIds.delete(job.id);
-    render();
+    if (render() === false) return;
 
+    if (result.stale) return;
     if (!result.ok) {
       visibleDoneJobIds.delete(job.id);
 
@@ -1273,7 +1313,7 @@ function createStatusButton({
     }
 
     showSuccessNotice({
-      title: "Job status updated",
+      title: job.source === "live" ? "Mock Job status updated" : "Job status updated",
       message: `${result.data.job.title} is now ${statusOption.label}.`,
     });
 
@@ -1295,7 +1335,7 @@ function createLoadingState() {
   containerElement.setAttribute("role", "status");
 
   const titleElement = createStateTitle("Loading Jobs...");
-  const messageElement = createStateMessage("The mock backend is loading the current Jobs list.");
+  const messageElement = createStateMessage("Loading the current Jobs list.");
 
   containerElement.append(titleElement, messageElement);
 

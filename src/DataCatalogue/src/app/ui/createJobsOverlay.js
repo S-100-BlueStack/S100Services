@@ -1,6 +1,6 @@
 import { createJobList } from "../../features/jobs/ui/jobList.js";
 
-export function createJobsOverlay({ jobFilterStore, jobStore } = {}) {
+export function createJobsOverlay({ jobFilterStore, jobStore, sourceMode = "mock" } = {}) {
   const jobList = createJobList({
     jobFilterStore,
     store: jobStore,
@@ -23,7 +23,10 @@ export function createJobsOverlay({ jobFilterStore, jobStore } = {}) {
 
   const subtitleElement = document.createElement("p");
   subtitleElement.className = "data-catalogue-overlay-panel__subtitle";
-  subtitleElement.textContent = "Mock backend";
+  subtitleElement.textContent =
+    sourceMode === "live"
+      ? "Live Packages · Mock Job status · Geometry unavailable"
+      : "Mock backend";
 
   titleGroupElement.append(titleElement, subtitleElement);
 

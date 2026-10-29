@@ -22,10 +22,15 @@ export async function createNavbarController({
   jobClusterSettingsStore,
   themeStore,
   onTestNotice,
+  sourceMode = "mock",
 } = {}) {
   await ensureNavbarComponentsDefined();
 
   const element = await loadNavbarTemplate();
+  if (sourceMode === "live") {
+    const assignmentButton = element.querySelector("#feature-assignment-toggle");
+    if (assignmentButton) assignmentButton.textContent = "Package assignment";
+  }
   const jobsButton = getRequiredElement(element, "#jobs-toggle");
   const filtersButton = getRequiredElement(element, "#filters-button");
   const filtersPopover = getRequiredElement(element, "#filters-popover");
@@ -35,6 +40,7 @@ export async function createNavbarController({
   await configureFiltersPopover({ filtersButton, filtersPopover });
 
   const filterControlRefs = createJobFilterPopoverContent({
+    sourceMode,
     filtersPopover,
     jobFilterStore,
     aoiMapFilterStore,
@@ -174,6 +180,7 @@ async function configureFiltersPopover({ filtersButton, filtersPopover }) {
 }
 
 function createJobFilterPopoverContent({
+  sourceMode,
   filtersPopover,
   jobFilterStore,
   aoiMapFilterStore,
@@ -396,6 +403,21 @@ function createJobFilterPopoverContent({
     clusterStyleSection.element
   );
 
+  if (sourceMode === "live") {
+    for (const section of [
+      aoiOverviewSection,
+      prioritySection,
+      clusteringSection,
+      clusterStyleSection,
+    ])
+      section.element.remove();
+    highPriorityOnlyButton.buttonElement.remove();
+    withRelatedAoisOnlyButton.buttonElement.remove();
+    const hint = document.createElement("p");
+    hint.textContent =
+      "Filters apply to the complete selected Workspace list. Severity bands and map filters are unavailable. Status is mock-only.";
+    scrollElement.prepend(hint);
+  }
   contentElement.append(headerElement, summaryElement, scrollElement);
 
   filtersPopover.replaceChildren(contentElement);

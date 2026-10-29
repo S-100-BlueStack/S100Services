@@ -1,3 +1,8 @@
+import { createCatalogueClient } from "../shared/api/catalogueClient.js";
+import { createCatalogueService } from "../shared/api/catalogueService.js";
+import { createLiveJobServiceAdapter } from "../features/jobs/services/liveJobServiceAdapter.js";
+import { createJobService } from "../features/jobs/services/jobService.js";
+import { createWorkspaceScope } from "../features/jobs/ui/createWorkspaceScope.js";
 import { createAssignmentWorkflow } from "../features/assignmentPage/createAssignmentWorkflow.js";
 import { createWorkflowNavigation } from "./ui/createWorkflowNavigation.js";
 import { createSelectedAoiStore } from "../features/aoi/state/selectedAoiStore.js";
@@ -21,10 +26,20 @@ import { createNavbarController } from "./ui/createNavbarController.js";
 
 export async function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
+  const live = runtimeConfig.sourceMode === "live";
+  const catalogue = live
+    ? createCatalogueService(
+        createCatalogueClient({
+          baseUrl: runtimeConfig.catalogueApiBaseUrl,
+          credentials: runtimeConfig.catalogueApiCredentials,
+        })
+      )
+    : null;
+  const liveJobs = live ? createLiveJobServiceAdapter({ catalogue }) : null;
   const selectedAoiStore = createSelectedAoiStore();
   const selectedJobStore = createSelectedJobStore();
   const jobFilterStore = createJobFilterStore();
-  const jobStore = createJobStore();
+  const jobStore = createJobStore(live ? { service: createJobService({ adapter: liveJobs }) } : {});
   const aoiMapFilterStore = createAoiMapFilterStore();
   const jobClusterSettingsStore = createJobClusterSettingsStore();
   const themeStore = createThemeStore();
@@ -37,6 +52,7 @@ export async function createApp(rootElement) {
   let mapSyncCoordinator = null;
 
   const navbar = await createNavbarController({
+    sourceMode: runtimeConfig.sourceMode,
     jobFilterStore,
     aoiMapFilterStore,
     jobClusterSettingsStore,
@@ -50,6 +66,7 @@ export async function createApp(rootElement) {
   });
 
   const jobsPanel = createJobsOverlay({
+    sourceMode: runtimeConfig.sourceMode,
     jobFilterStore,
     jobStore,
   });
@@ -178,10 +195,21 @@ export async function createApp(rootElement) {
     shellElement,
     jobsWorkflowHost,
     navbar,
-    createPage: () => createAssignmentWorkflow(runtimeConfig),
+    createPage: () => createAssignmentWorkflow(runtimeConfig, catalogue),
     onOpenJobs: jobsPanelActions.open,
     isJobsStartupComplete: () => isStartupComplete,
   });
+
+  const workspaceScope = live
+    ? createWorkspaceScope({
+        catalogue,
+        adapter: liveJobs,
+        store: jobStore,
+        onScopeChange: resetJobsPanelContext,
+      })
+    : null;
+  if (workspaceScope)
+    jobsPanel.element.insertBefore(workspaceScope.element, jobsPanel.element.lastElementChild);
 
   const startupController = createStartupController({
     startupLoader,
@@ -356,20 +384,29 @@ export async function createApp(rootElement) {
     }
   );
 
-  void startupController.runStartup({
-    onStartupBlocked() {
-      isStartupComplete = false;
-      blockShellForStartup(workspace.element);
-      workflowNavigation.syncJobsButtonState();
-      navbar.filtersButton.disabled = true;
-    },
-    onStartupComplete() {
-      isStartupComplete = true;
-      releaseShellAfterStartup(workspace.element);
-      workflowNavigation.syncJobsButtonState();
-      navbar.filtersButton.disabled = false;
-    },
-  });
+  if (live) {
+    // API list access must not depend on unverified geography or basemap availability.
+    isStartupComplete = true;
+    releaseShellAfterStartup(workspace.element);
+    startupLoader.complete({ text: "Live catalogue list access ready." });
+    workflowNavigation.syncJobsButtonState();
+    navbar.filtersButton.disabled = false;
+    void mapController.start({ requireAois: false, deferJobGeometry: true });
+  } else
+    void startupController.runStartup({
+      onStartupBlocked() {
+        isStartupComplete = false;
+        blockShellForStartup(workspace.element);
+        workflowNavigation.syncJobsButtonState();
+        navbar.filtersButton.disabled = true;
+      },
+      onStartupComplete() {
+        isStartupComplete = true;
+        releaseShellAfterStartup(workspace.element);
+        workflowNavigation.syncJobsButtonState();
+        navbar.filtersButton.disabled = false;
+      },
+    });
 
   function applySelectedJobMapHighlights(selectedJob) {
     void mapController.highlightJob(selectedJob).catch((error) => {
@@ -410,6 +447,8 @@ export async function createApp(rootElement) {
 
   return {
     destroy() {
+      workspaceScope?.destroy();
+      jobStore.destroy();
       workflowNavigation.destroy();
       startupController.destroy();
       mapSyncCoordinator?.destroy?.();

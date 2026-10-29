@@ -1,9 +1,15 @@
-export function createDraftNavigation({ session, host, onSaved }) {
+export function createDraftNavigation({
+  session,
+  host,
+  onSaved,
+  onSaveAttempt,
+  entityName = "Feature",
+}) {
   let pending = false;
   const dialog = document.createElement("dialog");
   dialog.className = "dc-assignment-dialog";
   dialog.setAttribute("aria-labelledby", "dc-draft-title");
-  dialog.innerHTML = `<h2 id="dc-draft-title">Unsaved changes</h2><p>Save your changes, discard them, or stay on this Feature.</p><div class="dc-assignment-toolbar"><button type="button" data-choice="save">Save and continue</button><button type="button" data-choice="discard">Discard changes</button><button type="button" data-choice="cancel" autofocus>Cancel</button></div>`;
+  dialog.innerHTML = `<h2 id="dc-draft-title">Unsaved changes</h2><p>Save your changes, discard them, or stay on this ${entityName}.</p><div class="dc-assignment-toolbar"><button type="button" data-choice="save">Save and continue</button><button type="button" data-choice="discard">Discard changes</button><button type="button" data-choice="cancel" autofocus>Cancel</button></div>`;
   host.append(dialog);
   let resolveChoice = null;
   dialog.addEventListener("click", (event) => {
@@ -37,6 +43,7 @@ export function createDraftNavigation({ session, host, onSaved }) {
         }
         if (choice === "save") {
           const saved = await session.save();
+          onSaveAttempt?.();
           if (saved) onSaved();
           return saved;
         }

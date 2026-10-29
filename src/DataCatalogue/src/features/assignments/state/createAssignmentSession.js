@@ -86,7 +86,10 @@ export function createAssignmentSession({ services }) {
         return true;
       })
       .catch((error) => {
-        if (alive && generation === current) state.error = error.message;
+        if (alive && generation === current) {
+          if (error.record) state.record = error.record;
+          state.error = error.message;
+        }
         return false;
       })
       .finally(() => {

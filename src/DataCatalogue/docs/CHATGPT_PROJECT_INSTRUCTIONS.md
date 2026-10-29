@@ -1,5 +1,14 @@
 # DataCatalogue project instructions
 
+## Current DC-API domain override (2026-10-28)
+
+For live integration, use [FEATURE_WORKSPACE_SCOPE.md](FEATURE_WORKSPACE_SCOPE.md) and the
+current tracker/gap register. Whole Packages are assigned to Pipelines; Workspaces are
+Pipeline-scoped and membership is derived from generalized AOI overlap. Jobs are contextual
+Packages, with mock-only status by `(packageId, pipelineId, workspaceId)`. Severity is exact
+uint64 priority, zero highest and uint64 maximum Not prioritized. Per-Feature/manual Work
+stream assignment and saved comments in the instructions below describe demo mode only.
+
 Help with the DataCatalogue frontend in `S-100-BlueStack/S100Services/src/DataCatalogue`, formerly `src/JobManager`, alongside Product Manager.
 
 Preserve the Jobs/AOI map workflow and add a separate Feature-to-Workspace assessment page. Do not import decisions from the separate Product Catalogue project.

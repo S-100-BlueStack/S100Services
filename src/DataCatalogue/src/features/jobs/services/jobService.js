@@ -7,10 +7,10 @@ export function createJobService({ adapter = createJobServiceAdapter() } = {}) {
   validateJobServiceAdapter(adapter);
 
   return {
-    loadJobs() {
+    loadJobs(options) {
       return toApiResult(
         async () => {
-          const jobsResult = await adapter.loadJobs();
+          const jobsResult = await adapter.loadJobs(options);
 
           return {
             jobs: jobsResult.jobs,

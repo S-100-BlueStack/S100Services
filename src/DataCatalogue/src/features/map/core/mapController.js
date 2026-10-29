@@ -99,7 +99,10 @@ export function createMapController({
         };
       }
 
-      const aoiReadinessResult = await validateCurrentAoiLayer();
+      const aoiReadinessResult =
+        runtimeConfig?.sourceMode === "live"
+          ? { ok: true, data: { status: "missing-geometry" } }
+          : await validateCurrentAoiLayer();
 
       if (isDestroyed || startRequestId !== mapStartRequestId) {
         return {
@@ -750,6 +753,15 @@ export function createMapController({
   }
 
   function setReadyStatus(aoiReadinessResult) {
+    if (runtimeConfig?.sourceMode === "live") {
+      setStatus({
+        status: MAP_STATUS.WARNING,
+        title: "Live geometry unavailable",
+        message:
+          "Package AOI and Workspace layer mappings are not verified. Use the Jobs panel to select a Workspace and read live Packages. No catalogue overlays are displayed.",
+      });
+      return;
+    }
     if (!aoiReadinessResult?.ok) {
       setStatus({
         status: MAP_STATUS.WARNING,

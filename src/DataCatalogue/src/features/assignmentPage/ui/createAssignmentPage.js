@@ -1,3 +1,5 @@
+import { createPipelineRow } from "./createPipelineRow.js";
+import { severityLabel } from "../../../shared/domain/severity.js";
 import { createQueryLifecycle } from "../state/createQueryLifecycle.js";
 import {
   WORK_STREAM_LIST_MODE,
@@ -14,11 +16,17 @@ import { createRequiredTargetGetter } from "./assignmentPageContract.js";
 import { createWorkStreamRow } from "./createWorkStreamRow.js";
 
 export function createAssignmentPage({ services, createMap, runtimeConfig }) {
+  const live = services.source === "live";
+  const entityName = live ? "Package" : "Feature";
+  const assignmentName = live ? "Pipeline" : "Work stream";
   const element = document.createElement("main");
   element.className = "dc-assignment-page";
   element.id = "data-catalogue-feature-assignment";
-  element.setAttribute("aria-label", "Feature assignment prototype");
-  element.innerHTML = `
+  element.setAttribute(
+    "aria-label",
+    live ? "Package Pipeline assignment" : "Feature assignment prototype"
+  );
+  const markup = `
     <div class="dc-assignment-column dc-assignment-column--left">
       <section class="dc-assignment-panel dc-feature-panel" aria-label="Feature assignment">
         <form class="dc-assignment-toolbar" data-filter-form>
@@ -71,12 +79,29 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
     </div>
     <footer class="dc-prototype-toolbar dc-assignment-toolbar"><span>Mock data · Prototype user · Saved comments are immutable</span><button type="button" data-fail-load>Fail next load</button><button type="button" data-fail-save>Fail next save</button><button type="button" data-reset>Reset mock data</button><span data-test-status role="status"></span></footer>`;
 
+  element.innerHTML = live
+    ? markup.replaceAll("Feature", "Package").replaceAll("Work stream", "Pipeline")
+    : markup;
+
   const get = createRequiredTargetGetter((name) => element.querySelector(`[data-${name}]`));
+  if (live) {
+    get("search").disabled = true;
+    get("search").placeholder = "Unavailable in v1 API";
+    get("search").title = "The API has no Package name search; no page-only search is applied.";
+    get("type").previousSibling.textContent = "Category";
+    get("type").replaceChildren(new Option("All categories", ""));
+    get("map-empty").textContent = "Package AOI geometry mapping is pending verification.";
+    element.querySelector(".dc-assignment-legend").remove();
+    element.querySelector(".dc-prototype-toolbar > span").textContent =
+      "Live API · Whole Package bindings · Workspaces are derived · Comments unavailable";
+    for (const name of ["fail-load", "fail-save", "reset"]) get(name).hidden = true;
+  }
   const abort = new AbortController();
   const listen = (node, name, handler) =>
     node.addEventListener(name, handler, { signal: abort.signal });
   const session = createAssignmentSession({ services });
   let alive = true;
+  const categoryRequests = createQueryLifecycle();
   const featureRequests = createQueryLifecycle();
   const workStreamRequests = createQueryLifecycle();
   let featurePage = 0;
@@ -96,7 +121,13 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
   const guard = createDraftNavigation({
     session,
     host: element,
-    onSaved: () => void loadFeatures(),
+    entityName,
+    onSaved: () => {
+      if (!live) void loadFeatures();
+    },
+    onSaveAttempt: () => {
+      if (live) void loadFeatures();
+    },
   });
 
   function busy() {
@@ -149,7 +180,7 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
     const isCurrent = featureRequests.begin();
     const query = filterQuery();
     currentQuery = query;
-    get("list-status").textContent = "Loading Features…";
+    get("list-status").textContent = `Loading ${entityName}s…`;
     get("feature-prev").disabled = true;
     get("feature-next").disabled = true;
     get("features").setAttribute("aria-busy", "true");
@@ -172,7 +203,7 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
         const name = document.createElement("span");
         name.textContent = feature.name;
         const status = document.createElement("span");
-        status.className = `dc-assignment-status ${feature.status === "Assigned" ? "is-assigned" : "is-unassigned"}`;
+        status.className = `dc-assignment-status ${feature.status === "Assigned" ? "is-assigned" : feature.status === "Not assigned" ? "is-unassigned" : ""}`;
         status.textContent = feature.status;
         button.replaceChildren(name, status);
         nextRows.push(button);
@@ -185,7 +216,7 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
       }
 
       get("list-status").textContent =
-        `${result.total} Features${result.total ? "" : " — no matches"}`;
+        `${result.total} ${entityName}s${result.total ? "" : " — no matches"}`;
       get("feature-page").textContent = result.total
         ? `Page ${result.page + 1} of ${Math.ceil(result.total / result.pageSize)}`
         : "No results";
@@ -230,7 +261,7 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
 
     const scopedIds = workStreamIds(state);
     lastScopeKey = JSON.stringify([state.feature.id, workStreamMode, scopedIds]);
-    get("work-stream-status").textContent = "Loading Work streams…";
+    get("work-stream-status").textContent = `Loading ${assignmentName}s…`;
 
     try {
       const result = await services.workStreams.list({ ids: scopedIds });
@@ -238,7 +269,10 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
 
       rows = result.items.map((workStream) => {
         if (!workStreamRows.has(workStream.id)) {
-          workStreamRows.set(workStream.id, createWorkStreamRow(workStream, session));
+          workStreamRows.set(
+            workStream.id,
+            (live ? createPipelineRow : createWorkStreamRow)(workStream, session)
+          );
         }
         return workStreamRows.get(workStream.id);
       });
@@ -257,10 +291,12 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
       }
 
       get("work-stream-status").textContent = result.total
-        ? `${result.total} Work streams. Any Work stream may be assigned.`
+        ? live
+          ? `${result.total} Pipelines. Workspaces are derived from saved bindings and AOI overlap.`
+          : `${result.total} Work streams. Any Work stream may be assigned.`
         : workStreamMode === WORK_STREAM_LIST_MODE.ACTIVE
-          ? "No active Work stream assignments."
-          : "No Work streams are available.";
+          ? `No active ${assignmentName} assignments.`
+          : `No ${assignmentName}s are available.`;
     } catch (error) {
       if (isCurrent()) {
         get("work-stream-status").textContent = error.message;
@@ -291,7 +327,20 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
 
     const dl = document.createElement("dl");
     for (const [label, value] of [
-      ["ID", feature.sourceId],
+      ["ID", live ? feature.packageId : feature.sourceId],
+      ...(live
+        ? [
+            ["Short ID", feature.shortId],
+            ["Category", feature.category],
+            ["Severity", severityLabel(feature.severity)],
+            [
+              "AOI reference",
+              feature.geometryRef
+                ? `${feature.geometryRef.featureClass} / ${feature.geometryRef.globalId}`
+                : null,
+            ],
+          ]
+        : []),
       ["Title", feature.title],
       ["References", feature.references],
       ["Details", feature.details],
@@ -317,21 +366,27 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
         ? "Draft needs attention"
         : state.dirty
           ? "Unsaved changes"
-          : "Saved state"
+          : live
+            ? "Loaded binding state"
+            : "Saved state"
       : "";
-    get("save-error").textContent = state.feature ? state.error || state.validationError : "";
+    get("save-error").textContent = state.feature
+      ? state.error || state.validationError || state.record?.saveMessage || ""
+      : "";
     get("selection-status").textContent = state.loading
-      ? "Loading Feature…"
-      : state.error || "Select a Feature to view its information.";
+      ? `Loading ${entityName}…`
+      : state.error || `Select a ${entityName} to view its information.`;
     get("selection-retry").hidden = !state.error || Boolean(state.feature);
     get("work-stream-panel").setAttribute(
       "aria-label",
       state.feature
-        ? `Work stream assignments for ${state.feature.name}`
-        : "Work stream assignments"
+        ? `${assignmentName} assignments for ${state.feature.name}`
+        : `${assignmentName} assignments`
     );
     get("active-count").textContent = state.draft
-      ? `${state.draft.activeIds.length} active · ${state.draft.comments.length} draft comments`
+      ? live
+        ? `${state.draft.activeIds.length} selected Pipelines`
+        : `${state.draft.activeIds.length} active · ${state.draft.comments.length} draft comments`
       : "";
     get("map-empty").hidden = Boolean(state.feature);
     get("work-stream-mode").disabled = !state.feature || resetting;
@@ -350,7 +405,7 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
       workStreamRows.clear();
       get("work-streams").replaceChildren();
       renderInformation(state.feature);
-      get("work-stream-status").textContent = "Select a Feature to edit assignments.";
+      get("work-stream-status").textContent = `Select a ${entityName} to edit assignments.`;
       lastScopeKey = "";
     }
 
@@ -414,7 +469,9 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
 
   listen(get("work-stream-retry"), "click", () => void loadWorkStreams());
   listen(get("save"), "click", async () => {
-    if (!busy() && (await session.save()) && alive) void loadFeatures();
+    if (busy()) return;
+    const saved = await session.save();
+    if (alive && (saved || live)) void loadFeatures();
   });
   listen(get("map-retry"), "click", createMapRetryHandler(makeMap));
   listen(get("fail-load"), "click", () => {
@@ -463,6 +520,27 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
     }
   });
 
+  async function loadCategories() {
+    if (!live) return;
+    const isCurrent = categoryRequests.begin();
+    try {
+      const categories = await services.categories({ signal: abort.signal });
+      if (!isCurrent()) return;
+      get("test-status").textContent = "";
+      const selected = get("type").value;
+      get("type").replaceChildren(
+        new Option("All categories", ""),
+        ...categories.map((item) => new Option(item.name, item.id))
+      );
+      get("type").value = selected;
+      get("type").title = "";
+    } catch (error) {
+      if (isCurrent())
+        get("test-status").textContent = `Category filters unavailable: ${error.message}`;
+    }
+  }
+  listen(get("feature-retry"), "click", () => void loadCategories());
+  void loadCategories();
   void loadFeatures();
 
   return {
@@ -475,6 +553,7 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
     },
     destroy() {
       alive = false;
+      categoryRequests.destroy();
       featureRequests.destroy();
       workStreamRequests.destroy();
       mapGeneration++;

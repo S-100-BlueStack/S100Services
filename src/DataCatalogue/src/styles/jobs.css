@@ -591,3 +591,52 @@
     gap: 0.15rem;
   }
 }
+
+.dc-workspace-scope {
+  flex: 0 0 auto;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--calcite-color-border-3);
+}
+
+.dc-workspace-scope label {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.dc-workspace-scope select {
+  width: 100%;
+}
+
+.dc-workspace-scope p {
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.dc-workspace-scope button,
+.dc-workspace-scope select {
+  font: inherit;
+  border: 1px solid var(--dc-border);
+  border-radius: 2px;
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  padding: 3px 6px;
+}
+
+.dc-workspace-scope :focus-visible {
+  outline: 2px solid var(--calcite-color-brand, #007ac2);
+  outline-offset: 2px;
+}
+
+.job-card__priority--severity {
+  width: auto;
+  max-width: 12rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-transform: none;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: right;
+  border-color: var(--dc-border);
+  background: var(--dc-surface-alt);
+  color: var(--dc-text);
+}

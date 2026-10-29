@@ -10,6 +10,9 @@ export const JOB_STORE_CHANGE_TYPE = Object.freeze({
 
 export function createJobStore({ service = jobService } = {}) {
   let changeSequence = 0;
+  let loadGeneration = 0;
+  let loadAbort = null;
+  let alive = true;
   let state = {
     jobs: [],
     isLoading: false,
@@ -39,13 +42,20 @@ export function createJobStore({ service = jobService } = {}) {
     };
   }
 
-  async function loadJobs() {
+  async function loadJobs({ clear = false } = {}) {
+    const current = ++loadGeneration;
+    loadAbort?.abort();
+    const request = new AbortController();
+    loadAbort = request;
     setState({
+      ...(clear ? { jobs: [] } : {}),
       isLoading: true,
       error: null,
     });
 
-    const result = await service.loadJobs();
+    const result = await service.loadJobs({ signal: request.signal });
+    if (!alive || current !== loadGeneration || request.signal.aborted)
+      return { ...result, stale: true };
 
     if (result.ok) {
       setState({
@@ -70,10 +80,15 @@ export function createJobStore({ service = jobService } = {}) {
   }
 
   async function updateJobStatus(jobId, status) {
+    const current = loadGeneration;
     const result = await service.updateJobStatus(jobId, status);
+    if (!alive || current !== loadGeneration) return { ...result, stale: true };
 
     if (result.ok) {
+      // A read started before this mutation must not restore the previous status.
+      loadAbort?.abort();
       setState({
+        isLoading: false,
         jobs: applyJobMutationResult(state.jobs, result.data),
         error: null,
         lastChange: createJobStoreChange(JOB_STORE_CHANGE_TYPE.JOB_STATUS_UPDATED, {
@@ -125,6 +140,12 @@ export function createJobStore({ service = jobService } = {}) {
   }
 
   return {
+    destroy() {
+      alive = false;
+      loadGeneration++;
+      loadAbort?.abort();
+      listeners.clear();
+    },
     subscribe,
     loadJobs,
     updateJobStatus,

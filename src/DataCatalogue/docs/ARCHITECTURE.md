@@ -1,5 +1,48 @@
 # DataCatalogue Architecture
 
+## DC-API current integration architecture (2026-10-28)
+
+Baseline `08d9281fe35b06012bda430c94767ef69a439d3e`; frontend-only candidate.
+The sections below this current note describe the preserved demo/historical architecture.
+
+- `shared/config/runtimeConfig` selects exactly `mock` or `live` and supplies a public API
+  origin/prefix plus fetch credentials policy. Invalid modes fail rather than falling back.
+- `shared/api/catalogueClient` owns native fetch, HTTP/ProblemDetails errors, cancellation,
+  non-JSON/204 handling and exact integer token parsing. `catalogueService` owns v1 routes,
+  zero/one-based pagination conversion and normalized Package/Pipeline/Workspace identities.
+- `shared/domain/severity` validates uint64 strings and safe integers, labels null/sentinel
+  separately and compares with BigInt. No BigInt reaches JSON serialization or UI state.
+- `createApp` composes one live catalogue service and a live Job adapter when explicitly
+  configured. Existing mock services remain the default; no silent network fallback exists.
+- `features/assignments/services/liveAssignmentServices` adapts whole Package bindings to
+  the existing session contract. Internal Feature/Work stream property names remain for
+  compatibility; in live mode the entities are Packages/Pipelines. It owns preflight/deltas,
+  per-Package save deduplication, independent writes and reconciliation. The session alone
+  owns selection/save generation and publishes fresh records while preserving failed drafts.
+- `assignmentPage` retains four panels and keyed controls; `createPipelineRow` shows only
+  Pipeline checkboxes and derived, read-only Workspaces. Existing demo comment rows remain.
+  List query lifecycles prevent stale reads from publishing; category loading is independent.
+- `features/jobs/services/liveJobServiceAdapter` reads complete Workspace membership and
+  hydrates Package details with bounded concurrency. It projects contextual Jobs without
+  inventing a Job API aggregate. `scopedJobStatusAdapter` owns resettable in-memory mock status
+  by the full Package/Pipeline/Workspace tuple. It never changes binding or lock data.
+- `jobStore` owns Job read generation/abort and suppresses stale results after new requests,
+  mutation or teardown. `jobList` suppresses stale refresh notices/map events. The existing
+  list/details/filters consume contextual IDs; live Severity has no demo priority coercion.
+- `createWorkspaceScope` reads all Workspace pages via the service boundary and composes
+  selection with the existing Jobs store. It clears old context on scope change. Filters
+  and counters are explicitly scoped; no local page filter is called a global search.
+- Map/MapView and layer construction stay under `features/map`. Live mode skips the legacy
+  AOI FeatureLayer and required-AOI startup gate, retaining the basemap and honest missing-
+  geometry status. Demo layers, popups and map interactions remain unchanged. No approved
+  geometry join has been fabricated. See GEO-01/GEO-02 before adding live layers.
+
+No new dependency, backend mutation code, production proxy, credential storage or durable
+status store is introduced. See [scope](FEATURE_WORKSPACE_SCOPE.md),
+[gaps](DC_API_BACKEND_GAPS.md) and [verification](DC_API_LOCAL_VERIFICATION.md).
+
+## Historical and preserved demo architecture
+
 This document describes the frontend architecture for DataCatalogue.
 
 The app should follow Product Manager patterns where useful. Preserve the current Jobs/AOI feature boundaries and keep the Feature/Work stream assessment workflow distinct from them.

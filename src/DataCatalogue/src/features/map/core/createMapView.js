@@ -9,7 +9,7 @@ export function createMapView({ container, runtimeConfig, mapConfig } = {}) {
     throw new Error("MapView container is required.");
   }
 
-  const aoiLayer = createAoiLayer({ runtimeConfig });
+  const aoiLayer = runtimeConfig?.sourceMode === "live" ? null : createAoiLayer({ runtimeConfig });
   const jobLayers = createJobLayers();
   const operationalLayers = [...(aoiLayer ? [aoiLayer] : []), ...jobLayers.layers];
   const { map, view } = createBaseMapView({

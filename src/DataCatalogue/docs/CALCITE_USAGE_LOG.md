@@ -52,3 +52,15 @@ Native buttons, selects, the Feature search input, checkboxes, textareas and a m
 The existing Jobs navbar control keeps the established native-button/public-`calcite-icon` pattern. The `Feature assignment` navbar control is intentionally text-only after browser-polish review, so it uses the same application-owned native button without a decorative Calcite icon. The assignment-map Retry action uses the same public `calcite-icon` contract with the `refresh` icon inside a small application-owned native button; this keeps the action keyboard/focus behavior and compact overlay styling under application control without ArcGIS or Calcite shadow-DOM manipulation. The assignment-map legend uses application-owned CSS swatches rather than demo-like glyphs or private Calcite styling.
 
 This is a deliberate page-specific opt-out, not a replacement of existing Jobs/Calcite controls. No private selectors, shadow-DOM manipulation or new component dependency are used.
+
+## DC-API compact live controls (2026-10-28)
+
+Status: Implemented candidate; browser acceptance pending.
+
+Pipeline assignment uses the existing native checkbox/label pattern and keyed rows to retain
+keyboard focus and one-click behavior. The Workspace/Pipeline selector uses a native select
+with optgroups, plus native Reload Workspaces and Reset mock statuses buttons. These choices
+extend the existing compact application-owned form pattern rather than introducing a second
+component lifecycle. Public Calcite status/buttons/icons remain in the Jobs UI. Shared theme
+tokens, small borders and `:focus-visible` style the new controls; no private shadow-DOM access
+or new animation is introduced. No live map control is offered for unverified geometry.

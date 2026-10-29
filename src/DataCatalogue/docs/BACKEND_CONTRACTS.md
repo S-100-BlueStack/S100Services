@@ -1,5 +1,50 @@
 # DataCatalogue Backend Contracts
 
+## DC-API source-verified v1 contract (2026-10-28)
+
+Baseline `08d9281fe35b06012bda430c94767ef69a439d3e`. This section supersedes earlier
+"unverified routes" and Feature assignment assumptions below. Runtime availability is still
+unverified. Backend projects were inspected, not changed.
+
+| Operation                                                    | Contract used by the candidate                                                                                                                                                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GET `/api/v1/packages`                                       | Paged `items/page/pageSize/totalCount`; one-based page, size 1–200; Category and hasPipeline filters in assignment UI. Adapter also supports pipelineId. No name search or global Severity sort. |
+| GET `/api/v1/packages/{id}`                                  | Package ID, metaData.shortId, category, descriptions/charts, nullable dates/Severity, generalized geometryRef and distinct detailedGeometry.                                                     |
+| GET `/api/v1/pipelines`                                      | Complete catalogue in a page envelope; controller does not implement requested paging. Incomplete response is rejected.                                                                          |
+| GET `/api/v1/dispatcher/categories`                          | Complete Category catalogue in a page envelope; used for the live Category filter.                                                                                                               |
+| GET `/api/v1/workspaces`                                     | Paged Pipeline-context Workspace records; adapter supports pipelineId/owner/unassigned. UI reads the full catalogue with no implicit owner selection.                                            |
+| GET `/api/v1/pipelines/{id}/workspaces/{workspace}/packages` | Paged `{ packageId, shortId }` from binding plus generalized AOI overlap; Package details are hydrated separately.                                                                               |
+| GET `/api/v1/pipelines/{id}/workspaces/{workspace}`          | Workspace plus Esri JSON string; service method available, live overlay rendering deferred.                                                                                                      |
+| GET `/api/v1/dispatcher/bindings?packageId=...`              | Active bindings with exact binding ID, Package ID, Pipeline ID and derived Workspace array.                                                                                                      |
+| POST `/api/v1/dispatcher/bindings`                           | `{ packageId, pipelineId }`; independent result, normally 201; conflicts reported.                                                                                                               |
+| DELETE `/api/v1/dispatcher/bindings/{id}`                    | Uses returned opaque binding ID; 204 supported; no Package/Workspace deletion.                                                                                                                   |
+
+Evidence: PackageController, PipelineController, WorkspaceController, DispatcherController;
+PackageResponse/PipelineResponse/WorkspaceResponse/PagedResponse; PackageRepository;
+WorkspaceService/WorkspaceQueryService/PipelineAssignmentService; Package and WorkspaceAndRouting
+integration tests; bundled v1 OpenAPI. V2 ProductsController is excluded from compilation.
+
+Package is the assignment unit; Workspace membership is derived and read-only. Job status is
+not a backend field. Existing labels are isolated mock state keyed by the contextual tuple.
+Ownership does not imply progress. Comments, deadlines and generated follow-ups have no live
+contract. Temporary in-memory backend persistence is accepted only for integration testing.
+
+Severity is `ulong?` in source. MVC configuration adds only enum conversion; no uint64 string
+converter is configured. The client reads raw response text, preserves unsafe integer tokens
+as strings and then validates exact uint64 values. Decimal strings are accepted too. Already-
+rounded unsafe Number values fail, as do unsupported unsafe exponent/decimal representations.
+Zero is highest priority; the maximum is Not prioritized. Null is Unspecified. Live wire
+verification and numeric priority bands remain separate gaps; confirmed meanings are settled.
+
+The existing transport wraps errors through the shared service/result boundary. No retries
+are performed for writes. A network failure may have committed; authoritative reads precede
+retry. No transaction, ETag guarantee, mock fallback or backend durability is claimed.
+
+For actual origins/auth/CORS, geometry joins, status persistence, comments and scalability,
+see the [current gap register](DC_API_BACKEND_GAPS.md).
+
+## Historical and preserved demo contract notes
+
 This document tracks backend assumptions, draft contracts, open questions and integration decisions for DataCatalogue.
 
 Backend development is owned by the colleague. This scoped frontend baseline does not verify API readiness or contracts. Do not treat any draft below as final until it has been checked against the supplied backend contract.

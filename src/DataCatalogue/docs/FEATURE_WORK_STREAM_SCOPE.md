@@ -1,5 +1,13 @@
 # Feature-to-Work stream Assignment Scope
 
+## Historical demo scope; live scope superseded on 2026-10-28
+
+This document now describes the preserved `mock` mode only. Its Feature assignment,
+manual Work stream membership and comments are demo semantics, not the v1 backend model.
+For current live Package–Pipeline assignment, derived Workspaces, Workspace-backed Jobs,
+scoped mock status and exact Severity, use [FEATURE_WORKSPACE_SCOPE.md](FEATURE_WORKSPACE_SCOPE.md).
+No broad internal Work stream rename is part of DC-API.
+
 Status: Accepted scope; DC-001 runtime candidate implemented, pending local/browser acceptance and live-service verification.
 
 This document records the accepted DataCatalogue scoping decisions. Implementation ownership is recorded in ARCHITECTURE.md; verification and operational limits are recorded in DC_001_VALIDATION.md.

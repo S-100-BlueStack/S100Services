@@ -1,5 +1,38 @@
 # DataCatalogue Project Tracker
 
+## DC-API combined integration candidate — current status (2026-10-28)
+
+Status: **In progress — source implementation candidate delivered; local acceptance pending.**
+Authoritative baseline: `08d9281fe35b06012bda430c94767ef69a439d3e`.
+Source ZIP SHA-256: `9f18f23d319d4eccda61c8bddaebfb532c0eb06cd976afe0b5cfe3331ba51238`.
+All 937 selected source files and handoff checksums were verified before implementation.
+
+| Scope                                                                    | Candidate state                                                                                                                                                                         |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DC-API-01 transport/read adapters                                        | Implemented; controlled-fixture tests. Explicit live/mock configuration, exact integer JSON, real v1 normalization and pagination; deployment/auth unverified.                          |
+| DC-API-02 Package assignments                                            | Implemented in existing four panels. Multi-Pipeline binding writes, per-request outcomes, preflight and post-write reconciliation, retained failed draft, read-only derived Workspaces. |
+| DC-API-03 Workspace-backed Jobs                                          | Implemented list/service path in existing Jobs panel. Complete selected Workspace membership, contextual identity, exact Severity sort, isolated resettable mock status.                |
+| Live generalized AOI / Workspace overlays                                | Blocked by GEO-01/GEO-02. Honest missing-geometry state; no synthetic replacement. List access remains available.                                                                       |
+| Demo regression                                                          | Existing mocks and UI paths retained; dependency-free regression tests run. ArcGIS/browser acceptance pending.                                                                          |
+| Final Job lifecycle, comments, deadline/follow-ups, bands, durable store | Deferred. See current gap register; no invented live contract.                                                                                                                          |
+
+Authoritative current scope is [FEATURE_WORKSPACE_SCOPE.md](FEATURE_WORKSPACE_SCOPE.md).
+A Package owns one generalized AOI and detailed Features; a Package is not a Feature.
+Pipeline binding is the editable relation. Workspace membership derives from overlap.
+Jobs use `(packageId, pipelineId, workspaceId)`; status is mock-only at that scope. Severity
+is Package priority, smaller first, zero highest, uint64 maximum Not prioritized, null unknown.
+
+No backend project or package-lock changes; no dependency additions or commits.
+Exact current test logs/file inventory are in the candidate delivery report. The full check
+is blocked by missing dependencies; do not reuse historical test counts as current results.
+Next: run [local verification](DC_API_LOCAL_VERIFICATION.md), capture permitted API response
+and mutation evidence, resolve geographic mapping, then accept/revise the candidate.
+
+## Historical DC-001 tracker and preserved demo behavior
+
+All prior status/baseline descriptions below are historical. They do not override the current
+Package/Pipeline/Workspace decisions. Historical task IDs are intentionally retained.
+
 This document is the source of truth for DataCatalogue project goals, requirements, architecture decisions, folder structure, implementation order, open questions and progress.
 
 Keep this document updated when requirements, technical decisions, backend assumptions or implementation status change.
