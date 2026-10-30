@@ -28,6 +28,12 @@ public interface IEncPackageRepository
     Task<DateTime?> GetReplayFromUtcAsync(CancellationToken cancellationToken = default);
     /// <summary>Gets the per-AOI replay bounds to avoid rebuilding unrelated packages from old edits.</summary>
     Task<IReadOnlyDictionary<string, DateTime>> GetReplayBoundsAsync(CancellationToken cancellationToken = default);
+    /// <summary>Gets the exact archive cutoffs already attempted by failed shared snapshot builds.</summary>
+    Task<IReadOnlyDictionary<string, DateTime>> GetSnapshotAttemptBoundsAsync(CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Durable ENC snapshot attempt checkpoints are unavailable.");
+    /// <summary>Atomically retains the cumulative replay baseline and the last failed build's inspected UTC cutoff.</summary>
+    Task MarkSnapshotAttemptAsync(string sourceDatasetName, DateTime scanFromUtc, DateTime attemptedThroughUtc, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Durable ENC snapshot attempt checkpoints are unavailable.");
     /// <summary>Retains source edits while a manual hold or unrelated candidate blocks package creation.</summary>
     Task MarkReplayAsync(string sourceDatasetName, DateTime scanFromUtc, CancellationToken cancellationToken = default);
     /// <summary>Clears a replay bound after all edits in its window have no net product change.</summary>

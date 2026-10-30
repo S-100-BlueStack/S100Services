@@ -17,6 +17,58 @@ namespace TestProductCatalogueAPI;
 public sealed class DpcSqlTransactionTests
 {
     [DpcSqlFact]
+    public async Task SnapshotAttemptMigrationUpgradesExistingReplayAndCanBeRerun() {
+        await using var db = await DpcSqlDatabase.CreateAsync();
+        await db.Packages.MarkReplayAsync(DpcRunFixture.Source, DpcRunFixture.Utc(8));
+        // Recreate the previous two-column schema only in this disposable test database.
+        await db.ExecuteAsync("""
+            ALTER TABLE dbo.EncPackageReplay DROP CONSTRAINT CK_EncPackageReplay_SnapshotAttempt;
+            ALTER TABLE dbo.EncPackageReplay DROP COLUMN last_snapshot_attempt_utc;
+            """);
+        var migration = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "DpcMigrations", "009_AddEncSnapshotAttempt.sql"));
+        await db.ExecuteAsync(migration);
+        await db.ExecuteAsync(migration);
+        Assert.Equal(DpcRunFixture.Utc(8), (await db.Packages.GetReplayBoundsAsync())[DpcRunFixture.Source]);
+        Assert.Empty(await db.Packages.GetSnapshotAttemptBoundsAsync());
+        await db.Packages.MarkSnapshotAttemptAsync(DpcRunFixture.Source, DpcRunFixture.Utc(8), DpcRunFixture.Utc(10));
+        Assert.Equal(DpcRunFixture.Utc(10), (await db.Packages.GetSnapshotAttemptBoundsAsync())[DpcRunFixture.Source]);
+    }
+
+    [DpcSqlFact]
+    public async Task SnapshotAttemptPersistsAcrossRepositoryReadsWithoutRegressingEitherBound() {
+        await using var db = await DpcSqlDatabase.CreateAsync();
+        await db.Packages.MarkSnapshotAttemptAsync(DpcRunFixture.Source, DpcRunFixture.Utc(8), DpcRunFixture.Utc(10));
+        await db.Packages.MarkReplayAsync(DpcRunFixture.Source, DpcRunFixture.Utc(7));
+        await db.Packages.MarkSnapshotAttemptAsync(DpcRunFixture.Source, DpcRunFixture.Utc(8), DpcRunFixture.Utc(9));
+        Assert.Equal(DpcRunFixture.Utc(7), (await db.Packages.GetReplayBoundsAsync())[DpcRunFixture.Source]);
+        var attempt = (await db.Packages.GetSnapshotAttemptBoundsAsync())[DpcRunFixture.Source];
+        Assert.Equal(DpcRunFixture.Utc(10), attempt);
+        Assert.Equal(DateTimeKind.Utc, attempt.Kind);
+        await db.Packages.RetireReplayAsync(DpcRunFixture.Source, DpcRunFixture.Utc(8));
+        Assert.Single(await db.Packages.GetSnapshotAttemptBoundsAsync());
+        await db.Packages.RetireReplayAsync(DpcRunFixture.Source, DpcRunFixture.Utc(7));
+        Assert.Empty(await db.Packages.GetSnapshotAttemptBoundsAsync());
+    }
+
+    [DpcSqlFact]
+    public async Task SnapshotCheckpointWriteFailureRollsBackTheReplayInsertAndBaselineUpdate() {
+        await using var db = await DpcSqlDatabase.CreateAsync();
+        await db.ExecuteAsync("""
+            CREATE TRIGGER dbo.FailSnapshotCheckpoint ON dbo.EncPackageReplay AFTER UPDATE AS
+            BEGIN
+                IF EXISTS (SELECT 1 FROM inserted WHERE last_snapshot_attempt_utc IS NOT NULL)
+                    THROW 51112, 'fixture checkpoint failure', 1;
+            END;
+            """);
+        await Assert.ThrowsAsync<SqlException>(() => db.Packages.MarkSnapshotAttemptAsync(DpcRunFixture.Source, DpcRunFixture.Utc(8), DpcRunFixture.Utc(10)));
+        Assert.Empty(await db.Packages.GetReplayBoundsAsync());
+        await db.Packages.MarkReplayAsync(DpcRunFixture.Source, DpcRunFixture.Utc(8));
+        await Assert.ThrowsAsync<SqlException>(() => db.Packages.MarkSnapshotAttemptAsync(DpcRunFixture.Source, DpcRunFixture.Utc(7), DpcRunFixture.Utc(10)));
+        Assert.Equal(DpcRunFixture.Utc(8), (await db.Packages.GetReplayBoundsAsync())[DpcRunFixture.Source]);
+        Assert.Empty(await db.Packages.GetSnapshotAttemptBoundsAsync());
+    }
+
+    [DpcSqlFact]
     public async Task CreatingPendingPackageCommitsBothNonIdleMembersAndReplayBeforeAnyExport() {
         await using var db = await DpcSqlDatabase.CreateAsync();
         var s101 = await db.Workflows.GetOrCreateTrackAsync(DpcRunFixture.Source, ProductSpecification.S101, ExportEngineKind.IsoIec8211, 0, 0);

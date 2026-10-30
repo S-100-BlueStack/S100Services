@@ -1,14 +1,14 @@
 /*
 Product Catalogue - fresh System schema for an existing SQL Server database.
 Generated 2026-10-29 from the latest supplied S100Services snapshot:
-  09e712e5eaa194ece996277e642683aef34aa3fe (clean main).
+  68d57f39a4670bd376d083add74eee360e4d812d (clean main), with migration 009.
 
 In SSMS, select the existing database that will be used by SystemConnection
 (the S-128 database if co-locating application tables with the geodatabase),
 then execute this entire file as the database owner. No database name is assumed.
 The API and Worker must point SystemConnection at this same database.
 
-Includes the final schema from migrations 001, 002, 003, 004, 006, 007, 008
+Includes the final schema from migrations 001, 002, 003, 004, 006, 007, 008, 009
 and BE108A_001, with their keys, constraints, defaults and indexes.
 This replaces those migrations for a FRESH application schema only.
 No legacy JobTable conversion, seed products or checkpoint rows are needed.
@@ -224,7 +224,11 @@ CREATE UNIQUE INDEX UX_EncPackage_S57Dataset ON dbo.EncPackage(s57_dataset_name)
 -- dbo.EncPackageReplay
 CREATE TABLE dbo.EncPackageReplay (
     source_dataset_name nvarchar(64) NOT NULL CONSTRAINT PK_EncPackageReplay PRIMARY KEY,
-    scan_from_utc datetime2(7) NOT NULL
+    scan_from_utc datetime2(7) NOT NULL,
+    last_snapshot_attempt_utc datetime2(7) NULL,
+    CONSTRAINT CK_EncPackageReplay_SnapshotAttempt CHECK (
+        last_snapshot_attempt_utc IS NULL OR last_snapshot_attempt_utc >= scan_from_utc
+    )
 );
 
 -- dbo.ProductIcEncDelivery

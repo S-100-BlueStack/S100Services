@@ -50,8 +50,16 @@ public sealed class DpcRunAsyncTests
         await f.RunAsync();
         Assert.Equal(completed.OrderBy(id => id), f.Packages.Active.Values.Select(p => p.Id).OrderBy(id => id));
         Assert.Equal(6, f.Engine.Requests.Count);
+        Assert.Equal(4, f.SnapshotCalls);
+        Assert.Equal(DpcRunFixture.Utc(10), f.Packages.SnapshotAttempts[DpcRunFixture.Source]);
+        Assert.Equal(PublicExportError.GenericMessage, (await f.TrackAsync(ProductSpecification.S101)).ErrorMessage);
         f.FailSnapshotSource = null;
         f.Clock.Now = DpcRunFixture.Utc(14);
+        await f.RunAsync();
+        Assert.Equal(4, f.SnapshotCalls);
+        Assert.Equal(3, f.Packages.Active.Count);
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.A, DpcRunFixture.Utc(15), 2);
+        f.Clock.Now = DpcRunFixture.Utc(16);
         await f.RunAsync();
         Assert.Equal(4, f.Packages.Active.Count);
         Assert.Equal(8, f.Engine.Requests.Count);
@@ -68,7 +76,7 @@ public sealed class DpcRunAsyncTests
         f.FailSnapshotSource = DpcRunFixture.Source;
         await f.RunAsync();
         Assert.Same(previous, f.Packages.Active[DpcRunFixture.Source]);
-        Assert.Contains("snapshot failed", previous.ErrorMessage!);
+        Assert.Equal(PublicExportError.GenericMessage, previous.ErrorMessage);
         Assert.Equal(candidate, (await f.TrackAsync(ProductSpecification.S101)).CandidateEdition);
         Assert.Equal(ProductState.ReadyForDistribution, (await f.TrackAsync(ProductSpecification.S101)).State);
         Assert.Equal(0, f.Packages.PairedDiscards);
@@ -77,9 +85,115 @@ public sealed class DpcRunAsyncTests
         f.FailSnapshotSource = null;
         f.Clock.Now = DpcRunFixture.Utc(14);
         await f.RunAsync();
+        Assert.Same(previous, f.Packages.Active[DpcRunFixture.Source]);
+        Assert.Equal(2, f.SnapshotCalls);
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.B, DpcRunFixture.Utc(15), 3);
+        f.Clock.Now = DpcRunFixture.Utc(16);
+        await f.RunAsync();
         Assert.NotEqual(previous.Id, f.Packages.Active[DpcRunFixture.Source].Id);
         Assert.Equal(previous.ScanFromUtc, f.Packages.Active[DpcRunFixture.Source].ScanFromUtc);
         Assert.Equal(4, f.Engine.Requests.Count);
+    }
+
+    [Fact]
+    public async Task FourFailedProductsStayCheckpointedUntilOnlyOneReceivesANewArchiveEdit() {
+        var f = await DpcRunFixture.CreateAsync();
+        var sources = new[] { DpcRunFixture.Source, "101DK002", "101DK003", "101DK004" };
+        foreach (var source in sources.Skip(1)) {
+            f.Archive.AddSource(source, 1000);
+            f.Archive.AddFeature(source, DpcRunFixture.A, 0);
+        }
+        foreach (var source in sources) f.Archive.Edit(source, DpcRunFixture.A, DpcRunFixture.Utc(9), 1);
+        f.FailAllSnapshots = true;
+        await f.RunAsync();
+        Assert.Equal(4, f.SnapshotCalls);
+        Assert.Equal(4, f.Packages.SnapshotAttempts.Count);
+        f.FailAllSnapshots = false;
+        f.Clock.Now = DpcRunFixture.Utc(12);
+        await f.RunAsync(); // RunAsync constructs a new coordinator; checkpoints survive its lifetime.
+        Assert.Equal(4, f.SnapshotCalls);
+        Assert.Empty(f.Engine.Requests);
+        f.Archive.Edit(sources[2], DpcRunFixture.A, DpcRunFixture.Utc(13), 2);
+        f.Clock.Now = DpcRunFixture.Utc(14);
+        await f.RunAsync();
+        Assert.Equal(5, f.SnapshotCalls);
+        Assert.Equal(sources[2], Assert.Single(f.Packages.Active.Values).SourceDatasetName);
+        Assert.Equal(3, f.Packages.SnapshotAttempts.Count);
+        Assert.Equal(2, f.Engine.Requests.Count);
+    }
+
+    [Fact]
+    public async Task FailedAttemptUsesTheScanCutoffSoEditsDuringTheBuildRemainEligible() {
+        var f = await DpcRunFixture.CreateAsync();
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.A, DpcRunFixture.Utc(9), 1);
+        f.FailSnapshotSource = DpcRunFixture.Source;
+        f.BeforeSnapshot = () => {
+            f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.A, DpcRunFixture.Utc(11), 2);
+            f.Clock.Now = DpcRunFixture.Utc(12);
+        };
+        await f.RunAsync();
+        Assert.Equal(DpcRunFixture.Utc(10), f.Packages.SnapshotAttempts[DpcRunFixture.Source]);
+        Assert.Equal(DpcRunFixture.Utc(12), (await f.TrackAsync(ProductSpecification.S101)).UpdatedAtUtc);
+        f.BeforeSnapshot = null;
+        f.FailSnapshotSource = null;
+        f.Clock.Now = DpcRunFixture.Utc(14);
+        await f.RunAsync();
+        Assert.Contains("A=2", Assert.Single(f.Packages.Active.Values).DatasetYaml);
+        Assert.Empty(f.Packages.SnapshotAttempts);
+    }
+
+    [Fact]
+    public async Task IncompleteAttemptInspectionNeverConsumesTheFailureCheckpoint() {
+        var f = await DpcRunFixture.CreateAsync();
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.A, DpcRunFixture.Utc(9), 1);
+        f.FailSnapshotSource = DpcRunFixture.Source;
+        await f.RunAsync();
+        await f.Workflow.SetSuccessfulRunUtcAsync(nameof(DetectProductChangesJob), DpcRunFixture.Utc(11));
+        f.Clock.Now = DpcRunFixture.Utc(14);
+        f.Archive.FailFrom = DpcRunFixture.Utc(10);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => f.RunAsync());
+        Assert.Equal(DpcRunFixture.Utc(11), await f.WatermarkAsync());
+        Assert.Equal(DpcRunFixture.Utc(10), f.Packages.SnapshotAttempts[DpcRunFixture.Source]);
+        Assert.Equal(1, f.SnapshotCalls);
+    }
+
+    [Fact]
+    public async Task HoldDoesNotConsumeANewEditOrAdvanceTheFailureCheckpoint() {
+        var f = await DpcRunFixture.CreateAsync();
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.A, DpcRunFixture.Utc(9), 1);
+        f.FailSnapshotSource = DpcRunFixture.Source;
+        await f.RunAsync();
+        var held = await f.TrackAsync(ProductSpecification.S57);
+        held.IsManuallyFrozen = true;
+        f.FailSnapshotSource = null;
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.A, DpcRunFixture.Utc(11), 2);
+        f.Clock.Now = DpcRunFixture.Utc(12);
+        await f.RunAsync();
+        Assert.Equal(1, f.SnapshotCalls);
+        Assert.Equal(DpcRunFixture.Utc(10), f.Packages.SnapshotAttempts[DpcRunFixture.Source]);
+        held.IsManuallyFrozen = false;
+        f.Clock.Now = DpcRunFixture.Utc(14);
+        await f.RunAsync();
+        Assert.Single(f.Packages.Active);
+        Assert.Equal(2, f.SnapshotCalls);
+        Assert.Empty(f.Packages.SnapshotAttempts);
+    }
+
+    [Fact]
+    public async Task FullRevertAfterFailedInitialSnapshotClearsTheErrorWithoutBuildingAnExport() {
+        var f = await DpcRunFixture.CreateAsync();
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.A, DpcRunFixture.Utc(9), 1);
+        f.FailSnapshotSource = DpcRunFixture.Source;
+        await f.RunAsync();
+        f.Archive.Edit(DpcRunFixture.Source, DpcRunFixture.A, DpcRunFixture.Utc(11), 0);
+        f.Clock.Now = DpcRunFixture.Utc(12);
+        await f.RunAsync();
+        Assert.Empty(f.Packages.Active);
+        Assert.Empty(f.Packages.SnapshotAttempts);
+        Assert.Empty(f.Packages.Replay);
+        Assert.Equal(1, f.SnapshotCalls);
+        Assert.Equal(ProductState.Idle, (await f.TrackAsync(ProductSpecification.S101)).State);
+        Assert.Equal(ProductState.Idle, (await f.TrackAsync(ProductSpecification.S57)).State);
     }
 
     [Fact]
@@ -722,6 +836,7 @@ internal sealed class DpcRunFixture
     internal readonly IProductManager Manager;
     internal int SnapshotCalls;
     internal string? FailSnapshotSource;
+    internal bool FailAllSnapshots;
     internal bool InvalidSnapshot;
     internal Action? BeforeSnapshot;
     internal int PublicationCalls;
@@ -745,7 +860,7 @@ internal sealed class DpcRunFixture
                 case nameof(IElectronicProductManager.CreateVerifiedExportSnapshotAsync):
                     SnapshotCalls++;
                     BeforeSnapshot?.Invoke();
-                    if (name == FailSnapshotSource) {
+                    if (name == FailSnapshotSource || FailAllSnapshots) {
                         if (InvalidSnapshot) return Task.FromResult(new VerifiedExportSnapshot(null!, []));
                         throw new ArgumentNullException("Geometry is null or empty");
                     }
@@ -943,6 +1058,14 @@ internal sealed class DpcArchiveFixture
 /// <summary>SQL transaction tests separately verify these paired mutations using real migrations and SQL Server.</summary>
 internal sealed class DpcMemoryPackages(InMemoryProductRepository workflows, DpcClock clock) : IEncPackageRepository
 {
+    internal Dictionary<string, DateTime> SnapshotAttempts { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Task<IReadOnlyDictionary<string, DateTime>> GetSnapshotAttemptBoundsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyDictionary<string, DateTime>>(new Dictionary<string, DateTime>(SnapshotAttempts));
+    public async Task MarkSnapshotAttemptAsync(string sourceDatasetName, DateTime scanFromUtc, DateTime attemptedThroughUtc, CancellationToken cancellationToken = default) {
+        await MarkReplayAsync(sourceDatasetName, scanFromUtc, cancellationToken);
+        if (!SnapshotAttempts.TryGetValue(sourceDatasetName, out var previous) || previous < attemptedThroughUtc)
+            SnapshotAttempts[sourceDatasetName] = attemptedThroughUtc;
+    }
     internal Dictionary<string, EncPackage> Active { get; } = new(StringComparer.OrdinalIgnoreCase);
     internal Dictionary<string, DateTime> Replay { get; } = new(StringComparer.OrdinalIgnoreCase);
     internal Dictionary<string, string> Delivery { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -954,12 +1077,12 @@ internal sealed class DpcMemoryPackages(InMemoryProductRepository workflows, Dpc
     public Task<DateTime?> GetReplayFromUtcAsync(CancellationToken cancellationToken = default) => Task.FromResult(Replay.Count == 0 ? null : (DateTime?)Replay.Values.Min());
     public Task<IReadOnlyDictionary<string, DateTime>> GetReplayBoundsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyDictionary<string, DateTime>>(new Dictionary<string, DateTime>(Replay));
     public Task MarkReplayAsync(string sourceDatasetName, DateTime scanFromUtc, CancellationToken cancellationToken = default) { Replay[sourceDatasetName] = Replay.TryGetValue(sourceDatasetName, out var old) && old < scanFromUtc ? old : scanFromUtc; return Task.CompletedTask; }
-    public Task ClearReplayAsync(string sourceDatasetName, CancellationToken cancellationToken = default) { Replay.Remove(sourceDatasetName); return Task.CompletedTask; }
+    public Task ClearReplayAsync(string sourceDatasetName, CancellationToken cancellationToken = default) { Replay.Remove(sourceDatasetName); SnapshotAttempts.Remove(sourceDatasetName); return Task.CompletedTask; }
     public Task RetireReplayAsync(string sourceDatasetName, DateTime expectedScanFromUtc, CancellationToken cancellationToken = default) {
-        if (Replay.TryGetValue(sourceDatasetName, out var current) && current == expectedScanFromUtc) Replay.Remove(sourceDatasetName);
+        if (Replay.TryGetValue(sourceDatasetName, out var current) && current == expectedScanFromUtc) { Replay.Remove(sourceDatasetName); SnapshotAttempts.Remove(sourceDatasetName); }
         return Task.CompletedTask;
     }
-    public Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default) { cancellationToken.ThrowIfCancellationRequested(); var added = Active.TryAdd(package.SourceDatasetName, package); if (added && Replay.TryGetValue(package.SourceDatasetName, out var bound) && bound >= package.ScanFromUtc) Replay.Remove(package.SourceDatasetName); return Task.FromResult(added); }
+    public Task<bool> TryCreateAsync(EncPackage package, CancellationToken cancellationToken = default) { cancellationToken.ThrowIfCancellationRequested(); var added = Active.TryAdd(package.SourceDatasetName, package); if (added && Replay.TryGetValue(package.SourceDatasetName, out var bound) && bound >= package.ScanFromUtc) { Replay.Remove(package.SourceDatasetName); SnapshotAttempts.Remove(package.SourceDatasetName); } return Task.FromResult(added); }
     public async Task<bool> TryCreatePendingAsync(EncPackage package, CancellationToken cancellationToken = default) {
         foreach (var (name, spec) in new[] { (package.SourceDatasetName, ProductSpecification.S101), (package.S57DatasetName, ProductSpecification.S57) }) {
             var track = await workflows.GetTrackAsync(name, spec, cancellationToken);

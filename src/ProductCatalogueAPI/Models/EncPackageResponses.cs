@@ -61,15 +61,15 @@ public static class EncPackageStatusResolver
         if (IsUncertain(s101) || IsUncertain(s57))
             return "IC-ENC delivery could not be confirmed. Verify the receiver's intake and reconcile the delivery before continuing.";
         if (IsError(s101, package?.S101Discarded == true) && !string.IsNullOrWhiteSpace(s101?.ErrorMessage))
-            return s101.ErrorMessage;
+            return PublicExportError.For(s101);
         if (IsError(s57, package?.S57Discarded == true) && !string.IsNullOrWhiteSpace(s57?.ErrorMessage))
-            return s57.ErrorMessage;
+            return PublicExportError.For(s57);
         if (!string.IsNullOrWhiteSpace(package?.ErrorMessage))
-            return package.ErrorMessage;
+            return PublicExportError.GenericMessage;
         if (IsError(s101, package?.S101Discarded == true))
-            return "The S-101 candidate failed or was rejected. Review its validation artifacts and discard the failed candidate.";
+            return PublicExportError.GenericMessage;
         if (IsError(s57, package?.S57Discarded == true))
-            return "The S-57 candidate failed or was rejected. Review its validation artifacts and discard the failed candidate.";
+            return PublicExportError.GenericMessage;
         return null;
     }
 

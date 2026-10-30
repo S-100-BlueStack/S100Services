@@ -67,6 +67,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         foreach (var incomplete in (await packages.GetActiveAsync(incompleteNames, cancellationToken, includeSourceYaml: false)).Values)
             await packages.MarkReplayAsync(incomplete.SourceDatasetName, incomplete.ScanFromUtc, cancellationToken);
         var replay = await packages.GetReplayBoundsAsync(cancellationToken);
+        var snapshotAttempts = await packages.GetSnapshotAttemptBoundsAsync(cancellationToken);
         if (replay.Count > 0) {
             var activeReplay = await packages.GetActiveAsync(replay.Keys, cancellationToken);
             var mappedS57 = replay.Keys.ToDictionary(name => name,
@@ -104,9 +105,21 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 // Composition is relative to an endpoint state, not just a timestamp filter.
                 // A source at 10:00 cannot reuse an 08:00 comparison, even if the net result is empty.
                 logger.LogInformation("ENC replay archive scan started. SinceUtc: {SinceUtc:O}. EligibleAoiCount: {EligibleAoiCount}.", group.Key, group.Count());
-                var replayed = await ScanAsync(group.Key);
-                foreach (var entry in group)
+                foreach (var entry in group) {
+                    // A dormant failed source needs only its post-attempt delta. Keep the
+                    // older cumulative baseline durable without composing it every minute.
+                    if (snapshotAttempts.TryGetValue(entry.Key, out var attemptedThroughUtc) &&
+                        (!activeReplay.TryGetValue(entry.Key, out var attemptedPackage) || attemptedPackage.DetectedAtUtc <= attemptedThroughUtc)) {
+                        var newerChanges = (await ScanAsync(attemptedThroughUtc)).GetValueOrDefault(entry.Key);
+                        if (newerChanges is null || !newerChanges.Values.Any(change => EncChangeSummary.GetObservedAttributePaths(change).Count > 0)) {
+                            pending.Remove(entry.Key);
+                            logger.LogInformation("ENC failed snapshot is awaiting a new matching archive change. SourceDatasetName: {SourceDatasetName}. AttemptedThroughUtc: {AttemptedThroughUtc:O}.", entry.Key, attemptedThroughUtc);
+                            continue;
+                        }
+                    }
+                    var replayed = await ScanAsync(group.Key);
                     pending[entry.Key] = replayed.GetValueOrDefault(entry.Key) ?? new(StringComparer.OrdinalIgnoreCase);
+                }
             }
         }
 
@@ -139,6 +152,10 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             await ScanAsync(existing.ScanFromUtc);
             await ScanAsync(existing.DetectedAtUtc);
         }
+        foreach (var sourceName in pending.Keys) {
+            if (snapshotAttempts.TryGetValue(sourceName, out var attemptedThroughUtc))
+                await ScanAsync(attemptedThroughUtc);
+        }
         var retiredReplay = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
         var failedSourceCount = 0;
         foreach (var (sourceName, changes) in pending) {
@@ -154,6 +171,15 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             await using var s57Lock = await locks.TryAcquireAsync(ProductTrackLockKey.For(s57Name, ProductSpecification.S57), cancellationToken);
             if (s57Lock is null)
                 throw new InvalidOperationException($"Mapped S-57 export lock for '{s57Name}' is busy. The scan watermark was preserved.");
+
+            if (snapshotAttempts.TryGetValue(sourceName, out var attemptedThroughUtc) &&
+                (!active.TryGetValue(sourceName, out var attemptedPackage) || attemptedPackage.DetectedAtUtc <= attemptedThroughUtc)) {
+                var newerChanges = (await ScanAsync(attemptedThroughUtc)).GetValueOrDefault(sourceName);
+                if (newerChanges is null || !newerChanges.Values.Any(change => EncChangeSummary.GetObservedAttributePaths(change).Count > 0)) {
+                    logger.LogInformation("ENC failed snapshot is awaiting a new matching archive change. SourceDatasetName: {SourceDatasetName}. AttemptedThroughUtc: {AttemptedThroughUtc:O}.", sourceName, attemptedThroughUtc);
+                    continue;
+                }
+            }
 
             var packageChanges = changes;
             var snapshotChanges = changes;
@@ -205,6 +231,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             var summaryChanges = packageChanges.SelectMany(pair => EncChangeSummary.GetObservedAttributePaths(pair.Value)
                 .Select(path => new ProductChange(pair.Key, pair.Value.Code, path, pair.Value.EditDate ?? scanStartedUtc, pair.Value.Deleted))).ToArray();
             if (summaryChanges.Length == 0 && previous is null) {
+                await AcknowledgeSourceFailuresAsync(s101, s57, cancellationToken);
                 retiredReplay[sourceName] = packageScanFromUtc;
                 logger.LogInformation("ENC archive rows had no net feature difference. SourceDatasetName: {SourceDatasetName}.", sourceName);
                 continue;
@@ -243,7 +270,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             catch (Exception exception) {
                 // This failure belongs to one source, not to the complete archive inspection.
                 // Persist replay before the global cursor advances, and never discard its old pair.
-                await RecordSourceSnapshotFailureAsync(sourceName, previous, packageScanFromUtc, s101, s57, exception, cancellationToken);
+                await RecordSourceSnapshotFailureAsync(sourceName, previous, packageScanFromUtc, s101, s57, scanStartedUtc, exception, cancellationToken);
                 failedSourceCount++;
                 continue;
             }
@@ -280,6 +307,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             var relevantIds = packageChanges.Where(IsRelevant).Select(pair => pair.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
             summaryChanges = summaryChanges.Where(change => relevantIds.Contains(change.FeatureId)).ToArray();
             if (summaryChanges.Length == 0) {
+                if (previous is null) await AcknowledgeSourceFailuresAsync(s101, s57, cancellationToken);
                 if (previous is not null && !await DiscardForRefreshAsync(previous, cancellationToken))
                     continue;
                 retiredReplay[sourceName] = packageScanFromUtc;
@@ -294,8 +322,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             if (previous is null) {
                 // Only this owned, pre-candidate failure is safe to acknowledge automatically.
                 // The immutable failure history remains; ordinary manual errors stay protected.
-                foreach (var track in new[] { s101, s57 }.Where(IsSourceSnapshotFailure))
-                    await workflowRepository.DiscardCandidateAsync(track.Id, "system", clock.GetUtcNow().UtcDateTime, cancellationToken);
+                await AcknowledgeSourceFailuresAsync(s101, s57, cancellationToken);
             }
 
             var package = new EncPackage { Id = Guid.NewGuid(), SourceDatasetName = sourceName, S57DatasetName = s57Name, ScanFromUtc = packageScanFromUtc, DetectedAtUtc = scanStartedUtc, DatasetYaml = yaml, SummaryYaml = summary };
@@ -331,11 +358,10 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
     }
 
     /// <summary>Retains source work durably while recording the failed shared build on both product histories.</summary>
-    private async Task RecordSourceSnapshotFailureAsync(string sourceName, EncPackage? previous, DateTime scanFromUtc, ProductExportTrackRecord s101, ProductExportTrackRecord s57, Exception exception, CancellationToken cancellationToken) {
+    private async Task RecordSourceSnapshotFailureAsync(string sourceName, EncPackage? previous, DateTime scanFromUtc, ProductExportTrackRecord s101, ProductExportTrackRecord s57, DateTime attemptedThroughUtc, Exception exception, CancellationToken cancellationToken) {
         var replayFromUtc = previous?.ScanFromUtc ?? scanFromUtc;
         await packages.MarkReplayAsync(sourceName, replayFromUtc, cancellationToken);
-        var message = $"Shared ENC source snapshot failed: {exception.Message}";
-        if (message.Length > 1024) message = message[..1024];
+        var message = PublicExportError.GenericMessage;
         if (previous is not null)
             await packages.SetErrorAsync(previous.Id, message, cancellationToken);
         foreach (var track in new[] { s101, s57 }) {
@@ -344,6 +370,9 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             var state = previous is null ? ProductState.Error : track.State;
             await workflowRepository.SetStateAsync(track.Id, state, "system", clock.GetUtcNow().UtcDateTime, "ENC_SOURCE_SNAPSHOT_FAILED", message, cancellationToken);
         }
+        // Commit the retry gate only after both durable error histories succeeded. A failure
+        // while recording diagnostics must never suppress the unfinished attempt on restart.
+        await packages.MarkSnapshotAttemptAsync(sourceName, replayFromUtc, attemptedThroughUtc, cancellationToken);
         logger.LogError(exception, "ENC source snapshot failed; replay retained and remaining products will continue. SourceDatasetName: {SourceDatasetName}. ExistingPackageId: {PackageId}. ReplayFromUtc: {ReplayFromUtc:O}.", sourceName, previous?.Id, replayFromUtc);
     }
 
@@ -386,6 +415,11 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         track.State == ProductState.Error && track.CandidateEdition is null && track.CandidateUpdate is null &&
         track.ErrorCode == "ENC_SOURCE_SNAPSHOT_FAILED";
 
+    private async Task AcknowledgeSourceFailuresAsync(ProductExportTrackRecord s101, ProductExportTrackRecord s57, CancellationToken cancellationToken) {
+        foreach (var track in new[] { s101, s57 }.Where(IsSourceSnapshotFailure))
+            await workflowRepository.DiscardCandidateAsync(track.Id, "system", clock.GetUtcNow().UtcDateTime, cancellationToken);
+    }
+
     /// <summary>Checks and discards both members in one SQL transaction, preserving replay if either member is protected.</summary>
     private async Task<bool> DiscardForRefreshAsync(EncPackage package, CancellationToken cancellationToken) {
         if (await exports.ExecutePackageRefreshDiscardAsync(package.Id, cancellationToken))
@@ -423,8 +457,8 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
     private async Task RecordCandidateFailureAsync(EncPackage package, string datasetName, ProductSpecification specification, Exception exception) {
         logger.LogError(exception, "ENC candidate failed. PackageId: {PackageId}. ExportDatasetName: {ExportDatasetName}.", package.Id, datasetName);
         var message = exception is ExportValidationException validation
-            ? validation.PublicMessage
-            : $"The {specification} candidate '{datasetName}' failed. Review its diagnostics and discard the failed candidate.";
+            ? PublicExportError.Message(validation.Code, validation.PublicMessage)
+            : PublicExportError.GenericMessage;
         var errorCode = exception is ExportValidationException failure ? failure.Code : "ENC_CANDIDATE_FAILED";
         try {
             // A failure before BeginExportAsync still needs a failed track for the operator to acknowledge.

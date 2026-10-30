@@ -42,7 +42,7 @@ public class ProductHistoryControllerTests
         Assert.Equal(ProductStatus.Exported, state.Status);
         Assert.Equal("USER", state.Owner);
         Assert.Equal("TEST_ERROR", state.ErrorCode);
-        Assert.Equal("Test error message", state.ErrorMessage);
+        Assert.Equal(PublicExportError.GenericMessage, state.ErrorMessage);
         Assert.Equal(1, response.EventTotalHits);
         Assert.Equal(stateId, Assert.Single(response.Events).StateRecordId);
         Assert.True(response.Success);

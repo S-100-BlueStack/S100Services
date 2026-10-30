@@ -40,6 +40,7 @@ public sealed class EncPackageStatusTests
         var package = Package();
         var s57 = Track(ProductSpecification.S57, ProductState.ReadyForDistribution);
         var s101 = Track(ProductSpecification.S101, ProductState.Error);
+        s101.ErrorCode = "SEVENCS_VALIDATION_FAILED";
         s101.ErrorMessage = "SevenCs validation found 3 critical findings.";
 
         Assert.Equal(EncPackageStatus.Error, EncPackageStatusResolver.Resolve(package, s57, s101));
@@ -65,7 +66,7 @@ public sealed class EncPackageStatusTests
         var s101 = Track(ProductSpecification.S101, ProductState.Error);
 
         Assert.Equal(EncPackageStatus.Error, EncPackageStatusResolver.Resolve(package, null, s101));
-        Assert.Contains("S-101", EncPackageStatusResolver.GetErrorMessage(package, null, s101));
+        Assert.Equal(PublicExportError.GenericMessage, EncPackageStatusResolver.GetErrorMessage(package, null, s101));
     }
 
     private static EncPackage Package() => new() { SourceDatasetName = "101DK001", S57DatasetName = "DK3BIDQE" };

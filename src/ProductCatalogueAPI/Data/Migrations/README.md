@@ -14,3 +14,12 @@ This migration creates one small source-scoped delivery policy table. `EncPackag
 This foundation does not enable Pause or Resume as user actions, does not block legacy Send paths, and introduces no automatic/manual delivery mark, Accept, scheduler, or publication operation. Do not expose Pause controls until the later dispatch layer verifies all relevant operations. A schema-only or repository-only deployment is not proof that delivery can be paused.
 
 For application rollback before activating package actions, retain this additive table; earlier binaries ignore it. No down/drop script is supplied. A later decision about whether Pause persists across terminal/discarded package lifecycles must be made before exposing actions; the current storage retains it until explicitly changed.
+
+## Failed snapshot retry checkpoint (009)
+
+Apply `009_AddEncSnapshotAttempt.sql` to the System database before deploying the
+DPC retry gate. It adds `EncPackageReplay.last_snapshot_attempt_utc`, the exact
+archive cutoff inspected by a failed shared snapshot build. Replay still retains
+the cumulative source baseline; only a subsequent matching change permits another
+build. The migration adds no geodatabase tables and does not backfill guessed
+cutoffs from old exception/finish timestamps.

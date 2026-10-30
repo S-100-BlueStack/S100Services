@@ -184,6 +184,35 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
     }
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyDictionary<string, DateTime>> GetSnapshotAttemptBoundsAsync(CancellationToken cancellationToken = default) {
+        using var connection = _connectionFactory.Create();
+        var rows = await connection.QueryAsync<SnapshotAttemptRow>(new CommandDefinition("""
+            SELECT source_dataset_name AS SourceDatasetName, last_snapshot_attempt_utc AS AttemptedThroughUtc
+            FROM dbo.EncPackageReplay WHERE last_snapshot_attempt_utc IS NOT NULL;
+            """, cancellationToken: cancellationToken));
+        return rows.ToDictionary(row => row.SourceDatasetName, row => DateTime.SpecifyKind(row.AttemptedThroughUtc, DateTimeKind.Utc), StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <inheritdoc/>
+    public async Task MarkSnapshotAttemptAsync(string sourceDatasetName, DateTime scanFromUtc, DateTime attemptedThroughUtc, CancellationToken cancellationToken = default) {
+        if (string.IsNullOrWhiteSpace(sourceDatasetName) || scanFromUtc.Kind != DateTimeKind.Utc ||
+            attemptedThroughUtc.Kind != DateTimeKind.Utc || attemptedThroughUtc < scanFromUtc)
+            throw new ArgumentException("A failed snapshot requires a source identity and a normalized UTC inspection window.");
+        using var connection = _connectionFactory.Create();
+        connection.Open();
+        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+        await UpsertReplayAsync(connection, transaction, sourceDatasetName, scanFromUtc, cancellationToken);
+        await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE dbo.EncPackageReplay
+            SET last_snapshot_attempt_utc = CASE
+                WHEN last_snapshot_attempt_utc IS NULL OR last_snapshot_attempt_utc < @AttemptedThroughUtc
+                THEN @AttemptedThroughUtc ELSE last_snapshot_attempt_utc END
+            WHERE source_dataset_name = @SourceDatasetName;
+            """, new { SourceDatasetName = sourceDatasetName, AttemptedThroughUtc = attemptedThroughUtc }, transaction, cancellationToken: cancellationToken));
+        transaction.Commit();
+    }
+
+    /// <inheritdoc/>
     public async Task ClearReplayAsync(string sourceDatasetName, CancellationToken cancellationToken = default) {
         using var connection = _connectionFactory.Create();
         await connection.ExecuteAsync(new CommandDefinition("DELETE FROM dbo.EncPackageReplay WHERE source_dataset_name = @SourceDatasetName;", new { SourceDatasetName = sourceDatasetName }, cancellationToken: cancellationToken));
@@ -363,6 +392,12 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
                summary_yaml AS SummaryYaml, s57_discarded AS S57Discarded, s101_discarded AS S101Discarded,
                error_message AS ErrorMessage FROM dbo.EncPackage
         """;
+
+    private sealed class SnapshotAttemptRow
+    {
+        public string SourceDatasetName { get; set; } = string.Empty;
+        public DateTime AttemptedThroughUtc { get; set; }
+    }
 
     private sealed class ReplayRow
     {

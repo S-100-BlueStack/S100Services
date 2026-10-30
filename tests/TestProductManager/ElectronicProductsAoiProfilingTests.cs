@@ -371,7 +371,7 @@ namespace TestProductCatalogueAPI
             Assert.Equal(datasetName, response.Data?.Attributes?.DatasetName);
             Assert.Equal("S57", response.Data?.Attributes?.ProductSpecification);
             Assert.Equal(ProductStatus.Error, response.Data?.Attributes?.Status);
-            Assert.Equal("Validation failed.", response.Data?.Attributes?.ErrorMessage);
+            Assert.Equal(PublicExportError.GenericMessage, response.Data?.Attributes?.ErrorMessage);
             Assert.Equal(0, electronicProductManager.BulkAoiCallCount);
             Assert.Equal(1, electronicProductManager.TargetedBoundaryCallCount);
             Assert.Equal(1, repository.BatchCallCount);

@@ -414,7 +414,7 @@ namespace ProductCatalogueAPI.Controllers
                     track.CandidateUpdate ?? track.PublishedUpdate,
                     Enum.Parse<ProductStatus>(track.State.ToString()),
                     track.UpdatedAtUtc,
-                    track.ErrorMessage,
+                    PublicExportError.For(track),
                     artifactLinks));
             }
 
@@ -428,7 +428,7 @@ namespace ProductCatalogueAPI.Controllers
                 Update = electronicProduct.updateNumber,
                 UsageBand = electronicProduct.specificUsage,
                 Status = s128Status,
-                ErrorMessage = current?.ErrorMessage,
+                ErrorMessage = PublicExportError.For(current),
                 Exports = exports
             };
 
@@ -587,7 +587,7 @@ namespace ProductCatalogueAPI.Controllers
                     Edition = electronicProduct.editionNumber,
                     Update = electronicProduct.updateNumber,
                     IssueDate = electronicProduct.issueDate,
-                    ErrorMessage = current?.ErrorMessage,
+                    ErrorMessage = PublicExportError.For(current),
                 }
             };
 
@@ -740,7 +740,7 @@ namespace ProductCatalogueAPI.Controllers
                     To = r.Date_to,
                     Owner = TrimUsername(r.Owner),
                     ErrorCode = r.ErrorCode,
-                    ErrorMessage = r.ErrorMessage,
+                    ErrorMessage = PublicExportError.For(r),
                     IsManuallyFrozen = r.IsManuallyFrozen
                 })
             ];
@@ -781,7 +781,7 @@ namespace ProductCatalogueAPI.Controllers
                 Type = metadata.Type,
                 Severity = metadata.Severity,
                 Title = metadata.Title,
-                Description = string.IsNullOrWhiteSpace(record.ErrorMessage) ? metadata.Description : record.ErrorMessage,
+                Description = string.IsNullOrWhiteSpace(PublicExportError.For(record)) ? metadata.Description : PublicExportError.For(record),
                 Status = metadata.Status,
                 Actor = TrimUsername(record.Owner),
                 Edition = record.EditionNo,
@@ -818,8 +818,8 @@ namespace ProductCatalogueAPI.Controllers
             if (!string.IsNullOrWhiteSpace(record.ErrorCode))
                 details.Add(new DashboardActivityDetailResponse { Label = "Error code", Value = record.ErrorCode });
 
-            if (!string.IsNullOrWhiteSpace(record.ErrorMessage))
-                details.Add(new DashboardActivityDetailResponse { Label = "Error message", Value = record.ErrorMessage });
+            if (!string.IsNullOrWhiteSpace(PublicExportError.For(record)))
+                details.Add(new DashboardActivityDetailResponse { Label = "Error message", Value = PublicExportError.For(record) });
 
             return details;
         }
@@ -879,7 +879,7 @@ namespace ProductCatalogueAPI.Controllers
                 },
                 DisplayScale = product.optimumDisplayScale,
                 UsageBand = product.specificUsage,
-                ErrorMessage = status == EncPackageStatus.Error ? packageError : current?.ErrorMessage
+                ErrorMessage = status == EncPackageStatus.Error ? packageError : PublicExportError.For(current)
             };
         }
 
@@ -895,7 +895,7 @@ namespace ProductCatalogueAPI.Controllers
             track?.State ?? ProductState.Idle,
             track?.IsManuallyFrozen == true,
             discarded,
-            discarded ? null : track?.ErrorMessage);
+            discarded ? null : PublicExportError.For(track));
 
         private async Task<IReadOnlyList<ProductExportTrackRecord>> GetRelatedExportTracksAsync(ElectronicProduct electronicProduct, CancellationToken cancellationToken = default)
         {

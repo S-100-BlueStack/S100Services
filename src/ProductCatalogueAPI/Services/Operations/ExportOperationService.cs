@@ -302,6 +302,6 @@ public class ExportOperationService(IProductManager productManager, IExportEngin
             ExportJobContract.OperationCancelledCode,
             ExportJobContract.OperationCancelledMessage
         ),
-        _ => (exception.GetType().Name, "The export failed. Contact support and provide the dataset name and failure time.")
+        _ => (exception.GetType().Name, PublicExportError.GenericMessage)
     };
 }
