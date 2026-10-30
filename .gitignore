@@ -478,3 +478,4 @@ src/ProductCatalogueAPI/config/hangfire.connection
 /src/DataCatalogue/.vite/deps
 /src/ProductCatalogue/public/branding/Favicon.png
 /src/ProductCatalogue/public/branding/Logo.png
+*.ps1
