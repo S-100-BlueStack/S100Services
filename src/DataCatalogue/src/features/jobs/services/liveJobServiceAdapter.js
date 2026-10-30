@@ -5,8 +5,10 @@ import { createScopedJobStatusAdapter, scopedJobId } from "../mock/scopedJobStat
 export function createLiveJobServiceAdapter({
   catalogue,
   statuses = createScopedJobStatusAdapter(),
+  ensureWorkspaces = null,
 }) {
-  let scopes = [];
+  // Null means the catalogue has not loaded; [] means a verified empty catalogue.
+  let scopes = null;
   let jobs = new Map();
 
   function setWorkspaces(workspaces) {
@@ -32,6 +34,19 @@ export function createLiveJobServiceAdapter({
       setWorkspaces(value ? [value] : []);
     },
     async loadJobs({ signal } = {}) {
+      if (scopes === null) {
+        if (typeof ensureWorkspaces !== "function") {
+          throw new Error("Workspace catalogue has not loaded. Retry Jobs when it is available.");
+        }
+        const prerequisite = await ensureWorkspaces();
+        signal?.throwIfAborted();
+        if (!prerequisite?.ok) {
+          throw prerequisite?.error ?? new Error("Workspace catalogue could not be loaded.");
+        }
+        if (scopes === null) {
+          throw new Error("Workspace catalogue did not provide an authoritative Job scope.");
+        }
+      }
       const selected = scopes;
       if (!selected.length) return { jobs: [] };
       const memberships = [];

@@ -57,7 +57,7 @@ test("mock statuses are isolated by all three identities and reset without backe
 
 test("Workspace-backed Jobs retain context, expose exact Severity and never fabricate AOIs or follow-ups", async () => {
   const adapter = createLiveJobServiceAdapter({ catalogue: fixture() });
-  assert.deepEqual(await adapter.loadJobs(), { jobs: [] });
+  await assert.rejects(adapter.loadJobs(), /Workspace catalogue has not loaded/);
   adapter.setScope(scope());
   const { jobs } = await adapter.loadJobs();
   assert.equal(jobs[0].packageId, "pkg");

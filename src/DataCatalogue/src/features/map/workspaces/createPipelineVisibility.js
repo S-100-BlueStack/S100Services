@@ -35,6 +35,8 @@ export function createPipelineVisibility({ catalogue, container, onChange, onWor
   let alive = true;
   let generation = 0;
   let request = null;
+  let loaded = false;
+  let pending = null;
 
   function visible() {
     return visibleWorkspacePipelines(groups, enabledPipelines, enabledWorkspaces);
@@ -105,35 +107,59 @@ export function createPipelineVisibility({ catalogue, container, onChange, onWor
     updateMessage();
   }
 
-  async function reload() {
-    if (!alive) return;
+  function reload() {
+    if (!alive) {
+      return Promise.resolve({
+        ok: false,
+        error: new Error("Workspace catalogue is unavailable."),
+      });
+    }
     const current = ++generation;
     request?.abort();
     request = new AbortController();
+    const signal = request.signal;
     message.textContent = "Loading Pipelines…";
-    try {
-      const [pipelines, workspaces] = await Promise.all([
-        catalogue.pipelines({ signal: request.signal }),
-        collectPages(catalogue.workspaces, { signal: request.signal }),
-      ]);
-      if (!alive || current !== generation) return;
-      const next = groupWorkspacePipelines(workspaces, pipelines);
-      enabledPipelines = new Set(preservePipelineSelection(next, groups, enabledPipelines));
-      enabledWorkspaces = new Set(preserveWorkspaceSelection(next, groups, enabledWorkspaces));
-      groups = next;
-      render();
-      // All Workspaces stay in the Jobs membership scope, regardless of visibility.
-      onWorkspacesLoaded?.(groups.flatMap((group) => group.workspaces));
-      notify({ autoFocus: false });
-    } catch (error) {
-      if (!alive || current !== generation) return;
-      message.textContent = `Pipelines could not be loaded: ${error.message}`;
-    }
+
+    const operation = (async () => {
+      try {
+        const [pipelines, workspaces] = await Promise.all([
+          catalogue.pipelines({ signal }),
+          collectPages(catalogue.workspaces, { signal }),
+        ]);
+        if (!alive || current !== generation) return { ok: false, stale: true };
+        const next = groupWorkspacePipelines(workspaces, pipelines);
+        enabledPipelines = new Set(preservePipelineSelection(next, groups, enabledPipelines));
+        enabledWorkspaces = new Set(preserveWorkspaceSelection(next, groups, enabledWorkspaces));
+        groups = next;
+        render();
+        // Jobs use the complete, verified catalogue rather than map visibility.
+        onWorkspacesLoaded?.(groups.flatMap((group) => group.workspaces));
+        loaded = true;
+        notify({ autoFocus: false });
+        return { ok: true };
+      } catch (error) {
+        if (!alive || current !== generation) return { ok: false, stale: true };
+        message.textContent = `Pipelines could not be loaded: ${error.message}`;
+        return { ok: false, error };
+      }
+    })();
+    pending = operation;
+    void operation.then(() => {
+      if (pending === operation) pending = null;
+    });
+    return operation;
+  }
+
+  function ensureLoaded() {
+    if (loaded) return Promise.resolve({ ok: true });
+    // The Jobs reader joins an in-flight initial read rather than sending duplicates.
+    return pending ?? reload();
   }
 
   void reload();
   return {
     reload,
+    ensureLoaded,
     destroy() {
       alive = false;
       generation++;

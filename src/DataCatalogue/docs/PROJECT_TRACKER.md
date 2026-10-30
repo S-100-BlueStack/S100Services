@@ -1,3 +1,27 @@
+## DC-STAB-02A — Live Jobs catalogue readiness and in-panel recovery (candidate, 2026-10-30)
+
+Authoritative baseline: `4e4790733bc2c59e74254d3f06a12eef3967e513`.
+Scope: DC-STAB-01 findings F01 (P1) and F08 (P3). This is a focused frontend
+correction; no other audit findings are claimed as fixed.
+
+- A live Jobs scope starts **uninitialized**, not as an authoritative empty array.
+  Only a successful Pipeline/Workspace catalogue response may establish the scope,
+  including an explicitly valid zero-Workspace catalogue.
+- `createPipelineVisibility` owns the initial catalogue request, bounded by its
+  existing AbortController/generation guard. A Jobs read joins an in-flight
+  catalogue request, or retries that prerequisite after failure; map-only
+  Pipeline/Workspace visibility changes do not reload Jobs.
+- Once the catalogue is verified, Jobs membership and Package detail reads retain
+  their existing boundaries. A failed prerequisite produces an error in the Jobs
+  panel instead of a successful empty list or `Jobs refreshed` notice.
+- The first successful catalogue completion avoids a duplicate Jobs load when
+  one is already awaiting the prerequisite. Subsequent catalogue reloads replace
+  any in-flight Jobs read using the previous scope.
+- An initial empty Jobs error in either list or details mode presents an
+  accessible `Retry` action; the normal refresh affordances remain unchanged.
+- Local validation: [DC_STAB_02A_VALIDATION.md](DC_STAB_02A_VALIDATION.md).
+  F02–F07 and F09 remain deferred to the next audit remediation tasks.
+
 ## DC-API-05 — Compact Jobs presentation candidate (2026-10-30)
 
 Authoritative repository baseline: `2972cd6356c502a963342122bcbd48a321670eb9`.

@@ -1,3 +1,22 @@
+## DC-STAB-02A — Catalogue prerequisite ownership
+
+The live Workspace/Pipeline catalogue has a single request owner:
+`features/map/workspaces/createPipelineVisibility.js`. Its `ensureLoaded()` method
+joins an active request, returns success for an already verified catalogue, and
+retries an initial failed request when Jobs needs the catalogue. Error and pending
+states are not represented as an empty Workspace list.
+
+`features/jobs/services/liveJobServiceAdapter.js` consumes the prerequisite through
+an injected callback without duplicating API fetches. The adapter's `scopes = null`
+means _not yet verified_; `scopes = []` is a successful empty catalogue. It cannot
+publish successful empty Jobs before an authoritative catalogue response.
+`app/createApp.js` coordinates the first completed catalogue with `jobStore`: a
+Jobs read already awaiting this prerequisite owns its load, while later explicit
+catalogue reloads cancel older membership reads. Existing scoped mock status,
+map-only visibility filters and geometry ownership are unchanged.
+`features/jobs/ui/jobList.js` provides a visible initial-error Retry control in
+both list and details mode through its existing refresh path.
+
 ## DC-API-05 — Jobs UI presentation boundary
 
 `features/jobs/services/liveJobServiceAdapter.js` continues to own the contextual

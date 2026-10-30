@@ -363,6 +363,10 @@ function renderJobList({
       createErrorState({
         title: "Jobs are unavailable",
         message: state.error.message,
+        isLoading: state.isLoading,
+        onRetry() {
+          void runJobsRefresh({ source: "retry", showSuccessNoticeOnSuccess: true });
+        },
       })
     );
     return;
@@ -451,6 +455,10 @@ function renderJobDetailsView({
       createErrorState({
         title: "Jobs are unavailable",
         message: state.error.message,
+        isLoading: state.isLoading,
+        onRetry() {
+          void runJobsRefresh({ source: "retry", showSuccessNoticeOnSuccess: true });
+        },
       })
     );
     return;

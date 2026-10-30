@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createJobList } from "./jobList.js";
+import { createJobStore } from "../state/jobStore.js";
 
 class TestElement {
   constructor(tagName) {
@@ -291,3 +292,124 @@ test("Optional live metadata cannot create placeholder dates or fabricated Packa
     view.destroy();
   });
 });
+
+test("Initial Jobs error provides an accessible Retry that invokes one new read", () => {
+  withDocument(() => {
+    let reads = 0;
+    const errorState = {
+      jobs: [],
+      isLoading: false,
+      error: { message: "Workspace catalogue unavailable" },
+    };
+    const store = {
+      getSnapshot: () => errorState,
+      subscribe(listener) {
+        listener(errorState);
+        return () => {};
+      },
+      loadJobs() {
+        reads++;
+        return Promise.resolve({ ok: false, error: errorState.error });
+      },
+    };
+    const view = createJobList({ store, sourceMode: "live" });
+    const error = findByClass(view.element, "job-list__state--error")[0];
+    assert.match(elementText(error), /Workspace catalogue unavailable/);
+    const retry = findByTag(error, "calcite-button")[0];
+    assert.equal(retry.textContent, "Retry");
+    assert.equal(retry.disabled, false);
+    retry.dispatchEvent({ type: "click" });
+    assert.equal(reads, 1);
+    view.destroy();
+  });
+});
+
+test("Job Details error also provides an in-panel Retry", () => {
+  withDocument(() => {
+    const job = fixture("live").job;
+    let publish;
+    let snapshot = { jobs: [job], isLoading: false, error: null };
+    const store = {
+      getSnapshot: () => snapshot,
+      subscribe(listener) {
+        publish = listener;
+        listener(snapshot);
+        return () => {};
+      },
+      loadJobs() {
+        return Promise.resolve({ ok: false, error: snapshot.error });
+      },
+    };
+    const view = createJobList({ store, sourceMode: "live" });
+    findByClass(view.element, "job-card__details-action")[0].dispatchEvent({ type: "click" });
+    snapshot = { jobs: [], isLoading: false, error: { message: "Membership denied" } };
+    publish(snapshot);
+    const retry = findByTag(
+      findByClass(view.element, "job-list__state--error")[0],
+      "calcite-button"
+    )[0];
+    assert.equal(retry.textContent, "Retry");
+    view.destroy();
+  });
+});
+
+async function withAsyncDocument(run) {
+  const oldDocument = globalThis.document;
+  const oldWindow = globalThis.window;
+  globalThis.document = { createElement: (name) => new TestElement(name) };
+  globalThis.window = {
+    requestAnimationFrame: (callback) => callback(),
+    setTimeout: () => 0,
+  };
+  try {
+    await run();
+  } finally {
+    globalThis.document = oldDocument;
+    globalThis.window = oldWindow;
+  }
+}
+
+for (const sourceMode of ["live", "mock"]) {
+  test(`Retry from an initial ${sourceMode} Jobs failure recovers without a panel reopen`, async () => {
+    await withAsyncDocument(async () => {
+      let reads = 0;
+      let resolveRetry;
+      const retryResult = new Promise((resolve) => {
+        resolveRetry = resolve;
+      });
+      const store = createJobStore({
+        service: {
+          loadJobs() {
+            reads++;
+            return reads === 1
+              ? Promise.resolve({ ok: false, error: { message: "Temporary Jobs failure" } })
+              : retryResult;
+          },
+        },
+      });
+      try {
+        await store.loadJobs();
+        const view = createJobList({ store, sourceMode });
+        try {
+          const error = findByClass(view.element, "job-list__state--error")[0];
+          assert.match(elementText(error), /Temporary Jobs failure/);
+          const retry = findByTag(error, "calcite-button")[0];
+          retry.dispatchEvent({ type: "click" });
+          assert.equal(reads, 2);
+          assert.equal(store.getSnapshot().isLoading, true);
+          assert.equal(findByClass(view.element, "job-list__state--loading").length, 1);
+
+          resolveRetry({ ok: true, data: { jobs: [fixture(sourceMode).job] } });
+          await new Promise((resolve) => setImmediate(resolve));
+          assert.equal(findByClass(view.element, "job-card").length, 1);
+          assert.equal(findByClass(view.element, "job-list__state--error").length, 0);
+          assert.equal(store.getSnapshot().error, null);
+        } finally {
+          view.destroy();
+        }
+      } finally {
+        store.destroy();
+      }
+    });
+  });
+}

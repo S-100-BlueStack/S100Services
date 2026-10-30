@@ -50,7 +50,14 @@ export async function createApp(rootElement) {
         })
       )
     : null;
-  const liveJobs = live ? createLiveJobServiceAdapter({ catalogue }) : null;
+  let pipelineVisibility = null;
+  let hasLoadedJobCatalogue = false;
+  const liveJobs = live
+    ? createLiveJobServiceAdapter({
+        catalogue,
+        ensureWorkspaces: () => pipelineVisibility.ensureLoaded(),
+      })
+    : null;
   const selectedAoiStore = createSelectedAoiStore();
   const selectedJobStore = createSelectedJobStore();
   const jobFilterStore = createJobFilterStore();
@@ -239,7 +246,7 @@ export async function createApp(rootElement) {
     isJobsStartupComplete: () => live || isStartupComplete,
   });
 
-  const pipelineVisibility = live
+  pipelineVisibility = live
     ? createPipelineVisibility({
         catalogue,
         container: workspace.pipelineContent,
@@ -250,8 +257,14 @@ export async function createApp(rootElement) {
           void mapController.setWorkspaceCatalog(workspaces, { reload: true, autoFocus: false });
           // Jobs belong to every Workspace, regardless of which Pipelines are shown on the map.
           resetJobsPanelContext();
+          const wasLoaded = hasLoadedJobCatalogue;
           liveJobs.setWorkspaces(workspaces);
-          void jobStore.loadJobs({ clear: true });
+          hasLoadedJobCatalogue = true;
+          // Only the first catalogue load can be joined by a pending Jobs read.
+          // Later catalogue reloads must supersede any read using older scopes.
+          if (wasLoaded || !jobStore.getSnapshot().isLoading) {
+            void jobStore.loadJobs({ clear: true });
+          }
         },
       })
     : null;
