@@ -81,6 +81,7 @@ export function createLiveJobServiceAdapter({
           id: scopedJobId(context),
           source: "live",
           shortId: member.shortId ?? item.shortId,
+          packageTitle: item.title ?? null,
           title: `${member.shortId || item.name} · ${item.title}`,
           summary: `${workspace.pipelineName} / ${workspace.name}`,
           pipelineName: workspace.pipelineName,

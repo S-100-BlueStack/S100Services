@@ -15,6 +15,7 @@ import {
 } from "../../notices/services/noticeService.js";
 import { getJobsForAoiFromJobs } from "../../relations/services/relationService.js";
 import { createJobStore } from "../state/jobStore.js";
+import { getLiveJobPresentation } from "./liveJobPresentation.js";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
@@ -25,7 +26,11 @@ const JOB_LIST_VIEW_MODE = Object.freeze({
   DETAILS: "details",
 });
 
-export function createJobList({ jobFilterStore, store = createJobStore() } = {}) {
+export function createJobList({
+  jobFilterStore,
+  store = createJobStore(),
+  sourceMode = "mock",
+} = {}) {
   const rootElement = document.createElement("div");
   rootElement.className = "job-list";
 
@@ -148,6 +153,7 @@ export function createJobList({ jobFilterStore, store = createJobStore() } = {})
       rootElement,
       state: currentState,
       store,
+      sourceMode,
       jobFilters,
       aoiFilter,
       selectedJobId,
@@ -297,6 +303,7 @@ function renderJobList({
   rootElement,
   state,
   store,
+  sourceMode,
   jobFilters,
   aoiFilter,
   selectedJobId,
@@ -367,6 +374,7 @@ function renderJobList({
     hiddenDoneCount,
     jobFilters,
     expandedJobIds,
+    sourceMode,
     runJobsRefresh,
     render,
   });
@@ -524,9 +532,10 @@ function createJobDetailsHeader({
   eyebrowElement.className = "job-details__eyebrow";
   eyebrowElement.textContent = "Selected Job";
 
+  const livePresentation = getLiveJobPresentation(job);
   const titleElement = document.createElement("h3");
   titleElement.className = "job-details__title";
-  titleElement.textContent = job.title;
+  titleElement.textContent = livePresentation?.shortId ?? job.title;
 
   const metaElement = document.createElement("div");
   metaElement.className = "job-details__badge-row";
@@ -536,36 +545,40 @@ function createJobDetailsHeader({
     ...(job.source === "live" ? [] : [createAffectedAoiBadge(job)])
   );
 
-  titleGroupElement.append(eyebrowElement, titleElement, metaElement);
+  if (!livePresentation) titleGroupElement.append(eyebrowElement);
+  titleGroupElement.append(titleElement);
+  if (livePresentation?.packageTitle) {
+    const descriptionElement = document.createElement("p");
+    descriptionElement.className = "job-details__package-title";
+    descriptionElement.textContent = livePresentation.packageTitle;
+    titleGroupElement.append(descriptionElement);
+  }
+  titleGroupElement.append(metaElement);
 
   const actionsElement = document.createElement("div");
   actionsElement.className = "job-details__header-actions";
 
-  const focusMapButton = createToolbarButton("Focus map");
-  focusMapButton.disabled = job.source === "live" && !job.geometry;
-  focusMapButton.title = "Filter the map to this Job and highlight related AOIs";
-  focusMapButton.addEventListener("click", () => {
-    requestJobMapFocus?.(job);
-  });
-
-  const clearMapFocusButton = createToolbarButton("Clear map focus");
-  clearMapFocusButton.title = "Return the map to the normal Job context";
-  clearMapFocusButton.addEventListener("click", () => {
-    clearJobMapFocus?.();
-  });
-
-  const refreshButton = createToolbarButton(isLoading ? "Refreshing..." : "Refresh");
-  refreshButton.disabled = isLoading;
-  refreshButton.title = "Refresh all Jobs";
-  refreshButton.addEventListener("click", () => {
-    void runJobsRefresh({
-      source: "details-refresh",
-      showSuccessNoticeOnSuccess: true,
+  if (livePresentation) {
+    const refreshButton = createRefreshIconButton({ isLoading });
+    refreshButton.addEventListener("click", () => {
+      void runJobsRefresh({ source: "details-refresh", showSuccessNoticeOnSuccess: true });
     });
-  });
+    actionsElement.append(refreshButton);
+  } else {
+    const focusMapButton = createToolbarButton("Focus map");
+    focusMapButton.title = "Filter the map to this Job and highlight related AOIs";
+    focusMapButton.addEventListener("click", () => requestJobMapFocus?.(job));
 
-  if (job.source !== "live") actionsElement.append(focusMapButton, clearMapFocusButton);
-  actionsElement.append(refreshButton);
+    const clearMapFocusButton = createToolbarButton("Clear map focus");
+    clearMapFocusButton.title = "Return the map to the normal Job context";
+    clearMapFocusButton.addEventListener("click", () => clearJobMapFocus?.());
+
+    const refreshButton = createRefreshIconButton({ isLoading });
+    refreshButton.addEventListener("click", () => {
+      void runJobsRefresh({ source: "details-refresh", showSuccessNoticeOnSuccess: true });
+    });
+    actionsElement.append(focusMapButton, clearMapFocusButton, refreshButton);
+  }
   headerElement.append(titleGroupElement, actionsElement);
 
   return headerElement;
@@ -584,16 +597,17 @@ function createJobDetailsSummary(job) {
 }
 
 function createJobDetailsFactSection(job) {
-  const sectionElement = createJobDetailsSection("Details");
+  const sectionElement = createJobDetailsSection(job.source === "live" ? null : "Details");
   const factGridElement = document.createElement("dl");
   factGridElement.className = "job-details__fact-grid";
 
   if (job.source === "live") {
-    factGridElement.append(
-      createJobDetailFact("Package", job.shortId || job.packageId),
-      createJobDetailFact("Pipeline", job.pipelineName),
-      createJobDetailFact("Severity", severityLabel(job.severity))
-    );
+    sectionElement.classList.add("job-details__section--live-facts");
+    const presentation = getLiveJobPresentation(job);
+    factGridElement.append(createJobDetailFact("Pipeline", presentation.pipeline));
+    if (job.createdAt) {
+      factGridElement.append(createJobDetailFact("Created", formatDate(job.createdAt)));
+    }
   } else {
     factGridElement.append(
       createJobDetailFact("Job ID", job.id),
@@ -618,7 +632,7 @@ function createJobDetailsStatusSection({
   pendingMutationJobIds,
   render,
 }) {
-  const sectionElement = createJobDetailsSection("Update status");
+  const sectionElement = createJobDetailsSection(job.source === "live" ? null : "Update status");
 
   const hintElement = document.createElement("p");
   hintElement.className = "job-details__hint";
@@ -627,16 +641,21 @@ function createJobDetailsStatusSection({
       ? "Temporary status · not saved to the API."
       : "Status changes are saved through the current Jobs service.";
 
-  sectionElement.append(
-    hintElement,
-    createStatusActions({
-      job,
-      visibleDoneJobIds,
-      pendingMutationJobIds,
-      store,
-      render,
-    })
-  );
+  const actionsElement = createStatusActions({
+    job,
+    visibleDoneJobIds,
+    pendingMutationJobIds,
+    store,
+    render,
+  });
+  actionsElement.setAttribute("role", "group");
+  actionsElement.setAttribute("aria-label", "Update Job status");
+  if (job.source === "live") {
+    sectionElement.classList.add("job-details__section--live-status");
+    sectionElement.append(actionsElement);
+  } else {
+    sectionElement.append(hintElement, actionsElement);
+  }
 
   return sectionElement;
 }
@@ -672,11 +691,12 @@ function createJobDetailsSection(title) {
   const sectionElement = document.createElement("section");
   sectionElement.className = "job-details__section";
 
-  const titleElement = document.createElement("h4");
-  titleElement.className = "job-details__section-title";
-  titleElement.textContent = title;
-
-  sectionElement.append(titleElement);
+  if (title) {
+    const titleElement = document.createElement("h4");
+    titleElement.className = "job-details__section-title";
+    titleElement.textContent = title;
+    sectionElement.append(titleElement);
+  }
 
   return sectionElement;
 }
@@ -729,12 +749,7 @@ function createSelectedJobMissingState({
   backButton.textContent = "Back to Jobs";
   backButton.addEventListener("click", showJobListFromDetails);
 
-  const refreshButton = document.createElement("calcite-button");
-  refreshButton.scale = "s";
-  refreshButton.kind = "neutral";
-  refreshButton.appearance = "outline";
-  refreshButton.disabled = isLoading;
-  refreshButton.textContent = isLoading ? "Refreshing..." : "Refresh";
+  const refreshButton = createRefreshIconButton({ isLoading });
   refreshButton.addEventListener("click", () => {
     void runJobsRefresh({
       source: "details-missing-refresh",
@@ -886,6 +901,7 @@ function createListToolbar({
   hiddenDoneCount,
   jobFilters,
   expandedJobIds,
+  sourceMode,
   runJobsRefresh,
   render,
 }) {
@@ -906,7 +922,10 @@ function createListToolbar({
     jobFilters,
   });
 
-  countGroupElement.append(countElement, hiddenDoneElement);
+  countGroupElement.append(countElement);
+  if (sourceMode !== "live" || hiddenDoneCount > 0 || shouldRevealDoneJobsForFilters(jobFilters)) {
+    countGroupElement.append(hiddenDoneElement);
+  }
 
   const toolbarActionsElement = document.createElement("div");
   toolbarActionsElement.className = "job-list__toolbar-actions";
@@ -914,8 +933,7 @@ function createListToolbar({
   const refreshActionsElement = document.createElement("div");
   refreshActionsElement.className = "job-list__toolbar-action-row";
 
-  const refreshButton = createToolbarButton(state.isLoading ? "Refreshing..." : "Refresh");
-  refreshButton.disabled = state.isLoading;
+  const refreshButton = createRefreshIconButton({ isLoading: state.isLoading });
   refreshButton.addEventListener("click", async () => {
     await runJobsRefresh({
       source: "manual",
@@ -925,29 +943,32 @@ function createListToolbar({
 
   refreshActionsElement.appendChild(refreshButton);
 
-  const expandActionsElement = document.createElement("div");
-  expandActionsElement.className = "job-list__toolbar-action-row";
+  toolbarActionsElement.append(refreshActionsElement);
+  if (sourceMode !== "live") {
+    const expandActionsElement = document.createElement("div");
+    expandActionsElement.className = "job-list__toolbar-action-row";
 
-  const expandAllButton = createToolbarButton("Expand all");
-  expandAllButton.disabled =
-    visibleJobs.length === 0 || areAllVisibleJobsExpanded(visibleJobs, expandedJobIds);
-  expandAllButton.addEventListener("click", () => {
-    for (const job of visibleJobs) {
-      expandedJobIds.add(job.id);
-    }
+    const expandAllButton = createToolbarButton("Expand all");
+    expandAllButton.disabled =
+      visibleJobs.length === 0 || areAllVisibleJobsExpanded(visibleJobs, expandedJobIds);
+    expandAllButton.addEventListener("click", () => {
+      for (const job of visibleJobs) {
+        expandedJobIds.add(job.id);
+      }
 
-    render();
-  });
+      render();
+    });
 
-  const collapseAllButton = createToolbarButton("Collapse all");
-  collapseAllButton.disabled = !hasExpandedVisibleJobs(visibleJobs, expandedJobIds);
-  collapseAllButton.addEventListener("click", () => {
-    expandedJobIds.clear();
-    render();
-  });
+    const collapseAllButton = createToolbarButton("Collapse all");
+    collapseAllButton.disabled = !hasExpandedVisibleJobs(visibleJobs, expandedJobIds);
+    collapseAllButton.addEventListener("click", () => {
+      expandedJobIds.clear();
+      render();
+    });
 
-  expandActionsElement.append(expandAllButton, collapseAllButton);
-  toolbarActionsElement.append(refreshActionsElement, expandActionsElement);
+    expandActionsElement.append(expandAllButton, collapseAllButton);
+    toolbarActionsElement.append(expandActionsElement);
+  }
   toolbarElement.append(countGroupElement, toolbarActionsElement);
 
   return toolbarElement;
@@ -967,6 +988,24 @@ function areAllVisibleJobsExpanded(visibleJobs, expandedJobIds) {
 
 function hasExpandedVisibleJobs(visibleJobs, expandedJobIds) {
   return visibleJobs.some((job) => expandedJobIds.has(job.id));
+}
+
+function createRefreshIconButton({ isLoading = false } = {}) {
+  const buttonElement = document.createElement("button");
+  const label = isLoading ? "Refreshing Jobs" : "Refresh Jobs";
+  buttonElement.type = "button";
+  buttonElement.className = "job-list__refresh-button";
+  buttonElement.disabled = isLoading;
+  buttonElement.title = label;
+  buttonElement.setAttribute("aria-label", label);
+
+  const iconElement = document.createElement("calcite-icon");
+  iconElement.icon = "refresh";
+  iconElement.scale = "s";
+  iconElement.setAttribute("aria-hidden", "true");
+  buttonElement.append(iconElement);
+
+  return buttonElement;
 }
 
 function createToolbarButton(label) {
@@ -993,7 +1032,7 @@ function createJobCard({
   const isSelected = job.id === selectedJobId;
   const cardElement = document.createElement("article");
 
-  cardElement.className = "job-card";
+  cardElement.className = job.source === "live" ? "job-card job-card--live" : "job-card";
   cardElement.dataset.jobId = job.id;
   cardElement.dataset.jobStatus = job.status;
   cardElement.dataset.jobPriority = job.priority;
@@ -1017,7 +1056,7 @@ function createJobCard({
     })
   );
 
-  if (isExpanded) {
+  if (isExpanded && job.source !== "live") {
     cardElement.appendChild(createJobCardDetails(job));
   }
 
@@ -1046,8 +1085,8 @@ function createJobCardSummary({
 
   const bottomRowElement = document.createElement("div");
   bottomRowElement.className = "job-card__bottom-row";
+  if (job.source !== "live") bottomRowElement.append(createDateChips(job));
   bottomRowElement.append(
-    createDateChips(job),
     createStatusActions({
       job,
       visibleDoneJobIds,
@@ -1066,21 +1105,6 @@ function createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDet
   const titleRowElement = document.createElement("div");
   titleRowElement.className = "job-card__title-row";
 
-  const expandButton = document.createElement("calcite-action");
-  expandButton.className = "job-card__expand-action";
-  expandButton.icon = isExpanded ? "chevron-up" : "chevron-down";
-  expandButton.text = isExpanded ? "Collapse Job card" : "Expand Job card";
-  expandButton.title = isExpanded ? "Collapse Job card" : "Expand Job card";
-  expandButton.addEventListener("click", () => {
-    if (isExpanded) {
-      expandedJobIds.delete(job.id);
-    } else {
-      expandedJobIds.add(job.id);
-    }
-
-    render();
-  });
-
   const detailsButton = document.createElement("calcite-action");
   detailsButton.className = "job-card__details-action";
   detailsButton.icon = "information";
@@ -1092,9 +1116,39 @@ function createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDet
 
   const titleElement = document.createElement("h3");
   titleElement.className = "job-card__title";
-  titleElement.textContent = job.title;
+  const livePresentation = getLiveJobPresentation(job);
+  titleElement.textContent = livePresentation?.shortId ?? job.title;
 
-  titleRowElement.append(expandButton, detailsButton, titleElement);
+  if (livePresentation) {
+    titleRowElement.append(detailsButton);
+    const textElement = document.createElement("div");
+    textElement.className = "job-card__identity";
+    textElement.append(titleElement);
+    if (livePresentation.context) {
+      const contextElement = document.createElement("p");
+      contextElement.className = "job-card__context";
+      contextElement.textContent = livePresentation.context;
+      textElement.append(contextElement);
+    }
+    titleRowElement.append(textElement);
+  } else {
+    const expandButton = document.createElement("calcite-action");
+    expandButton.className = "job-card__expand-action";
+    expandButton.icon = isExpanded ? "chevron-up" : "chevron-down";
+    expandButton.text = isExpanded ? "Collapse Job card" : "Expand Job card";
+    expandButton.title = isExpanded ? "Collapse Job card" : "Expand Job card";
+    expandButton.addEventListener("click", () => {
+      if (isExpanded) {
+        expandedJobIds.delete(job.id);
+      } else {
+        expandedJobIds.add(job.id);
+      }
+
+      render();
+    });
+
+    titleRowElement.append(expandButton, detailsButton, titleElement);
+  }
 
   return titleRowElement;
 }

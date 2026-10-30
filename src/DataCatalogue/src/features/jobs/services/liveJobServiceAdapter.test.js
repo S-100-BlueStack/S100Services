@@ -62,6 +62,7 @@ test("Workspace-backed Jobs retain context, expose exact Severity and never fabr
   const { jobs } = await adapter.loadJobs();
   assert.equal(jobs[0].packageId, "pkg");
   assert.equal(jobs[0].shortId, "NM1000");
+  assert.equal(jobs[0].packageTitle, "Notice");
   assert.equal(jobs[0].pipelineId, "p");
   assert.equal(jobs[0].workspaceId, "w");
   assert.equal(jobs[0].severity, "0");

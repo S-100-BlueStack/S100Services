@@ -1,3 +1,16 @@
+## DC-API-05 — Jobs UI presentation boundary
+
+`features/jobs/services/liveJobServiceAdapter.js` continues to own the contextual
+Job identity and backend Package hydration. It carries the Package title separately
+for optional display without changing the existing Job title used by map/popups.
+`features/jobs/ui/liveJobPresentation.js` derives the visible `shortId` and compact
+Pipeline / Workspace context for live Jobs without exposing internal composite keys.
+`features/jobs/ui/jobList.js` renders lean live cards and details, while retaining
+mock-only expansion, AOI, map-focus and deadline behavior. The shared Job store,
+status mutations, filters and service boundaries are unchanged. UI copy uses safe
+text content, not backend HTML insertion. `app/ui/createJobsOverlay.js` forwards
+its existing source mode to the list so no mode is guessed from an empty result.
+
 ## DC-API-04 v3 — docked map panels, presentation and basemap settings
 
 - `createMapWorkspace.js` now constructs public `calcite-shell`, `calcite-shell-panel`

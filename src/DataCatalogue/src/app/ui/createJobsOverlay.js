@@ -4,6 +4,7 @@ export function createJobsOverlay({ jobFilterStore, jobStore, sourceMode = "mock
   const jobList = createJobList({
     jobFilterStore,
     store: jobStore,
+    sourceMode,
   });
   const panelElement = document.createElement("aside");
   panelElement.id = "data-catalogue-jobs-panel";

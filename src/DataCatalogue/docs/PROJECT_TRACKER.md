@@ -1,3 +1,26 @@
+## DC-API-05 — Compact Jobs presentation candidate (2026-10-30)
+
+Authoritative repository baseline: `2972cd6356c502a963342122bcbd48a321670eb9`.
+The preceding DC-API-04 work is committed and user-accepted. This DC-API-05 change is
+an uncommitted frontend-only candidate; run the local quality gate and browser checks
+before acceptance.
+
+- Live Jobs cards use the Package `shortId` as their visible identity. A small
+  Pipeline / Workspace subtitle distinguishes contextual Jobs for the same Package.
+  The internal composite `(packageId, pipelineId, workspaceId)` ID is unchanged and
+  is never presented as a user-facing label.
+- Live cards retain direct status actions and exact Severity, but remove the extra
+  Expand/Collapse card controls, unnecessary Created chip and Expand all/Collapse all
+  toolbar actions. Mock cards and their AOI details/expansion remain intact.
+- Live Job Details show `shortId`, an optional source Package title, status and Severity,
+  plus minimal Pipeline/Created metadata; duplicate Package/Severity facts and repeated
+  temporary-status help text are removed. Refresh is an accessible Calcite icon action.
+  The panel subtitle still identifies status as mock-only.
+- No changes to Job scope, status persistence, sorting, filters, navigation, backend
+  contracts, Package assignment, map layers, basemaps or Preferences. Manual Workspace
+  overrides and Package/Job coordinates still depend on the existing backend gap register.
+- Verification and browser acceptance steps: [DC_API_05_VALIDATION.md](DC_API_05_VALIDATION.md).
+
 ## DC-API-04 v5 correction candidate — map viewport, navigation and basemap behavior (2026-10-30)
 
 Controlled input: DC-API-04 v4 (SHA-256 `d9b2bdccbab65df6ff6f13ebe4516af3d896a7d610324afa5f6e1b358f53c068`), based on commit `829bb6ee9ff9b6925431d5f040f9a1b55eba297d`. Browser acceptance and local `npm run check` are pending. This section supersedes the v3/v4 layout and basemap-selection decisions below; other accepted v4 behavior remains in scope.
@@ -3031,3 +3054,12 @@ Historical rename validation and migration boundaries remain in `RENAME_NOTES.md
 - **Backend follow-up GEO-01/GEO-04:** require generalized and detailed Package coordinates from backend. No direct browser geodatabase or Feature Service requirement.
 - **Local dependency gate:** install `@arcgis/map-components@5.0.9` via npm in `src/DataCatalogue`; npm must generate `package-lock.json`. No lockfile is authored by the candidate.
 - Verify `npm run format`, `npm run check`, and browser map behavior on both pages before commit.
+
+### DC-API-05 v2 — Jobs Refresh affordance (candidate, 2026-10-30)
+
+- Standardize Jobs list, Job Details and missing-Job Refresh controls as
+  compact icon-only buttons with a public Calcite refresh icon, native accessible
+  label, tooltip and disabled state. Keep the existing refresh lifecycle.
+- Local browser screenshots of the first DC-API-05 candidate still showed
+  pre-candidate live card expansion/date controls and older Job Details facts;
+  verify that the candidate files are actually installed before acceptance.

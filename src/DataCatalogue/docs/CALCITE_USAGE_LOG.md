@@ -1,3 +1,12 @@
+## DC-API-05 — Compact Jobs controls
+
+Live Job Details uses a public `calcite-action` with the `refresh` icon, accessible
+`text` and title instead of another full-width button. Live cards keep the existing
+public Calcite detail action and status buttons. Native semantic headings, fact lists
+and compact contextual text are intentional application-owned presentation, not new
+custom replacements for Calcite controls. Mock Job actions are preserved; no private
+shadow-DOM selectors or undocumented properties are introduced.
+
 ## DC-API-04 v3 — docked Shell pattern
 
 - Main map now uses public `calcite-shell` and `calcite-shell-panel` with `displayMode="dock"`
@@ -131,3 +140,12 @@ or new animation is introduced. No live map control is offered for unverified ge
 - Keep the existing docked `calcite-action-bar` layout and floating application-owned panel behavior.
 - Use public `--calcite-action-bar-background-color` and `--calcite-action-*` CSS properties with semantic `--calcite-color-surface-2/3/4` and `--calcite-color-text-1/2` tokens. The neutral colors follow Calcite light/dark mode without requiring separate hard-coded values.
 - Apply the neutral surface to the Action Bar host as well as the component tokens, so the entire 48px map toolbar does not reveal the blue-tinted map background between actions. No shadow-DOM selectors or changes to focus behavior are introduced.
+
+### DC-API-05 v2 — Jobs refresh icon controls (2026-10-30)
+
+- Use an application-owned native icon-only button containing public `calcite-icon`
+  (`refresh`) for Jobs list, Job Details and missing-Job retry. A standalone
+  `calcite-action` can display its `text` in some contexts, while a text-only
+  `calcite-button` was still rendered in the Jobs list.
+- Provide native `title`, `aria-label`, `:focus-visible` styling and disabled
+  state without private Calcite selectors or altering refresh behavior.

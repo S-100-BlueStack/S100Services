@@ -82,6 +82,40 @@
   border-radius: 0;
 }
 
+.job-list__refresh-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0;
+  border: 1px solid var(--dc-border);
+  border-radius: 0;
+  appearance: none;
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  cursor: pointer;
+}
+
+.job-list__refresh-button:hover:not(:disabled) {
+  background: var(--calcite-color-foreground-2, var(--dc-surface));
+}
+
+.job-list__refresh-button:focus-visible {
+  outline: 2px solid var(--calcite-color-brand);
+  outline-offset: 2px;
+}
+
+.job-list__refresh-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.job-list__refresh-button calcite-icon {
+  flex: 0 0 auto;
+}
+
 .job-list__items {
   display: flex;
   flex-direction: column;
@@ -652,4 +686,47 @@
 }
 .dc-jobs-reset-statuses:focus-visible {
   outline: 2px solid var(--calcite-color-brand, #007ac2);
+}
+
+/* Live Jobs keep the identity and Pipeline/Workspace scope visible without extra expansion UI. */
+.job-card--live {
+  padding: 0.55rem 0.65rem;
+}
+
+.job-card--live .job-card__summary-layout {
+  gap: 0.4rem;
+}
+
+.job-card--live .job-card__bottom-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.job-card__identity {
+  min-width: 0;
+}
+
+.job-card__context {
+  margin: 0.2rem 0 0;
+  color: var(--dc-text-muted);
+  font-size: 0.77rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.job-details__package-title {
+  margin: 0.2rem 0 0;
+  color: var(--dc-text-muted);
+  font-size: 0.85rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.job-details__section--live-facts,
+.job-details__section--live-status {
+  padding: 0.5rem 0.75rem;
+}
+
+.job-details__section--live-status .job-card__actions {
+  justify-content: flex-start;
 }
