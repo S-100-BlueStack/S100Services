@@ -190,3 +190,39 @@ test("concurrent mutations on different Jobs both publish without invalidating e
     ["done", "done"]
   );
 });
+
+test("All available Pipelines load every Workspace, reuse Package details and keep contextual Job status", async () => {
+  const catalogue = fixture();
+  const packageReads = [];
+  catalogue.workspacePackages = async (pipelineId, workspaceId) =>
+    memberPage([{ packageId: "shared", shortId: `${pipelineId}-${workspaceId}` }]);
+  catalogue.package = async (id) => {
+    packageReads.push(id);
+    return { id, severity: "2", title: "Shared" };
+  };
+  const adapter = createLiveJobServiceAdapter({ catalogue });
+  adapter.setWorkspaces([scope("enc", "east"), scope("paper", "east"), scope("enc", "west")]);
+  const first = await adapter.loadJobs();
+  assert.equal(first.jobs.length, 3);
+  assert.deepEqual(packageReads, ["shared"]);
+  const encEast = first.jobs.find((job) => job.pipelineId === "enc" && job.workspaceId === "east");
+  await adapter.updateJobStatus(encEast.id, "done");
+  adapter.setWorkspaces([scope("enc", "east"), scope("paper", "east")]);
+  const second = await adapter.loadJobs();
+  assert.equal(second.jobs.length, 2);
+  assert.equal(second.jobs.find((job) => job.pipelineId === "enc").status, "done");
+  assert.equal(second.jobs.find((job) => job.pipelineId === "paper").status, "todo");
+});
+
+test("A broken Workspace read never returns a seemingly complete all-Pipeline Jobs list", async () => {
+  const catalogue = fixture();
+  catalogue.workspacePackages = async (_pipeline, workspaceId) => {
+    if (workspaceId === "broken") throw new Error("Workspace API unavailable");
+    return memberPage([{ packageId: "shared" }]);
+  };
+  const adapter = createLiveJobServiceAdapter({ catalogue });
+  adapter.setWorkspaces([scope("enc", "ok"), scope("enc", "broken")]);
+  const result = await createJobService({ adapter }).loadJobs();
+  assert.equal(result.ok, false);
+  assert.match(result.error.message, /Workspace API unavailable/);
+});

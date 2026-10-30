@@ -85,6 +85,9 @@
   gap: 4px;
   align-items: center;
 }
+.dc-assignment-toolbar label[hidden] {
+  display: none;
+}
 .dc-assignment-toolbar-spacer {
   flex: 1 1 auto;
 }
@@ -343,4 +346,52 @@
   .dc-assignment-page {
     font-size: 0.76rem;
   }
+}
+/* The assignment map shares the persisted basemap choice with the Jobs map. */
+.dc-basemap-control--assignment {
+  top: 39px;
+  right: 6px;
+  max-width: calc(100% - 12px);
+}
+.dc-basemap-control--assignment .dc-basemap-gallery {
+  width: min(18rem, 75vw);
+  max-height: min(18rem, 55vh);
+}
+
+/* Safe rich text from Package descriptions (table markup and HTML entities). */
+.dc-package-description + .dc-package-description {
+  margin-top: 0.7rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--dc-border);
+}
+.dc-package-description__language {
+  margin-bottom: 0.2rem;
+  color: var(--dc-text-muted);
+  font-size: 0.74rem;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+.dc-package-description__body {
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+  line-height: 1.35;
+}
+.dc-package-description__body p {
+  margin: 0 0 0.4rem;
+}
+.dc-package-description__body table {
+  border-collapse: collapse;
+  width: max-content;
+  max-width: 100%;
+  margin: 0.25rem 0 0.55rem;
+  font-size: 0.79rem;
+}
+.dc-package-description__body td,
+.dc-package-description__body th {
+  padding: 0.15rem 0.35rem;
+  border: 1px solid var(--dc-border);
+  vertical-align: top;
+}
+.dc-package-description__body a {
+  color: var(--calcite-color-brand);
 }

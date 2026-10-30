@@ -4,15 +4,23 @@ import { createBaseMapView } from "../core/createBaseMapView.js";
 import { createDirectWorkStreamSource } from "./createDirectWorkStreamSource.js";
 import { featureGraphicProperties } from "./assignmentMapModel.js";
 
-export function createAssignmentMap({ container, runtimeConfig, workStreams, onStatus }) {
+export function createAssignmentMap({
+  container,
+  runtimeConfig,
+  workStreams,
+  onStatus,
+  basemapSettings,
+}) {
   const featureLayer = new GraphicsLayer({
     id: "data-catalogue-assignment-feature",
     title: "Selected Feature",
     popupEnabled: false,
   });
-  const { map, view } = createBaseMapView({
+  const { map, view, detachBasemap } = createBaseMapView({
     container,
     runtimeConfig,
+    basemapSettings,
+    positionSlot: "assignment",
     layers: [featureLayer],
     viewOptions: { popup: null, popupEnabled: false },
   });
@@ -84,6 +92,7 @@ export function createAssignmentMap({ container, runtimeConfig, workStreams, onS
   void load();
 
   return {
+    view,
     async selectFeature(feature) {
       const id = feature?.id ?? null;
       if (id === currentId) return;
@@ -117,6 +126,7 @@ export function createAssignmentMap({ container, runtimeConfig, workStreams, onS
       abort.abort();
       clearTimeout(timeout);
       errors.remove();
+      detachBasemap();
       view.destroy();
       source?.destroy();
     },

@@ -4,28 +4,26 @@
   </div>
 
   <nav class="header-center" aria-label="Primary navigation">
-    <a href="#" class="navbar-title-link">DataCatalogue</a>
+    <a href="/" class="navbar-title-link">DataCatalogue</a>
 
-    <button
-      id="jobs-toggle"
-      type="button"
-      class="navbar-panel-button"
-      aria-controls="data-catalogue-jobs-panel"
-      aria-expanded="true"
-    >
-      <calcite-icon icon="list" scale="s" aria-hidden="true"></calcite-icon>
-      <span>Jobs</span>
-    </button>
-    <button
+    <a
       id="feature-assignment-toggle"
-      type="button"
-      class="navbar-panel-button"
-      aria-controls="data-catalogue-feature-assignment"
-      aria-pressed="false"
+      href="/assignments"
+      class="navbar-nav-link"
+      aria-current="false"
+      >Package assignment</a
     >
-      <span>Feature assignment</span>
-    </button>
   </nav>
+
+  <calcite-action
+    id="jobs-toggle"
+    icon="list"
+    text="Jobs"
+    title="Jobs"
+    aria-controls="data-catalogue-jobs-panel"
+    aria-expanded="false"
+    hidden
+  ></calcite-action>
 
   <div class="header-right">
     <span id="last-updated">Updated: -</span>
@@ -39,12 +37,20 @@
     ></calcite-action>
 
     <calcite-action
-      id="theme-toggle"
-      icon="moon"
-      text="Switch to dark mode"
-      label="Switch to dark mode"
-      title="Switch to dark mode"
+      id="preferences-button"
+      icon="gear"
+      text="Preferences"
+      title="Preferences"
+      aria-expanded="false"
     ></calcite-action>
+
+    <div
+      id="preferences-panel"
+      class="dc-preferences-popover"
+      role="region"
+      aria-label="Preferences"
+      hidden
+    ></div>
 
     <calcite-popover
       id="filters-popover"

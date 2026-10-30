@@ -24,9 +24,7 @@ export function createJobsOverlay({ jobFilterStore, jobStore, sourceMode = "mock
   const subtitleElement = document.createElement("p");
   subtitleElement.className = "data-catalogue-overlay-panel__subtitle";
   subtitleElement.textContent =
-    sourceMode === "live"
-      ? "Live Packages · Mock Job status · Geometry unavailable"
-      : "Mock backend";
+    sourceMode === "live" ? "Live Packages · Mock status" : "Mock backend";
 
   titleGroupElement.append(titleElement, subtitleElement);
 
@@ -50,6 +48,14 @@ export function createJobsOverlay({ jobFilterStore, jobStore, sourceMode = "mock
   closeButton.text = "Close Jobs panel";
   closeButton.title = "Close Jobs panel";
 
+  const resetStatusesButton = sourceMode === "live" ? document.createElement("button") : null;
+  if (resetStatusesButton) {
+    resetStatusesButton.type = "button";
+    resetStatusesButton.className = "dc-jobs-reset-statuses";
+    resetStatusesButton.textContent = "Reset statuses";
+    resetStatusesButton.title = "Reset temporary Job statuses";
+    headerActionsElement.append(resetStatusesButton);
+  }
   headerActionsElement.append(backButton, closeButton);
   headerElement.append(titleGroupElement, headerActionsElement);
   panelElement.append(headerElement, jobList.element);
@@ -76,6 +82,7 @@ export function createJobsOverlay({ jobFilterStore, jobStore, sourceMode = "mock
   return {
     element: panelElement,
     closeButton,
+    resetStatusesButton,
     refreshJobs() {
       return jobList.refreshJobs();
     },

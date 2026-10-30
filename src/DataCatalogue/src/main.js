@@ -1,4 +1,8 @@
 import "@esri/calcite-components/components/calcite-action";
+import "@esri/calcite-components/components/calcite-action-bar";
+import "@esri/calcite-components/components/calcite-shell";
+import "@esri/calcite-components/components/calcite-shell-panel";
+import "@esri/calcite-components/components/calcite-panel";
 import "@esri/calcite-components/components/calcite-button";
 import "@esri/calcite-components/components/calcite-checkbox";
 import "@esri/calcite-components/components/calcite-icon";

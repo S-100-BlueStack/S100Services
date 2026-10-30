@@ -1,6 +1,6 @@
 import { collectPages } from "../../../shared/api/catalogueService.js";
 
-export function createWorkspaceScope({ catalogue, adapter, store, onScopeChange }) {
+export function createWorkspaceScope({ catalogue, adapter, store, onScopeChange, onFocus }) {
   const element = document.createElement("div");
   element.className = "dc-workspace-scope dc-assignment-toolbar";
   const label = document.createElement("label");
@@ -9,6 +9,10 @@ export function createWorkspaceScope({ catalogue, adapter, store, onScopeChange 
   select.setAttribute("aria-label", "Pipeline and Workspace for Jobs");
   select.append(new Option("Select a Workspace", ""));
   label.append(select);
+  const focus = document.createElement("button");
+  focus.type = "button";
+  focus.textContent = "Focus Workspace";
+  focus.disabled = true;
   const reload = document.createElement("button");
   reload.type = "button";
   reload.textContent = "Reload Workspaces";
@@ -17,16 +21,17 @@ export function createWorkspaceScope({ catalogue, adapter, store, onScopeChange 
   reset.textContent = "Reset mock statuses";
   const message = document.createElement("p");
   message.setAttribute("role", "status");
-  element.append(label, reload, reset, message);
+  element.append(label, focus, reload, reset, message);
   let workspaces = [];
   let alive = true;
   let generation = 0;
   let request = null;
 
-  function applyScope() {
+  function applyScope(options) {
     const selected = workspaces.find((workspace) => workspace.key === select.value) ?? null;
     adapter.setScope(selected);
-    onScopeChange();
+    focus.disabled = !selected;
+    onScopeChange(selected, options);
     void store.loadJobs({ clear: true });
   }
 
@@ -54,7 +59,7 @@ export function createWorkspaceScope({ catalogue, adapter, store, onScopeChange 
         group.append(new Option(workspace.name, workspace.key));
       }
       select.value = workspaces.some((workspace) => workspace.key === previous) ? previous : "";
-      if (previous) applyScope();
+      if (previous) applyScope({ reload: true, autoFocus: false });
       message.textContent = `${workspaces.length} Workspaces. Jobs and filters cover only the selected Workspace. Status is simulated in memory and is never saved to the API.`;
     } catch (error) {
       if (alive && current === generation) {
@@ -67,7 +72,8 @@ export function createWorkspaceScope({ catalogue, adapter, store, onScopeChange 
       if (alive && current === generation) select.disabled = false;
     }
   }
-  select.addEventListener("change", applyScope);
+  select.addEventListener("change", () => applyScope());
+  focus.addEventListener("click", () => onFocus?.());
   reload.addEventListener("click", () => void load());
   reset.addEventListener("click", () => {
     adapter.resetStatuses();

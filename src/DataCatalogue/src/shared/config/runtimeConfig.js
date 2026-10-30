@@ -7,6 +7,7 @@ export function getRuntimeConfig() {
     catalogueApiCredentials: readStringEnv("VITE_CATALOGUE_API_CREDENTIALS") || "same-origin",
     workStreamMapServiceUrl: readStringEnv("VITE_WORK_STREAM_MAP_SERVICE_URL"),
     arcgisPortalUrl: readStringEnv("VITE_ARCGIS_PORTAL_URL"),
+    arcgisBasemapApiKey: readStringEnv("VITE_ARCGIS_BASEMAP_API_KEY"),
     aoiFeatureServiceUrl: readStringEnv("VITE_AOI_FEATURE_SERVICE_URL"),
   };
 }

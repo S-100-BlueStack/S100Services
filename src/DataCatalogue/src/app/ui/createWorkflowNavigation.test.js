@@ -113,6 +113,15 @@ test("Jobs remains default and assignment initializes once without waiting for J
   assert.equal(f.counts().destroys, 1);
 });
 
+test("Live Jobs button can be enabled before any map geometry requests complete", () => {
+  const f = fixture({ startupComplete: true });
+  f.navbar.jobsButton.disabled = true;
+  f.navigation.syncJobsButtonState();
+  assert.equal(f.navbar.jobsButton.disabled, false);
+  assert.equal(f.jobsWorkflowHost.hidden, false);
+  f.navigation.destroy();
+});
+
 test("A startup failure that publishes while assignment is open keeps Jobs navigation available", async () => {
   const f = fixture();
   await f.navigation.openAssignment();
@@ -177,7 +186,7 @@ for (const choice of ["failed Save", "Cancel or closed confirmation"]) {
     assert.equal(f.counts().jobsActions, 0);
     assert.equal(f.jobsWorkflowHost.hidden, true);
     assert.equal(f.page.element.hidden, false);
-    assert.equal(f.button.attributes.get("aria-pressed"), "true");
+    assert.equal(f.button.attributes.get("aria-current"), "page");
     f.navigation.destroy();
   });
 }
@@ -252,4 +261,95 @@ test("A pending navigation decision is not duplicated and cannot publish after d
   await pending;
   assert.equal(f.jobsWorkflowHost.hidden, true);
   assert.equal(f.counts().jobsActions, 0);
+});
+
+test("Separate assignment URL and stable Package deep links encode identifiers", async () => {
+  const { assignmentPath, parseWorkflowPath } = await import("./createWorkflowNavigation.js");
+  assert.equal(assignmentPath(), "/assignments");
+  assert.equal(assignmentPath("a/b"), "/assignments/packages/a%2Fb");
+  assert.deepEqual(parseWorkflowPath("/assignments"), { assignment: true, packageId: null });
+  assert.deepEqual(parseWorkflowPath("/assignments/packages/a%2Fb"), {
+    assignment: true,
+    packageId: "a/b",
+  });
+  assert.equal(parseWorkflowPath("/").assignment, false);
+});
+
+test("A navigation initialization error is reported rather than silently ignoring the page link", async () => {
+  const f = fixture();
+  f.navigation.destroy();
+  const problems = [];
+  const navigation = createWorkflowNavigation({
+    shellElement: new Element(),
+    jobsWorkflowHost: new Element(),
+    navbar: f.navbar,
+    createPage: () => {
+      throw new Error("Missing map focus target");
+    },
+    onOpenJobs() {},
+    onNavigationError(error) {
+      problems.push(error.message);
+    },
+  });
+  assert.equal(await navigation.openAssignment(), false);
+  assert.deepEqual(problems, ["Missing map focus target"]);
+  navigation.destroy();
+});
+
+test("Direct Package URL opens assignment and selects the decoded Package identity", async () => {
+  const nav = new Element();
+  const button = new Element();
+  const home = new Element();
+  const updated = new Element();
+  nav.querySelector = (selector) =>
+    ({
+      "#feature-assignment-toggle": button,
+      ".navbar-title-link": home,
+      "#last-updated": updated,
+    })[selector];
+  const locationRef = { pathname: "/assignments/packages/one%2Ftwo" };
+  const pushes = [];
+  const historyRef = {
+    pushState(_state, _unused, path) {
+      pushes.push(path);
+      locationRef.pathname = path;
+    },
+    replaceState() {},
+  };
+  const selected = [];
+  const navigation = createWorkflowNavigation({
+    shellElement: new Element(),
+    jobsWorkflowHost: new Element(),
+    navbar: {
+      element: nav,
+      jobsButton: new Element(),
+      filtersButton: new Element(),
+      filtersPopover: new Element(),
+    },
+    locationRef,
+    historyRef,
+    windowRef: new EventTarget(),
+    onOpenJobs() {},
+    createPage({ onPackageSelected }) {
+      return {
+        element: new Element(),
+        activate() {},
+        allowLeave: async () => true,
+        async selectPackage(id) {
+          selected.push(id);
+          onPackageSelected(id);
+          return true;
+        },
+        destroy() {},
+      };
+    },
+  });
+  try {
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(selected, ["one/two"]);
+    assert.deepEqual(pushes, []);
+    assert.equal(button.attributes.get("aria-current"), "page");
+  } finally {
+    navigation.destroy();
+  }
 });

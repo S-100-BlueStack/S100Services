@@ -4,6 +4,15 @@ Authoritative decisions: WORK-TASK.md and CONFIRMED-DECISIONS-2026-10-28.md in t
 handoff. Baseline: `08d9281fe35b06012bda430c94767ef69a439d3e`.
 Status: DC-API frontend candidate implemented; local browser/API acceptance pending.
 
+## DC-API-04 geometry clarification (2026-10-29)
+
+On baseline `829bb6ee9ff9b6925431d5f040f9a1b55eba297d`, Workspace polygons are now
+read from the existing v1 detail `esriJSON` and shown on both live MapViews. This supersedes
+missing-geometry statements below only for Workspace coverage. Jobs map shows selected coverage;
+assignment map shows last loaded saved binding intersections. Unsaved checkboxes do not change
+coverage. Package/Job AOI coordinates remain unavailable; references are never drawn as geometry.
+No published Feature Service is needed. See [geometry verification](DC_API_GEOMETRY_VERIFICATION.md).
+
 ## Domain
 
 A Package is the assignment unit. It has one generalized rectangular AOI and detailed

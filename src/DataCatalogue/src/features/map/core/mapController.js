@@ -1,3 +1,9 @@
+import { createWorkspaceGeometrySource } from "../workspaces/createWorkspaceGeometrySource.js";
+import { createWorkspaceGraphics } from "../workspaces/createWorkspaceGraphics.js";
+import {
+  createWorkspaceOverlay,
+  workspaceOverlayMessage,
+} from "../workspaces/createWorkspaceOverlay.js";
 import { normalizeError } from "../../../shared/errors/normalizeError.js";
 import { validateAoiFeatureLayer } from "../../aoi/services/aoiService.js";
 import * as defaultRelationService from "../../relations/services/relationService.js";
@@ -28,15 +34,25 @@ export function createMapController({
   container,
   statusElement,
   runtimeConfig,
+  catalogue,
+  basemapSettings,
   onError,
   onAoiLayerError,
   onJobLayerError,
+  onWorkspaceCoverageError,
   onShowRelatedJobs,
   onShowJobDetails,
   relationService = defaultRelationService,
   getJobs,
 } = {}) {
   let mapResult = null;
+  let workspaceOverlay = null;
+  let visibleWorkspaces = [];
+  let workspaceCatalog = [];
+  let openJobCounts = null;
+  let catalogOptions = { autoFocus: false };
+  let lastReportedCoverageError = "";
+  let workspaceRenderErrors = null;
   let isDestroyed = false;
   let removeAoiPopupActions = () => {};
   let removeJobPopupActions = () => {};
@@ -88,6 +104,7 @@ export function createMapController({
       mapResult = createMapView({
         container,
         runtimeConfig,
+        basemapSettings,
       });
 
       await mapResult.view.when();
@@ -99,10 +116,60 @@ export function createMapController({
         };
       }
 
-      const aoiReadinessResult =
-        runtimeConfig?.sourceMode === "live"
-          ? { ok: true, data: { status: "missing-geometry" } }
-          : await validateCurrentAoiLayer();
+      if (runtimeConfig?.sourceMode === "live") {
+        let renderError = "";
+        workspaceRenderErrors = mapResult.view.on("layerview-create-error", ({ layer }) => {
+          if (layer?.id !== "data-catalogue-jobs-workspace") return;
+          renderError =
+            "Workspace rendering failed. The Jobs list remains available. Reload the page to retry the map.";
+          setStatus({
+            status: MAP_STATUS.ERROR,
+            title: "Workspace rendering failed",
+            message: renderError,
+          });
+        });
+        workspaceOverlay = createWorkspaceOverlay({
+          source: createWorkspaceGeometrySource({ catalogue }),
+          renderer: createWorkspaceGraphics({
+            map: mapResult.map,
+            view: mapResult.view,
+            id: "data-catalogue-jobs-workspace",
+            colorByOpenJobs: true,
+          }),
+          onStatus(state) {
+            const failure = state.status === "error" || state.status === "partial";
+            const errorMessage = failure ? workspaceOverlayMessage(state) : "";
+            if (errorMessage && errorMessage !== lastReportedCoverageError) {
+              lastReportedCoverageError = errorMessage;
+              onWorkspaceCoverageError?.(errorMessage);
+            } else if (!failure) {
+              lastReportedCoverageError = "";
+            }
+            setStatus({
+              status: renderError || state.status === "error" ? MAP_STATUS.ERROR : MAP_STATUS.READY,
+              title:
+                renderError || state.status === "error"
+                  ? "Workspace coverage unavailable"
+                  : "Workspace coverage",
+              message: [
+                renderError ||
+                  workspaceOverlayMessage(state) ||
+                  "Workspace coverage is loading or unavailable.",
+                "Job AOI coordinates are unavailable from the API; no Job footprints are shown.",
+              ].join(" "),
+            });
+          },
+        });
+        workspaceOverlay.setOpenJobCounts(openJobCounts);
+        workspaceOverlay.setVisibleWorkspaces(visibleWorkspaces);
+        void workspaceOverlay.setContext(
+          { id: "workspace-catalog", workspaces: workspaceCatalog },
+          catalogOptions
+        );
+        return { ok: true, data: mapResult };
+      }
+
+      const aoiReadinessResult = await validateCurrentAoiLayer();
 
       if (isDestroyed || startRequestId !== mapStartRequestId) {
         return {
@@ -204,6 +271,34 @@ export function createMapController({
     }
   }
 
+  function setWorkspaceCatalog(workspaces, options = { autoFocus: false }) {
+    workspaceCatalog = [...workspaces];
+    catalogOptions = { autoFocus: false, ...options };
+    return workspaceOverlay?.setContext(
+      { id: "workspace-catalog", workspaces: workspaceCatalog },
+      catalogOptions
+    );
+  }
+
+  function setVisibleWorkspaces(workspaces) {
+    // Map visibility is presentation state, never a reason to refetch or recreate geometry.
+    visibleWorkspaces = [...workspaces];
+    workspaceOverlay?.setVisibleWorkspaces(visibleWorkspaces);
+  }
+
+  function selectWorkspace(workspace) {
+    setVisibleWorkspaces(workspace ? [workspace] : []);
+  }
+
+  function setWorkspaceJobCounts(counts) {
+    openJobCounts = counts;
+    workspaceOverlay?.setOpenJobCounts(counts);
+  }
+
+  function focusWorkspace() {
+    return workspaceOverlay?.focus();
+  }
+
   function destroy() {
     isDestroyed = true;
     mapStartRequestId += 1;
@@ -232,6 +327,11 @@ export function createMapController({
     aoiHighlightController = null;
     lastAoiReadinessResult = null;
 
+    workspaceRenderErrors?.remove();
+    workspaceRenderErrors = null;
+    workspaceOverlay?.destroy();
+    workspaceOverlay = null;
+    mapResult?.detachBasemap?.();
     mapResult?.view?.destroy();
     mapResult = null;
   }
@@ -365,7 +465,8 @@ export function createMapController({
   }
 
   async function refreshJobData({ jobs } = {}) {
-    if (!mapResult?.layers?.jobLayers) {
+    // Live Jobs have no verified AOI coordinates; never invoke the demo geometry loader.
+    if (runtimeConfig?.sourceMode === "live" || !mapResult?.layers?.jobLayers) {
       return {
         ok: true,
         data: {
@@ -753,15 +854,6 @@ export function createMapController({
   }
 
   function setReadyStatus(aoiReadinessResult) {
-    if (runtimeConfig?.sourceMode === "live") {
-      setStatus({
-        status: MAP_STATUS.WARNING,
-        title: "Live geometry unavailable",
-        message:
-          "Package AOI and Workspace layer mappings are not verified. Use the Jobs panel to select a Workspace and read live Packages. No catalogue overlays are displayed.",
-      });
-      return;
-    }
     if (!aoiReadinessResult?.ok) {
       setStatus({
         status: MAP_STATUS.WARNING,
@@ -850,6 +942,11 @@ export function createMapController({
   }
 
   return {
+    selectWorkspace,
+    setWorkspaceCatalog,
+    setVisibleWorkspaces,
+    setWorkspaceJobCounts,
+    focusWorkspace,
     start,
     destroy,
     getView,

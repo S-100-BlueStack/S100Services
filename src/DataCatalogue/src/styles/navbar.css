@@ -1,4 +1,6 @@
 #header {
+  position: relative;
+  z-index: 30;
   display: flex;
   align-items: center;
   height: var(--dc-navbar-height);
@@ -25,6 +27,7 @@
 }
 
 .header-right {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -205,4 +208,108 @@
 .data-catalogue-filters__preset-button::part(button) {
   justify-content: center;
   border-radius: 0;
+}
+
+/* Page navigation stays in the header; map tools belong to the left Action Bar. */
+.navbar-nav-link,
+.navbar-nav-link:visited {
+  color: #fff;
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 500;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+.navbar-nav-link:hover,
+.navbar-nav-link[aria-current="page"] {
+  border-bottom-color: currentColor;
+}
+.navbar-nav-link:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+#header > #jobs-toggle[hidden] {
+  display: none;
+}
+
+/* Preferences use the existing compact popover styling, not a full-page settings view. */
+.dc-preferences {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 15.5rem;
+  max-width: min(21rem, 90vw);
+  padding: 0.65rem;
+  color: var(--dc-text);
+  background: var(--dc-surface);
+  font-size: 0.79rem;
+}
+.dc-preferences h2,
+.dc-preferences h3 {
+  font-size: 0.82rem;
+  font-weight: 650;
+  margin: 0.2rem 0;
+}
+.dc-preferences__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-height: 1.8rem;
+}
+.dc-preferences__row select {
+  color: var(--dc-text);
+  background: var(--dc-surface);
+  border: 1px solid var(--dc-border);
+  padding: 0.15rem;
+}
+.dc-preferences__row input {
+  accent-color: var(--calcite-color-brand, #007ac2);
+}
+.dc-preferences__help {
+  margin: 0;
+  font-size: 0.73rem;
+  color: var(--dc-text-muted);
+}
+
+/* Preferences is an application-owned non-modal panel; no lazy popover anchor is required. */
+.dc-preferences-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  width: min(22rem, calc(100vw - 1.5rem));
+  max-height: min(75vh, 34rem);
+  overflow: auto;
+  border: 1px solid var(--dc-border);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  box-shadow: var(--dc-shadow);
+}
+.dc-preferences-popover[hidden] {
+  display: none;
+}
+.dc-preferences__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.dc-preferences__close,
+.dc-preferences__reset-basemap {
+  padding: 0.2rem 0.35rem;
+  border: 1px solid var(--dc-border);
+  border-radius: 0;
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  cursor: pointer;
+}
+.dc-preferences__close:focus-visible,
+.dc-preferences__reset-basemap:focus-visible {
+  outline: 2px solid var(--calcite-color-brand, #007ac2);
+  outline-offset: 1px;
+}
+.dc-preferences__reset-basemap:disabled {
+  opacity: 0.6;
+  cursor: default;
 }

@@ -36,6 +36,18 @@ test("Package ID, short ID and GlobalID are separate; null fields and source HTM
   assert.throws(() => normalizePackage({}), /identifier/);
 });
 
+test("Live Package list identity is shortId and never a Package name or fileName", () => {
+  const item = normalizePackage({
+    id: "canonical-package-id",
+    fileName: "file-name-that-must-not-be-the-label",
+    metaData: { shortId: "NM1000", title: "An optional description" },
+  });
+  assert.equal(item.name, "NM1000");
+  assert.equal(item.packageId, "canonical-package-id");
+  assert.equal(item.title, "An optional description");
+  assert.equal(normalizePackage({ id: "fallback-id", fileName: "wrong" }).name, "fallback-id");
+});
+
 test("Workspace ownership is preserved without becoming workflow status", () => {
   const a = normalizeWorkspace({ id: "w", owner: "alice" }, "p");
   const b = normalizeWorkspace({ id: "w", owner: "alice" }, "q");
@@ -133,4 +145,22 @@ test("routes encode opaque identifiers and bindings validate package and Pipelin
   await assert.rejects(service.bindings("other"), /inconsistent/);
   await service.unbind("p::q");
   assert.equal(requests.at(-1).path, "/api/v1/dispatcher/bindings/p%3A%3Aq");
+});
+
+test("Workspace detail preserves Esri JSON, validates identity and forwards abort ownership", async () => {
+  const controller = new AbortController();
+  const esriJSON = '{"rings":[]}';
+  let captured;
+  const service = createCatalogueService({
+    request: async (path, options) => {
+      captured = { path, options };
+      return { workspace: { id: "work space" }, esriJSON };
+    },
+  });
+  const detail = await service.workspace("pipe/a", "work space", { signal: controller.signal });
+  assert.equal(captured.path, "/api/v1/pipelines/pipe%2Fa/workspaces/work%20space");
+  assert.equal(captured.options.signal, controller.signal);
+  assert.equal(detail.workspace.pipelineId, "pipe/a");
+  assert.equal(detail.esriJSON, esriJSON);
+  await assert.rejects(service.workspace("pipe/a", "other"), /different Workspace/);
 });

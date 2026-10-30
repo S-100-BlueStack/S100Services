@@ -499,9 +499,9 @@ function renderJobDetailsView({
       pendingMutationJobIds,
       render,
     }),
-    createJobDetailsSummary(selectedJob),
+    ...(selectedJob.source === "live" ? [] : [createJobDetailsSummary(selectedJob)]),
     createJobDetailsFactSection(selectedJob),
-    createJobDetailsAoiSection(selectedJob)
+    ...(selectedJob.source === "live" ? [] : [createJobDetailsAoiSection(selectedJob)])
   );
   contentElements.push(detailsElement);
   rootElement.replaceChildren(...contentElements);
@@ -533,7 +533,7 @@ function createJobDetailsHeader({
   metaElement.append(
     createJobStatusBadge(job),
     createPriorityBadge(job),
-    createAffectedAoiBadge(job)
+    ...(job.source === "live" ? [] : [createAffectedAoiBadge(job)])
   );
 
   titleGroupElement.append(eyebrowElement, titleElement, metaElement);
@@ -564,7 +564,8 @@ function createJobDetailsHeader({
     });
   });
 
-  actionsElement.append(focusMapButton, clearMapFocusButton, refreshButton);
+  if (job.source !== "live") actionsElement.append(focusMapButton, clearMapFocusButton);
+  actionsElement.append(refreshButton);
   headerElement.append(titleGroupElement, actionsElement);
 
   return headerElement;
@@ -587,37 +588,23 @@ function createJobDetailsFactSection(job) {
   const factGridElement = document.createElement("dl");
   factGridElement.className = "job-details__fact-grid";
 
-  factGridElement.append(
-    createJobDetailFact("Job ID", job.id),
-    ...(job.source === "live"
-      ? [
-          createJobDetailFact("Package ID", job.packageId),
-          createJobDetailFact("Short ID", job.shortId ?? "Not provided"),
-          createJobDetailFact("Pipeline", job.pipelineName),
-          createJobDetailFact("Workspace", job.workspaceName),
-        ]
-      : []),
-    createJobDetailFact("Created", formatDate(job.createdAt)),
-    createJobDetailFact(
-      "Deadline",
-      job.source === "live" ? "Unavailable in v1 API" : formatDate(job.deadline)
-    ),
-    createJobDetailFact(
-      job.source === "live" ? "Mock status" : "Status",
-      getJobStatusLabel(job.status)
-    ),
-    createJobDetailFact(
-      job.source === "live" ? "Severity" : "Priority",
-      job.source === "live" ? severityLabel(job.severity) : getJobPriorityLabel(job.priority)
-    ),
-    createJobDetailFact(
-      "Geometry",
-      job.source === "live" ? "AOI mapping unavailable" : getJobGeometryTypeLabel(job)
-    ),
-    ...(job.source === "live"
-      ? []
-      : [createJobDetailFact("Affected AOIs", String(job.relatedAoiIds.length))])
-  );
+  if (job.source === "live") {
+    factGridElement.append(
+      createJobDetailFact("Package", job.shortId || job.packageId),
+      createJobDetailFact("Pipeline", job.pipelineName),
+      createJobDetailFact("Severity", severityLabel(job.severity))
+    );
+  } else {
+    factGridElement.append(
+      createJobDetailFact("Job ID", job.id),
+      createJobDetailFact("Created", formatDate(job.createdAt)),
+      createJobDetailFact("Deadline", formatDate(job.deadline)),
+      createJobDetailFact("Status", getJobStatusLabel(job.status)),
+      createJobDetailFact("Priority", getJobPriorityLabel(job.priority)),
+      createJobDetailFact("Geometry", getJobGeometryTypeLabel(job)),
+      createJobDetailFact("Affected AOIs", String(job.relatedAoiIds.length))
+    );
+  }
 
   sectionElement.append(factGridElement);
 
@@ -637,7 +624,7 @@ function createJobDetailsStatusSection({
   hintElement.className = "job-details__hint";
   hintElement.textContent =
     job.source === "live"
-      ? "Mock status for this Package, Pipeline and Workspace only. Stored in memory; never saved to the API."
+      ? "Temporary status · not saved to the API."
       : "Status changes are saved through the current Jobs service.";
 
   sectionElement.append(

@@ -2,7 +2,12 @@ import { createCatalogueClient } from "../shared/api/catalogueClient.js";
 import { createCatalogueService } from "../shared/api/catalogueService.js";
 import { createLiveJobServiceAdapter } from "../features/jobs/services/liveJobServiceAdapter.js";
 import { createJobService } from "../features/jobs/services/jobService.js";
-import { createWorkspaceScope } from "../features/jobs/ui/createWorkspaceScope.js";
+import { createPipelineVisibility } from "../features/map/workspaces/createPipelineVisibility.js";
+import { createBasemapSettings } from "../features/map/basemaps/basemapSettings.js";
+import { createBasemapSelector } from "../features/map/basemaps/createBasemapSelector.js";
+import { createPreferencesSettings } from "../features/preferences/state/createPreferencesSettings.js";
+import { createPreferencesPanel } from "../features/preferences/ui/createPreferencesPanel.js";
+import { countOpenJobsByWorkspace } from "../features/map/workspaces/workspaceJobColors.js";
 import { createAssignmentWorkflow } from "../features/assignmentPage/createAssignmentWorkflow.js";
 import { createWorkflowNavigation } from "./ui/createWorkflowNavigation.js";
 import { createSelectedAoiStore } from "../features/aoi/state/selectedAoiStore.js";
@@ -27,6 +32,16 @@ import { createNavbarController } from "./ui/createNavbarController.js";
 export async function createApp(rootElement) {
   const runtimeConfig = getRuntimeConfig();
   const live = runtimeConfig.sourceMode === "live";
+  const preferences = createPreferencesSettings();
+  const themeStore = createThemeStore({ storage: preferences.themeStorage });
+  const basemapSettings = createBasemapSettings({
+    apiKey: runtimeConfig.arcgisBasemapApiKey,
+    preferences,
+    themeMode: themeStore.getSnapshot().themeMode,
+  });
+  const unsubscribeThemeBasemap = themeStore.subscribe(({ themeMode }) => {
+    basemapSettings.setThemeMode(themeMode);
+  });
   const catalogue = live
     ? createCatalogueService(
         createCatalogueClient({
@@ -42,7 +57,6 @@ export async function createApp(rootElement) {
   const jobStore = createJobStore(live ? { service: createJobService({ adapter: liveJobs }) } : {});
   const aoiMapFilterStore = createAoiMapFilterStore();
   const jobClusterSettingsStore = createJobClusterSettingsStore();
-  const themeStore = createThemeStore();
   const noticeRegion = createNoticeRegion();
   const startupLoader = createStartupLoader();
   const appEventAbortController = new AbortController();
@@ -65,22 +79,39 @@ export async function createApp(rootElement) {
     },
   });
 
+  const preferencesPanel = createPreferencesPanel({
+    navbarElement: navbar.element,
+    settings: preferences,
+    themeStore,
+    basemapSettings,
+  });
   const jobsPanel = createJobsOverlay({
     sourceMode: runtimeConfig.sourceMode,
     jobFilterStore,
     jobStore,
   });
-  const workspace = createMapWorkspace();
+  const workspace = createMapWorkspace({ live });
+  const basemapSelector = createBasemapSelector({
+    container: workspace.basemapHost,
+    settings: basemapSettings,
+  });
+  workspace.actionBar.prepend(navbar.jobsButton);
+  navbar.jobsButton.hidden = false;
 
   const mapController = createMapController({
     container: workspace.mapViewElement,
     statusElement: workspace.mapStatusElement,
     runtimeConfig,
+    catalogue,
+    basemapSettings,
     onError(error) {
       showErrorNoticeAfterStartup({
         title: "Map could not be loaded",
         message: error.message,
       });
+    },
+    onWorkspaceCoverageError(message) {
+      showErrorNoticeAfterStartup({ title: "Workspace geometry unavailable", message });
     },
     onJobLayerError(error) {
       showErrorNoticeAfterStartup({
@@ -142,7 +173,7 @@ export async function createApp(rootElement) {
       });
 
       jobsPanel.showJobsForAoi(normalizedSelectedAoi);
-      setPanelOpen(jobsPanel.element, navbar.jobsButton, true);
+      setJobsPanelOpen(true);
     },
     onShowJobDetails(selectedJob) {
       const normalizedSelectedJob = selectedJobStore.selectJob(selectedJob);
@@ -161,12 +192,12 @@ export async function createApp(rootElement) {
       selectedAoiStore.clearSelection();
       mapController.clearAoiJobScope();
       jobsPanel.showJobDetails(normalizedSelectedJob);
-      setPanelOpen(jobsPanel.element, navbar.jobsButton, true);
+      setJobsPanelOpen(true);
       applySelectedJobMapHighlights(normalizedSelectedJob);
     },
   });
 
-  workspace.element.appendChild(jobsPanel.element);
+  workspace.panelHost.appendChild(jobsPanel.element);
 
   const jobsWorkflowHost = document.createElement("div");
   jobsWorkflowHost.className = "dc-jobs-workflow-host";
@@ -174,9 +205,10 @@ export async function createApp(rootElement) {
   jobsWorkflowHost.append(workspace.element, startupLoader.element);
 
   const shellElement = document.createElement("div");
-  shellElement.className = "data-catalogue-app";
+  shellElement.className = `data-catalogue-app${live ? " data-catalogue-app--live" : ""}`;
   blockShellForStartup(workspace.element);
-  navbar.jobsButton.disabled = true;
+  // Live Jobs are available immediately, independently of map geometry loading.
+  navbar.jobsButton.disabled = !live;
   navbar.filtersButton.disabled = true;
   shellElement.append(navbar.element, jobsWorkflowHost, noticeRegion);
 
@@ -189,27 +221,40 @@ export async function createApp(rootElement) {
       jobsPanel.refreshJobs();
     },
     prepareClose: () => jobsPanel.hideCompletedJobs(),
-    setOpen: (isOpen) => setPanelOpen(jobsPanel.element, navbar.jobsButton, isOpen),
+    setOpen: (isOpen) => setJobsPanelOpen(isOpen),
   });
   const workflowNavigation = createWorkflowNavigation({
     shellElement,
     jobsWorkflowHost,
     navbar,
-    createPage: () => createAssignmentWorkflow(runtimeConfig, catalogue),
+    createPage: (options) =>
+      createAssignmentWorkflow(runtimeConfig, catalogue, { ...options, basemapSettings }),
+    onNavigationError(error) {
+      showErrorNotice({
+        title: "Package assignment could not be opened",
+        message: error.message,
+      });
+    },
     onOpenJobs: jobsPanelActions.open,
-    isJobsStartupComplete: () => isStartupComplete,
+    isJobsStartupComplete: () => live || isStartupComplete,
   });
 
-  const workspaceScope = live
-    ? createWorkspaceScope({
+  const pipelineVisibility = live
+    ? createPipelineVisibility({
         catalogue,
-        adapter: liveJobs,
-        store: jobStore,
-        onScopeChange: resetJobsPanelContext,
+        container: workspace.pipelineContent,
+        onChange(workspaces) {
+          mapController.setVisibleWorkspaces(workspaces);
+        },
+        onWorkspacesLoaded(workspaces) {
+          void mapController.setWorkspaceCatalog(workspaces, { reload: true, autoFocus: false });
+          // Jobs belong to every Workspace, regardless of which Pipelines are shown on the map.
+          resetJobsPanelContext();
+          liveJobs.setWorkspaces(workspaces);
+          void jobStore.loadJobs({ clear: true });
+        },
       })
     : null;
-  if (workspaceScope)
-    jobsPanel.element.insertBefore(workspaceScope.element, jobsPanel.element.lastElementChild);
 
   const startupController = createStartupController({
     startupLoader,
@@ -242,6 +287,12 @@ export async function createApp(rootElement) {
   });
 
   const unsubscribeJobStoreSync = jobStore.subscribe((snapshot) => {
+    if (live) {
+      // During a new catalogue load, retain neutral coverage until the full Jobs list arrives.
+      mapController.setWorkspaceJobCounts(
+        snapshot.isLoading || snapshot.error ? null : countOpenJobsByWorkspace(snapshot.jobs)
+      );
+    }
     mapController.refreshAoiPopupContent();
     void mapSyncCoordinator.syncMapAfterJobStoreChange(snapshot);
   });
@@ -347,7 +398,13 @@ export async function createApp(rootElement) {
     }
   );
 
-  setPanelOpen(jobsPanel.element, navbar.jobsButton, false);
+  setJobsPanelOpen(false);
+
+  function setJobsPanelOpen(isOpen) {
+    setPanelOpen(jobsPanel.element, navbar.jobsButton, isOpen);
+    navbar.jobsButton.active = isOpen;
+    workspace.setJobsVisible(isOpen);
+  }
 
   function resetJobsPanelContext() {
     cancelPendingMapRestores();
@@ -359,6 +416,28 @@ export async function createApp(rootElement) {
     mapController.clearAoiHighlight();
     mapController.clearAoiJobScope();
   }
+
+  workspace.pipelineAction.addEventListener(
+    "click",
+    () => {
+      if (!jobsPanel.element.hidden) {
+        jobsPanelActions.toggle();
+        workspace.setPipelinesPanelOpen(true);
+      } else {
+        workspace.togglePipelinesPanel();
+      }
+    },
+    { signal: appEventAbortController.signal }
+  );
+
+  jobsPanel.resetStatusesButton?.addEventListener(
+    "click",
+    () => {
+      liveJobs.resetStatuses();
+      void jobStore.loadJobs({ clear: true });
+    },
+    { signal: appEventAbortController.signal }
+  );
 
   navbar.jobsButton.addEventListener("click", () => jobsPanelActions.toggle(), {
     signal: appEventAbortController.signal,
@@ -377,7 +456,7 @@ export async function createApp(rootElement) {
       mapController.clearAoiHighlight();
       mapController.clearAoiJobScope();
       jobsPanel.hideCompletedJobs();
-      setPanelOpen(jobsPanel.element, navbar.jobsButton, false);
+      setJobsPanelOpen(false);
     },
     {
       signal: appEventAbortController.signal,
@@ -391,7 +470,9 @@ export async function createApp(rootElement) {
     startupLoader.complete({ text: "Live catalogue list access ready." });
     workflowNavigation.syncJobsButtonState();
     navbar.filtersButton.disabled = false;
-    void mapController.start({ requireAois: false, deferJobGeometry: true });
+    void mapController.start({ requireAois: false, deferJobGeometry: true }).then((result) => {
+      if (result?.ok) basemapSelector.setView(result.data.view);
+    });
   } else
     void startupController.runStartup({
       onStartupBlocked() {
@@ -405,6 +486,7 @@ export async function createApp(rootElement) {
         releaseShellAfterStartup(workspace.element);
         workflowNavigation.syncJobsButtonState();
         navbar.filtersButton.disabled = false;
+        basemapSelector.setView(mapController.getView());
       },
     });
 
@@ -447,7 +529,12 @@ export async function createApp(rootElement) {
 
   return {
     destroy() {
-      workspaceScope?.destroy();
+      pipelineVisibility?.destroy();
+      basemapSelector.destroy();
+      preferencesPanel.destroy();
+      unsubscribeThemeBasemap();
+      basemapSettings.destroy();
+      preferences.destroy();
       jobStore.destroy();
       workflowNavigation.destroy();
       startupController.destroy();

@@ -1,3 +1,5 @@
+import { createBasemapSelector } from "../../map/basemaps/createBasemapSelector.js";
+import { renderPackageDescriptions } from "./renderPackageDescriptions.js";
 import { createPipelineRow } from "./createPipelineRow.js";
 import { severityLabel } from "../../../shared/domain/severity.js";
 import { createQueryLifecycle } from "../state/createQueryLifecycle.js";
@@ -15,7 +17,13 @@ import { createDraftNavigation } from "./confirmDraftNavigation.js";
 import { createRequiredTargetGetter } from "./assignmentPageContract.js";
 import { createWorkStreamRow } from "./createWorkStreamRow.js";
 
-export function createAssignmentPage({ services, createMap, runtimeConfig }) {
+export function createAssignmentPage({
+  services,
+  createMap,
+  runtimeConfig,
+  onPackageSelected,
+  basemapSettings,
+}) {
   const live = services.source === "live";
   const entityName = live ? "Package" : "Feature";
   const assignmentName = live ? "Pipeline" : "Work stream";
@@ -62,8 +70,10 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
       </section>
       <section class="dc-assignment-panel dc-assignment-map-panel" aria-label="Assignment map">
         <p data-map-empty>Select a Feature to focus its geometry.</p>
+        <button type="button" data-map-focus hidden disabled>Focus Workspaces</button>
         <div class="dc-assignment-map-stage">
           <div class="dc-assignment-map" data-map></div>
+          <div class="dc-basemap-control dc-basemap-control--assignment" data-basemap-host></div>
           <button class="dc-assignment-map-retry" type="button" data-map-retry aria-label="Retry map" title="Retry map">
             <calcite-icon icon="refresh" scale="s" aria-hidden="true"></calcite-icon>
           </button>
@@ -86,16 +96,19 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
   const get = createRequiredTargetGetter((name) => element.querySelector(`[data-${name}]`));
   if (live) {
     get("search").disabled = true;
-    get("search").placeholder = "Unavailable in v1 API";
-    get("search").title = "The API has no Package name search; no page-only search is applied.";
+    get("search").closest("label").hidden = true;
     get("type").previousSibling.textContent = "Category";
     get("type").replaceChildren(new Option("All categories", ""));
-    get("map-empty").textContent = "Package AOI geometry mapping is pending verification.";
+    get("map-empty").textContent = "Select a Package to view its saved intersecting Workspaces.";
+    get("map-focus").hidden = false;
     element.querySelector(".dc-assignment-legend").remove();
     element.querySelector(".dc-prototype-toolbar > span").textContent =
-      "Live API · Whole Package bindings · Workspaces are derived · Comments unavailable";
+      "Live API · Automatic Workspaces · Manual overrides pending API support";
     for (const name of ["fail-load", "fail-save", "reset"]) get(name).hidden = true;
   }
+  const basemapSelector = basemapSettings
+    ? createBasemapSelector({ container: get("basemap-host"), settings: basemapSettings })
+    : null;
   const abort = new AbortController();
   const listen = (node, name, handler) =>
     node.addEventListener(name, handler, { signal: abort.signal });
@@ -135,6 +148,7 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
   }
 
   function makeMap() {
+    basemapSelector?.setView(null);
     map?.destroy();
     map = null;
     const current = ++mapGeneration;
@@ -144,11 +158,13 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
       map = createMap({
         container: get("map"),
         runtimeConfig,
+        basemapSettings,
         workStreams: services.workStreams,
         onStatus(message) {
           if (alive && current === mapGeneration) get("map-status").textContent = message;
         },
       });
+      basemapSelector?.setView(map.view ?? null);
       syncMap(session.snapshot());
     } catch {
       get("map-status").textContent = "Map initialization failed. Retry map when ready.";
@@ -156,6 +172,11 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
   }
 
   function syncMap(state) {
+    if (live) {
+      map?.selectContext(state.feature, state.record);
+      get("map-focus").disabled = !state.feature;
+      return;
+    }
     void map?.selectFeature(state.feature);
     const ids = state.draft?.activeIds ?? [];
     const key = JSON.stringify(ids);
@@ -292,7 +313,7 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
 
       get("work-stream-status").textContent = result.total
         ? live
-          ? `${result.total} Pipelines. Workspaces are derived from saved bindings and AOI overlap.`
+          ? `${result.total} Pipelines. Workspaces follow AOI overlap; manual overrides require backend support.`
           : `${result.total} Work streams. Any Work stream may be assigned.`
         : workStreamMode === WORK_STREAM_LIST_MODE.ACTIVE
           ? `No active ${assignmentName} assignments.`
@@ -350,8 +371,12 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
       const dt = document.createElement("dt");
       dt.textContent = label;
       const dd = document.createElement("dd");
-      dd.textContent = value || "Not provided";
       dd.className = "dc-assignment-text";
+      if (live && label === "Details") {
+        renderPackageDescriptions(dd, feature.descriptionEntries, value);
+      } else {
+        dd.textContent = value || "Not provided";
+      }
       dl.append(dt, dd);
     }
     get("information").append(dl);
@@ -420,13 +445,13 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
     }
   });
 
-  async function selectFeature(id) {
-    if (busy() || id === session.snapshot().feature?.id || !(await guard.allow()) || !alive) {
-      return;
-    }
-
+  async function selectFeature(id, { notify = true } = {}) {
+    if (id === session.snapshot().feature?.id) return true;
+    if (busy() || !(await guard.allow()) || !alive) return false;
     requestedId = id;
-    await session.select(id);
+    const selected = await session.select(id);
+    if (selected && live && notify) onPackageSelected?.(id);
+    return selected;
   }
 
   listen(get("features"), "click", (event) => {
@@ -474,6 +499,7 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
     if (alive && (saved || live)) void loadFeatures();
   });
   listen(get("map-retry"), "click", createMapRetryHandler(makeMap));
+  listen(get("map-focus"), "click", () => void map?.focus?.());
   listen(get("fail-load"), "click", () => {
     services.testing.failNext("load");
     get("test-status").textContent = "The next mock load will fail once.";
@@ -548,6 +574,12 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
     activate() {
       if (!map) makeMap();
     },
+    selectPackage(id, { notify = true } = {}) {
+      return live ? selectFeature(id, { notify }) : Promise.resolve(false);
+    },
+    hasUnsavedDraft() {
+      return session.snapshot().dirty;
+    },
     async allowLeave() {
       return !resetting && (await guard.allow());
     },
@@ -563,6 +595,7 @@ export function createAssignmentPage({ services, createMap, runtimeConfig }) {
       unsubscribe();
       session.destroy();
       map?.destroy();
+      basemapSelector?.destroy();
       element.remove();
     },
   };

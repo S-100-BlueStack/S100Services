@@ -640,3 +640,16 @@
   background: var(--dc-surface-alt);
   color: var(--dc-text);
 }
+
+.dc-jobs-reset-statuses {
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--dc-border);
+  border-radius: 2px;
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  font-size: 0.73rem;
+  cursor: pointer;
+}
+.dc-jobs-reset-statuses:focus-visible {
+  outline: 2px solid var(--calcite-color-brand, #007ac2);
+}

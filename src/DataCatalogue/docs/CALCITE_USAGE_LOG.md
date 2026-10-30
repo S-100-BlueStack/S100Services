@@ -1,4 +1,38 @@
+## DC-API-04 v3 — docked Shell pattern
+
+- Main map now uses public `calcite-shell` and `calcite-shell-panel` with `displayMode="dock"`
+  and `contentBehind=false`; the `calcite-action-bar` lives in the documented `action-bar`
+  slot. A single `calcite-panel` hosts either the Pipeline visibility panel or Jobs panel.
+  This replaces positioning the action bar and content as absolute overlays over the map.
+- Native input checkboxes and select controls remain intentional application-owned controls
+  inside public Calcite layout components. They provide direct keyboard interaction without
+  relying on private shadow-DOM styling. Light/dark follows app tokens, and map navigation
+  uses `animate: false` for explicit focus actions.
+
 # Calcite Usage Log
+
+## DC-API-04 correction — docked Calcite Action Bar (2026-10-29)
+
+- The main map uses the public `calcite-action-bar` and `calcite-action` components to expose
+  icon-only `Jobs` and `Pipelines` actions on the left edge. These are map operations, not
+  links between separate pages. `text` remains the accessible label for each action.
+- `Package assignment` uses an ordinary semantic `<a>` element in the header because it is
+  a separate routed page, not a map action. This is not a Calcite form control opt-out.
+- The Pipeline checklist uses native checkboxes and labels in an application-owned side
+  panel. This keeps multi-toggle keyboard input compact and avoids private Calcite DOM.
+  The panel follows application light/dark tokens and `:focus-visible`.
+- The previous native `Jobs` _navbar_ button and selected-Workspace `Focus Workspace`
+  discussion below are historical for the original prototype; they are superseded in live
+  mode by this correction. The assignment page retains its independent Focus Workspaces
+  control and map Retry action.
+- No Calcite private shadow-DOM selectors or unsupported custom properties are introduced.
+
+## DC-API-04 map focus controls (2026-10-29)
+
+The native `Focus Workspace` and `Focus Workspaces` buttons extend the accepted compact native
+Workspace/assignment control pattern. They preserve ordinary keyboard focus, stable control
+identity and the existing `:focus-visible` styling. The map Retry action retains its public
+Calcite icon. No shadow-DOM styling, custom map widget framework or new dependency is used.
 
 DataCatalogue should use Calcite and Calcite Components where they fit the UI need.
 
@@ -64,3 +98,36 @@ extend the existing compact application-owned form pattern rather than introduci
 component lifecycle. Public Calcite status/buttons/icons remain in the Jobs UI. Shared theme
 tokens, small borders and `:focus-visible` style the new controls; no private shadow-DOM access
 or new animation is introduced. No live map control is offered for unverified geometry.
+
+### DC-API-04 v4 — docked action bar, floating panels and ArcGIS Basemap Gallery
+
+- Use documented `calcite-shell-panel display-mode="float-content"` to keep the action
+  bar docked while floating only the active `calcite-panel` over the existing MapView.
+- Use public ArcGIS map components `arcgis-expand` + `arcgis-basemap-gallery`, both
+  bound to programmatic MapView with their public `view` property. This avoids
+  deprecated `@arcgis/core/widgets/BasemapGallery` and avoids migrating to `arcgis-map`.
+- Use the documented `calcite-popover` for the compact Preferences panel, and
+  application-owned native select/checkbox inputs rather than private Calcite DOM.
+- No private shadow-root selectors or programmatic shadow-DOM manipulation are used.
+
+### DC-API-04 v5 — verified layout and Preferences opt-outs (2026-10-30)
+
+- **Action Bar:** keep public `calcite-action-bar` and `calcite-action`, but position
+  the bar in an application-owned fixed-width grid column. The earlier public
+  `calcite-shell-panel display-mode="float-content"` still shifted the map in
+  local browser tests. The mutually exclusive Jobs/Pipelines content is a native
+  floating panel host to guarantee MapView size stability. No private selectors.
+- **Preferences:** use an application-owned non-modal panel with native theme select
+  and persistence checkboxes, triggered by a public Calcite Action. In local testing
+  the v4 Calcite Popover did not become visible. The replacement preserves Escape,
+  outside-click dismissal, focus restoration, `aria-expanded` and light/dark tokens.
+  No direct component shadow-DOM access or new UI library is introduced.
+- **Basemaps:** retain `arcgis-expand` + `arcgis-basemap-gallery` with their documented
+  public `view` and `activeBasemap` properties. All four available basemaps appear in
+  either theme. Theme only controls automatic defaults, not gallery availability.
+
+### DC-API-04 v6 — neutral Action Bar colors (2026-10-30)
+
+- Keep the existing docked `calcite-action-bar` layout and floating application-owned panel behavior.
+- Use public `--calcite-action-bar-background-color` and `--calcite-action-*` CSS properties with semantic `--calcite-color-surface-2/3/4` and `--calcite-color-text-1/2` tokens. The neutral colors follow Calcite light/dark mode without requiring separate hard-coded values.
+- Apply the neutral surface to the Action Bar host as well as the component tokens, so the entire 48px map toolbar does not reveal the blue-tinted map background between actions. No shadow-DOM selectors or changes to focus behavior are introduced.

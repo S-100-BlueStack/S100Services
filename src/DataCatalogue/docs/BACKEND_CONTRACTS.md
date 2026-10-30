@@ -1,4 +1,56 @@
+## DC-API-04 v3 — manual membership requirement versus implemented API (2026-10-29)
+
+The confirmed product direction allows users to override Workspace membership for a
+Package/Pipeline assignment, including manually adding Workspaces with no AOI intersection.
+**This is not supported by the current verified v1 binding contract:** `BindRequest`
+contains only `PackageId` and `PipelineId`; the backend computes `BindingResponse.Workspaces`
+from current geographic intersection, and Workspace package listing also uses the spatial
+query. A persistent override needs backend-owned read and write semantics and must affect
+both binding responses and Workspace package listing (Jobs). See
+`DC_API_BACKEND_GAPS.md` (`OVERRIDE-01`). No routes or response fields are assumed.
+
+Current Package geometry references do not expose generalized AOI coordinates or detailed
+Feature geometry to the browser (`GEO-01`, `GEO-04`). The frontend uses only verified
+Workspace Esri JSON geometry and does not require a published Feature Service.
+
 # DataCatalogue Backend Contracts
+
+## DC-API-04 verified geometry reads (2026-10-29)
+
+Baseline `829bb6ee9ff9b6925431d5f040f9a1b55eba297d`. Backend source was read only.
+These findings supersede the earlier deferred-overlay and Feature Service prerequisites.
+
+- `PipelineController.GetWorkspace`, `WorkspaceDetailResponse` (declared in
+  `Models/Responses/WorkspaceResponse.cs`) and `WorkspaceService.GetWorkspaceAsync` confirm
+  `GET /api/v1/pipelines/{id}/workspaces/{workspace}` returns `{ workspace, esriJSON }`.
+  `esriJSON` is a string containing the actual stored polygon, not GeoJSON or a FeatureSet.
+- `DispatchRepository.Workspaces.cs` projects on write into the surface feature class SR,
+  then reads its stored polygon; `ToJson()` retains that SR. No fixed EPSG code can be inferred
+  from the WGS84 test fixtures. The frontend explicitly projects to the current MapView SR.
+- The detail response has Workspace identity, but no independent Pipeline field. The frontend
+  validates the Workspace ID, carries Pipeline context from the encoded request route, checks
+  any catalogue/binding geometry reference against detail, and never claims independent
+  verification of a Pipeline field absent from the DTO.
+- The route uses existing access authorization. Source declares 400 for invalid inputs,
+  404 for missing Pipeline/Workspace, plus ordinary auth/server/network failures. Those remain
+  map-scoped errors with no fallback or changes to credentials, CORS or binding operations.
+- Workspace create validation accepts `rings` or `curveRings`, a known SR and a nonempty
+  simple polygon; input size is capped at 1,000,000 characters. The browser adapter supports
+  straight rings up to 2,000,000 characters / 100,000 vertices per polygon. It explicitly
+  rejects curves rather than pretending they are straight. SDK projection/topology failures
+  are scoped per Workspace. XY is retained; optional Z/M (including null) is not used as elevation.
+- `PackageController` exposes GET list/detail and **PUT**, not GET, `{id}/geometry`.
+  `PackageResponse.geometryRef` and `detailedGeometry` identify stored features; they do not
+  contain coordinates. `GeometryReferenceResponse` explicitly documents geodatabase storage.
+  A geometry query parameter filters Packages but does not return AOI coordinates. No executable
+  public Package AOI read was found in the bundled executable v1 controller routes. V2 is not used.
+
+No backend contract was added. Package/Job AOI retrieval needs and required tests are recorded
+as a proposal in [GEO-01](DC_API_BACKEND_GAPS.md). A published Feature Service is not required.
+SDK references: [Polygon](https://developers.arcgis.com/javascript/latest/references/core/geometry/Polygon/),
+[projectOperator](https://developers.arcgis.com/javascript/latest/api-reference/esri-geometry-operators-projectOperator.html),
+[simplifyOperator](https://developers.arcgis.com/javascript/latest/api-reference/esri-geometry-operators-simplifyOperator.html).
+The renderer uses `isSimple` to reject unsupported topology, not to repair returned geography.
 
 ## DC-API source-verified v1 contract (2026-10-28)
 
@@ -14,7 +66,7 @@ unverified. Backend projects were inspected, not changed.
 | GET `/api/v1/dispatcher/categories`                          | Complete Category catalogue in a page envelope; used for the live Category filter.                                                                                                               |
 | GET `/api/v1/workspaces`                                     | Paged Pipeline-context Workspace records; adapter supports pipelineId/owner/unassigned. UI reads the full catalogue with no implicit owner selection.                                            |
 | GET `/api/v1/pipelines/{id}/workspaces/{workspace}/packages` | Paged `{ packageId, shortId }` from binding plus generalized AOI overlap; Package details are hydrated separately.                                                                               |
-| GET `/api/v1/pipelines/{id}/workspaces/{workspace}`          | Workspace plus Esri JSON string; service method available, live overlay rendering deferred.                                                                                                      |
+| GET `/api/v1/pipelines/{id}/workspaces/{workspace}`          | Workspace plus Esri JSON string; service method used for the live Workspace overlays on both maps.                                                                                               |
 | GET `/api/v1/dispatcher/bindings?packageId=...`              | Active bindings with exact binding ID, Package ID, Pipeline ID and derived Workspace array.                                                                                                      |
 | POST `/api/v1/dispatcher/bindings`                           | `{ packageId, pipelineId }`; independent result, normally 201; conflicts reported.                                                                                                               |
 | DELETE `/api/v1/dispatcher/bindings/{id}`                    | Uses returned opaque binding ID; 204 supported; no Package/Workspace deletion.                                                                                                                   |
@@ -941,3 +993,17 @@ The frontend Work stream catalogue exposes neither free-text name search nor pag
 Production ArcGIS access and Microsoft AD identity/authorization belong behind the backend. Assignment relation/comment API ownership remains unresolved. The local storage envelope, prototype storage key and prototype comment identifiers are provisional test details, not API contracts. The mock assumes one browser user editing at a time; cross-tab and concurrent-user conflict handling remains deferred.
 
 The service metadata could not be retrieved in this implementation environment. Actual fields, spatial reference, browser-origin CORS, session authentication, token expiry and rendering therefore remain manual integration gates. See `DC_001_VALIDATION.md`. ENC completion and Work-area locking remain separate later workflows.
+
+### DC-API-04 v4 contract boundary (2026-10-29)
+
+Live Package rows are identified by `metaData.shortId` (fallback canonical `id`);
+Package name search is not part of the verified v1 API. The existing geographic
+Workspace API supplies polygon coordinates. Package `geometryRef` and detailed
+Feature references are not equivalent to coordinates. The assignment map must not
+render Workspace polygons as a substitute for a selected Package AOI.
+
+Backend-owned follow-ups: the read-only generalized/detailed Package geometry
+contract (selected Package only in assignment) and an explicit override contract for
+manual Workspace inclusion/exclusion alongside overlap-derived memberships. No
+frontend write to an unverified Workspace endpoint is allowed. See
+`DC_API_BACKEND_GAPS.md` GEO-01/GEO-04/OVERRIDE-01.

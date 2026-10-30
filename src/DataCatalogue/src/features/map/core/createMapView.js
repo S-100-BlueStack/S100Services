@@ -4,7 +4,7 @@ import { createBaseMapView } from "./createBaseMapView.js";
 import { createAoiLayer } from "../layers/createAoiLayer.js";
 import { createJobLayers } from "../layers/createJobLayers.js";
 
-export function createMapView({ container, runtimeConfig, mapConfig } = {}) {
+export function createMapView({ container, runtimeConfig, mapConfig, basemapSettings } = {}) {
   if (!container) {
     throw new Error("MapView container is required.");
   }
@@ -12,10 +12,11 @@ export function createMapView({ container, runtimeConfig, mapConfig } = {}) {
   const aoiLayer = runtimeConfig?.sourceMode === "live" ? null : createAoiLayer({ runtimeConfig });
   const jobLayers = createJobLayers();
   const operationalLayers = [...(aoiLayer ? [aoiLayer] : []), ...jobLayers.layers];
-  const { map, view } = createBaseMapView({
+  const { map, view, detachBasemap } = createBaseMapView({
     container,
     runtimeConfig,
     mapConfig,
+    basemapSettings,
     layers: operationalLayers,
     viewOptions: {
       popup: {
@@ -32,11 +33,16 @@ export function createMapView({ container, runtimeConfig, mapConfig } = {}) {
     },
   });
 
+  // Floating Pipelines/Jobs panels occupy the left part of the live map. Keep
+  // the standard zoom controls accessible on the unobstructed right side.
+  if (runtimeConfig?.sourceMode === "live") view.ui.move("zoom", "bottom-right");
+
   configurePopupDefaults(view);
 
   return {
     map,
     view,
+    detachBasemap,
     layers: {
       aoiLayer,
       jobLayers,

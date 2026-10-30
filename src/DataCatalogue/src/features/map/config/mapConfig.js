@@ -1,4 +1,6 @@
 import esriConfig from "@arcgis/core/config.js";
+import { DEFAULT_BASEMAP } from "../basemaps/basemapSettings.js";
+export { DEFAULT_BASEMAP };
 
 const DEFAULT_CENTER = Object.freeze([10.4, 56.15]);
 const DEFAULT_CONSTRAINTS = Object.freeze({
@@ -6,7 +8,6 @@ const DEFAULT_CONSTRAINTS = Object.freeze({
   rotationEnabled: false,
 });
 
-export const DEFAULT_BASEMAP = "topo-vector";
 export const DEFAULT_ZOOM = 6;
 
 export function configureArcGisRuntime(runtimeConfig = {}) {
@@ -16,6 +17,11 @@ export function configureArcGisRuntime(runtimeConfig = {}) {
 
   if (portalUrl) {
     esriConfig.portalUrl = portalUrl;
+  }
+  // Only authorize Esri basemap-style requests. Do not attach a public browser
+  // API key to private ArcGIS or catalogue API requests.
+  if (runtimeConfig.arcgisBasemapApiKey) {
+    esriConfig.apiKeys.basemapStyles = runtimeConfig.arcgisBasemapApiKey;
   }
 }
 

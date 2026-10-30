@@ -6,8 +6,10 @@
 }
 
 .data-catalogue-map {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   background: #d7e3ef;
 }
@@ -337,4 +339,168 @@ html.calcite-mode-dark .data-catalogue-map {
   display: none;
   opacity: 0;
   box-shadow: none;
+}
+
+/* The Action Bar alone takes layout width. Its panel overlays the map and
+   never changes MapView's container dimensions when toggled. */
+.dc-map-shell {
+  --dc-map-action-bar-width: 48px;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: var(--dc-map-action-bar-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.dc-map-shell > .data-catalogue-map {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.dc-map-action-bar {
+  grid-column: 1;
+  grid-row: 1;
+  z-index: 8;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-right: 1px solid var(--dc-border);
+  background: var(--calcite-color-surface-2);
+  --calcite-action-bar-background-color: var(--calcite-color-surface-2);
+  --calcite-action-background-color: var(--calcite-color-surface-2);
+  --calcite-action-background-color-hover: var(--calcite-color-surface-3);
+  --calcite-action-background-color-press: var(--calcite-color-surface-4);
+  --calcite-action-text-color: var(--calcite-color-text-2);
+  --calcite-action-text-color-press: var(--calcite-color-text-1);
+}
+.dc-map-side-panel {
+  position: absolute;
+  z-index: 9;
+  top: 0;
+  bottom: 0;
+  left: var(--dc-map-action-bar-width);
+  width: min(23rem, calc(100% - var(--dc-map-action-bar-width)));
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid var(--dc-border);
+  background: var(--dc-overlay);
+  color: var(--dc-text);
+  box-shadow: var(--dc-shadow);
+}
+.dc-map-side-panel[hidden] {
+  display: none;
+}
+.dc-map-pipelines-panel {
+  height: 100%;
+  overflow-y: auto;
+  background: var(--dc-overlay);
+  color: var(--dc-text);
+}
+.dc-map-pipelines-panel[hidden] {
+  display: none;
+}
+.dc-map-pipelines-panel h2 {
+  margin: 0;
+  padding: 0.65rem 0.75rem 0.35rem;
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+.dc-map-pipelines-panel__content {
+  padding: 0 0.6rem 0.6rem;
+}
+.dc-pipeline-list {
+  display: grid;
+  gap: 0.3rem;
+}
+.dc-pipeline-group {
+  min-width: 0;
+}
+.dc-pipeline-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.28rem 0.25rem;
+  min-height: 29px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.dc-pipeline-row--workspace {
+  padding-left: 1.2rem;
+  font-size: 0.79rem;
+}
+.dc-pipeline-row--workspace:has(input:disabled) {
+  opacity: 0.65;
+}
+.dc-pipeline-row input {
+  margin: 0;
+  accent-color: var(--calcite-color-brand, #007ac2);
+}
+.dc-pipeline-row small {
+  color: var(--dc-text-muted);
+  font-size: 0.74rem;
+}
+.dc-pipeline-row:focus-within {
+  outline: 2px solid var(--calcite-color-brand, #007ac2);
+  outline-offset: -2px;
+}
+.dc-pipeline-message {
+  margin: 0 0 0.2rem;
+  color: var(--dc-text-muted);
+  font-size: 0.72rem;
+}
+.dc-workspace-status-legend {
+  margin: 0.7rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--dc-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.6rem;
+  color: var(--dc-text-muted);
+  font-size: 0.7rem;
+}
+.dc-workspace-status-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.dc-workspace-status-legend i {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+}
+.dc-basemap-control {
+  position: absolute;
+  z-index: 6;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: block;
+  background: transparent;
+}
+.dc-basemap-expand {
+  --calcite-action-background-color: var(--dc-surface);
+}
+.dc-basemap-gallery {
+  display: block;
+  width: min(20rem, 80vw);
+  max-height: min(28rem, 65vh);
+  overflow-y: auto;
+}
+/* Keep live map status accessible without displaying a floating information box. */
+.data-catalogue-app--live .data-catalogue-map-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  box-shadow: none;
+  transform: none;
 }

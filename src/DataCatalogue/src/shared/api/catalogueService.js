@@ -13,12 +13,18 @@ export function normalizePackage(value) {
     id,
     packageId: id,
     shortId: metadata.shortId ?? null,
-    name: metadata.shortId || value.fileName || id,
+    name: metadata.shortId || id,
     sourceId: metadata.refId ?? metadata.shortId ?? id,
     type: metadata.type ?? null,
     category: value.category ?? null,
     title: metadata.title ?? value.fileName ?? id,
     references: metadata.refId ?? null,
+    descriptionEntries: Array.isArray(value.descriptions)
+      ? value.descriptions.map((entry) => ({
+          language: entry.language ?? null,
+          description: entry.description ?? "",
+        }))
+      : [],
     details:
       value.descriptions
         ?.map((item) => [item.language, item.description].filter(Boolean).join(": "))
@@ -164,10 +170,10 @@ export function createCatalogueService(client) {
     },
     async workspace(pipelineId, workspaceId, { signal } = {}) {
       const value = await client.request(workspacePath(pipelineId, workspaceId), { signal });
-      return {
-        workspace: normalizeWorkspace(value.workspace, pipelineId),
-        esriJSON: value.esriJSON,
-      };
+      const workspace = normalizeWorkspace(value?.workspace, pipelineId);
+      if (workspace.workspaceId !== workspaceId)
+        throw new Error("API returned a different Workspace identity.");
+      return { workspace, esriJSON: value.esriJSON };
     },
     async workspacePackages(pipelineId, workspaceId, { page, pageSize, signal } = {}) {
       return normalizePage(

@@ -1,8 +1,8 @@
 import { isThemeMode, normalizeThemeMode } from "../domain/themeMode.js";
 
-const THEME_STORAGE_KEY = "data-catalogue:theme-mode";
+export const THEME_STORAGE_KEY = "data-catalogue:theme-mode";
 // Preserve preferences saved before the app rename without maintaining two write targets.
-const LEGACY_THEME_STORAGE_KEY = "job-manager:theme-mode";
+export const LEGACY_THEME_STORAGE_KEY = "job-manager:theme-mode";
 
 export function resolveThemeStorage(host = globalThis) {
   try {

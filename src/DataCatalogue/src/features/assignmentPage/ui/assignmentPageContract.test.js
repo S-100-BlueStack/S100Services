@@ -27,3 +27,9 @@ test("Work stream pagination targets are not part of the assignment-page contrac
   assert.equal(REQUIRED_ASSIGNMENT_PAGE_TARGETS.includes("work-stream-page"), false);
   assert.equal(REQUIRED_ASSIGNMENT_PAGE_TARGETS.includes("work-stream-next"), false);
 });
+
+test("Live map focus is declared so assignment page initialization cannot fail", () => {
+  assert.equal(REQUIRED_ASSIGNMENT_PAGE_TARGETS.includes("map-focus"), true);
+  const get = createRequiredTargetGetter((name) => ({ name }));
+  assert.equal(get("map-focus").name, "map-focus");
+});

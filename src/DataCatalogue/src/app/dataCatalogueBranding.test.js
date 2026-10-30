@@ -41,7 +41,8 @@ test("navbar Jobs control and overlay retain matching accessible identifiers", (
   assert.ok(overlay.includes(`panelElement.id = "${panelId}"`));
   assert.ok(overlay.includes('"aria-labelledby", "data-catalogue-jobs-title"'));
   assert.ok(overlay.includes('titleElement.id = "data-catalogue-jobs-title"'));
-  assert.match(navbar, /<span>Jobs<\/span>/);
+  assert.match(navbar, /<calcite-action[^>]+id="jobs-toggle"[^>]+text="Jobs"/);
+  assert.match(read("src/app/ui/createMapWorkspace.js"), /calcite-action-bar/);
 });
 
 test("Jobs events keep matching producers and consumers after namespacing", () => {

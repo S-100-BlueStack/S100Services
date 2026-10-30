@@ -14,27 +14,20 @@ import {
   JOB_CLUSTER_STYLE_OPTIONS,
   getJobClusterSettingSummary,
 } from "../../features/map/domain/jobClusterSettings.js";
-import { THEME_MODE } from "../../features/theme/domain/themeMode.js";
 
 export async function createNavbarController({
   jobFilterStore,
   aoiMapFilterStore,
   jobClusterSettingsStore,
-  themeStore,
   onTestNotice,
   sourceMode = "mock",
 } = {}) {
   await ensureNavbarComponentsDefined();
 
   const element = await loadNavbarTemplate();
-  if (sourceMode === "live") {
-    const assignmentButton = element.querySelector("#feature-assignment-toggle");
-    if (assignmentButton) assignmentButton.textContent = "Package assignment";
-  }
   const jobsButton = getRequiredElement(element, "#jobs-toggle");
   const filtersButton = getRequiredElement(element, "#filters-button");
   const filtersPopover = getRequiredElement(element, "#filters-popover");
-  const themeToggle = getRequiredElement(element, "#theme-toggle");
   const testNoticeButton = getRequiredElement(element, "#test-notice-button");
 
   await configureFiltersPopover({ filtersButton, filtersPopover });
@@ -73,24 +66,12 @@ export async function createNavbarController({
       });
     }) ?? (() => {});
 
-  const unsubscribeTheme =
-    themeStore?.subscribe?.((snapshot) => {
-      syncThemeToggle({
-        themeToggle,
-        themeMode: snapshot.themeMode,
-      });
-    }) ?? (() => {});
-
   const handleFiltersButtonClick = () => {
     setFilterPopoverOpen(filtersPopover, filtersButton, !filtersPopover.open);
   };
 
   const handleFiltersCloseClick = () => {
     setFilterPopoverOpen(filtersPopover, filtersButton, false);
-  };
-
-  const handleThemeToggleClick = () => {
-    themeStore?.toggleThemeMode?.();
   };
 
   const handleTestNoticeClick = () => {
@@ -111,7 +92,6 @@ export async function createNavbarController({
 
   filtersButton.addEventListener("click", handleFiltersButtonClick);
   filterControlRefs.closeButton.addEventListener("click", handleFiltersCloseClick);
-  themeToggle.addEventListener("click", handleThemeToggleClick);
   testNoticeButton.addEventListener("click", handleTestNoticeClick);
   document.addEventListener("click", handleDocumentClick);
 
@@ -122,17 +102,14 @@ export async function createNavbarController({
     jobsButton,
     filtersButton,
     filtersPopover,
-    themeToggle,
     destroy() {
       filtersButton.removeEventListener("click", handleFiltersButtonClick);
       filterControlRefs.closeButton.removeEventListener("click", handleFiltersCloseClick);
-      themeToggle.removeEventListener("click", handleThemeToggleClick);
       testNoticeButton.removeEventListener("click", handleTestNoticeClick);
       document.removeEventListener("click", handleDocumentClick);
       unsubscribeJobFilters();
       unsubscribeAoiMapFilters();
       unsubscribeJobClusterSettings();
-      unsubscribeTheme();
     },
   };
 }
@@ -577,17 +554,6 @@ function syncJobClusterSettingControls({ filterControlRefs, settings }) {
     buttons: filterControlRefs.clusterStyleButtons,
     activeValue: settings.style,
   });
-}
-
-function syncThemeToggle({ themeToggle, themeMode }) {
-  const isDark = themeMode === THEME_MODE.DARK;
-  const nextLabel = isDark ? "Switch to light mode" : "Switch to dark mode";
-
-  themeToggle.icon = isDark ? "brightness" : "moon";
-  themeToggle.text = nextLabel;
-  themeToggle.label = nextLabel;
-  themeToggle.title = nextLabel;
-  themeToggle.setAttribute("aria-label", nextLabel);
 }
 
 function syncPresetButtons({ buttons, activeValue }) {

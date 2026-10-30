@@ -1,4 +1,109 @@
+## DC-API-04 v3 — docked map panels, presentation and basemap settings
+
+- `createMapWorkspace.js` now constructs public `calcite-shell`, `calcite-shell-panel`
+  (`displayMode="dock"`), `calcite-action-bar` and `calcite-panel` components. The Shell
+  default slot owns the MapView, so the action bar/panels reduce available map width rather
+  than covering navigation controls. A single panel host switches between Jobs and
+  Pipeline/Workspace visibility.
+- `createPipelineVisibility.js` owns checkboxes for Pipeline gates and individual Workspaces;
+  selections affect Workspace graphics only. The full Workspace catalogue is separately
+  forwarded to the live Jobs adapter. Async catalogue reloads use an AbortController and
+  generation guard; user exclusions survive reloads and new identities start visible.
+- `workspaceJobColors.js` is the domain/presentation configuration for open Job counts.
+  `jobStore` snapshots are reduced to per-Workspace counts; the map controller updates the
+  existing `GraphicsLayer` symbols without re-requesting geometry or affecting Job statuses.
+- `basemapSettings.js` is a single app-scoped owner of the map basemap choice and safe
+  localStorage persistence. `createBaseMapView` registers each Map and cleans up on destroy.
+  The selector is native and accessible, with supported Calcite layout. Only basemap style
+  requests receive the optional browser API key (`esriConfig.apiKeys.basemapStyles`).
+  Last map extent is a separate deferred setting, not implemented or advertised as stored.
+- Package descriptions are normalized as language-specific entries in the API adapter;
+  `renderPackageDescriptions.js` parses inert HTML and copies only allowlisted nodes/attrs
+  into the DOM, preserving simple tables and entities. Scripts, forms, SVG, event handler
+  attributes, unsafe URLs and arbitrary styles are never copied.
+- Manual Workspace assignment and Package/Feature AOI coordinate retrieval remain backend
+  gaps `OVERRIDE-01`, `GEO-01` and `GEO-04`; no invented frontend persistence/geometry.
+
 # DataCatalogue Architecture
+
+## DC-API-04 correction — default Pipeline coverage and navigation (2026-10-29)
+
+This candidate supersedes the _selected Workspace_ main-map interaction in the original
+DC-API-04 candidate. It retains the original ArcGIS `Map`/`MapView`, backend Esri JSON
+validation, geometry projection, partial failure reports, map ownership and mock lifecycle.
+
+- `features/map/workspaces/createPipelineVisibility.js` reads the complete Workspace catalogue
+  and Pipeline catalogue through the live service adapter. All Pipelines start enabled; the
+  user can toggle map coverage without selecting a Workspace. Previously disabled Pipelines
+  remain disabled on Reload, while newly introduced Pipelines start enabled.
+- `features/map/workspaces/pipelineVisibility.js` groups and sorts Pipeline/Workspace identities
+  independently of backend result order; no name-only Workspace joins are introduced.
+- `features/map/core/mapController.js` receives the enabled Workspace set and displays every
+  supported Workspace polygon on the main map. The initial Denmark basemap view is retained;
+  visibility changes never auto-fit, avoiding an unexpected geographic jump.
+- All discovered Workspace memberships supply Jobs independently of Pipeline _map visibility_.
+  The adapter hydrates Package details with bounded reads; status remains scoped to each
+  Package/Pipeline/Workspace tuple and in memory only. Hiding a Pipeline on the map does not
+  filter Jobs or reset their mock statuses.
+- `app/ui/createMapWorkspace.js` owns the docked left `calcite-action-bar` with a Jobs action
+  and a Pipelines action. The small Pipeline checklist is an application-owned panel using
+  native checkboxes with visible focus. `Jobs` is no longer top-header page navigation.
+- `public/components/navbar.html` owns the separate `Package assignment` page link.
+  `app/ui/createWorkflowNavigation.js` owns page navigation, history and optional Package
+  deep links (`/assignments/packages/{encodedPackageId}`) without a new router dependency.
+  Existing draft-navigation guards are preserved. Production host SPA fallback is not yet
+  verified; local direct-link testing is required.
+- The `assignmentPageContract.js` target list now includes `map-focus`, fixing the
+  page-construction error reported in browser testing. The earlier live assignment map,
+  saved-binding-only geography and independent retry lifecycle are unchanged.
+- The main-map status element remains available to assistive technology but has no visible
+  information box in live mode. Actual failure notices are still delivered through the
+  existing notice service.
+- Live Job Details omit Workspace-specific map actions, internal compound IDs and the
+  empty Related AOIs section. Mock Job Details remain unchanged.
+
+A Workspace polygon is not the same as a Package/Job AOI. Package geometry coordinates are
+not provided by the verified backend read contract. This candidate does not claim to draw
+Package/Job footprints, does not require a Feature Service and does not construct geometry
+from references.
+
+The shared ProductCatalogue URL supplied for visual comparison was not accessible in the
+candidate environment. Header styling is isolated and needs local visual comparison against
+that reference; no ProductCatalogue source was modified.
+
+## DC-API-04 Workspace overlay architecture (2026-10-29)
+
+Baseline `829bb6ee9ff9b6925431d5f040f9a1b55eba297d`. This section supersedes the
+older live-geometry/Feature Service blockers below. The mock map path is preserved.
+
+| Boundary                                                        | Responsibility                                                                                                                                                                                                    |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shared/api/catalogueService.js`                                | Existing v1 Workspace detail read, normalized identity and exact returned Workspace ID check. Transport/credentials are unchanged.                                                                                |
+| `shared/api/workspaceGeometry.js`                               | Pure Esri JSON wire validation and horizontal footprint normalization; no ArcGIS instances, endpoint construction or inferred coordinates.                                                                        |
+| `features/map/workspaces/createWorkspaceGeometrySource.js`      | Detail reads through catalogue service, per-batch identity deduplication, four workers per map, 20-second read deadline, abort and per-Workspace errors.                                                          |
+| `features/map/workspaces/createWorkspaceOverlay.js`             | Sole map-context generation owner. Clears old graphics immediately, suppresses stale reads/projections/focus, reuses only the current context and publishes partial results.                                      |
+| `features/map/workspaces/createWorkspaceGraphics.js`            | Public SDK Polygon/Graphic/GraphicsLayer, projection to the actual view SR, topology/extent checks, graphics replacement, guarded instant goTo and disposal. Only SDK operator initialization is shared globally. |
+| `features/map/assignment/liveAssignmentMapContext.js`           | Extracts deduplicated `(pipelineId, workspaceId)` coverage from last loaded active bindings; rejects inconsistent ownership. Draft membership is never inferred.                                                  |
+| `features/map/assignment/createLiveCatalogueMap.js`             | Separate assignment MapView lifecycle, saved Workspace overlay and truthful Package AOI limitation.                                                                                                               |
+| `features/map/core/mapController.js`                            | Main-map live overlay lifecycle. Holds current selected Workspace during map startup, then applies it when the view is ready; existing mock orchestration stays on its original path.                             |
+| `features/jobs/ui/createWorkspaceScope.js` / `app/createApp.js` | Stable native selector and explicit Focus action; composition forwards scope/reload/focus without moving geometry or layer logic into UI.                                                                         |
+
+Live selection does not depend on Jobs loading successfully. Geometry failure does not change
+Jobs data or binding results. Both maps retain basemaps, and successful assignment Workspace
+polygons remain visible when other polygons fail. Main coverage uses a strong blue outline;
+assignment coverage uses the same outline for all Workspaces in the selected Package context.
+No Job/Package geometry, synthetic fallback, legacy service join or manual Workspace write is used.
+
+The overlay key includes context ID, Pipeline/Workspace pair and geometry reference. Identical
+rerenders retain current graphics without requests or goTo; selection changes clear the old
+context before loading. Geometry is read again after leaving/reselecting a context, Workspace
+Reload or assignment-map Retry. No ETag/freshness assumption or unbounded cache is introduced.
+New saved membership after reconciliation changes the assignment context; draft-only changes
+leave coverage untouched. Existing hidden workflow views remain retained by shell navigation.
+Destroy aborts pending work, invalidates continuations and destroys layers before MapView.
+
+See the map feature [README](../src/features/map/workspaces/README.md) and
+[geometry browser checks](DC_API_GEOMETRY_VERIFICATION.md) for limits and acceptance steps.
 
 ## DC-API current integration architecture (2026-10-28)
 
@@ -1738,3 +1843,51 @@ The session freezes edits and context switches during Save. Repeated Save calls 
 App-shell workflow navigation preserves the intent of navbar controls after dirty-state resolution. Returning through `Jobs` invokes an explicit open action once after the assignment page has allowed the transition, so a panel that was already open before entering assignment is not toggled closed. The normal main-workflow Jobs control still uses the separate toggle action. Both actions share the same app-shell context reset and open/close branches; title navigation only restores the main workflow. Assignment domain/session code does not own these actions.
 
 Map selection has its own generation within the map boundary. Assignment/comment changes update renderers without `goTo`. Shared layers are styled assigned when any bound Work stream is assigned; all successfully loaded unassigned layers remain visible. Selected Feature, assigned Work stream and context use distinct shapes/line styles as well as color, mirrored by application-owned legend swatches. The source checks metadata and a bounded geometry query through public SDK APIs, with a 20-second abort deadline. Failure does not manufacture Work stream geography. A small application-owned top-right Retry action with a public Calcite refresh icon explicitly recreates that map instance without adding a dedicated toolbar row.
+
+### DC-API-04 v4 map and preferences boundaries (2026-10-29)
+
+The existing ArcGIS `Map`/`MapView` instances remain authoritative. The shared
+`createBaseMapView` adapter registers optional main/assignment viewpoint persistence;
+`createBasemapSettings` owns the light/dark basemap choice and applies it to registered
+maps. `createBasemapSelector` lazy-loads public ArcGIS `arcgis-expand` and
+`arcgis-basemap-gallery` components and connects them via `view`, without moving to
+`arcgis-map`. Browser API keys remain optional and must be restricted on the server side.
+
+The main-map `calcite-shell-panel` uses `float-content`: its Action Bar consumes layout
+width while one mutually exclusive content panel floats over the map. `createPipelineVisibility`
+separates catalogue availability from per-user visibility; `mapController` loads the
+complete Workspace geometry context only when the catalogue is reloaded. The renderer
+updates existing `Graphic.visible` and symbol attributes on checkbox/status changes
+without clearing the `GraphicsLayer` or requesting geometry again.
+
+Preferences are application-owned (`features/preferences/state` and `ui`), with
+independent localStorage permissions for theme, basemap selection, and map position.
+Map position uses separate `main` and `assignment` slots and is disabled by default.
+On disable, persisted values are removed. `shortId` is the user-facing Package identity,
+whereas `packageId` stays stable for API operations and deep links.
+
+A real Package AOI and manual Workspace overrides require backend-owned verified
+contracts; frontend controls may not fabricate coordinates or persistence.
+
+### DC-API-04 v5 map shell and preferences correction (2026-10-30)
+
+The v4 `calcite-shell-panel` display mode was insufficient in local browser testing:
+opening Pipelines or Jobs still resized the map. `createMapWorkspace` now owns a fixed
+CSS grid with a public Calcite Action Bar in the first column, MapView in the second,
+and one application-owned absolutely positioned panel host over the map. The panel
+host never participates in grid sizing; the MapView is not recreated on panel toggles.
+The live MapView zoom UI moves to bottom-right using the public `view.ui.move` API.
+
+The main workflow enables the Jobs action immediately in live mode, independently
+of optional Workspace geometry requests. Existing mock startup gates remain. The
+Preferences gear opens an application-owned non-modal header panel with native
+Theme and persistence controls; outside click and Escape close it, and Escape
+restores trigger focus. This replaces the unreliable v4 Calcite Popover hookup
+without accessing component internals.
+
+The shared basemap settings service provides four allowed basemaps to both ArcGIS
+Basemap Galleries. Automatic theme defaults apply until an explicit gallery
+selection; a manual selection takes priority over future theme changes and can be
+reset in Preferences. Only an explicitly selected basemap is persisted. Legacy v4
+nondefault selections are migrated. Workspace visibility remains an in-place
+`Graphic.visible` change without geometry refetch or MapView reset.
