@@ -1,5 +1,6 @@
 import { createWorkspaceGeometrySource } from "../workspaces/createWorkspaceGeometrySource.js";
 import { createWorkspaceGraphics } from "../workspaces/createWorkspaceGraphics.js";
+import { createWorkspaceCoverageStatus } from "../workspaces/createWorkspaceCoverageStatus.js";
 import {
   createWorkspaceOverlay,
   workspaceOverlayMessage,
@@ -51,8 +52,7 @@ export function createMapController({
   let workspaceCatalog = [];
   let openJobCounts = null;
   let catalogOptions = { autoFocus: false };
-  let lastReportedCoverageError = "";
-  let workspaceRenderErrors = null;
+  let workspaceCoverageStatus = null;
   let isDestroyed = false;
   let removeAoiPopupActions = () => {};
   let removeJobPopupActions = () => {};
@@ -117,16 +117,11 @@ export function createMapController({
       }
 
       if (runtimeConfig?.sourceMode === "live") {
-        let renderError = "";
-        workspaceRenderErrors = mapResult.view.on("layerview-create-error", ({ layer }) => {
-          if (layer?.id !== "data-catalogue-jobs-workspace") return;
-          renderError =
-            "Workspace rendering failed. The Jobs list remains available. Reload the page to retry the map.";
-          setStatus({
-            status: MAP_STATUS.ERROR,
-            title: "Workspace rendering failed",
-            message: renderError,
-          });
+        workspaceCoverageStatus = createWorkspaceCoverageStatus({
+          view: mapResult.view,
+          layerId: "data-catalogue-jobs-workspace",
+          onStatus: setStatus,
+          onCoverageError: onWorkspaceCoverageError,
         });
         workspaceOverlay = createWorkspaceOverlay({
           source: createWorkspaceGeometrySource({ catalogue }),
@@ -136,29 +131,7 @@ export function createMapController({
             id: "data-catalogue-jobs-workspace",
             colorByOpenJobs: true,
           }),
-          onStatus(state) {
-            const failure = state.status === "error" || state.status === "partial";
-            const errorMessage = failure ? workspaceOverlayMessage(state) : "";
-            if (errorMessage && errorMessage !== lastReportedCoverageError) {
-              lastReportedCoverageError = errorMessage;
-              onWorkspaceCoverageError?.(errorMessage);
-            } else if (!failure) {
-              lastReportedCoverageError = "";
-            }
-            setStatus({
-              status: renderError || state.status === "error" ? MAP_STATUS.ERROR : MAP_STATUS.READY,
-              title:
-                renderError || state.status === "error"
-                  ? "Workspace coverage unavailable"
-                  : "Workspace coverage",
-              message: [
-                renderError ||
-                  workspaceOverlayMessage(state) ||
-                  "Workspace coverage is loading or unavailable.",
-                "Job AOI coordinates are unavailable from the API; no Job footprints are shown.",
-              ].join(" "),
-            });
-          },
+          onStatus: workspaceCoverageStatus.onOverlayStatus,
         });
         workspaceOverlay.setOpenJobCounts(openJobCounts);
         workspaceOverlay.setVisibleWorkspaces(visibleWorkspaces);
@@ -327,8 +300,8 @@ export function createMapController({
     aoiHighlightController = null;
     lastAoiReadinessResult = null;
 
-    workspaceRenderErrors?.remove();
-    workspaceRenderErrors = null;
+    workspaceCoverageStatus?.remove();
+    workspaceCoverageStatus = null;
     workspaceOverlay?.destroy();
     workspaceOverlay = null;
     mapResult?.detachBasemap?.();

@@ -1,4 +1,34 @@
-## DC-STAB-02A — Live Jobs catalogue readiness and in-panel recovery (candidate, 2026-10-30)
+## DC-STAB-02B — Navigation intent ownership and Workspace LayerView notices (candidate, 2026-10-30)
+
+Authoritative requested baseline: `67ae3ba1452075535dec2b59f65a9e53e50833a3`.
+Implementation input: the verified `4e479073...` source archive plus the accepted
+DC-STAB-02A replacement ZIP, which the user reported committed as this new baseline.
+The exact Git commit tree cannot be independently verified in this environment;
+local diff/merge review remains required.
+
+- **F02 (P2):** `app/ui/createWorkflowNavigation.js` serializes workflow navigation and
+  retains only the latest pending history/button intent. An async Save/Discard/Cancel
+  decision cannot publish older route, host visibility, Jobs side effects or focus
+  after a newer navigation request. When multiple history changes still request
+  leaving the same assignment, the completed decision is reused rather than
+  opening a duplicate dialog. Rejected history changes restore the last accepted
+  route. Deep links continue using canonical encoded Package IDs.
+- **F05 (P2):** `features/map/workspaces/createWorkspaceCoverageStatus.js` handles
+  public ArcGIS MapView `layerview-create-error` and `layerview-create` events for
+  the main Workspace coverage layer. Rendering failures use the existing visible
+  coverage notice callback, deduplicate repeated failures, retain the error while
+  overlay preparation succeeds, and clear it only after a new matching LayerView
+  succeeds. SDK event listeners are disposed with their map.
+- Focused regression tests cover overlapping history intents, cancellation,
+  button navigation, destruction, rendering errors, recovery and SDK teardown.
+  The existing mock map, API contracts, Package bindings, Jobs status and
+  basemap/Preferences ownership are unchanged.
+- Local browser instructions: [DC_STAB_02B_VALIDATION.md](DC_STAB_02B_VALIDATION.md).
+  DC-STAB-01 findings F03, F04, F06, F07 and F09 remain open.
+
+## DC-STAB-02A — Live Jobs catalogue readiness and in-panel recovery (committed, 2026-10-30)
+
+User-reported accepted commit: `67ae3ba1452075535dec2b59f65a9e53e50833a3`.
 
 Authoritative baseline: `4e4790733bc2c59e74254d3f06a12eef3967e513`.
 Scope: DC-STAB-01 findings F01 (P1) and F08 (P3). This is a focused frontend

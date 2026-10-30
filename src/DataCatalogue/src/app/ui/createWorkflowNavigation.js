@@ -38,6 +38,8 @@ export function createWorkflowNavigation({
   let transitioning = false;
   let alive = true;
   let navigationGeneration = 0;
+  let currentIntent = null;
+  let queuedIntent = null;
   let acceptedPath = locationRef?.pathname ?? "/";
 
   function syncJobsButtonState() {
@@ -45,8 +47,9 @@ export function createWorkflowNavigation({
   }
 
   function setRoute(path) {
-    if (!historyRef || !locationRef || locationRef.pathname === path) return;
-    historyRef.pushState({}, "", path);
+    if (historyRef && locationRef && locationRef.pathname !== path) {
+      historyRef.pushState({}, "", path);
+    }
     acceptedPath = path;
   }
 
@@ -55,76 +58,147 @@ export function createWorkflowNavigation({
     home.setAttribute("aria-current", active ? "false" : "page");
   }
 
-  async function showAssignment(show, afterShow, { updateHistory = true } = {}) {
-    if (!alive || transitioning || (show === active && !show)) return false;
-    if (show === active) return true;
-    transitioning = true;
-    try {
-      if (!show && page && !(await page.allowLeave())) return false;
-      if (!alive) return false;
+  function sameIntent(a, b) {
+    return (
+      a?.assignment === b.assignment &&
+      a?.path === b.path &&
+      a?.fromHistory === b.fromHistory &&
+      a?.openJobs === b.openJobs
+    );
+  }
 
-      if (show && !page) {
+  function commitVisibility(show, openJobs) {
+    if (show === active) return;
+
+    // Move keyboard focus before hiding the currently active workflow.
+    (show ? button : home).focus({ preventScroll: true });
+    active = show;
+    jobsWorkflowHost.hidden = show;
+    syncJobsButtonState();
+    if (page) page.element.hidden = !show;
+    navbar.filtersPopover.open = false;
+    navbar.filtersPopover.removeAttribute("open");
+    navbar.filtersButton.active = false;
+    navbar.filtersButton.removeAttribute("active");
+    navbar.filtersButton.setAttribute("aria-expanded", "false");
+    navbar.filtersButton.hidden = show;
+    navbar.element.querySelector("#last-updated").hidden = show;
+    syncNavigation();
+    if (show) page.activate();
+    else if (openJobs && isJobsStartupComplete()) onOpenJobs?.();
+  }
+
+  async function applyNavigation(intent, generation) {
+    transitioning = true;
+    currentIntent = intent;
+    const isCurrent = () => alive && generation === navigationGeneration;
+    try {
+      if (!intent.assignment && active && page) {
+        const allowed =
+          typeof intent.leaveDecision === "boolean"
+            ? intent.leaveDecision
+            : await page.allowLeave();
+        // Reuse one completed decision if repeated history events still request leaving
+        // the same unchanged assignment; do not show a second Save/Discard dialog.
+        if (!isCurrent() && queuedIntent && !queuedIntent.intent.assignment) {
+          queuedIntent.intent.leaveDecision = allowed;
+        }
+        if (!isCurrent()) return false;
+        if (!allowed) {
+          if (intent.fromHistory) historyRef?.replaceState?.({}, "", acceptedPath);
+          return false;
+        }
+      }
+      if (!isCurrent()) return false;
+
+      if (intent.assignment && !page) {
         page = createPage({
           onPackageSelected(id) {
-            if (alive && active) setRoute(assignmentPath(id));
+            if (alive && active && !transitioning) setRoute(assignmentPath(id));
           },
         });
         shellElement.append(page.element);
       }
+      if (!isCurrent()) return false;
 
-      // Move keyboard focus before hiding the currently active workflow.
-      (show ? button : home).focus({ preventScroll: true });
-      active = show;
-      jobsWorkflowHost.hidden = show;
-      syncJobsButtonState();
-      if (page) page.element.hidden = !show;
-      navbar.filtersPopover.open = false;
-      navbar.filtersPopover.removeAttribute("open");
-      navbar.filtersButton.active = false;
-      navbar.filtersButton.removeAttribute("active");
-      navbar.filtersButton.setAttribute("aria-expanded", "false");
-      navbar.filtersButton.hidden = show;
-      navbar.element.querySelector("#last-updated").hidden = show;
-      syncNavigation();
-      if (show) page.activate();
-      else if (isJobsStartupComplete()) afterShow?.();
-      if (updateHistory) setRoute(show ? assignmentPath() : "/");
+      // An already-open workflow should not reset its selected Package on a navbar click.
+      if (!intent.fromHistory && intent.assignment === active) {
+        if (active && locationRef && locationRef.pathname !== acceptedPath) {
+          // A pending popstate changed the address bar, not the accepted workflow.
+          historyRef?.replaceState?.({}, "", acceptedPath);
+        }
+        return intent.assignment;
+      }
+      if (!intent.fromHistory && !intent.assignment && !active) return false;
+
+      commitVisibility(intent.assignment, intent.openJobs);
+
+      if (intent.fromHistory && intent.assignment && intent.packageId) {
+        const selected = await page?.selectPackage?.(intent.packageId, { notify: false });
+        if (!isCurrent()) return false;
+        if (!selected && page?.hasUnsavedDraft?.()) {
+          historyRef?.replaceState?.({}, "", acceptedPath);
+          return false;
+        }
+      }
+      if (!isCurrent()) return false;
+
+      if (intent.fromHistory) acceptedPath = intent.path;
+      else setRoute(intent.assignment ? assignmentPath() : "/");
       return true;
     } catch (error) {
-      onNavigationError(error);
+      if (isCurrent()) {
+        onNavigationError(error);
+        if (intent.fromHistory) historyRef?.replaceState?.({}, "", acceptedPath);
+      }
       return false;
     } finally {
       transitioning = false;
+      currentIntent = null;
+      const queued = queuedIntent;
+      queuedIntent = null;
+      if (queued) {
+        if (alive) {
+          // Only the newest queued navigation may commit after the current await settles.
+          void applyNavigation(queued.intent, queued.generation).then(queued.resolve);
+        } else {
+          queued.resolve(false);
+        }
+      }
     }
   }
 
-  async function openFromLocation() {
-    if (!alive) return;
-    const current = ++navigationGeneration;
-    const desiredPath = locationRef?.pathname ?? "/";
-    const route = parseWorkflowPath(desiredPath);
-    if (route.assignment) {
-      const shown = await showAssignment(true, undefined, { updateHistory: false });
-      if (!alive || current !== navigationGeneration) return;
-      if (!shown) {
-        historyRef?.replaceState?.({}, "", acceptedPath);
-        return;
-      }
-      if (route.packageId) {
-        const selected = await page?.selectPackage?.(route.packageId, { notify: false });
-        if (!alive || current !== navigationGeneration) return;
-        if (!selected && page?.hasUnsavedDraft?.()) {
-          historyRef?.replaceState?.({}, "", acceptedPath);
-          return;
-        }
-      }
-      acceptedPath = desiredPath;
-      return;
+  function navigate(intent) {
+    if (!alive) return Promise.resolve(false);
+    if (transitioning) {
+      if (sameIntent(queuedIntent?.intent ?? currentIntent, intent)) return Promise.resolve(false);
+      const generation = ++navigationGeneration;
+      queuedIntent?.resolve(false);
+      return new Promise((resolve) => {
+        queuedIntent = { intent, generation, resolve };
+      });
     }
-    const shown = active ? await showAssignment(false, onOpenJobs, { updateHistory: false }) : true;
-    if (!alive || current !== navigationGeneration) return;
-    if (!shown) historyRef?.replaceState?.({}, "", acceptedPath);
-    else acceptedPath = desiredPath;
+    return applyNavigation(intent, ++navigationGeneration);
+  }
+
+  function openFromLocation() {
+    const path = locationRef?.pathname ?? "/";
+    return navigate({
+      ...parseWorkflowPath(path),
+      path,
+      fromHistory: true,
+      openJobs: true,
+    });
+  }
+
+  function showAssignment(show, openJobs = false) {
+    return navigate({
+      assignment: show,
+      packageId: null,
+      path: show ? assignmentPath() : "/",
+      fromHistory: false,
+      openJobs,
+    });
   }
 
   button.addEventListener(
@@ -150,7 +224,7 @@ export function createWorkflowNavigation({
     (event) => {
       if (!active) return;
       event.stopImmediatePropagation();
-      void showAssignment(false, onOpenJobs);
+      void showAssignment(false, true);
     },
     { capture: true, signal: abort.signal }
   );
@@ -163,11 +237,13 @@ export function createWorkflowNavigation({
 
   return {
     openAssignment: () => showAssignment(true),
-    openJobs: () => showAssignment(false, onOpenJobs),
+    openJobs: () => showAssignment(false, true),
     syncJobsButtonState,
     destroy() {
       alive = false;
       navigationGeneration++;
+      queuedIntent?.resolve(false);
+      queuedIntent = null;
       abort.abort();
       page?.destroy();
     },

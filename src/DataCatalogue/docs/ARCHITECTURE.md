@@ -1,3 +1,24 @@
+## DC-STAB-02B — Workflow navigation and main-map rendering feedback
+
+`app/ui/createWorkflowNavigation.js` is the single owner of accepted history and
+workflow visibility. History events and navigation buttons share a generation
+and last-intent queue. A pending `allowLeave()` decision may complete its own
+Save/Discard side effects, but only the latest intent may publish host
+visibility, URL acceptance, focus and Jobs-opening callbacks. A later intent to
+leave the same assignment can reuse the already completed decision. An invalid
+history transition restores the accepted URL; teardown invalidates queued work.
+The assignment page continues to own draft state and the confirmation dialog.
+
+`features/map/workspaces/createWorkspaceCoverageStatus.js` owns the main-map
+Workspace LayerView lifecycle feedback. It listens to public MapView
+`layerview-create-error` and `layerview-create` events and receives the existing
+geometry overlay's status. Both are reported through one deduplicated visible
+coverage notice callback. A rendering error cannot be cleared by a successful
+HTTP/projection status; only successful creation of the same LayerView clears it.
+The main map keeps its hidden accessible status text; successful Jobs loading
+is independent of Workspace rendering. The status subscriptions are destroyed
+with MapView and do not change the assignment map renderer or mock map.
+
 ## DC-STAB-02A — Catalogue prerequisite ownership
 
 The live Workspace/Pipeline catalogue has a single request owner:
