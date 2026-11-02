@@ -55,6 +55,10 @@ public sealed class DiscardEncPackageJob(
         logger.LogInformation("ENC package {PackageId} discarded. CandidateCount: {CandidateCount}.", expectedPackageId, result.Outputs.Count);
     }
 
+    /// <summary>Enables package actions only when explicitly configured, in any hosting environment.</summary>
+    /// <param name="config">The API or Worker's effective application configuration.</param>
+    /// <param name="environment">Retained for existing callers; the environment does not override the explicit feature flag.</param>
+    /// <returns>True when EncPackageActions:Enabled is true; false when missing or false.</returns>
     public static bool EncPackageActionsEnabled(IConfiguration config, IHostEnvironment environment) =>
-        environment.IsDevelopment() && config.GetValue<bool>("EncPackageActions:Enabled");
+        config.GetValue<bool>("EncPackageActions:Enabled");
 }

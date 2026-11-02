@@ -8,7 +8,7 @@ using ProductCatalogueAPI.Services.Operations;
 
 namespace ProductCatalogueAPI.Controllers;
 
-/// <summary>Development-only live package Pause/Resume/Discard. Never exposes Send/Accept.</summary>
+/// <summary>Feature-flagged live package Pause/Resume/Discard. Never exposes Send/Accept.</summary>
 [Authorize]
 [ApiController]
 [Route("electronicproducts/packages")]

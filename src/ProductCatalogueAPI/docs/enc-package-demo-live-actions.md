@@ -2,9 +2,9 @@
 
 ## Scope and deployment gate
 
-This development-only action slice builds on B1-lite `dbo.EncPackageControl` and the current `EncPackage`/Product export-track schema, at baseline `e57344d78e9167fa08d235d17d1d74f5b4434e96`.
+This configurable action slice builds on B1-lite `dbo.EncPackageControl` and the current `EncPackage`/Product export-track schema, at baseline `e57344d78e9167fa08d235d17d1d74f5b4434e96`.
 
-**Both API and Worker must run in `Development` and have `EncPackageActions:Enabled` set to `true` in their effective application configuration.** Otherwise the new HTTP routes return `503 PACKAGE_ACTIONS_DISABLED` and the Worker refuses queued Discard execution. Add the following to each relevant existing `appsettings.Development.json` or equivalent effective configuration; the candidate does not replace private settings:
+**Both API and Worker must have `EncPackageActions:Enabled` set to `true` in their effective application configuration. The flag applies in every hosting environment, including Production.** Otherwise the new HTTP routes return `503 PACKAGE_ACTIONS_DISABLED` and the Worker refuses queued Discard execution. Add the following to each relevant existing `appsettings.json`, environment-specific settings, or equivalent effective configuration; the candidate does not replace private settings:
 
 ```json
 {
@@ -41,7 +41,7 @@ The API performs no ArcGIS or export-file mutation. `DiscardEncPackageJob` execu
 
 ## Local verification
 
-1. Confirm the API and Worker use the same target database, that migration 008 is applied, and the Development-only feature flag is enabled in both processes.
+1. Confirm the API and Worker use the same target database, that migration 008 is applied, and the feature flag is enabled in both processes.
 2. Build the API and test project; run `EncPackageActionEligibilityTests`, `EncPackageControlRepositoryTests`, `EncPackageDetectionEligibilityTests`, `ExportOperationServiceTests`, and delivery-reservation tests. This candidate cannot establish SQL integration correctness without a real disposable database.
 3. Start API and Worker once. Open an existing **failed, unsent** ENC package. Confirm action GET returns the current package UUID and a control version.
 4. Pause; verify success, a changed control version and a new read reporting `paused: true`. Attempt a live transmission reservation in a **controlled test environment** only, where transport cannot actually send to IC-ENC; the reservation must fail. Resume and verify the persisted state returns to false. Never perform a real external send for this acceptance.
