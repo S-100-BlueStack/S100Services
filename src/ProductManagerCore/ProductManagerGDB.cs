@@ -2144,7 +2144,8 @@ namespace S100FC.ProductCatalogue
                 //  Geometries
                 foreach (var (geometry, name, feature) in geometries.OrderBy(e => e.geometry.GeometryType)) {
                     cancellationToken.ThrowIfCancellationRequested();
-                    if (geometry.GeometryType == GeometryType.Polygon) continue;    // Skip polygons after topology
+                    if (geometry.GeometryType != GeometryType.Multipoint) continue;    // Everything but multipoints are handled in topology
+                 
                     dataset?.AddGeometry(geometry, name!);
                     if (dataset is not null)
                         EncPointGeometryReferences.Rebind(dataset, geometry, feature);
