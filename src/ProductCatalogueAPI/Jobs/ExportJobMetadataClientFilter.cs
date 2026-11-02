@@ -40,8 +40,8 @@ namespace ProductCatalogueAPI.Jobs
 
             var parameters = CreateSharedParameters(
                 request.DatasetName,
-                ExportOperationContract.ToPublicValue(request.OperationType),
-                request.ProductSpecification,
+                request.BuildPackage ? "NewExport" : ExportOperationContract.ToPublicValue(request.OperationType),
+                request.BuildPackage ? "S101/S57" : request.ProductSpecification,
                 request.ExpectedEdition,
                 request.ExpectedUpdate,
                 request.CorrelationId,

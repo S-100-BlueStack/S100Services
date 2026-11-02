@@ -6,6 +6,16 @@ namespace TestProductCatalogueAPI;
 
 public sealed class EncTopologyQueryFilterTests
 {
+    /// <summary>Legacy dependency predicates must use the renamed column without losing coverage constraints.</summary>
+    [Fact]
+    public void LegacyScalePredicatesUseCompilationScaleBeforeQuerying() {
+        var filter = new SpatialQueryFilter { WhereClause = "upper(ps) = 'S-101' AND (NOMINALSCALE = 4000 OR nominalscale = 8000)", SubFields = "GLOBALID,SHAPE" };
+        EncTopologyQueryFilters.UseCompilationScale([filter]);
+        EncTopologyQueryFilters.UseCompilationScale([filter]);
+        Assert.Equal("upper(ps) = 'S-101' AND (compilationscale = 4000 OR compilationscale = 8000)", filter.WhereClause);
+        Assert.Equal("GLOBALID,SHAPE", filter.SubFields);
+    }
+
     private const string Coverage = "POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0))";
 
     [Fact]
@@ -83,11 +93,11 @@ public sealed class EncTopologyQueryFilterTests
     public void CoverageScaleAndExplicitEqualityFilterRemainIntact()
     {
         var automatic = AutomaticRelation();
-        automatic.WhereClause = "upper(ps) = 'S-101' AND nominalscale = 4000";
+        automatic.WhereClause = "upper(ps) = 'S-101' AND compilationscale = 4000";
         automatic.SubFields = "OBJECTID,GLOBALID,CODE,SHAPE";
         var equality = new SpatialQueryFilter
         {
-            WhereClause = "upper(ps) = 'S-101' AND (nominalscale = 4000 OR nominalscale = 8000)",
+            WhereClause = "upper(ps) = 'S-101' AND (compilationscale = 4000 OR compilationscale = 8000)",
             SpatialRelationship = SpatialRelationship.Relation,
             SpatialRelationshipDescription = "T*F**FFF*"
         };
@@ -95,11 +105,11 @@ public sealed class EncTopologyQueryFilterTests
         EncTopologyQueryFilters.PrepareForVerifiedSnapshot([automatic, equality]);
         EncTopologyQueryFilters.PrepareForVerifiedSnapshot([automatic, equality]);
 
-        Assert.Equal("upper(ps) = 'S-101' AND nominalscale = 4000", automatic.WhereClause);
+        Assert.Equal("upper(ps) = 'S-101' AND compilationscale = 4000", automatic.WhereClause);
         Assert.Equal("OBJECTID,GLOBALID,CODE,SHAPE", automatic.SubFields);
         Assert.Equal(SpatialRelationship.Relation, automatic.SpatialRelationship);
         Assert.Equal("T*F**FFF*", equality.SpatialRelationshipDescription);
-        Assert.Equal("upper(ps) = 'S-101' AND (nominalscale = 4000 OR nominalscale = 8000)", equality.WhereClause);
+        Assert.Equal("upper(ps) = 'S-101' AND (compilationscale = 4000 OR compilationscale = 8000)", equality.WhereClause);
     }
 
     [Fact]

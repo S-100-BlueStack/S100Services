@@ -14,12 +14,95 @@ public interface IEncPackageDetectionService
 {
     /// <summary>Runs one coalesced scan; an overlapping invocation returns without advancing the watermark.</summary>
     Task RunAsync(CancellationToken cancellationToken);
+
+    /// <summary>Builds one operator-requested package even when no new archive edit exists.</summary>
+    /// <param name="sourceName">The S-101 source dataset identifying the package.</param>
+    /// <param name="expectedEdition">Published edition observed before queueing.</param>
+    /// <param name="expectedUpdate">Published update observed before queueing.</param>
+    /// <param name="cancellationToken">Cancels work; a persisted pair remains recoverable by DPC.</param>
+    /// <returns>The persisted package identifier after both candidates succeed.</returns>
+    /// <exception cref="ExportOperationRejectedException">The source, mapping, version or candidate state prevents creation.</exception>
+    Task<Guid> CreateManualAsync(string sourceName, int? expectedEdition, int? expectedUpdate, CancellationToken cancellationToken);
 }
 
 /// <summary>Coordinates a package scan across the system database, S-128 catalogue, and export engines.</summary>
 public sealed class EncPackageDetectionService(IProductRepository productRepository, IProductWorkflowRepository workflowRepository, IEncPackageRepository packages, IProductManager productManager, IExportOperationService exports, IDatasetLockService locks, TimeProvider clock, ILogger<EncPackageDetectionService> logger, IConfiguration configuration, IEncPackageFinalizationService? finalization = null) : IEncPackageDetectionService
 {
     private readonly IElectronicProductManager _products = productManager.ElectronicProductManager;
+
+    /// <inheritdoc/>
+    public async Task<Guid> CreateManualAsync(string sourceName, int? expectedEdition, int? expectedUpdate, CancellationToken cancellationToken) {
+        // Serialize with archive scans so a manual snapshot never consumes a concurrent replay window.
+        await using var scanLock = await locks.TryAcquireAsync("ENC-DPC-GLOBAL", cancellationToken);
+        if (scanLock is null) throw new ExportOperationRejectedException("An ENC scan is running.");
+        await using var s101Lock = await locks.TryAcquireAsync(ProductTrackLockKey.For(sourceName, ProductSpecification.S101), cancellationToken);
+        if (s101Lock is null) throw new ExportOperationRejectedException("The S-101 product is busy.");
+        var mapped = _products.GetMappedElectronicProducts(sourceName, ProductSpecification.S57.ToString());
+        if (mapped.Count != 1 || string.IsNullOrWhiteSpace(mapped[0].datasetName))
+            throw new ExportOperationRejectedException("The package must map to exactly one S-57 product.");
+        var s57Name = mapped[0].datasetName!.Trim();
+        await using var s57Lock = await locks.TryAcquireAsync(ProductTrackLockKey.For(s57Name, ProductSpecification.S57), cancellationToken);
+        if (s57Lock is null) throw new ExportOperationRejectedException("The S-57 product is busy.");
+        if ((await packages.GetActiveAsync([sourceName], cancellationToken, includeSourceYaml: false)).ContainsKey(sourceName))
+            throw new ExportOperationRejectedException("Discard the existing package before creating another export.");
+
+        var s101Version = await _products.ReadElectronicProductVersionAsync(sourceName, ProductSpecification.S101.ToString(), cancellationToken)
+            ?? throw new ExportOperationRejectedException("The S-101 product is unavailable.");
+        var s57Version = await _products.ReadElectronicProductVersionAsync(s57Name, ProductSpecification.S57.ToString(), cancellationToken)
+            ?? throw new ExportOperationRejectedException("The S-57 product is unavailable.");
+        if (s101Version.Edition != expectedEdition || s101Version.Update != expectedUpdate)
+            throw new ExportOperationRejectedException("The source version changed after queueing.");
+        if (!s101Version.Edition.HasValue || !s101Version.Update.HasValue || !s57Version.Edition.HasValue || !s57Version.Update.HasValue)
+            throw new ExportOperationRejectedException("Both published product versions are required.");
+        var s101 = await workflowRepository.GetOrCreateTrackAsync(sourceName, ProductSpecification.S101, ExportEngineKind.IsoIec8211, s101Version.Edition.Value, s101Version.Update.Value, cancellationToken);
+        var s57 = await workflowRepository.GetOrCreateTrackAsync(s57Name, ProductSpecification.S57, ExportEngineKind.IsoIec8211, s57Version.Edition.Value, s57Version.Update.Value, cancellationToken);
+        if (IsRefreshBlocked(s101) || IsRefreshBlocked(s57) || HasUnownedFinalCandidate(null, s101, s57))
+            throw new ExportOperationRejectedException("Both products must be free before creating a package.");
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        var watermark = await productRepository.GetLastSuccessfulRunUtcAsync(nameof(DetectProductChangesJob));
+        var scanFrom = watermark.HasValue ? DateTime.SpecifyKind(watermark.Value, DateTimeKind.Utc) : EncChangeSummary.GetCopenhagenDayStartUtc(now);
+        var replay = await packages.GetReplayBoundsAsync(cancellationToken);
+        if (replay.TryGetValue(sourceName, out var replayFrom) && replayFrom < scanFrom) scanFrom = replayFrom;
+        var changes = (await _products.GetPendingEditsAsync(scanFrom, now)).GetValueOrDefault(sourceName) ?? new(StringComparer.OrdinalIgnoreCase);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (changes.Values.Any(change => change.EditDate is null || change.EditDate.Value.Kind != DateTimeKind.Utc || change.EditDate > now.AddMinutes(5)))
+            throw new InvalidOperationException("The manual ENC source scan returned an invalid archive timestamp.");
+        var summaryChanges = changes.SelectMany(pair => EncChangeSummary.GetObservedAttributePaths(pair.Value)
+            .Select(path => new ProductChange(pair.Key, pair.Value.Code, path, pair.Value.EditDate ?? now, pair.Value.Deleted))).ToArray();
+        var summary = EncChangeSummary.Serialize(sourceName, ProductSpecification.S101, EncChangeSummary.GetCopenhagenDate(now), scanFrom, now, summaryChanges);
+        string yaml;
+        try {
+            var required = changes.Where(pair => pair.Value.CurrentInProduct && !pair.Value.Deleted).Select(pair => pair.Key).ToArray();
+            var snapshot = await _products.CreateVerifiedExportSnapshotAsync(sourceName, ExportTypes.NewEdition, checked(s101.PublishedEdition + 1), 0, required, cancellationToken);
+            yaml = snapshot.Dataset.Serialize();
+            if (snapshot.SuppressedMetadataSurfaces.Count > 0)
+                yaml = EncMetadataSurfaceYamlCleanup.RemoveSuppressedSurfaces(yaml, snapshot.SuppressedMetadataSurfaces);
+            if (string.IsNullOrWhiteSpace(yaml)) throw new InvalidOperationException("The ENC source snapshot was empty.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) {
+            await RecordSourceSnapshotFailureAsync(sourceName, null, scanFrom, s101, s57, now, exception, cancellationToken);
+            throw;
+        }
+        await AcknowledgeSourceFailuresAsync(s101, s57, cancellationToken);
+        var package = new EncPackage { Id = Guid.NewGuid(), SourceDatasetName = sourceName, S57DatasetName = s57Name, ScanFromUtc = scanFrom, DetectedAtUtc = now, DatasetYaml = yaml, SummaryYaml = summary };
+        if (!await packages.TryCreatePendingAsync(package, cancellationToken))
+            throw new ExportOperationRejectedException("Another package already owns this source.");
+        Exception? failure = null;
+        foreach (var (name, specification) in new[] { (sourceName, ProductSpecification.S101), (s57Name, ProductSpecification.S57) }) {
+            try {
+                await exports.ExecutePackageExportAsync(name, ExportRevisionType.NewEdition, yaml, summary, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception exception) {
+                await RecordCandidateFailureAsync(package, name, specification, exception);
+                failure ??= exception;
+            }
+        }
+        if (failure is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+        return package.Id;
+    }
 
     /// <inheritdoc/>
     public async Task RunAsync(CancellationToken cancellationToken) {

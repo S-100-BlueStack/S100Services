@@ -39,12 +39,12 @@ internal sealed class ArchiveBindingIndex
     /// <param name="interval">Lifetime of this archived spatial owner version.</param>
     /// <param name="informationBindings">The owner's informationBindings JSON, not the target row's fields.</param>
     /// <param name="featureBindings">The owner's featureBindings JSON.</param>
-    /// <param name="findProducts">The existing nominalscale, DataCoverage and exact AOI intersection matcher.</param>
+    /// <param name="findProducts">The existing compilationscale, DataCoverage and exact AOI intersection matcher.</param>
     internal void AddOwner(ArchiveInterval interval, string? informationBindings, string? featureBindings, Func<IReadOnlyList<string>> findProducts) {
         AddOwner(interval, FindTargets(interval, informationBindings, featureBindings), findProducts);
     }
 
-    /// <summary>Filters a lightweight binding row before any shape or nominalscale is fetched.</summary>
+    /// <summary>Filters a lightweight binding row before any shape or compilationscale is fetched.</summary>
     internal IReadOnlyCollection<ArchiveBindingTarget> FindTargets(ArchiveInterval interval, string? informationBindings, string? featureBindings) {
         var before = interval.Contains(_window.SinceUtc);
         var after = interval.Contains(_window.ThroughUtc);

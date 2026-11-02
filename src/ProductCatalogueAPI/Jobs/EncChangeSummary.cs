@@ -23,7 +23,7 @@ internal static class EncChangeSummary
         if (row.GeometryChanged)
             paths.Add("$geometry");
         if (row.BeforeNominalScale != row.NominalScale)
-            paths.Add("$nominalscale");
+            paths.Add("$compilationscale");
         if (row.BeforeCode is null && paths.Count == 0)
             paths.Add("$feature");
         return paths.OrderBy(path => path, StringComparer.Ordinal).ToArray();

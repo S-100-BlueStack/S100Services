@@ -224,14 +224,16 @@ namespace ProductCatalogueAPI.Services.Jobs
 
             if (string.IsNullOrWhiteSpace(datasetName) ||
                 string.IsNullOrWhiteSpace(correlationId) ||
-                operationType is not ("NewDataset" or "ExportEdition" or "ExportUpdate" or "CancelExport" or "Discard" or "SendToIcEnc"))
+                operationType is not ("NewDataset" or "ExportEdition" or "ExportUpdate" or "NewExport" or "CancelExport" or "Discard" or "SendToIcEnc"))
                 return null;
 
             var exportTarget = ReadOptional<string>(
                 snapshot,
                 ExportJobParameterNames.ExportTarget
             );
-            if (operationType != SendToIcEncContract.OperationType &&
+            if (operationType == "NewExport" && exportTarget != "S101/S57")
+                return null;
+            if (operationType is not (SendToIcEncContract.OperationType or "NewExport") &&
                 exportTarget is not ("S57" or "S101"))
                 return null;
             if (operationType == SendToIcEncContract.OperationType && exportTarget != null)

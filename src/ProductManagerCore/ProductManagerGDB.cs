@@ -698,7 +698,7 @@ namespace S100FC.ProductCatalogue
             return ReadCoverageScale(Convert.ToString(row["attributebindings"])!);
         }
 
-        /// <summary>Uses the DataCoverage attribute, not the nominal scale of another feature.</summary>
+        /// <summary>Uses the DataCoverage attribute, not the compilation scale of another feature.</summary>
         internal static long ReadCoverageScale(string attributeBindings) {
             using var json = JsonDocument.Parse(attributeBindings);
             if (json.RootElement.ValueKind != JsonValueKind.Object)
@@ -711,10 +711,15 @@ namespace S100FC.ProductCatalogue
             throw new InvalidOperationException("S-101 DataCoverage has no valid optimumDisplayScale; DPC preserved its watermark.");
         }
 
-        private static long ReadNominalScale(Row row, string featureId) {
-            if (row.FindField("nominalscale") < 0 || row.IsNull("nominalscale") ||
-                !TryReadScale(Convert.ToString(row["nominalscale"], CultureInfo.InvariantCulture), out var scale))
-                throw new InvalidOperationException($"S-101 archive feature '{featureId}' has no valid nominalscale; DPC preserved its watermark.");
+        /// <summary>Reads the renamed S-101 feature scale column and rejects unusable archive selection data.</summary>
+        /// <param name="row">The spatial feature or archive version being matched to products.</param>
+        /// <param name="featureId">The stable identifier included in diagnostics.</param>
+        /// <returns>The positive integral compilation scale.</returns>
+        /// <exception cref="InvalidOperationException">The column is missing, null or contains an invalid scale.</exception>
+        private static long ReadCompilationScale(Row row, string featureId) {
+            if (row.FindField("compilationscale") < 0 || row.IsNull("compilationscale") ||
+                !TryReadScale(Convert.ToString(row["compilationscale"], CultureInfo.InvariantCulture), out var scale))
+                throw new InvalidOperationException($"S-101 archive feature '{featureId}' has no valid compilationscale; DPC preserved its watermark.");
             return scale;
         }
 
@@ -820,15 +825,15 @@ namespace S100FC.ProductCatalogue
                     uniqueChangedFeatureIds.Add(id);
                     if (!latestEditByFeature.TryGetValue(id, out var latestEdit) || changedAt.Value > latestEdit)
                         latestEditByFeature[id] = changedAt.Value;
-                    var nominalScale = baseTableName == "surface" && string.Equals(row["Code"]?.ToString(), "DataCoverage", StringComparison.OrdinalIgnoreCase)
-                        ? ReadCoverageScale(row) : ReadNominalScale(row, id);
+                    var compilationScale = baseTableName == "surface" && string.Equals(row["Code"]?.ToString(), "DataCoverage", StringComparison.OrdinalIgnoreCase)
+                        ? ReadCoverageScale(row) : ReadCompilationScale(row, id);
                     var archiveRow = new ArchiveRow {
                         Code = row["Code"]?.ToString() ?? string.Empty,
                         AttributeBindings = row["attributebindings"]?.ToString(),
                         InformationBindings = row["informationbindings"]?.ToString(),
                         FeatureBindings = row["featurebindings"]?.ToString(),
                         EditDate = changedAt,
-                        NominalScale = nominalScale
+                        NominalScale = compilationScale
                     };
                     if (!versionsById.TryGetValue(id, out var versions)) {
                         versions = new List<ArchiveVersion>();
@@ -837,7 +842,7 @@ namespace S100FC.ProductCatalogue
                     versions.Add(new ArchiveVersion(archiveRow, interval, changedShape.Clone()));
 
                     var isDataCoverage = baseTableName == "surface" && string.Equals(archiveRow.Code, "DataCoverage", StringComparison.OrdinalIgnoreCase);
-                    foreach (var productName in FindAffectedProductsAtScale(changedShape, nominalScale, productList, isDataCoverage ? changedShape : null, id, archiveRow.Code, baseTableName)) {
+                    foreach (var productName in FindAffectedProductsAtScale(changedShape, compilationScale, productList, isDataCoverage ? changedShape : null, id, archiveRow.Code, baseTableName)) {
                         affectedProducts.Add(productName);
 
                         if (!affectedIdsByProduct.TryGetValue(productName, out var affectedIds)) {
@@ -925,7 +930,7 @@ namespace S100FC.ProductCatalogue
                 before?.Shape is not null && after?.Shape is not null && !GeometryEngine.Instance.Equals(before.Shape, after.Shape));
         }
 
-        /// <summary>Reads the same bounded event history for non-spatial rows without requiring nominalscale, geometry, or optional binding columns.</summary>
+        /// <summary>Reads the same bounded event history for non-spatial rows without requiring compilationscale, geometry, or optional binding columns.</summary>
         private Dictionary<ArchiveBindingTarget, List<ArchiveVersion>> ReadAssociatedArchiveChanges(Geodatabase connection, string connectionName, ArchiveScanWindow window, string eventPredicate) {
             var result = new Dictionary<ArchiveBindingTarget, List<ArchiveVersion>>();
             foreach (var className in ArchiveScanRequirements.NonSpatialClasses) {
@@ -1018,7 +1023,7 @@ namespace S100FC.ProductCatalogue
                                 throw new InvalidOperationException($"DPC incoming binding owner '{id}' has no geometry: connection '{connectionName}', class '{className}'. The watermark and candidates were preserved.");
                             var code = ReadOptionalString(row, "code");
                             var isCoverage = className == "surface" && string.Equals(code, "DataCoverage", StringComparison.OrdinalIgnoreCase);
-                            var scale = isCoverage ? ReadCoverageScale(row) : ReadNominalScale(row, id);
+                            var scale = isCoverage ? ReadCoverageScale(row) : ReadCompilationScale(row, id);
                             return FindAffectedProductsAtScale(shape, scale, products, isCoverage ? shape : null, id, code, className);
                         });
                     }
@@ -1047,10 +1052,10 @@ namespace S100FC.ProductCatalogue
         internal static DateTime? ReadArchiveUtc(object? value) => DpcArchiveClock.Value.ReadUtc(value);
 
         /// <summary>Requires both matching coverage and the final S-128 AOI intersection at the feature's scale.</summary>
-        internal static IReadOnlyList<string> FindAffectedProductsAtScale(ArcGIS.Core.Geometry.Geometry feature, long nominalScale, IReadOnlyList<DpcProductCoverage> products, ArcGIS.Core.Geometry.Geometry? archivedCoverage = null, string? featureId = null, string? featureCode = null, string? tableName = null) {
-            if (nominalScale <= 0)
-                throw new InvalidOperationException($"Archive feature '{featureId}' has no positive nominalscale.");
-            var eligible = products.Where(product => product.OptimumDisplayScale == nominalScale &&
+        internal static IReadOnlyList<string> FindAffectedProductsAtScale(ArcGIS.Core.Geometry.Geometry feature, long compilationScale, IReadOnlyList<DpcProductCoverage> products, ArcGIS.Core.Geometry.Geometry? archivedCoverage = null, string? featureId = null, string? featureCode = null, string? tableName = null) {
+            if (compilationScale <= 0)
+                throw new InvalidOperationException($"Archive feature '{featureId}' has no positive compilationscale.");
+            var eligible = products.Where(product => product.OptimumDisplayScale == compilationScale &&
                 (archivedCoverage is not null && GeometriesIntersect(archivedCoverage, product.Product.Aoi) ||
                  product.DataCoverages.Any(coverage => GeometriesIntersect(feature, coverage))))
                 .Select(product => product.Product).ToArray();
@@ -1336,7 +1341,6 @@ namespace S100FC.ProductCatalogue
                 //var shapeCoverage = (ArcGIS.Core.Geometry.Polygon)((ArcGIS.Core.Data.Feature)cursorS128.Current).GetShape();
 
                 // TODO: FIX, only exist in s101
-                // var nominalScale = cursorS128.Current["nominalScale"] != null ? Convert.ToInt64(cursorS128.Current["nominalScale"]) : 0;
 
                 var whereClause = "upper(ps) = 'S-101'";
 
@@ -1371,7 +1375,7 @@ namespace S100FC.ProductCatalogue
             //var uri = this.Connection(electronicProduct.productSpecification!.name!, electronicProduct.optimumDisplayScale!.Value)!;
             var uri = this.Connection(electronicProduct.productSpecification!.name!)!;
 
-            long nominalscale = electronicProduct.optimumDisplayScale!.Value;
+            long compilationScale = electronicProduct.optimumDisplayScale!.Value;
 
             electronicProduct.issueDate = DateOnly.FromDateTime(timestamp);
 
@@ -1426,9 +1430,10 @@ namespace S100FC.ProductCatalogue
                     throw new InvalidOperationException($"Cannot query S-101 DataCoverage for '{electronicProduct.datasetName}': the AOI geometry is null or empty.");
 
                 var extent = shape?.Extent;
-                Log.Information("Calling S101_QueryDataCoverage with nominalScale: {NominalScale}, extent: {XMin},{YMin} to {XMax},{YMax}", nominalscale, extent?.XMin, extent?.YMin, extent?.XMax, extent?.YMax);
+                Log.Information("Calling S101_QueryDataCoverage with compilationScale: {CompilationScale}, extent: {XMin},{YMin} to {XMax},{YMax}", compilationScale, extent?.XMin, extent?.YMin, extent?.XMax, extent?.YMax);
 
-                var filters = s101Geodatabase.S101_QueryDataCoverage(shape, nominalscale).Select(result => result.Filter).ToArray();
+                var filters = s101Geodatabase.S101_QueryDataCoverage(shape, compilationScale).Select(result => result.Filter).ToArray();
+                EncTopologyQueryFilters.UseCompilationScale(filters);
                 if (featureTracker is not null)
                     EncTopologyQueryFilters.PrepareForVerifiedSnapshot(filters);
                 profiler?.Next("BuildTopology", filters.Length);

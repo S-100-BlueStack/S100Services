@@ -21,7 +21,8 @@ namespace ProductCatalogueAPI.Jobs
         IDatasetLockService datasetLockService,
         IExportOperationService exportOperationService,
         ILogger<ExportOperationJob> logger,
-        IProductExportHistory history
+        IProductExportHistory history,
+        IEncPackageDetectionService? encPackages = null
     )
     {
         private readonly IElectronicProductManager _electronicProductManager = productManager.ElectronicProductManager;
@@ -68,6 +69,26 @@ namespace ProductCatalogueAPI.Jobs
                 request.ExpectedEdition,
                 request.ExpectedUpdate
             );
+
+            if (request.BuildPackage) {
+                if (context.GetJobParameter<bool?>(ExportJobParameterNames.ExecutionStarted) == true)
+                    throw CreateSafeFailure(context, ExportJobContract.ManualReviewRequiredCode, ExportJobContract.ManualReviewRequiredMessage);
+                context.SetJobParameter(ExportJobParameterNames.ExecutionStarted, true);
+                try {
+                    if (encPackages is null)
+                        throw new InvalidOperationException("ENC package builds are unavailable in this Worker.");
+                    await encPackages.CreateManualAsync(request.DatasetName, request.ExpectedEdition, request.ExpectedUpdate, cancellationToken);
+                    context.SetJobParameter(ExportJobParameterNames.ResultMessage, "The S-101 and S-57 package candidates were created.");
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch (Exception exception) {
+                    _logger.LogError(exception, "Manual ENC package build failed. SourceDatasetName: {SourceDatasetName}.", request.DatasetName);
+                    var message = exception is ExportValidationException validation
+                        ? PublicExportError.Message(validation.Code, validation.PublicMessage) : PublicExportError.GenericMessage;
+                    throw CreateSafeFailure(context, ExportJobContract.ExportFailedCode, message);
+                }
+                return;
+            }
 
             var productSpecification = ParseProductSpecification(request.ProductSpecification);
 

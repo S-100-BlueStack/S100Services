@@ -19,6 +19,47 @@ namespace TestProductCatalogueAPI;
 /// <summary>Runs the real detector and export service with bounded archive versions and isolated persistence/encoder boundaries.</summary>
 public sealed class DpcRunAsyncTests
 {
+    /// <summary>A manual request creates both members without depending on an archive edit or advancing DPC.</summary>
+    [Fact]
+    public async Task ManualExportBuildsThePairWithoutNewEdits() {
+        var f = await DpcRunFixture.CreateAsync();
+        var id = await f.ManualAsync();
+        Assert.Equal(id, f.Packages.Active[DpcRunFixture.Source].Id);
+        Assert.Equal(2, f.Engine.Requests.Count);
+        Assert.Equal(f.Engine.Requests[0].DatasetYaml, f.Engine.Requests[1].DatasetYaml);
+        Assert.Equal(ProductState.ReadyForDistribution, (await f.TrackAsync(ProductSpecification.S101)).State);
+        Assert.Equal(ProductState.ReadyForDistribution, (await f.TrackAsync(ProductSpecification.S57)).State);
+        Assert.Equal(DpcRunFixture.Utc(8), await f.WatermarkAsync());
+        Assert.Equal(0, f.PublicationCalls);
+        await Assert.ThrowsAsync<ExportOperationRejectedException>(() => f.ManualAsync());
+        Assert.Equal(2, f.Engine.Requests.Count);
+    }
+
+    /// <summary>A failed first compiler leaves a durable failed pair and still attempts the second member.</summary>
+    [Fact]
+    public async Task ManualExportAttemptsS57AfterS101Fails() {
+        var f = await DpcRunFixture.CreateAsync();
+        f.Engine.FailDataset = DpcRunFixture.Source;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => f.ManualAsync());
+        Assert.Equal(2, f.Engine.Requests.Count);
+        Assert.Single(f.Packages.Active);
+        Assert.Equal(ProductState.Error, (await f.TrackAsync(ProductSpecification.S101)).State);
+        Assert.Equal(ProductState.ReadyForDistribution, (await f.TrackAsync(ProductSpecification.S57)).State);
+        Assert.Equal(DpcRunFixture.Utc(8), await f.WatermarkAsync());
+    }
+
+    /// <summary>A hold on either member prevents reserving or compiling either candidate.</summary>
+    [Theory]
+    [InlineData(ProductSpecification.S101)]
+    [InlineData(ProductSpecification.S57)]
+    public async Task ManualExportProtectsEitherMembersHold(ProductSpecification specification) {
+        var f = await DpcRunFixture.CreateAsync();
+        (await f.TrackAsync(specification)).IsManuallyFrozen = true;
+        await Assert.ThrowsAsync<ExportOperationRejectedException>(() => f.ManualAsync());
+        Assert.Empty(f.Packages.Active);
+        Assert.Empty(f.Engine.Requests);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -556,7 +597,7 @@ public sealed class DpcRunAsyncTests
 
         Assert.Equal(2, f.Packages.Active.Count);
         Assert.All(f.Packages.Active.Values, package => {
-            Assert.Contains("$nominalscale", package.SummaryYaml);
+            Assert.Contains("$compilationscale", package.SummaryYaml);
             Assert.DoesNotContain(DpcRunFixture.Outside, package.SummaryYaml);
         });
         Assert.Equal(4, f.Engine.Requests.Count);
@@ -896,6 +937,13 @@ internal sealed class DpcRunFixture
         if (includeB) f.Archive.Edit(Source, B, Utc(9), 1);
         await f.RunAsync();
         return f;
+    }
+
+    /// <summary>Exercises the manual coordinator against the same isolated boundaries as DPC.</summary>
+    internal Task<Guid> ManualAsync() {
+        var exports = new ExportOperationService(Manager, new ExportEngineRegistry([Engine]), Workflow, Engine, Clock, NullLogger<ExportOperationService>.Instance, Packages);
+        return new EncPackageDetectionService(Workflow, Workflow, Packages, Manager, exports, Locks, Clock,
+            NullLogger<EncPackageDetectionService>.Instance, new ConfigurationBuilder().Build()).CreateManualAsync(Source, PublishedEditions[Source], 0, CancellationToken.None);
     }
 
     internal Task RunAsync(CancellationToken token = default) {

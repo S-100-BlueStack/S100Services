@@ -12,6 +12,17 @@ namespace TestProductCatalogueAPI
 {
     public class HangfireJobStatusServiceTests
     {
+        /// <summary>The accepted package job must remain visible through the existing polling endpoint.</summary>
+        [Fact]
+        public void NewExportReportsBothPackageTargets() {
+            var response = Service(new HangfireJobSnapshot(RequiredParameters("NewExport", "S101/S57"),
+                [new HangfireStateSnapshot("Enqueued", Utc(10, 5))])).GetJob("job-1");
+            Assert.NotNull(response);
+            Assert.Equal("NewExport", response.OperationType);
+            Assert.Equal("S101/S57", response.ExportTarget);
+            Assert.Equal("Queued", response.Status);
+        }
+
         [Theory]
         [InlineData("Enqueued", "Queued")]
         [InlineData("Scheduled", "Queued")]
