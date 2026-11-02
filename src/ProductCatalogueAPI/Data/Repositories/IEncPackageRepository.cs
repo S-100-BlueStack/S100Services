@@ -5,6 +5,19 @@ namespace ProductCatalogueAPI.Data.Repositories;
 /// <summary>Persists one active package per S-101 AOI and any source scan that must be replayed.</summary>
 public interface IEncPackageRepository
 {
+    /// <summary>Finds snapshots whose cumulative source window crosses a newly configured import boundary.</summary>
+    /// <param name="baselineUtc">The exclusive UTC import cutoff.</param>
+    /// <param name="cancellationToken">Cancels the system-database read.</param>
+    /// <returns>Source names requiring guarded paired discard before another archive scan.</returns>
+    Task<IReadOnlyList<string>> GetSourceNamesBeforeBaselineAsync(DateTime baselineUtc, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Import baseline reconciliation is unavailable.");
+
+    /// <summary>Clamps durable replay windows and invalidates retry gates computed from a pre-import comparison boundary.</summary>
+    /// <param name="baselineUtc">The exclusive UTC import cutoff; no archive rows are deleted.</param>
+    /// <param name="cancellationToken">Cancels the system-database update.</param>
+    Task RebaseReplayAsync(DateTime baselineUtc, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Import replay rebasing is unavailable.");
+
     /// <summary>Gets one exact current snapshot without loading its YAML.</summary>
     Task<EncPackage?> GetByIdAsync(Guid packageId, CancellationToken cancellationToken = default);
     /// <summary>Atomically discards both unsent member candidates for the exact snapshot.</summary>

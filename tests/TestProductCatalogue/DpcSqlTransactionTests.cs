@@ -16,6 +16,24 @@ namespace TestProductCatalogueAPI;
 /// <summary>Opt-in SQL Server tests execute repositories against a fresh database built exclusively from included migrations.</summary>
 public sealed class DpcSqlTransactionTests
 {
+    /// <summary>Rebasing invalidates a pre-import cumulative attempt while preserving later retry gates.</summary>
+    [DpcSqlFact]
+    public async Task ImportBaselineRebasesReplayAndPreservesPostBaselineAttempts() {
+        await using var db = await DpcSqlDatabase.CreateAsync();
+        await db.Packages.MarkSnapshotAttemptAsync(DpcRunFixture.Source, DpcRunFixture.Utc(8), DpcRunFixture.Utc(10));
+        await db.Packages.MarkSnapshotAttemptAsync("101DK002", DpcRunFixture.Utc(9).AddMinutes(30), DpcRunFixture.Utc(10));
+        await db.Packages.RebaseReplayAsync(DpcRunFixture.Utc(9));
+        await db.Packages.RebaseReplayAsync(DpcRunFixture.Utc(9));
+        var replay = await db.Packages.GetReplayBoundsAsync();
+        var attempts = await db.Packages.GetSnapshotAttemptBoundsAsync();
+        Assert.Equal(DpcRunFixture.Utc(9), replay[DpcRunFixture.Source]);
+        Assert.Equal(DpcRunFixture.Utc(9).AddMinutes(30), replay["101DK002"]);
+        Assert.False(attempts.ContainsKey(DpcRunFixture.Source));
+        Assert.Equal(DpcRunFixture.Utc(10), attempts["101DK002"]);
+        await db.Packages.RetireReplayAsync(DpcRunFixture.Source, DpcRunFixture.Utc(9));
+        Assert.False((await db.Packages.GetReplayBoundsAsync()).ContainsKey(DpcRunFixture.Source));
+    }
+
     [DpcSqlFact]
     public async Task SnapshotAttemptMigrationUpgradesExistingReplayAndCanBeRerun() {
         await using var db = await DpcSqlDatabase.CreateAsync();

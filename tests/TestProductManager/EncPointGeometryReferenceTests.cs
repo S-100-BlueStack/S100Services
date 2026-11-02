@@ -12,6 +12,75 @@ public class EncPointGeometryReferenceTests
 {
     private const string SourceUid = "00000000-0000-0000-0000-0000000001ab";
 
+    /// <summary>Reproduces the ArcGIS YAML .12 overload retaining the supplied topology geometry name.</summary>
+    [Fact]
+    public void CallerNamedPoint_IsBoundWithoutAssumingAHashName() {
+        var dataset = DatasetWithPoint("Ptopology64");
+        var feature = Assert.Single(dataset.Features!);
+        dataset.AddPoint(new S100FC.YAML.Point(14, 55) { Name = "Ptopology64" });
+
+        EncPointGeometryReferences.Rebind(dataset, new NtsPoint(14, 55), feature);
+
+        Assert.Equal("Ptopology64", feature.Geometry);
+        Assert.Equal("110:1:1", feature.Foid);
+        EncPointGeometryReferences.RequireResolvedPointReferences(dataset);
+        AssertSerializedPointReferencesResolve(dataset);
+    }
+
+    /// <summary>Sounding definitions may also retain the caller name, with their ordered rounded depths.</summary>
+    [Fact]
+    public void CallerNamedSoundings_PreserveTheirEmittedNameAndDepths() {
+        var dataset = DatasetWithPoint("Psource");
+        var feature = Assert.Single(dataset.Features!);
+        var source = new NtsMultiPoint([new NtsPoint(14, 55, 10.123456789), new NtsPoint(15, 56, 20)]);
+        dataset.AddPointSet(new PointSet([new S100FC.YAML.Coordinate(14, 55), new S100FC.YAML.Coordinate(15, 56)],
+            [Math.Round(10.123456789, 7), 20]) { Name = "Psource" });
+
+        EncPointGeometryReferences.Rebind(dataset, source, feature);
+
+        Assert.Equal("Psource", feature.Geometry);
+        Assert.Equal(2, Assert.Single(dataset.Depths!).Points.Length);
+        AssertSerializedPointReferencesResolve(dataset);
+    }
+
+    /// <summary>An existing reference alone is insufficient when its coordinates differ from the source.</summary>
+    [Fact]
+    public void MatchingNameWithDifferentCoordinates_IsRejected() {
+        var dataset = DatasetWithPoint("Psource");
+        dataset.AddPoint(new S100FC.YAML.Point(15, 56) { Name = "Psource" });
+        var feature = Assert.Single(dataset.Features!);
+        Assert.Throws<InvalidOperationException>(() => EncPointGeometryReferences.Rebind(dataset, new NtsPoint(14, 55), feature));
+        Assert.Equal("Psource", feature.Geometry);
+    }
+
+    /// <summary>Identical XY coordinates must not hide changed depths or reordered soundings.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DifferentSoundingDepthsOrOrder_AreRejected(bool reverseOrder) {
+        var dataset = DatasetWithPoint("Psource");
+        dataset.AddPointSet(new PointSet([new S100FC.YAML.Coordinate(14, 55), new S100FC.YAML.Coordinate(15, 56)],
+            [10, 20]) { Name = "Psource" });
+        var source = reverseOrder
+            ? new NtsMultiPoint([new NtsPoint(15, 56, 20), new NtsPoint(14, 55, 10)])
+            : new NtsMultiPoint([new NtsPoint(14, 55, 99), new NtsPoint(15, 56, 20)]);
+        Assert.Throws<InvalidOperationException>(() => EncPointGeometryReferences.Rebind(dataset, source, Assert.Single(dataset.Features!)));
+    }
+
+    /// <summary>Coordinate matching cannot silently choose between unrelated emitted identifiers.</summary>
+    [Fact]
+    public void MultipleMatchingNames_RequireAnExistingMatchingReference() {
+        var dataset = DatasetWithPoint("Ptemporary");
+        dataset.AddPoint(new S100FC.YAML.Point(14, 55) { Name = "Pfirst" });
+        dataset.AddPoint(new S100FC.YAML.Point(14, 55) { Name = "Psecond" });
+        var feature = Assert.Single(dataset.Features!);
+        Assert.Throws<InvalidOperationException>(() => EncPointGeometryReferences.Rebind(dataset, new NtsPoint(14, 55), feature));
+        Assert.Equal("Ptemporary", feature.Geometry);
+        feature.Geometry = "Psecond";
+        EncPointGeometryReferences.Rebind(dataset, new NtsPoint(14, 55), feature);
+        Assert.Equal("Psecond", feature.Geometry);
+    }
+
     [Theory]
     [InlineData(14.0072643, 54.9692015, 46.0)]
     [InlineData(-180.0, -90.0, 0.0)]
@@ -222,6 +291,7 @@ public class EncPointGeometryReferenceTests
 
     private sealed class TestMatrix : IMatrix
     {
+        public IEnumerable<PointFeature> Points { get; init; } = [];
         public IEnumerable<CurveFeature> Curves { get; init; } = [];
         public IEnumerable<CompositeCurveFeature> CompositeCurves { get; init; } = [];
         public IEnumerable<SurfaceFeature> Surfaces { get; init; } = [];

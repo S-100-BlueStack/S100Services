@@ -875,6 +875,7 @@ internal sealed class DpcRunFixture
     internal readonly DpcMemoryPackages Packages;
     internal readonly DpcEngine Engine;
     internal readonly IProductManager Manager;
+    internal IConfiguration Configuration { get; set; } = new ConfigurationBuilder().Build();
     internal int SnapshotCalls;
     internal string? FailSnapshotSource;
     internal bool FailAllSnapshots;
@@ -921,13 +922,14 @@ internal sealed class DpcRunFixture
         Manager = new DpcManager(products);
     }
 
-    internal static async Task<DpcRunFixture> CreateAsync() {
+    internal static async Task<DpcRunFixture> CreateAsync(bool initializeCheckpoint = true) {
         var f = new DpcRunFixture();
         f.Archive.AddSource(Source, 1000);
         f.Archive.AddFeature(Source, A, 0);
         f.Archive.AddFeature(Source, B, 0);
         f.Archive.AddFeature(Source, Outside, 0, emitted: false);
-        await f.Workflow.SetSuccessfulRunUtcAsync(nameof(DetectProductChangesJob), Utc(8));
+        if (initializeCheckpoint)
+            await f.Workflow.SetSuccessfulRunUtcAsync(nameof(DetectProductChangesJob), Utc(8));
         return f;
     }
 
@@ -943,13 +945,13 @@ internal sealed class DpcRunFixture
     internal Task<Guid> ManualAsync() {
         var exports = new ExportOperationService(Manager, new ExportEngineRegistry([Engine]), Workflow, Engine, Clock, NullLogger<ExportOperationService>.Instance, Packages);
         return new EncPackageDetectionService(Workflow, Workflow, Packages, Manager, exports, Locks, Clock,
-            NullLogger<EncPackageDetectionService>.Instance, new ConfigurationBuilder().Build()).CreateManualAsync(Source, PublishedEditions[Source], 0, CancellationToken.None);
+            NullLogger<EncPackageDetectionService>.Instance, Configuration).CreateManualAsync(Source, PublishedEditions[Source], 0, CancellationToken.None);
     }
 
     internal Task RunAsync(CancellationToken token = default) {
         var exports = new ExportOperationService(Manager, new ExportEngineRegistry([Engine]), Workflow, Engine, Clock, NullLogger<ExportOperationService>.Instance, Packages);
         return new EncPackageDetectionService(Workflow, Workflow, Packages, Manager, exports, Locks, Clock,
-            NullLogger<EncPackageDetectionService>.Instance, new ConfigurationBuilder().Build()).RunAsync(token);
+            NullLogger<EncPackageDetectionService>.Instance, Configuration).RunAsync(token);
     }
 
     internal Task<DateTime?> WatermarkAsync() => Workflow.GetLastSuccessfulRunUtcAsync(nameof(DetectProductChangesJob));
@@ -1106,6 +1108,20 @@ internal sealed class DpcArchiveFixture
 /// <summary>SQL transaction tests separately verify these paired mutations using real migrations and SQL Server.</summary>
 internal sealed class DpcMemoryPackages(InMemoryProductRepository workflows, DpcClock clock) : IEncPackageRepository
 {
+    /// <inheritdoc/>
+    public Task<IReadOnlyList<string>> GetSourceNamesBeforeBaselineAsync(DateTime baselineUtc, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<string>>(Active.Values.Where(package => package.ScanFromUtc < baselineUtc).Select(package => package.SourceDatasetName).ToArray());
+
+    /// <inheritdoc/>
+    public Task RebaseReplayAsync(DateTime baselineUtc, CancellationToken cancellationToken = default) {
+        cancellationToken.ThrowIfCancellationRequested();
+        foreach (var source in Replay.Keys.ToArray())
+            if (Replay[source] < baselineUtc) { Replay[source] = baselineUtc; SnapshotAttempts.Remove(source); }
+        foreach (var source in SnapshotAttempts.Keys.ToArray())
+            if (SnapshotAttempts[source] < baselineUtc) SnapshotAttempts.Remove(source);
+        return Task.CompletedTask;
+    }
+
     internal Dictionary<string, DateTime> SnapshotAttempts { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Task<IReadOnlyDictionary<string, DateTime>> GetSnapshotAttemptBoundsAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyDictionary<string, DateTime>>(new Dictionary<string, DateTime>(SnapshotAttempts));

@@ -138,6 +138,25 @@ internal static class EncChangeSummary
         return string.Join(Environment.NewLine, lines) + Environment.NewLine;
     }
 
+    /// <summary>Records a manual snapshot without inventing an archive edit when import exclusion leaves no changes.</summary>
+    /// <param name="datasetName">The S-101 source identifying the paired package.</param>
+    /// <param name="scanFromUtc">The effective UTC comparison boundary after import exclusion.</param>
+    /// <param name="snapshotUtc">The UTC snapshot request time.</param>
+    /// <param name="changes">Only archive changes after the comparison boundary.</param>
+    /// <returns>The ordinary change summary, or an explicitly empty manual summary.</returns>
+    internal static string SerializeManual(string datasetName, DateTime scanFromUtc, DateTime snapshotUtc, IReadOnlyCollection<ProductChange> changes) {
+        if (changes.Count > 0)
+            return Serialize(datasetName, ProductSpecification.S101, GetCopenhagenDate(snapshotUtc), scanFromUtc, snapshotUtc, changes);
+        if (scanFromUtc.Kind != DateTimeKind.Utc || snapshotUtc.Kind != DateTimeKind.Utc)
+            throw new InvalidOperationException("Manual ENC summary timestamps require normalized UTC instants.");
+        return string.Join(Environment.NewLine, new[] {
+            $"datasetName: {Quote(datasetName)}", "productSpecification: S101",
+            $"workDate: {GetCopenhagenDate(snapshotUtc):yyyy-MM-dd}",
+            $"firstDetectedAtUtc: {scanFromUtc:O}", $"lastDetectedAtUtc: {snapshotUtc:O}",
+            "latestArchiveEditUtc: null", "changes: []", string.Empty
+        });
+    }
+
     /// <summary>Reads the archive clock recorded with a package, including summaries made before the explicit header existed.</summary>
     internal static DateTime GetLatestArchiveEditUtc(string summaryYaml) {
         DateTime? latest = null;

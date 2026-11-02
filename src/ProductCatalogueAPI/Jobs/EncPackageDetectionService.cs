@@ -35,6 +35,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         // Serialize with archive scans so a manual snapshot never consumes a concurrent replay window.
         await using var scanLock = await locks.TryAcquireAsync("ENC-DPC-GLOBAL", cancellationToken);
         if (scanLock is null) throw new ExportOperationRejectedException("An ENC scan is running.");
+        var baselineUtc = await ApplyImportBaselineAsync(clock.GetUtcNow().UtcDateTime, cancellationToken);
         await using var s101Lock = await locks.TryAcquireAsync(ProductTrackLockKey.For(sourceName, ProductSpecification.S101), cancellationToken);
         if (s101Lock is null) throw new ExportOperationRejectedException("The S-101 product is busy.");
         var mapped = _products.GetMappedElectronicProducts(sourceName, ProductSpecification.S57.ToString());
@@ -61,16 +62,17 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
 
         var now = clock.GetUtcNow().UtcDateTime;
         var watermark = await productRepository.GetLastSuccessfulRunUtcAsync(nameof(DetectProductChangesJob));
-        var scanFrom = watermark.HasValue ? DateTime.SpecifyKind(watermark.Value, DateTimeKind.Utc) : EncChangeSummary.GetCopenhagenDayStartUtc(now);
+        var scanFrom = watermark.HasValue ? DateTime.SpecifyKind(watermark.Value, DateTimeKind.Utc) : baselineUtc ?? EncChangeSummary.GetCopenhagenDayStartUtc(now);
         var replay = await packages.GetReplayBoundsAsync(cancellationToken);
         if (replay.TryGetValue(sourceName, out var replayFrom) && replayFrom < scanFrom) scanFrom = replayFrom;
+        scanFrom = DpcArchiveBaseline.Clamp(scanFrom, baselineUtc);
         var changes = (await _products.GetPendingEditsAsync(scanFrom, now)).GetValueOrDefault(sourceName) ?? new(StringComparer.OrdinalIgnoreCase);
         cancellationToken.ThrowIfCancellationRequested();
         if (changes.Values.Any(change => change.EditDate is null || change.EditDate.Value.Kind != DateTimeKind.Utc || change.EditDate > now.AddMinutes(5)))
             throw new InvalidOperationException("The manual ENC source scan returned an invalid archive timestamp.");
         var summaryChanges = changes.SelectMany(pair => EncChangeSummary.GetObservedAttributePaths(pair.Value)
             .Select(path => new ProductChange(pair.Key, pair.Value.Code, path, pair.Value.EditDate ?? now, pair.Value.Deleted))).ToArray();
-        var summary = EncChangeSummary.Serialize(sourceName, ProductSpecification.S101, EncChangeSummary.GetCopenhagenDate(now), scanFrom, now, summaryChanges);
+        var summary = EncChangeSummary.SerializeManual(sourceName, scanFrom, now, summaryChanges);
         string yaml;
         try {
             var required = changes.Where(pair => pair.Value.CurrentInProduct && !pair.Value.Deleted).Select(pair => pair.Key).ToArray();
@@ -115,17 +117,20 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         // Load the diagnostic flag from the Worker's normal appsettings configuration.
         EncDetectionPerformance.Configure(configuration[EncDetectionPerformance.ConfigurationKey]);
 
+        var baselineUtc = await ApplyImportBaselineAsync(clock.GetUtcNow().UtcDateTime, cancellationToken);
         if (finalization is not null)
             await finalization.FinalizePendingAsync(cancellationToken);
         var scanStartedUtc = clock.GetUtcNow().UtcDateTime;
         var storedWatermark = await productRepository.GetLastSuccessfulRunUtcAsync(nameof(DetectProductChangesJob));
         // SQL datetime2 has no Kind; JobRunState persists UTC instants, not ArcGIS wall time.
         var sinceUtc = storedWatermark.HasValue ? DateTime.SpecifyKind(storedWatermark.Value, DateTimeKind.Utc)
-            : EncChangeSummary.GetCopenhagenDayStartUtc(scanStartedUtc);
+            : baselineUtc ?? EncChangeSummary.GetCopenhagenDayStartUtc(scanStartedUtc);
+        sinceUtc = DpcArchiveBaseline.Clamp(sinceUtc, baselineUtc);
         logger.LogInformation("ENC archive scan started. SinceUtc: {SinceUtc:O}. StartedUtc: {StartedUtc:O}.", sinceUtc, scanStartedUtc);
 
         var completeScans = new Dictionary<DateTime, Dictionary<string, Dictionary<string, ArchiveRow>>>();
         async Task<Dictionary<string, Dictionary<string, ArchiveRow>>> ScanAsync(DateTime lowerBound) {
+            lowerBound = DpcArchiveBaseline.Clamp(lowerBound, baselineUtc);
             if (!completeScans.TryGetValue(lowerBound, out var result)) {
                 result = await _products.GetPendingEditsAsync(lowerBound, scanStartedUtc);
                 cancellationToken.ThrowIfCancellationRequested();
@@ -438,6 +443,47 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
         foreach (var (sourceName, inspectedFromUtc) in retiredReplay)
             await packages.RetireReplayAsync(sourceName, inspectedFromUtc, cancellationToken);
         logger.LogInformation("ENC change scan completed. ChangedAoiCount: {ChangedAoiCount}. WatermarkUtc: {WatermarkUtc:O}. FailedSourceCount: {FailedSourceCount}.", pending.Count, scanStartedUtc, failedSourceCount);
+    }
+
+    /// <summary>Accepts a monotonic import cutoff and reconciles old source windows while the global DPC lock is held.</summary>
+    /// <param name="nowUtc">The UTC clock used to validate configuration and stored state.</param>
+    /// <param name="cancellationToken">Cancels reconciliation without consuming archive progress.</param>
+    /// <returns>The durable exclusive import boundary, or null for an existing unconfigured installation.</returns>
+    /// <exception cref="InvalidOperationException">Configuration is invalid or an old package is protected from replacement.</exception>
+    private async Task<DateTime?> ApplyImportBaselineAsync(DateTime nowUtc, CancellationToken cancellationToken) {
+        var configured = DpcArchiveBaseline.ReadConfigured(configuration, nowUtc);
+        var persisted = await productRepository.GetLastSuccessfulRunUtcAsync(DpcArchiveBaseline.StateKey);
+        var baseline = DpcArchiveBaseline.Resolve(configured, persisted);
+        if (!baseline.HasValue) return null;
+        if (baseline.Value > nowUtc)
+            throw new InvalidOperationException("The persisted DPC import baseline is ahead of the worker clock.");
+        if (!persisted.HasValue || baseline.Value != DateTime.SpecifyKind(persisted.Value, DateTimeKind.Utc)) {
+            cancellationToken.ThrowIfCancellationRequested();
+            // Commit exclusion before touching candidates. A partial cleanup must never permit
+            // a later restart without configuration to read the excluded import again.
+            await productRepository.SetSuccessfulRunUtcAsync(DpcArchiveBaseline.StateKey, baseline.Value);
+            logger.LogWarning("ENC import baseline accepted. ArchiveBaselineUtc: {ArchiveBaselineUtc:O}. Archive events at or before this instant are excluded; later user edits remain eligible.", baseline.Value);
+        }
+        var staleNames = await packages.GetSourceNamesBeforeBaselineAsync(baseline.Value, cancellationToken);
+        var stalePackages = await packages.GetActiveAsync(staleNames, cancellationToken, includeSourceYaml: false);
+        foreach (var package in stalePackages.Values) {
+            cancellationToken.ThrowIfCancellationRequested();
+            await using var s101Lock = await locks.TryAcquireAsync(ProductTrackLockKey.For(package.SourceDatasetName, ProductSpecification.S101), cancellationToken);
+            if (s101Lock is null)
+                throw new InvalidOperationException($"Import baseline reconciliation is waiting for S-101 '{package.SourceDatasetName}'. No scan checkpoint was advanced.");
+            await using var s57Lock = await locks.TryAcquireAsync(ProductTrackLockKey.For(package.S57DatasetName, ProductSpecification.S57), cancellationToken);
+            if (s57Lock is null)
+                throw new InvalidOperationException($"Import baseline reconciliation is waiting for S-57 '{package.S57DatasetName}'. No scan checkpoint was advanced.");
+            await EncPackageInterruptedExportRecovery.TryRecoverAsync(package, workflowRepository, packages, clock, logger, cancellationToken);
+            if (!await exports.ExecutePackageRefreshDiscardAsync(package.Id, cancellationToken))
+                throw new InvalidOperationException($"ENC package '{package.Id}' crosses the import baseline but is held or protected by delivery state. Resolve it through the package workflow before detection resumes. No scan checkpoint was advanced.");
+            logger.LogWarning("ENC package invalidated by import baseline. PackageId: {PackageId}. SourceDatasetName: {SourceDatasetName}. PreviousScanFromUtc: {PreviousScanFromUtc:O}. ArchiveBaselineUtc: {ArchiveBaselineUtc:O}. Post-baseline replay retained.", package.Id, package.SourceDatasetName, package.ScanFromUtc, baseline.Value);
+        }
+        // Paired discard retains its old replay boundary transactionally. Normalize afterward,
+        // including on restart, so the ordinary exact-bound retirement check still works.
+        await packages.RebaseReplayAsync(baseline.Value, cancellationToken);
+        logger.LogInformation("ENC import baseline active. ArchiveBaselineUtc: {ArchiveBaselineUtc:O}. InvalidatedPackageCount: {InvalidatedPackageCount}.", baseline.Value, stalePackages.Count);
+        return baseline;
     }
 
     /// <summary>Retains source work durably while recording the failed shared build on both product histories.</summary>

@@ -31,6 +31,28 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
     }
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyList<string>> GetSourceNamesBeforeBaselineAsync(DateTime baselineUtc, CancellationToken cancellationToken = default) {
+        using var connection = _connectionFactory.Create();
+        var names = await connection.QueryAsync<string>(new CommandDefinition(
+            "SELECT source_dataset_name FROM dbo.EncPackage WHERE scan_from_utc < @BaselineUtc;",
+            new { BaselineUtc = baselineUtc }, cancellationToken: cancellationToken));
+        return names.ToArray();
+    }
+
+    /// <inheritdoc/>
+    public async Task RebaseReplayAsync(DateTime baselineUtc, CancellationToken cancellationToken = default) {
+        if (baselineUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("An import baseline must be normalized UTC.", nameof(baselineUtc));
+        using var connection = _connectionFactory.Create();
+        await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE dbo.EncPackageReplay
+            SET scan_from_utc = CASE WHEN scan_from_utc < @BaselineUtc THEN @BaselineUtc ELSE scan_from_utc END,
+                last_snapshot_attempt_utc = CASE WHEN scan_from_utc < @BaselineUtc OR last_snapshot_attempt_utc < @BaselineUtc THEN NULL ELSE last_snapshot_attempt_utc END
+            WHERE scan_from_utc < @BaselineUtc OR last_snapshot_attempt_utc < @BaselineUtc;
+            """, new { BaselineUtc = baselineUtc }, cancellationToken: cancellationToken));
+    }
+
+    /// <inheritdoc/>
     public async Task<EncPackage?> GetByIdAsync(Guid packageId, CancellationToken cancellationToken = default) {
         if (packageId == Guid.Empty) return null;
         using var connection = _connectionFactory.Create();

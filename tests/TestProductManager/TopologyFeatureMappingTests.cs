@@ -421,6 +421,7 @@ namespace TestProductCatalogueAPI
 
         private sealed class TestMatrix : IMatrix
         {
+            public IEnumerable<PointFeature> Points { get; init; } = [];
             public IEnumerable<CurveFeature> Curves { get; init; } = [];
             public IEnumerable<CompositeCurveFeature> CompositeCurves { get; init; } = [];
             public IEnumerable<SurfaceFeature> Surfaces { get; init; } = [];
