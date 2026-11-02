@@ -11,10 +11,12 @@ namespace ProductCatalogueAPI.Services.Export;
 /// <param name="logger">Receives compiler diagnostics without exposing internal paths to API callers.</param>
 /// <param name="artifactsPath">Contains the feature catalogue and S-57 mapping pipeline.</param>
 /// <param name="s100CompilerExecutablePath">The configured S-101 compiler executable.</param>
-public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, string artifactsPath, string s100CompilerExecutablePath = S100CompilerConfiguration.CompatibilityDefaultExecutablePath) : IExportEngine
+/// <param name="s100MapperExecutablePath">The configured S-101 to S-57 mapper executable.</param>
+/// <param name="s57CompilerExecutablePath">The configured S-57 compiler executable.</param>
+public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, string artifactsPath, string s100CompilerExecutablePath = S100CompilerConfiguration.CompatibilityDefaultExecutablePath, string s100MapperExecutablePath = ExportToolConfiguration.DefaultMapperExecutablePath, string s57CompilerExecutablePath = ExportToolConfiguration.DefaultS57ExecutablePath) : IExportEngine
 {
-    private const string S100MapperPath = @"C:\Program Files\s100mapper\s100mapper.exe";
-    private const string S57CompilerPath = @"C:\Program Files\s57compiler\s57compiler.exe";
+    private readonly string _s100MapperExecutablePath = s100MapperExecutablePath;
+    private readonly string _s57CompilerExecutablePath = s57CompilerExecutablePath;
     private readonly ILogger<IsoIec8211ExportEngine> _logger = logger;
     private readonly string _artifactsPath = artifactsPath;
     private readonly string _s100CompilerExecutablePath = s100CompilerExecutablePath;
@@ -134,12 +136,12 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
 
         var mapperArguments = $"\"{s101Yaml}\" \"{s57Yaml}\" --fc \"{Path.GetFullPath(featureCatalogue)}\" --pipeline \"{pipeline}\"";
         // The pipeline includes relative rule files, so the mapper must start beside it.
-        await RunProcessAsync(S100MapperPath, mapperArguments, Path.GetDirectoryName(pipeline)!, request.DatasetName, cancellationToken);
+        await RunProcessAsync(_s100MapperExecutablePath, mapperArguments, Path.GetDirectoryName(pipeline)!, request.DatasetName, cancellationToken);
         if (!File.Exists(s57Yaml) || new FileInfo(s57Yaml).Length == 0)
             throw new InvalidOperationException($"The S-57 mapper did not create a non-empty YAML file for '{request.DatasetName}'.");
 
         // The compiler takes the mapped S-57 YAML path and the output directory.
-        await RunProcessAsync(S57CompilerPath, $"\"{s57Yaml}\" \"{outputDirectory}\"", outputDirectory, request.DatasetName, cancellationToken);
+        await RunProcessAsync(_s57CompilerExecutablePath, $"\"{s57Yaml}\" \"{outputDirectory}\"", outputDirectory, request.DatasetName, cancellationToken);
         // Use the same cell identity and layout check as SevenCs validation.
         _ = ExportOutputPath.GetS57DatasetFilesDirectory(request.OutputRoot, request.DatasetName, request.Edition, request.Update);
         var exchangeSet = await CreateZipAsync(outputDirectory, cancellationToken);
@@ -197,7 +199,7 @@ public class IsoIec8211ExportEngine(ILogger<IsoIec8211ExportEngine> logger, stri
             throw new FileNotFoundException("The configured export compiler was not found.", executable);
         }
 
-        _logger.LogInformation("Starting export compiler {CompilerName} for {DatasetName}.", Path.GetFileName(executable), datasetName);
+        ExportToolDiagnostics.LogBeforeLaunch(_logger, executable, datasetName);
         var startInfo = new ProcessStartInfo {
             FileName = executable,
             Arguments = arguments,

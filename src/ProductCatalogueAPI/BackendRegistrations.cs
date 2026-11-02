@@ -74,7 +74,9 @@ public static class BackendRegistrations
         services.AddSingleton<IExportEngine>(provider => new IsoIec8211ExportEngine(
             provider.GetRequiredService<ILogger<IsoIec8211ExportEngine>>(),
             configuration["ArtifactsPath"] ?? throw new InvalidOperationException("ArtifactsPath is not configured."),
-            S100CompilerConfiguration.ResolveExecutablePath(configuration)
+            S100CompilerConfiguration.ResolveExecutablePath(configuration),
+            ExportToolConfiguration.ResolveMapperExecutablePath(configuration),
+            ExportToolConfiguration.ResolveS57ExecutablePath(configuration)
         ));
         services.AddSingleton<IExportEngine, Hdf5ExportEngine>();
         services.AddSingleton<IExportEngine, GmlExportEngine>();

@@ -32,6 +32,8 @@ namespace S100FC.ProductCatalogue
 {
     public class ProductManagerGDB : IProductManager, INauticalProductManager, IElectronicProductManager, IDisposable
     {
+        /// <summary>Resolves the current Serilog pipeline with this component's source context, including on the ArcGIS execution lane.</summary>
+        private static Serilog.ILogger Logger => Serilog.Log.ForContext<ProductManagerGDB>();
         // Abort implausibly broad archive matches before DPC can create any candidates or advance its watermark.
         internal const int MaxAoisPerArchiveFeature = 600;
 
@@ -129,7 +131,7 @@ namespace S100FC.ProductCatalogue
 
                                 //var exist = IO.Path.Exists(path);
 
-                                Log.Information("Adding connection for {productSpecification}  with connection file: {path}.", e.ProductSpecification, uri?.OriginalString);
+                                Logger.Information("Adding connection for {productSpecification}  with connection file: {path}.", e.ProductSpecification, uri?.OriginalString);
 
                                 //  var uri = new Uri(System.IO.Path.GetFullPath(path));
 
@@ -213,7 +215,7 @@ namespace S100FC.ProductCatalogue
                 }
                 finally {
                     var completedAt = Stopwatch.GetTimestamp();
-                    Log.Verbose(
+                    Logger.Verbose(
                         "ArcGIS operation completed. ExecutionLane: {ExecutionLane}. OperationType: {OperationType}. DatasetName: {DatasetName}. CorrelationId: {CorrelationId}. Success: {Success}. Cancelled: {Cancelled}. ArcGisQueueWaitMs: {ArcGisQueueWaitMs}. ArcGisExecutionMs: {ArcGisExecutionMs}",
                         this._executionLane,
                         operationType,
@@ -386,7 +388,7 @@ namespace S100FC.ProductCatalogue
                 cancellationToken
             );
             if (sourceResolutionTimer is not null)
-                Log.Information("ENC detection profile. DatasetName: {DatasetName}. Phase: ResolveSourceProduct. DurationMs: {DurationMs}.",
+                Logger.Information("ENC detection profile. DatasetName: {DatasetName}. Phase: ResolveSourceProduct. DurationMs: {DurationMs}.",
                     name, sourceResolutionTimer.Elapsed.TotalMilliseconds);
             result.ElectronicProduct.editionNumber = edition;
             result.ElectronicProduct.updateNumber = update;
@@ -444,12 +446,12 @@ namespace S100FC.ProductCatalogue
                         while (archiveCursor.MoveNext()) {
                             var cur = archiveCursor.Current;
                             var id = cur.UID();
-                            Log.Information("Change detected for {id} in {table}. Stopping further detection", id, baseTableName);
+                            Logger.Information("Change detected for {id} in {table}. Stopping further detection", id, baseTableName);
                             return true;
                         }
                     }
                     else {
-                        Log.Warning("Archive is not enabled on {tableName}. Should only happen while debugging! Checking for 'created_date' or 'last_edited_date' instead", baseTableName);
+                        Logger.Warning("Archive is not enabled on {tableName}. Should only happen while debugging! Checking for 'created_date' or 'last_edited_date' instead", baseTableName);
                         filter.WhereClause = $"UPPER(ps) = 'S-101' AND (" +
                                              $"created_date > DATE '{dataset.TimestampUTC:yyyy-MM-dd HH:mm:ss}' " +
                                              $"OR last_edited_date > DATE '{dataset.TimestampUTC:yyyy-MM-dd HH:mm:ss}')";
@@ -504,7 +506,7 @@ namespace S100FC.ProductCatalogue
                         this.QualifyTableName(baseTableName));
 
                     if (!fc.IsArchiveEnabled()) {
-                        Log.Warning(
+                        Logger.Warning(
                             "Archiving is not enabled on {tableName} for product {name}.",
                             baseTableName,
                             name);
@@ -539,7 +541,7 @@ namespace S100FC.ProductCatalogue
                         tableCount++;
                     }
 
-                    Log.Information(
+                    Logger.Information(
                         "Found {count} archive changes in {tableName} for product {name}.",
                         tableCount,
                         baseTableName,
@@ -547,7 +549,7 @@ namespace S100FC.ProductCatalogue
                 }
             });
 
-            Log.Information(
+            Logger.Information(
                 "Found {count} unique pending edited features for product {name}.",
                 result.Count,
                 name);
@@ -595,10 +597,10 @@ namespace S100FC.ProductCatalogue
                         rebuiltCoverage = true;
                         cache = BuildDpcCoverageCache(connection, productsForConnection);
                         _dpcCoverageCaches[cacheKey] = cache;
-                        Log.Information("DPC coverage cache rebuilt. S101AoiCount: {S101AoiCount}. DataCoverageCount: {DataCoverageCount}. Connection: {Connection}.", cache.Products.Count, cache.DataCoverageCount, connectionSettings.ProductSpecification);
+                        Logger.Information("DPC coverage cache rebuilt. S101AoiCount: {S101AoiCount}. DataCoverageCount: {DataCoverageCount}. Connection: {Connection}.", cache.Products.Count, cache.DataCoverageCount, connectionSettings.ProductSpecification);
                     }
                     if (coverageTimer is not null)
-                        Log.Information("ENC detection profile. Phase: CoverageCache. Connection: {Connection}. Rebuilt: {Rebuilt}. AoiCount: {AoiCount}. DataCoverageCount: {DataCoverageCount}. DurationMs: {DurationMs}.",
+                        Logger.Information("ENC detection profile. Phase: CoverageCache. Connection: {Connection}. Rebuilt: {Rebuilt}. AoiCount: {AoiCount}. DataCoverageCount: {DataCoverageCount}. DurationMs: {DurationMs}.",
                             connectionSettings.ProductSpecification, rebuiltCoverage, cache.Products.Count, cache.DataCoverageCount, coverageTimer.Elapsed.TotalMilliseconds);
 
                     ScanConnectionForPendingEdits(connection, connectionLabel, cache.Products, window, result);
@@ -663,7 +665,7 @@ namespace S100FC.ProductCatalogue
                 var matching = (coverageByScale.GetValueOrDefault(optimumScale) ?? [])
                     .Where(coverage => GeometriesIntersect(coverage, aoi)).ToArray();
                 if (matching.Length == 0)
-                    Log.Warning("S-128 product {ProductName} has no intersecting S-101 DataCoverage at optimumDisplayScale {OptimumDisplayScale}.", name, optimumScale);
+                    Logger.Warning("S-128 product {ProductName} has no intersecting S-101 DataCoverage at optimumDisplayScale {OptimumDisplayScale}.", name, optimumScale);
                 entries.Add(new DpcProductCoverage(new ScanProductAoi(name, aoi), optimumScale, matching));
             }
             return new DpcCoverageCache(entries, coverages.Count, loadedAtUtc);
@@ -745,7 +747,7 @@ namespace S100FC.ProductCatalogue
             // Keep post-cutoff rows readable for clock validation. Both archive dates are checked
             // against the exact UTC window before geometry matching or change composition.
             var archiveWhereClause = $"UPPER(ps) = 'S-101' AND {ArchiveClock.CreateEventPredicate(formattedSince, formattedMaxDate)}";
-            Log.Information("DPC archive query boundary. SinceUtc: {SinceUtc:O}. ThroughUtc: {ThroughUtc:O}. StorageZone: {StorageZone}. UnspecifiedValueZone: {UnspecifiedValueZone}. QuerySinceStorage: {QuerySinceStorage:O}. SqlSinceLiteral: {SqlSinceLiteral}.",
+            Logger.Information("DPC archive query boundary. SinceUtc: {SinceUtc:O}. ThroughUtc: {ThroughUtc:O}. StorageZone: {StorageZone}. UnspecifiedValueZone: {UnspecifiedValueZone}. QuerySinceStorage: {QuerySinceStorage:O}. SqlSinceLiteral: {SqlSinceLiteral}.",
                 window.SinceUtc, window.ThroughUtc, archiveClock.StorageTimeZone.Id, archiveClock.UnspecifiedValueTimeZone.Id, querySince, formattedSince);
 
             var tableNames = ArchiveScanRequirements.SpatialClasses;
@@ -792,13 +794,13 @@ namespace S100FC.ProductCatalogue
                         archiveClock.VerifyQueryCandidate(interval, window);
                     }
                     catch (InvalidOperationException exception) {
-                        Log.Error(exception, "DPC archive clock rejected a row. TableName: {TableName}. FeatureId: {FeatureId}. RawFrom: {RawFrom:O}. RawFromKind: {RawFromKind}. RawTo: {RawTo:O}. RawToKind: {RawToKind}. SqlSinceLiteral: {SqlSinceLiteral}.",
+                        Logger.Error(exception, "DPC archive clock rejected a row. TableName: {TableName}. FeatureId: {FeatureId}. RawFrom: {RawFrom:O}. RawFromKind: {RawFromKind}. RawTo: {RawTo:O}. RawToKind: {RawToKind}. SqlSinceLiteral: {SqlSinceLiteral}.",
                             baseTableName, id, row["GDB_FROM_DATE"], (row["GDB_FROM_DATE"] as DateTime?)?.Kind,
                             row["GDB_TO_DATE"], (row["GDB_TO_DATE"] as DateTime?)?.Kind, formattedSince);
                         throw new InvalidOperationException($"Invalid archive interval for feature '{id}' in '{baseTableName}'. DPC preserved its watermark and candidates.", exception);
                     }
                     if (!loggedArchiveClock) {
-                        Log.Information("DPC archive clock. Connection: {Connection}. FeatureId: {FeatureId}. RawFrom: {RawFrom:O}. RawFromKind: {RawFromKind}. RawTo: {RawTo:O}. RawToKind: {RawToKind}. FromUtc: {FromUtc:O}. ToUtc: {ToUtc:O}. OpenEnded: {OpenEnded}.",
+                        Logger.Information("DPC archive clock. Connection: {Connection}. FeatureId: {FeatureId}. RawFrom: {RawFrom:O}. RawFromKind: {RawFromKind}. RawTo: {RawTo:O}. RawToKind: {RawToKind}. FromUtc: {FromUtc:O}. ToUtc: {ToUtc:O}. OpenEnded: {OpenEnded}.",
                             connectionName, id, row["GDB_FROM_DATE"], (row["GDB_FROM_DATE"] as DateTime?)?.Kind,
                             row["GDB_TO_DATE"], (row["GDB_TO_DATE"] as DateTime?)?.Kind, interval.FromUtc, interval.ToUtc, !interval.ToUtc.HasValue);
                         loggedArchiveClock = true;
@@ -807,18 +809,18 @@ namespace S100FC.ProductCatalogue
                     if (!changedAt.HasValue) {
                         // A subsecond SQL literal can over-select boundary rows. Later real edits
                         // belong to the next scan; neither case should affect this scan's counts.
-                        Log.Debug("DPC archive version outside UTC scan window. FeatureId: {FeatureId}. FromUtc: {FromUtc:O}. ToUtc: {ToUtc:O}. SinceUtc: {SinceUtc:O}. ThroughUtc: {ThroughUtc:O}.",
+                        Logger.Debug("DPC archive version outside UTC scan window. FeatureId: {FeatureId}. FromUtc: {FromUtc:O}. ToUtc: {ToUtc:O}. SinceUtc: {SinceUtc:O}. ThroughUtc: {ThroughUtc:O}.",
                             id, interval.FromUtc, interval.ToUtc, window.SinceUtc, window.ThroughUtc);
                         continue;
                     }
                     if (row is not ArcGIS.Core.Data.Feature feature) {
-                        Log.Warning("Archive row {FeatureId} in {TableName} for connection {ConnectionName} is not a feature.", id, baseTableName, connectionName);
+                        Logger.Warning("Archive row {FeatureId} in {TableName} for connection {ConnectionName} is not a feature.", id, baseTableName, connectionName);
                         unclassifiedArchiveRows++;
                         continue;
                     }
                     var changedShape = feature.GetShape();
                     if (changedShape == null || changedShape.IsEmpty) {
-                        Log.Warning("Archive feature {FeatureId} in {TableName} for connection {ConnectionName} has no geometry.", id, baseTableName, connectionName);
+                        Logger.Warning("Archive feature {FeatureId} in {TableName} for connection {ConnectionName} has no geometry.", id, baseTableName, connectionName);
                         unclassifiedArchiveRows++;
                         continue;
                     }
@@ -861,18 +863,18 @@ namespace S100FC.ProductCatalogue
                 }
 
                 if (uniqueChangedFeatureIds.Count == 0) {
-                    Log.Debug("Scanned archive changes in {TableName} for connection {ConnectionName}. SinceUtc: {SinceUtc:O}. No changed features.",
+                    Logger.Debug("Scanned archive changes in {TableName} for connection {ConnectionName}. SinceUtc: {SinceUtc:O}. No changed features.",
                         baseTableName, connectionName, sinceUtc);
                 }
                 else {
-                    Log.Information("Scanned archive changes in {TableName} for connection {ConnectionName}. SinceUtc: {SinceUtc:O}. UniqueChangedFeatures: {UniqueChangedFeatures}. AffectedProducts: {AffectedProducts}.",
+                    Logger.Information("Scanned archive changes in {TableName} for connection {ConnectionName}. SinceUtc: {SinceUtc:O}. UniqueChangedFeatures: {UniqueChangedFeatures}. AffectedProducts: {AffectedProducts}.",
                         baseTableName, connectionName, sinceUtc, uniqueChangedFeatureIds.Count, affectedProducts.Count);
                     foreach (var (featureId, latestEditUtc) in latestEditByFeature.OrderBy(entry => entry.Key))
-                        Log.Information("DPC archive feature detected. TableName: {TableName}. FeatureId: {FeatureId}. LatestEditUtc: {LatestEditUtc:O}. SinceUtc: {SinceUtc:O}.",
+                        Logger.Information("DPC archive feature detected. TableName: {TableName}. FeatureId: {FeatureId}. LatestEditUtc: {LatestEditUtc:O}. SinceUtc: {SinceUtc:O}.",
                             baseTableName, featureId, latestEditUtc, sinceUtc);
                 }
                 if (archiveTableTimer is not null)
-                    Log.Information("ENC detection profile. Phase: ArchiveTable. TableName: {TableName}. Connection: {Connection}. RowsRead: {RowsRead}. UniqueChangedFeatures: {UniqueChangedFeatures}. AffectedAoiCount: {AffectedAoiCount}. DurationMs: {DurationMs}.",
+                    Logger.Information("ENC detection profile. Phase: ArchiveTable. TableName: {TableName}. Connection: {Connection}. RowsRead: {RowsRead}. UniqueChangedFeatures: {UniqueChangedFeatures}. AffectedAoiCount: {AffectedAoiCount}. DurationMs: {DurationMs}.",
                         baseTableName, connectionName, archiveRowsRead, uniqueChangedFeatureIds.Count, affectedProducts.Count, archiveTableTimer.Elapsed.TotalMilliseconds);
             }
 
@@ -965,7 +967,7 @@ namespace S100FC.ProductCatalogue
                         EditDate = changedAt
                     }, interval, null));
                 }
-                Log.Information("DPC associated archive scanned. Connection: {Connection}. Table: {Table}. ChangedTargets: {ChangedTargets}.",
+                Logger.Information("DPC associated archive scanned. Connection: {Connection}. Table: {Table}. ChangedTargets: {ChangedTargets}.",
                     connectionName, className, result.Keys.Count(target => target.Kind == kind));
             }
             return result;
@@ -1030,7 +1032,7 @@ namespace S100FC.ProductCatalogue
                     if (found.Count != batch.Length)
                         throw new InvalidOperationException($"DPC could not re-read all incoming binding owners: connection '{connectionName}', class '{className}'. The watermark and candidates were preserved.");
                 }
-                Log.Information("DPC incoming bindings resolved. Connection: {Connection}. Table: {Table}. BindingRowsRead: {RowsRead}. MatchingOwnerVersions: {MatchingOwners}. AffectedProducts: {AffectedProducts}.",
+                Logger.Information("DPC incoming bindings resolved. Connection: {Connection}. Table: {Table}. BindingRowsRead: {RowsRead}. MatchingOwnerVersions: {MatchingOwners}. AffectedProducts: {AffectedProducts}.",
                     connectionName, className, rowsRead, owners.Count, index.Affected.Count);
             }
             return index;
@@ -1096,7 +1098,7 @@ namespace S100FC.ProductCatalogue
                 var matching = result.ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var sample = products.Where(product => matching.Contains(product.Name)).Take(3)
                     .Select(product => $"{product.Name}: {product.Aoi.Extent.XMin},{product.Aoi.Extent.YMin} to {product.Aoi.Extent.XMax},{product.Aoi.Extent.YMax}");
-                Log.Error("DPC AOI-intersection matcher v2 rejected excessive spatial fan-out. Table: {TableName}. FeatureId: {FeatureId}. FeatureCode: {FeatureCode}. Matches: {Matches}. AvailableAois: {AvailableAois}. FeatureExtent: {XMin},{YMin} to {XMax},{YMax}. FeatureWkid: {Wkid}. ExampleMatchedAois: {ExampleMatchedAois}.", tableName, featureId, featureCode, result.Count, products.Count, bounds.XMin, bounds.YMin, bounds.XMax, bounds.YMax, feature.SpatialReference.Wkid, string.Join("; ", sample));
+                Logger.Error("DPC AOI-intersection matcher v2 rejected excessive spatial fan-out. Table: {TableName}. FeatureId: {FeatureId}. FeatureCode: {FeatureCode}. Matches: {Matches}. AvailableAois: {AvailableAois}. FeatureExtent: {XMin},{YMin} to {XMax},{YMax}. FeatureWkid: {Wkid}. ExampleMatchedAois: {ExampleMatchedAois}.", tableName, featureId, featureCode, result.Count, products.Count, bounds.XMin, bounds.YMin, bounds.XMax, bounds.YMax, feature.SpatialReference.Wkid, string.Join("; ", sample));
                 throw new InvalidOperationException($"Archive feature '{featureId}' matched {result.Count} S-101 AOIs. DPC stopped before creating packages; inspect the AOI geometries and spatial references in the error log.");
             }
             return result;
@@ -1272,7 +1274,7 @@ namespace S100FC.ProductCatalogue
 
             if (exactMatches.Length > 1) {
                 var correlationId = Activity.Current?.TraceId.ToString();
-                Log.Error(
+                Logger.Error(
                     "Multiple exact ElectronicProduct rows found. DatasetName: {DatasetName}. ExactMatchCount: {ExactMatchCount}. CorrelationId: {CorrelationId}",
                     normalizedDatasetName,
                     exactMatches.Length,
@@ -1362,7 +1364,7 @@ namespace S100FC.ProductCatalogue
             var creationSucceeded = false;
             EncDetectionPhaseProfiler? profiler = null;
             if (logNewDataset)
-                Log.Information("CreateNewDataset started. DatasetName: {DatasetName}. Edition: {Edition}. Update: {Update}.",
+                Logger.Information("CreateNewDataset started. DatasetName: {DatasetName}. Edition: {Edition}. Update: {Update}.",
                     electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
             try {
             var timestamp = DateTime.UtcNow;
@@ -1430,14 +1432,14 @@ namespace S100FC.ProductCatalogue
                     throw new InvalidOperationException($"Cannot query S-101 DataCoverage for '{electronicProduct.datasetName}': the AOI geometry is null or empty.");
 
                 var extent = shape?.Extent;
-                Log.Information("Calling S101_QueryDataCoverage with compilationScale: {CompilationScale}, extent: {XMin},{YMin} to {XMax},{YMax}", compilationScale, extent?.XMin, extent?.YMin, extent?.XMax, extent?.YMax);
+                Logger.Information("Calling S101_QueryDataCoverage with compilationScale: {CompilationScale}, extent: {XMin},{YMin} to {XMax},{YMax}", compilationScale, extent?.XMin, extent?.YMin, extent?.XMax, extent?.YMax);
 
                 var filters = s101Geodatabase.S101_QueryDataCoverage(shape, compilationScale).Select(result => result.Filter).ToArray();
                 EncTopologyQueryFilters.UseCompilationScale(filters);
                 if (featureTracker is not null)
                     EncTopologyQueryFilters.PrepareForVerifiedSnapshot(filters);
                 profiler?.Next("BuildTopology", filters.Length);
-                Log.Information("Filters found from S101_QueryDataCoverage: {filtersCount} ", filters.Length);
+                Logger.Information("Filters found from S101_QueryDataCoverage: {filtersCount} ", filters.Length);
              
                 var result = connection.BuildTopology(filters, loggerFactory: loggerFactory)!;
 
@@ -1491,7 +1493,7 @@ namespace S100FC.ProductCatalogue
                     throw;
                 }
                 catch (Exception ex) {
-                    Log.Information("Table: informationtype: {message} ", ex.Message);
+                    Logger.Information("Table: informationtype: {message} ", ex.Message);
                 }
 
                 profiler?.Next("FeatureTypes", informationTypes.Count);
@@ -1538,7 +1540,7 @@ namespace S100FC.ProductCatalogue
                     throw;
                 }
                 catch (Exception ex) {
-                    Log.Information("Table: featuretype: {message} ", ex.Message);
+                    Logger.Information("Table: featuretype: {message} ", ex.Message);
                 }
 
                 profiler?.Next("FeatureTables", featureTypes.Count);
@@ -1556,7 +1558,7 @@ namespace S100FC.ProductCatalogue
                     };
 
                     if (!supported) {
-                        Log.Information("Unsupported table detected: {tableName}", tableName);
+                        Logger.Information("Unsupported table detected: {tableName}", tableName);
                         continue;
                     }
 
@@ -1628,7 +1630,7 @@ namespace S100FC.ProductCatalogue
                                     var type = featureCatalogue.Assembly?.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", false) ?? default;
 
                                     if (type == default) {
-                                        Log.Error("Could not get type: {type} for feature: {name}. In product: {product}", code, name, electronicProduct.datasetName);
+                                        Logger.Error("Could not get type: {type} for feature: {name}. In product: {product}", code, name, electronicProduct.datasetName);
                                         continue;
                                     }
                                     // var flatten = current["attributebindings"].ToString()!;
@@ -1760,7 +1762,7 @@ namespace S100FC.ProductCatalogue
                                             throw;
                                         }
                                         catch (Exception ex) {
-                                            Log.Warning(ex, "Error deserializing informationbindings for feature {name}: {message}", name, ex.Message);
+                                            Logger.Warning(ex, "Error deserializing informationbindings for feature {name}: {message}", name, ex.Message);
                                         }
                                     }
 
@@ -1829,7 +1831,7 @@ namespace S100FC.ProductCatalogue
                                             throw;
                                         }
                                         catch (Exception ex) {
-                                            Log.Warning(ex, "Error deserializing featurebindings for feature {name}: {message}", name, ex.Message);
+                                            Logger.Warning(ex, "Error deserializing featurebindings for feature {name}: {message}", name, ex.Message);
                                         }
                                     }
 
@@ -1863,7 +1865,7 @@ namespace S100FC.ProductCatalogue
 
                                 }
                                 catch (Exception ex) {
-                                    Log.Error(ex, ex.Message);
+                                    Logger.Error(ex, ex.Message);
                                     throw;
                                 }
                             }
@@ -1943,7 +1945,7 @@ namespace S100FC.ProductCatalogue
                     //                var type = featureCatalogue.Assembly!.GetType($"{S100FC.Catalogues.FeatureCatalogue.Namespace("S101", "FeatureTypes")}.{code}", true) ?? default;
 
                     //                if (type == default) {
-                    //                    Log.Error("Could not get type: {type} for feature: {name}", code, uid);
+                    //                    Logger.Error("Could not get type: {type} for feature: {name}", code, uid);
                     //                    continue;
                     //                }
 
@@ -2010,7 +2012,7 @@ namespace S100FC.ProductCatalogue
                     //                                    else {
                     //                                        if (System.Diagnostics.Debugger.IsAttached)
                     //                                            System.Diagnostics.Debugger.Break();
-                    //                                        Log.Error("File not found ({filename})!", filename);
+                    //                                        Logger.Error("File not found ({filename})!", filename);
                     //                                    }
                     //                                }
                     //                            }
@@ -2088,7 +2090,7 @@ namespace S100FC.ProductCatalogue
                     //               // geometries.Add(new(current.GetShape(), name!));                                        
                     //            }
                     //            catch (Exception ex) {
-                    //                Log.Error("Exception: {ex}", ex);
+                    //                Logger.Error("Exception: {ex}", ex);
                     //                if (Guid.TryParse(_uid, out var failedId) && requiredFeatureIds?.Contains(failedId.ToString("B"), StringComparer.OrdinalIgnoreCase) == true)
                     //                    throw new InvalidOperationException($"Detected S-101 feature '{_uid}' could not be included in the export snapshot.", ex);
                     //                continue;
@@ -2146,7 +2148,7 @@ namespace S100FC.ProductCatalogue
                     dataset?.AddGeometry(geometry, name!);
                     if (dataset is not null)
                         EncPointGeometryReferences.Rebind(dataset, geometry, feature);
-                    Log.Verbose("Adding {geometryType} with ID: {name}", geometry.GeometryType, name);
+                    Logger.Verbose("Adding {geometryType} with ID: {name}", geometry.GeometryType, name);
                 }
 
                 profiler?.Next("MembershipVerification", geometries.Count);
@@ -2156,9 +2158,9 @@ namespace S100FC.ProductCatalogue
                     foreach (var id in verification.Included)
                         includedChangedFeatureIds?.Add(id);
                     foreach (var id in verification.OutsideSelection)
-                        Log.Information("DPC source feature {FeatureId} is outside the topology selection for {DatasetName}; it is not required in this product's YAML.", id, electronicProduct.datasetName);
+                        Logger.Information("DPC source feature {FeatureId} is outside the topology selection for {DatasetName}; it is not required in this product's YAML.", id, electronicProduct.datasetName);
                     foreach (var id in verification.Collapsed)
-                        Log.Information("DPC source surface {FeatureId} collapsed during topology for {DatasetName}; it is not emitted as a feature.", id, electronicProduct.datasetName);
+                        Logger.Information("DPC source surface {FeatureId} collapsed during topology for {DatasetName}; it is not emitted as a feature.", id, electronicProduct.datasetName);
                 }
                 profiler?.Next("TopologyAndAssociations", requiredFeatureIds?.Count ?? 0, includedChangedFeatureIds?.Count ?? 0);
                 dataset!.AddTopology(topology);
@@ -2169,10 +2171,10 @@ namespace S100FC.ProductCatalogue
                         suppressedMetadataSurfaces.Add(surfaceName);
                 }
                 if (coverageResult.SkippedPartialOverlap)
-                    Log.Warning("ENC metadata normalization skipped for unsupported partial overlap; all metadata preserved for compiler and SevenCs validation. DatasetName: {DatasetName}. Reason: {Reason}.",
+                    Logger.Warning("ENC metadata normalization skipped for unsupported partial overlap; all metadata preserved for compiler and SevenCs validation. DatasetName: {DatasetName}. Reason: {Reason}.",
                         electronicProduct.datasetName, coverageResult.SkipReason);
                 else if (coverageResult.TotalRemoved > 0)
-                    Log.Information("ENC metadata coverage normalized. DatasetName: {DatasetName}. DataCoverageRemoved: {DataCoverageRemoved}. SoundingDatumRemoved: {SoundingDatumRemoved}. VerticalDatumOfDataRemoved: {VerticalDatumOfDataRemoved}.",
+                    Logger.Information("ENC metadata coverage normalized. DatasetName: {DatasetName}. DataCoverageRemoved: {DataCoverageRemoved}. SoundingDatumRemoved: {SoundingDatumRemoved}. VerticalDatumOfDataRemoved: {VerticalDatumOfDataRemoved}.",
                         electronicProduct.datasetName, coverageResult.RemovedDataCoverage,
                         coverageResult.RemovedSoundingDatum, coverageResult.RemovedVerticalDatumOfData);
                 EncPointGeometryReferences.RequireResolvedPointReferences(dataset);
@@ -2220,7 +2222,7 @@ namespace S100FC.ProductCatalogue
                 // The dispatch delegate may never run if it was cancelled while queued.
                 profiler?.Finish(false);
                 if (logNewDataset)
-                    Log.Information("CreateNewDataset finished. DatasetName: {DatasetName}. Success: {Success}. DurationMs: {DurationMs}.",
+                    Logger.Information("CreateNewDataset finished. DatasetName: {DatasetName}. Success: {Success}. DurationMs: {DurationMs}.",
                         electronicProduct.datasetName, creationSucceeded, creationTimer.ElapsedMilliseconds);
             }
         }
@@ -2252,7 +2254,7 @@ namespace S100FC.ProductCatalogue
 
                     attachment.CreateRow(buffer);
 
-                    Log.Information("Attachment created for dataset {datasetName} with edition {edition} and update {update}", electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
+                    Logger.Information("Attachment created for dataset {datasetName} with edition {edition} and update {update}", electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
                 });
             });
         }
@@ -2287,7 +2289,7 @@ namespace S100FC.ProductCatalogue
 
                     attachment.CreateRow(buffer);
 
-                    Log.Information("Attachment created for dataset {datasetName} with edition {edition} and update {update}", electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
+                    Logger.Information("Attachment created for dataset {datasetName} with edition {edition} and update {update}", electronicProduct.datasetName, electronicProduct.editionNumber, electronicProduct.updateNumber);
                 });
             });
         }
@@ -2407,7 +2409,7 @@ namespace S100FC.ProductCatalogue
 
                 AddElectronicProduct(products["S57"]);
                 AddElectronicProduct(products["S101"]);
-                Log.Information("Accepted ENC package {PackageId} published in S-128.", publication.PackageId);
+                Logger.Information("Accepted ENC package {PackageId} published in S-128.", publication.PackageId);
             });
 
             static void Write(ZipArchive archive, string name, byte[] bytes) {
@@ -2783,7 +2785,7 @@ namespace S100FC.ProductCatalogue
                     dispatchCompletedAt
                 ).TotalMilliseconds;
 
-                Log.Verbose(
+                Logger.Verbose(
                     "AOI ArcGIS profiling completed. ExecutionLane: {ExecutionLane}. OperationType: {OperationType}. CorrelationId: {CorrelationId}. Success: {Success}. ArcGisDispatchTotalMs: {ArcGisDispatchTotalMs}. ArcGisQueueWaitMs: {ArcGisQueueWaitMs}. ArcGisExecutionMs: {ArcGisExecutionMs}. ArcGisOpenAndSearchMs: {ArcGisOpenAndSearchMs}. ArcGisCursorMoveNextMs: {ArcGisCursorMoveNextMs}. ArcGisAttributeReadMs: {ArcGisAttributeReadMs}. ArcGisDatasetNameReadMs: {ArcGisDatasetNameReadMs}. ArcGisGeometryReadMs: {ArcGisGeometryReadMs}. ArcGisRectangleSerializationMs: {ArcGisRectangleSerializationMs}. DatasetNameFastPathCount: {DatasetNameFastPathCount}. DatasetNameUnflattenFallbackCount: {DatasetNameUnflattenFallbackCount}. RowsScanned: {RowsScanned}. RowsAccepted: {RowsAccepted}. RowsSkippedMissingAttributes: {RowsSkippedMissingAttributes}. RowsSkippedMissingDatasetName: {RowsSkippedMissingDatasetName}. RowsFailed: {RowsFailed}. GeometryCount: {GeometryCount}",
                     this._executionLane,
                     "GetDatasetAOIs",

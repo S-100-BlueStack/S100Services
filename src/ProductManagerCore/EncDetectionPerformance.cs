@@ -74,7 +74,7 @@ internal sealed class EncDetectionPhaseProfiler
             return null;
 
         return new EncDetectionPhaseProfiler(datasetName, edition, update, requiredChangedFeatureCount, metric =>
-            Log.Information(
+            Log.ForContext<EncDetectionPhaseProfiler>().Information(
                 "ENC detection profile. DatasetName: {DatasetName}. Edition: {Edition}. Update: {Update}. RequiredChangedFeatureCount: {RequiredChangedFeatureCount}. Phase: {Phase}. Detail: {Detail}. DurationMs: {DurationMs}. InputCount: {InputCount}. OutputCount: {OutputCount}. Success: {Success}.",
                 metric.DatasetName, metric.Edition, metric.Update, metric.RequiredChangedFeatureCount,
                 metric.Phase, metric.IsDetail, metric.DurationMs, metric.InputCount, metric.OutputCount, metric.Success));

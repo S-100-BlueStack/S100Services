@@ -45,6 +45,7 @@ namespace ProductCatalogueAPI
             var central_logpath = Environment.GetEnvironmentVariable("log_path");
             // Bootstrap logging
             Log.Logger = new LoggerConfiguration()
+                .Enrich.WithProperty("SourceContext", "ProductCatalogue")
                 .MinimumLevel.Information()
                 .WriteTo.Console()
                 .WriteTo.File(
@@ -67,6 +68,7 @@ namespace ProductCatalogueAPI
                     .MinimumLevel.Override("Hangfire.SqlServer.SqlServerObjectsInstaller", LogEventLevel.Warning)
                     .Enrich.FromLogContext()
                     .Enrich.WithProperty("MachineName", Environment.MachineName)
+                    .Enrich.WithProperty("SourceContext", "ProductCatalogue")
                     .WriteTo.Console(outputTemplate: outputTemplate, restrictedToMinimumLevel: LogEventLevel.Verbose)
                     .WriteTo.File(
                         path: "Logs/ProductManagerAPI.log",
@@ -169,6 +171,7 @@ namespace ProductCatalogueAPI
             //}
 
             var app = builder.Build();
+            CheckJavaToolOptions();
             DetectProductChangesRecurringJob.Reconcile(
                 detectionState,
                 app.Services,
@@ -287,6 +290,7 @@ namespace ProductCatalogueAPI
                 .MinimumLevel.Information()
                 .Enrich.FromLogContext()
                 .Enrich.WithProperty("MachineName", Environment.MachineName)
+                .Enrich.WithProperty("SourceContext", "ProductCatalogue")
                 .WriteTo.Console(outputTemplate: outputTemplate)
                 .WriteTo.File(
                     path: Path.Combine(AppContext.BaseDirectory, "Logs", "ProductManagerWorker.log"),
@@ -314,6 +318,7 @@ namespace ProductCatalogueAPI
             }
 
             Log.Logger = loggerConfiguration.CreateLogger();
+            CheckJavaToolOptions();
 
             var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings {
                 Args = args,
@@ -340,6 +345,12 @@ namespace ProductCatalogueAPI
                 processProfile.HangfireWorkerCount
             );
             await host.RunAsync();
+        }
+
+        /// <summary>Reports missing inherited Java options without modifying the environment or blocking startup.</summary>
+        private static void CheckJavaToolOptions() {
+            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("JAVA_TOOL_OPTIONS")))
+                Log.ForContext<Program>().Warning("JAVA_TOOL_OPTIONS is not set in this process. Export tools will inherit no Java options from this variable.");
         }
 
         private static ProductCatalogueProcessRole ResolveProcessRole(string[] args) {
