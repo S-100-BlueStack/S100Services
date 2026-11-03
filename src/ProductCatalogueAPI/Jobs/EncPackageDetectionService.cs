@@ -88,7 +88,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
             throw;
         }
         await AcknowledgeSourceFailuresAsync(s101, s57, cancellationToken);
-        var package = new EncPackage { Id = Guid.NewGuid(), SourceDatasetName = sourceName, S57DatasetName = s57Name, ScanFromUtc = scanFrom, DetectedAtUtc = now, DatasetYaml = yaml, SummaryYaml = summary };
+        var package = new EncPackage { Id = Guid.NewGuid(), SourceDatasetName = sourceName, S57DatasetName = s57Name, ScanFromUtc = scanFrom, DetectedAtUtc = now, BuiltAtUtc = clock.GetUtcNow().UtcDateTime, DatasetYaml = yaml, SummaryYaml = summary };
         if (!await packages.TryCreatePendingAsync(package, cancellationToken))
             throw new ExportOperationRejectedException("Another package already owns this source.");
         Exception? failure = null;
@@ -413,7 +413,7 @@ public sealed class EncPackageDetectionService(IProductRepository productReposit
                 await AcknowledgeSourceFailuresAsync(s101, s57, cancellationToken);
             }
 
-            var package = new EncPackage { Id = Guid.NewGuid(), SourceDatasetName = sourceName, S57DatasetName = s57Name, ScanFromUtc = packageScanFromUtc, DetectedAtUtc = scanStartedUtc, DatasetYaml = yaml, SummaryYaml = summary };
+            var package = new EncPackage { Id = Guid.NewGuid(), SourceDatasetName = sourceName, S57DatasetName = s57Name, ScanFromUtc = packageScanFromUtc, DetectedAtUtc = scanStartedUtc, BuiltAtUtc = clock.GetUtcNow().UtcDateTime, DatasetYaml = yaml, SummaryYaml = summary };
             if (!await packages.TryCreatePendingAsync(package, cancellationToken)) {
                 await packages.MarkReplayAsync(sourceName, packageScanFromUtc, cancellationToken);
                 continue;

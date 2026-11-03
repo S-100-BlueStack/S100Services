@@ -30,6 +30,8 @@ public sealed record EncPackageActionSnapshot(
 {
     /// <summary>The aggregate status of both export members at the time eligibility was read.</summary>
     public EncPackageStatus Status { get; init; }
+    /// <summary>UTC creation time of the active shared package snapshot, when recorded.</summary>
+    public DateTime? BuiltAtUtc { get; init; }
     /// <summary>The safe package or member diagnostic, when available.</summary>
     public string? ErrorMessage { get; init; }
 }
@@ -70,6 +72,7 @@ public sealed class EncPackageActionService(
             control.RowVersion is null ? null : Convert.ToBase64String(control.RowVersion),
             canAct && !control.IsPaused, canAct && control.IsPaused, canDiscard, eligible, restriction) {
             Status = EncPackageStatusResolver.Resolve(active, s57, s101),
+            BuiltAtUtc = active.BuiltAtUtc,
             ErrorMessage = EncPackageStatusResolver.GetErrorMessage(active, s57, s101)
         };
     }

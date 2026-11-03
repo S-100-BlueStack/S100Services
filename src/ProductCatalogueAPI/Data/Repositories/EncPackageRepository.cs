@@ -24,6 +24,7 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
             foreach (var row in rows) {
                 row.ScanFromUtc = DateTime.SpecifyKind(row.ScanFromUtc, DateTimeKind.Utc);
                 row.DetectedAtUtc = DateTime.SpecifyKind(row.DetectedAtUtc, DateTimeKind.Utc);
+                if (row.BuiltAtUtc.HasValue) row.BuiltAtUtc = DateTime.SpecifyKind(row.BuiltAtUtc.Value, DateTimeKind.Utc);
                 result.Add(row.SourceDatasetName, row);
             }
         }
@@ -56,8 +57,10 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
     public async Task<EncPackage?> GetByIdAsync(Guid packageId, CancellationToken cancellationToken = default) {
         if (packageId == Guid.Empty) return null;
         using var connection = _connectionFactory.Create();
-        return await connection.QuerySingleOrDefaultAsync<EncPackage>(new CommandDefinition(
+        var package = await connection.QuerySingleOrDefaultAsync<EncPackage>(new CommandDefinition(
             $"{SelectHeaderSql} WHERE package_id = @PackageId;", new { PackageId = packageId }, cancellationToken: cancellationToken));
+        if (package?.BuiltAtUtc is { } builtAtUtc) package.BuiltAtUtc = DateTime.SpecifyKind(builtAtUtc, DateTimeKind.Utc);
+        return package;
     }
 
     /// <summary>One serializable transaction owns both track transitions, history and snapshot deletion.</summary>
@@ -269,8 +272,8 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
         connection.Open();
         using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
         var affected = await connection.ExecuteAsync(new CommandDefinition("""
-            INSERT INTO dbo.EncPackage (package_id, source_dataset_name, s57_dataset_name, scan_from_utc, detected_at_utc, dataset_yaml, summary_yaml, error_message)
-            SELECT @Id, @SourceDatasetName, @S57DatasetName, @ScanFromUtc, @DetectedAtUtc, @DatasetYaml, @SummaryYaml, @ErrorMessage
+            INSERT INTO dbo.EncPackage (package_id, source_dataset_name, s57_dataset_name, scan_from_utc, detected_at_utc, built_at_utc, dataset_yaml, summary_yaml, error_message)
+            SELECT @Id, @SourceDatasetName, @S57DatasetName, @ScanFromUtc, @DetectedAtUtc, COALESCE(@BuiltAtUtc, SYSUTCDATETIME()), @DatasetYaml, @SummaryYaml, @ErrorMessage
             WHERE NOT EXISTS (SELECT 1 FROM dbo.EncPackage WITH (UPDLOCK, HOLDLOCK) WHERE source_dataset_name = @SourceDatasetName);
             """, package, transaction, cancellationToken: cancellationToken));
         if (affected == 1 && queueMembers && !await QueueMissingMembersAsync(connection, transaction, package, package.DetectedAtUtc, cancellationToken, requireUnstarted: true))
@@ -390,14 +393,14 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
 
     private const string SelectHeaderSql = """
         SELECT package_id AS Id, source_dataset_name AS SourceDatasetName, s57_dataset_name AS S57DatasetName,
-               scan_from_utc AS ScanFromUtc, detected_at_utc AS DetectedAtUtc,
+               scan_from_utc AS ScanFromUtc, detected_at_utc AS DetectedAtUtc, built_at_utc AS BuiltAtUtc,
                s57_discarded AS S57Discarded, s101_discarded AS S101Discarded,
                error_message AS ErrorMessage FROM dbo.EncPackage
         """;
 
     private const string SelectSql = """
         SELECT package_id AS Id, source_dataset_name AS SourceDatasetName, s57_dataset_name AS S57DatasetName,
-               scan_from_utc AS ScanFromUtc, detected_at_utc AS DetectedAtUtc, dataset_yaml AS DatasetYaml,
+               scan_from_utc AS ScanFromUtc, detected_at_utc AS DetectedAtUtc, built_at_utc AS BuiltAtUtc, dataset_yaml AS DatasetYaml,
                summary_yaml AS SummaryYaml, s57_discarded AS S57Discarded, s101_discarded AS S101Discarded,
                error_message AS ErrorMessage FROM dbo.EncPackage
         """;

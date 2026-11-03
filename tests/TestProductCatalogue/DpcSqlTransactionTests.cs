@@ -16,6 +16,35 @@ namespace TestProductCatalogueAPI;
 /// <summary>Opt-in SQL Server tests execute repositories against a fresh database built exclusively from included migrations.</summary>
 public sealed class DpcSqlTransactionTests
 {
+    /// <summary>Build timestamps survive reads in UTC, including lightweight package status reads.</summary>
+    [DpcSqlFact]
+    public async Task PackageBuildTimePersistsIndependentlyOfDetectionTime() {
+        await using var db = await DpcSqlDatabase.CreateAsync();
+        var package = PendingPackage();
+        package.BuiltAtUtc = package.DetectedAtUtc.AddMinutes(5);
+        Assert.True(await db.Packages.TryCreateAsync(package));
+        var byId = await db.Packages.GetByIdAsync(package.Id);
+        var header = (await db.Packages.GetActiveAsync([package.SourceDatasetName], includeSourceYaml: false))[package.SourceDatasetName];
+        Assert.Equal(package.BuiltAtUtc, byId!.BuiltAtUtc);
+        Assert.Equal(DateTimeKind.Utc, byId.BuiltAtUtc!.Value.Kind);
+        Assert.Equal(package.BuiltAtUtc, header.BuiltAtUtc);
+        Assert.Equal(package.DetectedAtUtc, header.DetectedAtUtc);
+    }
+
+    /// <summary>Migration does not invent historical build timestamps and is safe to apply again.</summary>
+    [DpcSqlFact]
+    public async Task BuildTimeMigrationPreservesUnknownHistoricalTimes() {
+        await using var db = await DpcSqlDatabase.CreateAsync();
+        var package = PendingPackage();
+        Assert.True(await db.Packages.TryCreateAsync(package));
+        await db.ExecuteAsync("ALTER TABLE dbo.EncPackage DROP CONSTRAINT DF_EncPackage_BuiltAtUtc; ALTER TABLE dbo.EncPackage DROP COLUMN built_at_utc;");
+        var migration = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "DpcMigrations", "010_AddEncPackageBuiltAtUtc.sql"));
+        await db.ExecuteAsync(migration);
+        await db.ExecuteAsync(migration);
+        Assert.Null((await db.Packages.GetByIdAsync(package.Id))!.BuiltAtUtc);
+        Assert.Equal(package.DetectedAtUtc, (await db.Packages.GetActiveAsync([package.SourceDatasetName]))[package.SourceDatasetName].DetectedAtUtc);
+    }
+
     /// <summary>Rebasing invalidates a pre-import cumulative attempt while preserving later retry gates.</summary>
     [DpcSqlFact]
     public async Task ImportBaselineRebasesReplayAndPreservesPostBaselineAttempts() {

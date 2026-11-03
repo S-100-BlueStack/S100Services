@@ -420,6 +420,7 @@ namespace ProductCatalogueAPI.Controllers
             }
 
             var packageAttributes = await ReadPackageAttributesAsync(electronicProduct, cancellationToken);
+            var isEncProduct = MatchesProductSpecification(electronicProduct, ProductSpecification.S101) || MatchesProductSpecification(electronicProduct, ProductSpecification.S57);
             var product = new ProductResponse
             {
                 S57 = GetCurrentProduct(electronicProduct, ProductSpecification.S57),
@@ -428,8 +429,11 @@ namespace ProductCatalogueAPI.Controllers
                 Name = electronicProduct.datasetName,
                 Package = packageAttributes?.Package,
                 UsageBand = electronicProduct.specificUsage,
-                Status = packageAttributes?.Status ?? s128Status,
-                ErrorMessage = packageAttributes is not null ? packageAttributes.ErrorMessage : PublicExportError.For(current),
+                Status = packageAttributes?.Status ?? (isEncProduct ? ProductStatus.Error : s128Status),
+                ErrorMessage = packageAttributes is not null ? packageAttributes.ErrorMessage : isEncProduct
+                    ? EncPackageStatusResolver.GetErrorMessage(null, tracks.FirstOrDefault(track => track.ProductSpecification == ProductSpecification.S57), tracks.FirstOrDefault(track => track.ProductSpecification == ProductSpecification.S101))
+                        ?? "The ENC package mapping is unavailable."
+                    : PublicExportError.For(current),
                 Exports = exports
             };
 
@@ -889,7 +893,8 @@ namespace ProductCatalogueAPI.Controllers
                 CreatePackageProduct(s57, ProductSpecification.S57, s57Track, activePackage?.S57Discarded == true),
                 CreatePackageProduct(product, ProductSpecification.S101, s101Track, activePackage?.S101Discarded == true))
             {
-                HasActivePackage = activePackage is not null
+                HasActivePackage = activePackage is not null,
+                BuiltAtUtc = activePackage?.BuiltAtUtc
             };
             return new Attributes
             {
@@ -900,10 +905,7 @@ namespace ProductCatalogueAPI.Controllers
                     EncPackageStatus.Error => ProductStatus.Error,
                     EncPackageStatus.InTransit => ProductStatus.InTransit,
                     EncPackageStatus.Ready => ProductStatus.ReadyForDistribution,
-                    EncPackageStatus.Building => ProductStatus.Exporting,
-                    EncPackageStatus.Held => ProductStatus.Frozen,
-                    EncPackageStatus.Accepted => ProductStatus.AcceptedForDistribution,
-                    EncPackageStatus.Published => ProductStatus.Published,
+                    EncPackageStatus.Hold => ProductStatus.Frozen,
                     _ => ProductStatus.Idle
                 },
                 DisplayScale = product.optimumDisplayScale,

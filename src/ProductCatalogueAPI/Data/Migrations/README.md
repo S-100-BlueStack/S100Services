@@ -23,3 +23,28 @@ archive cutoff inspected by a failed shared snapshot build. Replay still retains
 the cumulative source baseline; only a subsequent matching change permits another
 build. The migration adds no geodatabase tables and does not backfill guessed
 cutoffs from old exception/finish timestamps.
+
+## Package snapshot build time (010)
+
+Apply `010_AddEncPackageBuiltAtUtc.sql` to the ProductCatalogue System database
+before deploying the updated API and Worker. The BAT only installs/stages files;
+it does not execute this migration. The consolidated creation script includes
+the new column for fresh databases.
+
+`EncPackage.built_at_utc` records when the current shared YAML snapshot is created
+and saved as a package, before its two candidate compilers run. A saved replacement
+receives a new timestamp; a failed replacement that retains the old snapshot does
+not change it. Normal scans and recovery of the same snapshot do not change it.
+`detected_at_utc` retains its archive-cutoff meaning and is never overwritten by
+build timing.
+
+Existing packages retain NULL because their precise snapshot build time was not
+recorded. They receive a value on their next successful snapshot replacement.
+No approximate time is backfilled from archive timestamps. New direct SQL inserts
+that omit the column receive a UTC database default; application-created snapshots
+supply their explicit UTC creation time.
+
+API package projections and action snapshots expose `builtAtUtc`. Published
+`issueDate` remains separate: the existing finalization path writes it to S-128
+only after both IC-ENC acceptances, using the accepted snapshot's issue date.
+Creating or rebuilding candidates does not publish that date to S-128.

@@ -20,6 +20,8 @@ public sealed class EncPackage
     public DateTime ScanFromUtc { get; set; }
     /// <summary>Gets or sets the timestamp of the source scan that created this snapshot.</summary>
     public DateTime DetectedAtUtc { get; set; }
+    /// <summary>The UTC creation time of this shared snapshot; null only when an older package has no recorded build time.</summary>
+    public DateTime? BuiltAtUtc { get; set; }
     /// <summary>Gets or sets the YAML snapshot shared by both encoders.</summary>
     public string DatasetYaml { get; set; } = string.Empty;
     /// <summary>Gets or sets the YAML summary of the edits that triggered this package.</summary>

@@ -5,29 +5,16 @@ namespace ProductCatalogueAPI.Models;
 /// <summary>Summarizes the state shared by the two exports of one ENC AOI.</summary>
 public enum EncPackageStatus
 {
-    /// <summary>No candidate exists.</summary> 
-    Idle,
-
-    /// <summary>At least one candidate is being built or validated.</summary> 
-    Building,
-
-    /// <summary>Both required candidates are ready.</summary>
-    Ready,
-
-    /// <summary>At least one candidate is awaiting IC-ENC.</summary> 
-    InTransit,
-
-    /// <summary>A candidate failed or was rejected and must be acknowledged.</summary> 
-    Error,
-
-    /// <summary>One of the products has an operator hold.</summary> 
-    Held,
-
-    /// <summary>Both required candidates have been accepted for distribution.</summary>
-    Accepted,
-
-    /// <summary>Both required candidates have been published.</summary>
-    Published
+    /// <summary>No ready pair or outstanding delivery; candidate build progress is exposed on the members.</summary>
+    Idle = 0,
+    /// <summary>A candidate failed, IC-ENC rejected a member, or the active pair is inconsistent.</summary>
+    Error = 4,
+    /// <summary>One of the products has an operator hold.</summary>
+    Hold = 5,
+    /// <summary>Both required candidates are ready for distribution.</summary>
+    Ready = 2,
+    /// <summary>Delivery or acceptance finalization remains outstanding for at least one member.</summary>
+    InTransit = 3
 }
 
 /// <summary>Exposes public and candidate versions separately for one mapped product.</summary>
@@ -39,6 +26,8 @@ public sealed record EncPackageResponse(PackageLayer Layer, string SourceDataset
 {
     /// <summary>True only when an active EncPackage exists; never inferred from member track states.</summary>
     public bool HasActivePackage { get; init; }
+    /// <summary>UTC creation time of the current shared snapshot, refreshed only when a replacement package is saved.</summary>
+    public DateTime? BuiltAtUtc { get; init; }
 }
 
 /// <summary>Computes a package status from both tracks so send and acceptance changes are visible immediately.</summary>
@@ -54,27 +43,24 @@ public static class EncPackageStatusResolver
             IsUncertain(s57) || IsUncertain(s101))
             return EncPackageStatus.Error;
         if (package is null)
-            return IsHeld(s57) || IsHeld(s101) ? EncPackageStatus.Held : EncPackageStatus.Idle;
+            return IsHeld(s57) || IsHeld(s101) ? EncPackageStatus.Hold : EncPackageStatus.Idle;
         if (s57 is null || s101 is null || package.S57Discarded || package.S101Discarded)
             return EncPackageStatus.Error;
         if (IsHeld(s57) || IsHeld(s101))
-            return EncPackageStatus.Held;
-        if (s57.State == s101.State) {
-            switch (s57.State) {
-                case ProductState.ReadyForDistribution: return EncPackageStatus.Ready;
-                case ProductState.AcceptedForDistribution: return EncPackageStatus.Accepted;
-                case ProductState.Published: return EncPackageStatus.Published;
-            }
-        }
-        if (s57.State == ProductState.InTransit || s101.State == ProductState.InTransit)
+            return EncPackageStatus.Hold;
+        if (s57.State == ProductState.ReadyForDistribution && s101.State == ProductState.ReadyForDistribution)
+            return EncPackageStatus.Ready;
+        if (IsAwaitingCompletion(s57) || IsAwaitingCompletion(s101))
             return EncPackageStatus.InTransit;
-        if (IsBuilding(s57) || IsBuilding(s101))
-            return EncPackageStatus.Building;
+        if (IsIdlePresentation(s57) || IsIdlePresentation(s101))
+            return EncPackageStatus.Idle;
         return EncPackageStatus.Error;
     }
 
     /// <summary>Shows the failed product's diagnostic even when the package row has no error text.</summary>
     public static string? GetErrorMessage(EncPackage? package, ProductExportTrackRecord? s57, ProductExportTrackRecord? s101) {
+        var rejection = GetRejectionMessage(package, s57, s101);
+        if (rejection is not null) return rejection;
         if (IsUncertain(s101) || IsUncertain(s57))
             return "IC-ENC delivery could not be confirmed. Verify the receiver's intake and reconcile the delivery before continuing.";
         if (IsError(s101, package?.S101Discarded == true) && !string.IsNullOrWhiteSpace(s101?.ErrorMessage))
@@ -94,10 +80,29 @@ public static class EncPackageStatusResolver
         return null;
     }
 
-    /// <summary>Identifies queued or active candidate work without implying that either member succeeded.</summary>
-    /// <param name="track">The existing member track.</param>
-    /// <returns>Whether the member still has queued or running build work.</returns>
-    private static bool IsBuilding(ProductExportTrackRecord track) => track.State is ProductState.ChangesDetected or ProductState.Exporting or ProductState.Validating;
+    /// <summary>Reports IC-ENC rejection explicitly, including when the stored rejection reason is empty.</summary>
+    /// <param name="package">The active snapshot and any historical member-discard flags.</param>
+    /// <param name="s57">The S-57 track.</param>
+    /// <param name="s101">The S-101 track.</param>
+    /// <returns>The rejection marker and member-specific reasons, or null if neither current member was rejected.</returns>
+    private static string? GetRejectionMessage(EncPackage? package, ProductExportTrackRecord? s57, ProductExportTrackRecord? s101) {
+        var reasons = new List<string>();
+        if (package?.S101Discarded != true && s101?.State == ProductState.Rejected)
+            reasons.Add($"S-101: {PublicExportError.For(s101) ?? "The candidate was rejected."}");
+        if (package?.S57Discarded != true && s57?.State == ProductState.Rejected)
+            reasons.Add($"S-57: {PublicExportError.For(s57) ?? "The candidate was rejected."}");
+        return reasons.Count == 0 ? null : "RejectedByIC-ENC. " + string.Join("; ", reasons);
+    }
+
+    /// <summary>Preserves a delivery status until accepted candidates have completed package finalization.</summary>
+    /// <param name="track">The current candidate track.</param>
+    /// <returns>Whether delivery or acceptance is still outstanding.</returns>
+    private static bool IsAwaitingCompletion(ProductExportTrackRecord track) => track.State is ProductState.InTransit or ProductState.AcceptedForDistribution;
+
+    /// <summary>Maps detailed build progress and completed/cancelled candidates to the simplified Idle presentation.</summary>
+    /// <param name="track">The candidate whose detailed status remains available on the member response.</param>
+    /// <returns>Whether this state has no separate package-level label.</returns>
+    private static bool IsIdlePresentation(ProductExportTrackRecord track) => track.State is ProductState.ChangesDetected or ProductState.Exporting or ProductState.Validating or ProductState.Published or ProductState.Cancelled;
 
     private static bool IsError(ProductExportTrackRecord? track, bool discarded) => !discarded && track is { State: ProductState.Error or ProductState.Rejected };
     private static bool IsUncertain(ProductExportTrackRecord? track) => track?.ErrorCode == "IC_ENC_DELIVERY_UNCERTAIN" && track.State == ProductState.InTransit;

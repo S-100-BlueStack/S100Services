@@ -13,21 +13,21 @@ public sealed class EncPackageAggregateResponseTests
     /// <summary>The result is independent of member order and cannot report a successful pair from one successful member.</summary>
     [Theory]
     [InlineData(ProductState.ReadyForDistribution, ProductState.ReadyForDistribution, EncPackageStatus.Ready)]
-    [InlineData(ProductState.AcceptedForDistribution, ProductState.AcceptedForDistribution, EncPackageStatus.Accepted)]
-    [InlineData(ProductState.Published, ProductState.Published, EncPackageStatus.Published)]
+    [InlineData(ProductState.AcceptedForDistribution, ProductState.AcceptedForDistribution, EncPackageStatus.InTransit)]
+    [InlineData(ProductState.Published, ProductState.Published, EncPackageStatus.Idle)]
     [InlineData(ProductState.Error, ProductState.ReadyForDistribution, EncPackageStatus.Error)]
     [InlineData(ProductState.Error, ProductState.InTransit, EncPackageStatus.Error)]
     [InlineData(ProductState.Rejected, ProductState.AcceptedForDistribution, EncPackageStatus.Error)]
     [InlineData(ProductState.Frozen, ProductState.Error, EncPackageStatus.Error)]
-    [InlineData(ProductState.Frozen, ProductState.InTransit, EncPackageStatus.Held)]
-    [InlineData(ProductState.Exporting, ProductState.ReadyForDistribution, EncPackageStatus.Building)]
-    [InlineData(ProductState.Validating, ProductState.ReadyForDistribution, EncPackageStatus.Building)]
+    [InlineData(ProductState.Frozen, ProductState.InTransit, EncPackageStatus.Hold)]
+    [InlineData(ProductState.Exporting, ProductState.ReadyForDistribution, EncPackageStatus.Idle)]
+    [InlineData(ProductState.Validating, ProductState.ReadyForDistribution, EncPackageStatus.Idle)]
     [InlineData(ProductState.InTransit, ProductState.ReadyForDistribution, EncPackageStatus.InTransit)]
     [InlineData(ProductState.InTransit, ProductState.AcceptedForDistribution, EncPackageStatus.InTransit)]
-    [InlineData(ProductState.AcceptedForDistribution, ProductState.ReadyForDistribution, EncPackageStatus.Error)]
-    [InlineData(ProductState.Published, ProductState.AcceptedForDistribution, EncPackageStatus.Error)]
+    [InlineData(ProductState.AcceptedForDistribution, ProductState.ReadyForDistribution, EncPackageStatus.InTransit)]
+    [InlineData(ProductState.Published, ProductState.AcceptedForDistribution, EncPackageStatus.InTransit)]
     [InlineData(ProductState.Idle, ProductState.ReadyForDistribution, EncPackageStatus.Error)]
-    [InlineData(ProductState.Cancelled, ProductState.ReadyForDistribution, EncPackageStatus.Error)]
+    [InlineData(ProductState.Cancelled, ProductState.ReadyForDistribution, EncPackageStatus.Idle)]
     public void MemberStatesHaveSymmetricPrecedence(ProductState first, ProductState second, EncPackageStatus expected) {
         var package = new EncPackage();
         Assert.Equal(expected, EncPackageStatusResolver.Resolve(package, new() { State = first }, new() { State = second }));
@@ -93,5 +93,6 @@ public sealed class EncPackageAggregateResponseTests
         Assert.NotNull(response);
         Assert.Equal(EncPackageStatus.Error, response.Status);
         Assert.Equal(s101.ErrorMessage, response.ErrorMessage);
+        Assert.Equal(package.BuiltAtUtc, response.BuiltAtUtc);
     }
 }

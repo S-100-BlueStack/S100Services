@@ -32,7 +32,7 @@ public sealed class EncPackageStatusTests
         var s57 = Track(ProductSpecification.S57, ProductState.ReadyForDistribution);
         var s101 = Track(ProductSpecification.S101, ProductState.Frozen);
 
-        Assert.Equal(EncPackageStatus.Held, EncPackageStatusResolver.Resolve(package, s57, s101));
+        Assert.Equal(EncPackageStatus.Hold, EncPackageStatusResolver.Resolve(package, s57, s101));
     }
 
     [Fact]
@@ -57,7 +57,8 @@ public sealed class EncPackageStatusTests
         s101.ErrorMessage = "IC-ENC rejected the S-101 candidate.";
 
         Assert.Equal(EncPackageStatus.Error, EncPackageStatusResolver.Resolve(package, s57, s101));
-        Assert.Equal(s101.ErrorMessage, EncPackageStatusResolver.GetErrorMessage(package, s57, s101));
+        Assert.Contains("RejectedByIC-ENC", EncPackageStatusResolver.GetErrorMessage(package, s57, s101));
+        Assert.Contains(s101.ErrorMessage, EncPackageStatusResolver.GetErrorMessage(package, s57, s101));
     }
 
     [Fact]

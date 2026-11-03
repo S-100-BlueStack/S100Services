@@ -216,6 +216,7 @@ CREATE TABLE dbo.EncPackage (
     s101_discarded bit NOT NULL CONSTRAINT DF_EncPackage_S101Discarded DEFAULT (0),
     error_message nvarchar(1024) NULL,
     CONSTRAINT UQ_EncPackage_SourceDataset UNIQUE (source_dataset_name),
+    built_at_utc datetime2(7) NULL CONSTRAINT DF_EncPackage_BuiltAtUtc DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT CK_EncPackage_ScanWindow CHECK (scan_from_utc <= detected_at_utc)
 );
 
