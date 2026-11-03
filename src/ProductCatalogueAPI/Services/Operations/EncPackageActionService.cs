@@ -2,6 +2,7 @@ using Hangfire;
 using ProductCatalogueAPI.Data.Models;
 using ProductCatalogueAPI.Data.Repositories;
 using ProductCatalogueAPI.Jobs;
+using ProductCatalogueAPI.Models;
 using S100FC.ProductCatalogue;
 
 namespace ProductCatalogueAPI.Services.Operations;
@@ -25,7 +26,13 @@ public sealed record EncPackageActionSnapshot(
     bool CanResume,
     bool CanDiscard,
     IReadOnlyList<EncPackageEligibleMember> EligibleMembers,
-    string? RestrictionCode);
+    string? RestrictionCode)
+{
+    /// <summary>The aggregate status of both export members at the time eligibility was read.</summary>
+    public EncPackageStatus Status { get; init; }
+    /// <summary>The safe package or member diagnostic, when available.</summary>
+    public string? ErrorMessage { get; init; }
+}
 
 public sealed class EncPackageActionService(
     IEncPackageRepository packages,
@@ -61,7 +68,10 @@ public sealed class EncPackageActionService(
             !tracksReady ? "MEMBERS_NOT_READY" : null;
         return new(active.Id, active.SourceDatasetName, control.IsPaused,
             control.RowVersion is null ? null : Convert.ToBase64String(control.RowVersion),
-            canAct && !control.IsPaused, canAct && control.IsPaused, canDiscard, eligible, restriction);
+            canAct && !control.IsPaused, canAct && control.IsPaused, canDiscard, eligible, restriction) {
+            Status = EncPackageStatusResolver.Resolve(active, s57, s101),
+            ErrorMessage = EncPackageStatusResolver.GetErrorMessage(active, s57, s101)
+        };
     }
 
     public async Task<EncPackagePauseWriteResult> SetPausedAsync(string sourceName, Guid packageId, byte[]? expectedVersion, bool paused, CancellationToken cancellationToken = default) {

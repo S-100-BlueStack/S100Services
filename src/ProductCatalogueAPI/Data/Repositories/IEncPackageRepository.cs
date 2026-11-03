@@ -79,6 +79,6 @@ public interface IEncPackageRepository
         throw new NotSupportedException("ENC member queue recovery is unavailable.");
     /// <summary>Records a package failure without losing its source YAML or rollback boundary.</summary>
     Task SetErrorAsync(Guid packageId, string message, CancellationToken cancellationToken = default);
-    /// <summary>Marks a candidate discarded; only an automatic package refresh replays its scan bound.</summary>
+    /// <summary>Rejects legacy per-member discard; callers must use the guarded paired package discard transaction.</summary>
     Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default, bool preserveScanBound = false);
 }

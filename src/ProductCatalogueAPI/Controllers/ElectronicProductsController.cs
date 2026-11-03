@@ -362,12 +362,13 @@ namespace ProductCatalogueAPI.Controllers
         /// <summary>
         /// Gets the requested electronic product and the current versions of both mapped ENC products.
         /// </summary>
-        /// <param name="name">The name of the dataset.</param>
-        /// <returns>The product.</returns>
-        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK, "application/json")]
+        /// <param name="name">The name of either mapped ENC member.</param>
+        /// <param name="cancellationToken">Cancels candidate and package status reads.</param>
+        /// <returns>The independently versioned products, exports, and aggregate package status.</returns>
+        [ProducesResponseType(typeof(ApiResponse<ProductResponse>), StatusCodes.Status200OK, "application/json")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError, "application/json")]
         [HttpGet("{name}", Name = "GetElectronicProduct")]
-        public async Task<IActionResult> GetElectronicProduct(string name)
+        public async Task<IActionResult> GetElectronicProduct(string name, CancellationToken cancellationToken = default)
         {
             var sw = Stopwatch.StartNew();
             var response = new ApiResponse<ProductResponse>();
@@ -386,7 +387,7 @@ namespace ProductCatalogueAPI.Controllers
             var s128Status = Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString());
             // var s57Status = Enum.Parse((s57current?.State ?? Data.Models.ProductState.Idle).ToString());
 
-            var tracks = await GetRelatedExportTracksAsync(electronicProduct);
+            var tracks = await GetRelatedExportTracksAsync(electronicProduct, cancellationToken);
             var exports = new List<ProductExport>();
             foreach (var track in tracks)
             {
@@ -418,17 +419,17 @@ namespace ProductCatalogueAPI.Controllers
                     artifactLinks));
             }
 
+            var packageAttributes = await ReadPackageAttributesAsync(electronicProduct, cancellationToken);
             var product = new ProductResponse
             {
                 S57 = GetCurrentProduct(electronicProduct, ProductSpecification.S57),
                 S101 = GetCurrentProduct(electronicProduct, ProductSpecification.S101),
                 IssueDate = electronicProduct.issueDate,
                 Name = electronicProduct.datasetName,
-                Edition = electronicProduct.editionNumber,
-                Update = electronicProduct.updateNumber,
+                Package = packageAttributes?.Package,
                 UsageBand = electronicProduct.specificUsage,
-                Status = s128Status,
-                ErrorMessage = PublicExportError.For(current),
+                Status = packageAttributes?.Status ?? s128Status,
+                ErrorMessage = packageAttributes is not null ? packageAttributes.ErrorMessage : PublicExportError.For(current),
                 Exports = exports
             };
 
@@ -847,6 +848,32 @@ namespace ProductCatalogueAPI.Controllers
                 : new CurrentElectronicProductResponse(product.datasetName.Trim(), product.editionNumber, product.updateNumber, product.issueDate);
         }
 
+        /// <summary>Reads the same paired status used by AOI and targeted status responses for a detail request naming either member.</summary>
+        /// <param name="requestedProduct">The requested S-128 product.</param>
+        /// <param name="cancellationToken">Cancels system-database reads.</param>
+        /// <returns>The package projection, or null when the product has no unambiguous ENC pair.</returns>
+        private async Task<Attributes?> ReadPackageAttributesAsync(ElectronicProduct requestedProduct, CancellationToken cancellationToken) {
+            var source = requestedProduct;
+            if (!MatchesProductSpecification(source, ProductSpecification.S101)) {
+                if (!MatchesProductSpecification(source, ProductSpecification.S57) || string.IsNullOrWhiteSpace(source.datasetName)) return null;
+                var sources = _electronicProductManager.GetMappedElectronicProducts(source.datasetName, ProductSpecification.S101.ToString());
+                if (sources.Count != 1) return null;
+                source = sources[0];
+            }
+            if (!MatchesProductSpecification(source, ProductSpecification.S101) || string.IsNullOrWhiteSpace(source.datasetName)) return null;
+            var sourceName = source.datasetName.Trim();
+            var mapped = _electronicProductManager.GetMappedElectronicProducts(sourceName, ProductSpecification.S57.ToString());
+            if (mapped.Count != 1 || !MatchesProductSpecification(mapped[0], ProductSpecification.S57) ||
+                string.IsNullOrWhiteSpace(mapped[0].datasetName) || string.Equals(sourceName, mapped[0].datasetName!.Trim(), StringComparison.OrdinalIgnoreCase)) return null;
+            var s57 = mapped[0];
+            var tracks = await _workflowRepository.GetTracksByNamesAsync([sourceName, s57.datasetName!], cancellationToken);
+            var s101Track = tracks.FirstOrDefault(track => track.ProductSpecification == ProductSpecification.S101 && string.Equals(track.DatasetName, sourceName, StringComparison.OrdinalIgnoreCase));
+            var s57Track = tracks.FirstOrDefault(track => track.ProductSpecification == ProductSpecification.S57 && string.Equals(track.DatasetName, s57.datasetName, StringComparison.OrdinalIgnoreCase));
+            var active = _packageRepository is null ? null : (await _packageRepository.GetActiveAsync([sourceName], cancellationToken, includeSourceYaml: false)).GetValueOrDefault(sourceName);
+            var current = (await _repository.GetCurrentByNamesAsync([sourceName], ProductSpecification.S101)).FirstOrDefault(record => string.Equals(record.Name, sourceName, StringComparison.OrdinalIgnoreCase));
+            return CreateEncPackageAttributes(PackageLayer.ENC, source, s57, current, s101Track, s57Track, active);
+        }
+
         /// <summary>Shared status projection for complete AOI loads and single-product status reads.</summary>
         private static Attributes CreateEncPackageAttributes(
             PackageLayer layer, ElectronicProduct product, ElectronicProduct s57,
@@ -875,11 +902,13 @@ namespace ProductCatalogueAPI.Controllers
                     EncPackageStatus.Ready => ProductStatus.ReadyForDistribution,
                     EncPackageStatus.Building => ProductStatus.Exporting,
                     EncPackageStatus.Held => ProductStatus.Frozen,
-                    _ => Enum.Parse<ProductStatus>((current?.State ?? ProductState.Idle).ToString())
+                    EncPackageStatus.Accepted => ProductStatus.AcceptedForDistribution,
+                    EncPackageStatus.Published => ProductStatus.Published,
+                    _ => ProductStatus.Idle
                 },
                 DisplayScale = product.optimumDisplayScale,
                 UsageBand = product.specificUsage,
-                ErrorMessage = status == EncPackageStatus.Error ? packageError : PublicExportError.For(current)
+                ErrorMessage = packageError
             };
         }
 

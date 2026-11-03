@@ -6,7 +6,7 @@ namespace TestProductCatalogueAPI;
 public sealed class EncPackageStatusTests
 {
     [Fact]
-    public void EitherFailedExportMakesThePackageErrorUntilDiscarded() {
+    public void FailedExportMakesPackageErrorAndDiscardFlagRemainsAnError() {
         var package = Package();
         var s57 = Track(ProductSpecification.S57, ProductState.Error);
         var s101 = Track(ProductSpecification.S101, ProductState.ReadyForDistribution);
@@ -14,7 +14,7 @@ public sealed class EncPackageStatusTests
         Assert.Equal(EncPackageStatus.Error, EncPackageStatusResolver.Resolve(package, s57, s101));
 
         package.S57Discarded = true;
-        Assert.Equal(EncPackageStatus.Ready, EncPackageStatusResolver.Resolve(package, s57, s101));
+        Assert.Equal(EncPackageStatus.Error, EncPackageStatusResolver.Resolve(package, s57, s101));
     }
 
     [Fact]

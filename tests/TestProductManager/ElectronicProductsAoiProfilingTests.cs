@@ -53,6 +53,14 @@ namespace TestProductCatalogueAPI
 
             var detail = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(await detailController.GetElectronicProduct(s101Name)).Value).Data!;
             Assert.Empty(detail.Exports!);
+            Assert.NotNull(detail.Package);
+            var serialized = System.Text.Json.JsonSerializer.SerializeToElement(detail, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            Assert.False(serialized.TryGetProperty("edition", out _));
+            Assert.False(serialized.TryGetProperty("update", out _));
+            Assert.False(serialized.GetProperty("package").TryGetProperty("edition", out _));
+            Assert.False(serialized.GetProperty("package").TryGetProperty("update", out _));
+            Assert.Equal(3, serialized.GetProperty("s101").GetProperty("edition").GetInt32());
+            Assert.Equal(4, serialized.GetProperty("s57").GetProperty("edition").GetInt32());
             Assert.Equal(s57Name, detail.S57?.Name);
             Assert.Equal(4, detail.S57?.Edition);
             Assert.Equal(1, detail.S57?.Update);
@@ -100,6 +108,10 @@ namespace TestProductCatalogueAPI
             Assert.Equal(global.Attributes?.Package?.Status, result.Data?.Package?.Status);
             Assert.Equal(global.Attributes?.Package?.S101.Status, result.Data?.Package?.S101.Status);
             Assert.Equal(global.Attributes?.Package?.S57.Status, result.Data?.Package?.S57.Status);
+            var detailResult = Assert.IsType<ApiResponse<ProductResponse>>(Assert.IsType<OkObjectResult>(await controller.GetElectronicProduct(sourceName)).Value);
+            Assert.Equal(result.Data?.Package?.Status, detailResult.Data?.Package?.Status);
+            Assert.Equal(result.Data?.Status, detailResult.Data?.Status);
+            Assert.Equal(result.Data?.ErrorMessage, detailResult.Data?.ErrorMessage);
             Assert.False(result.Data!.Package!.HasActivePackage);
             Assert.Equal(0, productManager.TargetedBoundaryCallCount);
             Assert.Equal(1, productManager.BulkAoiCallCount);

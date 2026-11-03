@@ -370,28 +370,15 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
     }
 
     /// <inheritdoc/>
-    public async Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default, bool preserveScanBound = false) {
-        if (specification is not (ProductSpecification.S57 or ProductSpecification.S101))
-            throw new ArgumentOutOfRangeException(nameof(specification));
-
-        using var connection = _connectionFactory.Create();
-        connection.Open();
-        using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
-        var where = specification == ProductSpecification.S57 ? "s57_dataset_name" : "source_dataset_name";
-        var flag = specification == ProductSpecification.S57 ? "s57_discarded" : "s101_discarded";
-        // The identifiers are selected exclusively from the two fixed enum cases above.
-        var package = await connection.QuerySingleOrDefaultAsync<EncPackage>(new CommandDefinition($"{SelectHeaderSql} WITH (UPDLOCK, HOLDLOCK) WHERE {where} = @DatasetName", new { DatasetName = datasetName }, transaction, cancellationToken: cancellationToken));
-        if (package is null)
-            throw new InvalidOperationException("No active ENC package contains this export.");
-
-        await connection.ExecuteAsync(new CommandDefinition($"UPDATE dbo.EncPackage SET {flag} = 1, error_message = NULL WHERE package_id = @Id", new { package.Id }, transaction, cancellationToken: cancellationToken));
-        if ((specification == ProductSpecification.S57 || package.S57Discarded) && (specification == ProductSpecification.S101 || package.S101Discarded)) {
-            if (preserveScanBound)
-                await UpsertReplayAsync(connection, transaction, package.SourceDatasetName, package.ScanFromUtc, cancellationToken);
-            await connection.ExecuteAsync(new CommandDefinition("DELETE FROM dbo.EncPackage WHERE package_id = @Id", new { package.Id }, transaction, cancellationToken: cancellationToken));
-        }
-        transaction.Commit();
-    }
+    /// <summary>Rejects legacy per-member discard calls; an ENC snapshot can only be discarded as a pair.</summary>
+    /// <param name="datasetName">The legacy member identity, retained for source compatibility.</param>
+    /// <param name="specification">The legacy product specification.</param>
+    /// <param name="cancellationToken">The legacy cancellation token; no database work is started.</param>
+    /// <param name="preserveScanBound">The legacy replay option; paired operations own replay handling.</param>
+    /// <returns>A faulted task without opening a database connection.</returns>
+    /// <exception cref="InvalidOperationException">Individual ENC export discard is unsupported.</exception>
+    public Task DiscardAsync(string datasetName, ProductSpecification specification, CancellationToken cancellationToken = default, bool preserveScanBound = false) =>
+        Task.FromException(new InvalidOperationException("An ENC export cannot be discarded individually. Discard the whole ENC package."));
 
     private static Task UpsertReplayAsync(IDbConnection connection, IDbTransaction transaction, string sourceDatasetName, DateTime scanFromUtc, CancellationToken cancellationToken) => connection.ExecuteAsync(new CommandDefinition("""
         UPDATE dbo.EncPackageReplay WITH (UPDLOCK, HOLDLOCK)

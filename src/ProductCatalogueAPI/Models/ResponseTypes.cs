@@ -52,13 +52,14 @@ namespace ProductCatalogueAPI.Models
 
         public class ProductResponse
         {
+            /// <summary>The aggregate ENC package and its independently versioned members, when applicable.</summary>
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public EncPackageResponse? Package { get; set; }
             /// <summary>Gets the current S-57 product, even when no export candidate exists.</summary>
             public CurrentElectronicProductResponse? S57 { get; set; }
             /// <summary>Gets the current S-101 product, even when no export candidate exists.</summary>
             public CurrentElectronicProductResponse? S101 { get; set; }
             public string? Name { get; set; }
-            public int? Edition { get; set; }
-            public int? Update { get; set; }
             public ProductStatus? Status { get; set; }
             public int? UsageBand { get; set; }
             public DateOnly? IssueDate { get; set; }
