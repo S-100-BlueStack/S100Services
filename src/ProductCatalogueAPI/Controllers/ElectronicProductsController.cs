@@ -1,4 +1,3 @@
-using Azure;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
@@ -566,7 +565,7 @@ namespace ProductCatalogueAPI.Controllers
 
             var boundary = await _electronicProductManager.GetDatasetBoundary(sourceName);
 
-            if (boundary.IsNullOrEmpty())
+            if (string.IsNullOrEmpty(boundary))
             {
                 response.Success = false;
                 response.Message = $"No AOI could be found for electronic product with name '{identity.DatasetName}'";

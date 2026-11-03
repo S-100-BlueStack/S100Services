@@ -1,6 +1,6 @@
 using Hangfire;
 using Microsoft.AspNetCore.Authentication.Negotiate;
-using Microsoft.AspNetCore.Mvc; // Required for ApiVersion
+using Asp.Versioning;
 using Microsoft.Extensions.Hosting;
 using ProductCatalogueAPI.Filters;
 using ProductCatalogueAPI.Hosting;
@@ -15,10 +15,13 @@ using System.Text.Json;
 
 namespace ProductCatalogueAPI
 {
+    /// <summary>Hosts the HTTP API or its isolated background worker.</summary>
     public class Program
     {
         private const string outputTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff}| [{Level:u3}] [{MachineName}] [{SourceContext}] {Message:lj} {NewLine}{Exception}";
 
+        /// <summary>Starts the configured process role with Windows authentication for API requests.</summary>
+        /// <param name="args">Command-line configuration forwarded to the selected host.</param>
         [STAThread]
         public static async Task Main(string[] args) {
             var processRole = ResolveProcessRole(args);
@@ -129,11 +132,14 @@ namespace ProductCatalogueAPI
 #endif
             // API authentication is separate from the background Worker's service identity.
             ConfigureWindowsSso(builder.Services, builder.Configuration);
+            // Preserve the legacy versioning error envelope for existing API clients.
+            builder.Services.AddErrorObjects();
             builder.Services.AddApiVersioning(options => {
                 options.AssumeDefaultVersionWhenUnspecified = true;
                 options.DefaultApiVersion = new ApiVersion(1, 0);
                 options.ReportApiVersions = true;
-            });
+                options.ApiVersionReader = new QueryStringApiVersionReader();
+            }).AddMvc();
 
             builder.Services.AddRouting(options => {
                 options.LowercaseUrls = true;

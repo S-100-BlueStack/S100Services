@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using ProductCatalogueAPI.Controllers;
 using ProductCatalogueAPI.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
@@ -36,12 +36,7 @@ namespace TestProductCatalogueAPI
                 ?? throw new InvalidOperationException($"Method {methodName} was not found.");
 
             var operation = new OpenApiOperation();
-            var context = new OperationFilterContext(
-                new ApiDescription(),
-                null!,
-                new SchemaRepository(),
-                method
-            );
+            var context = new OperationFilterContext(new ApiDescription(), null!, new SchemaRepository(), new OpenApiDocument(), method);
 
             new ExportTargetOperationFilter().Apply(operation, context);
 

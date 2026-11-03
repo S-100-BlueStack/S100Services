@@ -42,17 +42,20 @@
 	  <None Include="Properties\PublishProfiles\ModelOffice.pubxml.user" />
 	</ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Dapper" Version="2.1.72" />
-    <PackageReference Include="FluentFTP" Version="54.1.2" />
-    <PackageReference Include="Hangfire" Version="1.8.23" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="10.0.10" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Versioning" Version="5.1.0" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.5" />
+    <PackageReference Include="Dapper" Version="2.1.89" />
+    <PackageReference Include="FluentFTP" Version="55.1.0" />
+    <PackageReference Include="Hangfire" Version="1.8.25" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="10.0.14" />
+    <PackageReference Include="Asp.Versioning.Mvc" Version="10.2.1" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.14" />
+    <!-- Hangfire accepts older Json.NET releases; pin the patched transitive dependency. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="S100Framework.Catalogues" Version="4.1.1" />
     <PackageReference Include="S100Framework.YAML" Version="3.7.1901.12" />
     <PackageReference Include="SharpZipLib" Version="1.4.2" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="8.1.4" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.1" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ProductManagerCore\ProductManagerCore.csproj" />
