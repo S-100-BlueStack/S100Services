@@ -124,6 +124,36 @@ namespace DataCatalague.Api.Controllers
             }
         }
 
+        /// <summary>Gets the package's current AOI and complete detailed coordinates as Esri JSON objects.</summary>
+        /// <param name="id">The existing package identifier.</param>
+        /// <param name="cancellationToken">Cancels the package read and geometry queries.</param>
+        /// <returns>The AOI and every detailed point, curve and surface, including stored spatial references.</returns>
+        /// <remarks>Absent groups are null, except points which is an empty array. A missing referenced row returns 500 rather than partial geometry.</remarks>
+        [HttpGet("{id}/geometry")]
+        [ProducesResponseType<PackageGeometryResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<PackageGeometryResponse>> GetGeometry(string id, CancellationToken cancellationToken) {
+            if (string.IsNullOrWhiteSpace(id)) {
+                this.ModelState.AddModelError(nameof(id), "A package identifier is required.");
+                return this.ValidationProblem(this.ModelState);
+            }
+            try {
+                var geometry = await this._geometryService.GetAsync(id, cancellationToken);
+                if (geometry is null) {
+                    return this.Problem(title: "Package not found.", detail: $"No package exists with identifier {id}.", statusCode: StatusCodes.Status404NotFound);
+                }
+                return this.Ok(geometry);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException) {
+                this._logger.LogError(exception, "Could not read package geometry. PackageId: {PackageId}.", id);
+                return this.Problem(title: "Could not retrieve package geometry.", statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
         /// <summary>Replaces the package's complete detail geometry and recomputes its rectangular AOI.</summary>
         /// <param name="id">The existing package identifier.</param>
         /// <param name="request">Esri JSON strings for the AOI fallback and detail groups; omitted groups are removed.</param>

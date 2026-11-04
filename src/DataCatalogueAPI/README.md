@@ -48,6 +48,41 @@ Niord notice samples are different: their source geometry is genuinely GeoJSON.
 before passing them to the package API. The original notice sample JSON is
 therefore retained in its source format.
 
+## Read package coordinates
+
+`GET /api/v1/packages/{id}/geometry` resolves the package's current geometry
+references and returns coordinates as Esri JSON **objects**, including each
+geometry's stored spatial reference. It requires the `datacatalogue:access`
+policy, like the other package endpoints.
+
+| Response field | Content |
+| --- | --- |
+| `aoi` | Current AOI geometry object, or null when there is no reference. |
+| `detailedGeometry` | Current detail groups, or null when no points, curves or surfaces exist. |
+| `detailedGeometry.points` | Array of all referenced point or multipoint geometry objects; empty when absent. |
+| `detailedGeometry.curves` | Multipart polyline object, or null when absent. |
+| `detailedGeometry.surfaces` | Polygon object with all rings and holes, or null when absent. |
+
+Points may be stored as multiple individual features or as one multipoint;
+the array includes every referenced feature in reference order. Coordinates
+retain their stored spatial reference, Z/M dimensions and curve definitions.
+The endpoint does not project, merge or simplify geometry. Read the
+`spatialReference` on each object rather than assuming WGS84.
+
+The read captures one package event state and resolves only those references,
+so retained historical rows are excluded and concurrent replacements cannot
+mix reference sets. Unknown packages return 404. Missing or unusable referenced
+geometry returns a generic 500 problem response; details are logged server-side.
+The existing package metadata and geometry replacement contracts are unchanged.
+
+Focused integration coverage is in
+`tests/DataCatalogueAPI.Tests/Integration/PackageGeometryReadTests.cs`. Run on
+Windows x64 with .NET 10, licensed ArcGIS Pro and the `s100ed17.zip` template:
+
+```powershell
+dotnet test tests/DataCatalogueAPI.Tests/DataCatalogueAPI.Tests.csproj -p:Platform=x64 --filter FullyQualifiedName~PackageGeometryReadTests
+```
+
 ## Package search and pagination
 
 `GET /api/v1/packages` keeps the existing response envelope and accepts:

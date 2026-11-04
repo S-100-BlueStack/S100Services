@@ -10,12 +10,33 @@ using System.Text.Json;
 
 namespace DataCatalague.Api.Services;
 
-/// <summary>Coordinates ArcGIS geometry writes and the package event that makes their references current.</summary>
+/// <summary>Resolves current package geometry and coordinates writes with the events that make their references current.</summary>
 public sealed class PackageGeometryService(IEventStore eventStore, StreamNameMap streamNameMap, ICommandService<PackageState> commands, PackageRepository repository, ArcGisDispatcher dispatcher, ILogger<PackageGeometryService> logger)
 {
     // The current API has one in-memory event store. Serialize replacement writes
     // across request scopes so retries cannot both allocate geometry rows.
     private static readonly SemaphoreSlim GeometryGate = new(1, 1);
+
+    /// <summary>Reads the current AOI and all detailed coordinates directly from their stored references.</summary>
+    /// <param name="id">The catalogue package identifier.</param>
+    /// <param name="cancellationToken">Cancels the event read and work before or between geometry queries.</param>
+    /// <returns>Esri JSON geometry objects, or null when the package does not exist.</returns>
+    /// <exception cref="InvalidOperationException">A referenced geometry is invalid, missing or unusable.</exception>
+    public async Task<PackageGeometryResponse?> GetAsync(string id, CancellationToken cancellationToken) {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!await eventStore.StreamExists(streamNameMap.GetStreamName(new PackageId(id)), cancellationToken)) { return null; }
+        var stream = await eventStore.LoadState<PackageState, PackageId>(streamNameMap, new(id), true, cancellationToken);
+
+        // Replacements retain historical rows, so one captured state remains consistent
+        // even if a new replacement commits while its geometries are being read.
+        var geometry = await dispatcher.ExecuteAsync(() => repository.ReadPackageGeometry(stream.State, cancellationToken));
+        cancellationToken.ThrowIfCancellationRequested();
+        var hasDetails = geometry.Points.Count > 0 || geometry.Curves is not null || geometry.Surfaces is not null;
+        var details = !hasDetails ? null : new PackageDetailedGeometryResponse(geometry.Points.Select(json => JsonSerializer.Deserialize<JsonElement>(json)).ToArray(), ParseJson(geometry.Curves), ParseJson(geometry.Surfaces));
+        return new(ParseJson(geometry.Aoi), details);
+
+        static JsonElement? ParseJson(string? json) => json is null ? null : JsonSerializer.Deserialize<JsonElement>(json);
+    }
 
     /// <summary>Replaces all detail groups and the AOI, or returns null when the package does not exist.</summary>
     /// <param name="id">The catalogue package identifier.</param>
