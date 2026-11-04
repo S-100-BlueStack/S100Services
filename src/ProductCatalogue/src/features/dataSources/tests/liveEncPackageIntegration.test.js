@@ -17,7 +17,7 @@ import {
   resolveCorrectionSymbol,
   areCorrectionSymbolsEquivalent,
 } from "../../map/symbology/correctionSymbolResolver.js";
-import { getCorrectionSymbol } from "../../map/symbology/correctionSymbols.js";
+import { getPackageCorrectionSymbol } from "../../map/symbology/correctionSymbols.js";
 import { reconcileGraphicsLayers } from "../../map/core/reconcileGraphicsLayers.js";
 import { applyGraphicAttributes } from "../../map/state/featureState.js";
 import { createDataSourceMapAdapter } from "../map/dataSourceMapAdapter.js";
@@ -91,10 +91,11 @@ test("live DTO maps representative geometry, scalar fields and authoritative ord
   assert.equal(attributes.errorMessage, "Representative error");
   assert.deepEqual(result.layers[0].data.features[0].geometry, JSON.parse(raw.Geometry));
   assert.deepEqual(attributes.workUnitStatus, {
+    packageStatus: 4,
     workflowStatus: 9,
     members: [
-      { key: "s101", datasetName: "101DK0041149E", status: 10 },
-      { key: "s57", datasetName: "DK-WIRE-MAPPING-42", status: 15 },
+      { key: "s101", datasetName: "101DK0041149E", status: 10, errorMessage: null },
+      { key: "s57", datasetName: "DK-WIRE-MAPPING-42", status: 15, errorMessage: "Member error" },
     ],
   });
   assert.equal(attributes.Package, undefined);
@@ -146,7 +147,7 @@ test("registry declarations own member order and transport mapping without sourc
   );
 });
 
-test("missing or unknown member state keeps representative scalar fallback", () => {
+test("incomplete member status never substitutes a Product color for an unknown package", () => {
   for (const mutate of [
     (raw) => {
       delete raw.Attributes.Package;
@@ -166,14 +167,15 @@ test("missing or unknown member state keeps representative scalar fallback", () 
   ]) {
     const raw = createLiveEncAoi();
     mutate(raw);
+    const hasPackage = Boolean(raw.Attributes.Package);
     const attributes = attributesOf(raw);
-    assert.equal(attributes.workUnitStatus, undefined);
-    assert.deepEqual(resolveSymbol(attributes), getCorrectionSymbol(9));
-    const values = source.filtering.definitions[0].readValues(
-      { attributes },
-      () => attributes.status
+    assert.equal(attributes.workUnitStatus?.packageStatus, hasPackage ? 4 : undefined);
+    assert.deepEqual(
+      resolveSymbol(attributes),
+      getPackageCorrectionSymbol(hasPackage ? 4 : undefined)
     );
-    assert.deepEqual(values.map(String), ["9"]);
+    const values = source.filtering.definitions[0].readValues({ attributes });
+    assert.deepEqual(values, [hasPackage ? "4" : "unknown"]);
   }
 });
 
@@ -206,24 +208,25 @@ test("contradictory package identities and malformed geometry fail the complete 
   );
 });
 
-test("live equal members render scalar and mixed members render CIM independently of workflow", () => {
-  const equal = attributesOf(createLiveEncAoi({ s101Status: 11, s57Status: 11 }));
-  assert.deepEqual(resolveSymbol(equal), getCorrectionSymbol(11));
-  const mixed = attributesOf(createLiveEncAoi());
-  assert.equal(resolveSymbol(mixed).type, "cim");
-  const workflowOnly = createLiveEncAoi({ workflowStatus: 5 });
-  workflowOnly.Attributes.Package.Status = 5;
-  assert.ok(
-    areCorrectionSymbolsEquivalent(resolveSymbol(mixed), resolveSymbol(attributesOf(workflowOnly)))
-  );
+test("live symbol depends on Package.Status, never candidate or workflow status", () => {
+  const first = attributesOf(createLiveEncAoi({ s101Status: 11, s57Status: 11 }));
+  const mixed = attributesOf(createLiveEncAoi({ s101Status: 10, s57Status: 15 }));
+  assert.deepEqual(resolveSymbol(first), getPackageCorrectionSymbol(4));
+  assert.deepEqual(resolveSymbol(mixed), getPackageCorrectionSymbol(4));
+  const workflowChanged = attributesOf(createLiveEncAoi({ workflowStatus: 5 }));
+  assert.ok(areCorrectionSymbolsEquivalent(resolveSymbol(first), resolveSymbol(workflowChanged)));
+  const held = attributesOf(createLiveEncAoi({ packageStatus: 5 }));
+  assert.deepEqual(resolveSymbol(held), getPackageCorrectionSymbol(5));
+  assert.equal(areCorrectionSymbolsEquivalent(resolveSymbol(first), resolveSymbol(held)), false);
 });
 
-test("normalized live payload feeds F1 OR matching, F3 self-excluding counts and one search item", () => {
+test("live DTO feeds aggregate-status filtering, independent facet counts and Product search", () => {
   const payload = [
-    createLiveEncAoi(),
+    createLiveEncAoi({ packageStatus: 4 }),
     createLiveEncAoi({
       datasetName: "SECOND",
       s57DatasetName: "MAPPED-SECOND",
+      packageStatus: 2,
       workflowStatus: 11,
       s101Status: 11,
       s57Status: 11,
@@ -251,29 +254,35 @@ test("normalized live payload feeds F1 OR matching, F3 self-excluding counts and
   handlers.get("activated")({ source, sourceId: source.id, generation: 1, layers: [layer] });
   const counts = () =>
     Object.fromEntries(
-      service.getValuesForField(source.id, "status").map(({ value, count }) => [value, count])
+      service
+        .getValuesForField(source.id, "packageStatus")
+        .map(({ value, count }) => [value, count])
     );
-  assert.deepEqual(counts(), { 9: 1, 10: 1, 11: 1, 15: 1 });
+  assert.equal(counts()["4"], 1);
+  assert.equal(counts()["2"], 1);
+  assert.equal(service.getValuesForField(source.id, "status").length, 0);
   assert.equal(search.getEntries().length, 2);
-  for (const status of [9, 10, 15]) {
-    service.setFilter(source.id, "status", [String(status)], 4);
-    assert.equal(service.getLayerMetadata(source.id).visibleCount, 1);
-    assert.equal(service.matchesGraphic(layer.graphics[0], layer), true);
-  }
+  const total = service.getValuesForField(source.id, "packageStatus").length;
+  service.setFilter(source.id, "packageStatus", ["4"], total);
+  assert.equal(service.getLayerMetadata(source.id).visibleCount, 1);
+  assert.equal(service.matchesGraphic(layer.graphics[0], layer), true);
+  assert.equal(service.matchesGraphic(layer.graphics[1], layer), false);
   service.setFilter(source.id, "usageBand", ["4"], 2);
-  assert.deepEqual(counts(), { 9: 0, 10: 0, 11: 1, 15: 0 });
+  assert.equal(counts()["4"], 0);
+  assert.equal(counts()["2"], 1);
   assert.equal(service.getLayerMetadata(source.id).visibleCount, 0);
-  service.setFilter(source.id, "status", ["11"], 4);
+  service.setFilter(source.id, "packageStatus", ["2"], total);
   assert.equal(service.getLayerMetadata(source.id).visibleCount, 1);
   service.setRangeFilter(source.id, "displayScale", 25000, 25000, 25000, 50000);
-  assert.deepEqual(counts(), { 9: 0, 10: 0, 11: 0, 15: 0 });
+  assert.equal(counts()["2"], 0);
   assert.equal(service.getLayerMetadata(source.id).visibleCount, 0);
   service.clearAll(source.id);
-  const updated = createLayer([createLiveEncAoi({ s57Status: 11 })]);
+  const updated = createLayer([createLiveEncAoi({ packageStatus: 5, s57Status: 11 })]);
   handlers.get("refreshed")({ source, sourceId: source.id, generation: 2, layers: [updated] });
   assert.equal(search.getEntries().length, 1);
   assert.equal(service.getLayerMetadata(source.id).totalCount, 1);
-  assert.deepEqual(counts(), { 9: 1, 10: 1, 11: 1, 15: 0 });
+  assert.equal(counts()["5"], 1);
+  assert.equal(counts()["4"], 0);
   coordinator.destroy();
 });
 
@@ -293,15 +302,22 @@ test("live refresh preserves representative Graphic identity and no-op symbol re
   });
   assert.equal(workflowOnly.updatedGraphicsCount, 1);
   assert.equal(graphic.symbol, symbol);
-  const changed = reconcileGraphicsLayers({
+  const changedMember = reconcileGraphicsLayers({
     currentLayers: [layer],
     candidateLayers: [createLayer([createLiveEncAoi({ s57Status: 11 })])],
   });
-  assert.equal(changed.success, true);
+  assert.equal(changedMember.success, true);
   assert.equal(layer.graphics[0], graphic);
   assert.equal(layer.graphics.length, 1);
   assert.equal(graphic.attributes.workUnitStatus.members[1].status, 11);
-  assert.notDeepEqual(graphic.symbol, symbol);
+  assert.deepEqual(graphic.symbol, symbol);
+  const changedPackage = reconcileGraphicsLayers({
+    currentLayers: [layer],
+    candidateLayers: [createLayer([createLiveEncAoi({ packageStatus: 5, s57Status: 11 })])],
+  });
+  assert.equal(changedPackage.success, true);
+  assert.equal(layer.graphics[0], graphic);
+  assert.deepEqual(graphic.symbol, getPackageCorrectionSymbol(5));
 });
 
 test("superseded source generation cannot publish older live package member state", async () => {
@@ -388,7 +404,7 @@ test("targeted ENC status fails closed on contradictory or incomplete identities
 
 test("targeted status updates existing ENC Graphic symbol and retains S-57 independently", () => {
   const original = createLiveEncAoi({ s101Status: 15, s57Status: 1 });
-  const updated = createLiveEncAoi({ s101Status: 1, s57Status: 1 });
+  const updated = createLiveEncAoi({ packageStatus: 0, s101Status: 1, s57Status: 1 });
   original.Attributes.Package.HasActivePackage = false;
   updated.Attributes.Package.HasActivePackage = false;
   const layer = createLayer([original]);
@@ -405,13 +421,18 @@ test("targeted status updates existing ENC Graphic symbol and retains S-57 indep
   assert.equal(graphic.attributes.workUnitStatus.members[1].status, 1);
   assert.equal(graphic.attributes.hasActivePackage, false);
   assert.equal(graphic.attributes.status, patch.status);
-  assert.equal(areCorrectionSymbolsEquivalent(graphic.symbol, getCorrectionSymbol(1)), true);
+  assert.equal(areCorrectionSymbolsEquivalent(graphic.symbol, getPackageCorrectionSymbol(0)), true);
   assert.notDeepEqual(graphic.symbol, previousSymbol);
 });
 
 test("targeted status publishes to a real layer-prefixed ENC Graphic without AOI reload", async () => {
   const initial = createLiveEncAoi({ workflowStatus: 15, s101Status: 15, s57Status: 1 });
-  const idle = createLiveEncAoi({ workflowStatus: 1, s101Status: 1, s57Status: 1 });
+  const idle = createLiveEncAoi({
+    packageStatus: 0,
+    workflowStatus: 1,
+    s101Status: 1,
+    s57Status: 1,
+  });
   initial.Attributes.Package.HasActivePackage = false;
   idle.Attributes.Package.HasActivePackage = false;
   const currentLayers = [];
@@ -501,4 +522,29 @@ test("targeted status publishes to a real layer-prefixed ENC Graphic without AOI
   });
   assert.equal(again.published, true);
   assert.equal(again.changed, false);
+});
+
+test("targeted status rejects incomplete candidates even when Package.Status is known", () => {
+  for (const mutate of [
+    (raw) => {
+      delete raw.Attributes.Package.S57;
+    },
+    (raw) => {
+      raw.Attributes.Package.S57.Status = 999;
+    },
+    (raw) => {
+      raw.Attributes.Package.S101.Status = null;
+    },
+  ]) {
+    const raw = createLiveEncAoi({ packageStatus: 2 });
+    raw.Attributes.Package.HasActivePackage = true;
+    mutate(raw);
+    const projected = attributesOf(raw);
+    assert.equal(projected.workUnitStatus.packageStatus, 2);
+    assert.deepEqual(resolveSymbol(projected), getPackageCorrectionSymbol(2));
+    assert.throws(
+      () => normalizeTargetedElectronicStatus(raw.Attributes, source, raw.Attributes.DatasetName),
+      /incomplete/
+    );
+  }
 });

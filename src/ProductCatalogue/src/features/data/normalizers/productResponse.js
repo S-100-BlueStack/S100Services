@@ -1,5 +1,6 @@
 import { normalizeProductExportMetadata } from "./productExportMetadata.js";
 import { normalizeWorkUnitMetadata } from "./workUnitMetadata.js";
+import { normalizeEncPackageStatus } from "../../dataSources/domain/encPackageStatus.js";
 
 export function normalizeElectronicProductResponse(data) {
   const product = findElectronicProductPayload(data);
@@ -7,7 +8,12 @@ export function normalizeElectronicProductResponse(data) {
   if (!product) {
     return {};
   }
+  const packagePayload = readFirstDefined(product, ["package", "Package"]);
+  const packageStatus = normalizeEncPackageStatus(
+    readFirstDefined(packagePayload ?? {}, ["status", "Status"])
+  );
   return {
+    ...(packageStatus !== undefined ? { packageStatus } : {}),
     datasetName: readFirstDefined(product, ["datasetName", "DatasetName", "name", "Name"]),
     edition: readFirstDefined(product, ["edition", "Edition"]),
     update: readFirstDefined(product, ["update", "Update", "updateNumber", "UpdateNumber"]),

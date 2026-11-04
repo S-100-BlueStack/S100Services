@@ -94,12 +94,12 @@ export function createPopupErrorDetails({ document: doc = document, window: win 
   }
 
   return {
-    createTrigger(message, { key, label }) {
+    createTrigger(message, { key, label, text = "Error" }) {
       if (!String(message ?? "").trim()) return null;
       const button = doc.createElement("button");
       button.type = "button";
       button.className = "popup-product-error";
-      button.textContent = "Error";
+      button.textContent = String(text);
       button.setAttribute("aria-label", `${label}: show full error`);
       button.setAttribute("aria-haspopup", "dialog");
       button.setAttribute("aria-controls", `popup-error-details-${++nextId}`);

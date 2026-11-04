@@ -1,5 +1,6 @@
 import { normalizeWorkUnitMetadata } from "../../data/normalizers/workUnitMetadata.js";
 import { normalizeElectronicProductStatus } from "../domain/electronicProductStatus.js";
+import { normalizeEncPackageStatus } from "../domain/encPackageStatus.js";
 import {
   assertUniqueProductIdentities,
   createSourceAwareProductIdentity,
@@ -306,18 +307,15 @@ function normalizeElectronicPackage(attributes, source, datasetName) {
       key: declaration.key,
       datasetName: memberDatasetName,
       status: normalizeElectronicProductStatus(readFirstDefined(member, ["status"])),
+      errorMessage: readFirstDefined(member, ["errorMessage"]) ?? null,
     };
   });
 
-  // Incomplete member state must keep representative rendering; a single known
-  // member must not masquerade as the rendering state of the whole package.
-  if (
-    members.length === 0 ||
-    members.some((member) => !member.datasetName || member.status === undefined)
-  ) {
-    return undefined;
-  }
+  // Package.Status is authoritative even when a member track is incomplete.
+  // Preserve truthful partial member state for display; targeted mutations still
+  // reject incomplete membership before publication.
   return {
+    packageStatus: normalizeEncPackageStatus(readFirstDefined(pkg, ["status"])),
     workflowStatus: normalizeElectronicProductStatus(readFirstDefined(attributes, ["status"])),
     members,
   };
@@ -351,6 +349,8 @@ export function normalizeTargetedElectronicStatus(payload, source, requestedData
     status === undefined ||
     !workUnitStatus ||
     typeof hasActivePackage !== "boolean" ||
+    workUnitStatus.members.length !== source.workUnit.members.length ||
+    workUnitStatus.members.some((member) => !member.datasetName || member.status === undefined) ||
     source.workUnit.members.some(({ key }) => !names[key]?.datasetName) ||
     names[source.workUnit.primaryMemberKey]?.datasetName?.toUpperCase() !==
       datasetName.toUpperCase()

@@ -408,3 +408,15 @@ test("unavailable package tooltips are specific without exposing backend details
   assert.equal(actions[1].disabled, true);
   assert.equal(actions[2].disabled, false);
 });
+
+test("known aggregate Package status suppresses the old Product workflow summary", () => {
+  const options = selection();
+  options.attributes.workUnitStatus.packageStatus = 5;
+  const model = createPackagePopupPresentation({
+    ...options,
+    workflowStatusLabels: { 11: "Ready for distribution" },
+  });
+  assert.equal(model.summary.workflowText, null);
+  assert.equal(model.actions[0].label, "Pause");
+  assert.equal(model.actions[2].label, "Send");
+});

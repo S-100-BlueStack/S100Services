@@ -6,6 +6,11 @@ import { createPackageActionSession } from "./packageActionSession.js";
 import { updatePackagePopupWorkflow } from "./packagePopupWorkflow.js";
 import { createPackagePopupSnapshotSynchronization } from "./packagePopupSnapshot.js";
 import { createPopupErrorDetails } from "./popupErrorDetails.js";
+import {
+  getEncPackageStatusLabel,
+  normalizeEncPackageStatus,
+} from "../../dataSources/domain/encPackageStatus.js";
+import { packageStatusColorConfig } from "../../../shared/config/colorsConfig.js";
 import { applyPopupProductStatusCell } from "./popupProductStatusCell.js";
 import { fetchProductPropertiesByDatasetName } from "../../data/api/productApi.js";
 import { getStatusName, getStatusIdByName, getAllStatuses } from "../../data/stores/statusStore.js";
@@ -354,13 +359,15 @@ function renderPopupContent(
   const signature = JSON.stringify({
     columns,
     statuses: columns.map((column) => formatProductStatus(column.item.status)),
+    packageStatus: attributes?.workUnitStatus?.packageStatus,
+    packageError: productContext?.workUnit?.kind === "package" ? attributes?.errorMessage : null,
   });
   if (shouldRenderProductContent(attributes) && section.metadataSignature === signature) return;
   const focusedErrorKey = errorDetails.beforeRender();
   section.replaceChildren();
   section.metadataSignature = null;
   if (shouldRenderProductContent(attributes)) {
-    renderProductRows(section, columns, errorDetails);
+    renderProductRows(section, columns, errorDetails, attributes, productContext);
     section.metadataSignature = signature;
   } else {
     renderGenericRows(section, attributes);
@@ -389,7 +396,10 @@ function getDirectChildByClass(container, className) {
   });
 }
 
-function renderProductRows(section, columns, errorDetails) {
+function renderProductRows(section, columns, errorDetails, attributes, productContext) {
+  if (productContext?.workUnit?.kind === "package") {
+    section.appendChild(createPackageStatusRow(attributes, errorDetails));
+  }
   const table = createProductMetadataTable(columns, errorDetails);
 
   if (table) {
@@ -398,6 +408,31 @@ function renderProductRows(section, columns, errorDetails) {
   }
 
   section.appendChild(createRow("Details", "No displayable product attributes."));
+}
+
+function createPackageStatusRow(attributes, errorDetails) {
+  const row = document.createElement("div");
+  row.className = "popup-row popup-package-status";
+  const label = document.createElement("span");
+  label.className = "popup-label";
+  label.textContent = "Package status";
+  const value = document.createElement("span");
+  value.className = "popup-value popup-package-status__value";
+
+  const status = normalizeEncPackageStatus(attributes?.workUnitStatus?.packageStatus);
+  const text = getEncPackageStatusLabel(status);
+  const palette = packageStatusColorConfig[status];
+  if (palette) value.style.setProperty("--pc-package-status-background", palette.badge);
+  const errorMessage = status === 4 ? attributes?.errorMessage : null;
+  const trigger = errorDetails.createTrigger(errorMessage, {
+    key: "package-status",
+    label: "Package",
+    text,
+  });
+  if (trigger) value.appendChild(trigger);
+  else value.textContent = text;
+  row.append(label, value);
+  return row;
 }
 
 function renderGenericRows(section, attributes) {
@@ -622,16 +657,13 @@ function createProductMetadataRows(columns, errorDetails) {
           });
         }
       },
-      getValue: (item) => formatProductStatus(item?.status),
-    },
-    {
-      label: "Error message",
       getContent: (item, column) =>
-        column.presentation?.compactError
-          ? errorDetails.createTrigger(item?.errorMessage, column)
-          : null,
-      getValue: (item) => formatProductTableValue(item?.errorMessage),
-      shouldShow: () => columns.some((column) => hasDisplayableValue(column.item?.errorMessage)),
+        errorDetails.createTrigger(item?.errorMessage, {
+          key: column.key,
+          label: column.label,
+          text: formatProductStatus(item?.status) || "Error",
+        }),
+      getValue: (item) => formatProductStatus(item?.status),
     },
     {
       label: "Validation files",

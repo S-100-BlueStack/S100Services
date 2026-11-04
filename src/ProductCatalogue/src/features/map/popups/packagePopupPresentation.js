@@ -1,6 +1,7 @@
 import { createPopupWorkflowActions } from "./popupWorkflowActions.js";
 import { resolveProductContext } from "../../products/domain/productContext.js";
 import { normalizeElectronicProductStatus } from "../../dataSources/domain/electronicProductStatus.js";
+import { normalizeEncPackageStatus } from "../../dataSources/domain/encPackageStatus.js";
 
 export const PACKAGE_ACTION_UNAVAILABLE = "This action is unavailable right now.";
 
@@ -23,6 +24,15 @@ export function createPackagePopupPresentation({
     attributes.workUnitStatus?.workflowStatus
   );
   const workflowLabel = workflowStatus === undefined ? null : workflowStatusLabels[workflowStatus];
+  const hasPackageStatus =
+    normalizeEncPackageStatus(attributes.workUnitStatus?.packageStatus) !== undefined;
+  const workflowText =
+    !hasPackageStatus &&
+    typeof workflowLabel === "string" &&
+    workflowLabel.trim() &&
+    workflowLabel.trim().toLowerCase() !== "idle"
+      ? `Package workflow: ${workflowLabel}`
+      : null;
 
   return {
     actions: createPopupWorkflowActions({
@@ -34,12 +44,7 @@ export function createPackagePopupPresentation({
     }),
     explanation: projection ? null : PACKAGE_ACTION_UNAVAILABLE,
     summary: {
-      workflowText:
-        typeof workflowLabel === "string" &&
-        workflowLabel.trim() &&
-        workflowLabel.trim().toLowerCase() !== "idle"
-          ? `Package workflow: ${workflowLabel}`
-          : null,
+      workflowText,
       unavailableText: null,
       pausedText: projection?.liveVerified !== false && paused === true ? "Delivery paused." : null,
       scheduledSendAt: projection?.scheduledSendAt ?? null,

@@ -1,6 +1,6 @@
-import { readWorkUnitStatusFilterValues } from "../domain/workUnitStatusProjection.js";
+import { readEncPackageStatusFilterValues } from "../domain/encPackageStatus.js";
 import { ATTRIBUTE_FILTER_CONFIG } from "../../map/filters/attributeFilterConfig.js";
-import { WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION } from "../../map/symbology/correctionSymbolResolver.js";
+import { WORK_UNIT_PACKAGE_STATUS_SYMBOLIZATION } from "../../map/symbology/correctionSymbolResolver.js";
 import { createElectronicExportConfiguration } from "../../products/domain/electronicProductContract.js";
 export const DATA_SOURCE_AVAILABILITY = Object.freeze({
   AVAILABLE: "available",
@@ -264,7 +264,7 @@ function createElectronicSource({
           supportsOverlapPicker: true,
           supportsProductSearch: true,
         },
-        ...(workUnit ? { symbolization: WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION } : {}),
+        ...(workUnit ? { symbolization: WORK_UNIT_PACKAGE_STATUS_SYMBOLIZATION } : {}),
       },
     ],
     capabilities: {
@@ -311,12 +311,14 @@ function createElectronicSource({
       supported: true,
       definitions: workUnit
         ? [
-            { fieldName: "status", readValues: readWorkUnitStatusFilterValues },
+            { fieldName: "packageStatus", readValues: readEncPackageStatusFilterValues },
             "displayScale",
             "usageBand",
           ]
         : ["status", "displayScale", "usageBand"],
-      defaultExcludedValues: ATTRIBUTE_FILTER_CONFIG.global.defaultExcludedValues,
+      defaultExcludedValues: workUnit
+        ? [{ fieldName: "packageStatus", values: ["0"] }]
+        : ATTRIBUTE_FILTER_CONFIG.global.defaultExcludedValues,
       useLookupOptions: true,
     },
     search: DEFAULT_PRODUCT_SEARCH,

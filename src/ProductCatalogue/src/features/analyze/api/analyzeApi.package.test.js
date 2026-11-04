@@ -30,6 +30,7 @@ function harness({
   failExact = null,
   missingGeometry = false,
   contradictory = false,
+  packageStatus = 99,
 } = {}) {
   const registry = createDataSourceRegistry();
   const exactCalls = [];
@@ -62,7 +63,7 @@ function harness({
       missing === "s57"
         ? null
         : { Name: contradictory && name === names[1] ? "Different legacy" : names[1] },
-    Package: { Status: 99 },
+    Package: { Status: packageStatus },
   });
   const fetchProduct = async (name) => {
     detailCalls.push(name);
@@ -255,4 +256,18 @@ test("post-prime projection rereads member metadata and rejects a remapped snaps
   });
   assert.equal(failed.workspaceLoadState, "failed");
   assert.equal(failed.members, undefined);
+});
+
+test("Analyze retains backend Package.Status from the existing detail read", async () => {
+  const h = harness({ packageStatus: 2 });
+  const [product] = await fetchAnalyzeProducts([names[0]], h);
+  assert.equal(product.packageStatus, 2);
+  assert.deepEqual(
+    product.members.map((member) => member.status),
+    [8, 11]
+  );
+  assert.equal(h.detailCalls.filter((name) => name === names[0]).length, 1);
+  assert.equal(h.getCalls.filter((path) => path.includes("/artifacts/history")).length, 2);
+  const [unknown] = await fetchAnalyzeProducts([names[0]], harness({ packageStatus: 999 }));
+  assert.equal(unknown.packageStatus, undefined);
 });

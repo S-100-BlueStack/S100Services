@@ -20,3 +20,30 @@ test("Product detail preserves both current products separately from active expo
     undefined
   );
 });
+
+test("Product detail carries the backend aggregate Package status without conflating ProductState", () => {
+  const result = normalizeElectronicProductResponse({
+    DatasetName: "PRIMARY",
+    Status: 11,
+    Package: { Status: 5 },
+    S101: { DatasetName: "PRIMARY", Status: 11 },
+    S57: { DatasetName: "SECONDARY", Status: 15 },
+  });
+  assert.equal(result.status, 11);
+  assert.equal(result.packageStatus, 5);
+  assert.equal(
+    normalizeElectronicProductResponse({
+      DatasetName: "PRIMARY",
+      Status: 11,
+      Package: { Status: 999 },
+    }).packageStatus,
+    undefined
+  );
+  assert.equal(
+    Object.hasOwn(
+      normalizeElectronicProductResponse({ DatasetName: "ORDINARY", Status: 11 }),
+      "packageStatus"
+    ),
+    false
+  );
+});

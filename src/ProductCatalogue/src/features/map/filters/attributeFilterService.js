@@ -1,5 +1,6 @@
 import { getAllStatuses } from "../../data/stores/statusStore.js";
 import { getAllUsages } from "../../data/stores/usageStore.js";
+import { ENC_PACKAGE_STATUSES } from "../../dataSources/domain/encPackageStatus.js";
 import {
   ATTRIBUTE_FILTER_CONFIG,
   getAttributeFilterFieldDefinition,
@@ -738,6 +739,12 @@ function createLookupOptionEntries({ definition, useLookupOptions, getStatuses, 
 
   if (definition.optionSource === "productStates") {
     addLookupEntries(values, getStatuses());
+  }
+  if (definition.optionSource === "packageStatuses") {
+    addLookupEntries(
+      values,
+      ENC_PACKAGE_STATUSES.map(({ id, label }) => ({ Id: id, Name: label }))
+    );
   }
   if (definition.optionSource === "specificUsages") {
     addLookupEntries(values, getUsages());

@@ -453,6 +453,27 @@ The current frontend contract does not depend on the Hangfire worker running ins
 
 An external worker migration must be coordinated with the planned atomic operation-registry work. The current local dataset lock and Hangfire monitoring lookup are not sufficient as a final distributed ownership model across independently deployed workers.
 
+## Current Package status and error presentation (2026-11)
+
+The Main-map package popup renders a dedicated **Package status** row from the current source
+Graphic's normalized `workUnitStatus.packageStatus` (backend `Attributes.Package.Status`).
+`Ready` is the aggregate status, distinct from the S-101/S-57 Export Candidate state
+`ReadyForDistribution`. The two-member Product metadata table remains in registry order; its
+Status row contains the ProductState label and, when backend provides an error message,
+the same application-owned hover/focus/click detail trigger previously placed in an additional
+**Error message** row. The additional row is removed. Package-status Error shows the aggregate
+`Attributes.ErrorMessage` using the same trigger; member errors use current `Package.S101` /
+`Package.S57` ErrorMessage or the matching active export overlay.
+
+Only the source AOI/targeted-status refresh updates the map-owned aggregate, members, symbols and
+filters. Product-detail freshness does not rewrite map-owned status. An absent or unsupported
+aggregate status renders **Unknown** and an unclassified neutral map symbol, not Idle. When the
+aggregate is known, the old ProductState-based `Package workflow:` summary is suppressed to
+avoid displaying two conflicting package statuses. The popup header and overlap-picker status marker
+and subtitle also use this aggregate through the layer symbolization contract; ordinary Products
+continue to show their own ProductState. Pause/Resume, send/accept, error dialog focus, Tools and
+all other popup actions continue through existing session ownership.
+
 ## F5 package popup read freshness
 
 `GET electronicproducts/{name}` supplies independent current S-101 and S-57

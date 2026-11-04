@@ -1,6 +1,6 @@
 import { bindPopupActionHelp } from "./popupActionHelp.js";
 import { addNotice } from "../../notices/state/noticeStore.js";
-import { getStatusColor } from "../../data/stores/statusStore.js";
+import { resolveGraphicStatusPresentation } from "../symbology/graphicStatusPresentation.js";
 import {
   addProductCollectionProduct,
   hasProductCollectionProduct,
@@ -72,11 +72,10 @@ function waitForFeatureHeader(view, featureId, remainingFrames = 20) {
   }
 
   const attr = feature.attributes;
-  const color = getStatusColor(attr.status)?.header ?? "#666";
+  const color = resolveGraphicStatusPresentation(feature).colors?.header ?? "#666";
 
   if (header.dataset.statusColor !== color) {
     header.style.backgroundColor = color;
-    header.style.color = "#ffffff";
     header.dataset.statusColor = color;
   }
   ensureCollectionButton(header, feature, view);

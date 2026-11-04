@@ -206,20 +206,18 @@ package. Optional validation diagnostics and History errors retain the existing 
 warning/unavailable states. No incomplete metadata package is published as an ordinary Product.
 Layer creation cleans up already created layers on a subsequent renderer failure.
 
-F6B v4 projects only the accepted package model's member Product statuses at the dedicated package
-layer boundary. `workUnitStatus` contains `members: [{ key, datasetName, status }]`, with each value
-copied from the corresponding `memberKey`, `datasetName` and `status`. Missing status remains missing;
-no workflow status or representative status is used to fill it. Only package layer definitions opt
-into `WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION`. The ordinary compatibility/source layer paths and
-`analyzeGraphicProductContext.js` remain unchanged.
+The package Analyze layer now uses the backend aggregate `Package.Status`, already available
+from the existing Product-detail request, via the normalized `packageStatus` field. Its one shared
+polygon Graphic opts into `WORK_UNIT_PACKAGE_STATUS_SYMBOLIZATION`, with `workUnitStatus` carrying
+`{ packageStatus, members: [{ key, datasetName, status }] }`. Member statuses are preserved as
+metadata, but cannot change the package AOI color. Symbols use a thin-opacity fill, a thicker
+outline, and no stripes. Missing/unknown aggregate status uses a neutral dashed outline instead
+of a fabricated member or Idle fallback.
 
-The existing Esri transformer passes those attributes and the strategy to `createGraphicProperties()`
-and the central `resolveCorrectionSymbol()`. F2's member-only projection, existing palette and CIM
-hatches choose the initial symbol for the one shared polygon Graphic: no usable member status falls
-back to representative scalar status, one distinct supplied status is scalar, and distinct member
-statuses are mixed. Equal statuses never manufacture a hatch. No additional Product read occurs.
-Initial loads and successful targeted replacements use this same path. Failed/stale replacements
-retain the accepted Graphic/symbol under the unchanged v2/v3 lifecycle.
+The ordinary compatibility/source layers and `analyzeGraphicProductContext.js` are unchanged.
+No additional Product read occurs. Initial loads and successful targeted replacements use the same
+Esri transformer and central `resolveCorrectionSymbol()` path; failed/stale replacements retain
+the accepted Graphic/symbol under the existing lifecycle.
 
 F6B v5 scopes package member Internal Validation Reports before content publication. The backend
 `electronicproducts/{datasetName}/artifacts/history` returns validation artifacts from related S-101

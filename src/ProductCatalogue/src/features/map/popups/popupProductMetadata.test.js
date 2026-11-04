@@ -160,3 +160,25 @@ test("contradictory candidate identity cannot override current package member", 
   );
   assert.equal(value[1].item.edition, 7);
 });
+
+test("package status columns retain authoritative member error messages without export metadata", () => {
+  const columns = createPopupProductMetadataColumns(
+    {
+      ...packageAttributes,
+      workUnitStatus: {
+        packageStatus: 4,
+        members: [
+          { key: "s101", status: 11, errorMessage: null },
+          { key: "s57", status: 15, errorMessage: "S-57 compilation failed" },
+        ],
+      },
+    },
+    packageContext
+  );
+  assert.equal(columns[0].item.errorMessage, null);
+  assert.equal(columns[1].item.errorMessage, "S-57 compilation failed");
+  assert.deepEqual(
+    columns.map(({ item }) => item.status),
+    [11, 15]
+  );
+});

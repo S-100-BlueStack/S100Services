@@ -15,6 +15,13 @@ export const ATTRIBUTE_FILTER_FIELD_DEFINITIONS = Object.freeze([
     aliases: Object.freeze(["status", "Status"]),
   }),
   Object.freeze({
+    fieldName: "packageStatus",
+    label: "Package status",
+    mode: "values",
+    optionSource: "packageStatuses",
+    aliases: Object.freeze(["packageStatus", "PackageStatus"]),
+  }),
+  Object.freeze({
     fieldName: "usageBand",
     label: "Usage band",
     mode: "values",

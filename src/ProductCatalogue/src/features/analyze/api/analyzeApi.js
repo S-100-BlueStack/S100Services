@@ -1,4 +1,5 @@
 import { normalizeElectronicProductResponse } from "../../data/normalizers/productResponse.js";
+import { normalizeEncPackageStatus } from "../../dataSources/domain/encPackageStatus.js";
 import { normalizeArtifactHistory } from "../../data/normalizers/productArtifact.js";
 import { apiGet } from "../../../shared/api/apiClient.js";
 import { normalizeProductExportMetadata } from "../../data/normalizers/productExportMetadata.js";
@@ -175,6 +176,14 @@ function normalizeAnalyzeProduct(
     contentAvailability: createContentAvailability(productContext),
     status: normalizeOptionalStatus(
       readFirstDefined(product, ["status", "Status", "productState", "ProductState"])
+    ),
+    // Product detail owns Package.Status; member ProductState must not stand in for it.
+    packageStatus: normalizeEncPackageStatus(
+      readFirstDefined(product, ["packageStatus"]) ??
+        readFirstDefined(readFirstDefined(product, ["package", "Package"]) ?? {}, [
+          "status",
+          "Status",
+        ])
     ),
     edition: readFirstDefined(product, ["edition", "Edition"]) ?? "-",
     update: readFirstDefined(product, ["update", "Update", "updateNumber", "UpdateNumber"]) ?? "-",

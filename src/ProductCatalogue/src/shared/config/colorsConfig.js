@@ -14,6 +14,29 @@ const PRODUCT_STATUS_RGB = Object.freeze({
   15: "220,45,45", // Error
 });
 
+// EncPackageStatus IDs are distinct from ProductState, even when the numbers overlap.
+const PACKAGE_STATUS_RGB = Object.freeze({
+  0: "115,125,120", // Idle
+  2: "45,145,80", // Ready
+  3: "55,120,195", // InTransit
+  4: "220,45,45", // Error
+  5: "215,135,25", // Hold
+});
+
+// Popup headers should keep the pre-existing, theme-friendly translucency.
+// Badges use translucent fills to remain readable in both light and dark themes.
+export const packageStatusColorConfig = Object.fromEntries(
+  Object.entries(PACKAGE_STATUS_RGB).map(([id, rgb]) => [
+    id,
+    {
+      fill: `rgba(${rgb},0.1)`,
+      outline: `rgba(${rgb},0.95)`,
+      header: `rgba(${rgb},0.25)`,
+      badge: `rgba(${rgb},0.18)`,
+    },
+  ])
+);
+
 export const statusColorConfig = {};
 
 for (const [id, rgb] of Object.entries(PRODUCT_STATUS_RGB)) {

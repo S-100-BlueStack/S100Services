@@ -1,5 +1,5 @@
 import { createLayer } from "../../map/core/layerFactory.js";
-import { WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION } from "../../map/symbology/correctionSymbolResolver.js";
+import { WORK_UNIT_PACKAGE_STATUS_SYMBOLIZATION } from "../../map/symbology/correctionSymbolResolver.js";
 import {
   createCompatibilityAnalyzeEntry,
   createProductContextLookup,
@@ -25,9 +25,10 @@ export async function createAnalyzeLayers(map, products, { onProgress } = {}) {
   for (const product of packageProducts) {
     const entry = createCompatibilityAnalyzeEntry(product, 0);
     if (!entry) continue;
-    // Analyze has already accepted the complete member snapshot. Render those
-    // supplied Product statuses through F2 without inventing workflow/member state.
+    // The Product detail provides the authoritative Package status. Keep member
+    // states as metadata, but never derive map colors from candidate status.
     entry.feature.attributes.workUnitStatus = {
+      packageStatus: product.packageStatus,
       members: product.members.map((member) => ({
         key: member.memberKey,
         datasetName: member.datasetName,
@@ -38,7 +39,7 @@ export async function createAnalyzeLayers(map, products, { onProgress } = {}) {
       id: `analyze-package:${product.workUnit.identityKey}`,
       title: product.datasetName,
       appAnalyzeWorkUnitKey: product.workUnit.identityKey,
-      symbolization: WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION,
+      symbolization: WORK_UNIT_PACKAGE_STATUS_SYMBOLIZATION,
     });
   }
 

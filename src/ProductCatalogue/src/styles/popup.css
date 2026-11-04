@@ -157,6 +157,17 @@
   margin-inline-start: auto;
 }
 
+.popup-package-status__value {
+  width: fit-content;
+  min-width: 0;
+  padding: 3px 7px;
+  background: var(--pc-package-status-background, var(--pc-popup-surface-alt));
+}
+
+.popup-package-status .popup-product-error {
+  font-weight: inherit;
+}
+
 .popup-product-table-wrapper {
   margin-top: 0;
   overflow: visible;

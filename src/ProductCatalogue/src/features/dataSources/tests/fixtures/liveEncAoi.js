@@ -2,6 +2,7 @@ export function createLiveEncAoi({
   datasetName = "101DK0041149E",
   s57DatasetName = "DK-WIRE-MAPPING-42",
   workflowStatus = 9,
+  packageStatus = 4,
   s101Status = 10,
   s57Status = 15,
   usageBand = 3,
@@ -31,7 +32,7 @@ export function createLiveEncAoi({
         UsageBand: usageBand,
         DisplayScale: displayScale,
         DetectedAtUtc: "2026-10-02T06:00:00Z",
-        Status: 4,
+        Status: packageStatus,
         ErrorMessage: "Package error",
         S101: {
           DatasetName: datasetName,

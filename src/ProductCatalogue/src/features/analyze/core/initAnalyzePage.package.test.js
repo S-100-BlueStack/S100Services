@@ -7,10 +7,7 @@ import { validateProductCatalogSelection } from "../../products/domain/productCa
 import { createWorkspaceProductContext } from "../../products/domain/productContext.js";
 import { loadAnalyzeProductHistories } from "../services/analyzeHistoryLoader.js";
 import { loadAnalyzeMapTestPipeline } from "../map/analyzeMapTestSupport.js";
-import {
-  getCorrectionSymbol,
-  getMixedCorrectionSymbol,
-} from "../../map/symbology/correctionSymbols.js";
+import { getPackageCorrectionSymbol } from "../../map/symbology/correctionSymbols.js";
 import { fetchAnalyzeProducts as fetchOwnedAnalyzeProducts } from "../api/analyzeApi.js";
 import { artifactHarness, validationArtifact } from "../api/analyzeArtifactTestSupport.js";
 
@@ -43,7 +40,12 @@ function simpleProduct(edition = 1) {
     aoiGeometry: { x: 20, y: 57 },
   };
 }
-function packageProduct(edition = 1, statuses = [8, 11], polygonGeometry = false) {
+function packageProduct(
+  edition = 1,
+  statuses = [8, 11],
+  polygonGeometry = false,
+  packageStatus = 4
+) {
   const members = declaration.members.map((member) => ({
     datasetName: member.datasetName,
     edition,
@@ -61,6 +63,7 @@ function packageProduct(edition = 1, statuses = [8, 11], polygonGeometry = false
   }));
   return {
     ...members[0],
+    packageStatus,
     aoiGeometry: polygonGeometry
       ? {
           rings: [
@@ -89,7 +92,12 @@ const deferred = () => {
 async function harness(
   t,
   initial = names,
-  { memberStatuses = [8, 11], polygonGeometry = false, fetchProducts = null } = {}
+  {
+    memberStatuses = [8, 11],
+    packageStatus = 4,
+    polygonGeometry = false,
+    fetchProducts = null,
+  } = {}
 ) {
   const previousDocument = globalThis.document;
   const previousWindow = globalThis.window;
@@ -110,6 +118,7 @@ async function harness(
   };
   const state = {
     memberStatuses,
+    packageStatus,
     polygonGeometry,
     revision: 1,
     loads: 0,
@@ -263,7 +272,12 @@ async function harness(
                   workspaceLoadState: "failed",
                   loadError: "Member unavailable",
                 }
-              : packageProduct(state.revision, state.memberStatuses, state.polygonGeometry)
+              : packageProduct(
+                  state.revision,
+                  state.memberStatuses,
+                  state.polygonGeometry,
+                  state.packageStatus
+                )
       );
     },
     loadAnalyzeProductHistories: async (products) => {
@@ -661,7 +675,7 @@ test("cancelling staged hover preserves the accepted package popup during a simp
   assert.equal(h.state.closes, closes);
 });
 
-test("package refresh transitions scalar to mixed and back without touching ordinary map state", async (t) => {
+test("package refresh follows aggregate status, not members, without disturbing ordinary map", async (t) => {
   const h = await harness(t, [names[0], ordinaryName], {
     memberStatuses: [8, 8],
     polygonGeometry: true,
@@ -672,7 +686,7 @@ test("package refresh transitions scalar to mixed and back without touching ordi
   h.view.popup.selectedFeature = ordinary;
   h.view.popup.visible = true;
   const closes = h.state.closes;
-  assert.deepEqual(initial.symbol, getCorrectionSymbol(8));
+  assert.deepEqual(initial.symbol, getPackageCorrectionSymbol(4));
   assert.deepEqual(
     initial.attributes.workUnitStatus.members.map((member) => member.status),
     [8, 8]
@@ -682,18 +696,19 @@ test("package refresh transitions scalar to mixed and back without touching ordi
   assert.equal(await h.state.refresh([names[0]]), true);
   const mixed = findGraphic(h, names[0]);
   assert.notEqual(mixed, initial);
-  assert.deepEqual(mixed.symbol, getMixedCorrectionSymbol([8, 11]));
+  assert.deepEqual(mixed.symbol, getPackageCorrectionSymbol(4));
   assert.equal(h.page.products[0].members[1].status, 11);
   assert.equal(findGraphic(h, ordinaryName), ordinary);
   assert.equal(h.state.unregistered.includes(ordinary.layer), false);
   assert.equal(h.view.popup.visible, true);
   assert.equal(h.state.closes, closes);
   h.state.memberStatuses = [11, 11];
+  h.state.packageStatus = 2;
   h.state.revision = 3;
   assert.equal(await h.state.refresh([names[0]]), true);
   const scalar = findGraphic(h, names[0]);
   assert.notEqual(scalar, mixed);
-  assert.deepEqual(scalar.symbol, getCorrectionSymbol(11));
+  assert.deepEqual(scalar.symbol, getPackageCorrectionSymbol(2));
   assert.deepEqual(
     scalar.attributes.workUnitStatus.members.map((member) => member.status),
     [11, 11]
@@ -706,12 +721,12 @@ test("package refresh transitions scalar to mixed and back without touching ordi
   h.state.memberStatuses = [8, 11];
   assert.equal(await h.state.refresh([names[0]]), false);
   assert.equal(findGraphic(h, names[0]), scalar);
-  assert.deepEqual(scalar.symbol, getCorrectionSymbol(11));
+  assert.deepEqual(scalar.symbol, getPackageCorrectionSymbol(2));
   assert.equal(findGraphic(h, ordinaryName), ordinary);
   assert.equal(h.view.popup.visible, true);
 });
 
-test("failed package refresh retains its accepted mixed Graphic and symbol", async (t) => {
+test("failed package refresh retains its accepted aggregate-status Graphic and symbol", async (t) => {
   const h = await harness(t, [names[0], ordinaryName], {
     memberStatuses: [8, 11],
     polygonGeometry: true,
@@ -719,7 +734,7 @@ test("failed package refresh retains its accepted mixed Graphic and symbol", asy
   const accepted = findGraphic(h, names[0]);
   const symbol = accepted.symbol;
   const members = h.page.products[0].members;
-  assert.deepEqual(symbol, getMixedCorrectionSymbol([8, 11]));
+  assert.deepEqual(symbol, getPackageCorrectionSymbol(4));
   h.state.fail = true;
   h.state.memberStatuses = [8, 8];
   assert.equal(await h.state.refresh([names[0]]), false);
@@ -748,7 +763,7 @@ test("late artifact history cannot overwrite a newer accepted package member sna
       [[], [validationArtifact(1).Id]]
     );
     assert.equal(h.map.layers.flatMap((layer) => layer.graphics).length, 1);
-    assert.equal(findGraphic(h, names[0]).symbol.type, "cim");
+    assert.deepEqual(findGraphic(h, names[0]).symbol, getPackageCorrectionSymbol(undefined));
   } finally {
     gate.done.resolve();
     assert.equal(await oldRefresh, false);

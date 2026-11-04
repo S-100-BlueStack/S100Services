@@ -31,26 +31,24 @@ service does not depend on layer titles or visible DOM state.
 
 The shared field registry currently defines:
 
-- `status` as a value filter;
+- `status` as the ProductState value filter for single-product sources;
+- `packageStatus` as the aggregate EncPackageStatus value filter for package sources;
 - `displayScale` as a numeric range filter;
 - `usageBand` as a value filter.
 
-A value-mode field definition may provide `readValues(graphic, readScalar)` instead of
-reading one scalar attribute. It returns logical values for one Graphic; facets and matching use
-the same reader and deduplicate values per Graphic. One selected value matches if any returned
-value matches. Other dimensions still combine with AND, while numeric range fields always read
-one scalar. The package source configures this reader only for Status; simple sources and
-Display scale/Usage band keep their existing scalar behavior.
+A value-mode field definition may supply `readValues(graphic, readScalar)`. Its normalized
+values feed both matching and contextual facet counts. The ENC package supplies
+`readEncPackageStatusFilterValues()` for the dedicated `packageStatus` field: it reads only
+`graphic.attributes.workUnitStatus.packageStatus` as normalized from backend
+`Attributes.Package.Status`. Neither member ProductState nor top-level `Attributes.Status`
+can match a Package-status filter. Unknown/unsupported aggregate status uses a separate
+`unknown` value, never Idle. Product sources still read their scalar `status` field.
 
-The package status reader consumes the application-owned normalized
-`graphic.attributes.workUnitStatus` shape `{ workflowStatus, members: [{ key, status }] }`.
-The future AOI integration must map its canonical backend read state into that shape. Neither the
-filter service nor this foundation assumes a backend DTO. Package workflow status and all available
-member Product statuses form one Status option list. A repeated value counts once per Graphic,
-and a matching member retains the one representative Graphic/work unit. Until normalized package
-state is supplied, the reader falls back to that Graphic's scalar `status`; it does not infer
-missing member or workflow state. Backend DTO mapping remains deferred; the accepted F2 rendering
-foundation is unchanged by contextual facet counting.
+Aggregate lookup options are Idle (0), Ready (2), InTransit (3), Error (4), and Hold (5).
+These numeric IDs are **not** ProductState IDs. An older saved package `status` selection is
+sanitized out when its source activates because it is no longer a supported package field;
+no value conversion is attempted. Package source defaults exclude Idle (0); ordinary sources
+retain ProductState Idle (1) as their default exclusion.
 
 Selections remain provider/value based in schema version 2. No member key or package identity is
 stored in filter preferences beyond the existing provider identity.
@@ -70,11 +68,9 @@ Graphics and filters. The target field ignores its own active filter; all other 
 are ANDed using the same predicate as map matching. Alternatives within a value field remain ORed.
 No contextual cache or network request is involved.
 
-Status counts therefore apply Usage band and Display scale, Usage band counts apply Status and
-Display scale, and Display scale counts apply Status and Usage band. Package Status uses the same
-F1 workflow/member projection as matching: one representative Graphic contributes at most once per
-logical facet value, even when workflow and multiple members repeat it. Scalar-only package fallback
-and current backend/member integration limitations remain unchanged.
+Counts for Status/Package status apply Usage band and Display scale; the other dimensions
+apply the active status dimension. A package contributes exactly one aggregate status value
+regardless of the number or state of its Export Candidates.
 
 Zero-count options remain visible and selectable, including lookup options and unknown values with
 fallback labels. Contextual counts never remove fields or shrink the provider's option domain.

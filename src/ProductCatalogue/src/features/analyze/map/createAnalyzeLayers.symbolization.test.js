@@ -5,12 +5,11 @@ import {
   createWorkspaceProductContext,
   resolveProductContext,
 } from "../../products/domain/productContext.js";
-import { projectMemberStatusRenderState } from "../../dataSources/domain/memberStatusRenderingProjection.js";
 import {
   getCorrectionSymbol,
-  getMixedCorrectionSymbol,
+  getPackageCorrectionSymbol,
 } from "../../map/symbology/correctionSymbols.js";
-import { WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION } from "../../map/symbology/correctionSymbolResolver.js";
+import { WORK_UNIT_PACKAGE_STATUS_SYMBOLIZATION } from "../../map/symbology/correctionSymbolResolver.js";
 
 const polygon = {
   rings: [
@@ -23,7 +22,8 @@ const polygon = {
   ],
   spatialReference: { wkid: 4326 },
 };
-function packageProduct(statuses, representativeStatus = statuses[0]) {
+
+function packageProduct(statuses, packageStatus = 4, representativeStatus = statuses[0]) {
   const members = statuses.map((status, index) => ({
     datasetName: index ? "Mapped legacy" : "Primary harbour",
     memberKey: index ? "s57" : "s101",
@@ -41,6 +41,7 @@ function packageProduct(statuses, representativeStatus = statuses[0]) {
   return {
     ...members[0],
     status: representativeStatus,
+    packageStatus,
     aoiGeometry: polygon,
     workUnit: {
       kind: "package",
@@ -54,6 +55,7 @@ function packageProduct(statuses, representativeStatus = statuses[0]) {
     members,
   };
 }
+
 async function render(products) {
   const map = {
     layers: [],
@@ -84,38 +86,18 @@ async function render(products) {
   return { layers, definitions };
 }
 
-test("different Analyze member statuses render one existing F2 CIM hatch Graphic", async (t) => {
-  const product = packageProduct([8, 11]);
-  assert.deepEqual(
-    product.members.map((member) => member.status),
-    [8, 11]
-  );
+test("Analyze package uses the authoritative package status regardless of candidate statuses", async () => {
+  const product = packageProduct([8, 11], 5);
   const { layers } = await render([product]);
   assert.equal(layers.length, 1);
   assert.equal(layers[0].graphics.length, 1);
   const graphic = layers[0].graphics[0];
   assert.equal(graphic.attributes.status, 8);
-  t.diagnostic(
-    JSON.stringify({
-      modelStatuses: product.members.map((member) => member.status),
-      graphics: layers[0].graphics.length,
-      representativeStatus: graphic.attributes.status,
-      symbolType: graphic.symbol.type,
-    })
-  );
-  if (graphic.symbol.type === "simple-fill")
-    assert.deepEqual(graphic.symbol, getCorrectionSymbol(8));
-  // Check the rendered symbol first so controlled v3 proves scalar fallback,
-  // rather than failing only because its configuration projection is absent.
-  assert.equal(
-    graphic.symbol.type,
-    "cim",
-    "One shared polygon must use F2 mixed rendering, not the representative scalar symbol"
-  );
-  assert.deepEqual(graphic.symbol, getMixedCorrectionSymbol([8, 11]));
-  assert.ok(graphic.symbol.data.symbol.symbolLayers.some((layer) => layer.type === "CIMHatchFill"));
-  assert.equal(layers[0].appSymbolization, WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION);
+  assert.deepEqual(graphic.symbol, getPackageCorrectionSymbol(5));
+  assert.equal(graphic.symbol.type, "simple-fill");
+  assert.equal(layers[0].appSymbolization, WORK_UNIT_PACKAGE_STATUS_SYMBOLIZATION);
   assert.deepEqual(graphic.attributes.workUnitStatus, {
+    packageStatus: 5,
     members: [
       { key: "s101", datasetName: "Primary harbour", status: 8 },
       { key: "s57", datasetName: "Mapped legacy", status: 11 },
@@ -136,45 +118,30 @@ test("different Analyze member statuses render one existing F2 CIM hatch Graphic
   );
 });
 
-for (const [statuses, representative, expectedStatus] of [
-  [[11, 11], 11, 11],
-  [[8, undefined], 8, 8],
-  [[null, 11], null, 11],
-  [[null, undefined], null, null],
-]) {
-  test(`Analyze package scalar rendering uses supplied member state ${JSON.stringify(statuses)}`, async () => {
-    const product = packageProduct(statuses, representative);
-    product.workUnitStatus = { workflowStatus: 15, members: [{ status: 15 }] };
+for (const status of [0, 2, 3, 4, 5, undefined]) {
+  test(`Analyze displays package status ${status ?? "unknown"} without member hatches`, async () => {
+    const product = packageProduct([null, 11], status === undefined ? null : status);
     const originalMembers = structuredClone(product.members);
     const { layers } = await render([product]);
     const graphic = layers[0].graphics[0];
-    assert.equal(layers[0].graphics.length, 1);
-    assert.equal(layers[0].appSymbolization, WORK_UNIT_MEMBER_STATUS_SYMBOLIZATION);
-    assert.deepEqual(
-      graphic.attributes.workUnitStatus.members.map((member) => member.status),
-      statuses
-    );
-    assert.equal(Object.hasOwn(graphic.attributes.workUnitStatus, "workflowStatus"), false);
-    assert.deepEqual(
-      projectMemberStatusRenderState({
-        representativeStatus: representative,
-        workUnitStatus: graphic.attributes.workUnitStatus,
-      }),
-      {
-        kind: "scalar",
-        status: statuses.every((status) => status == null)
-          ? representative
-          : String(expectedStatus),
-        memberStatuses: statuses.every((status) => status == null) ? [] : [String(expectedStatus)],
-      }
-    );
-    assert.deepEqual(graphic.symbol, getCorrectionSymbol(expectedStatus));
+    assert.deepEqual(graphic.symbol, getPackageCorrectionSymbol(status));
     assert.equal(graphic.symbol.type, "simple-fill");
+    assert.deepEqual(
+      graphic.attributes.workUnitStatus.members.map((item) => item.status),
+      [null, 11]
+    );
+    assert.equal(layers[0].appSymbolization, WORK_UNIT_PACKAGE_STATUS_SYMBOLIZATION);
     assert.deepEqual(product.members, originalMembers);
   });
 }
 
-test("ordinary Analyze layers retain scalar rendering alongside member-aware package layers", async () => {
+test("Analyze member changes do not override the package symbol", async () => {
+  const first = await render([packageProduct([8, 11], 2)]);
+  const second = await render([packageProduct([15, 15], 2)]);
+  assert.deepEqual(first.layers[0].graphics[0].symbol, second.layers[0].graphics[0].symbol);
+});
+
+test("ordinary Analyze layers retain scalar rendering beside packages", async () => {
   const packageValue = packageProduct([8, 11]);
   const simple = {
     datasetName: "Ordinary chart",

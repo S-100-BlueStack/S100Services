@@ -12,7 +12,7 @@ export function createPopupProductMetadataColumns(attributes, productContext) {
         update: current?.update,
         date: current?.issueDate,
         status: state?.status,
-        errorMessage: undefined,
+        errorMessage: state?.errorMessage,
         validationArtifacts: [],
       };
       const related = findProductExportMetadataItem(attributes?.exportMetadata, [
