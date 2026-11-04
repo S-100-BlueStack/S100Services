@@ -1,14 +1,7 @@
 import esriConfig from "@arcgis/core/config.js";
 import { DEFAULT_BASEMAP } from "../basemaps/basemapSettings.js";
-export { DEFAULT_BASEMAP };
-
-const DEFAULT_CENTER = Object.freeze([10.4, 56.15]);
-const DEFAULT_CONSTRAINTS = Object.freeze({
-  minZoom: 4,
-  rotationEnabled: false,
-});
-
-export const DEFAULT_ZOOM = 6;
+import { createDefaultMapViewOptions, DEFAULT_ZOOM } from "./mapViewDefaults.js";
+export { DEFAULT_BASEMAP, DEFAULT_ZOOM };
 
 export function configureArcGisRuntime(runtimeConfig = {}) {
   const portalUrl = normalizeOptionalString(
@@ -28,9 +21,7 @@ export function configureArcGisRuntime(runtimeConfig = {}) {
 export function createDefaultMapConfig() {
   return {
     basemap: DEFAULT_BASEMAP,
-    center: [...DEFAULT_CENTER],
-    zoom: DEFAULT_ZOOM,
-    constraints: { ...DEFAULT_CONSTRAINTS },
+    ...createDefaultMapViewOptions(),
   };
 }
 

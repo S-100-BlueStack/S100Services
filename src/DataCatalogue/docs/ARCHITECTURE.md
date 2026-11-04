@@ -1,3 +1,19 @@
+## DC-MAP-01 — Shared MapView overview constraints
+
+`features/map/config/mapConfig.js` composes the basemap with pure
+`features/map/config/mapViewDefaults.js` options. Both the Jobs main map and
+Package assignment map use `core/createBaseMapView.js`, so they share the
+application-owned `constraints.minZoom: 0` global overview bound. The accepted
+initial center and zoom (`[10.4, 56.15]`, `6`) remain unchanged. `MapView`
+instances, basemaps, geometry overlays, visibility and position persistence are
+not rebuilt or reloaded as part of a zoom-only navigation. Existing opt-in
+per-map position persistence can restore lower zoom levels independently.
+
+The effective zoom range also depends on each ArcGIS basemap's tile LODs, and
+visual confirmation across supported basemaps requires the local SDK/browser.
+No automatic fit of Denmark and Greenland is performed at startup; the user
+can zoom out to the overview when needed.
+
 ## DC-STAB-02C v3 — Assignment selection publication
 
 `features/assignments/state/createAssignmentSession.js` owns the committed

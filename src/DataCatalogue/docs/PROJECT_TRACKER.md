@@ -20,21 +20,40 @@ check must pass before installation. No backend projects or dependencies change.
 - Prior prototype/candidate status sections below are historical and do not
   supersede this scope or user-confirmed accepted commits.
 
-### DC-MAP-01 — Denmark and Greenland map extent (P2, backlog)
+### DC-MAP-01 — Denmark and Greenland map extent (P2, implementation candidate)
 
-Users must be able to zoom out far enough to see both Denmark and Greenland in
-one map view, on the Jobs main map **and** Package assignment map.
-`src/features/map/config/mapConfig.js` currently sets `DEFAULT_CONSTRAINTS.minZoom`
-to `4`. Investigate that value, per-view overrides, effective basemap/view
-constraints and actual rendering before choosing a new bound; the root cause
-has not been verified in a browser.
+Requested baseline: `e02bfd84e89740e14f34dcb6d904879df396c136`
+(user-reported accepted DC-STAB-02E commit). The exact Git tree is not mounted
+in the authoring environment; the delivery requires a commit-pinned preimage
+check before installation. The accepted DC-STAB-02E candidate is the controlled
+source snapshot used to prepare this change.
 
-Acceptance: both MapViews reach the necessary overview scale; existing zoom,
-keyboard/pointer interactions, per-map saved positions, basemap switching and
-initial view preferences remain compatible. Zoom-only interactions must not
-recreate the MapView or re-fetch Workspace geometry. No forced auto-fit when
-Pipelines/Workspaces are toggled. Test laptop viewport sizes and theme/basemap
-variants. **Documented only; no map configuration change in DC-STAB-02E.**
+- The shared `createDefaultMapConfig()` feeds `createBaseMapView()` for the Jobs
+  main map and both live/mock Package assignment maps. Its previous explicit
+  `minZoom: 4` prevented the required Denmark/Greenland overview.
+- The shared `MapView` defaults now permit zoom level **0**. This removes the
+  application-owned lower-zoom restriction without changing the accepted
+  default center `[10.4, 56.15]`, initial zoom `6`, rotation constraint,
+  basemap selection, navigation controls or MapView lifecycle.
+- Defaults are defined in a small SDK-independent configuration module so
+  Node tests can verify the bound and independent options for both maps.
+  Existing optional per-map saved center/zoom values continue to work,
+  including lower zooms, with no migration.
+- No new geographic extent, automatic fit, geometry request, Pipeline filtering
+  or Workspace data behavior is introduced by this change. The current map
+  remains centered on Denmark at initial startup unless a saved position exists.
+- ArcGIS `constraints.effectiveMinZoom` also depends on the active basemap's
+  supported LODs. Verify the actual zoom-out limit in the local browser for
+  Topographic, Oceans, Dark Gray and optional Human Geography Dark; a particular
+  basemap may require a follow-up if its LOD range is narrower than expected.
+
+Acceptance: Both Maps reach an overview including Denmark and Greenland in one
+view at laptop dimensions; mouse wheel, +/- controls and keyboard navigation
+remain usable. Switching basemaps, preserving independent saved positions,
+changing Workspace visibility and switching Packages must not recreate a
+MapView or trigger Workspace geometry reads solely because of zoom. Confirm
+light/dark modes and a normal Denmark startup. Browser/SDK verification is
+pending on the implementation candidate.
 
 ## DC-STAB-02C v3 — Stable Package assignment selection (candidate, 2026-10-30)
 

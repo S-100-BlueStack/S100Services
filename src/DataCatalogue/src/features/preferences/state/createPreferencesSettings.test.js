@@ -109,3 +109,17 @@ test("Map position validation is independent of other preference settings", () =
   assert.equal(preferences.readMapPosition("main"), null);
   preferences.destroy();
 });
+
+test("Wide overview zoom persists independently for both maps when opted in", () => {
+  const store = storage();
+  const preferences = createPreferencesSettings({ storage: store });
+  preferences.set("rememberMapPosition", true);
+  preferences.saveMapPosition("main", { center: [-35, 66], zoom: 1.25 });
+  preferences.saveMapPosition("assignment", { center: [10, 56], zoom: 6 });
+  preferences.destroy();
+
+  const restored = createPreferencesSettings({ storage: store });
+  assert.deepEqual(restored.readMapPosition("main"), { center: [-35, 66], zoom: 1.25 });
+  assert.deepEqual(restored.readMapPosition("assignment"), { center: [10, 56], zoom: 6 });
+  restored.destroy();
+});
