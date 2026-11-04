@@ -28,7 +28,8 @@ export function createDraftNavigation({
   });
   return {
     async allow() {
-      if (pending || session.snapshot().saving) return false;
+      if (pending || session.snapshot().saving || session.snapshot().reconciliationRequired)
+        return false;
       if (!session.snapshot().dirty) return true;
       pending = true;
       try {

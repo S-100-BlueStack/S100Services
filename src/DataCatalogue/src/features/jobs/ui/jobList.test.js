@@ -7,6 +7,7 @@ class TestElement {
   constructor(tagName) {
     this.tagName = tagName;
     this.children = [];
+    this.parent = null;
     this.dataset = {};
     this.listeners = new Map();
     this.attributes = new Map();
@@ -25,16 +26,36 @@ class TestElement {
   }
 
   append(...children) {
+    for (const child of children) child.parent = this;
     this.children.push(...children);
   }
 
   appendChild(child) {
-    this.children.push(child);
+    this.append(child);
     return child;
   }
 
   replaceChildren(...children) {
-    this.children = children;
+    this.children = [];
+    this.append(...children);
+  }
+
+  contains(other) {
+    return this === other || this.children.some((child) => child.contains(other));
+  }
+
+  closest(selector) {
+    let node = this;
+    while (node) {
+      if (selector === "[data-job-focus]" && node.dataset.jobFocus) return node;
+      if (selector === "[data-job-id]" && node.dataset.jobId) return node;
+      node = node.parent;
+    }
+    return null;
+  }
+
+  matches(selector) {
+    return selector === ":focus-visible" && this.focusVisible === true;
   }
 
   setAttribute(name, value) {
@@ -54,11 +75,16 @@ class TestElement {
   querySelectorAll(selector) {
     if (selector === "[data-job-details-id]")
       return descendants(this).filter((element) => element.dataset.jobDetailsId);
+    if (selector === "[data-job-id]")
+      return descendants(this).filter((element) => element.dataset.jobId);
+    if (selector === "[data-job-focus]")
+      return descendants(this).filter((element) => element.dataset.jobFocus);
     return [];
   }
 
   focus() {
     this.focused = true;
+    if (globalThis.document) globalThis.document.activeElement = this;
   }
 
   scrollIntoView() {}
@@ -413,3 +439,74 @@ for (const sourceMode of ["live", "mock"]) {
     });
   });
 }
+
+test("keyboard status focus survives a store emission replacing the live Job card", () => {
+  withDocument(() => {
+    const { job } = fixture("live");
+    let publish;
+    const store = {
+      getSnapshot: () => ({ jobs: [job], isLoading: false, error: null }),
+      subscribe(listener) {
+        publish = listener;
+        listener(this.getSnapshot());
+        return () => {};
+      },
+    };
+    const view = createJobList({ store, sourceMode: "live" });
+    const first = findByClass(view.element, "job-status-button").find(
+      (button) => button.dataset.jobFocus === "status:inProgress"
+    );
+    first.focus();
+    view.element.dispatchEvent({ type: "keydown" });
+    publish({ jobs: [{ ...job, status: "inProgress" }], isLoading: false, error: null });
+    assert.notEqual(globalThis.document.activeElement, first);
+    assert.equal(globalThis.document.activeElement.dataset.jobFocus, "status:inProgress");
+    assert.equal(globalThis.document.activeElement.disabled, false);
+    view.destroy();
+  });
+});
+
+test("keyboard Refresh focus survives the loading state and completion", () => {
+  withDocument(() => {
+    const { job } = fixture("live");
+    let publish;
+    const store = {
+      getSnapshot: () => ({ jobs: [job], isLoading: false, error: null }),
+      subscribe(listener) {
+        publish = listener;
+        listener(this.getSnapshot());
+        return () => {};
+      },
+    };
+    const view = createJobList({ store, sourceMode: "live" });
+    assertRefreshIconButton(view.element).focus();
+    view.element.dispatchEvent({ type: "keydown" });
+    publish({ jobs: [job], isLoading: true, error: null });
+    assert.equal(globalThis.document.activeElement, view.element);
+    publish({ jobs: [job], isLoading: false, error: null });
+    assert.equal(globalThis.document.activeElement.dataset.jobFocus, "refresh");
+    assert.equal(globalThis.document.activeElement.disabled, false);
+    view.destroy();
+  });
+});
+
+test("disappearing focused Job moves focus to the panel Refresh control", () => {
+  withDocument(() => {
+    const { job } = fixture("mock");
+    let publish;
+    const store = {
+      getSnapshot: () => ({ jobs: [job], isLoading: false, error: null }),
+      subscribe(listener) {
+        publish = listener;
+        listener(this.getSnapshot());
+        return () => {};
+      },
+    };
+    const view = createJobList({ store, sourceMode: "mock" });
+    findByClass(view.element, "job-status-button")[0].focus();
+    view.element.dispatchEvent({ type: "keydown" });
+    publish({ jobs: [], isLoading: false, error: null });
+    assert.equal(globalThis.document.activeElement.dataset.jobFocus, "refresh");
+    view.destroy();
+  });
+});

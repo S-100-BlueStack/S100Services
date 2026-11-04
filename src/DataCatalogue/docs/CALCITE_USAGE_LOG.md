@@ -149,3 +149,12 @@ or new animation is introduced. No live map control is offered for unverified ge
   `calcite-button` was still rendered in the Jobs list.
 - Provide native `title`, `aria-label`, `:focus-visible` styling and disabled
   state without private Calcite selectors or altering refresh behavior.
+
+### DC-STAB-02D — Native recovery actions and public keyboard focus (candidate, 2026-11-04)
+
+The assignment toolbar adds application-owned native `button` controls for
+read-only binding verification and explicit local draft discard, consistent with
+its existing native Save control. Jobs uses stable `data-job-focus` markers on
+public `calcite-button`/`calcite-action` hosts and native Refresh buttons to
+restore logical keyboard focus after re-rendering. There are no private Calcite
+shadow-DOM selectors, new component dependencies, or changes to theme tokens.

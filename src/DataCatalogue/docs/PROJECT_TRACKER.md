@@ -3202,3 +3202,29 @@ Historical rename validation and migration boundaries remain in `RENAME_NOTES.md
 - Local browser screenshots of the first DC-API-05 candidate still showed
   pre-candidate live card expansion/date controls and older Job Details facts;
   verify that the candidate files are actually installed before acceptance.
+
+### DC-STAB-02D — Binding reliability and keyboard focus (candidate, 2026-11-04)
+
+Status: **implemented candidate; local acceptance and full `npm run check` pending**.
+Authoritative requested commit: `25f21f0959385704ef24913b4c894d127a398174`.
+The source of that commit is not independently mounted in the implementation environment;
+preimage validation against the exact Git commit is mandatory before installation.
+
+- **F06 (P2):** Bound each live binding preflight, mutation, reconciliation and
+  response-body read. Stop later mutations after an uncertain outcome; preserve the
+  draft and require read-only verification before Save can run again. Offer an explicit
+  local-only draft discard with a warning about possible late server completion.
+  Normal independent definitive failures continue to reconcile as before. No backend
+  contract, persistent status model, or authentication flow is changed.
+- **F07 (P2):** Preserve logical Jobs keyboard focus through loading, status changes,
+  refresh and disappearance; do not steal focus from other page controls or pointer
+  interaction. Retain the accepted compact Jobs presentation and refresh icons.
+- Remaining backend gap: without an operation result/idempotency or version token,
+  an aborted write can commit after the next read. The frontend does not claim to
+  prevent that cross-request race; explicit verification and user review are required.
+- Scope protection: DC-STAB-02C Package selection, Workspace color retention,
+  F03/F04 mock map lifecycle, and prior DC-STAB-02A/02B fixes remain unchanged.
+- Required local validation: exact baseline/preimage check, `npm run format`,
+  `npm run check`, controlled pending API requests (preflight/write/reload),
+  read-only recovery, manual local discard, and keyboard status/Refresh focus in
+  both Jobs views. The manual checklist is provided directly in the conversation.

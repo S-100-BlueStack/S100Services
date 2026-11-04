@@ -12,6 +12,7 @@ export function createAssignmentSession({ services }) {
     draft: null,
     loading: false,
     saving: false,
+    reconciliationRequired: false,
     error: "",
     selectionError: "",
     validationError: "",
@@ -33,7 +34,8 @@ export function createAssignmentSession({ services }) {
   }
 
   function select(id) {
-    if (!alive || state.saving || state.dirty) return Promise.resolve(false);
+    if (!alive || state.saving || state.dirty || state.reconciliationRequired)
+      return Promise.resolve(false);
     if (pendingSelection?.id === id) return pendingSelection.promise;
 
     const current = ++generation;
@@ -56,6 +58,7 @@ export function createAssignmentSession({ services }) {
           draft: createDraft(record),
           loading: false,
           saving: false,
+          reconciliationRequired: false,
           error: "",
           selectionError: "",
           validationError: "",
@@ -84,7 +87,8 @@ export function createAssignmentSession({ services }) {
 
   function save() {
     if (pendingSave) return pendingSave;
-    if (!editable() || !state.dirty) return Promise.resolve(!state.error);
+    if (!editable() || state.reconciliationRequired) return Promise.resolve(false);
+    if (!state.dirty) return Promise.resolve(!state.error);
     if (state.validationError) return Promise.resolve(false);
 
     const current = generation;
@@ -101,11 +105,13 @@ export function createAssignmentSession({ services }) {
         if (!alive || generation !== current) return false;
         state.record = record;
         state.draft = createDraft(record);
+        state.reconciliationRequired = false;
         return true;
       })
       .catch((error) => {
         if (alive && generation === current) {
           if (error.record) state.record = error.record;
+          state.reconciliationRequired = Boolean(error.requiresReconciliation);
           state.error = error.message;
         }
         return false;
@@ -121,10 +127,68 @@ export function createAssignmentSession({ services }) {
     return pendingSave;
   }
 
+  function reconcile() {
+    if (pendingSave) return pendingSave;
+    if (!editable() || !state.reconciliationRequired || !state.feature)
+      return Promise.resolve(false);
+
+    const current = generation;
+    const id = state.feature.id;
+    state.saving = true;
+    state.error = "";
+    emit();
+
+    pendingSave = Promise.resolve()
+      .then(() => (services.assignments.reconcile ?? services.assignments.load)(id))
+      .then((record) => {
+        if (!alive || generation !== current) return false;
+        // Preserve the intended draft; only the server-owned record may be replaced.
+        state.record = record;
+        state.reconciliationRequired = false;
+        state.error =
+          "Saved bindings reloaded. Review your draft before another Save. A timed-out request may still complete on the server.";
+        return true;
+      })
+      .catch((error) => {
+        if (alive && generation === current) {
+          state.error = `Could not verify saved bindings: ${error.message} Check again before saving.`;
+        }
+        return false;
+      })
+      .finally(() => {
+        pendingSave = null;
+        if (alive && generation === current) {
+          state.saving = false;
+          emit();
+        }
+      });
+    return pendingSave;
+  }
+
   return {
     snapshot,
     select,
     save,
+    reconcile,
+    abandonUncertainDraft() {
+      if (!alive || state.saving || !state.reconciliationRequired) return false;
+      // This discards only the browser draft. A timed-out server mutation may still complete.
+      generation++;
+      state = {
+        feature: null,
+        record: null,
+        draft: null,
+        loading: false,
+        saving: false,
+        reconciliationRequired: false,
+        error: "",
+        selectionError: "",
+        validationError: "",
+        dirty: false,
+      };
+      emit();
+      return true;
+    },
     subscribe(listener) {
       listeners.add(listener);
       listener(snapshot());
@@ -161,14 +225,14 @@ export function createAssignmentSession({ services }) {
       }
     },
     discard() {
-      if (editable()) {
+      if (editable() && !state.reconciliationRequired) {
         state.draft = createDraft(state.record);
         state.error = "";
         emit();
       }
     },
     clear() {
-      if (!alive || state.saving || state.dirty) return false;
+      if (!alive || state.saving || state.dirty || state.reconciliationRequired) return false;
       generation++;
       pendingSelection = null;
       state = {
@@ -177,6 +241,7 @@ export function createAssignmentSession({ services }) {
         draft: null,
         loading: false,
         saving: false,
+        reconciliationRequired: false,
         error: "",
         selectionError: "",
         validationError: "",

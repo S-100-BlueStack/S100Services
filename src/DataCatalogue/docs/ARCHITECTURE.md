@@ -1999,3 +1999,32 @@ selection; a manual selection takes priority over future theme changes and can b
 reset in Preferences. Only an explicitly selected basemap is persisted. Legacy v4
 nondefault selections are migrated. Workspace visibility remains an in-place
 `Graphic.visible` change without geometry refetch or MapView reset.
+
+### DC-STAB-02D — Binding deadlines and Jobs focus continuity (candidate, 2026-11-04)
+
+Binding reads, preflight, independent POST/DELETE operations, and reconciliation are
+bounded individually by a 30-second frontend deadline in
+`features/assignments/services/withBindingRequestDeadline.js`. Each request receives
+an `AbortSignal`; the deadline also settles when transport or HTTP-body consumption
+ignores cancellation. An aborted mutation is **not** evidence that the backend rolled
+it back. The live assignment service stops the remaining batch after a timeout,
+network failure, or ambiguous server error instead of blindly replaying writes.
+Ordinary definitive independent mutation failures still produce per-Pipeline outcomes
+and authoritative reconciliation.
+
+`createAssignmentSession` remains the sole owner of the draft and Save lifecycle.
+An uncertain write or a failed post-write reconciliation sets
+`reconciliationRequired`, retains the desired draft, and prevents another Save or
+Package navigation until an explicit read-only **Check saved bindings** succeeds.
+That action updates only the authoritative saved record, not the desired draft.
+An explicit **Discard local draft** confirmation is an escape hatch that clears the
+local selection; it does not undo or verify a server mutation. The backend still lacks
+operation IDs, idempotency keys, versions, and an authoritative operation-completion
+contract, so a late server-side write after verification remains possible.
+
+`features/jobs/ui/createJobsFocusRecovery.js` maintains logical focus by Job identity
+and public action name when list/details subtrees are re-rendered. Keyboard-triggered
+status and Refresh actions restore focus to their replacement control or to a stable
+fallback if the original disappears or becomes temporarily disabled. External pointer
+interaction invalidates pending restoration. The implementation uses DOM focus
+operations and public Calcite component hosts only, never shadow-DOM internals.

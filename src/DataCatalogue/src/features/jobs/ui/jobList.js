@@ -16,6 +16,7 @@ import {
 import { getJobsForAoiFromJobs } from "../../relations/services/relationService.js";
 import { createJobStore } from "../state/jobStore.js";
 import { getLiveJobPresentation } from "./liveJobPresentation.js";
+import { createJobsFocusRecovery } from "./createJobsFocusRecovery.js";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
@@ -33,6 +34,8 @@ export function createJobList({
 } = {}) {
   const rootElement = document.createElement("div");
   rootElement.className = "job-list";
+  rootElement.tabIndex = -1;
+  const focusRecovery = createJobsFocusRecovery(rootElement);
 
   let alive = true;
   let currentState = store.getSnapshot();
@@ -149,6 +152,7 @@ export function createJobList({
     if (!alive) return false;
     rootElement.classList.toggle("job-list--details", viewMode === JOB_LIST_VIEW_MODE.DETAILS);
 
+    const focusTarget = focusRecovery.capture();
     renderJobList({
       rootElement,
       state: currentState,
@@ -171,6 +175,7 @@ export function createJobList({
       clearJobMapFocus,
     });
 
+    focusRecovery.restore(focusTarget);
     rootElement.dispatchEvent(
       createJobDetailsModeChangedEvent({
         isDetailsMode: viewMode === JOB_LIST_VIEW_MODE.DETAILS,
@@ -277,6 +282,7 @@ export function createJobList({
     },
     destroy() {
       alive = false;
+      focusRecovery.destroy();
       unsubscribeJobs();
       unsubscribeFilters();
       rootElement.replaceChildren();
@@ -505,6 +511,7 @@ function renderJobDetailsView({
   const detailsElement = document.createElement("article");
   detailsElement.className = "job-details";
   detailsElement.dataset.jobDetailsId = selectedJob.id;
+  detailsElement.dataset.jobId = selectedJob.id;
   detailsElement.tabIndex = -1;
 
   detailsElement.append(
@@ -1003,6 +1010,7 @@ function createRefreshIconButton({ isLoading = false } = {}) {
   const label = isLoading ? "Refreshing Jobs" : "Refresh Jobs";
   buttonElement.type = "button";
   buttonElement.className = "job-list__refresh-button";
+  buttonElement.dataset.jobFocus = "refresh";
   buttonElement.disabled = isLoading;
   buttonElement.title = label;
   buttonElement.setAttribute("aria-label", label);
@@ -1022,6 +1030,7 @@ function createToolbarButton(label) {
   buttonElement.kind = "neutral";
   buttonElement.scale = "s";
   buttonElement.textContent = label;
+  buttonElement.dataset.jobFocus = label;
 
   return buttonElement;
 }
@@ -1115,6 +1124,7 @@ function createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDet
 
   const detailsButton = document.createElement("calcite-action");
   detailsButton.className = "job-card__details-action";
+  detailsButton.dataset.jobFocus = "details";
   detailsButton.icon = "information";
   detailsButton.text = "Open Job details";
   detailsButton.title = "Open Job details";
@@ -1142,6 +1152,7 @@ function createJobTitleRow({ job, isExpanded, expandedJobIds, render, openJobDet
   } else {
     const expandButton = document.createElement("calcite-action");
     expandButton.className = "job-card__expand-action";
+    expandButton.dataset.jobFocus = "expand";
     expandButton.icon = isExpanded ? "chevron-up" : "chevron-down";
     expandButton.text = isExpanded ? "Collapse Job card" : "Expand Job card";
     expandButton.title = isExpanded ? "Collapse Job card" : "Expand Job card";
@@ -1320,6 +1331,7 @@ function createStatusButton({
   const buttonElement = document.createElement("calcite-button");
 
   buttonElement.className = "job-status-button";
+  buttonElement.dataset.jobFocus = `status:${statusOption.value}`;
   buttonElement.scale = "s";
   buttonElement.kind = "brand";
   buttonElement.appearance = isActive ? "solid" : "outline";
@@ -1411,6 +1423,7 @@ function createErrorState({ title, message, isLoading = false, onRetry = null })
 
   const retryButton = document.createElement("calcite-button");
   retryButton.scale = "s";
+  retryButton.dataset.jobFocus = "retry";
   retryButton.kind = "neutral";
   retryButton.appearance = "outline";
   retryButton.disabled = isLoading;
@@ -1436,6 +1449,7 @@ function createInlineErrorState({ title, message, isLoading, onRetry }) {
 
   const retryButton = document.createElement("calcite-button");
   retryButton.scale = "s";
+  retryButton.dataset.jobFocus = "retry";
   retryButton.kind = "neutral";
   retryButton.appearance = "outline";
   retryButton.disabled = isLoading;

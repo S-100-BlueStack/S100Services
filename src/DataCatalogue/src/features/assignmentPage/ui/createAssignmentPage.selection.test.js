@@ -325,3 +325,116 @@ test("Failed Pipeline catalogue does not show stale bindings under a new Package
     dom.restore();
   }
 });
+
+test("uncertain Save exposes read-only verification without repeating the mutation", async () => {
+  const dom = fakeDom();
+  let writes = 0;
+  let verifies = 0;
+  const services = {
+    source: "live",
+    categories: async () => [],
+    features: {
+      search: async () => ({ items: [], page: 0, pageSize: 25, total: 0 }),
+      get: async (id) => packageData(id),
+    },
+    assignments: {
+      load: async () => record(false),
+      save: async () => {
+        writes++;
+        throw Object.assign(new Error("Binding write timed out; server outcome unknown"), {
+          requiresReconciliation: true,
+        });
+      },
+      reconcile: async () => {
+        verifies++;
+        return record(true);
+      },
+    },
+    workStreams: {
+      list: async () => ({ items: [{ id: "ENC", name: "ENC" }], total: 1 }),
+    },
+  };
+  let page;
+  try {
+    page = createAssignmentPage({
+      services,
+      createMap: () => ({ view: null, selectContext() {}, destroy() {} }),
+      runtimeConfig: { sourceMode: "live" },
+    });
+    assert.equal(await page.selectPackage("A"), true);
+    await flush();
+    const checkbox = dom.get("work-streams").children[0].children[0].children[0];
+    checkbox.checked = true;
+    checkbox.listeners.get("change")();
+    dom.get("save").click();
+    await flush();
+    assert.equal(writes, 1);
+    assert.equal(dom.get("save").disabled, true);
+    assert.equal(dom.get("reconcile").hidden, false);
+    assert.equal(dom.get("abandon").hidden, false);
+    assert.match(dom.get("save-error").textContent, /outcome unknown/);
+    assert.equal(await page.allowLeave(), false);
+
+    dom.get("reconcile").click();
+    await flush();
+    assert.equal(verifies, 1);
+    assert.equal(writes, 1);
+    assert.equal(dom.get("reconcile").hidden, true);
+    assert.equal(dom.get("abandon").hidden, true);
+    assert.equal(dom.get("save").disabled, true);
+  } finally {
+    page?.destroy();
+    dom.restore();
+  }
+});
+
+test("confirmed local discard clears uncertain Package without claiming rollback", async () => {
+  const dom = fakeDom();
+  let writes = 0;
+  let confirms = 0;
+  globalThis.window.confirm = (message) => {
+    confirms++;
+    assert.match(message, /will not undo server changes/);
+    return true;
+  };
+  const services = {
+    source: "live",
+    categories: async () => [],
+    features: {
+      search: async () => ({ items: [], page: 0, pageSize: 25, total: 0 }),
+      get: async (id) => packageData(id),
+    },
+    assignments: {
+      load: async () => record(false),
+      save: async () => {
+        writes++;
+        throw Object.assign(new Error("Write timed out"), { requiresReconciliation: true });
+      },
+    },
+    workStreams: { list: async () => ({ items: [{ id: "ENC", name: "ENC" }], total: 1 }) },
+  };
+  let page;
+  try {
+    page = createAssignmentPage({
+      services,
+      createMap: () => ({ view: null, selectContext() {}, destroy() {} }),
+      runtimeConfig: { sourceMode: "live" },
+    });
+    assert.equal(await page.selectPackage("A"), true);
+    await flush();
+    const checkbox = dom.get("work-streams").children[0].children[0].children[0];
+    checkbox.checked = true;
+    checkbox.listeners.get("change")();
+    dom.get("save").click();
+    await flush();
+    assert.equal(dom.get("abandon").hidden, false);
+    dom.get("abandon").click();
+    assert.equal(confirms, 1);
+    assert.equal(writes, 1);
+    assert.equal(dom.get("map-empty").hidden, false);
+    assert.equal(await page.allowLeave(), true);
+  } finally {
+    page?.destroy();
+    dom.restore();
+  }
+});

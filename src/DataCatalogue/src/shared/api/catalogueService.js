@@ -204,15 +204,17 @@ export function createCatalogueService(client) {
         };
       });
     },
-    bind(packageId, pipelineId) {
+    bind(packageId, pipelineId, { signal } = {}) {
       return client.request("/api/v1/dispatcher/bindings", {
         method: "POST",
+        signal,
         body: { packageId: requiredId(packageId), pipelineId: requiredId(pipelineId) },
       });
     },
-    unbind(bindingId) {
+    unbind(bindingId, { signal } = {}) {
       return client.request(`/api/v1/dispatcher/bindings/${segment(bindingId)}`, {
         method: "DELETE",
+        signal,
       });
     },
   };

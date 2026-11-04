@@ -1,3 +1,10 @@
+import {
+  BindingRequestTimeoutError,
+  withBindingRequestDeadline,
+} from "./withBindingRequestDeadline.js";
+
+const DEFAULT_BINDING_REQUEST_TIMEOUT_MS = 30_000;
+
 function bindingRecord(bindings) {
   return {
     relations: Object.fromEntries(
@@ -15,19 +22,49 @@ function bindingRecord(bindings) {
 }
 
 export class BindingSaveError extends Error {
-  constructor(message, { record = null, outcomes = [] } = {}) {
+  constructor(message, { record = null, outcomes = [], requiresReconciliation = false } = {}) {
     super(message);
     this.name = "BindingSaveError";
     this.record = record;
     this.outcomes = outcomes;
+    this.requiresReconciliation = requiresReconciliation;
   }
 }
 
-export function createLiveAssignmentServices(catalogue) {
+function hasUncertainOutcome(error) {
+  return (
+    error instanceof BindingRequestTimeoutError ||
+    error?.name === "AbortError" ||
+    error?.kind === "network" ||
+    (Number.isInteger(error?.status) && error.status >= 500)
+  );
+}
+
+export function createLiveAssignmentServices(
+  catalogue,
+  { bindingRequestTimeoutMs = DEFAULT_BINDING_REQUEST_TIMEOUT_MS } = {}
+) {
   const pending = new Map();
+  const request = (stage, operation, signal) =>
+    withBindingRequestDeadline(operation, {
+      stage,
+      timeoutMs: bindingRequestTimeoutMs,
+      signal,
+    });
+  const readBindings = (id, signal) =>
+    request(
+      "Binding catalogue read",
+      ({ signal: requestSignal }) => catalogue.bindings(id, { signal: requestSignal }),
+      signal
+    );
+
   const assignments = {
-    async load(id, options) {
-      return bindingRecord(await catalogue.bindings(id, options));
+    async load(id, { signal } = {}) {
+      return bindingRecord(await readBindings(id, signal));
+    },
+    // Recovery is read-only. It must not repeat an unconfirmed POST or DELETE.
+    async reconcile(id) {
+      return bindingRecord(await readBindings(id));
     },
     save(id, draft) {
       if (pending.has(id)) return pending.get(id);
@@ -40,8 +77,8 @@ export function createLiveAssignmentServices(catalogue) {
 
   async function saveBindings(id, desired, comments = []) {
     if (comments.length) throw new Error("Comments are available only in demo mode.");
-    // Re-read before each attempt: a failed response may still have committed a mutation.
-    const existing = await catalogue.bindings(id);
+    // Preflight is always authoritative. A previous unsuccessful response may have committed.
+    const existing = await readBindings(id);
     const current = new Set(existing.map((binding) => binding.pipelineId));
     const changes = [
       ...desired
@@ -49,21 +86,25 @@ export function createLiveAssignmentServices(catalogue) {
         .map((pipelineId) => ({
           pipelineId,
           action: "Add",
-          run: () => catalogue.bind(id, pipelineId),
+          run: (signal) => catalogue.bind(id, pipelineId, { signal }),
         })),
       ...existing
         .filter((binding) => !desired.includes(binding.pipelineId))
         .map((binding) => ({
           pipelineId: binding.pipelineId,
           action: "Remove",
-          run: () => catalogue.unbind(binding.id),
+          run: (signal) => catalogue.unbind(binding.id, { signal }),
         })),
     ];
     const outcomes = [];
-    // Mutations are deliberately not aborted on navigation: abort cannot roll back a server write.
+    let successfulWrites = 0;
+
+    // Preserve independent 4xx failures, but stop on uncertain transport/server outcomes.
+    // Continuing the batch after a timed-out write could silently duplicate or undo it.
     for (const change of changes) {
       try {
-        await change.run();
+        await request(`Binding ${change.action.toLowerCase()}`, ({ signal }) => change.run(signal));
+        successfulWrites++;
         outcomes.push({ pipelineId: change.pipelineId, action: change.action, ok: true });
       } catch (error) {
         outcomes.push({
@@ -72,8 +113,15 @@ export function createLiveAssignmentServices(catalogue) {
           ok: false,
           message: error.message,
         });
+        if (hasUncertainOutcome(error)) {
+          throw new BindingSaveError(
+            `${change.action} ${change.pipelineId}: ${error.message} The server outcome is unknown. Check saved bindings before another Save. No remaining changes were sent.`,
+            { outcomes, requiresReconciliation: true }
+          );
+        }
       }
     }
+
     const summary = outcomes
       .map(
         (item) =>
@@ -82,11 +130,11 @@ export function createLiveAssignmentServices(catalogue) {
       .join("; ");
     let record;
     try {
-      record = await assignments.load(id);
+      record = await assignments.reconcile(id);
     } catch (error) {
       throw new BindingSaveError(
-        `${summary ? `${summary}. ` : ""}Authoritative reload failed: ${error.message} Save again to reconcile before retrying changes.`,
-        { outcomes }
+        `${summary ? `${summary}. ` : ""}Authoritative reload failed: ${error.message} ${successfulWrites ? "Check saved bindings before another Save." : "Retry Save to read the current bindings."}`,
+        { outcomes, requiresReconciliation: successfulWrites > 0 }
       );
     }
     const actual = Object.keys(record.relations).sort();

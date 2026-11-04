@@ -155,3 +155,131 @@ test("a response failure after the backend committed is reconciled and never sil
   await services.assignments.save("p", { activeIds: ["a", "b"], comments: [] });
   assert.equal(calls.filter((item) => item === "add:b").length, 1);
 });
+
+function heldRequest() {
+  let resolve;
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+test("stalled binding preflight settles without writes and leaves the draft retryable", async () => {
+  const { catalogue, calls } = fixture();
+  const services = createLiveAssignmentServices(catalogue, { bindingRequestTimeoutMs: 12 });
+  const session = createAssignmentSession({ services });
+  await session.select("p");
+  session.setAssigned("b", true);
+  const originalRead = catalogue.bindings;
+  const pending = heldRequest();
+  catalogue.bindings = () => pending.promise;
+  assert.equal(await session.save(), false);
+  assert.equal(session.snapshot().saving, false);
+  assert.equal(session.snapshot().dirty, true);
+  assert.equal(session.snapshot().reconciliationRequired, false);
+  assert.equal(calls.filter((call) => call.startsWith("add:")).length, 0);
+  catalogue.bindings = originalRead;
+  assert.equal(await session.save(), true);
+  pending.resolve([]);
+});
+
+test("uncertain timed-out mutation stops the batch and requires read-only verification", async () => {
+  const { catalogue, calls } = fixture();
+  const services = createLiveAssignmentServices(catalogue, { bindingRequestTimeoutMs: 12 });
+  const session = createAssignmentSession({ services });
+  await session.select("p");
+  session.setAssigned("b", true);
+  session.setAssigned("a", false);
+  let signal;
+  const heldWrite = heldRequest();
+  catalogue.bind = (_id, _pipelineId, options) => {
+    calls.push("add:b");
+    signal = options.signal;
+    return heldWrite.promise;
+  };
+
+  assert.equal(await session.save(), false);
+  assert.equal(signal.aborted, true);
+  assert.equal(session.snapshot().saving, false);
+  assert.equal(session.snapshot().reconciliationRequired, true);
+  assert.deepEqual(session.snapshot().draft.activeIds, ["b"]);
+  assert.equal(await session.save(), false);
+  assert.equal(await session.select("another"), false);
+  assert.equal(calls.filter((call) => call === "add:b").length, 1);
+  assert.equal(
+    calls.some((call) => call.startsWith("remove:")),
+    false
+  );
+
+  assert.equal(await session.reconcile(), true);
+  assert.equal(session.snapshot().reconciliationRequired, false);
+  assert.deepEqual(session.snapshot().draft.activeIds, ["b"]);
+  assert.deepEqual(Object.keys(session.snapshot().record.relations), ["a"]);
+  assert.match(session.snapshot().error, /timed-out request may still complete/);
+  heldWrite.resolve();
+});
+
+test("post-write reconciliation deadline retains draft and blocks another mutation", async () => {
+  const { catalogue, calls } = fixture();
+  const services = createLiveAssignmentServices(catalogue, { bindingRequestTimeoutMs: 12 });
+  const session = createAssignmentSession({ services });
+  await session.select("p");
+  session.setAssigned("b", true);
+  const originalRead = catalogue.bindings;
+  const heldRead = heldRequest();
+  let reads = 0;
+  catalogue.bindings = (...args) => (++reads === 2 ? heldRead.promise : originalRead(...args));
+
+  assert.equal(await session.save(), false);
+  assert.equal(session.snapshot().reconciliationRequired, true);
+  assert.equal(await session.save(), false);
+  assert.equal(calls.filter((call) => call === "add:b").length, 1);
+  assert.equal(await session.reconcile(), true);
+  assert.equal(session.snapshot().reconciliationRequired, false);
+  assert.equal(session.snapshot().dirty, false);
+  heldRead.resolve([]);
+});
+
+test("binding response body is included in the deadline and aborts transport", async () => {
+  const { createCatalogueClient } = await import("../../../shared/api/catalogueClient.js");
+  const { createCatalogueService } = await import("../../../shared/api/catalogueService.js");
+  const body = heldRequest();
+  let signal;
+  const client = createCatalogueClient({
+    fetchImpl: async (_url, options) => {
+      signal = options.signal;
+      return {
+        status: 200,
+        ok: true,
+        headers: { get: () => "application/json" },
+        text: () => body.promise,
+      };
+    },
+  });
+  const services = createLiveAssignmentServices(createCatalogueService(client), {
+    bindingRequestTimeoutMs: 12,
+  });
+  await assert.rejects(services.assignments.load("p"), /timed out/);
+  assert.equal(signal.aborted, true);
+  body.resolve("[]");
+});
+
+test("an explicit local abandonment unlocks navigation without claiming server rollback", async () => {
+  const { catalogue, calls } = fixture();
+  const services = createLiveAssignmentServices(catalogue, { bindingRequestTimeoutMs: 12 });
+  const session = createAssignmentSession({ services });
+  await session.select("p");
+  session.setAssigned("b", true);
+  const held = heldRequest();
+  catalogue.bind = () => held.promise;
+  assert.equal(await session.save(), false);
+  assert.equal(session.snapshot().reconciliationRequired, true);
+  assert.equal(session.discard(), undefined);
+  assert.equal(session.snapshot().dirty, true);
+  assert.equal(session.abandonUncertainDraft(), true);
+  assert.equal(session.snapshot().feature, null);
+  assert.equal(session.snapshot().reconciliationRequired, false);
+  assert.equal(session.snapshot().dirty, false);
+  assert.equal(calls.filter((call) => call.startsWith("remove:")).length, 0);
+  held.resolve();
+});

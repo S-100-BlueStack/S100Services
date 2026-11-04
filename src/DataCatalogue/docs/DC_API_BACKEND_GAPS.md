@@ -149,3 +149,14 @@ The 2 MB / 100,000-vertex limits are frontend display bounds, not new backend co
   canonical Package ID reserved for API reads, mutations and deep links.
 
 There are no backend changes or invented routes in this frontend candidate.
+
+### DC-STAB-02D binding outcome limitation (2026-11-04)
+
+Frontend request deadlines and read-only reconciliation improve recovery, but a
+client-side timeout or abort does not prove that a Package–Pipeline binding write
+was rejected or rolled back. A mutation may complete on the backend after a
+subsequent GET. `BIND-02` therefore remains open: a server operation identifier,
+idempotent mutation semantics and/or version preconditions are needed to guarantee
+that the authoritative read and later writes cannot race a previously timed-out
+mutation. Do not represent an unknown outcome as a successful rollback or invent
+an API status endpoint.

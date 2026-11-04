@@ -59,6 +59,8 @@ export function createAssignmentPage({
           <span class="dc-assignment-muted" data-active-count></span>
           <span class="dc-assignment-toolbar-spacer"></span>
           <button type="button" data-work-stream-mode aria-pressed="false">Show active</button>
+          <button type="button" data-reconcile hidden>Check saved bindings</button>
+          <button type="button" data-abandon hidden>Discard local draft</button>
           <button type="button" data-save disabled>Save</button>
         </div>
         <p data-save-error role="alert"></p>
@@ -406,16 +408,29 @@ export function createAssignmentPage({
 
   const unsubscribe = session.subscribe((state) => {
     get("save").disabled =
-      !state.dirty || state.loading || state.saving || resetting || Boolean(state.validationError);
+      !state.dirty ||
+      state.loading ||
+      state.saving ||
+      state.reconciliationRequired ||
+      resetting ||
+      Boolean(state.validationError);
+    get("reconcile").hidden = !state.reconciliationRequired;
+    get("reconcile").disabled = state.saving || state.loading || resetting;
+    get("abandon").hidden = !state.reconciliationRequired;
+    get("abandon").disabled = state.saving || state.loading || resetting;
+    get("reconcile").textContent =
+      state.saving && state.reconciliationRequired ? "Checking…" : "Check saved bindings";
     get("save").textContent = state.saving ? "Saving…" : "Save";
     get("draft-status").textContent = state.feature
-      ? state.validationError
-        ? "Draft needs attention"
-        : state.dirty
-          ? "Unsaved changes"
-          : live
-            ? "Loaded binding state"
-            : "Saved state"
+      ? state.reconciliationRequired
+        ? "Verify saved bindings"
+        : state.validationError
+          ? "Draft needs attention"
+          : state.dirty
+            ? "Unsaved changes"
+            : live
+              ? "Loaded binding state"
+              : "Saved state"
       : "";
     get("save-error").textContent =
       state.feature && !state.selectionError
@@ -537,6 +552,21 @@ export function createAssignmentPage({
   });
 
   listen(get("work-stream-retry"), "click", () => void loadWorkStreams());
+  listen(get("abandon"), "click", () => {
+    if (busy() || !session.snapshot().reconciliationRequired) return;
+    if (
+      window.confirm(
+        "Discard this local draft and clear the Package selection? A timed-out Save may still complete on the server. This will not undo server changes."
+      )
+    ) {
+      session.abandonUncertainDraft();
+    }
+  });
+  listen(get("reconcile"), "click", async () => {
+    if (busy()) return;
+    await session.reconcile();
+    if (alive) void loadFeatures();
+  });
   listen(get("save"), "click", async () => {
     if (busy()) return;
     const saved = await session.save();
@@ -584,7 +614,11 @@ export function createAssignmentPage({
     }
   });
   listen(window, "beforeunload", (event) => {
-    if (session.snapshot().dirty || session.snapshot().saving) {
+    if (
+      session.snapshot().dirty ||
+      session.snapshot().saving ||
+      session.snapshot().reconciliationRequired
+    ) {
       event.preventDefault();
       event.returnValue = "";
     }

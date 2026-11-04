@@ -17,6 +17,8 @@ export const REQUIRED_ASSIGNMENT_PAGE_TARGETS = Object.freeze([
   "draft-status",
   "active-count",
   "work-stream-mode",
+  "reconcile",
+  "abandon",
   "save",
   "save-error",
   "work-stream-status",
