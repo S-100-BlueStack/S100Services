@@ -16,8 +16,7 @@ public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : C
     [Fact]
     public async Task Initialization_loads_categories_pipelines_workspaces_and_unassigned_sample_packages() {
         await this.App.SeedAsync();
-        var extractionFile = Path.Combine(AppContext.BaseDirectory, "Samples", "MarineAggregateExtraction", "MARIS_Raastof_Live.geojson");
-        var extractionCount = Math.Min(10, DataCatalague.Api.PackageTypes.MarineAggregateExtraction.Parse(await File.ReadAllTextAsync(extractionFile)).Count);
+        var extractionCount = Math.Min(10, Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "MarineAggregateExtraction"), "*.zip").Length);
         var expected = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "NoticesToMariners"), "*.json").Length + 2 + extractionCount;
         await this.App.EventuallyAsync(async () => (await this.PackagesAsync()).TotalCount == expected);
         await this.App.EventuallyAsync(async () => {
@@ -54,6 +53,8 @@ public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : C
             Assert.StartsWith("MA-", package.MetaData!.ShortId);
             Assert.True(Guid.TryParse(package.MetaData.RefId, out _));
             Assert.NotNull(package.DetailedGeometry!.SurfaceRef);
+            Assert.StartsWith("database://", package.AbsoluteUri);
+            Assert.EndsWith(".zip", package.FileName);
         });
         var extractionGeometry = (await this.Client.GetFromJsonAsync<PackageGeometryResponse>($"/api/v1/packages/{extractionPage.Items.First().Id}/geometry"))!;
         Assert.True(extractionGeometry.Aoi.HasValue);

@@ -1,4 +1,4 @@
-﻿# DataCatalogueAPI
+# DataCatalogueAPI
 
 A .NET 10 controller-based REST API with API versioning, OpenAPI document generation,
 Serilog logging, HTTPS, and two browsable documentation UIs (Swagger UI and Scalar).
@@ -25,6 +25,9 @@ GET    /api/v2/dispatcher?page=1&pageSize=20
 Package creation (`CreatePackageRequest`), severity areas (`AddSeverityAreaRequest`)
 and workspaces (`AddWorkspaceRequest`) accept **Esri JSON**, not GeoJSON. Their
 C# property is `EsriJSON`, exposed as `esriJSON` in JSON request bodies and OpenAPI.
+MA archive imports are an alternative package creation mode: the request supplies
+the uploaded ZIP URI and `importFromArchive=true`, and the server converts the
+archive's source GeoJSON internally as described below.
 Replace the previous request field `geoJSON` with `esriJSON` in API clients;
 there is no legacy field alias.
 
@@ -187,7 +190,7 @@ and logger. The sample reader creates API request models from the local fixture 
 all packages still go through `PackageController.CreatePackage`. Production
 package types are not responsible for constructing requests to their own API. Startup creates the `NoticeToMariners`,
 `GeneralSubmission` and `MarineAggregateExtraction` categories and imports the supplied notice JSON,
-submission ZIPs and MARIS GeoJSON snapshot.
+submission ZIPs and MA ZIP fixtures.
 
 Startup also creates `ENC` and `Paper Chart` through `PipelineController.Create`.
 All sample packages remain unbound. Humans or agents explicitly select package/pipeline
@@ -259,16 +262,47 @@ Neither the project, ArcPy, notebook nor file geodatabase is needed for fixture
 parsing. The existing Windows/ArcGIS CoreHost requirements still apply to
 persisting and retrieving the package geometry.
 
-The checked-in `Samples/MarineAggregateExtraction/MARIS_Raastof_Live.geojson`
-is an unchanged copy of the supplied export, **not a live feed**. Its capture time
-is unknown. The original filename does not establish freshness. Startup imports
-at most 10 sites, selecting the first records in source order through
-`SamplePackageReader` and `PackageController.CreatePackage`.
-The complete 141-site snapshot remains available as the source fixture.
+MA submissions use one ZIP per site. Each ZIP has this version 1.0 contract:
+
+| File | Contents |
+| --- | --- |
+| `manifest.json` | Submission category, schema version, source URL, actual retrieval time and file references |
+| `areas.geojson` | A WGS84 FeatureCollection containing exactly one site's geometry and properties |
+| `documents/*.pdf` | Optional PDFs explicitly referenced by the manifest; retained in the original archive |
+
+Example `manifest.json`:
+
+```json
+{
+  "schemaVersion": "1.0",
+  "category": "MarineAggregateExtraction",
+  "sourceUrl": "https://api.raastofindvinding.dk/v1/extraction-sites",
+  "retrievedAtUtc": null,
+  "geoJsonFile": "areas.geojson",
+  "documents": []
+}
+```
+
+`retrievedAtUtc` is null when capture time is unknown. When known, supply an ISO
+8601 timestamp with an explicit UTC offset (`Z` or `+00:00`). Packaging time and
+permit effective/expiry dates must not be substituted for source retrieval time.
+Manifest fields are submission metadata; site attributes remain solely in each
+GeoJSON feature's `properties`. Unrecognized manifest fields are rejected for
+version 1.0. No URLs are fetched during import, including permit links.
+
+The ten `MA-01-*.zip` through `MA-10-*.zip` fixtures contain the first ten sites
+from the supplied snapshot, with source properties and geometry unchanged.
+They contain no downloaded PDFs. The original 141-site
+`MARIS_Raastof_Live.geojson` remains a reference fixture and parser test input;
+startup imports only the first ten ZIPs in ordinal filename order. It uploads
+each ZIP through `PackageController.UploadFile` before calling
+`PackageController.CreatePackage` with archive import enabled. Existing category
+and pipeline creation still uses the registered controllers. No sample package
+is automatically assigned to a pipeline.
 
 | Source value | Package mapping |
 | --- | --- |
-| Site UUID | `metaData.refId`; duplicate UUIDs in a snapshot are rejected |
+| Site UUID | `metaData.refId`; exactly one site per ZIP |
 | Number, name, optional subsite | `metaData.title` and description; area numbers are not assumed unique |
 | Common / Auction / Builder | `metaData.type` |
 | Authority | `metaData.source = Miljøstyrelsen / MARIS` |
@@ -277,14 +311,47 @@ The complete 141-site snapshot remains available as the source fixture.
 | Polygon or MultiPolygon | Full `detailedGeometry.surfaces`, preserving parts and holes |
 | Geometry envelope | Rectangular AOI; existing persistence projects and recomputes it |
 | Permit dates, snapshot status, remarks, deadline value, volume ID, permit URL | HTML-encoded description; HTTP(S) permit URLs become links |
-| Original source | Local snapshot file URI; the full original properties remain in that fixture |
+| Manifest provenance and PDF paths | Additional HTML-encoded description; PDFs are not extracted or linked as external resources |
+| Original ZIP | Existing attachment repository, referenced by the package's `database://UUID` source URI |
 
-The parser accepts WGS84 longitude/latitude only. It validates finite coordinates,
-closed nonzero-area rings and site identity, and converts shell/hole winding to
-Esri JSON. It does not repair invalid polygon topology. Source properties use
-typed models; GeoJSON's variable-depth coordinate arrays are parsed separately.
-No domain event, public request/response schema, route, DI registration or
-authorization change is required.
+#### Import through the existing API
+
+1. Upload the original ZIP as multipart field `File` to
+   `POST /api/v1/packages/repository` and retain its returned `absoluteUri`.
+2. POST JSON to the existing `POST /api/v1/packages` route:
+
+```json
+{
+  "category": "MarineAggregateExtraction",
+  "absoluteUri": "database://<UUID-returned-by-upload>",
+  "importFromArchive": true
+}
+```
+
+Successful creation returns 201. The response retains the complete database URI
+and the original archive filename. Severity and display scale may still be
+supplied; geometry, metadata, descriptions and charts must be omitted because
+they are derived from the archive. Existing explicit-geometry JSON requests
+continue to work when `importFromArchive` is false or omitted; `esriJSON` remains
+required in that mode. Archive import currently supports only MA. It does not
+read client-supplied local paths or arbitrary HTTP URLs.
+
+Missing uploaded archives return 404. Invalid manifests, geometry, file
+references, conflicting input fields and size/path violations return 400 before
+package identity or geometry writes. The already uploaded original stays in the
+repository if creation fails, allowing inspection or another create attempt.
+Uploading and creating are separate operations, as before; repeated create
+requests create separate packages and are not a source synchronization/upsert.
+
+`MarineAggregateArchive.ReadAsync` reads a ZIP in memory without extracting to
+disk. Limits are 16 MiB compressed, 64 MiB cumulative expanded, 100 entries,
+64 KiB manifest and 8 MiB GeoJSON. Header sizes and actual streamed sizes are
+bounded. Unsafe paths, duplicate names (case insensitive), symbolic links,
+undeclared files and missing referenced PDFs are rejected. ZIP entry names use
+portable ASCII paths with forward slashes. The GeoJSON parser validates finite
+WGS84 positions and closed nonzero-area rings, converts shell/hole winding to
+Esri JSON, and does not repair polygon topology. Existing CoreHost dispatching,
+geometry projection, transaction and event creation flow remain in use.
 
 The source snapshot labels 42 sites `Aktiv` and 99 `Udløbet`. These labels were
 calculated by the notebook when it ran; the importer does not assert that they
@@ -299,7 +366,7 @@ and the other three WFS exports use longitude/latitude.
 To inspect these packages after startup, use
 `GET /api/v1/packages?category=MarineAggregateExtraction&pageSize=200`, then
 `GET /api/v1/packages/{id}/geometry` for the AOI and detailed coordinates.
-The fixtures are copied to build and publish output, and to test output.
+The reference snapshot and ZIP fixtures are copied to build, publish and test output.
 
 Live synchronization is a separate feature. Before implementing it, decide the
 authoritative source and reconciliation rules, whether expired/missing sites

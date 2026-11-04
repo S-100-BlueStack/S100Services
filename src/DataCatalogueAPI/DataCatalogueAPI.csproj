@@ -48,6 +48,8 @@
 	<ItemGroup>
 	  <None Remove="Samples\MarineAggregateExtraction\*.geojson" />
 	  <Content Include="Samples\MarineAggregateExtraction\*.geojson" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+	  <None Remove="Samples\MarineAggregateExtraction\*.zip" />
+	  <Content Include="Samples\MarineAggregateExtraction\*.zip" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	  <None Remove="Samples\GeneralSubmission\CoastalWorksSubmission.zip" />
 	  <None Remove="Samples\GeneralSubmission\HarbourSurveySubmission.zip" />
 	</ItemGroup>

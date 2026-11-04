@@ -37,6 +37,10 @@ namespace DataCatalague.Api.Controllers
         private readonly ILogger<PackageController> _logger = logger;
 
 
+        /// <summary>Creates a package from explicit Esri JSON, or imports an uploaded MA ZIP when importFromArchive is true.</summary>
+        /// <param name="request">Existing package fields, or category, upload-issued absoluteUri and importFromArchive=true.</param>
+        /// <param name="cancellationToken">Cancels source reading and work before geometry commits.</param>
+        /// <returns>The created package, including its stored source archive URI when imported.</returns>
         [HttpPost()]
         [Consumes("application/json")]
         [ProducesResponseType<PackageResponse>(StatusCodes.Status201Created)]
@@ -53,7 +57,7 @@ namespace DataCatalague.Api.Controllers
                 || !Uri.TryCreate(request.AbsoluteUri, UriKind.Absolute, out _)) {
                 return this.BadRequest(new ProblemDetails {
                     Title = "Invalid package request.",
-                    Detail = "A category, absolute source URI and geometry are required."
+                    Detail = string.Join(" ", validationErrors.Select(error => error.ErrorMessage))
                 });
             }
 
@@ -66,6 +70,7 @@ namespace DataCatalague.Api.Controllers
                 var status = exception.Error switch {
                     PackageCreationError.Validation => StatusCodes.Status400BadRequest,
                     PackageCreationError.Conflict => StatusCodes.Status409Conflict,
+                    PackageCreationError.NotFound => StatusCodes.Status404NotFound,
                     _ => StatusCodes.Status500InternalServerError,
                 };
                 return this.Problem(title: exception.Message, detail: exception.Detail, statusCode: status);
@@ -217,7 +222,7 @@ namespace DataCatalague.Api.Controllers
             Id = state.Id,
             Category = state.Category,
             FileName = state.FileName,
-            AbsoluteUri = state.AbsoluteUri?.AbsolutePath,
+            AbsoluteUri = state.AbsoluteUri?.Scheme == "database" ? state.AbsoluteUri.GetLeftPart(UriPartial.Authority) : state.AbsoluteUri?.AbsolutePath,
             GeometryRef = GeometryReferenceResponse.FromStoredReference(state.GeometryRef),
             DetailedGeometry = DetailedGeometryResponse.FromState(state.DetailedGeometry),
             Severity = state.Severity,

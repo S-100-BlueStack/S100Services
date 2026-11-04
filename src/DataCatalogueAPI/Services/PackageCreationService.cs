@@ -2,6 +2,7 @@ using ArcGIS.Core.Geometry;
 using DataCatalague.Api.Domain;
 using DataCatalague.Api.Domain.Commands;
 using DataCatalague.Api.Models.V1;
+using DataCatalague.Api.PackageTypes;
 using DataCatalague.Api.Repositories;
 using Eventuous;
 using System.ComponentModel.DataAnnotations;
@@ -9,7 +10,7 @@ using IO = System.IO;
 
 namespace DataCatalague.Api.Services;
 
-public enum PackageCreationError { Validation, Conflict, Persistence }
+public enum PackageCreationError { Validation, Conflict, Persistence, NotFound }
 
 public sealed class PackageCreationException(PackageCreationError error, string message, string? detail = null) : Exception(message)
 {
@@ -18,7 +19,7 @@ public sealed class PackageCreationException(PackageCreationError error, string 
 }
 
 /// <summary>Coordinates package validation, identity reservation, geometry persistence and creation events.</summary>
-public sealed class PackageCreationService(IEventStore eventStore, StreamNameMap streams, ICommandService<PackageState> commands, PackageRepository packages, PackageIdentityService identities, ArcGisDispatcher dispatcher, ILogger<PackageCreationService> logger)
+public sealed class PackageCreationService(IEventStore eventStore, StreamNameMap streams, ICommandService<PackageState> commands, PackageRepository packages, PackageIdentityService identities, ArcGisDispatcher dispatcher, DispatcherResourceService resources, ILogger<PackageCreationService> logger)
 {
     // Event and geometry writes cannot share a transaction; serialize reservations
     // across service instances until their persistence outcome is known.
@@ -31,7 +32,32 @@ public sealed class PackageCreationService(IEventStore eventStore, StreamNameMap
         var validationErrors = new List<ValidationResult>();
         if (!Validator.TryValidateObject(request, new ValidationContext(request), validationErrors, validateAllProperties: true)
             || !Uri.TryCreate(request.AbsoluteUri, UriKind.Absolute, out _)) {
-            throw new PackageCreationException(PackageCreationError.Validation, "Invalid package request.", "A category, absolute source URI and geometry are required.");
+            throw new PackageCreationException(PackageCreationError.Validation, "Invalid package request.", string.Join(" ", validationErrors.Select(error => error.ErrorMessage)));
+        }
+
+        string? archiveFileName = null;
+        if (request.ImportFromArchive) {
+            try {
+                var id = Guid.Parse(new Uri(request.AbsoluteUri).Host);
+                var stored = await resources.ReadArchiveAsync(id, MarineAggregateArchive.MaximumArchiveBytes, cancellationToken);
+                if (stored is null) { throw new PackageCreationException(PackageCreationError.NotFound, "Uploaded archive not found."); }
+                using var input = new MemoryStream(stored.Value.Data, writable: false);
+                var archive = await MarineAggregateArchive.ReadAsync(input, cancellationToken);
+                archiveFileName = stored.Value.FileName;
+                request = new CreatePackageRequest {
+                    Category = request.Category,
+                    AbsoluteUri = request.AbsoluteUri,
+                    Severity = request.Severity,
+                    DisplayScale = request.DisplayScale,
+                    EsriJSON = archive.Site.Geometry.Aoi,
+                    DetailedGeometry = archive.Site.Geometry,
+                    MetaData = archive.Site.MetaData,
+                    Descriptions = archive.Site.Descriptions,
+                };
+            }
+            catch (InvalidDataException exception) {
+                throw new PackageCreationException(PackageCreationError.Validation, "Invalid MA archive.", exception.Message);
+            }
         }
 
         await CreationGate.WaitAsync(cancellationToken);
@@ -86,12 +112,12 @@ public sealed class PackageCreationService(IEventStore eventStore, StreamNameMap
                     return packages.AddPackageGeometries(aoi, points, curves, surfaces, streamId, request.AbsoluteUri, cancellationToken);
                 }
 
-                var polygon = packages.FromEsriJson(request.EsriJSON);
+                var polygon = packages.FromEsriJson(request.EsriJSON!);
                 return (Aoi: packages.AddPackageAOI(polygon, streamId, request.AbsoluteUri), Details: (DetailedGeometry?)null);
             });
 
             geometryCommitted = true;
-            var filename = IO.Path.GetFileName(request.AbsoluteUri);
+            var filename = archiveFileName ?? IO.Path.GetFileName(request.AbsoluteUri);
 
             // Once geometry commits, finish recording its references even if the caller disconnects.
             var cmd = await commands.Handle(new PackagesCommands.CreatePackage(streamId, category.State.Id, filename, request.AbsoluteUri, references.Aoi, request.Severity, metadata, request.DisplayScale, references.Details, request.Descriptions, request.Charts), CancellationToken.None);

@@ -78,9 +78,9 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
 
                 Danish source category: Indvindingsområder.
 
-                - Source: the supplied MARIS GeoJSON snapshot in `Samples/MarineAggregateExtraction`.
-                - Startup creates at most 10 sample packages, selecting the first sites in source order.
-                - One package per MARIS site UUID; the source UUID is retained in `metaData.refId`.
+                - Source: ZIP submissions in `Samples/MarineAggregateExtraction`, each with manifest.json and areas.geojson.
+                - Startup uploads at most 10 ZIPs in filename order, then creates packages through the same archive import flow used by HTTP clients.
+                - One site per archive; the source UUID is retained in `metaData.refId` and the original ZIP is stored as an attachment.
                 - Catalogue short IDs are allocated as `MA-NNN-YY`; source area numbers remain in the title and description.
                 - Full Polygon/MultiPolygon geometry, including holes, is stored as surfaces in WGS84; the envelope becomes the AOI.
                 - Common, Auction and Builder remain source extraction types, not separate categories.
@@ -135,16 +135,24 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
         }
 
         var extractionDirectory = Path.Combine(AppContext.BaseDirectory, "Samples", "MarineAggregateExtraction");
-        var extractionFiles = Directory.GetFiles(extractionDirectory, "*.geojson").Order(StringComparer.Ordinal).ToArray();
-        if (extractionFiles.Length != 1) {
-            throw new InvalidDataException($"Expected one MARIS snapshot in '{extractionDirectory}', found {extractionFiles.Length}.");
+        var extractionFiles = Directory.GetFiles(extractionDirectory, "*.zip").Order(StringComparer.Ordinal).Take(10).ToArray();
+        if (extractionFiles.Length == 0) {
+            throw new InvalidDataException($"No MA ZIP samples found in '{extractionDirectory}'.");
         }
-        var extractionRequests = (await sampleReader.ReadMarineAggregateExtractionAsync(extractionFiles[0], cancellationToken).ConfigureAwait(false)).Take(10).ToArray();
-        foreach (var request in extractionRequests) {
+        foreach (var file in extractionFiles) {
+            await using var input = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+            var upload = RequireSuccess(await packages.UploadFile(new UploadFileRequest {
+                File = new FormFile(input, 0, input.Length, "File", Path.GetFileName(file)),
+            }, cancellationToken).ConfigureAwait(false), $"store MA sample '{Path.GetFileName(file)}'");
+            var request = new CreatePackageRequest {
+                Category = "MarineAggregateExtraction",
+                AbsoluteUri = upload.AbsoluteUri!,
+                ImportFromArchive = true,
+            };
             var created = await packages.CreatePackage(request, cancellationToken).ConfigureAwait(false);
-            packageSamples.Add(RequireSuccess(created, $"create MARIS site '{request.MetaData?.RefId}'"));
+            packageSamples.Add(RequireSuccess(created, $"import MA sample '{Path.GetFileName(file)}'"));
         }
-        logger.LogInformation("Created marine aggregate extraction samples from {FileName}. CreatedPackages: {CreatedPackages}.", Path.GetFileName(extractionFiles[0]), extractionRequests.Length);
+        logger.LogInformation("Created marine aggregate extraction ZIP samples. CreatedPackages: {CreatedPackages}.", extractionFiles.Length);
 
         logger.LogInformation("Sample initialization completed. CreatedPipelines: {CreatedPipelines}, CreatedPackages: {CreatedPackages}.", pipelineSamples.Count, packageSamples.Count);
     }
@@ -155,6 +163,11 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
             return result;
         }
         var status = (response.Result as ObjectResult)?.StatusCode;
-        throw new InvalidOperationException($"Could not {operation}; controller returned {status?.ToString() ?? response.Result?.GetType().Name ?? "no result"}.");
+        var error = response.Result switch {
+            ObjectResult { Value: ValidationProblemDetails problem } => string.Join(" ", problem.Errors.OrderBy(entry => entry.Key, StringComparer.Ordinal).SelectMany(entry => entry.Value.Select(message => $"{entry.Key}: {message}"))),
+            ObjectResult { Value: ProblemDetails problem } => string.Join(" ", new[] { problem.Title, problem.Detail }.Where(value => !string.IsNullOrWhiteSpace(value))),
+            _ => null,
+        };
+        throw new InvalidOperationException($"Could not {operation}; controller returned {status?.ToString() ?? response.Result?.GetType().Name ?? "no result"}.{(string.IsNullOrWhiteSpace(error) ? string.Empty : $" {error}")}");
     }
 }

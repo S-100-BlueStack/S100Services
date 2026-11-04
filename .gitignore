@@ -444,6 +444,7 @@ dist-ssr
 *.sw?
 
 *.zip
+!src/DataCatalogueAPI/Samples/MarineAggregateExtraction/*.zip
 /src/ProductCatalogueService/exports
 /src/ProductCatalogueAPI/exports
 /src/ProductCatalogueAPI/config
