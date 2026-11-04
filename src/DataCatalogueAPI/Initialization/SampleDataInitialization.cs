@@ -72,6 +72,21 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
                 - The sample initializer reads the title and source from `submission.json`; geometry comes only from the shapefile.
                 - The full shapefile polygon is saved as detailed geometry; its envelope becomes the AOI.
                 - The manifest description is stored as a package description; chart references remain null.
+                """),
+            (Id: "MarineAggregateExtraction", Name: "Marine Aggregate Extraction Areas", Prefix: "MA", Description: "Marine sand, gravel and stone extraction sites supplied by Miljøstyrelsen / MARIS.", Specification: """
+                # Marine Aggregate Extraction Areas
+
+                Danish source category: Indvindingsområder.
+
+                - Source: the supplied MARIS GeoJSON snapshot in `Samples/MarineAggregateExtraction`.
+                - Startup creates at most 10 sample packages, selecting the first sites in source order.
+                - One package per MARIS site UUID; the source UUID is retained in `metaData.refId`.
+                - Catalogue short IDs are allocated as `MA-NNN-YY`; source area numbers remain in the title and description.
+                - Full Polygon/MultiPolygon geometry, including holes, is stored as surfaces in WGS84; the envelope becomes the AOI.
+                - Common, Auction and Builder remain source extraction types, not separate categories.
+                - Descriptions preserve permit dates, snapshot status, remarks and permit links; all external text is HTML-encoded.
+                - Includes expired sites. Snapshot status and dates do not establish current permit validity.
+                - No live fetch, WFS merge, scheduled synchronization or automatic chart/pipeline assignment is performed.
                 """)
         }) {
             var created = await dispatcher.CreateCategory(new CreateCategoryRequest {
@@ -118,6 +133,18 @@ public sealed class SampleDataInitialization(DispatcherController dispatcher, Pa
             packageSamples.Add(RequireSuccess(created, $"create general submission '{Path.GetFileName(file)}'"));
             logger.LogInformation("Created general submission sample {FileName}.", Path.GetFileName(file));
         }
+
+        var extractionDirectory = Path.Combine(AppContext.BaseDirectory, "Samples", "MarineAggregateExtraction");
+        var extractionFiles = Directory.GetFiles(extractionDirectory, "*.geojson").Order(StringComparer.Ordinal).ToArray();
+        if (extractionFiles.Length != 1) {
+            throw new InvalidDataException($"Expected one MARIS snapshot in '{extractionDirectory}', found {extractionFiles.Length}.");
+        }
+        var extractionRequests = (await sampleReader.ReadMarineAggregateExtractionAsync(extractionFiles[0], cancellationToken).ConfigureAwait(false)).Take(10).ToArray();
+        foreach (var request in extractionRequests) {
+            var created = await packages.CreatePackage(request, cancellationToken).ConfigureAwait(false);
+            packageSamples.Add(RequireSuccess(created, $"create MARIS site '{request.MetaData?.RefId}'"));
+        }
+        logger.LogInformation("Created marine aggregate extraction samples from {FileName}. CreatedPackages: {CreatedPackages}.", Path.GetFileName(extractionFiles[0]), extractionRequests.Length);
 
         logger.LogInformation("Sample initialization completed. CreatedPipelines: {CreatedPipelines}, CreatedPackages: {CreatedPackages}.", pipelineSamples.Count, packageSamples.Count);
     }

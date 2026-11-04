@@ -12,19 +12,21 @@ namespace DataCatalogue.Api.Tests.Integration;
 public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : CatalogueTest(runtime)
 {
     // Run development initialization against a fresh application and database.
-    // Expected: Two categories, two pipelines, two unowned workspaces per pipeline and all sample packages exist; no package has a binding.
+    // Expected: Three categories, two pipelines, two unowned workspaces per pipeline and all sample packages exist; no package has a binding.
     [Fact]
     public async Task Initialization_loads_categories_pipelines_workspaces_and_unassigned_sample_packages() {
         await this.App.SeedAsync();
-        var expected = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "NoticesToMariners"), "*.json").Length + 2;
+        var extractionFile = Path.Combine(AppContext.BaseDirectory, "Samples", "MarineAggregateExtraction", "MARIS_Raastof_Live.geojson");
+        var extractionCount = Math.Min(10, DataCatalague.Api.PackageTypes.MarineAggregateExtraction.Parse(await File.ReadAllTextAsync(extractionFile)).Count);
+        var expected = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Samples", "NoticesToMariners"), "*.json").Length + 2 + extractionCount;
         await this.App.EventuallyAsync(async () => (await this.PackagesAsync()).TotalCount == expected);
         await this.App.EventuallyAsync(async () => {
             var page = (await this.Client.GetFromJsonAsync<PagedResponse<PipelineResponse>>("/api/v1/pipelines"))!;
             return page.TotalCount == 2 && page.Items.All(pipeline => pipeline.Workspaces.Count == 2);
         });
-        await this.App.EventuallyAsync(async () => (await this.Client.GetFromJsonAsync<PagedResponse<CategoryResponse>>("/api/v1/dispatcher/categories"))!.TotalCount == 2);
+        await this.App.EventuallyAsync(async () => (await this.Client.GetFromJsonAsync<PagedResponse<CategoryResponse>>("/api/v1/dispatcher/categories"))!.TotalCount == 3);
         var categories = (await this.Client.GetFromJsonAsync<PagedResponse<CategoryResponse>>("/api/v1/dispatcher/categories"))!;
-        Assert.Equal(new[] { "GeneralSubmission", "NoticeToMariners" }, categories.Items.Select(item => item.Id).Order().ToArray());
+        Assert.Equal(new[] { "GeneralSubmission", "MarineAggregateExtraction", "NoticeToMariners" }, categories.Items.Select(item => item.Id).Order().ToArray());
         Assert.All(categories.Items, category => Assert.NotNull(category.Specification));
         var pipelines = (await this.Client.GetFromJsonAsync<PagedResponse<PipelineResponse>>("/api/v1/pipelines"))!;
         Assert.Equal(new[] { "ENC", "Paper Chart" }, pipelines.Items.Select(item => item.DisplayName).Order().ToArray());
@@ -46,6 +48,16 @@ public sealed class InitializationAndSecurityTests(CatalogueFixture runtime) : C
             Assert.Empty((await this.Client.GetFromJsonAsync<BindingResponse[]>("/api/v1/dispatcher/bindings?packageId=" + package.Id))!);
         }
         Assert.Equal(2, (await this.PackagesAsync("?category=GeneralSubmission")).TotalCount);
+        var extractionPage = await this.PackagesAsync("?category=MarineAggregateExtraction&pageSize=200");
+        Assert.Equal(extractionCount, extractionPage.TotalCount);
+        Assert.All(extractionPage.Items, package => {
+            Assert.StartsWith("MA-", package.MetaData!.ShortId);
+            Assert.True(Guid.TryParse(package.MetaData.RefId, out _));
+            Assert.NotNull(package.DetailedGeometry!.SurfaceRef);
+        });
+        var extractionGeometry = (await this.Client.GetFromJsonAsync<PackageGeometryResponse>($"/api/v1/packages/{extractionPage.Items.First().Id}/geometry"))!;
+        Assert.True(extractionGeometry.Aoi.HasValue);
+        Assert.True(extractionGeometry.DetailedGeometry!.Surfaces.HasValue);
     }
 
     // Create data in one application and start a second application using the same native runtime.

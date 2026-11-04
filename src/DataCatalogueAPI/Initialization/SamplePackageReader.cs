@@ -16,6 +16,23 @@ public sealed class SamplePackageReader(ArcGisDispatcher dispatcher, ILogger<Sam
 {
     private const long MaximumExpandedBytes = 256L * 1024 * 1024;
 
+    /// <summary>Maps each MARIS snapshot feature to the existing package creation contract.</summary>
+    /// <param name="sourceFile">Path to the supplied WGS84 MARIS GeoJSON fixture.</param>
+    /// <param name="cancellationToken">Cancels file loading.</param>
+    /// <returns>One request per source site, preserving expired sites and source UUIDs.</returns>
+    public async Task<IReadOnlyList<CreatePackageRequest>> ReadMarineAggregateExtractionAsync(string sourceFile, CancellationToken cancellationToken) {
+        var fullPath = RequireSourceFile(sourceFile);
+        var sites = MarineAggregateExtraction.Parse(await File.ReadAllTextAsync(fullPath, cancellationToken).ConfigureAwait(false));
+        return sites.Select(site => new CreatePackageRequest {
+            Category = "MarineAggregateExtraction",
+            AbsoluteUri = new Uri(fullPath).AbsoluteUri,
+            EsriJSON = site.Geometry.Aoi,
+            DetailedGeometry = site.Geometry,
+            MetaData = site.MetaData,
+            Descriptions = site.Descriptions,
+        }).ToArray();
+    }
+
     /// <summary>Converts a notice sample to the request accepted by the existing package controller.</summary>
     /// <param name="sourceFile">Path to a notice fixture file.</param>
     /// <param name="cancellationToken">Cancels file loading.</param>

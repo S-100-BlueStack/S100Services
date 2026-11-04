@@ -185,23 +185,19 @@ Its constructor receives the DI-registered `DispatcherController`,
 `PackageController`, `PipelineController`, the initialization-only `SamplePackageReader`
 and logger. The sample reader creates API request models from the local fixture files;
 all packages still go through `PackageController.CreatePackage`. Production
-package types are not responsible for constructing requests to their own API. Startup creates the `NoticeToMariners` and
-`GeneralSubmission` categories and imports the supplied notice JSON and submission
-ZIP samples.
+package types are not responsible for constructing requests to their own API. Startup creates the `NoticeToMariners`,
+`GeneralSubmission` and `MarineAggregateExtraction` categories and imports the supplied notice JSON,
+submission ZIPs and MARIS GeoJSON snapshot.
 
 Startup also creates `ENC` and `Paper Chart` through `PipelineController.Create`.
-After importing packages in sorted file order, it applies the repeating sample
-pattern ENC, unbound, Paper Chart, Paper Chart, unbound, ENC, unbound, Paper Chart.
-With the supplied 14 notices and two submissions this creates 10 bindings and
-leaves six packages unbound. This is arbitrary development fixture data, not a
-production routing rule. Humans or agents explicitly select package/pipeline
+All sample packages remain unbound. Humans or agents explicitly select package/pipeline
 pairs through `POST /api/v1/dispatcher/bindings` using professional judgment.
 
 Bindings use typed package/pipeline stream names and persist their own ID.
 Creation returns 201 and a retrievable binding URL; missing package/pipeline IDs
 return 404, and an existing pair returns 409. A package can be bound to multiple
 pipelines. `GET /api/v1/dispatcher/bindings/{id}` reads the saved link. Startup
-reads each sample link back through this controller and checks its IDs.
+does not create sample bindings.
 Pipeline IDs are logged at startup and can be read using
 `GET /api/v1/pipelines/{id}`. Missing bindings/pipelines return 404; unexpected
 store failures and cancellation are no longer disguised as missing records.
@@ -246,6 +242,70 @@ routes continue to identify packages by their internal `id`.
 
 There is no invented severity mapping: the existing `ulong.MaxValue` default is
 used, and display scale stays null.
+
+### Marine aggregate extraction samples (Indvindingsområder)
+
+The category ID is `MarineAggregateExtraction`, its display name is
+**Marine Aggregate Extraction Areas**, and its identifier prefix is `MA`.
+This describes seabed sand, gravel and stone extraction; it is separate from
+dumping dredged material. Miljøstyrelsen describes the source layers at
+<https://mst.dk/erhverv/groen-produktion-og-affald/raastofindvinding/raastofindvinding-paa-havet/kort-og-gis-data>.
+
+The supplied ArcGIS Pro project is a collection/inspection workflow. Its notebook
+fetches `https://api.raastofindvinding.dk/v1/extraction-sites`, exports MARIS
+GeoJSON and projects it into its own file geodatabase. It also exports four WFS
+layers from `https://wfs2-miljoegis.mim.dk/raastofpaahavet/ows`.
+Neither the project, ArcPy, notebook nor file geodatabase is needed for fixture
+parsing. The existing Windows/ArcGIS CoreHost requirements still apply to
+persisting and retrieving the package geometry.
+
+The checked-in `Samples/MarineAggregateExtraction/MARIS_Raastof_Live.geojson`
+is an unchanged copy of the supplied export, **not a live feed**. Its capture time
+is unknown. The original filename does not establish freshness. Startup imports
+at most 10 sites, selecting the first records in source order through
+`SamplePackageReader` and `PackageController.CreatePackage`.
+The complete 141-site snapshot remains available as the source fixture.
+
+| Source value | Package mapping |
+| --- | --- |
+| Site UUID | `metaData.refId`; duplicate UUIDs in a snapshot are rejected |
+| Number, name, optional subsite | `metaData.title` and description; area numbers are not assumed unique |
+| Common / Auction / Builder | `metaData.type` |
+| Authority | `metaData.source = Miljøstyrelsen / MARIS` |
+| No published catalogue short ID | Server allocates `MA-NNN-YY` |
+| No source creation timestamp | `metaData.createdUTC = null` |
+| Polygon or MultiPolygon | Full `detailedGeometry.surfaces`, preserving parts and holes |
+| Geometry envelope | Rectangular AOI; existing persistence projects and recomputes it |
+| Permit dates, snapshot status, remarks, deadline value, volume ID, permit URL | HTML-encoded description; HTTP(S) permit URLs become links |
+| Original source | Local snapshot file URI; the full original properties remain in that fixture |
+
+The parser accepts WGS84 longitude/latitude only. It validates finite coordinates,
+closed nonzero-area rings and site identity, and converts shell/hole winding to
+Esri JSON. It does not repair invalid polygon topology. Source properties use
+typed models; GeoJSON's variable-depth coordinate arrays are parsed separately.
+No domain event, public request/response schema, route, DI registration or
+authorization change is required.
+
+The source snapshot labels 42 sites `Aktiv` and 99 `Udløbet`. These labels were
+calculated by the notebook when it ran; the importer does not assert that they
+are current. The other supplied exports contain 19 common-area features,
+5 auction permits, 18 builder permits and 264 potential/historical features.
+They are deliberately not merged into the MARIS packages: layers can overlap,
+their identifiers differ, and permit dates conflict (for example, Thyborøn
+562-PA expires in 2024 in the MARIS snapshot and in 2034 in the builder WFS
+snapshot). The potential/historical export also uses EPSG:25832, whereas MARIS
+and the other three WFS exports use longitude/latitude.
+
+To inspect these packages after startup, use
+`GET /api/v1/packages?category=MarineAggregateExtraction&pageSize=200`, then
+`GET /api/v1/packages/{id}/geometry` for the AOI and detailed coordinates.
+The fixtures are copied to build and publish output, and to test output.
+
+Live synchronization is a separate feature. Before implementing it, decide the
+authoritative source and reconciliation rules, whether expired/missing sites
+remain available, and whether one package represents a site or a source change.
+The current sample initializer assumes fresh stores and is not a recurring,
+idempotent import. No automatic pipeline assignments or chart changes are made.
 
 `PackageTypes/NoticeToMariners.cs` reads every geometry from every part and
 converts GeoJSON into Esri JSON in WGS84. The AOI is always a rectangle covering
