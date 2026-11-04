@@ -61,3 +61,51 @@ test("Invalid or out-of-range map center and zoom never persist", () => {
   assert.equal(store.getItem(MAP_POSITION_KEY), null);
   preferences.destroy();
 });
+
+test("Stored positions are isolated by map and invalid legacy entries are ignored", () => {
+  const store = storage();
+  store.setItem(
+    MAP_POSITION_KEY,
+    JSON.stringify({
+      main: { center: [190, 55], zoom: 7 },
+      assignment: { center: [-45, 70], zoom: 3 },
+    })
+  );
+  const preferences = createPreferencesSettings({ storage: store });
+  assert.equal(preferences.readMapPosition("assignment"), null);
+  preferences.set("rememberMapPosition", true);
+  assert.equal(preferences.readMapPosition("main"), null);
+  assert.deepEqual(preferences.readMapPosition("assignment"), {
+    center: [-45, 70],
+    zoom: 3,
+  });
+  preferences.saveMapPosition("main", { center: [10, 56], zoom: 5 });
+  assert.deepEqual(preferences.readMapPosition("assignment"), {
+    center: [-45, 70],
+    zoom: 3,
+  });
+  preferences.set("rememberMapPosition", false);
+  assert.equal(store.getItem(MAP_POSITION_KEY), null);
+  assert.deepEqual(preferences.getSnapshot(), {
+    rememberBasemap: true,
+    rememberMapPosition: false,
+    rememberTheme: true,
+  });
+  preferences.destroy();
+});
+
+test("Map position validation is independent of other preference settings", () => {
+  const store = storage();
+  const preferences = createPreferencesSettings({ storage: store });
+  preferences.set("rememberMapPosition", true);
+  preferences.set("rememberTheme", false);
+  preferences.set("rememberBasemap", false);
+  preferences.saveMapPosition("main", { center: [12, 56], zoom: 6 });
+  assert.deepEqual(preferences.readMapPosition("main"), {
+    center: [12, 56],
+    zoom: 6,
+  });
+  preferences.set("rememberMapPosition", false);
+  assert.equal(preferences.readMapPosition("main"), null);
+  preferences.destroy();
+});

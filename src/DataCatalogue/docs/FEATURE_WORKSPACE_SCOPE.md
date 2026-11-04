@@ -1,82 +1,99 @@
 # Package, Pipeline, Workspace and Jobs scope
 
-Authoritative decisions: WORK-TASK.md and CONFIRMED-DECISIONS-2026-10-28.md in the supplied
-handoff. Baseline: `08d9281fe35b06012bda430c94767ef69a439d3e`.
-Status: DC-API frontend candidate implemented; local browser/API acceptance pending.
+## Current frontend behavior (DC-STAB-02E, 2026-11-04)
 
-## DC-API-04 geometry clarification (2026-10-29)
+This document describes the accepted live frontend behavior after DC-STAB-02D.
+Older DC-001 and 2026-10-28 integration candidate requirements are historical where
+superseded here. The authoritative implementation baseline for DC-STAB-02E is
+`664be515a00d89985005634336392d47a0fb4ca3`.
 
-On baseline `829bb6ee9ff9b6925431d5f040f9a1b55eba297d`, Workspace polygons are now
-read from the existing v1 detail `esriJSON` and shown on both live MapViews. This supersedes
-missing-geometry statements below only for Workspace coverage. Jobs map shows selected coverage;
-assignment map shows last loaded saved binding intersections. Unsaved checkboxes do not change
-coverage. Package/Job AOI coordinates remain unavailable; references are never drawn as geometry.
-No published Feature Service is needed. See [geometry verification](DC_API_GEOMETRY_VERIFICATION.md).
+## Domain and backend ownership
 
-## Domain
+A **Package** is an assignment unit with a generalized AOI reference and detailed
+geographic **Features**. A Package may be bound to several **Pipelines**. A
+**Workspace** is a Pipeline-scoped geographic work area. The backend computes
+Package membership from saved Package/Pipeline bindings and generalized AOI
+intersection. Manual Workspace include/exclude is an agreed requirement but has no
+verified v1 persistence contract yet; it must not be faked in the frontend.
 
-A Package is the assignment unit. It has one generalized rectangular AOI and detailed
-Features; it is not a Feature. A Pipeline is a product definition. A Package may have several
-Pipeline bindings. A Workspace is a Pipeline-scoped geographic work area. Membership is
-computed by the backend from an active binding and generalized AOI intersection. No manual
-Workspace membership or per-Feature assignment is saved in live mode.
+A **Job** is a Package within one `(packageId, pipelineId, workspaceId)` context.
+That complete tuple is its internal identity. Package Severity is shared across
+contexts; Job workflow status is independent mock state per tuple and remains in
+browser memory only. Ownership/locks are distinct from Job progress.
 
-A Job is a Package in a particular Pipeline and Workspace. Its canonical frontend identity is
-an unambiguous serialized tuple `(packageId, pipelineId, workspaceId)`. Package-level Severity
-is shared across those contexts; simulated workflow status is independent for every tuple.
-Ownership/locks remain distinct from progress.
+## Package assignment page
 
-## Four-panel assignment page
+The four-panel page retains independent scrolling, draft navigation decisions,
+keyboard/Escape behavior and saved binding reconciliation:
 
-The existing four panels, independent scrolling, explicit selection, Save, dirty navigation
-and native Escape/focus behavior remain. In live mode they display:
+1. **Packages:** paged records with supported Category and Assigned/Not assigned
+   filters. Unsupported Package name search stays disabled. Display `shortId`,
+   but use canonical `packageId` for API calls and deep links.
+2. **Package details:** render language-specific descriptions as **allowlisted
+   sanitized HTML**, including useful tables and safe links. Markup is untrusted;
+   it is not inserted raw and is not limited to plain text.
+3. **Bindings:** Pipeline checkboxes form a Package/Pipeline draft. Derived
+   Workspaces are read-only and reflect the **saved** bindings. A Package switch
+   retains the previous complete selection and disabled bindings while the new
+   Package and saved records load; it publishes the replacement atomically.
+4. **Map:** the assignment map renders Workspace geography derived from saved
+   binding intersections only. A missing Package or Job AOI is not invented from
+   Workspace geography, metadata references or a hypothetical Feature Service.
 
-1. Paged Packages with server-side Category and Assigned/Not assigned filters. Name search is
-   disabled because v1 has no such query. An unfiltered row says `Select to view bindings`;
-   it does not infer assignment status from a geometry reference or category.
-2. Package information, exact Severity, opaque ID, short ID and generalized AOI reference.
-   Source descriptions are rendered as text, never inserted as HTML.
-3. Multi-Pipeline checkboxes and saved derived Workspaces. Workspace lists are read-only and
-   explicitly refer to the last saved binding, not an unsaved draft. Comments are unavailable.
-4. A truthful missing-geometry surface. No synthetic Package AOIs, ENC overlays or legacy
-   demo layers are substituted.
+Save performs a preflight read, independent add/remove mutations and authoritative
+reconciliation. Partial definitive errors preserve individual results. Binding
+requests and response-body reads have a 30-second frontend deadline. A timed-out
+or otherwise uncertain mutation stops remaining writes and preserves the desired
+draft until **Check saved bindings** runs a read-only reconciliation. **Discard
+local draft** is an explicit local-only action, not a backend rollback. A server
+write may still complete late; version/idempotency semantics are backend-owned.
 
-Save re-reads bindings, computes independent add/remove deltas and uses returned binding IDs
-for deletion. It issues one operation per distinct change, then re-reads authoritative state.
-Each operation outcome is reported. Partial failure updates the saved baseline when possible
-and retains the desired draft. An unsuccessful reconciliation leaves the draft intact and
-requires another preflight read before any retry. No atomic transaction or rollback is implied.
+## Main Jobs map, coverage and filters
 
-## Main-map Jobs
+**All discovered Workspaces across all Pipelines** form the live Jobs scope.
+The user does not select a Workspace to make Jobs load. Map-only Pipeline and
+individual Workspace visibility toggles **do not filter Jobs**, reset mock
+statuses, reread geometry or change membership. Jobs load all member pages and
+hydrate unique Packages with bounded concurrency; an incomplete read is an error,
+not a successful partial list or an authoritative empty catalogue.
 
-The existing Jobs panel starts closed. Its live Workspace selector groups Workspaces by
-Pipeline and makes no automatic selection. After explicit selection, all member pages are
-read and Package details are hydrated with at most six concurrent requests. The list is
-published only when complete. Severity sorting, counts and supported status filters apply
-only to that selected Workspace, never to a claimed global catalogue search.
+Filters apply to Jobs from all loaded Workspaces, regardless of map visibility.
+Supported mock status filters and complete-data Severity ordering apply to this
+scope. Lower exact uint64 values have higher priority; `0` is highest; null is
+`Unspecified`; `18446744073709551615` is `Not prioritized` and sorts last.
+No invented numeric priority bands or unsafe Number rounding are allowed.
 
-The existing list/details/status controls remain. A visible banner and status detail explain
-that status is mock-only. Reset clears only live mock status memory; it does not change backend
-bindings, demo persistence or preferences. Reloading the browser also resets these statuses.
-No deadlines or follow-up Jobs are fabricated. Priority bands, AOI filters and clustering
-controls are hidden in live mode while their required mapping/band contracts are absent.
+The compact live Jobs list/details use `shortId` with Pipeline/Workspace context
+and icon Refresh; keyboard focus is retained through rerenders. Job status is
+simulated and resettable, not a backend write. Live deadlines, follow-ups, AOI
+geometry and unsupported clustering/priority controls remain unavailable.
 
-Map/MapView ownership remains under `features/map`. Live list access is independent of the
-legacy required-AOI startup gate. Existing demo startup, layers, popups, filters and highlights
-remain on the demo path. Live overlays and map focus are withheld until geometry is verified.
+Both map views use existing ArcGIS `Map`/`MapView`, validating Workspace geometry
+from the backend's Esri JSON. All Pipelines start visible; each Workspace may be
+hidden independently. Workspace open-Job colors are updated from the last verified
+complete Jobs snapshot; normal loading/refresh retains those colors rather than
+briefly turning every polygon neutral blue. A changed catalogue identity invalidates
+old counts. Main-map LayerView failures create visible notices without disabling
+Jobs. Mock map highlights and Job layer writes have separate stale-operation guards.
 
-## Severity
+## Basemaps and Preferences
 
-Lower exact unsigned integer means higher priority. `0` is highest. The uint64 maximum is
-`Not prioritized` and sorts last. Null is `Unspecified` and sorts after numeric prioritized
-values but before that sentinel. This null placement is a frontend display convention, not a
-new backend severity tier. Exact decimal strings and raw JSON integer tokens are supported;
-already-rounded unsafe JavaScript numbers and unsupported encodings are rejected.
+Basemap Gallery and Expand use public `@arcgis/map-components` components connected
+to the retained ArcGIS views. Theme-aware default choice applies until an explicit
+user selection; the two maps share basemap settings. Preferences independently
+control persistence of theme, basemap and **per-map center/zoom**. Map position
+persistence is **implemented but disabled by default**; `main` and `assignment`
+slots are independent. Disabling an option clears its persisted values.
 
-## Preserved demo and excluded work
+## Deferred work and historical prototype
 
-The earlier [Feature/Work stream scope](FEATURE_WORK_STREAM_SCOPE.md) describes demo behavior
-only. Its per-Feature assignments, manual Work stream membership, comments and priority bands
-are not live backend contracts. No backend code, final status taxonomy, durability, lock writes,
-Workspace override, authentication infrastructure or production deployment is included.
-See [backend gaps](DC_API_BACKEND_GAPS.md) and [verification](DC_API_LOCAL_VERIFICATION.md).
+- `GEO-01` / `GEO-04`: authorized generalized Package and detailed Feature AOI
+  coordinates (including spatial reference) are not verified as browser reads.
+- `OVERRIDE-01`: backend durable manual Workspace membership overrides are pending.
+- Persistent Job status, deadlines, follow-ups, Package name search, operation
+  idempotency/version semantics and remaining API gaps are separately documented.
+- [FEATURE_WORK_STREAM_SCOPE.md](FEATURE_WORK_STREAM_SCOPE.md) describes the earlier
+  mock prototype; its Work stream vocabulary is not a live backend contract.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md), [BACKEND_CONTRACTS.md](BACKEND_CONTRACTS.md)
+and [DC_API_BACKEND_GAPS.md](DC_API_BACKEND_GAPS.md) for feature boundaries.

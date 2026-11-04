@@ -122,9 +122,11 @@ its existing source mode to the list so no mode is guessed from an empty result.
   existing `GraphicsLayer` symbols without re-requesting geometry or affecting Job statuses.
 - `basemapSettings.js` is a single app-scoped owner of the map basemap choice and safe
   localStorage persistence. `createBaseMapView` registers each Map and cleans up on destroy.
-  The selector is native and accessible, with supported Calcite layout. Only basemap style
-  requests receive the optional browser API key (`esriConfig.apiKeys.basemapStyles`).
-  Last map extent is a separate deferred setting, not implemented or advertised as stored.
+  Current basemap selection uses public ArcGIS Basemap Gallery and Expand components
+  connected to the retained `MapView` via `view`. Only basemap style requests receive
+  the optional browser API key (`esriConfig.apiKeys.basemapStyles`). Per-map center
+  and zoom persistence is implemented as an opt-in Preferences setting, disabled
+  by default.
 - Package descriptions are normalized as language-specific entries in the API adapter;
   `renderPackageDescriptions.js` parses inert HTML and copies only allowlisted nodes/attrs
   into the DOM, preserving simple tables and entities. Scripts, forms, SVG, event handler
@@ -184,17 +186,17 @@ that reference; no ProductCatalogue source was modified.
 Baseline `829bb6ee9ff9b6925431d5f040f9a1b55eba297d`. This section supersedes the
 older live-geometry/Feature Service blockers below. The mock map path is preserved.
 
-| Boundary                                                        | Responsibility                                                                                                                                                                                                    |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shared/api/catalogueService.js`                                | Existing v1 Workspace detail read, normalized identity and exact returned Workspace ID check. Transport/credentials are unchanged.                                                                                |
-| `shared/api/workspaceGeometry.js`                               | Pure Esri JSON wire validation and horizontal footprint normalization; no ArcGIS instances, endpoint construction or inferred coordinates.                                                                        |
-| `features/map/workspaces/createWorkspaceGeometrySource.js`      | Detail reads through catalogue service, per-batch identity deduplication, four workers per map, 20-second read deadline, abort and per-Workspace errors.                                                          |
-| `features/map/workspaces/createWorkspaceOverlay.js`             | Sole map-context generation owner. Clears old graphics immediately, suppresses stale reads/projections/focus, reuses only the current context and publishes partial results.                                      |
-| `features/map/workspaces/createWorkspaceGraphics.js`            | Public SDK Polygon/Graphic/GraphicsLayer, projection to the actual view SR, topology/extent checks, graphics replacement, guarded instant goTo and disposal. Only SDK operator initialization is shared globally. |
-| `features/map/assignment/liveAssignmentMapContext.js`           | Extracts deduplicated `(pipelineId, workspaceId)` coverage from last loaded active bindings; rejects inconsistent ownership. Draft membership is never inferred.                                                  |
-| `features/map/assignment/createLiveCatalogueMap.js`             | Separate assignment MapView lifecycle, saved Workspace overlay and truthful Package AOI limitation.                                                                                                               |
-| `features/map/core/mapController.js`                            | Main-map live overlay lifecycle. Holds current selected Workspace during map startup, then applies it when the view is ready; existing mock orchestration stays on its original path.                             |
-| `features/jobs/ui/createWorkspaceScope.js` / `app/createApp.js` | Stable native selector and explicit Focus action; composition forwards scope/reload/focus without moving geometry or layer logic into UI.                                                                         |
+| Boundary                                                                   | Responsibility                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shared/api/catalogueService.js`                                           | Existing v1 Workspace detail read, normalized identity and exact returned Workspace ID check. Transport/credentials are unchanged.                                                                                |
+| `shared/api/workspaceGeometry.js`                                          | Pure Esri JSON wire validation and horizontal footprint normalization; no ArcGIS instances, endpoint construction or inferred coordinates.                                                                        |
+| `features/map/workspaces/createWorkspaceGeometrySource.js`                 | Detail reads through catalogue service, per-batch identity deduplication, four workers per map, 20-second read deadline, abort and per-Workspace errors.                                                          |
+| `features/map/workspaces/createWorkspaceOverlay.js`                        | Sole map-context generation owner. Clears old graphics immediately, suppresses stale reads/projections/focus, reuses only the current context and publishes partial results.                                      |
+| `features/map/workspaces/createWorkspaceGraphics.js`                       | Public SDK Polygon/Graphic/GraphicsLayer, projection to the actual view SR, topology/extent checks, graphics replacement, guarded instant goTo and disposal. Only SDK operator initialization is shared globally. |
+| `features/map/assignment/liveAssignmentMapContext.js`                      | Extracts deduplicated `(pipelineId, workspaceId)` coverage from last loaded active bindings; rejects inconsistent ownership. Draft membership is never inferred.                                                  |
+| `features/map/assignment/createLiveCatalogueMap.js`                        | Separate assignment MapView lifecycle, saved Workspace overlay and truthful Package AOI limitation.                                                                                                               |
+| `features/map/core/mapController.js`                                       | Main-map live overlay lifecycle. Retains the complete Workspace context during startup, then applies it when the view is ready; mock orchestration stays separate.                                                |
+| `features/map/workspaces/createPipelineVisibility.js` / `app/createApp.js` | All discovered Workspaces feed Jobs independently of map-only visibility toggles; the original selected-Workspace selector is no longer used by the live app.                                                     |
 
 Live selection does not depend on Jobs loading successfully. Geometry failure does not change
 Jobs data or binding results. Both maps retain basemaps, and successful assignment Workspace

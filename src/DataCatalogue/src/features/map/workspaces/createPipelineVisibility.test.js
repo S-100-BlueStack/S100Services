@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createPipelineVisibility } from "./createPipelineVisibility.js";
+import { createLiveJobServiceAdapter } from "../../jobs/services/liveJobServiceAdapter.js";
 
 class TestElement extends EventTarget {
   constructor(tagName) {
@@ -23,7 +24,7 @@ class TestElement extends EventTarget {
   }
 }
 
-function fixture() {
+function fixture({ onWorkspacesLoaded = null } = {}) {
   const original = globalThis.document;
   globalThis.document = {
     createElement: (name) => new TestElement(name),
@@ -57,6 +58,7 @@ function fixture() {
     container,
     onWorkspacesLoaded(workspaces) {
       loaded.push(workspaces);
+      onWorkspacesLoaded?.(workspaces);
     },
     onChange(workspaces, options) {
       callbacks.push({ workspaces, options });
@@ -67,6 +69,7 @@ function fixture() {
     container,
     callbacks,
     loaded,
+    catalogue,
     restore() {
       controller.destroy();
       globalThis.document = original;
@@ -171,6 +174,55 @@ test("Pipeline hide and restore retains individual Workspace choices", async () 
       f.callbacks.at(-1).workspaces.map((w) => w.pipelineId),
       ["enc", "paper"]
     );
+  } finally {
+    f.restore();
+  }
+});
+
+test("Pipeline and Workspace map toggles do not narrow the live Jobs catalogue", async () => {
+  const requests = [];
+  const membership = {
+    async workspacePackages(pipelineId, workspaceId) {
+      requests.push(`${pipelineId}/${workspaceId}`);
+      return {
+        items: [{ packageId: `package-${pipelineId}-${workspaceId}` }],
+        page: 0,
+        pageSize: 200,
+        total: 1,
+      };
+    },
+    async package(id) {
+      return { id, title: id, severity: "1" };
+    },
+  };
+  const adapter = createLiveJobServiceAdapter({ catalogue: membership });
+  const f = fixture({ onWorkspacesLoaded: (all) => adapter.setWorkspaces(all) });
+  try {
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(
+      (await adapter.loadJobs()).jobs.map((job) => job.pipelineId),
+      ["enc", "paper"]
+    );
+
+    const list = f.container.children[1];
+    const encCheckbox = list.children[0].children[0].children[0];
+    encCheckbox.checked = false;
+    encCheckbox.dispatchEvent(new Event("change"));
+    assert.deepEqual(
+      f.callbacks.at(-1).workspaces.map((workspace) => workspace.pipelineId),
+      ["paper"]
+    );
+
+    const paperWorkspaceCheckbox = list.children[1].children[1].children[0];
+    paperWorkspaceCheckbox.checked = false;
+    paperWorkspaceCheckbox.dispatchEvent(new Event("change"));
+    assert.deepEqual(f.callbacks.at(-1).workspaces, []);
+    assert.equal(f.loaded.length, 1, "Visibility toggles cannot replace the Jobs scope");
+    assert.deepEqual(
+      (await adapter.loadJobs()).jobs.map((job) => job.pipelineId),
+      ["enc", "paper"]
+    );
+    assert.deepEqual(requests, ["enc/east", "paper/west", "enc/east", "paper/west"]);
   } finally {
     f.restore();
   }

@@ -1,3 +1,41 @@
+## DC-STAB-02E — Current scope and targeted regression coverage (candidate, 2026-11-04)
+
+Authoritative baseline: `664be515a00d89985005634336392d47a0fb4ca3`
+(user-reported accepted DC-STAB-02D commit). The candidate uses the checksum-verified
+02D delivery over the previously verified handoff and accepted 02A/02B/02C
+candidate chain. The exact new Git tree is not mounted; a commit-pinned preimage
+check must pass before installation. No backend projects or dependencies change.
+
+- **F09 (P3):** The current `FEATURE_WORKSPACE_SCOPE.md` and early architecture
+  summary now describe all-Workspace Jobs independent of map visibility,
+  allowlisted HTML descriptions, public ArcGIS Basemap Gallery, and opt-in
+  per-map position persistence. The live filters hint no longer implies a
+  manually selected Workspace.
+- `DC_API_BACKEND_GAPS.md` corrects the obsolete `QA-01` missing-`tokens.css`
+  assertion. The verified source archive included that file; offline npm
+  dependencies/SDK imports were the actual blockers.
+- Regression coverage protects all-Workspace membership across map visibility
+  changes, HTML sanitization copying and separate Preferences map slots.
+  Actual browser parsing, ArcGIS/WebGL and auth checks remain local acceptance.
+- Prior prototype/candidate status sections below are historical and do not
+  supersede this scope or user-confirmed accepted commits.
+
+### DC-MAP-01 — Denmark and Greenland map extent (P2, backlog)
+
+Users must be able to zoom out far enough to see both Denmark and Greenland in
+one map view, on the Jobs main map **and** Package assignment map.
+`src/features/map/config/mapConfig.js` currently sets `DEFAULT_CONSTRAINTS.minZoom`
+to `4`. Investigate that value, per-view overrides, effective basemap/view
+constraints and actual rendering before choosing a new bound; the root cause
+has not been verified in a browser.
+
+Acceptance: both MapViews reach the necessary overview scale; existing zoom,
+keyboard/pointer interactions, per-map saved positions, basemap switching and
+initial view preferences remain compatible. Zoom-only interactions must not
+recreate the MapView or re-fetch Workspace geometry. No forced auto-fit when
+Pipelines/Workspaces are toggled. Test laptop viewport sizes and theme/basemap
+variants. **Documented only; no map configuration change in DC-STAB-02E.**
+
 ## DC-STAB-02C v3 — Stable Package assignment selection (candidate, 2026-10-30)
 
 Controlled source: the locally accepted DC-STAB-02C v2 candidate (SHA-256

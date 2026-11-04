@@ -392,7 +392,7 @@ function createJobFilterPopoverContent({
     withRelatedAoisOnlyButton.buttonElement.remove();
     const hint = document.createElement("p");
     hint.textContent =
-      "Filters apply to the complete selected Workspace list. Severity bands and map filters are unavailable. Status is mock-only.";
+      "Filters apply to Jobs from all loaded Workspaces, regardless of map visibility. Severity bands and map filters are unavailable. Status is mock-only.";
     scrollElement.prepend(hint);
   }
   contentElement.append(headerElement, summaryElement, scrollElement);

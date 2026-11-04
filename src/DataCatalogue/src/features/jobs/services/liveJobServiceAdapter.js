@@ -117,7 +117,7 @@ export function createLiveJobServiceAdapter({
       const job = jobs.get(id);
       if (!job)
         throw new Error(
-          "Job is outside the current Pipeline selection. Reload before updating status."
+          "Job is no longer in the loaded Workspace catalogue. Reload Jobs before updating status."
         );
       const next = { ...job, status: statuses.set(job, status) };
       jobs.set(id, next);
