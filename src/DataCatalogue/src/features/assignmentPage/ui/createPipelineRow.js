@@ -16,7 +16,7 @@ export function createPipelineRow(pipeline, session) {
     element,
     update(state) {
       checkbox.checked = state.draft.activeIds.includes(pipeline.id);
-      checkbox.disabled = state.saving;
+      checkbox.disabled = state.loading || state.saving;
       const saved = state.record.relations[pipeline.id];
       const names = saved?.workspaces.map((workspace) => workspace.name) ?? [];
       derived.textContent = saved

@@ -1,3 +1,58 @@
+## DC-STAB-02C v3 — Assignment selection publication
+
+`features/assignments/state/createAssignmentSession.js` owns the committed
+Package/Feature selection and its in-flight generation. A new selection does
+not clear the previous `{ feature, record, draft }`: the replacement becomes
+visible only after both the detail and saved binding reads succeed. Pending
+edits are blocked. Superseded reads never publish; identical pending selections
+share the same logical request. A failed new selection leaves the last verified
+context in place with an explicit retryable selection error.
+
+`features/assignmentPage/ui/createAssignmentPage.js` preserves the last
+rendered Pipeline rows while their replacement catalogue request is pending;
+retained rows are inaccessible (`inert`, `aria-busy`) until they match the
+published Package and draft. A successful Pipeline response reconciles rows
+without an intermediate "Select a Package" placeholder; an error cannot
+expose the previous Package's bindings under the new identity. The saved
+Workspace geometry map receives no `null` context while selecting a Package.
+Actual clearing/reset remains a distinct, intentional transition. This does
+not introduce a Pipeline cache, backend mutation, or new geometry contract.
+
+## DC-STAB-02C v2 — Workspace Job-color publication
+
+`features/map/workspaces/createWorkspaceJobColorSync.js` owns the bridge from
+`jobStore` publications to the existing main-map `setWorkspaceJobCounts` boundary.
+A pending/error Jobs snapshot is not an authoritative empty result: the bridge
+keeps previously verified colors during normal refresh and publishes new counts
+only after a successful load or status mutation. Unknown counts remain neutral
+on initial startup and when Pipeline/Workspace **identity membership** changes.
+Unchanged catalogue identities do not invalidate known colors; a successfully
+loaded zero-Job catalogue publishes an empty `Map`, which means zero open Jobs
+for each Workspace rather than unknown counts. The map renderer retains existing
+Graphics and applies colors without new geometry reads or layer replacement.
+The retained colors represent the last successful Jobs snapshot if the latest
+refresh fails, and the existing Jobs error UI must still report that failure.
+
+## DC-STAB-02C — Mock map async publication ownership
+
+`features/map/layers/createHighlightLifetime.js` owns the invalidation token
+and visible handle for both mock Job and AOI highlights. A public clear must
+cancel outstanding query and LayerView awaits, not only remove the current
+handle. `app/coordination/createMapSyncCoordinator.js` checks its own generation
+again after scope errors before attempting any restored highlight.
+
+`features/map/layers/createJobLayerUpdateQueue.js` owns **one** active writer
+per mock map instance. New Job snapshots supersede waiting requests; a write
+already submitted to ArcGIS is allowed to settle before the newest snapshot is
+applied. `applyJobLayerData.js` awaits every sibling layer write (including
+failures) before releasing the queue, and `replaceJobLayerFeatures.js` checks
+freshness after `load()` and `queryFeatures()` and immediately before
+`applyEdits()`. The queue is disposed before MapView teardown. This avoids
+cross-generation edits without assuming `applyEdits` is cancelable. All three
+mock geometry paths (required startup, best-effort startup and Jobs refresh)
+share the same lifecycle. Live Workspace coverage does not use these mock
+writers or highlights.
+
 ## DC-STAB-02B — Workflow navigation and main-map rendering feedback
 
 `app/ui/createWorkflowNavigation.js` is the single owner of accepted history and

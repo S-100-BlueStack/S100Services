@@ -167,3 +167,129 @@ test("Removing orphaned comment drafts resolves validation without changing save
   assert.equal(await session.save(), true);
   assert.equal(session.snapshot().record.relations.DK2, undefined);
 });
+
+test("Changing Package retains the previous committed context until both reads finish", async () => {
+  const service = services();
+  const session = createAssignmentSession({ services: service });
+  assert.equal(await session.select("feature-1"), true);
+  const previous = session.snapshot();
+  const nextFeature = deferred();
+  const nextBindings = deferred();
+  const originalGet = service.features.get;
+  const originalLoad = service.assignments.load;
+  service.features.get = (id) => (id === "feature-2" ? nextFeature.promise : originalGet(id));
+  service.assignments.load = (id) => (id === "feature-2" ? nextBindings.promise : originalLoad(id));
+  const observed = [];
+  session.subscribe((state) => observed.push(state));
+
+  const pending = session.select("feature-2");
+  assert.equal(session.snapshot().loading, true);
+  assert.equal(session.snapshot().feature.id, "feature-1");
+  assert.deepEqual(session.snapshot().record, previous.record);
+  assert.deepEqual(session.snapshot().draft, previous.draft);
+  session.setAssigned("DK3", true);
+  assert.deepEqual(session.snapshot().draft, previous.draft);
+
+  nextFeature.resolve(await originalGet("feature-2"));
+  await Promise.resolve();
+  assert.equal(session.snapshot().feature.id, "feature-1");
+  nextBindings.resolve(await originalLoad("feature-2"));
+  assert.equal(await pending, true);
+  assert.equal(session.snapshot().loading, false);
+  assert.equal(session.snapshot().feature.id, "feature-2");
+  assert.equal(
+    observed.some((state) => state.loading && state.feature === null),
+    false
+  );
+  assert.equal(
+    observed.some((state) => state.feature === null),
+    false
+  );
+});
+
+test("Failed replacement preserves the previous Package and can be retried", async () => {
+  const service = services();
+  const session = createAssignmentSession({ services: service });
+  assert.equal(await session.select("feature-1"), true);
+  const previous = session.snapshot();
+  const originalLoad = service.assignments.load;
+  let attempts = 0;
+  service.assignments.load = (id) => {
+    if (id === "feature-2" && ++attempts === 1)
+      return Promise.reject(new Error("Binding read failed"));
+    return originalLoad(id);
+  };
+  assert.equal(await session.select("feature-2"), false);
+  assert.equal(session.snapshot().loading, false);
+  assert.equal(session.snapshot().feature.id, "feature-1");
+  assert.deepEqual(session.snapshot().record, previous.record);
+  assert.match(session.snapshot().selectionError, /Binding read failed/);
+  assert.equal(await session.select("feature-2"), true);
+  assert.equal(session.snapshot().feature.id, "feature-2");
+  assert.equal(session.snapshot().selectionError, "");
+});
+
+test("Repeated selection of the same pending Package makes one pair of requests", async () => {
+  const service = services();
+  const session = createAssignmentSession({ services: service });
+  const pendingFeature = deferred();
+  const pendingRecord = deferred();
+  const originalGet = service.features.get;
+  const originalLoad = service.assignments.load;
+  let featureRequests = 0;
+  let bindingRequests = 0;
+  service.features.get = (id) => {
+    featureRequests++;
+    return id === "feature-1" ? pendingFeature.promise : originalGet(id);
+  };
+  service.assignments.load = (id) => {
+    bindingRequests++;
+    return id === "feature-1" ? pendingRecord.promise : originalLoad(id);
+  };
+  const first = session.select("feature-1");
+  const repeated = session.select("feature-1");
+  assert.strictEqual(first, repeated);
+  await Promise.resolve();
+  assert.equal(featureRequests, 1);
+  assert.equal(bindingRequests, 1);
+  pendingFeature.resolve(await originalGet("feature-1"));
+  pendingRecord.resolve(await originalLoad("feature-1"));
+  assert.equal(await first, true);
+  assert.equal(session.snapshot().feature.id, "feature-1");
+});
+
+test("A superseded replacement and disposal cannot clear a newer committed selection", async () => {
+  const service = services();
+  const session = createAssignmentSession({ services: service });
+  await session.select("feature-1");
+  const held = deferred();
+  const originalLoad = service.assignments.load;
+  service.assignments.load = (id) => (id === "feature-2" ? held.promise : originalLoad(id));
+  const old = session.select("feature-2");
+  assert.equal(session.snapshot().feature.id, "feature-1");
+  assert.equal(await session.select("feature-3"), true);
+  held.reject(new Error("Late failed selection"));
+  assert.equal(await old, false);
+  assert.equal(session.snapshot().feature.id, "feature-3");
+  assert.equal(session.snapshot().selectionError, "");
+
+  const pending = deferred();
+  service.assignments.load = () => pending.promise;
+  const abandoned = session.select("feature-4");
+  session.destroy();
+  pending.resolve(await originalLoad("feature-1"));
+  assert.equal(await abandoned, false);
+});
+
+test("A synchronous catalogue exception leaves the prior selection intact", async () => {
+  const service = services();
+  const session = createAssignmentSession({ services: service });
+  await session.select("feature-1");
+  service.features.get = () => {
+    throw new Error("Invalid catalogue response");
+  };
+  assert.equal(await session.select("feature-2"), false);
+  assert.equal(session.snapshot().feature.id, "feature-1");
+  assert.equal(session.snapshot().loading, false);
+  assert.match(session.snapshot().selectionError, /Invalid catalogue response/);
+});

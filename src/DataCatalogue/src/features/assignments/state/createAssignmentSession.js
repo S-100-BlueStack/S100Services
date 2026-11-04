@@ -5,6 +5,7 @@ export function createAssignmentSession({ services }) {
   let generation = 0;
   let alive = true;
   let pendingSave = null;
+  let pendingSelection = null;
   let state = {
     feature: null,
     record: null,
@@ -12,6 +13,7 @@ export function createAssignmentSession({ services }) {
     loading: false,
     saving: false,
     error: "",
+    selectionError: "",
     validationError: "",
     dirty: false,
   };
@@ -30,39 +32,54 @@ export function createAssignmentSession({ services }) {
     return alive && state.draft && !state.loading && !state.saving;
   }
 
-  async function select(id) {
-    if (!alive || state.saving || state.dirty) return false;
+  function select(id) {
+    if (!alive || state.saving || state.dirty) return Promise.resolve(false);
+    if (pendingSelection?.id === id) return pendingSelection.promise;
 
     const current = ++generation;
-    state = {
-      feature: null,
-      record: null,
-      draft: null,
-      loading: true,
-      saving: false,
-      error: "",
-      validationError: "",
-      dirty: false,
-    };
+    // Keep the last committed Package visible until both its replacement and bindings are ready.
+    // Clearing the selection here would temporarily publish an incorrect empty map and draft.
+    state.loading = true;
+    state.error = "";
+    state.selectionError = "";
     emit();
 
-    try {
-      const [feature, record] = await Promise.all([
-        services.features.get(id),
-        services.assignments.load(id),
-      ]);
-      if (!alive || current !== generation) return false;
-      state = { ...state, feature, record, draft: createDraft(record), loading: false };
-      emit();
-      return true;
-    } catch (error) {
-      if (alive && current === generation) {
-        state.loading = false;
-        state.error = error.message;
+    const promise = Promise.all([
+      Promise.resolve().then(() => services.features.get(id)),
+      Promise.resolve().then(() => services.assignments.load(id)),
+    ])
+      .then(([feature, record]) => {
+        if (!alive || current !== generation) return false;
+        state = {
+          feature,
+          record,
+          draft: createDraft(record),
+          loading: false,
+          saving: false,
+          error: "",
+          selectionError: "",
+          validationError: "",
+          dirty: false,
+        };
         emit();
-      }
-      return false;
-    }
+        return true;
+      })
+      .catch((error) => {
+        if (alive && current === generation) {
+          // Failed selection is not a request to discard the previous committed context.
+          state.loading = false;
+          state.error = error.message;
+          state.selectionError = error.message;
+          emit();
+        }
+        return false;
+      })
+      .finally(() => {
+        if (pendingSelection?.promise === promise) pendingSelection = null;
+      });
+
+    pendingSelection = { id, promise };
+    return promise;
   }
 
   function save() {
@@ -75,6 +92,7 @@ export function createAssignmentSession({ services }) {
     const payload = structuredClone(state.draft);
     state.saving = true;
     state.error = "";
+    state.selectionError = "";
     emit();
 
     pendingSave = Promise.resolve()
@@ -152,6 +170,7 @@ export function createAssignmentSession({ services }) {
     clear() {
       if (!alive || state.saving || state.dirty) return false;
       generation++;
+      pendingSelection = null;
       state = {
         feature: null,
         record: null,
@@ -159,6 +178,7 @@ export function createAssignmentSession({ services }) {
         loading: false,
         saving: false,
         error: "",
+        selectionError: "",
         validationError: "",
         dirty: false,
       };
@@ -168,6 +188,7 @@ export function createAssignmentSession({ services }) {
     destroy() {
       alive = false;
       generation++;
+      pendingSelection = null;
       listeners.clear();
     },
   };

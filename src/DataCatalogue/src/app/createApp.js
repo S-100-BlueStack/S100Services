@@ -7,7 +7,7 @@ import { createBasemapSettings } from "../features/map/basemaps/basemapSettings.
 import { createBasemapSelector } from "../features/map/basemaps/createBasemapSelector.js";
 import { createPreferencesSettings } from "../features/preferences/state/createPreferencesSettings.js";
 import { createPreferencesPanel } from "../features/preferences/ui/createPreferencesPanel.js";
-import { countOpenJobsByWorkspace } from "../features/map/workspaces/workspaceJobColors.js";
+import { createWorkspaceJobColorSync } from "../features/map/workspaces/createWorkspaceJobColorSync.js";
 import { createAssignmentWorkflow } from "../features/assignmentPage/createAssignmentWorkflow.js";
 import { createWorkflowNavigation } from "./ui/createWorkflowNavigation.js";
 import { createSelectedAoiStore } from "../features/aoi/state/selectedAoiStore.js";
@@ -204,6 +204,12 @@ export async function createApp(rootElement) {
     },
   });
 
+  const workspaceJobColorSync = live
+    ? createWorkspaceJobColorSync({
+        publishCounts: (counts) => mapController.setWorkspaceJobCounts(counts),
+      })
+    : null;
+
   workspace.panelHost.appendChild(jobsPanel.element);
 
   const jobsWorkflowHost = document.createElement("div");
@@ -254,6 +260,7 @@ export async function createApp(rootElement) {
           mapController.setVisibleWorkspaces(workspaces);
         },
         onWorkspacesLoaded(workspaces) {
+          workspaceJobColorSync.setCatalogue(workspaces);
           void mapController.setWorkspaceCatalog(workspaces, { reload: true, autoFocus: false });
           // Jobs belong to every Workspace, regardless of which Pipelines are shown on the map.
           resetJobsPanelContext();
@@ -300,12 +307,7 @@ export async function createApp(rootElement) {
   });
 
   const unsubscribeJobStoreSync = jobStore.subscribe((snapshot) => {
-    if (live) {
-      // During a new catalogue load, retain neutral coverage until the full Jobs list arrives.
-      mapController.setWorkspaceJobCounts(
-        snapshot.isLoading || snapshot.error ? null : countOpenJobsByWorkspace(snapshot.jobs)
-      );
-    }
+    if (live) workspaceJobColorSync.onJobsChanged(snapshot);
     mapController.refreshAoiPopupContent();
     void mapSyncCoordinator.syncMapAfterJobStoreChange(snapshot);
   });

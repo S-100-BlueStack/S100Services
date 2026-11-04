@@ -107,8 +107,8 @@ export function createWorkStreamRow(workStream, session) {
     update(state) {
       const active = state.draft.activeIds.includes(workStream.id);
       checkbox.checked = active;
-      checkbox.disabled = state.saving;
-      add.disabled = state.saving || !active;
+      checkbox.disabled = state.loading || state.saving;
+      add.disabled = state.loading || state.saving || !active;
       add.title = active
         ? "Add a draft comment"
         : "Assign this Work stream before adding a comment";
@@ -161,8 +161,8 @@ export function createWorkStreamRow(workStream, session) {
         }
 
         if (ref.input.value !== comment.text) ref.input.value = comment.text;
-        ref.input.disabled = state.saving;
-        ref.remove.disabled = state.saving;
+        ref.input.disabled = state.loading || state.saving;
+        ref.remove.disabled = state.loading || state.saving;
       }
     },
   };

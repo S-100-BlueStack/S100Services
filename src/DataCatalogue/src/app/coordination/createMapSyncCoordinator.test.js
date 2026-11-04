@@ -118,3 +118,82 @@ function createSelectedJobStoreStub(selectedJob = null) {
     },
   };
 }
+
+test("cancellation suppresses AOI highlight when a pending scope request rejects", async () => {
+  let rejectScope;
+  let scopeStarted;
+  const ready = new Promise((resolve) => {
+    scopeStarted = resolve;
+  });
+  const calls = [];
+  const notices = [];
+  const mapController = {
+    async refreshJobData() {
+      return { ok: true, data: {} };
+    },
+    applyAoiJobScope() {
+      scopeStarted();
+      return new Promise((resolve, reject) => {
+        rejectScope = reject;
+      });
+    },
+    async highlightAoiById() {
+      calls.push("highlightAoiById");
+    },
+  };
+  const coordinator = createMapSyncCoordinator({
+    mapController,
+    selectedAoiStore: createSelectedAoiStoreStub({ aoiId: "aoi-1" }),
+    selectedJobStore: createSelectedJobStoreStub(),
+    showErrorNotice: (notice) => notices.push(notice),
+  });
+
+  const request = coordinator.refreshMapAfterJobsRefresh({ jobs: [] });
+  await ready;
+  coordinator.cancelPendingRefreshes();
+  rejectScope(new Error("Scope unavailable"));
+  await request;
+
+  assert.deepEqual(calls, []);
+  assert.deepEqual(notices, []);
+});
+
+test("cancellation suppresses Job highlight after a failed selected-Job scope", async () => {
+  let rejectScope;
+  let scopeStarted;
+  const ready = new Promise((resolve) => {
+    scopeStarted = resolve;
+  });
+  const calls = [];
+  const notices = [];
+  const mapController = {
+    async refreshJobData() {
+      return { ok: true, data: {} };
+    },
+    applySelectedJobMapScope() {
+      scopeStarted();
+      return new Promise((resolve, reject) => {
+        rejectScope = reject;
+      });
+    },
+    async highlightJob() {
+      calls.push("highlightJob");
+    },
+  };
+  const coordinator = createMapSyncCoordinator({
+    mapController,
+    selectedAoiStore: createSelectedAoiStoreStub(),
+    selectedJobStore: createSelectedJobStoreStub({ jobId: "job-1", relatedAoiIds: [] }),
+    getIsSelectedJobMapScopeActive: () => true,
+    showErrorNotice: (notice) => notices.push(notice),
+  });
+
+  const request = coordinator.refreshMapAfterJobsRefresh({ jobs: [] });
+  await ready;
+  coordinator.cancelPendingRefreshes();
+  rejectScope(new Error("Scope unavailable"));
+  await request;
+
+  assert.deepEqual(calls, []);
+  assert.deepEqual(notices, []);
+});

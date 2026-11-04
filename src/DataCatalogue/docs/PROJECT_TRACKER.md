@@ -1,3 +1,88 @@
+## DC-STAB-02C v3 — Stable Package assignment selection (candidate, 2026-10-30)
+
+Controlled source: the locally accepted DC-STAB-02C v2 candidate (SHA-256
+`2732a9f9f0eea2a57be4857fbe546122584005c721caca29b20b65e8620e7e65`).
+Requested Git baseline remains `5d51589c2ba5c86ec67ea01e98fe0b75574e7dd0`;
+the independently committed Git tree is unavailable in the authoring environment.
+The local v3 preimage guard must pass before replacement.
+
+- Switching Packages previously emitted `feature: null`, `record: null` and
+  `draft: null` during every read. That intermediate state showed temporary
+  "Select a Package" messages in both assignment bindings and the map.
+- `createAssignmentSession` now retains the last complete selection while the
+  new Package and its saved bindings load concurrently. It publishes the new
+  context in a single state update, ignores superseded responses and joins
+  repeated reads for the same pending Package. Pending selections disable edits.
+- The assignment page retains its existing Pipeline rows while the next
+  catalogue request is pending and marks them `inert`/`aria-busy`; it swaps
+  rows only after the new response is ready. It never presents stale rows as
+  editable bindings for a newly selected Package. A failed Pipeline load shows
+  an explicit error and allows Retry instead of publishing old bindings.
+- A failed Package read preserves the prior complete selection and exposes a
+  selection-specific Retry. Genuine clearing/reset still shows the explicit
+  unselected state. Neither draft binding saves nor the saved Workspace map
+  context are changed by a pending request.
+- The live API contract, Package/Pipeline identity, map layers, v2 Workspace
+  Job-color behavior and accepted F03/F04 race fixes are unchanged. Focused
+  session/UI tests cover pending, failure, Retry, duplicated and superseded
+  selections, and delayed Pipeline publication. Browser validation is required.
+
+## DC-STAB-02C v2 — Retain verified Workspace colors during Jobs refresh (candidate, 2026-10-30)
+
+Controlled input: DC-STAB-02C v1 SHA-256
+`c93ee8cf541c8d7e2e3d69745a41b52e6464a06cb0d28f39106039415a416b91`.
+The requested authoritative Git baseline remains
+`5d51589c2ba5c86ec67ea01e98fe0b75574e7dd0`; the source is the verified v1
+candidate, not an independently retrieved Git tree. Run the local baseline guard
+before replacing files.
+
+- Opening Jobs triggers a Jobs refresh but does not require a Workspace geometry reload.
+  Previously every loading/error store emission replaced the verified open-Job counts
+  with `null`, briefly painting all main-map Workspace polygons neutral blue.
+- `features/map/workspaces/createWorkspaceJobColorSync.js` now publishes new counts
+  only after an authoritative Jobs load or status change. Loading and failed refreshes
+  retain the last verified counts; they do not mark an empty loading list as zero Jobs.
+- The first load stays neutral until confirmed. A changed set of Pipeline/Workspace
+  identities invalidates old counts; a successful empty Jobs result still colors
+  existing Workspaces green (zero open Jobs). The current Jobs error handling remains
+  responsible for making failed refreshes visible to the user.
+- Workspace geometry, SDK layers, visibility choices, status storage, and the accepted
+  F03/F04 mock-map lifecycle fixes are unchanged. Five focused tests cover initial,
+  loading, failed, status-update and changed-catalogue transitions.
+- Local browser verification must confirm that opening/refreshing Jobs retains the
+  previous color without blue flicker after the first successful load. A real catalogue
+  scope change may legitimately reset to neutral while the new Jobs read completes.
+
+## DC-STAB-02C — Mock-map highlight cancellation and latest Job geometry (candidate, 2026-10-30)
+
+Requested authoritative baseline: `5d51589c2ba5c86ec67ea01e98fe0b75574e7dd0`.
+Implementation source is the verified `4e479073...` handoff plus the accepted
+DC-STAB-02A and DC-STAB-02B replacement archives. The new commit tree was not
+available in the authoring environment; a required commit-pinned preimage check
+must succeed before installing these complete replacement files.
+
+- **F03 (P2):** mock Job/AOI highlight controllers share a lifecycle generation.
+  Public `clearHighlight()` invalidates pending queries, LayerView readiness and
+  subsequent highlight installation even when no visible handle exists. Destroy
+  prevents new highlights. The map-sync coordinator checks its current request
+  after rejected AOI/Job scope operations and before invoking highlight effects.
+- **F04 (P2):** a per-map `createJobLayerUpdateQueue` serializes and coalesces mock
+  Job geometry snapshots. The newest queued snapshot replaces an older pending
+  snapshot, never an active write. Preparatory reads and `applyEdits` submission
+  check current generation; all sibling layer edits settle before another
+  snapshot starts. On teardown queued work is canceled and subsequent writes
+  cannot begin. Already submitted ArcGIS edits cannot be rolled back; the latest
+  snapshot applies after an older in-flight edit finishes.
+- Startup required/deferred geometry and ordinary status/Refresh synchronization
+  now use this single queue. Live Workspace geometry, Jobs status persistence,
+  Pipeline/Workspace bindings, Preferences and backend contracts are unchanged.
+- Regression tests exercise highlight clear/destroy, rejected canceled scopes,
+  coalesced snapshots, reversed preparation/edit completion, disposal and edit
+  failures using controlled async boundaries. Browser/WebGL verification remains
+  necessary before stabilization acceptance.
+- Remaining DC-STAB-01 findings: F06 (binding deadline/reconciliation), F07
+  (Jobs keyboard focus), and F09 (current documentation drift).
+
 ## DC-STAB-02B — Navigation intent ownership and Workspace LayerView notices (candidate, 2026-10-30)
 
 Authoritative requested baseline: `67ae3ba1452075535dec2b59f65a9e53e50833a3`.

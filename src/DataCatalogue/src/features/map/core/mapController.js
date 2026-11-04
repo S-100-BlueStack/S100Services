@@ -14,6 +14,7 @@ import { applyJobLayerFilters } from "../filters/applyJobLayerFilters.js";
 import { applyAoiJobSummaryRenderer } from "../layers/applyAoiRenderer.js";
 import { createAoiHighlightController } from "../layers/aoiHighlight.js";
 import { applyJobLayerData } from "../layers/applyJobLayerData.js";
+import { createJobLayerUpdateQueue } from "../layers/createJobLayerUpdateQueue.js";
 import { applyJobPointClustering } from "../layers/jobClustering.js";
 import { createJobHighlightController } from "../layers/jobHighlight.js";
 import { createMapHoverController } from "../layers/mapHover.js";
@@ -60,6 +61,7 @@ export function createMapController({
   let jobHighlightController = null;
   let aoiHighlightController = null;
   let mapHoverController = null;
+  let jobLayerUpdateQueue = null;
   let currentJobFilters = null;
   let currentAoiMapFilters = null;
   let currentJobClusterSettings = null;
@@ -142,6 +144,16 @@ export function createMapController({
         return { ok: true, data: mapResult };
       }
 
+      const jobLayers = mapResult.layers?.jobLayers;
+
+      if (jobLayers) {
+        jobLayerUpdateQueue = createJobLayerUpdateQueue({
+          writeSnapshot({ jobs: snapshot, shouldApply }) {
+            return applyJobLayerData({ jobLayers, jobs: snapshot, shouldApply });
+          },
+        });
+      }
+
       const aoiReadinessResult = await validateCurrentAoiLayer();
 
       if (isDestroyed || startRequestId !== mapStartRequestId) {
@@ -203,7 +215,7 @@ export function createMapController({
       applyCurrentAoiRendererWithoutBlockingMapReady();
 
       if (!requireJobGeometry && !deferJobGeometry) {
-        applyJobGeometryWithoutBlockingMapReady(mapResult.layers.jobLayers);
+        applyJobGeometryWithoutBlockingMapReady();
       }
 
       if (suppressStatus) {
@@ -279,6 +291,8 @@ export function createMapController({
   }
 
   function resetMapRuntimeState() {
+    jobLayerUpdateQueue?.dispose();
+    jobLayerUpdateQueue = null;
     aoiRendererRequestId += 1;
     aoiMapFilterRequestId += 1;
     jobClusterRequestId += 1;
@@ -439,7 +453,7 @@ export function createMapController({
 
   async function refreshJobData({ jobs } = {}) {
     // Live Jobs have no verified AOI coordinates; never invoke the demo geometry loader.
-    if (runtimeConfig?.sourceMode === "live" || !mapResult?.layers?.jobLayers) {
+    if (runtimeConfig?.sourceMode === "live" || !jobLayerUpdateQueue) {
       return {
         ok: true,
         data: {
@@ -453,12 +467,10 @@ export function createMapController({
     closeOpenAggregatePopup();
 
     try {
-      const result = await applyJobLayerData({
-        jobLayers: mapResult.layers.jobLayers,
-        jobs,
-      });
+      const queue = jobLayerUpdateQueue;
+      const result = await queue.request({ jobs });
 
-      if (isDestroyed || !result.ok) {
+      if (isDestroyed || jobLayerUpdateQueue !== queue || result.meta?.superseded || !result.ok) {
         return result;
       }
 
@@ -658,16 +670,22 @@ export function createMapController({
     });
   }
 
-  function applyJobGeometryWithoutBlockingMapReady(jobLayers) {
-    void applyJobLayerData({ jobLayers })
-      .then((result) => {
-        if (!result.ok) {
-          onJobLayerError?.(result.error);
-        }
-      })
-      .catch((error) => {
-        onJobLayerError?.(normalizeError(error, "Job geometry could not be loaded."));
-      });
+  function applyJobGeometryWithoutBlockingMapReady() {
+    const queue = jobLayerUpdateQueue;
+
+    if (!queue) {
+      return;
+    }
+
+    void queue.request().then((result) => {
+      if (isDestroyed || queue !== jobLayerUpdateQueue || result.meta?.superseded) {
+        return;
+      }
+
+      if (!result.ok) {
+        onJobLayerError?.(normalizeError(result.error, "Job geometry could not be loaded."));
+      }
+    });
   }
 
   async function validateCurrentAoiLayer() {
@@ -719,16 +737,18 @@ export function createMapController({
   }
 
   async function applyRequiredJobGeometry({ jobs } = {}) {
-    const result = await applyJobLayerData({
-      jobLayers: mapResult?.layers?.jobLayers,
-      jobs,
-    });
+    const queue = jobLayerUpdateQueue;
+    const result = queue
+      ? await queue.request({ jobs })
+      : await applyJobLayerData({ jobLayers: null, jobs });
 
     if (result.ok) {
       return result;
     }
 
-    onJobLayerError?.(result.error);
+    if (!isDestroyed && queue === jobLayerUpdateQueue) {
+      onJobLayerError?.(result.error);
+    }
 
     throw result.error;
   }

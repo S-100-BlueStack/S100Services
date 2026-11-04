@@ -1,16 +1,17 @@
 import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 
 import { AOI_FIELD } from "../../aoi/config/aoiFieldConfig.js";
+import { createHighlightLifetime } from "./createHighlightLifetime.js";
 
 export function createAoiHighlightController({ view, aoiLayer } = {}) {
-  let highlightHandle = null;
-  let activeHighlightToken = 0;
+  const highlightLifetime = createHighlightLifetime();
 
   async function highlightAoisByIds(aoiIds = []) {
-    activeHighlightToken += 1;
-    const highlightToken = activeHighlightToken;
+    const highlightToken = highlightLifetime.begin();
 
-    clearHighlight();
+    if (highlightToken === null) {
+      return;
+    }
 
     const normalizedAoiIds = normalizeAoiIds(aoiIds);
 
@@ -20,7 +21,7 @@ export function createAoiHighlightController({ view, aoiLayer } = {}) {
 
     await aoiLayer.load();
 
-    if (highlightToken !== activeHighlightToken) {
+    if (!highlightLifetime.isCurrent(highlightToken)) {
       return;
     }
 
@@ -28,27 +29,25 @@ export function createAoiHighlightController({ view, aoiLayer } = {}) {
 
     await reactiveUtils.whenOnce(() => !layerView.updating);
 
-    if (highlightToken !== activeHighlightToken) {
+    if (!highlightLifetime.isCurrent(highlightToken)) {
       return;
     }
 
     const features = await queryAoiFeaturesByGlobalIds(layerView, normalizedAoiIds);
 
-    if (highlightToken !== activeHighlightToken || features.length === 0) {
+    if (!highlightLifetime.isCurrent(highlightToken) || features.length === 0) {
       return;
     }
 
-    highlightHandle = layerView.highlight(features);
+    highlightLifetime.install(highlightToken, layerView.highlight(features));
   }
 
   function clearHighlight() {
-    highlightHandle?.remove();
-    highlightHandle = null;
+    highlightLifetime.clear();
   }
 
   function destroy() {
-    activeHighlightToken += 1;
-    clearHighlight();
+    highlightLifetime.destroy();
   }
 
   return {

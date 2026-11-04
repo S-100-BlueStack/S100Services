@@ -123,6 +123,8 @@ export function createAssignmentPage({
   let displayedId = null;
   let requestedId = null;
   let rows = [];
+  let rowsFeatureId = null;
+  let workStreamsRequestPending = false;
   const featureRows = new Map();
   const workStreamRows = new Map();
   let map = null;
@@ -275,6 +277,12 @@ export function createAssignmentPage({
     );
   }
 
+  function setWorkStreamsBusy(value) {
+    // The retained rows belong to the previous fully loaded context until replacement finishes.
+    get("work-streams").inert = value;
+    get("work-streams").setAttribute("aria-busy", String(value));
+  }
+
   async function loadWorkStreams() {
     const isCurrent = workStreamRequests.begin();
     const state = session.snapshot();
@@ -283,6 +291,8 @@ export function createAssignmentPage({
     const scopedIds = workStreamIds(state);
     lastScopeKey = JSON.stringify([state.feature.id, workStreamMode, scopedIds]);
     get("work-stream-status").textContent = `Loading ${assignmentName}s…`;
+    workStreamsRequestPending = true;
+    setWorkStreamsBusy(true);
 
     try {
       const result = await services.workStreams.list({ ids: scopedIds });
@@ -300,6 +310,7 @@ export function createAssignmentPage({
 
       const latest = session.snapshot();
       for (const row of rows) row.update(latest);
+      rowsFeatureId = state.feature.id;
       reconcileRows(
         get("work-streams"),
         rows.map((row) => row.element),
@@ -321,8 +332,18 @@ export function createAssignmentPage({
     } catch (error) {
       if (isCurrent()) {
         get("work-stream-status").textContent = error.message;
-        rows = [];
-        get("work-streams").replaceChildren();
+        // Old rows must not be mistaken for bindings of a newly selected Package.
+        if (rowsFeatureId !== state.feature.id) {
+          rows = [];
+          workStreamRows.clear();
+          get("work-streams").replaceChildren();
+          rowsFeatureId = null;
+        }
+      }
+    } finally {
+      if (isCurrent()) {
+        workStreamsRequestPending = false;
+        setWorkStreamsBusy(false);
       }
     }
   }
@@ -332,6 +353,7 @@ export function createAssignmentPage({
       button.setAttribute("aria-pressed", String(button.dataset.featureId === state.feature?.id));
     }
 
+    if (state.loading || state.selectionError) return;
     if (state.feature) {
       const matches = matchesFeature(
         { ...state.feature, status: assignmentStatus(state.record) },
@@ -384,7 +406,7 @@ export function createAssignmentPage({
 
   const unsubscribe = session.subscribe((state) => {
     get("save").disabled =
-      !state.dirty || state.saving || resetting || Boolean(state.validationError);
+      !state.dirty || state.loading || state.saving || resetting || Boolean(state.validationError);
     get("save").textContent = state.saving ? "Saving…" : "Save";
     get("draft-status").textContent = state.feature
       ? state.validationError
@@ -395,13 +417,14 @@ export function createAssignmentPage({
             ? "Loaded binding state"
             : "Saved state"
       : "";
-    get("save-error").textContent = state.feature
-      ? state.error || state.validationError || state.record?.saveMessage || ""
-      : "";
+    get("save-error").textContent =
+      state.feature && !state.selectionError
+        ? state.error || state.validationError || state.record?.saveMessage || ""
+        : "";
     get("selection-status").textContent = state.loading
       ? `Loading ${entityName}…`
-      : state.error || `Select a ${entityName} to view its information.`;
-    get("selection-retry").hidden = !state.error || Boolean(state.feature);
+      : state.selectionError || state.error || `Select a ${entityName} to view its information.`;
+    get("selection-retry").hidden = !state.selectionError || !requestedId;
     get("work-stream-panel").setAttribute(
       "aria-label",
       state.feature
@@ -413,40 +436,61 @@ export function createAssignmentPage({
         ? `${state.draft.activeIds.length} selected Pipelines`
         : `${state.draft.activeIds.length} active · ${state.draft.comments.length} draft comments`
       : "";
-    get("map-empty").hidden = Boolean(state.feature);
-    get("work-stream-mode").disabled = !state.feature || resetting;
-    get("work-stream-retry").disabled = !state.feature || resetting;
-    get("reset").disabled = state.saving || resetting;
+    get("map-empty").hidden = state.loading || Boolean(state.feature);
+    get("information").setAttribute("aria-busy", String(state.loading));
+    get("map-focus").disabled = state.loading || !state.feature;
+    get("work-stream-mode").disabled = !state.feature || state.loading || resetting;
+    get("work-stream-retry").disabled = !state.feature || state.loading || resetting;
+    get("reset").disabled = state.loading || state.saving || resetting;
 
     syncWorkStreamMode(state);
     syncSelection(state);
-    syncMap(state);
+    // A pending selection still refers to the previous committed Package, not an empty one.
+    if (!state.loading && !state.selectionError) syncMap(state);
 
     const id = state.feature?.id ?? null;
-    if (displayedId !== id) {
+    if (state.loading) {
+      if (workStreamsRequestPending) lastScopeKey = "";
+      workStreamRequests.invalidate();
+      workStreamsRequestPending = false;
+      setWorkStreamsBusy(true);
+    }
+    const selectionChanged = displayedId !== id;
+    if (selectionChanged) {
       displayedId = id;
       workStreamRequests.invalidate();
-      rows = [];
-      workStreamRows.clear();
-      get("work-streams").replaceChildren();
-      renderInformation(state.feature);
-      get("work-stream-status").textContent = `Select a ${entityName} to edit assignments.`;
       lastScopeKey = "";
+      renderInformation(state.feature);
+      if (!state.feature) {
+        rows = [];
+        rowsFeatureId = null;
+        workStreamRows.clear();
+        get("work-streams").replaceChildren();
+        get("work-stream-status").textContent = `Select a ${entityName} to edit assignments.`;
+        setWorkStreamsBusy(false);
+      } else {
+        // Retain previous rows until the new Pipeline catalogue has loaded; never flash
+        // the unselected Package placeholder between two valid selections.
+        get("work-stream-status").textContent = `Loading ${assignmentName}s…`;
+      }
     }
 
-    if (state.feature) {
-      // Text edits patch existing controls so browser focus and selection remain stable.
-      for (const row of rows) row.update(state);
+    if (state.feature && !state.loading) {
+      // Rows belonging to another Package remain inert until their replacement is ready.
+      if (rowsFeatureId === id) for (const row of rows) row.update(state);
       const scope = JSON.stringify([state.feature.id, workStreamMode, workStreamIds(state)]);
       if (scope !== lastScopeKey) {
         lastScopeKey = scope;
         void loadWorkStreams();
+      } else if (state.selectionError) {
+        setWorkStreamsBusy(false);
       }
     }
   });
 
   async function selectFeature(id, { notify = true } = {}) {
-    if (id === session.snapshot().feature?.id) return true;
+    const current = session.snapshot();
+    if (id === current.feature?.id && !current.loading && !current.selectionError) return true;
     if (busy() || !(await guard.allow()) || !alive) return false;
     requestedId = id;
     const selected = await session.select(id);

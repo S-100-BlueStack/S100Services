@@ -2,9 +2,15 @@ import Graphic from "@arcgis/core/Graphic.js";
 
 import { createErrorResult, createSuccessResult } from "../../../shared/api/apiResult.js";
 import * as defaultJobService from "../../jobs/services/jobService.js";
-import { createJobLayerFeatureData, JOB_LAYER_FIELD } from "./jobLayerFeatureData.js";
+import { createJobLayerFeatureData } from "./jobLayerFeatureData.js";
+import { replaceJobLayerFeatures } from "./replaceJobLayerFeatures.js";
 
-export async function applyJobLayerData({ jobLayers, jobs, jobService = defaultJobService } = {}) {
+export async function applyJobLayerData({
+  jobLayers,
+  jobs,
+  jobService = defaultJobService,
+  shouldApply = () => true,
+} = {}) {
   if (!jobLayers?.pointLayer || !jobLayers?.polygonLayer) {
     return createSuccessResult(
       {
@@ -29,14 +35,38 @@ export async function applyJobLayerData({ jobLayers, jobs, jobService = defaultJ
     });
   }
 
-  const featureData = createJobLayerFeatureData(jobsResult.data.jobs);
+  if (!shouldApply()) {
+    return supersededResult();
+  }
 
-  await Promise.all([
+  const featureData = createJobLayerFeatureData(jobsResult.data.jobs);
+  const writes = await Promise.allSettled([
     ...getPointLayers(jobLayers).map((pointLayer) =>
-      replaceLayerFeatures(pointLayer, featureData.pointFeatures)
+      replaceJobLayerFeatures({
+        layer: pointLayer,
+        featureData: featureData.pointFeatures,
+        createGraphics,
+        shouldApply,
+      })
     ),
-    replaceLayerFeatures(jobLayers.polygonLayer, featureData.polygonFeatures),
+    replaceJobLayerFeatures({
+      layer: jobLayers.polygonLayer,
+      featureData: featureData.polygonFeatures,
+      createGraphics,
+      shouldApply,
+    }),
   ]);
+
+  // A failed layer must not release the queue while other layer edits remain in flight.
+  const failedWrite = writes.find((result) => result.status === "rejected");
+
+  if (failedWrite) {
+    throw failedWrite.reason;
+  }
+
+  if (!shouldApply()) {
+    return supersededResult();
+  }
 
   return createSuccessResult(
     {
@@ -55,35 +85,6 @@ function getPointLayers(jobLayers) {
   );
 }
 
-async function replaceLayerFeatures(layer, featureData) {
-  await layer.load();
-
-  const deleteFeatures = await queryExistingFeatures(layer);
-  const addFeatures = createGraphics(featureData);
-
-  if (deleteFeatures.length === 0 && addFeatures.length === 0) {
-    return;
-  }
-
-  const editsResult = await layer.applyEdits({
-    deleteFeatures,
-    addFeatures,
-  });
-
-  assertEditResults(editsResult);
-}
-
-async function queryExistingFeatures(layer) {
-  const query = layer.createQuery();
-  query.where = "1=1";
-  query.outFields = [JOB_LAYER_FIELD.OBJECT_ID];
-  query.returnGeometry = false;
-
-  const featureSet = await layer.queryFeatures(query);
-
-  return featureSet.features ?? [];
-}
-
 function createGraphics(featureData) {
   return featureData.map(
     (feature) =>
@@ -94,17 +95,11 @@ function createGraphics(featureData) {
   );
 }
 
-function assertEditResults(editsResult) {
-  const failedEdit = [
-    ...(editsResult.addFeatureResults ?? []),
-    ...(editsResult.deleteFeatureResults ?? []),
-  ].find((result) => result.error);
-
-  if (!failedEdit) {
-    return;
-  }
-
-  throw new Error(failedEdit.error?.message || "Job layer edits failed.");
+function supersededResult() {
+  return createSuccessResult(
+    { pointCount: 0, polygonCount: 0 },
+    { operation: "applyJobLayerData", superseded: true }
+  );
 }
 
 async function resolveJobs({ jobs, jobService }) {

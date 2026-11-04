@@ -1,14 +1,15 @@
+import { createHighlightLifetime } from "./createHighlightLifetime.js";
 import { JOB_GEOMETRY_TYPE, JOB_LAYER_FIELD } from "./jobLayerFeatureData.js";
 
 export function createJobHighlightController({ view, jobLayers } = {}) {
-  let highlightHandle = null;
-  let activeHighlightToken = 0;
+  const highlightLifetime = createHighlightLifetime();
 
   async function highlightJob(selectedJob = {}) {
-    activeHighlightToken += 1;
-    const highlightToken = activeHighlightToken;
+    const highlightToken = highlightLifetime.begin();
 
-    clearHighlight();
+    if (highlightToken === null) {
+      return;
+    }
 
     if (!view || !jobLayers || !selectedJob.jobId) {
       return;
@@ -19,29 +20,31 @@ export function createJobHighlightController({ view, jobLayers } = {}) {
     for (const layer of candidateLayers) {
       const objectId = await queryObjectIdForJob(layer, selectedJob.jobId);
 
-      if (!Number.isInteger(objectId) || highlightToken !== activeHighlightToken) {
+      if (!highlightLifetime.isCurrent(highlightToken)) {
+        return;
+      }
+
+      if (!Number.isInteger(objectId)) {
         continue;
       }
 
       const layerView = await view.whenLayerView(layer);
 
-      if (highlightToken !== activeHighlightToken) {
+      if (!highlightLifetime.isCurrent(highlightToken)) {
         return;
       }
 
-      highlightHandle = layerView.highlight(objectId);
+      highlightLifetime.install(highlightToken, layerView.highlight(objectId));
       return;
     }
   }
 
   function clearHighlight() {
-    highlightHandle?.remove();
-    highlightHandle = null;
+    highlightLifetime.clear();
   }
 
   function destroy() {
-    activeHighlightToken += 1;
-    clearHighlight();
+    highlightLifetime.destroy();
   }
 
   return {

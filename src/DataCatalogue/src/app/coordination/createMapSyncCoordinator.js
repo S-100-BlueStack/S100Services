@@ -103,6 +103,10 @@ export function createMapSyncCoordinator({
       }
     }
 
+    if (refreshRequestId !== refreshRequestSequence) {
+      return;
+    }
+
     try {
       await mapController.highlightAoiById(selectedAoi.aoiId);
     } catch (error) {
@@ -142,6 +146,10 @@ export function createMapSyncCoordinator({
           });
         }
       }
+    }
+
+    if (refreshRequestId !== refreshRequestSequence) {
+      return;
     }
 
     try {
