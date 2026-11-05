@@ -1,4 +1,4 @@
-﻿/* =========================================================
+/* =========================================================
    Header / navbar
    ========================================================= */
 
@@ -27,7 +27,8 @@
 
 .header-center {
   display: flex;
-  align-items: center;
+  align-items: stretch;
+  align-self: stretch;
   flex: 0 0 auto;
   gap: 30px;
   min-width: 0;
@@ -88,35 +89,57 @@
   --calcite-color-foreground-1: rgb(255, 255, 255);
 }
 
-.navbar-title-link,
-.navbar-title-link:visited {
+/* Native links fill the navbar height. The underline belongs to the full hit area,
+   not the small text box, so hover, pointer and navigation stay aligned. */
+.navbar-title-link {
+  position: relative;
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
-  min-height: 42px;
+  align-self: stretch;
   padding: 0 2px;
-  color: inherit;
+  color: #ffffff;
   line-height: 1;
   text-decoration: none;
   white-space: nowrap;
+  cursor: pointer;
 }
 
-.navbar-title-link[aria-current="page"] {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 4px;
+.navbar-title-link:visited,
+.navbar-title-link:hover,
+.navbar-title-link:active {
+  color: #ffffff;
+  text-decoration: none;
 }
 
-.navbar-title-link:hover {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 4px;
+.navbar-title-link::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 3px;
+  background: #ffffff;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 180ms ease-out;
+  pointer-events: none;
+}
+
+.navbar-title-link[aria-current="page"]::after,
+.navbar-title-link:not([aria-current="page"]):hover::after,
+.navbar-title-link:not([aria-current="page"]):focus-visible::after {
+  transform: scaleX(1);
 }
 
 .navbar-title-link:focus-visible {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  outline: none;
+  outline: 2px solid #ffffff;
+  outline-offset: -4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navbar-title-link::after {
+    transition: none;
+  }
 }
 
 #last-updated {

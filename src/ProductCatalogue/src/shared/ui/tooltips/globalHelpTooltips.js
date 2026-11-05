@@ -2,26 +2,6 @@ import { bindHelpTooltip, normalizeHelpText } from "./helpTooltip.js";
 
 const GLOBAL_HELP_RULES = [
   {
-    selector: "[data-nav-home-link]",
-    title: "Open the map",
-    mode: "replace-generic",
-  },
-  {
-    selector: "[data-nav-dashboard-link]",
-    title: "Open Dashboard",
-    mode: "replace-generic",
-  },
-  {
-    selector: "[data-nav-analyze-link]",
-    title: "Open Analyze",
-    mode: "replace-generic",
-  },
-  {
-    selector: "[data-nav-review-link]",
-    title: "Open Review",
-    mode: "replace-generic",
-  },
-  {
     selector: "#filter-button",
     title: "Filter products",
     mode: "replace-generic",
@@ -244,6 +224,12 @@ export function applyGlobalHelpTooltips(root = document) {
 }
 
 function prepareHelpElement(element, matchingRule = null) {
+  if (element.matches?.(".navbar-title-link")) {
+    // A visible route label is its own help. Do not allow a native title or
+    // application tooltip to obscure the full-height clickable navigation.
+    element.removeAttribute("title");
+    return;
+  }
   if (element.hasAttribute("data-popup-help")) return;
   const rule = matchingRule ?? findRule(element);
   if (!isApplicationControl(element, rule)) return;
@@ -341,6 +327,10 @@ function hasHelpSource(element, rule) {
 }
 
 function isApplicationControl(element, rule) {
+  // Primary navigation already has a visible, descriptive label. A second
+  // hover surface distracts from its full-height click and focus indicator.
+  if (element.matches?.(".navbar-title-link")) return false;
+
   // Error text already has a separate copyable overlay on hover and focus.
   // Never add a second tooltip or treat its dialog as an action.
   if (element.matches?.(".popup-product-error") || element.closest?.(".popup-error-details")) {

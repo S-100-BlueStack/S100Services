@@ -502,8 +502,20 @@ organization-specific values. The repository-wide `*.local` ignore rule keeps th
 override files untracked.
 
 Portal configuration is independent from `VITE_ARCGIS_LOCATOR_URL`. The Locator keeps its existing
-provider/service contract and DK/GL scope. The existing `Map` / `MapView` and basemap behavior are not
-changed by this configuration boundary.
+provider/service contract and DK/GL scope. The separate basemap-styles key does not authorize Locator
+or Product API requests. See [Basemap selection](src/features/map/basemaps/README.md).
+
+## Basemap gallery configuration
+
+Main Map and Analyze support Topographic, Oceans, Dark Gray and (when a browser
+basemap-styles key is configured) Human Geography Dark. The existing `Map` / `MapView`
+architecture is retained. Theme changes choose an automatic basemap until the user
+chooses one manually; Preferences can remember/reset the manual selection.
+
+Optional local Vite build configuration: `VITE_ARCGIS_BASEMAP_API_KEY`. This is a
+public browser key and should be restricted by service privileges and approved
+referrers. It is scoped to `esriConfig.apiKeys.basemapStyles`, not Product API calls.
+Do not commit the key. See [Basemap selection and verification](src/features/map/basemaps/README.md).
 
 ## Branding configuration
 

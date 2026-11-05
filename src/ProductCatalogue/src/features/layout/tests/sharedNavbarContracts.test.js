@@ -28,32 +28,48 @@ test("Main-map FI-026 controls use the required compact relative order", async (
   );
 });
 
-test("shared navbar uses underline for current, hover and keyboard focus without an outline", async () => {
-  const [navbar, loader, headerStyles] = await Promise.all([
+test("shared navbar keeps full-height navigable anchors and one animated underline", async () => {
+  const [navbar, loader, headerStyles, main] = await Promise.all([
     readProjectFile("public/components/navbar.html"),
     readProjectFile("src/features/layout/services/navbarLoader.js"),
     readProjectFile("src/styles/header.css"),
+    readProjectFile("src/main.js"),
   ]);
 
-  for (const routeName of ["main", "dashboard", "analyze", "review"]) {
-    assert.match(navbar, new RegExp(`data-nav-route="${routeName}"`));
+  const links = [...navbar.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)];
+  const expected = new Map([
+    ["main", "Product Catalogue"],
+    ["dashboard", "Dashboard"],
+    ["analyze", "Analyze"],
+    ["review", "Review"],
+  ]);
+
+  assert.equal(links.length, expected.size);
+  for (const [, attributes, label] of links) {
+    const routeName = attributes.match(/data-nav-route="([^"]+)"/)?.[1];
+    assert.ok(expected.has(routeName));
+    assert.equal(label.trim(), expected.get(routeName));
+    assert.match(attributes, /class="navbar-title-link"/);
+    assert.match(attributes, /\bhref="[^"]+"/);
+    expected.delete(routeName);
   }
+  assert.equal(expected.size, 0);
+  assert.doesNotMatch(navbar, /<calcite-link/);
+  assert.doesNotMatch(main, /@esri\/calcite-components\/components\/calcite-link/);
   assert.match(loader, /applyNavbarRouteState\(document, route\)/);
-  assert.match(
-    headerStyles,
-    /\.navbar-title-link\[aria-current="page"\][^{]*\{[^}]*text-decoration:\s*underline;/
-  );
-  assert.match(headerStyles, /\.navbar-title-link:hover[^{]*\{[^}]*text-decoration:\s*underline;/);
-  assert.doesNotMatch(headerStyles, /\.navbar-title-link:hover[^{]*\{[^}]*background\s*:/);
-  assert.match(
-    headerStyles,
-    /\.navbar-title-link:focus-visible[^{]*\{[^}]*text-decoration:\s*underline;[^}]*outline:\s*none;/
-  );
-  assert.doesNotMatch(headerStyles, /\.navbar-title-link:focus\s*\{/);
-  assert.doesNotMatch(
-    headerStyles,
-    /\.navbar-title-link:active[^{]*\{[^}]*text-decoration:\s*underline;/
-  );
+  assert.match(loader, /applyWorkspaceLinkNavigation\(dashboardLink, route, "dashboard"\)/);
+  assert.match(loader, /applyWorkspaceLinkNavigation\(analyzeLink, route, "analyze"\)/);
+  assert.match(loader, /applyWorkspaceLinkNavigation\(reviewLink, route, "review"\)/);
+
+  // The same native link receives pointer events and renders the bottom line.
+  assert.match(headerStyles, /\.header-center\s*\{[^}]*align-self: stretch;/);
+  assert.match(headerStyles, /\.navbar-title-link\s*\{[^}]*align-self: stretch;/);
+  assert.match(headerStyles, /\.navbar-title-link::after\s*\{[^}]*bottom: 0;/);
+  assert.match(headerStyles, /\.navbar-title-link::after\s*\{[^}]*transform: scaleX\(0\);/);
+  assert.match(headerStyles, /\.navbar-title-link\[aria-current="page"\]::after/);
+  assert.match(headerStyles, /\.navbar-title-link:not\(\[aria-current="page"\]\):hover::after/);
+  assert.match(headerStyles, /\.navbar-title-link:focus-visible/);
+  assert.match(headerStyles, /prefers-reduced-motion: reduce/);
 });
 
 test("navbar omits visible Help and standalone Theme controls", async () => {
@@ -87,7 +103,7 @@ test("Preferences owns one immediate Theme switch through the existing theme ser
   assert.doesNotMatch(preferences, /data-preference-action="toggle-theme"/);
   assert.doesNotMatch(preferences, /data-preference-theme|type="radio"/);
   assert.match(preferences, /getCurrentTheme\(\)/);
-  assert.match(bootstrap, /ui\.preferencesPanel\.updateContext\(\{ themeView: app\.view \}\)/);
+  assert.match(bootstrap, /ui\.preferencesPanel\.updateContext\(\{\s*themeView: app\.view,/);
   assert.doesNotMatch(bootstrap, /registerThemeToggle/);
 });
 

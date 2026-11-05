@@ -11,6 +11,7 @@ import {
 } from "../preferences/state/preferencePersistenceState.js";
 
 const THEME_STORAGE_KEY = "app-theme";
+const themeListeners = new Set();
 
 export const themes = {
   light: "light",
@@ -53,6 +54,12 @@ function applyCalciteMode(theme) {
 
   root.classList.remove("calcite-mode-light", "calcite-mode-dark");
   root.classList.add(modeClass);
+  root.style.colorScheme = theme === themes.dark ? "dark" : "light";
+
+  // Calcite's floating panels inherit the mode from body as well as the root.
+  // Keep both class owners synchronized during every runtime theme switch.
+  document.body.classList.remove("calcite-mode-light", "calcite-mode-dark");
+  document.body.classList.add(modeClass);
 }
 
 function applyArcgisTheme(theme) {
@@ -88,6 +95,12 @@ export function applyTheme(theme, view = null) {
   applyAttributionTheme(view, normalizedTheme);
   writeStoredTheme(normalizedTheme);
   notifySavedPreferenceChanged();
+  for (const listener of themeListeners) listener(normalizedTheme);
+}
+
+export function onThemeChanged(listener) {
+  themeListeners.add(listener);
+  return { remove: () => themeListeners.delete(listener) };
 }
 
 export function getStoredTheme() {
