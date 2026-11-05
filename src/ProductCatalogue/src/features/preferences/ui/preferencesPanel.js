@@ -22,6 +22,13 @@ const PREFERENCE_ITEMS = [
     requiresMapContext: true,
   },
   {
+    key: PREFERENCE_PERSISTENCE_KEY.BASEMAP,
+    title: "Basemap",
+    resetAction: "reset-basemap",
+    resetLabel: "Use theme default",
+    requiresBasemapContext: true,
+  },
+  {
     key: PREFERENCE_PERSISTENCE_KEY.ATTRIBUTE_FILTERS,
     resetAction: "reset-filters",
     title: "Filters",
@@ -52,6 +59,7 @@ export function initPreferencesPanel({
   dataSourceController,
   onStartIntroduction,
   themeView,
+  basemapSettings,
 } = {}) {
   if (activePanel) {
     activePanel.updateContext({
@@ -60,6 +68,7 @@ export function initPreferencesPanel({
       dataSourceController,
       onStartIntroduction,
       themeView,
+      basemapSettings,
     });
     return activePanel.api;
   }
@@ -82,10 +91,12 @@ export function initPreferencesPanel({
     dataSourceController: null,
     onStartIntroduction: null,
     themeView: null,
+    basemapSettings: null,
   };
 
   const isOpen = () => !panel.hidden;
   let displayScaleControlHandle = null;
+  let unsubscribeBasemapSettings = null;
   const render = () => {
     const focusedIdentity = panel.contains(document.activeElement)
       ? document.activeElement.dataset.preferenceFocus
@@ -95,7 +106,9 @@ export function initPreferencesPanel({
 
     const persistenceState = getPreferencePersistenceState();
     const availableItems = PREFERENCE_ITEMS.filter(
-      (item) => !item.requiresMapContext || context.mapPreferences
+      (item) =>
+        (!item.requiresMapContext || context.mapPreferences) &&
+        (!item.requiresBasemapContext || context.basemapSettings)
     );
 
     panel.innerHTML = `
@@ -106,6 +119,7 @@ export function initPreferencesPanel({
       </div>
       <div class="pc-preferences-panel__content">
         ${renderThemeSetting(getCurrentTheme())}
+        ${context.basemapSettings ? renderBasemapSetting(context.basemapSettings) : ""}
         ${context.mapPreferences ? renderDisplayScaleSetting(context.mapPreferences) : ""}
         <section class="pc-preferences-panel__group" aria-labelledby="preferences-saved-heading">
         <h3 id="preferences-saved-heading">Saved preferences</h3>
@@ -131,10 +145,12 @@ export function initPreferencesPanel({
           <span>Reset available preferences</span>
           <small>${
             context.mapPreferences
-              ? "Reset map view, filters, Scale hiding, source selection and Theme."
-              : document.body.classList.contains("pc-dashboard-route")
-                ? "Reset Theme and Dashboard page size to 50."
-                : "Reset Theme to Light."
+              ? "Reset map view, filters, Scale hiding, source selection, Basemap and Theme."
+              : context.basemapSettings
+                ? "Reset Basemap and Theme to their defaults."
+                : document.body.classList.contains("pc-dashboard-route")
+                  ? "Reset Theme and Dashboard page size to 50."
+                  : "Reset Theme to Light."
           } Auto-save choices are unchanged.</small>
         </button>
       </section>
@@ -179,6 +195,10 @@ export function initPreferencesPanel({
     }
     const darkMode = panel.querySelector("#preferences-dark-mode");
     if (darkMode) darkMode.checked = getCurrentTheme() === themes.dark;
+    const basemapStatus = panel.querySelector("#preferences-basemap-status");
+    if (basemapStatus && context.basemapSettings) {
+      basemapStatus.textContent = getBasemapDescription(context.basemapSettings);
+    }
     const scale = panel.querySelector("#preferences-scale-hiding");
     if (scale && context.mapPreferences) {
       scale.checked = !context.mapPreferences.isDisplayScaleHidingDisabled();
@@ -195,6 +215,7 @@ export function initPreferencesPanel({
 
     if (open) {
       render();
+      sync();
       positionPanel(button, panel);
       const initialFocus =
         panel.querySelector("#preferences-dark-mode") ??
@@ -220,6 +241,11 @@ export function initPreferencesPanel({
       case "reset-filters":
         context.mapPreferences?.resetFilters();
         noticeSuccess("Filters reset", null, { countAsUnread: false });
+        break;
+      case "reset-basemap":
+        context.basemapSettings?.resetToThemeDefault();
+        sync();
+        noticeSuccess("Basemap reset", null, { countAsUnread: false });
         break;
       case "reset-display-scale":
         context.mapPreferences?.resetDisplayScaleHidingPreference();
@@ -247,6 +273,7 @@ export function initPreferencesPanel({
           resetDashboardPageSizePreference();
         }
         resetThemePreference(context.themeView ?? context.view);
+        context.basemapSettings?.resetToThemeDefault();
         sync();
         noticeSuccess("Preferences reset", null, { countAsUnread: false });
         break;
@@ -333,6 +360,7 @@ export function initPreferencesPanel({
     },
     destroy() {
       displayScaleControlHandle?.remove();
+      unsubscribeBasemapSettings?.();
       persistenceHandle.remove();
       document.removeEventListener("keydown", handleKeydown);
       document.removeEventListener("click", handleDocumentClick);
@@ -345,6 +373,13 @@ export function initPreferencesPanel({
   activePanel = {
     api,
     updateContext(nextContext = {}) {
+      if (Object.prototype.hasOwnProperty.call(nextContext, "basemapSettings")) {
+        if (context.basemapSettings !== nextContext.basemapSettings) {
+          unsubscribeBasemapSettings?.();
+          context.basemapSettings = nextContext.basemapSettings;
+          unsubscribeBasemapSettings = context.basemapSettings?.subscribe(() => sync()) ?? null;
+        }
+      }
       if (Object.prototype.hasOwnProperty.call(nextContext, "mapPreferences")) {
         context.mapPreferences = nextContext.mapPreferences;
       }
@@ -374,6 +409,7 @@ export function initPreferencesPanel({
     dataSourceController,
     onStartIntroduction,
     themeView,
+    basemapSettings,
   });
   render();
   return api;
@@ -408,6 +444,23 @@ function renderThemeSetting(currentTheme) {
           title="Dark theme"
           aria-hidden="true"
         ></calcite-icon>
+      </div>
+    </section>
+  `;
+}
+
+function getBasemapDescription(settings) {
+  const entry = settings.getOptions().find((option) => option.id === settings.getValue());
+  const label = entry?.label ?? "Unavailable";
+  return `${settings.isCustom() ? "Custom" : "Automatic"}: ${label}`;
+}
+
+function renderBasemapSetting(settings) {
+  return `
+    <section class="pc-preferences-panel__setting pc-preferences-panel__setting--basemap">
+      <div class="pc-preferences-panel__copy">
+        <h4>Basemap</h4>
+        <p id="preferences-basemap-status">${escapeHtml(getBasemapDescription(settings))}</p>
       </div>
     </section>
   `;

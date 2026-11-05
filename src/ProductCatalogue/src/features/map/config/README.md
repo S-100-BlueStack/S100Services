@@ -191,3 +191,11 @@ When adding a new source-owned layer:
 
 Do not add source checks directly to unrelated UI modules when registry metadata, Product context, or
 lifecycle hooks can express the behavior.
+
+## Basemap selection
+
+Basemaps are owned by `features/map/basemaps/` and are **not** AOI/Product
+`GraphicsLayer` entries in the source registry. Main Map and Analyze register
+independent `MapView` UI hosts using the same user preference key. The optional
+API key is scoped to basemap styles in the shared ArcGIS configuration boundary.
+See [Basemap selection](../basemaps/README.md).

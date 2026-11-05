@@ -1,6 +1,7 @@
 import { loadStatuses } from "../../data/stores/statusStore.js";
 import { createMap } from "../../map/core/createMap.js";
 import { createView } from "../../map/core/createView.js";
+import { initBasemapExperience } from "../../map/basemaps/initBasemapExperience.js";
 import { createHoverManager } from "../../map/interactions/hoverManager.js";
 import { registerPopupHoverSync } from "../../map/interactions/registerPopupHoverSync.js";
 import { noticeError, noticeWarning } from "../../notices/services/noticeService.js";
@@ -59,6 +60,7 @@ export async function initAnalyzePage({ datasetNames }) {
 
   const map = createMap();
   const view = createView(map);
+  const basemapExperience = initBasemapExperience(view);
   const hoverManager = createHoverManager(view);
   // Pending replacements belong to the page from the public map.add boundary.
   // Layer construction stays off-map; published staging remains cancellable
@@ -555,7 +557,7 @@ export async function initAnalyzePage({ datasetNames }) {
   document.addEventListener("pc-analyze-refresh", handleAnalyzeRefresh);
 
   cleanupViewPadding = applyAnalyzeViewPadding(view);
-  cleanupKeyboardClose = bindAnalyzeKeyboardClose(view);
+  cleanupKeyboardClose = bindAnalyzeKeyboardClose(view, basemapExperience);
   await view.when();
   // The bootstrap loader covers initial page and map setup. Hide it before
   // data loading starts so the delayed Analyze loader can decide whether a
@@ -585,6 +587,7 @@ export async function initAnalyzePage({ datasetNames }) {
   return {
     map,
     view,
+    basemapSettings: basemapExperience.settings,
     get products() {
       return currentProducts;
     },
@@ -612,6 +615,7 @@ export async function initAnalyzePage({ datasetNames }) {
       cleanupKeyboardClose = null;
       closePopup(view);
       cleanupPopupHoverSync?.();
+      basemapExperience.destroy();
       activeLoaderProgress?.cleanup();
       activeLoaderProgress = null;
       cleanupViewPadding?.();
@@ -812,12 +816,16 @@ function closePopup(view) {
   view.popup?.close?.();
 }
 
-function bindAnalyzeKeyboardClose(view) {
+function bindAnalyzeKeyboardClose(view, basemapExperience) {
   const handleKeydown = (event) => {
     if (event.key !== "Escape" || event.defaultPrevented) {
       return;
     }
 
+    if (basemapExperience?.close?.()) {
+      event.preventDefault();
+      return;
+    }
     if (!view?.popup?.visible) {
       return;
     }

@@ -149,10 +149,17 @@ test("global and popup tooltips share one compact overlay with native title clea
   let popupHelp;
   try {
     const nav = doc.body.appendChild(new Element("a"));
+    nav.className = "navbar-title-link";
     nav.setAttribute("data-nav-dashboard-link", "");
     nav.textContent = "Dashboard";
-    nav.setAttribute("title", "Dashboard");
+    nav.setAttribute("title", "Open Dashboard");
     nav.setAttribute("aria-describedby", "existing-help");
+
+    const filter = doc.body.appendChild(new Element("calcite-action"));
+    filter.setAttribute("id", "filter-button");
+    filter.setAttribute("title", "Filters");
+    filter.setAttribute("aria-describedby", "filter-help");
+    filter.rect = { left: 120, width: 40, top: 100, bottom: 140 };
 
     const lastUpdated = doc.body.appendChild(new Element("span"));
     lastUpdated.setAttribute("title", "Last refreshed at 11:45.");
@@ -167,33 +174,40 @@ test("global and popup tooltips share one compact overlay with native title clea
 
     initGlobalHelpTooltips();
     assert.equal(nav.hasAttribute("title"), false);
-    assert.equal(nav.getAttribute("data-app-original-title"), "Dashboard");
+    assert.equal(nav.hasAttribute("data-app-help"), false);
+    assert.equal(filter.hasAttribute("title"), false);
     assert.equal(lastUpdated.hasAttribute("title"), false);
     assert.equal(arcgisControl.getAttribute("title"), "ArcGIS map zoom");
 
+    // Visible navbar labels do not display redundant help that competes with
+    // the full-height clickable link or its animated route indicator.
     doc.emit("pointerover", { target: nav });
-    let tooltip = doc.body.children.at(-1);
-    assert.equal(tooltip.getAttribute("role"), "tooltip");
-    assert.equal(tooltip.textContent, "Open Dashboard");
-    assert.equal(tooltip.className.includes("pc-help-tooltip"), true);
-    assert.match(nav.getAttribute("aria-describedby"), /^existing-help pc-help-tooltip-/);
-    assert.equal(tooltip.style.left, "89px");
-
-    // Help is pointer-transparent; leaving the anchor must dismiss it rather than
-    // creating a hoverable surface that blocks an adjacent menu item.
-    doc.emit("pointerout", { target: nav, relatedTarget: null });
-    assert.equal(doc.body.children.length, 3);
-    assert.equal(nav.getAttribute("aria-describedby"), "existing-help");
-
     doc.activeElement = nav;
     doc.emit("focusin", { target: nav });
-    tooltip = doc.body.children.at(-1);
+    assert.equal(doc.body.querySelectorAll(".pc-help-tooltip").length, 0);
+    assert.equal(nav.getAttribute("aria-describedby"), "existing-help");
+
+    doc.emit("pointerover", { target: filter });
+    let tooltip = doc.body.children.at(-1);
+    assert.equal(tooltip.getAttribute("role"), "tooltip");
+    assert.equal(tooltip.textContent, "Filter products");
+    assert.equal(tooltip.className.includes("pc-help-tooltip"), true);
+    assert.match(filter.getAttribute("aria-describedby"), /^filter-help pc-help-tooltip-/);
+    assert.ok(Number.parseFloat(tooltip.style.left) >= 0, "help stays inside the viewport");
+
+    // Other application help remains pointer-transparent and dismisses cleanly.
+    doc.emit("pointerout", { target: filter, relatedTarget: null });
+    assert.equal(doc.body.children.length, 4);
+    assert.equal(filter.getAttribute("aria-describedby"), "filter-help");
+
+    doc.activeElement = filter;
+    doc.emit("focusin", { target: filter });
     const escape = doc.emit("keydown", { key: "Escape" });
     assert.equal(escape.defaultPrevented, undefined, "global tooltip does not consume Escape");
     assert.equal(escape.stopped, undefined);
-    assert.equal(doc.activeElement, nav);
-    assert.equal(nav.getAttribute("aria-describedby"), "existing-help");
-    assert.equal(doc.body.children.length, 3);
+    assert.equal(doc.activeElement, filter);
+    assert.equal(filter.getAttribute("aria-describedby"), "filter-help");
+    assert.equal(doc.body.children.length, 4);
 
     doc.emit("pointerover", { target: lastUpdated });
     tooltip = doc.body.children.at(-1);
@@ -208,7 +222,7 @@ test("global and popup tooltips share one compact overlay with native title clea
     assert.equal(tooltip.textContent, "Last refreshed at 11:46");
 
     doc.emit("pointerover", { target: arcgisControl });
-    assert.equal(doc.body.children.length, 3, "framework-owned map chrome is not retargeted");
+    assert.equal(doc.body.children.length, 4, "framework-owned map chrome is not retargeted");
 
     const attributeHeading = doc.body.appendChild(new Element("th"));
     attributeHeading.setAttribute("aria-label", "Attribute");

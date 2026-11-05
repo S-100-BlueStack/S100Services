@@ -137,6 +137,7 @@ async function createHarness(
       ...analyzeUnits,
       createMap: () => map,
       createView: () => view,
+      initBasemapExperience: () => ({ settings: null, destroy() {} }),
       createHoverManager: () => ({
         clear() {},
         registerLayer: async () => {},

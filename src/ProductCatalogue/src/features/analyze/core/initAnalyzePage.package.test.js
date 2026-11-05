@@ -198,6 +198,7 @@ async function harness(
     validateProductCatalogSelection,
     createMap: () => map,
     createView: () => view,
+    initBasemapExperience: () => ({ settings: null, destroy: noop }),
     createHoverManager: () => ({
       clear: () => state.registered.clear(),
       registerLayer: async (layer) => {

@@ -147,7 +147,10 @@ async function bootstrapAnalyzeRoute(route) {
     });
 
     initializeTheme(app.view);
-    ui.preferencesPanel.updateContext({ themeView: app.view });
+    ui.preferencesPanel.updateContext({
+      themeView: app.view,
+      basemapSettings: app.basemapSettings,
+    });
     hideLoader();
     ui.onboarding.setRouteReady();
   } catch (error) {

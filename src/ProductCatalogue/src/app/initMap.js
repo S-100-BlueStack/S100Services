@@ -7,6 +7,7 @@ import { noticeError, noticeSuccess } from "../features/notices/services/noticeS
 import { cancelActiveConfirmPopover } from "../shared/ui/confirm/services/confirmService.js";
 import { createNavbarPopoverCoordinator } from "../shared/ui/navbarPopoverCoordinator.js";
 import { createMap } from "../features/map/core/createMap.js";
+import { initBasemapExperience } from "../features/map/basemaps/initBasemapExperience.js";
 import { createView } from "../features/map/core/createView.js";
 import { createLayer } from "../features/map/core/layerFactory.js";
 import { createHoverManager } from "../features/map/interactions/hoverManager.js";
@@ -54,6 +55,7 @@ function readCurrentLastUpdatedPresentation() {
 export function initMap() {
   const map = createMap();
   const view = createView(map);
+  const basemapExperience = initBasemapExperience(view);
   const mapViewpointPersistence = bindMapViewpointPersistence(view);
   const hoverManager = createHoverManager(view);
   const navbarPopoverCoordinator = createNavbarPopoverCoordinator();
@@ -109,6 +111,7 @@ export function initMap() {
     mapPreferences: createMainMapPreferences({ view, filterPanel }),
     view,
     dataSourceController: dataSourceRuntime.controller,
+    basemapSettings: basemapExperience.settings,
   });
   const productHistoryPanel = initProductHistoryPanel({
     view,
@@ -154,6 +157,7 @@ export function initMap() {
     productHistoryPanel,
     productSearch,
     locator,
+    basemapExperience,
   });
   const cleanupOverlapPicker = bindOverlapPicker(view, {
     hoverManager,
@@ -250,6 +254,7 @@ export function initMap() {
     bindMapVisibility,
     updateLastUpdated,
     mapViewpointPersistence,
+    basemapSettings: basemapExperience.settings,
     preferencesPanel,
     productSearch,
     locator,
@@ -277,6 +282,7 @@ export function initMap() {
       productHistoryPanel?.destroy?.();
       productCollectionTray?.destroy?.();
       mapViewpointPersistence?.destroy?.();
+      basemapExperience.destroy();
     },
   };
 }
@@ -286,6 +292,7 @@ function bindMainMapKeyboardClose({
   productHistoryPanel,
   productSearch,
   locator,
+  basemapExperience,
 }) {
   const handleKeydown = (event) => {
     if (event.key !== "Escape" || event.defaultPrevented) return;
@@ -312,6 +319,10 @@ function bindMainMapKeyboardClose({
     }
     if (hasVisibleElement("#product-history-panel")) {
       productHistoryPanel?.close?.();
+      event.preventDefault();
+      return;
+    }
+    if (basemapExperience?.close?.()) {
       event.preventDefault();
       return;
     }
