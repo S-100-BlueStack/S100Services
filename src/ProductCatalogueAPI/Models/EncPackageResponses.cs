@@ -9,7 +9,7 @@ public enum EncPackageStatus
     Idle = 0,
     /// <summary>A candidate failed, IC-ENC rejected a member, or the active pair is inconsistent.</summary>
     Error = 4,
-    /// <summary>One of the products has an operator hold.</summary>
+    /// <summary>Package delivery is paused or one of the products has an operator hold.</summary>
     Hold = 5,
     /// <summary>Both required candidates are ready for distribution.</summary>
     Ready = 2,
@@ -33,12 +33,14 @@ public sealed record EncPackageResponse(PackageLayer Layer, string SourceDataset
 /// <summary>Computes a package status from both tracks so send and acceptance changes are visible immediately.</summary>
 public static class EncPackageStatusResolver
 {
-    /// <summary>Prioritizes failures and holds; successful package states require agreement by both required candidates.</summary>
+    /// <summary>Prioritizes package Pause over candidate failures; otherwise preserves the member-state precedence.</summary>
     /// <param name="package">The active paired snapshot, if one exists.</param>
     /// <param name="s57">The S-57 workflow track.</param>
     /// <param name="s101">The S-101 workflow track.</param>
     /// <returns>The aggregate status, independent of member edition and update numbers.</returns>
     public static EncPackageStatus Resolve(EncPackage? package, ProductExportTrackRecord? s57, ProductExportTrackRecord? s101) {
+        if (package?.IsPaused == true)
+            return EncPackageStatus.Hold;
         if (!string.IsNullOrWhiteSpace(package?.ErrorMessage) || IsError(s57, package?.S57Discarded == true) || IsError(s101, package?.S101Discarded == true) ||
             IsUncertain(s57) || IsUncertain(s101))
             return EncPackageStatus.Error;

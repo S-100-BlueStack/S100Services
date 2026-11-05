@@ -47,6 +47,10 @@ public sealed class EncPackageActionService(
 {
     public bool Enabled => DiscardEncPackageJob.EncPackageActionsEnabled(configuration, environment);
 
+    /// <summary>Reads package actions and presents an active delivery Pause as Hold without changing candidate states.</summary>
+    /// <param name="sourceName">The S-101 dataset identifying the active package.</param>
+    /// <param name="cancellationToken">Cancels the package, control and candidate reads.</param>
+    /// <returns>The current action snapshot, or null when actions or the package control are unavailable.</returns>
     public async Task<EncPackageActionSnapshot?> ReadAsync(string sourceName, CancellationToken cancellationToken = default) {
         if (!Enabled || string.IsNullOrWhiteSpace(sourceName)) return null;
         var name = sourceName.Trim().ToUpperInvariant();
@@ -54,6 +58,8 @@ public sealed class EncPackageActionService(
         if (active is null || !string.Equals(active.SourceDatasetName, name, StringComparison.OrdinalIgnoreCase)) return null;
         var control = await controls.GetForPackageAsync(active.Id, cancellationToken);
         if (control is null || !string.Equals(control.SourceDatasetName, active.SourceDatasetName, StringComparison.OrdinalIgnoreCase)) return null;
+        // Use this control read if Pause changed after the package projection was loaded.
+        active.IsPaused = control.IsPaused;
         var s101 = await workflows.GetTrackAsync(active.SourceDatasetName, ProductSpecification.S101, cancellationToken);
         var s57 = await workflows.GetTrackAsync(active.S57DatasetName, ProductSpecification.S57, cancellationToken);
         // Missing tracks still produce a readable package snapshot, but no mutation

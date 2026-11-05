@@ -391,18 +391,26 @@ public sealed class EncPackageRepository(DbConnectionFactory connectionFactory) 
             INSERT INTO dbo.EncPackageReplay (source_dataset_name, scan_from_utc) VALUES (@SourceDatasetName, @ScanFromUtc);
         """, new { SourceDatasetName = sourceDatasetName, ScanFromUtc = scanFromUtc }, transaction, cancellationToken: cancellationToken));
 
+    /// <summary>Reads lightweight snapshot metadata together with its independently persisted delivery Pause.</summary>
     private const string SelectHeaderSql = """
         SELECT package_id AS Id, source_dataset_name AS SourceDatasetName, s57_dataset_name AS S57DatasetName,
                scan_from_utc AS ScanFromUtc, detected_at_utc AS DetectedAtUtc, built_at_utc AS BuiltAtUtc,
                s57_discarded AS S57Discarded, s101_discarded AS S101Discarded,
-               error_message AS ErrorMessage FROM dbo.EncPackage
+               error_message AS ErrorMessage,
+               COALESCE((SELECT control.is_paused FROM dbo.EncPackageControl control
+                         WHERE control.source_dataset_name = dbo.EncPackage.source_dataset_name), CONVERT(bit, 0)) AS IsPaused
+        FROM dbo.EncPackage
         """;
 
+    /// <summary>Reads the source YAML and metadata together with the source's current delivery Pause.</summary>
     private const string SelectSql = """
         SELECT package_id AS Id, source_dataset_name AS SourceDatasetName, s57_dataset_name AS S57DatasetName,
                scan_from_utc AS ScanFromUtc, detected_at_utc AS DetectedAtUtc, built_at_utc AS BuiltAtUtc, dataset_yaml AS DatasetYaml,
                summary_yaml AS SummaryYaml, s57_discarded AS S57Discarded, s101_discarded AS S101Discarded,
-               error_message AS ErrorMessage FROM dbo.EncPackage
+               error_message AS ErrorMessage,
+               COALESCE((SELECT control.is_paused FROM dbo.EncPackageControl control
+                         WHERE control.source_dataset_name = dbo.EncPackage.source_dataset_name), CONVERT(bit, 0)) AS IsPaused
+        FROM dbo.EncPackage
         """;
 
     private sealed class SnapshotAttemptRow

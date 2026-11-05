@@ -16,6 +16,30 @@ namespace TestProductCatalogueAPI;
 /// <summary>Opt-in SQL Server tests execute repositories against a fresh database built exclusively from included migrations.</summary>
 public sealed class DpcSqlTransactionTests
 {
+    /// <summary>All package read paths expose saved Pause and Resume without persisting Pause in the snapshot table.</summary>
+    /// <returns>A task completing after the isolated database verifies all three package projections.</returns>
+    [DpcSqlFact]
+    public async Task PackageReadsProjectTheCurrentDeliveryPause() {
+        await using var db = await DpcSqlDatabase.CreateAsync();
+        var package = PendingPackage();
+        Assert.True(await db.Packages.TryCreateAsync(package));
+        Assert.False((await db.Packages.GetByIdAsync(package.Id))!.IsPaused);
+        foreach (var paused in new[] { true, false }) {
+            await db.ExecuteAsync("""
+                UPDATE dbo.EncPackageControl SET is_paused = @Paused, paused_at_utc = @PausedAtUtc, updated_at_utc = @NowUtc
+                WHERE source_dataset_name = @SourceDatasetName;
+                IF @@ROWCOUNT = 0
+                    INSERT dbo.EncPackageControl (source_dataset_name, is_paused, paused_at_utc, updated_at_utc)
+                    VALUES (@SourceDatasetName, @Paused, @PausedAtUtc, @NowUtc);
+                """, new { package.SourceDatasetName, Paused = paused, PausedAtUtc = paused ? package.DetectedAtUtc : (DateTime?)null, NowUtc = package.DetectedAtUtc });
+            Assert.Equal(paused, (await db.Packages.GetByIdAsync(package.Id))!.IsPaused);
+            foreach (var includeYaml in new[] { true, false }) {
+                var projected = (await db.Packages.GetActiveAsync([package.SourceDatasetName], includeSourceYaml: includeYaml))[package.SourceDatasetName];
+                Assert.Equal(paused, projected.IsPaused);
+            }
+        }
+    }
+
     /// <summary>Build timestamps survive reads in UTC, including lightweight package status reads.</summary>
     [DpcSqlFact]
     public async Task PackageBuildTimePersistsIndependentlyOfDetectionTime() {
