@@ -1,3 +1,37 @@
+## DC-API-06 — Verified read-only Package geometry (2026-11-05)
+
+Backend source snapshot: `8960c5f815d4a4bb3a1af6733406250d024b2334`.
+The verified v1 `PackageController.GetGeometry` route is
+`GET /api/v1/packages/{id}/geometry`, authorized by `datacatalogue:access`.
+Its `PackageGeometryResponse` is `{ aoi, detailedGeometry }`, **not**
+`{ simplified, detailed }`. `aoi` is the stored rectangular/generalized AOI
+as an Esri polygon JSON object (or `null`), not a Feature Service reference.
+`detailedGeometry` is `null` when no detail is stored; when present it has
+`points` (an array of Esri point/multipoint objects), `curves` (Esri polyline or
+`null`), and `surfaces` (Esri polygon or `null`). A detail object with empty
+`points` and null remaining groups is valid. Each geometry carries its own
+spatial reference; curves may use Esri `curvePaths`/`curveRings`. The response
+does not include a Package ID, version, paging, or a geometry ETag.
+
+The route declares 200, 400, 401/403, 404 and 500. Missing referenced rows
+return a server error instead of fabricated partial coordinates. The
+frontend validates the envelope/groups and spatial references, bounds the
+read and display payload, projects into the current MapView, and treats
+`detailedGeometry: null` as a legitimate AOI-only case. A failed live read
+never substitutes Workspace polygons or mock geometry. `PUT /geometry`
+remains separate and is not called by the frontend renderer.
+
+Scope: Selected Package geometry on the assignment map; selected Job's
+Package geometry on the Jobs map. This is **not** a request to fetch every
+Package's geometry at startup. Full integration is still subject to local
+runtime/SSO, geometry/projection and browser checks; .NET tests were not run
+in the offline frontend candidate environment.
+
+The earlier DC-API-04 section below describes the **older backend baseline**
+before the read route was introduced, not the current API.
+
+---
+
 ## DC-API-04 v3 — manual membership requirement versus implemented API (2026-10-29)
 
 The confirmed product direction allows users to override Workspace membership for a

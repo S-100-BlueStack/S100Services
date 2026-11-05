@@ -101,9 +101,14 @@ export function createAssignmentPage({
     get("search").closest("label").hidden = true;
     get("type").previousSibling.textContent = "Category";
     get("type").replaceChildren(new Option("All categories", ""));
-    get("map-empty").textContent = "Select a Package to view its saved intersecting Workspaces.";
+    get("map-empty").textContent = "Select a Package to view its AOI and saved intersecting Workspaces.";
+    get("map-focus").textContent = "Focus geography";
     get("map-focus").hidden = false;
-    element.querySelector(".dc-assignment-legend").remove();
+    element.querySelector(".dc-assignment-legend").innerHTML = `
+      <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__line is-package-aoi" aria-hidden="true"></span>Package AOI</span>
+      <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__line is-package-detail" aria-hidden="true"></span>Detailed Features</span>
+      <span class="dc-assignment-legend__item"><span class="dc-assignment-legend__line is-context" aria-hidden="true"></span>Saved Workspaces</span>
+    `;
     element.querySelector(".dc-prototype-toolbar > span").textContent =
       "Live API · Automatic Workspaces · Manual overrides pending API support";
     for (const name of ["fail-load", "fail-save", "reset"]) get(name).hidden = true;

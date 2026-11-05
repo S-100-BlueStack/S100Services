@@ -310,6 +310,14 @@
   border-top-style: solid;
   border-top-width: 3px;
 }
+.dc-assignment-legend__line.is-package-aoi {
+  border-top: 3px dashed rgb(176, 60, 214);
+}
+
+.dc-assignment-legend__line.is-package-detail {
+  border-top: 3px solid rgb(0, 135, 200);
+}
+
 .dc-assignment-legend__line.is-context {
   border-top-style: dashed;
 }

@@ -1,3 +1,35 @@
+## DC-API-06 geometry integration update (2026-11-05)
+
+The previous read-contract blockers **GEO-01 and GEO-04 are resolved in source**.
+Verified backend commit `58264e4297872b356001611473d7090bd1b5102d`
+(introduced in snapshot `8960c5f815d4a4bb3a1af6733406250d024b2334`)
+provides `GET /api/v1/packages/{id}/geometry` with actual Esri JSON fields
+`aoi` and nullable `detailedGeometry` (`points`, `curves`, `surfaces`).
+
+The DC-API-06 frontend candidate reads that **existing** route and renders
+only the selected Package on the assignment map or the selected Job's Package
+on the main map. Nullable detail groups are supported, geometry is projected,
+and stale selections cannot replace later geometry. This change does **not**
+implement automatic loading of every Package's AOI at startup, publish a
+Feature Service, or change geometry persistence/authentication.
+
+**GEO-01/GEO-04 state:** Backend implemented / frontend implemented in DC-API-06
+candidate; **real browser/API and performance acceptance pending**. The
+existing source provides no geometry version or paging and reads all detailed
+coordinates at once. Large Package payloads, actual SR/datum projections,
+replacements made by other users, permission failures and IIS/SSO remain
+runtime verification items. The frontend uses an 8-million-character / 150,000
+coordinate display budget and a 20-second geometry-read deadline (not an API
+contract). No cross-selection cache is used because version/ETag is absent.
+
+**OVERRIDE-01 remains blocked**: manual effective Workspace membership still
+needs separate backend read/write/concurrency semantics. Workspace coverage
+and Package AOI are separate geographical entities and must not be conflated.
+Historical “GEO-01 remains unresolved” statements below apply only to earlier
+backend snapshots.
+
+---
+
 ## DC-API-04 v3 browser-feedback follow-up (2026-10-29)
 
 - **OVERRIDE-01 is now a confirmed requirement:** a user must be able to add/remove

@@ -3,7 +3,7 @@ import { workspaceOverlayMessage } from "./createWorkspaceOverlay.js";
 const RENDER_FAILURE =
   "Workspace rendering failed. The Jobs list remains available. Reload the page to retry the map.";
 const JOB_GEOMETRY_NOTE =
-  "Job AOI coordinates are unavailable from the API; no Job footprints are shown.";
+  "The selected Job's Package AOI is shown separately from Workspace coverage.";
 
 // Keep ArcGIS LayerView events and overlay preparation failures behind one visible notice boundary.
 export function createWorkspaceCoverageStatus({

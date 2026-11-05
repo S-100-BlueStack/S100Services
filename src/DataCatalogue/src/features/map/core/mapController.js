@@ -1,4 +1,7 @@
 import { createWorkspaceGeometrySource } from "../workspaces/createWorkspaceGeometrySource.js";
+import { createPackageGeometrySource } from "../packages/createPackageGeometrySource.js";
+import { createPackageGraphics } from "../packages/createPackageGraphics.js";
+import { createPackageGeometryOverlay } from "../packages/createPackageGeometryOverlay.js";
 import { createWorkspaceGraphics } from "../workspaces/createWorkspaceGraphics.js";
 import { createWorkspaceCoverageStatus } from "../workspaces/createWorkspaceCoverageStatus.js";
 import {
@@ -42,6 +45,7 @@ export function createMapController({
   onAoiLayerError,
   onJobLayerError,
   onWorkspaceCoverageError,
+  onPackageGeometryError,
   onShowRelatedJobs,
   onShowJobDetails,
   relationService = defaultRelationService,
@@ -49,6 +53,12 @@ export function createMapController({
 } = {}) {
   let mapResult = null;
   let workspaceOverlay = null;
+  let packageOverlay = null;
+  let packageRenderErrorHandle = null;
+  let packageRenderRecoveredHandle = null;
+  let packageRenderingError = "";
+  let lastPackageError = "";
+  let selectedPackageId = null;
   let visibleWorkspaces = [];
   let workspaceCatalog = [];
   let openJobCounts = null;
@@ -135,6 +145,32 @@ export function createMapController({
           }),
           onStatus: workspaceCoverageStatus.onOverlayStatus,
         });
+        packageRenderErrorHandle = mapResult.view.on("layerview-create-error", ({ layer }) => {
+          if (layer?.id !== "data-catalogue-selected-package") return;
+          packageRenderingError = "Selected Package geometry could not be rendered on the map.";
+          reportPackageGeometryError(packageRenderingError);
+        });
+        packageRenderRecoveredHandle = mapResult.view.on("layerview-create", ({ layer }) => {
+          if (layer?.id !== "data-catalogue-selected-package") return;
+          packageRenderingError = "";
+          reportPackageGeometryError("");
+        });
+        packageOverlay = createPackageGeometryOverlay({
+          source: createPackageGeometrySource({ catalogue }),
+          renderer: createPackageGraphics({
+            map: mapResult.map,
+            view: mapResult.view,
+            id: "data-catalogue-selected-package",
+          }),
+          onStatus(state) {
+            reportPackageGeometryError(
+              packageRenderingError || (state.status === "error" ? state.message : "")
+            );
+          },
+        });
+        if (selectedPackageId) {
+          void packageOverlay.setPackage(selectedPackageId, { autoFocus: true });
+        }
         workspaceOverlay.setOpenJobCounts(openJobCounts);
         workspaceOverlay.setVisibleWorkspaces(visibleWorkspaces);
         void workspaceOverlay.setContext(
@@ -256,6 +292,17 @@ export function createMapController({
     }
   }
 
+  function reportPackageGeometryError(message) {
+    if (!message) {
+      lastPackageError = "";
+      return;
+    }
+    if (lastPackageError !== message) {
+      lastPackageError = message;
+      onPackageGeometryError?.(message);
+    }
+  }
+
   function setWorkspaceCatalog(workspaces, options = { autoFocus: false }) {
     workspaceCatalog = [...workspaces];
     catalogOptions = { autoFocus: false, ...options };
@@ -286,6 +333,7 @@ export function createMapController({
 
   function destroy() {
     isDestroyed = true;
+    selectedPackageId = null;
     mapStartRequestId += 1;
     resetMapRuntimeState();
   }
@@ -318,6 +366,14 @@ export function createMapController({
     workspaceCoverageStatus = null;
     workspaceOverlay?.destroy();
     workspaceOverlay = null;
+    packageOverlay?.destroy();
+    packageOverlay = null;
+    packageRenderErrorHandle?.remove();
+    packageRenderRecoveredHandle?.remove();
+    packageRenderErrorHandle = null;
+    packageRenderRecoveredHandle = null;
+    packageRenderingError = "";
+    lastPackageError = "";
     mapResult?.detachBasemap?.();
     mapResult?.view?.destroy();
     mapResult = null;
@@ -332,12 +388,27 @@ export function createMapController({
   }
 
   function highlightJob(selectedJob) {
+    if (runtimeConfig?.sourceMode === "live") {
+      const nextId = normalizeOptionalString(selectedJob?.packageId);
+      if (nextId === selectedPackageId) {
+        if (nextId && packageOverlay?.getState().status === "error") {
+          return packageOverlay.setPackage(nextId, { reload: true });
+        }
+        return Promise.resolve();
+      }
+      selectedPackageId = nextId;
+      return packageOverlay?.setPackage(nextId, { autoFocus: Boolean(nextId) }) ?? Promise.resolve();
+    }
     return clearHoverAfterSelection(
       jobHighlightController?.highlightJob(selectedJob) ?? Promise.resolve()
     );
   }
 
   function clearJobHighlight() {
+    if (runtimeConfig?.sourceMode === "live") {
+      selectedPackageId = null;
+      void packageOverlay?.setPackage(null);
+    }
     jobHighlightController?.clearHighlight();
   }
 
@@ -452,7 +523,7 @@ export function createMapController({
   }
 
   async function refreshJobData({ jobs } = {}) {
-    // Live Jobs have no verified AOI coordinates; never invoke the demo geometry loader.
+    // Live Package AOIs are independent GraphicsLayer overlays, never mock Job features.
     if (runtimeConfig?.sourceMode === "live" || !jobLayerUpdateQueue) {
       return {
         ok: true,

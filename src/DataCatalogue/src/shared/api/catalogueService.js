@@ -1,4 +1,5 @@
 import { normalizeSeverity } from "../domain/severity.js";
+import { normalizePackageGeometry } from "./packageGeometry.js";
 
 export function requiredId(value) {
   if (typeof value !== "string" || !value.trim())
@@ -139,6 +140,11 @@ export function createCatalogueService(client) {
       );
       if (item.id !== id) throw new Error("API returned a different Package identity.");
       return item;
+    },
+    async packageGeometry(id, { signal } = {}) {
+      return normalizePackageGeometry(
+        await client.request(`/api/v1/packages/${segment(id)}/geometry`, { signal })
+      );
     },
     async pipelines({ signal } = {}) {
       const page = normalizePage(await client.request("/api/v1/pipelines", { signal }), (item) => ({

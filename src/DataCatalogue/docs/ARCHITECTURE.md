@@ -1,3 +1,30 @@
+## DC-API-06 — Selected Package geometry boundary (2026-11-05)
+
+- `shared/api/catalogueService.js` reads the verified
+  `GET /api/v1/packages/{id}/geometry` route. `shared/api/packageGeometry.js`
+  validates Esri JSON for the rectangular `aoi`, optional detailed
+  point/multipoint/polyline/polygon groups, nullable detail, SR and bounded
+  coordinate payloads. Backend normalization stays out of UI and map layers.
+- `features/map/packages/` owns the 20-second cancellable read, a single
+  generation-owner for selection/focus/render, and the ArcGIS GraphicsLayer
+  (one per MapView). Polygon/curve/point graphics are separate and projected
+  through the public SDK operator to the View SR. Only the latest prepared
+  Package is published; the previous graphic remains during a pending change
+  to prevent empty-map flashes, and is cleared on a genuine error/empty result.
+- `createLiveCatalogueMap.js` displays the selected Package AOI and detailed
+  Features alongside **saved** Workspace coverage. Draft Pipeline toggles
+  do not synthesize geographic membership. Package focus is preferred with
+  Workspace focus as a valid no-geometry fallback.
+- `mapController.js` displays the selected Job's Package on the main live map;
+  selection changes come from the existing Jobs detail event. No N-per-Job
+  geometry reads at startup, no changes to mock Job geometry/status flows, and
+  no replacement of the existing `Map`/`MapView` architecture.
+- Map lifecycle, retries and errors remain independent of list/binding reads.
+  No backend code or auth policy is changed. Real browser geometry rendering,
+  projection and SSO require local acceptance.
+
+---
+
 ## DC-MAP-01 — Shared MapView overview constraints
 
 `features/map/config/mapConfig.js` composes the basemap with pure

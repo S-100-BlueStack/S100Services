@@ -120,6 +120,9 @@ export async function createApp(rootElement) {
     onWorkspaceCoverageError(message) {
       showErrorNoticeAfterStartup({ title: "Workspace geometry unavailable", message });
     },
+    onPackageGeometryError(message) {
+      showErrorNoticeAfterStartup({ title: "Package geometry unavailable", message });
+    },
     onJobLayerError(error) {
       showErrorNoticeAfterStartup({
         title: "Job geometry could not be loaded",
@@ -311,6 +314,31 @@ export async function createApp(rootElement) {
     mapController.refreshAoiPopupContent();
     void mapSyncCoordinator.syncMapAfterJobStoreChange(snapshot);
   });
+
+  if (live) {
+    // Job Details is also opened from the list, not only from map popups.
+    // Repeated details rerenders do not refetch geometry for an unchanged Package.
+    jobsPanel.element.addEventListener(
+      "data-catalogue:job-details-mode-changed",
+      (event) => {
+        const selectedId = event.detail?.isDetailsMode ? event.detail.selectedJobId : null;
+        const selectedJob = selectedId
+          ? jobStore.getSnapshot().jobs.find((job) => job.id === selectedId)
+          : null;
+        if (!selectedJob) {
+          mapController.clearJobHighlight();
+          return;
+        }
+        void mapController.highlightJob(selectedJob).catch((error) => {
+          showErrorNoticeAfterStartup({
+            title: "Package geometry unavailable",
+            message: error.message,
+          });
+        });
+      },
+      { signal: appEventAbortController.signal }
+    );
+  }
 
   jobsPanel.element.addEventListener(
     "data-catalogue:aoi-filter-cleared",

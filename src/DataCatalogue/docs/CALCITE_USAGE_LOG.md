@@ -1,3 +1,13 @@
+## DC-API-06 Package geometry visualization (2026-11-05)
+
+The assignment-map geometry legend uses the existing application-owned,
+non-interactive semantic markup and CSS swatches to distinguish Package AOI,
+detailed Features and saved Workspace coverage. A Calcite interactive control
+is not needed for a static legend. Map graphics use public ArcGIS GraphicsLayer
+and geometry APIs; there is no private Calcite/ArcGIS shadow-DOM manipulation.
+
+---
+
 ## DC-API-05 — Compact Jobs controls
 
 Live Job Details uses a public `calcite-action` with the `refresh` icon, accessible

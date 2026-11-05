@@ -1,3 +1,37 @@
+## DC-API-06 — Package AOI and detailed geometry (implementation candidate, 2026-11-05)
+
+**Frontend baseline:** `f36b9956f9d5d9b35addf71b9d90eacd32e19948`.
+**Backend contract snapshot:** `8960c5f815d4a4bb3a1af6733406250d024b2334`.
+Both uploaded archives and source manifests were verified. This frontend
+candidate does **not** include the abandoned earlier DC-API-06 documentation
+handoff (which still claimed no geometry GET). It is not committed.
+
+- **GEO-01/GEO-04:** The backend now exposes the existing authorized
+  `GET /api/v1/packages/{id}/geometry` with `aoi` and nullable
+  `detailedGeometry`. Source contract is verified; deployment availability and
+  live geometry are not verified in the frontend test environment.
+- The selected Package's rectangular AOI (dashed outline), detailed point,
+  multipoint, curve and surface groups are shown on the **assignment map**,
+  alongside existing saved Workspace coverage. `detailedGeometry: null`
+  produces an AOI-only display without treating missing details as an error.
+- The **Jobs main map** renders the selected Job's Package geometry from the
+  same endpoint when Job Details opens. It does not fetch all Job AOIs on
+  startup, avoids duplicate reads for the same Package and clears selection
+  on exit. Mock Job status and mock map layers remain unchanged.
+- Source reads are abortable with a 20-second deadline. One selection generation
+  owns publication and focus; older Package responses cannot replace later
+  choices. No cross-selection geometry cache or Feature Service dependency.
+- Package, detailed Feature and Workspace geographies remain distinct.
+  Existing Pipeline/Workspace visibility controls, basemaps, map position
+  persistence, navigation and bindings are preserved.
+- **Next:** Local `npm run check`, live browser test with actual AOI and nullable
+  details, access failures, large geometry, Denmark/Greenland projection and
+  rapid selections. OVERRIDE-01 manual Workspace membership is still blocked
+  pending a separate backend contract. Consider an explicit geometry version/
+  conditional read contract only if measured performance or freshness requires it.
+
+---
+
 ## DC-STAB-02E — Current scope and targeted regression coverage (candidate, 2026-11-04)
 
 Authoritative baseline: `664be515a00d89985005634336392d47a0fb4ca3`

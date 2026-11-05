@@ -1,3 +1,15 @@
+## Live Package geometry clarification (2026-11-05)
+
+A Package's rectangular `aoi` is not a Workspace polygon; detailed Feature
+points, curves and surfaces are also not Workspace membership. DC-API-06
+renders the **selected** Package from the verified read-only geometry route,
+while existing Workspace overlays continue to show the backend's effective
+saved Pipeline bindings/intersections. `detailedGeometry: null` means no
+additional detailed geometry, not missing Package identity or failed bindings.
+Manual Workspace overrides remain a separate backend dependency.
+
+---
+
 # Package, Pipeline, Workspace and Jobs scope
 
 ## Current frontend behavior (DC-STAB-02E, 2026-11-04)
