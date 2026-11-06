@@ -1,0 +1,134 @@
+{
+  "id": "0a6eb8c7-7427-4dab-a443-a6781ef37261",
+  "created": "2025-06-13T11:57:20.000+00:00",
+  "updated": "2025-07-09T09:59:29.000+00:00",
+  "messageSeries": {
+    "seriesId": "dma-nm"
+  },
+  "number": 474,
+  "shortId": "NM-474-25",
+  "mainType": "NM",
+  "type": "PERMANENT_NOTICE",
+  "status": "EXPIRED",
+  "areas": [
+    {
+      "id": 473,
+      "active": true,
+      "parent": {
+        "id": 453,
+        "mrn": "urn:mrn:iho:country:dk",
+        "active": true,
+        "descs": [
+          {
+            "lang": "da",
+            "name": "Danmark"
+          },
+          {
+            "lang": "en",
+            "name": "Denmark"
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "name": "Sundet"
+        },
+        {
+          "lang": "en",
+          "name": "The Sound"
+        }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "chartNumber": "133",
+      "internationalNumber": 1333,
+      "active": true,
+      "scale": 50000
+    },
+    {
+      "chartNumber": "132",
+      "internationalNumber": 1332,
+      "active": true,
+      "scale": 75000
+    },
+    {
+      "chartNumber": "104",
+      "active": true,
+      "scale": 200000
+    }
+  ],
+  "publishDateFrom": "2025-06-13T12:05:26.000+00:00",
+  "publishDateTo": "2025-07-09T09:59:29.000+00:00",
+  "references": [
+    {
+      "messageId": "NM-404-25",
+      "type": "CANCELLATION"
+    }
+  ],
+  "originalInformation": true,
+  "parts": [
+    {
+      "indexNo": 0,
+      "type": "DETAILS",
+      "eventDates": [
+        {
+          "allDay": false,
+          "fromDate": "2025-06-13T12:05:26.000+00:00",
+          "toDate": "2025-07-09T09:59:29.000+00:00"
+        }
+      ],
+      "geometry": {
+        "type": "FeatureCollection",
+        "id": "a492f86f-5a24-4d1a-b6ce-82e8738c906a",
+        "features": [
+          {
+            "type": "Feature",
+            "id": "3e2ea72a-d09b-491a-8c1d-4891b4a58e41",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.6886,
+                55.6361
+              ]
+            },
+            "properties": {
+              "startCoordIndex": 1
+            }
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "subject": "Måleudstyr udlagt.",
+          "details": "<p>Der er udlagt m&aring;leudstyr p&aring; havbunden p&aring; n&aelig;vnte position.</p>\n<ul class=\"positions\">\n<li>55&deg; 38,16<strong>6</strong>'N - 012&deg; 41,3<strong>16</strong>'E.</li>\n</ul>\n<p>M&aring;leudstyret r&aelig;kker ca. 0,6 m op over havbunden.</p>\n<p>M&aring;leudstyret&nbsp;er ikke afm&aelig;rket.&nbsp;</p>"
+        },
+        {
+          "lang": "en",
+          "subject": "Measuring equipment deployed",
+          "details": "<p>Measuring equipment has been deployed on the seabed in the mentioned position.</p>\n<ul class=\"positions\">\n<li>55&deg; 38.16<strong>6</strong>'N - 012&deg; 41.3<strong>16</strong>'E.</li>\n</ul>\n<p>The measuring equipment extends approx. 0.6m above the seabed.&nbsp;</p>\n<p>The measuring equipment is not buoyed.&nbsp;</p>"
+        }
+      ],
+      "hideSubject": true
+    }
+  ],
+  "descs": [
+    {
+      "lang": "da",
+      "title": "Danmark. Sundet. Drogden N. Nordre Røse. Måleudstyr udlagt.",
+      "vicinity": "Drogden N. Nordre Røse.",
+      "publication": "",
+      "source": "DHI 13. juni 2025"
+    },
+    {
+      "lang": "en",
+      "title": "Denmark. The Sound. Drogden N. Nordre Røse. Measuring equipment deployed.",
+      "vicinity": "Drogden N. Nordre Røse.",
+      "publication": "",
+      "source": "DHI 13 June 2025"
+    }
+  ]
+}

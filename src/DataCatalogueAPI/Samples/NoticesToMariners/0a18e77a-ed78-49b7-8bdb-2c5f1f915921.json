@@ -1,0 +1,148 @@
+{
+  "id": "0a18e77a-ed78-49b7-8bdb-2c5f1f915921",
+  "created": "2025-05-06T11:02:35.000+00:00",
+  "updated": "2025-06-02T11:03:54.000+00:00",
+  "messageSeries": {
+    "seriesId": "dma-nm"
+  },
+  "number": 354,
+  "shortId": "NM-354-25",
+  "mainType": "NM",
+  "type": "TEMPORARY_NOTICE",
+  "status": "CANCELLED",
+  "areas": [
+    {
+      "id": 513,
+      "active": true,
+      "parent": {
+        "id": 453,
+        "mrn": "urn:mrn:iho:country:dk",
+        "active": true,
+        "descs": [
+          {
+            "lang": "da",
+            "name": "Danmark"
+          },
+          {
+            "lang": "en",
+            "name": "Denmark"
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "name": "Lillebælt"
+        },
+        {
+          "lang": "en",
+          "name": "The Little Belt"
+        }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "chartNumber": "151",
+      "internationalNumber": 1375,
+      "active": true,
+      "scale": 75000
+    },
+    {
+      "chartNumber": "103",
+      "internationalNumber": 1303,
+      "active": true,
+      "scale": 200000
+    }
+  ],
+  "publishDateFrom": "2025-05-06T13:19:53.000+00:00",
+  "publishDateTo": "2025-06-02T11:03:54.000+00:00",
+  "followUpDate": "2025-06-05T22:00:00.000+00:00",
+  "references": [
+    {
+      "messageId": "NM-902-24",
+      "type": "REPETITION_NEW_TIME"
+    }
+  ],
+  "originalInformation": true,
+  "parts": [
+    {
+      "indexNo": 0,
+      "type": "DETAILS",
+      "eventDates": [
+        {
+          "allDay": false,
+          "fromDate": "2025-05-06T13:19:53.000+00:00",
+          "toDate": "2025-06-02T11:03:54.000+00:00"
+        }
+      ],
+      "geometry": {
+        "type": "FeatureCollection",
+        "id": "1aae454c-f8bc-4306-894c-ce942da68aea",
+        "features": [
+          {
+            "type": "Feature",
+            "id": "bd87f18a-9420-46da-a12f-01f386e16f0f",
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [
+                    9.890116666666666,
+                    55.28550000000001
+                  ],
+                  [
+                    9.889433333333333,
+                    55.28469999999999
+                  ],
+                  [
+                    9.874183333333335,
+                    55.28806666666668
+                  ],
+                  [
+                    9.87465,
+                    55.28895
+                  ],
+                  [
+                    9.890116666666666,
+                    55.28550000000001
+                  ]
+                ]
+              ]
+            },
+            "properties": {
+              "startCoordIndex": 1
+            }
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "subject": "Undervandsarbejder",
+          "details": "<p><strong>Indtil 1. juni 2025,</strong> udf&oslash;res undervandsarbejde i et omr&aring;de afgr&aelig;nset af en linje gennem position 1) -4).&nbsp;</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">55&deg; 17,130'N - 009&deg; 53,407'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">55&deg; 17,082'N - 009&deg; 53,366'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">3)</td>\n<td class=\"pos-col\">55&deg; 17,284'N - 009&deg; 52,451'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">4)</td>\n<td class=\"pos-col\">55&deg; 17,337'N - 009&deg; 52,479'E</td>\n</tr>\n</tbody>\n</table>\n<p>Arbejdet udf&oslash;res af et fart&oslash;j som kan kontaktes p&aring; VHF kanal 16.</p>\n<p>Der anvendes dykkere.</p>\n<p>Skibsfarten aanmodes om at vise hensyn ved passage.</p>"
+        },
+        {
+          "lang": "en",
+          "subject": "Subsea works",
+          "details": "<p><strong>Until 1 June 2025,</strong> subsea works will be carried out in an area bounded by a line through positions 1) - 4)</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">55&deg; 17.130'N - 009&deg; 53.407'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">55&deg; 17.082'N - 009&deg; 53.366'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">3)</td>\n<td class=\"pos-col\">55&deg; 17.284'N - 009&deg; 52.451'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">4)</td>\n<td class=\"pos-col\">55&deg; 17.337'N - 009&deg; 52.479'E</td>\n</tr>\n</tbody>\n</table>\n<p>The work will be carried out by a vessel which can be contacted on VHF channel 16.&nbsp;</p>\n<p>Divers will be used.</p>\n<p>Mariners are requested to pass with caution.</p>"
+        }
+      ],
+      "hideSubject": true
+    }
+  ],
+  "descs": [
+    {
+      "lang": "da",
+      "title": "Danmark. Lillebælt. Asnæs Rev. Undervandsarbejder.",
+      "vicinity": "Asnæs Rev",
+      "source": "M.S. Rosbæk ApS 5. maj 2025"
+    },
+    {
+      "lang": "en",
+      "title": "Denmark. The Little Belt. Asnæs Rev. Subsea works.",
+      "vicinity": "Asnæs Rev",
+      "source": "M.S. Rosbæk ApS 5 May 2025"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="src/DataCatalogueAPI/DataCatalogueAPI.csproj">
+    <Platform Project="x64" />
+    <Build Solution="Release|*" Project="false" />
+  </Project>
+  <Project Path="tests/DataCatalogueAPI.Tests/DataCatalogueAPI.Tests.csproj">
+    <Platform Project="x64" />
+  </Project>
+</Solution>

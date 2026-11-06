@@ -1,0 +1,180 @@
+{
+  "id": "00e4d439-a4fc-49cd-b0b1-0abcd35c9247",
+  "created": "2025-07-29T08:30:44.000+00:00",
+  "updated": "2025-08-13T10:19:42.000+00:00",
+  "messageSeries": {
+    "seriesId": "dma-nm"
+  },
+  "number": 614,
+  "shortId": "NM-614-25",
+  "mainType": "NM",
+  "type": "TEMPORARY_NOTICE",
+  "status": "CANCELLED",
+  "areas": [
+    {
+      "id": 529,
+      "active": true,
+      "parent": {
+        "id": 453,
+        "mrn": "urn:mrn:iho:country:dk",
+        "active": true,
+        "descs": [
+          {
+            "lang": "da",
+            "name": "Danmark"
+          },
+          {
+            "lang": "en",
+            "name": "Denmark"
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "name": "Kattegat"
+        },
+        {
+          "lang": "en",
+          "name": "Kattegat"
+        }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "chartNumber": "123",
+      "active": true,
+      "scale": 75000
+    },
+    {
+      "chartNumber": "101",
+      "internationalNumber": 1301,
+      "active": true,
+      "scale": 200000
+    },
+    {
+      "chartNumber": "100",
+      "active": true,
+      "scale": 300000
+    },
+    {
+      "chartNumber": "92",
+      "internationalNumber": 1300,
+      "active": true,
+      "scale": 360000
+    }
+  ],
+  "publishDateFrom": "2025-07-29T10:52:15.000+00:00",
+  "publishDateTo": "2025-08-13T10:19:42.000+00:00",
+  "followUpDate": "2025-11-02T23:00:00.000+00:00",
+  "originalInformation": true,
+  "parts": [
+    {
+      "indexNo": 0,
+      "type": "DETAILS",
+      "eventDates": [
+        {
+          "allDay": false,
+          "fromDate": "2025-07-29T10:52:15.000+00:00",
+          "toDate": "2025-08-13T10:19:42.000+00:00"
+        }
+      ],
+      "geometry": {
+        "type": "FeatureCollection",
+        "id": "d28ae187-5ed3-45fb-8af9-a0fbebee6c4f",
+        "features": [
+          {
+            "type": "Feature",
+            "id": "063d19a3-08ca-4c23-a758-62d3a663f323",
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [
+                    10.525,
+                    57.34033333333332
+                  ],
+                  [
+                    10.548500000000002,
+                    57.34266666666667
+                  ],
+                  [
+                    10.546999999999999,
+                    57.38983333333334
+                  ],
+                  [
+                    10.517999999999999,
+                    57.3921666666667
+                  ],
+                  [
+                    10.5285,
+                    57.417333333333346
+                  ],
+                  [
+                    11.304833333333333,
+                    57.547666666666686
+                  ],
+                  [
+                    11.357333333333333,
+                    57.492333333333306
+                  ],
+                  [
+                    11.022833333333333,
+                    57.470500000000044
+                  ],
+                  [
+                    10.989666666666665,
+                    57.465833333333336
+                  ],
+                  [
+                    10.780833333333332,
+                    57.38383333333334
+                  ],
+                  [
+                    10.536833333333334,
+                    57.28916666666666
+                  ],
+                  [
+                    10.525,
+                    57.34033333333332
+                  ]
+                ]
+              ]
+            },
+            "properties": {
+              "startCoordIndex": 1
+            }
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "subject": "Havbundsundersøgelser",
+          "details": "<p><strong>I perioden 7. september&nbsp; - 29</strong><strong>. oktober 2025,</strong>&nbsp;udf&oslash;res havbundsunders&oslash;gelser i et omr&aring;de afgr&aelig;nset af en linje gennem position 1) - 11).&nbsp;</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">57&deg; 20,420'N - 010&deg; 31,500'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">57&deg; 20,560'N - 010&deg; 32,910'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">3)</td>\n<td class=\"pos-col\">57&deg; 23,390'N - 010&deg; 32,820'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">4)</td>\n<td class=\"pos-col\">57&deg; 23,530'N - 010&deg; 31,080'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">5)</td>\n<td class=\"pos-col\">57&deg; 25,040'N - 010&deg; 31,710'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">6)</td>\n<td class=\"pos-col\">57&deg; 32,860'N - 011&deg; 18,290'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">7)</td>\n<td class=\"pos-col\">57&deg; 29,540'N - 011&deg; 21,440'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">8)</td>\n<td class=\"pos-col\">57&deg; 28,230'N - 011&deg; 01,370'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">9)</td>\n<td class=\"pos-col\">57&deg; 27,950'N - 010&deg; 59,380'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">10)</td>\n<td class=\"pos-col\">57&deg; 23,030'N - 010&deg; 46,850'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">11)</td>\n<td class=\"pos-col\">57&deg; 17,350'N - 010&deg; 32,210'E</td>\n</tr>\n</tbody>\n</table>\n<p><span>Skibsfarten anmodes om at vise hensyn ved passage.&nbsp;</span></p>"
+        },
+        {
+          "lang": "en",
+          "subject": "Seabed surveys",
+          "details": "<p><strong>In the period&nbsp;7 September&nbsp;- 29 October 2025,</strong>&nbsp;seabed surveys will be carried out in area bounded by a line through positions 1) - 11).</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">57&deg; 20.420'N - 010&deg; 31.500'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">57&deg; 20.560'N - 010&deg; 32.910'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">3)</td>\n<td class=\"pos-col\">57&deg; 23.390'N - 010&deg; 32.820'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">4)</td>\n<td class=\"pos-col\">57&deg; 23.530'N - 010&deg; 31.080'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">5)</td>\n<td class=\"pos-col\">57&deg; 25.040'N - 010&deg; 31.710'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">6)</td>\n<td class=\"pos-col\">57&deg; 32.860'N - 011&deg; 18.290'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">7)</td>\n<td class=\"pos-col\">57&deg; 29.540'N - 011&deg; 21.440'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">8)</td>\n<td class=\"pos-col\">57&deg; 28.230'N - 011&deg; 01.370'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">9)</td>\n<td class=\"pos-col\">57&deg; 27.950'N - 010&deg; 59.380'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">10)</td>\n<td class=\"pos-col\">57&deg; 23.030'N - 010&deg; 46.850'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">11)</td>\n<td class=\"pos-col\">57&deg; 17.350'N - 010&deg; 32.210'E</td>\n</tr>\n</tbody>\n</table>\n<p>&nbsp;<span>Mariners are requested to pass with caution.&nbsp;</span></p>"
+        }
+      ],
+      "hideSubject": true
+    }
+  ],
+  "descs": [
+    {
+      "lang": "da",
+      "title": "Danmark. Kattegat. Læsø N, Læsørande N. Havbundsundersøgelser.",
+      "vicinity": "Læsø N, Læsørande N",
+      "source": "Energinet 21. juli 2025"
+    },
+    {
+      "lang": "en",
+      "title": "Denmark. Kattegat. Læsø N, Læsørande N. Seabed surveys.",
+      "vicinity": "Læsø N, Læsørande N",
+      "source": "Energinet 21 July 2025"
+    }
+  ]
+}

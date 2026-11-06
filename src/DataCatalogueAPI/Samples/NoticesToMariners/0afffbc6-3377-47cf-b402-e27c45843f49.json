@@ -1,0 +1,128 @@
+{
+  "id": "0afffbc6-3377-47cf-b402-e27c45843f49",
+  "created": "2024-05-10T08:23:28.000+00:00",
+  "updated": "2024-05-10T10:14:20.000+00:00",
+  "messageSeries": {
+    "seriesId": "dma-nm"
+  },
+  "number": 449,
+  "shortId": "NM-449-24",
+  "mainType": "NM",
+  "type": "PERMANENT_NOTICE",
+  "status": "PUBLISHED",
+  "areas": [
+    {
+      "id": 504,
+      "active": true,
+      "parent": {
+        "id": 453,
+        "mrn": "urn:mrn:iho:country:dk",
+        "active": true,
+        "descs": [
+          {
+            "lang": "da",
+            "name": "Danmark"
+          },
+          {
+            "lang": "en",
+            "name": "Denmark"
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "name": "Farvandet syd for Fyn"
+        },
+        {
+          "lang": "en",
+          "name": "Waters South of Funen"
+        }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "chartNumber": "152",
+      "internationalNumber": 1373,
+      "active": true,
+      "scale": 75000
+    },
+    {
+      "chartNumber": "103",
+      "internationalNumber": 1303,
+      "active": true,
+      "scale": 200000
+    }
+  ],
+  "publishDateFrom": "2024-05-10T10:14:19.000+00:00",
+  "publishDateTo": "2024-06-05T09:59:00.000+00:00",
+  "references": [
+    {
+      "messageId": "NM-201-24",
+      "type": "CANCELLATION"
+    }
+  ],
+  "originalInformation": true,
+  "parts": [
+    {
+      "indexNo": 0,
+      "type": "DETAILS",
+      "eventDates": [
+        {
+          "allDay": false,
+          "fromDate": "2024-05-10T10:14:19.000+00:00"
+        }
+      ],
+      "geometry": {
+        "type": "FeatureCollection",
+        "id": "3e57e74d-00b2-44a9-8cf4-612b4a243810",
+        "features": [
+          {
+            "type": "Feature",
+            "id": "6b4389de-219a-4a20-a86d-13f19ae256fc",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                10.480683333333333,
+                54.93615
+              ]
+            },
+            "properties": {
+              "name:0:en": "green spar buoy with topmark",
+              "name:0:da": "grøn stage med topbetegnelse",
+              "startCoordIndex": 1
+            }
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "subject": "Afmærkning på plads",
+          "details": "<ul class=\"positions\">\n<li>54&deg; 56,169'N - 010&deg; 28,841'E, gr&oslash;n stage med topbetegnelse.</li>\n</ul>"
+        },
+        {
+          "lang": "en",
+          "subject": "Buoyage in place",
+          "details": "<ul class=\"positions\">\n<li>54&deg; 56.169'N - 010&deg; 28.841'E, green spar buoy with topmark.</li>\n</ul>"
+        }
+      ],
+      "hideSubject": true
+    }
+  ],
+  "descs": [
+    {
+      "lang": "da",
+      "title": "Danmark. Farvandet syd for Fyn. Egholm Flak NE. Afmærkning på plads.",
+      "vicinity": "Egholm Flak NE",
+      "source": "Marstal Havn 10. maj 2024"
+    },
+    {
+      "lang": "en",
+      "title": "Denmark. Waters South of Funen. Egholm Flak NE. Buoyage in place.",
+      "vicinity": "Egholm Flak NE",
+      "source": "Marstal Havn 10 May 2024"
+    }
+  ]
+}

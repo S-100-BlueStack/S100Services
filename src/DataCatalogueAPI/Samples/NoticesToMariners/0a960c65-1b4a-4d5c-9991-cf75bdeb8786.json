@@ -1,0 +1,175 @@
+{
+  "id": "0a960c65-1b4a-4d5c-9991-cf75bdeb8786",
+  "created": "2025-12-03T14:02:51.000+00:00",
+  "updated": "2026-02-02T09:33:09.000+00:00",
+  "messageSeries": {
+    "seriesId": "dma-nm"
+  },
+  "number": 1026,
+  "shortId": "NM-1026-25",
+  "mainType": "NM",
+  "type": "PRELIMINARY_NOTICE",
+  "status": "PUBLISHED",
+  "areas": [
+    {
+      "id": 466,
+      "active": true,
+      "parent": {
+        "id": 453,
+        "mrn": "urn:mrn:iho:country:dk",
+        "active": true,
+        "descs": [
+          {
+            "lang": "da",
+            "name": "Danmark"
+          },
+          {
+            "lang": "en",
+            "name": "Denmark"
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "name": "Østersøen"
+        },
+        {
+          "lang": "en",
+          "name": "The Baltic Sea"
+        }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "chartNumber": "189",
+      "internationalNumber": 1336,
+      "active": true,
+      "scale": 100000
+    },
+    {
+      "chartNumber": "188",
+      "active": true,
+      "scale": 250000
+    }
+  ],
+  "publishDateFrom": "2025-12-05T09:53:45.000+00:00",
+  "followUpDate": "2026-02-05T23:00:00.000+00:00",
+  "references": [
+    {
+      "messageId": "NM-967-25",
+      "type": "REFERENCE"
+    }
+  ],
+  "originalInformation": true,
+  "parts": [
+    {
+      "indexNo": 0,
+      "type": "DETAILS",
+      "eventDates": [
+        {
+          "allDay": false,
+          "fromDate": "2025-12-05T09:53:45.000+00:00"
+        }
+      ],
+      "geometry": {
+        "type": "FeatureCollection",
+        "id": "22e8cd17-682b-4e22-a724-a803298053b5",
+        "features": [
+          {
+            "type": "Feature",
+            "id": "7eed2de0-7753-4f66-aa13-ebc681a15f95",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  14.682199999999998,
+                  55.09558333333334
+                ],
+                [
+                  14.682366666666667,
+                  55.09541666666664
+                ],
+                [
+                  14.6871,
+                  55.096949999999964
+                ],
+                [
+                  14.68695,
+                  55.097116666666665
+                ]
+              ]
+            },
+            "properties": {
+              "startCoordIndex": 1
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "df54073c-bbf2-43f4-a562-badbf1717dd6",
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [
+                    14.682199999999998,
+                    55.09558333333334
+                  ],
+                  [
+                    14.682366666666667,
+                    55.09541666666664
+                  ],
+                  [
+                    14.6871,
+                    55.096949999999964
+                  ],
+                  [
+                    14.68695,
+                    55.097116666666665
+                  ],
+                  [
+                    14.682199999999998,
+                    55.09558333333334
+                  ]
+                ]
+              ]
+            },
+            "properties": {
+              "startCoordIndex": 5
+            }
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "subject": "Uddybning",
+          "details": "<p><strong>Indtil ultimo januar 2026</strong>, udf&oslash;res uddybning i et omr&aring;de&nbsp; afgr&aelig;nset af en linje gennem position 1) - 4).</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">55&deg; 05,735'N - 014&deg; 40,932'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">55&deg; 05,725'N - 014&deg; 40,942'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">3)</td>\n<td class=\"pos-col\">55&deg; 05,817'N - 014&deg; 41,226'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">4)</td>\n<td class=\"pos-col\">55&deg; 05,827'N - 014&deg; 41,217'E</td>\n</tr>\n</tbody>\n</table>\n<p>Arbejdet udf&oslash;res fra fart&oslash;jet &raquo;JETTE SAJ&laquo; (<span>OUVS</span>),&nbsp;der kan kontaktes p&aring; VHF kanal 16.</p>\n<p>Skibsfarten anmodes om at vise hensyn ved passage.</p>"
+        },
+        {
+          "lang": "en",
+          "subject": "Dredging",
+          "details": "<p><strong>Until ending January 2026</strong>,&nbsp;dredging&nbsp;is being carried out in the area bounded by a line through positions 1) - 4).</p>\n<table class=\"position-table\">\n<tbody>\n<tr>\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">55&deg; 05.735'N - 014&deg; 40.932'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">55&deg; 05.725'N - 014&deg; 40.942'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">3)</td>\n<td class=\"pos-col\">55&deg; 05.817'N - 014&deg; 41.226'E</td>\n</tr>\n<tr>\n<td class=\"pos-index\">4)</td>\n<td class=\"pos-col\">55&deg; 05.827'N - 014&deg; 41.217'E</td>\n</tr>\n</tbody>\n</table>\n<p>The work&nbsp;is being carried out from the vessel&nbsp;<span>&raquo;JETTE SAJ&laquo; (OUVS)</span>,&nbsp;<span>which can be contacted on VHF channel 16.</span></p>\n<p><span>Mariners are requested to pass with caution.</span></p>"
+        }
+      ],
+      "hideSubject": true
+    }
+  ],
+  "descs": [
+    {
+      "lang": "da",
+      "title": "Danmark. Østersøen. Rønne Havn. Uddybning.",
+      "vicinity": "Rønne Havn",
+      "publication": "<a publication=\"f3a2a685-fe2e-48f7-98de-f6459c6667bb\" href=\"http://www.danskehavnelods.dk\" target=\"_blank\">www.danskehavnelods.dk.</a>",
+      "source": "MT Højgaard Danmark 28. november 2025"
+    },
+    {
+      "lang": "en",
+      "title": "Denmark. The Baltic Sea. Roenne Havn. Dredging.",
+      "vicinity": "Roenne Havn",
+      "publication": "<a publication=\"f3a2a685-fe2e-48f7-98de-f6459c6667bb\" href=\"http://www.danskehavnelods.dk\" target=\"_blank\">www.danskehavnelods.dk.</a>",
+      "source": "MT Højgaard Danmark 28 November 2025"
+    }
+  ]
+}

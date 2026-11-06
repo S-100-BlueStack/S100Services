@@ -1,0 +1,357 @@
+{
+  "id": "0a362b57-3aca-4466-ad13-310fa5fd6ad8",
+  "created": "2024-06-25T06:41:34.000+00:00",
+  "updated": "2024-07-10T06:57:48.000+00:00",
+  "messageSeries": {
+    "seriesId": "dma-nm"
+  },
+  "number": 645,
+  "shortId": "NM-645-24",
+  "mainType": "NM",
+  "type": "PRELIMINARY_NOTICE",
+  "status": "CANCELLED",
+  "areas": [
+    {
+      "id": 479,
+      "active": true,
+      "parent": {
+        "id": 453,
+        "mrn": "urn:mrn:iho:country:dk",
+        "active": true,
+        "descs": [
+          {
+            "lang": "da",
+            "name": "Danmark"
+          },
+          {
+            "lang": "en",
+            "name": "Denmark"
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "name": "Smålandsfarvandet"
+        },
+        {
+          "lang": "en",
+          "name": "The Waters South of Zealand"
+        }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "chartNumber": "162",
+      "active": true,
+      "scale": 30000
+    },
+    {
+      "chartNumber": "161",
+      "active": true,
+      "scale": 30000
+    },
+    {
+      "chartNumber": "160",
+      "active": true,
+      "scale": 75000
+    }
+  ],
+  "publishDateFrom": "2024-06-26T06:50:05.000+00:00",
+  "publishDateTo": "2024-07-10T06:57:48.000+00:00",
+  "followUpDate": "2024-07-16T22:00:00.000+00:00",
+  "references": [
+    {
+      "messageId": "NM-510-24",
+      "type": "REFERENCE"
+    },
+    {
+      "messageId": "NM-578-24",
+      "type": "REPETITION_NEW_TIME"
+    }
+  ],
+  "originalInformation": true,
+  "parts": [
+    {
+      "indexNo": 0,
+      "type": "DETAILS",
+      "eventDates": [
+        {
+          "allDay": false,
+          "fromDate": "2024-06-26T06:50:05.000+00:00",
+          "toDate": "2024-07-10T06:57:48.000+00:00"
+        }
+      ],
+      "geometry": {
+        "type": "FeatureCollection",
+        "id": "99ddc173-4492-4ee3-a042-666a57785e83",
+        "features": [
+          {
+            "type": "Feature",
+            "id": "e1ff5f26-040c-4811-bb0f-bdb233512e2c",
+            "geometry": {
+              "type": "MultiPoint",
+              "coordinates": [
+                [
+                  11.862666666666666,
+                  54.971983333333334
+                ],
+                [
+                  11.866216666666666,
+                  54.97143333333333
+                ],
+                [
+                  11.866666666666667,
+                  54.97136666666667
+                ],
+                [
+                  11.86945,
+                  54.970933333333335
+                ],
+                [
+                  11.87375,
+                  54.96971666666666
+                ]
+              ]
+            },
+            "properties": {
+              "name:0:en": "green cone buoy, Q.G",
+              "name:3:da": "grøn spidstønde, Q.G",
+              "name:1:en": "green cone buoy, Q.G",
+              "name:2:en": "green cone buoy, Q.G",
+              "startCoordIndex": 1,
+              "name:0:da": "grøn spidstønde, Q.G",
+              "name:4:da": "grøn spidstønde, Q.G",
+              "name:1:da": "grøn spidstønde, Q.G",
+              "name:2:da": "grøn spidstønde, Q.G",
+              "name:4:en": "green cone buoy, Q.G",
+              "name:3:en": "green cone buoy, Q.G"
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "7a5a64ba-8fb2-4121-b24d-728cf96df86d",
+            "geometry": {
+              "type": "MultiPoint",
+              "coordinates": [
+                [
+                  11.862966666666667,
+                  54.9726
+                ],
+                [
+                  11.8665,
+                  54.972033333333336
+                ],
+                [
+                  11.86695,
+                  54.97196666666667
+                ],
+                [
+                  11.869716666666667,
+                  54.971516666666666
+                ],
+                [
+                  11.87425,
+                  54.9708
+                ]
+              ]
+            },
+            "properties": {
+              "name:0:en": "safe water light buoy, Iso.2s",
+              "name:3:da": "midtfarvandsafmærkning, Iso.2s",
+              "name:1:en": "safe water light buoy, Iso.2s",
+              "name:2:en": "safe water light buoy, Iso.2s",
+              "startCoordIndex": 6,
+              "name:0:da": "midtfarvandsafmærkning, Iso.2s",
+              "name:4:da": "midtfarvandsafmærkning, Iso.2s",
+              "name:1:da": "midtfarvandsafmærkning, Iso.2s",
+              "name:2:da": "midtfarvandsafmærkning, Iso.2s",
+              "name:4:en": "safe water light buoy, Iso.2s",
+              "name:3:en": "safe water light buoy, Iso.2s"
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "d1df0857-890e-4ee0-9caa-d5e3a9707fe9",
+            "geometry": {
+              "type": "MultiPoint",
+              "coordinates": [
+                [
+                  11.863466666666667,
+                  54.9736
+                ],
+                [
+                  11.8668,
+                  54.97265
+                ],
+                [
+                  11.86725,
+                  54.972566666666665
+                ],
+                [
+                  11.870016666666666,
+                  54.972116666666665
+                ],
+                [
+                  11.874783333333333,
+                  54.97188333333333
+                ]
+              ]
+            },
+            "properties": {
+              "name:0:en": "red can buoy, Q.R",
+              "name:3:da": "rød stumptønde, Q.R",
+              "name:1:en": "red can buoy, Q.R",
+              "name:2:en": "red can buoy, Q.R",
+              "startCoordIndex": 11,
+              "name:0:da": "rød stumptønde, Q.R",
+              "name:4:da": "rød stumptønde, Q.R",
+              "name:1:da": "rød stumptønde, Q.R",
+              "name:2:da": "rød stumptønde, Q.R",
+              "name:4:en": "red can buoy, Q.R",
+              "name:3:en": "red can buoy, Q.R"
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "d21a3167-787c-410c-9bca-304418446d1f",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  11.86175,
+                  54.9698
+                ],
+                [
+                  11.865316666666667,
+                  54.96933333333333
+                ],
+                [
+                  11.865766666666667,
+                  54.96926666666667
+                ],
+                [
+                  11.868583333333333,
+                  54.9689
+                ],
+                [
+                  11.872966666666667,
+                  54.96778333333334
+                ]
+              ]
+            },
+            "properties": {
+              "startCoordIndex": 16
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "5579a536-62c2-44f1-96f2-5c7407a79a9e",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  11.862,
+                  54.97043333333333
+                ],
+                [
+                  11.865566666666666,
+                  54.96995
+                ],
+                [
+                  11.866016666666667,
+                  54.969883333333335
+                ],
+                [
+                  11.868833333333333,
+                  54.9695
+                ],
+                [
+                  11.873383333333333,
+                  54.96888333333333
+                ]
+              ]
+            },
+            "properties": {
+              "startCoordIndex": 21
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "1da6d9bc-4fe0-4a3a-b2ae-a46b5bf991c0",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  11.862433333333334,
+                  54.97145
+                ],
+                [
+                  11.865816666666667,
+                  54.97056666666667
+                ],
+                [
+                  11.866283333333334,
+                  54.9705
+                ],
+                [
+                  11.869083333333334,
+                  54.9701
+                ],
+                [
+                  11.873866666666666,
+                  54.969966666666664
+                ]
+              ]
+            },
+            "properties": {
+              "startCoordIndex": 26
+            }
+          }
+        ]
+      },
+      "descs": [
+        {
+          "lang": "da",
+          "subject": "Sejlløb flyttes. Afmærkning flyttes. Afmærket forbudsområde justeres.",
+          "details": "<p><strong>Medio&nbsp;juli&nbsp;2024,</strong>&nbsp;vil de afm&aelig;rkede &oslash;st- og vestg&aring;ende sejll&oslash;b p&aring; position 1) - 15), ved den nye Storstr&oslash;msbro, blive flyttet til position 16) - 30) som anf&oslash;rt.&nbsp;</p>\n<table class=\"position-table\">\n<tbody>\n<tr><!-- From position -->\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">54&deg; 58,319'N - 011&deg; 51,760'E</td>\n<td>gr&oslash;n spidst&oslash;nde, Q.G</td>\n<!-- To position -->\n<td class=\"pos-index\">16)</td>\n<td class=\"pos-col\">54&deg; 58,188'N - 011&deg; 51,705'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">54&deg; 58,286'N - 011&deg; 51,973'E</td>\n<td>gr&oslash;n spidst&oslash;nde, Q.G</td>\n<!-- To position -->\n<td class=\"pos-index\">17)</td>\n<td class=\"pos-col\">54&deg; 58,160'N - 011&deg; 51,919'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">3)</td>\n<td class=\"pos-col\">54&deg; 58,282'N - 011&deg; 52,000'E</td>\n<td>gr&oslash;n spidst&oslash;nde, Q.G</td>\n<!-- To position -->\n<td class=\"pos-index\">18)</td>\n<td class=\"pos-col\">54&deg; 58,156'N - 011&deg; 51,946'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">4)</td>\n<td class=\"pos-col\">54&deg; 58,256'N - 011&deg; 52,167'E</td>\n<td>gr&oslash;n spidst&oslash;nde, Q.G</td>\n<!-- To position -->\n<td class=\"pos-index\">19)</td>\n<td class=\"pos-col\">54&deg; 58,134'N - 011&deg; 52,115'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">5)</td>\n<td class=\"pos-col\">54&deg; 58,183'N - 011&deg; 52,425'E</td>\n<td>gr&oslash;n spidst&oslash;nde, Q.G</td>\n<!-- To position -->\n<td class=\"pos-index\">20)</td>\n<td class=\"pos-col\">54&deg; 58,067'N - 011&deg; 52,378'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">6)</td>\n<td class=\"pos-col\">54&deg; 58,356'N - 011&deg; 51,778'E</td>\n<td>midtfarvandsafm&aelig;rkning, Iso.2s</td>\n<!-- To position -->\n<td class=\"pos-index\">21)</td>\n<td class=\"pos-col\">54&deg; 58,226'N - 011&deg; 51,720'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">7)</td>\n<td class=\"pos-col\">54&deg; 58,322'N - 011&deg; 51,990'E</td>\n<td>midtfarvandsafm&aelig;rkning, Iso.2s</td>\n<!-- To position -->\n<td class=\"pos-index\">22)</td>\n<td class=\"pos-col\">54&deg; 58,197'N - 011&deg; 51,934'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">8)</td>\n<td class=\"pos-col\">54&deg; 58,318'N - 011&deg; 52,017'E</td>\n<td>midtfarvandsafm&aelig;rkning, Iso.2s</td>\n<!-- To position -->\n<td class=\"pos-index\">23)</td>\n<td class=\"pos-col\">54&deg; 58,193'N - 011&deg; 51,961'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">9)</td>\n<td class=\"pos-col\">54&deg; 58,291'N - 011&deg; 52,183'E</td>\n<td>midtfarvandsafm&aelig;rkning, Iso.2s</td>\n<!-- To position -->\n<td class=\"pos-index\">24)</td>\n<td class=\"pos-col\">54&deg; 58,170'N - 011&deg; 52,130'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">10)</td>\n<td class=\"pos-col\">54&deg; 58,248'N - 011&deg; 52,455'E</td>\n<td>midtfarvandsafm&aelig;rkning, Iso.2s</td>\n<!-- To position -->\n<td class=\"pos-index\">25)</td>\n<td class=\"pos-col\">54&deg; 58,133'N - 011&deg; 52,403'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">11)</td>\n<td class=\"pos-col\">54&deg; 58,416'N - 011&deg; 51,808'E</td>\n<td>r&oslash;d stumpt&oslash;nde, Q.R</td>\n<!-- To position -->\n<td class=\"pos-index\">26)</td>\n<td class=\"pos-col\">54&deg; 58,287'N - 011&deg; 51,746'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">12)</td>\n<td class=\"pos-col\">54&deg; 58,359'N - 011&deg; 52,008'E</td>\n<td>r&oslash;d stumpt&oslash;nde, Q.R</td>\n<!-- To position -->\n<td class=\"pos-index\">27)</td>\n<td class=\"pos-col\">54&deg; 58,234'N - 011&deg; 51,949'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">13)</td>\n<td class=\"pos-col\">54&deg; 58,354'N - 011&deg; 52,035'E</td>\n<td>r&oslash;d stumpt&oslash;nde, Q.R</td>\n<!-- To position -->\n<td class=\"pos-index\">28)</td>\n<td class=\"pos-col\">54&deg; 58,230'N - 011&deg; 51,977'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">14)</td>\n<td class=\"pos-col\">54&deg; 58,327'N - 011&deg; 52,201'E</td>\n<td>r&oslash;d stumpt&oslash;nde, Q.R</td>\n<!-- To position -->\n<td class=\"pos-index\">29)</td>\n<td class=\"pos-col\">54&deg; 58,206'N - 011&deg; 52,145'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">15)</td>\n<td class=\"pos-col\">54&deg; 58,313'N - 011&deg; 52,487'E</td>\n<td>r&oslash;d stumpt&oslash;nde, Q.R</td>\n<!-- To position -->\n<td class=\"pos-index\">30)</td>\n<td class=\"pos-col\">54&deg; 58,198'N - 011&deg; 52,432'E</td>\n</tr>\n</tbody>\n</table>\n<p>Forbudsomr&aring;derne vil blive justeret i henhold til de nye sejll&oslash;b.</p>\n<p>I forbudsomr&aring;derne er der forbud mod uvedkommende sejlads, dykning, ankring, fiskeri og arbejder&nbsp;p&aring; havbunden.</p>"
+        },
+        {
+          "lang": "en",
+          "subject": "Channels to be moved. Buoyage to be moved. Buoyed prohibited area to be adjusted.",
+          "details": "<p><strong>Mid-July 2024,</strong>&nbsp;the buoyed eastern and western channel in positions 1) - 15), at the new Storstr&oslash;msbro, will be moved to positions 16) - 30) as stated.&nbsp;</p>\n<table class=\"position-table\">\n<tbody>\n<tr><!-- From position -->\n<td class=\"pos-index\">1)</td>\n<td class=\"pos-col\">54&deg; 58.319'N - 011&deg; 51.760'E</td>\n<td>green cone buoy, Q.G</td>\n<!-- To position -->\n<td class=\"pos-index\">16)</td>\n<td class=\"pos-col\">54&deg; 58.188'N - 011&deg; 51.705'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">2)</td>\n<td class=\"pos-col\">54&deg; 58.286'N - 011&deg; 51.973'E</td>\n<td>green cone buoy, Q.G</td>\n<!-- To position -->\n<td class=\"pos-index\">17)</td>\n<td class=\"pos-col\">54&deg; 58.160'N - 011&deg; 51.919'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">3)</td>\n<td class=\"pos-col\">54&deg; 58.282'N - 011&deg; 52.000'E</td>\n<td>green cone buoy, Q.G</td>\n<!-- To position -->\n<td class=\"pos-index\">18)</td>\n<td class=\"pos-col\">54&deg; 58.156'N - 011&deg; 51.946'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">4)</td>\n<td class=\"pos-col\">54&deg; 58.256'N - 011&deg; 52.167'E</td>\n<td>green cone buoy, Q.G</td>\n<!-- To position -->\n<td class=\"pos-index\">19)</td>\n<td class=\"pos-col\">54&deg; 58.134'N - 011&deg; 52.115'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">5)</td>\n<td class=\"pos-col\">54&deg; 58.183'N - 011&deg; 52.425'E</td>\n<td>green cone buoy, Q.G</td>\n<!-- To position -->\n<td class=\"pos-index\">20)</td>\n<td class=\"pos-col\">54&deg; 58.067'N - 011&deg; 52.378'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">6)</td>\n<td class=\"pos-col\">54&deg; 58.356'N - 011&deg; 51.778'E</td>\n<td>safe water light buoy, Iso.2s</td>\n<!-- To position -->\n<td class=\"pos-index\">21)</td>\n<td class=\"pos-col\">54&deg; 58.226'N - 011&deg; 51.720'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">7)</td>\n<td class=\"pos-col\">54&deg; 58.322'N - 011&deg; 51.990'E</td>\n<td>safe water light buoy, Iso.2s</td>\n<!-- To position -->\n<td class=\"pos-index\">22)</td>\n<td class=\"pos-col\">54&deg; 58.197'N - 011&deg; 51.934'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">8)</td>\n<td class=\"pos-col\">54&deg; 58.318'N - 011&deg; 52.017'E</td>\n<td>safe water light buoy, Iso.2s</td>\n<!-- To position -->\n<td class=\"pos-index\">23)</td>\n<td class=\"pos-col\">54&deg; 58.193'N - 011&deg; 51.961'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">9)</td>\n<td class=\"pos-col\">54&deg; 58.291'N - 011&deg; 52.183'E</td>\n<td>safe water light buoy, Iso.2s</td>\n<!-- To position -->\n<td class=\"pos-index\">24)</td>\n<td class=\"pos-col\">54&deg; 58.170'N - 011&deg; 52.130'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">10)</td>\n<td class=\"pos-col\">54&deg; 58.248'N - 011&deg; 52.455'E</td>\n<td>safe water light buoy, Iso.2s</td>\n<!-- To position -->\n<td class=\"pos-index\">25)</td>\n<td class=\"pos-col\">54&deg; 58.133'N - 011&deg; 52.403'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">11)</td>\n<td class=\"pos-col\">54&deg; 58.416'N - 011&deg; 51.808'E</td>\n<td>red can buoy, Q.R</td>\n<!-- To position -->\n<td class=\"pos-index\">26)</td>\n<td class=\"pos-col\">54&deg; 58.287'N - 011&deg; 51.746'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">12)</td>\n<td class=\"pos-col\">54&deg; 58.359'N - 011&deg; 52.008'E</td>\n<td>red can buoy, Q.R</td>\n<!-- To position -->\n<td class=\"pos-index\">27)</td>\n<td class=\"pos-col\">54&deg; 58.234'N - 011&deg; 51.949'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">13)</td>\n<td class=\"pos-col\">54&deg; 58.354'N - 011&deg; 52.035'E</td>\n<td>red can buoy, Q.R</td>\n<!-- To position -->\n<td class=\"pos-index\">28)</td>\n<td class=\"pos-col\">54&deg; 58.230'N - 011&deg; 51.977'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">14)</td>\n<td class=\"pos-col\">54&deg; 58.327'N - 011&deg; 52.201'E</td>\n<td>red can buoy, Q.R</td>\n<!-- To position -->\n<td class=\"pos-index\">29)</td>\n<td class=\"pos-col\">54&deg; 58.206'N - 011&deg; 52.145'E</td>\n</tr>\n<tr><!-- From position -->\n<td class=\"pos-index\">15)</td>\n<td class=\"pos-col\">54&deg; 58.313'N - 011&deg; 52.487'E</td>\n<td>red can buoy, Q.R</td>\n<!-- To position -->\n<td class=\"pos-index\">30)</td>\n<td class=\"pos-col\">54&deg; 58.198'N - 011&deg; 52.432'E</td>\n</tr>\n</tbody>\n</table>\n<p>The prohibited areas will be adjusted according to the new channels.</p>\n<p>Unauthorized navigation, diving,&nbsp;anchoring, fishing and working on the seabed&nbsp;is prohibited in the prohibited areas.</p>"
+        }
+      ],
+      "hideSubject": true
+    },
+    {
+      "indexNo": 0,
+      "type": "NOTE",
+      "descs": [
+        {
+          "lang": "da",
+          "details": "<p>Forbudsomr&aring;derne er oprettet af SFS i henhold til Lovbekendtg&oslash;relse nr. 221 af 11. februar 2022 om&nbsp;sikkerhed til s&oslash;s, &sect; 6, nr. 1 og 7. Overtr&aelig;delse af forbuddet straffes i henhold til samme lov,&nbsp;&sect; 28, nr. 3.</p>"
+        },
+        {
+          "lang": "en",
+          "details": "<p>The prohibited areas have been established by the DMA in accordance with consolidated act&nbsp;no. 221 of 11 February 2022 on safety at sea, Section 6 (i and vii). Contraventions of the&nbsp;prohibition are punishable in accordance with the same Act, Section 28 (iii).</p>"
+        }
+      ]
+    }
+  ],
+  "descs": [
+    {
+      "lang": "da",
+      "title": "Danmark. Smålandsfarvandet. Ny Storstrømsbro. Sejlløb flyttes. Afmærkning flyttes. Afmærket forbudsområde justeres.",
+      "vicinity": "Ny Storstrømsbro.",
+      "source": "SFS 25. juni 2024"
+    },
+    {
+      "lang": "en",
+      "title": "Denmark. The Waters South of Zealand. Ny Storstrømsbro. Channels to be moved. Buoyage to be moved. Buoyed prohibited area to be adjusted.",
+      "vicinity": "Ny Storstrømsbro.",
+      "source": "DMA 25 June 2024"
+    }
+  ]
+}
